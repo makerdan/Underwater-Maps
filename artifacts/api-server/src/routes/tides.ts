@@ -165,6 +165,77 @@ export async function getTidePredictions(
   }
 }
 
+// ── Station datums (MHW / MHHW) ─────────────────────────────────────────────
+
+export interface TideStationDatums {
+  stationId: string;
+  /** Mean High Water, feet above MLLW, or null when NOAA has no value. */
+  mhwFt: number | null;
+  /** Mean Higher High Water, feet above MLLW, or null when NOAA has no value. */
+  mhhwFt: number | null;
+  datum: "MLLW";
+  units: "feet";
+}
+
+/**
+ * In-memory datums cache. Station datums are effectively static (updated on
+ * multi-year NOAA tidal-epoch cycles), so 24 h is very safe.
+ */
+const datumsCache = new Map<string, { result: TideStationDatums; ts: number }>();
+export const TIDES_DATUMS_TTL_MS = 24 * 60 * 60 * 1000;
+registerCache(() => datumsCache.clear());
+
+/** Test-only: clear the datums cache. */
+export function __clearTidesDatumsCacheForTests(): void {
+  datumsCache.clear();
+}
+
+/**
+ * Fetch (or serve from cache) the MHW/MHHW datums for a station, in feet
+ * above MLLW. Returns null when NOAA is unreachable or returns no datums at
+ * all; individual missing datums come back as null fields.
+ */
+export async function getStationDatums(
+  stationId: string,
+): Promise<TideStationDatums | null> {
+  const nowMs = Date.now();
+  const cached = datumsCache.get(stationId);
+  if (cached && nowMs - cached.ts < TIDES_DATUMS_TTL_MS) {
+    return cached.result;
+  }
+  try {
+    const url =
+      `${NOAA_BASE}/mdapi/prod/webapi/stations/${stationId}/datums.json?units=english`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status} from NOAA datums API`);
+    const json = (await res.json()) as {
+      datums?: Array<{ name?: string; value?: number }>;
+    };
+    const datums = json.datums ?? [];
+    const find = (name: string): number | null => {
+      const d = datums.find((x) => x.name === name);
+      return d && typeof d.value === "number" && Number.isFinite(d.value)
+        ? d.value
+        : null;
+    };
+    const mhwFt = find("MHW");
+    const mhhwFt = find("MHHW");
+    if (mhwFt === null && mhhwFt === null) return null;
+    const result: TideStationDatums = {
+      stationId,
+      mhwFt,
+      mhhwFt,
+      datum: "MLLW",
+      units: "feet",
+    };
+    datumsCache.set(stationId, { result, ts: nowMs });
+    return result;
+  } catch (err) {
+    logger.warn({ err, stationId }, "Failed to fetch NOAA station datums");
+    return null;
+  }
+}
+
 // ── GET /tides/station ──────────────────────────────────────────────────────
 router.get(
   "/tides/station",
@@ -206,6 +277,30 @@ router.get(
       res.status(502).json({
         error: "noaa_unavailable",
         details: "Could not retrieve tide predictions from NOAA for this station",
+      });
+      return;
+    }
+    res.json(result);
+  }),
+);
+
+// ── GET /tides/:stationId/datums ────────────────────────────────────────────
+router.get(
+  "/tides/:stationId/datums",
+  asyncHandler(async (req, res): Promise<void> => {
+    const stationId = String(req.params["stationId"] ?? "");
+    if (!STATION_ID_RE.test(stationId)) {
+      res.status(400).json({
+        error: "invalid_param",
+        details: "stationId must be a 7-digit NOAA station id",
+      });
+      return;
+    }
+    const result = await getStationDatums(stationId);
+    if (!result) {
+      res.status(502).json({
+        error: "noaa_unavailable",
+        details: "Could not retrieve tidal datums from NOAA for this station",
       });
       return;
     }

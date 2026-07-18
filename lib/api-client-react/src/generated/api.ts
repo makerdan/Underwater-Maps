@@ -77,6 +77,7 @@ import type {
   GetTidalScheduleParams,
   GetTidesStation200,
   GetTidesStationId200,
+  GetTidesStationIdDatums200,
   GetTidesStationParams,
   GetTrailsIdPointsParams,
   GetTrailsParams,
@@ -6181,6 +6182,84 @@ export function useGetTidesStationId<TData = Awaited<ReturnType<typeof getTidesS
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetTidesStationIdQueryOptions(stationId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTidesStationIdDatumsUrl = (stationId: string,) => {
+
+
+
+
+  return `/api/tides/${stationId}/datums`
+}
+
+/**
+ * Returns the Mean High Water and Mean Higher High Water datums for a NOAA station in feet above MLLW, fetched from the NOAA metadata API and cached server-side for 24 hours. Used by the intertidal classification settings to show what the band thresholds mean.
+ * @summary MHW / MHHW tidal datums for a station
+ */
+export const getTidesStationIdDatums = async (stationId: string, options?: RequestInit): Promise<GetTidesStationIdDatums200> => {
+
+  return customFetch<GetTidesStationIdDatums200>(getGetTidesStationIdDatumsUrl(stationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTidesStationIdDatumsQueryKey = (stationId: string,) => {
+    return [
+    `/api/tides/${stationId}/datums`
+    ] as const;
+    }
+
+
+export const getGetTidesStationIdDatumsQueryOptions = <TData = Awaited<ReturnType<typeof getTidesStationIdDatums>>, TError = ErrorType<ApiError>>(stationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidesStationIdDatums>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTidesStationIdDatumsQueryKey(stationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTidesStationIdDatums>>> = ({ signal }) => getTidesStationIdDatums(stationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(stationId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTidesStationIdDatums>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTidesStationIdDatumsQueryResult = NonNullable<Awaited<ReturnType<typeof getTidesStationIdDatums>>>
+export type GetTidesStationIdDatumsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary MHW / MHHW tidal datums for a station
+ */
+
+export function useGetTidesStationIdDatums<TData = Awaited<ReturnType<typeof getTidesStationIdDatums>>, TError = ErrorType<ApiError>>(
+ stationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidesStationIdDatums>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTidesStationIdDatumsQueryOptions(stationId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

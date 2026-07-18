@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useIntertidal } from "@/lib/useIntertidal";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { PaletteSuggestionBanner } from "@/components/PaletteSuggestionBanner";
 import { S } from "./styles";
@@ -45,6 +46,130 @@ function ContourIntervalRow() {
       onChange={s.setContourInterval}
       sublabel={`Depth spacing between lines (${unitLabel})`}
     />
+  );
+}
+
+function formatFt(v: number): string {
+  return v % 1 === 0 ? v.toFixed(0) : v.toFixed(2);
+}
+
+function DatumOverrideRow({
+  label,
+  testId,
+  overrideValue,
+  stationValue,
+  stationName,
+  datumsStatus,
+  onCommit,
+}: {
+  label: string;
+  testId: string;
+  overrideValue: number | null;
+  stationValue: number | null;
+  stationName: string | null;
+  datumsStatus: string;
+  onCommit: (v: number | null) => void;
+}) {
+  const [text, setText] = useState<string>(overrideValue === null ? "" : String(overrideValue));
+  // Keep the input in sync when the override changes externally (reset, server sync).
+  const prevOverride = useRef(overrideValue);
+  useEffect(() => {
+    if (prevOverride.current !== overrideValue) {
+      prevOverride.current = overrideValue;
+      setText(overrideValue === null ? "" : String(overrideValue));
+    }
+  }, [overrideValue]);
+
+  const commit = () => {
+    const trimmed = text.trim();
+    if (trimmed === "") {
+      onCommit(null);
+      return;
+    }
+    const n = Number(trimmed);
+    if (Number.isFinite(n)) onCommit(n);
+    else setText(overrideValue === null ? "" : String(overrideValue));
+  };
+
+  const sublabel =
+    stationValue !== null && stationName
+      ? `Station value: ${formatFt(stationValue)} ft above MLLW (${stationName}). Leave blank to use it.`
+      : datumsStatus === "loading"
+        ? "Resolving station datum from NOAA…"
+        : stationName
+          ? `No NOAA datum available for ${stationName} — enter a value manually.`
+          : "No tide station selected — load a dataset to resolve one, or enter a value manually.";
+
+  return (
+    <div style={S.row}>
+      <div>
+        <div style={S.label}>{label}</div>
+        <div style={S.sublabel} data-testid={`${testId}-sublabel`}>{sublabel}</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          data-testid={testId}
+          type="number"
+          step="0.1"
+          inputMode="decimal"
+          value={text}
+          placeholder={stationValue !== null ? formatFt(stationValue) : "—"}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          aria-label={label}
+          style={{
+            width: 88,
+            background: "rgba(0,10,20,0.6)",
+            border: "1px solid rgba(0,229,255,0.25)",
+            borderRadius: 3,
+            color: overrideValue !== null ? "#00e5ff" : "#e2e8f0",
+            fontSize: 11,
+            padding: "4px 6px",
+            textAlign: "right",
+          }}
+        />
+        <span style={{ color: "#64748b", fontSize: 10 }}>ft</span>
+      </div>
+    </div>
+  );
+}
+
+function IntertidalDatumsCard() {
+  const setMhw = useSettingsStore((s) => s.setIntertidalMhwOverrideFt);
+  const setMhhw = useSettingsStore((s) => s.setIntertidalMhhwOverrideFt);
+  const mhwOverride = useSettingsStore((s) => s.intertidalMhwOverrideFt);
+  const mhhwOverride = useSettingsStore((s) => s.intertidalMhhwOverrideFt);
+  const it = useIntertidal();
+  return (
+    <div style={S.card} data-testid="intertidal-datums-card">
+      <div style={S.cardHeader}>INTERTIDAL BANDS (MHW / MHHW)</div>
+      <div style={{ ...S.sublabel, padding: "8px 16px 4px" }}>
+        Intertidal band boundaries are defined by the Mean High Water and Mean
+        Higher High Water tidal datums, in feet above MLLW.
+        {it.stationName && it.datumsStatus === "ready"
+          ? ` Values below are resolved from NOAA station ${it.stationName}; enter a number to override.`
+          : " When a tide station is selected, its NOAA datum values appear below; enter a number to override."}
+      </div>
+      <DatumOverrideRow
+        label="MHW Override"
+        testId="intertidal-mhw-override"
+        overrideValue={mhwOverride}
+        stationValue={it.stationMhwFt}
+        stationName={it.stationName}
+        datumsStatus={it.datumsStatus}
+        onCommit={setMhw}
+      />
+      <DatumOverrideRow
+        label="MHHW Override"
+        testId="intertidal-mhhw-override"
+        overrideValue={mhhwOverride}
+        stationValue={it.stationMhhwFt}
+        stationName={it.stationName}
+        datumsStatus={it.datumsStatus}
+        onCommit={setMhhw}
+      />
+    </div>
   );
 }
 
@@ -167,6 +292,7 @@ export function VisualsSection() {
       <PaletteSuggestionBanner />
       <PalettePickerCard />
       <ZoneColourSwatches />
+      <IntertidalDatumsCard />
       <AdvancedDisclosure testId="visuals-advanced">
         <div style={S.card}>
           <div style={S.cardHeader}>PARTICLES &amp; TEXTURES</div>

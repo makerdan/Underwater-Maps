@@ -3544,6 +3544,26 @@ export const GetTidesStationIdResponse = zod.object({
 
 
 /**
+ * Returns the Mean High Water and Mean Higher High Water datums for a NOAA station in feet above MLLW, fetched from the NOAA metadata API and cached server-side for 24 hours. Used by the intertidal classification settings to show what the band thresholds mean.
+ * @summary MHW / MHHW tidal datums for a station
+ */
+export const getTidesStationIdDatumsPathStationIdRegExp = new RegExp('^\\d{7}$');
+
+
+export const GetTidesStationIdDatumsParams = zod.object({
+  "stationId": zod.coerce.string().regex(getTidesStationIdDatumsPathStationIdRegExp).describe('7-digit NOAA station id')
+})
+
+export const GetTidesStationIdDatumsResponse = zod.object({
+  "stationId": zod.string(),
+  "mhwFt": zod.number().nullable().describe('Mean High Water, feet above MLLW (null when NOAA has no value)'),
+  "mhhwFt": zod.number().nullable().describe('Mean Higher High Water, feet above MLLW (null when NOAA has no value)'),
+  "datum": zod.enum(['MLLW']),
+  "units": zod.enum(['feet'])
+})
+
+
+/**
  * Returns an ordered list of high/low tide events with slack windows and current direction changes for the requested location and day range.
  * @summary Multi-day tide schedule with slack windows
  */

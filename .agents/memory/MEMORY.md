@@ -39,3 +39,4 @@
 - [Port cleanup /proc quirks](port-cleanup-proc-quirks.md) — fuser is not on PATH (old fuser -k was a no-op); Nix node comm is "MainThread" — use scripts/kill-port-holders.mjs for freeing ports.
 - [E2E global-setup port sweep](e2e-global-setup-port-sweep.md) — Playwright boots webServer before globalSetup; port sweeps there must exempt own-tree holders or they kill their own servers.
 - [NCEI geoportal response format](ncei-geoportal-response-format.md) — f=json now returns atom shape (empty results); omit f for ES hits.hits format; bbox lives in envelope_geo.
+- [Plan sidebar e2e breakage](plan-sidebar-e2e-breakage.md) — sidebar tabs restructure broke many e2e specs: Plan tab gating, server-persisted sidebarMode, terrain-gated Explore panel, onboarding overlay, initScript reload re-seeding.

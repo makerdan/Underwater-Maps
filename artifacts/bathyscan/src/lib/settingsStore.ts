@@ -449,6 +449,16 @@ export interface SettingsState {
   intertidalHotspotsEnabled: boolean;
   /** Which score type to highlight in the Intertidal Hotspots layer. */
   intertidalScoreMode: 'tidepool' | 'beachcombing';
+  /**
+   * User override for the Mean High Water datum (ft above MLLW) used by
+   * intertidal classification. null = use the resolved station value.
+   */
+  intertidalMhwOverrideFt: number | null;
+  /**
+   * User override for the Mean Higher High Water datum (ft above MLLW) used
+   * by intertidal classification. null = use the resolved station value.
+   */
+  intertidalMhhwOverrideFt: number | null;
   /** Show EFH zone polygon outlines in the 3D scene. */
   efhOverlayEnabled: boolean;
   /**
@@ -683,6 +693,8 @@ interface SettingsActions {
   setHiddenSubstrateClasses: (v: string[]) => void;
   setIntertidalHotspotsEnabled: (v: boolean) => void;
   setIntertidalScoreMode: (v: 'tidepool' | 'beachcombing') => void;
+  setIntertidalMhwOverrideFt: (v: number | null) => void;
+  setIntertidalMhhwOverrideFt: (v: number | null) => void;
   setEfhOverlayEnabled: (v: boolean) => void;
   setHiddenEfhSpecies: (v: string[]) => void;
   setHyd93ActiveFeatureCodes: (v: number[]) => void;
@@ -953,6 +965,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   hiddenSubstrateClasses: [],
   intertidalHotspotsEnabled: false,
   intertidalScoreMode: 'tidepool',
+  intertidalMhwOverrideFt: null,
+  intertidalMhhwOverrideFt: null,
   efhOverlayEnabled: false,
   hiddenEfhSpecies: [],
   hyd93ActiveFeatureCodes: [89, 103, 146, 530, 988],
@@ -1014,6 +1028,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "zonePaintBrushRadius", "zoneOverlayEnabled", "zonePaintMode", "zonePaintSlot",
     "substrateColorMode", "hiddenSubstrateClasses",
     "intertidalHotspotsEnabled", "intertidalScoreMode",
+    "intertidalMhwOverrideFt", "intertidalMhhwOverrideFt",
     "efhOverlayEnabled", "hiddenEfhSpecies",
     "hyd93ActiveFeatureCodes", "hyd93FeaturesEnabled",
   ],
@@ -1300,6 +1315,10 @@ export const useSettingsStore = create<SettingsStore>()(
         setHiddenSubstrateClasses: setter("hiddenSubstrateClasses"),
         setIntertidalHotspotsEnabled: setter("intertidalHotspotsEnabled"),
         setIntertidalScoreMode: setter("intertidalScoreMode"),
+        setIntertidalMhwOverrideFt: (v) =>
+          set({ intertidalMhwOverrideFt: v === null || !Number.isFinite(v) ? null : v }),
+        setIntertidalMhhwOverrideFt: (v) =>
+          set({ intertidalMhhwOverrideFt: v === null || !Number.isFinite(v) ? null : v }),
         setEfhOverlayEnabled: setter("efhOverlayEnabled"),
         setHiddenEfhSpecies: setter("hiddenEfhSpecies"),
         setHyd93ActiveFeatureCodes: setter("hyd93ActiveFeatureCodes"),

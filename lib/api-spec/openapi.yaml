@@ -2855,6 +2855,58 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /tides/{stationId}/datums:
+    get:
+      operationId: getTidesStationIdDatums
+      tags: [tidal]
+      summary: MHW / MHHW tidal datums for a station
+      description: Returns the Mean High Water and Mean Higher High Water datums for a NOAA station in feet above MLLW, fetched from the NOAA metadata API and cached server-side for 24 hours. Used by the intertidal classification settings to show what the band thresholds mean.
+      parameters:
+        - in: path
+          name: stationId
+          required: true
+          schema:
+            type: string
+            pattern: "^\\d{7}$"
+          description: 7-digit NOAA station id
+      responses:
+        "200":
+          description: Station datums
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stationId:
+                    type: string
+                  mhwFt:
+                    type: number
+                    nullable: true
+                    description: Mean High Water, feet above MLLW (null when NOAA has no value)
+                  mhhwFt:
+                    type: number
+                    nullable: true
+                    description: Mean Higher High Water, feet above MLLW (null when NOAA has no value)
+                  datum:
+                    type: string
+                    enum: [MLLW]
+                  units:
+                    type: string
+                    enum: [feet]
+                required: [stationId, mhwFt, mhhwFt, datum, units]
+        "400":
+          description: stationId must be a 7-digit NOAA station id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: NOAA datums could not be retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /tidal/schedule:
     get:
       operationId: getTidalSchedule

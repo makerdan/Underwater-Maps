@@ -13,7 +13,9 @@ import { render, screen, fireEvent } from "@testing-library/react";
 
 const h = vi.hoisted(() => {
   const resetSection = vi.fn();
-  return { resetSection };
+  const setIntertidalMhwOverrideFt = vi.fn();
+  const setIntertidalMhhwOverrideFt = vi.fn();
+  return { resetSection, setIntertidalMhwOverrideFt, setIntertidalMhhwOverrideFt };
 });
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
@@ -68,6 +70,10 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     syncedSnapshot: null,
     lastSyncedAt: null,
     resetSection: h.resetSection,
+    intertidalMhwOverrideFt: null,
+    intertidalMhhwOverrideFt: null,
+    setIntertidalMhwOverrideFt: h.setIntertidalMhwOverrideFt,
+    setIntertidalMhhwOverrideFt: h.setIntertidalMhhwOverrideFt,
   });
 
   const useSettingsStore = Object.assign(
@@ -106,6 +112,7 @@ vi.mock("@/pages/settings/components/SectionTitle", () => ({
 }));
 
 import { VisualsSection } from "../VisualsSection";
+import { useTidalStore } from "@/lib/tidalStore";
 
 describe("VisualsSection", () => {
   beforeEach(() => {
@@ -176,5 +183,64 @@ describe("VisualsSection", () => {
   it("renders nested DEPTH DISPLAY card header", () => {
     render(<VisualsSection />);
     expect(screen.getByText("DEPTH DISPLAY")).toBeInTheDocument();
+  });
+
+  describe("intertidal datums card", () => {
+    beforeEach(() => {
+      useTidalStore.setState({
+        station: null,
+        stationStatus: "idle",
+        datums: null,
+        datumsStatus: "idle",
+      });
+    });
+
+    it("renders the card with MHW/MHHW override inputs", () => {
+      render(<VisualsSection />);
+      expect(screen.getByTestId("intertidal-datums-card")).toBeInTheDocument();
+      expect(screen.getByTestId("intertidal-mhw-override")).toBeInTheDocument();
+      expect(screen.getByTestId("intertidal-mhhw-override")).toBeInTheDocument();
+    });
+
+    it("shows station datum values and station name in the sublabels", () => {
+      useTidalStore.setState({
+        station: {
+          id: "9452210",
+          name: "Juneau, AK",
+          lat: 58.3,
+          lon: -134.4,
+          distanceMiles: 2.1,
+        },
+        stationStatus: "ready",
+        datums: { stationId: "9452210", mhwFt: 14.53, mhhwFt: 15.42 },
+        datumsStatus: "ready",
+      });
+      render(<VisualsSection />);
+      expect(screen.getByTestId("intertidal-mhw-override-sublabel").textContent).toMatch(
+        /Juneau, AK/,
+      );
+      expect(screen.getByTestId("intertidal-mhw-override-sublabel").textContent).toMatch(
+        /14\.53/,
+      );
+      expect(screen.getByTestId("intertidal-mhhw-override-sublabel").textContent).toMatch(
+        /15\.42/,
+      );
+      expect(
+        (screen.getByTestId("intertidal-mhw-override") as HTMLInputElement).placeholder,
+      ).toContain("14.53");
+    });
+
+    it("commits a typed override on blur and clears to null on blank blur", () => {
+      render(<VisualsSection />);
+      const input = screen.getByTestId("intertidal-mhw-override") as HTMLInputElement;
+
+      fireEvent.change(input, { target: { value: "12.5" } });
+      fireEvent.blur(input);
+      expect(h.setIntertidalMhwOverrideFt).toHaveBeenCalledWith(12.5);
+
+      fireEvent.change(input, { target: { value: "" } });
+      fireEvent.blur(input);
+      expect(h.setIntertidalMhwOverrideFt).toHaveBeenLastCalledWith(null);
+    });
   });
 });

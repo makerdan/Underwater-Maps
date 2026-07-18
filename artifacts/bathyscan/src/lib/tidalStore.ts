@@ -28,6 +28,13 @@ export interface TideStationInfo {
 
 export type TideFetchStatus = "idle" | "loading" | "ready" | "unavailable";
 
+/** MHW / MHHW datums for a station, feet above MLLW (null = NOAA has no value). */
+export interface TideStationDatums {
+  stationId: string;
+  mhwFt: number | null;
+  mhhwFt: number | null;
+}
+
 interface TidalStoreState {
   /** Nearest NOAA station for the active dataset, or null when none resolved. */
   station: TideStationInfo | null;
@@ -38,6 +45,9 @@ interface TidalStoreState {
   /** Window bounds (epoch ms) of the loaded predictions, for the date picker. */
   windowStartMs: number | null;
   windowEndMs: number | null;
+  /** MHW/MHHW datums for `station` (ft above MLLW), when resolved. */
+  datums: TideStationDatums | null;
+  datumsStatus: TideFetchStatus;
 
   /**
    * Set the station directly (e.g. from a dataset's stored tideStation
@@ -48,6 +58,8 @@ interface TidalStoreState {
   resolveStation: (lat: number, lon: number) => Promise<void>;
   /** Fetch the 31-day prediction window for the current station. */
   loadPredictions: (stationId: string) => Promise<void>;
+  /** Fetch the MHW/MHHW datums for the current station. */
+  loadDatums: (stationId: string) => Promise<void>;
   /** Clear everything (dataset unloaded / switched). */
   reset: () => void;
 }
@@ -64,12 +76,15 @@ export const useTidalStore = create<TidalStoreState>((set, get) => ({
   predictionsStatus: "idle",
   windowStartMs: null,
   windowEndMs: null,
+  datums: null,
+  datumsStatus: "idle",
 
   setStation: (station) => {
     const prev = get().station;
     if (prev && prev.id === station.id && get().predictionsStatus === "ready") {
       // Same station with predictions already loaded — just refresh metadata.
       set({ station, stationStatus: "ready" });
+      if (get().datumsStatus === "idle") void get().loadDatums(station.id);
       return;
     }
     set({
@@ -79,8 +94,11 @@ export const useTidalStore = create<TidalStoreState>((set, get) => ({
       predictionsStatus: "idle",
       windowStartMs: null,
       windowEndMs: null,
+      datums: null,
+      datumsStatus: "idle",
     });
     void get().loadPredictions(station.id);
+    void get().loadDatums(station.id);
   },
 
   resolveStation: async (lat, lon) => {
@@ -131,6 +149,31 @@ export const useTidalStore = create<TidalStoreState>((set, get) => ({
     }
   },
 
+  loadDatums: async (stationId) => {
+    set({ datumsStatus: "loading" });
+    try {
+      const res = await fetch(apiUrl(`/tides/${stationId}/datums`));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as {
+        stationId: string;
+        mhwFt: number | null;
+        mhhwFt: number | null;
+      };
+      // Ignore stale responses if the station changed mid-flight.
+      if (get().station?.id !== stationId) return;
+      const mhwFt = typeof json.mhwFt === "number" && Number.isFinite(json.mhwFt) ? json.mhwFt : null;
+      const mhhwFt = typeof json.mhhwFt === "number" && Number.isFinite(json.mhhwFt) ? json.mhhwFt : null;
+      if (mhwFt === null && mhhwFt === null) {
+        set({ datums: null, datumsStatus: "unavailable" });
+        return;
+      }
+      set({ datums: { stationId, mhwFt, mhhwFt }, datumsStatus: "ready" });
+    } catch {
+      if (get().station?.id !== stationId) return;
+      set({ datums: null, datumsStatus: "unavailable" });
+    }
+  },
+
   reset: () =>
     set({
       station: null,
@@ -139,5 +182,7 @@ export const useTidalStore = create<TidalStoreState>((set, get) => ({
       predictionsStatus: "idle",
       windowStartMs: null,
       windowEndMs: null,
+      datums: null,
+      datumsStatus: "idle",
     }),
 }));

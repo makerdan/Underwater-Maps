@@ -30,10 +30,6 @@ args = "test-unit"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "test-e2e"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "test-settings-validation"
 
 [[workflows.workflow.tasks]]
@@ -43,6 +39,10 @@ args = "test-e2e-palette"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "audit"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-e2e"
 
 [[workflows.workflow]]
 name = "typecheck"
@@ -78,17 +78,6 @@ task = "shell.exec"
 args = "pnpm run test:unit"
 
 [[workflows.workflow]]
-name = "test-e2e"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm run test:e2e"
-
-[workflows.workflow.metadata]
-isValidation = true
-
-[[workflows.workflow]]
 name = "test-settings-validation"
 author = "agent"
 
@@ -120,6 +109,14 @@ args = "pnpm audit --audit-level=moderate"
 
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow]]
+name = "test-e2e"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run test:e2e"
 
 [agent]
 stack = "PNPM_WORKSPACE"

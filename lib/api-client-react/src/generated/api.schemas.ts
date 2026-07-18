@@ -3254,6 +3254,30 @@ export type GetTidesStationId200 = {
   predictions: GetTidesStationId200PredictionsItem[];
 };
 
+export type GetTidesStationIdDatums200Datum = typeof GetTidesStationIdDatums200Datum[keyof typeof GetTidesStationIdDatums200Datum];
+
+
+export const GetTidesStationIdDatums200Datum = {
+  MLLW: 'MLLW',
+} as const;
+
+export type GetTidesStationIdDatums200Units = typeof GetTidesStationIdDatums200Units[keyof typeof GetTidesStationIdDatums200Units];
+
+
+export const GetTidesStationIdDatums200Units = {
+  feet: 'feet',
+} as const;
+
+export type GetTidesStationIdDatums200 = {
+  stationId: string;
+  /** Mean High Water, feet above MLLW (null when NOAA has no value) */
+  mhwFt: number | null;
+  /** Mean Higher High Water, feet above MLLW (null when NOAA has no value) */
+  mhhwFt: number | null;
+  datum: GetTidesStationIdDatums200Datum;
+  units: GetTidesStationIdDatums200Units;
+};
+
 export type GetTidalScheduleParams = {
 lat: number;
 lon: number;

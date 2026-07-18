@@ -35,6 +35,12 @@ function seedPanelCollapse(
 ) {
   return page.addInitScript((o: Record<string, boolean>) => {
     try {
+      // Seed only on the FIRST load of this test's browser context.
+      // addInitScript re-runs on every navigation (including page.reload()),
+      // and re-seeding would overwrite state the test itself toggled —
+      // breaking "persists across reload" assertions.
+      if (sessionStorage.getItem("bathyscan:e2e-collapse-seeded")) return;
+      sessionStorage.setItem("bathyscan:e2e-collapse-seeded", "1");
       const raw = localStorage.getItem("bathyscan:panel-collapse");
       const existing: { state?: { collapsed?: Record<string, boolean> }; version?: number } =
         raw ? JSON.parse(raw) : {};
@@ -106,7 +112,19 @@ test.describe("OverlaysToolsPanel — Advanced toggle", () => {
     await advBtn.click();
     await expect(advBtn).toHaveAttribute("aria-expanded", "true");
 
-    // 3. Persist across reload
+    // 3. Persist across reload.  The toggle is mirrored to the server via a
+    //    300 ms debounced PUT /api/settings; on reload hydrateFromServer
+    //    applies the server's panelCollapse map over localStorage, so we must
+    //    wait for the flush or the stale server value wins after reload.
+    await page
+      .evaluate(() =>
+        (
+          window as unknown as {
+            __bathyTest?: { waitForServerSettingsSync?: () => Promise<void> };
+          }
+        ).__bathyTest?.waitForServerSettingsSync?.(),
+      )
+      .catch(() => {});
     await page.reload();
     await expect(panel).toBeVisible({ timeout: 25_000 });
     const advBtnAfterReload = panel.locator('[data-testid="advanced-toggle-overlaysToolsAdvanced"]');
@@ -234,7 +252,19 @@ test.describe("SeafloorClassificationPanel — Advanced toggle", () => {
     await advBtn.click();
     await expect(advBtn).toHaveAttribute("aria-expanded", "true");
 
-    // 3. Persist across reload
+    // 3. Persist across reload.  The toggle is mirrored to the server via a
+    //    300 ms debounced PUT /api/settings; on reload hydrateFromServer
+    //    applies the server's panelCollapse map over localStorage, so we must
+    //    wait for the flush or the stale server value wins after reload.
+    await page
+      .evaluate(() =>
+        (
+          window as unknown as {
+            __bathyTest?: { waitForServerSettingsSync?: () => Promise<void> };
+          }
+        ).__bathyTest?.waitForServerSettingsSync?.(),
+      )
+      .catch(() => {});
     await page.reload();
     await expect(section).toBeVisible({ timeout: 25_000 });
     const advBtnAfterReload = section.locator('[data-testid="advanced-toggle-seafloorAdvanced"]');
@@ -478,7 +508,19 @@ test.describe("TidePanel — Advanced toggle", () => {
     await advBtn.click();
     await expect(advBtn).toHaveAttribute("aria-expanded", "true");
 
-    // 3. Persist across reload
+    // 3. Persist across reload.  The toggle is mirrored to the server via a
+    //    300 ms debounced PUT /api/settings; on reload hydrateFromServer
+    //    applies the server's panelCollapse map over localStorage, so we must
+    //    wait for the flush or the stale server value wins after reload.
+    await page
+      .evaluate(() =>
+        (
+          window as unknown as {
+            __bathyTest?: { waitForServerSettingsSync?: () => Promise<void> };
+          }
+        ).__bathyTest?.waitForServerSettingsSync?.(),
+      )
+      .catch(() => {});
     await page.reload();
     const advBtnReloaded = page.locator('[data-testid="advanced-toggle-tidePanelAdvanced"]');
     const reloadVisible = await advBtnReloaded.isVisible({ timeout: 20_000 }).catch(() => false);
@@ -549,7 +591,19 @@ test.describe("HabitatPanel — Advanced toggle", () => {
     await advBtn.click();
     await expect(advBtn).toHaveAttribute("aria-expanded", "true");
 
-    // 3. Persist across reload
+    // 3. Persist across reload.  The toggle is mirrored to the server via a
+    //    300 ms debounced PUT /api/settings; on reload hydrateFromServer
+    //    applies the server's panelCollapse map over localStorage, so we must
+    //    wait for the flush or the stale server value wins after reload.
+    await page
+      .evaluate(() =>
+        (
+          window as unknown as {
+            __bathyTest?: { waitForServerSettingsSync?: () => Promise<void> };
+          }
+        ).__bathyTest?.waitForServerSettingsSync?.(),
+      )
+      .catch(() => {});
     await page.reload();
     const advBtnReloaded = page.locator('[data-testid="advanced-toggle-habitatAdvanced"]');
     const reloadVisible = await advBtnReloaded.isVisible({ timeout: 20_000 }).catch(() => false);

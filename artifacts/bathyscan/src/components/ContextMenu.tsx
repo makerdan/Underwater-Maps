@@ -79,6 +79,22 @@ export const ContextMenu: React.FC = () => {
     };
   }, [open, hide]);
 
+  // Re-clamp against the *measured* menu size after paint. The initial
+  // render clamps with an estimated height (items × ITEM_HEIGHT), but the
+  // real rendered height varies with font scaling and wrapped labels, so a
+  // menu opened near the bottom/right edge could still overflow slightly.
+  useLayoutEffect(() => {
+    if (!open || !ref.current) return;
+    const el = ref.current;
+    const rect = el.getBoundingClientRect();
+    const maxLeft = window.innerWidth - rect.width - VIEWPORT_MARGIN;
+    const maxTop = window.innerHeight - rect.height - VIEWPORT_MARGIN;
+    const left = Math.max(VIEWPORT_MARGIN, Math.min(rect.left, maxLeft));
+    const top = Math.max(VIEWPORT_MARGIN, Math.min(rect.top, maxTop));
+    if (left !== rect.left) el.style.left = `${left}px`;
+    if (top !== rect.top) el.style.top = `${top}px`;
+  }, [open, x, y, items]);
+
   // Auto-focus the first non-disabled, non-separator item for keyboard nav
   useEffect(() => {
     if (!open || !ref.current) return;

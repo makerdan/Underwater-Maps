@@ -374,6 +374,7 @@ Authentication is handled by **Clerk** across all surfaces:
 | GET | `/tidal` | Current tide height, current speed/direction, and next high/low event |
 | GET | `/tides/station` | Nearest NOAA tide station to a point |
 | GET | `/tides/:stationId` | 31-day window of 6-minute tide predictions for a station |
+| GET | `/tides/:stationId/datums` | MHW / MHHW tidal datums for a station |
 | GET | `/tidal/schedule` | Multi-day tide schedule with slack windows |
 | GET | `/tidal/pack` | Packed tide-height and current predictions for a location |
 | GET | `/weather/pack` | Weather snapshot for offline packs |

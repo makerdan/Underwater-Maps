@@ -43,6 +43,10 @@ async function openDriftPlanner(page: Page): Promise<void> {
       }
     ).__bathyTest?.setDriftPlannerActive?.(true),
   );
+  // Since the Plan-mode sidebar restructure, the Drift & Route section (and
+  // the WeatherPanel inside it) lives in the PLAN tab and is display:none in
+  // Explore mode. Switch the sidebar to Plan so the panel becomes visible.
+  await page.getByRole("button", { name: "Plan", exact: true }).click();
 }
 
 async function mockOkSurfaceConditions(page: Page): Promise<void> {

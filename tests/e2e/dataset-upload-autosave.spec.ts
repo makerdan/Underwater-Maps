@@ -101,6 +101,66 @@ async function cleanupAllUploads(req: APIRequestContext): Promise<void> {
   }
 }
 
+/**
+ * Force the sidebar into Explore mode. sidebarMode is persisted server-side
+ * per user, so an earlier spec (e.g. drift-planner) may have left it in
+ * Plan/Analyze where the Explore tab content — including MY UPLOADS — is
+ * display:none.
+ */
+async function ensureExploreMode(page: Page): Promise<void> {
+  const exploreBtn = page.getByRole("button", { name: "Explore", exact: true });
+  if (await exploreBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
+    await exploreBtn.click().catch(() => {});
+  }
+  // Since the Plan-mode sidebar restructure, the Explore tab shows an
+  // empty-state ("Load a dataset to begin") instead of the DatasetPanel
+  // until terrain is loaded. Seed synthetic terrain so MY UPLOADS renders.
+  await page
+    .waitForFunction(
+      () =>
+        Boolean(
+          (window as unknown as { __bathyTest?: { seedTerrain?: () => boolean } })
+            .__bathyTest?.seedTerrain,
+        ),
+      undefined,
+      { timeout: 15_000 },
+    )
+    .catch(() => {});
+  await page
+    .evaluate(() =>
+      (window as unknown as { __bathyTest?: { seedTerrain?: () => boolean } })
+        .__bathyTest?.seedTerrain?.(),
+    )
+    .catch(() => {});
+}
+
+/**
+ * Inject hasSeenOnboarding=true into localStorage before the page script runs
+ * so the full-screen OnboardingOverlay (zIndex 9000) never mounts and cannot
+ * intercept clicks on MY UPLOADS rows. Same pattern as shallow-dataset.spec.ts.
+ */
+function patchOnboardingSeen() {
+  return () => {
+    try {
+      const raw = localStorage.getItem("bathyscan:settings");
+      const parsed: { state?: Record<string, unknown>; version?: number } = raw
+        ? JSON.parse(raw)
+        : {};
+      parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+      localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+    } catch {
+      try {
+        localStorage.setItem(
+          "bathyscan:settings",
+          JSON.stringify({ state: { hasSeenOnboarding: true }, version: 0 }),
+        );
+      } catch {
+        // localStorage blocked (unlikely in tests, but guard anyway).
+      }
+    }
+  };
+}
+
 async function openUploadAccordion(page: Page): Promise<boolean> {
   // The dataset panel is expanded by default. Click the "UPLOAD DATASET(S)"
   // accordion to reveal the dropzone.
@@ -149,6 +209,7 @@ test.describe("upload auto-save end-to-end", () => {
     // Also clear the panel-collapse localStorage key so the "My Library"
     // panel always starts expanded regardless of what a prior test run may
     // have persisted for the bypass user.
+    await page.addInitScript(patchOnboardingSeen());
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
@@ -213,6 +274,10 @@ test.describe("upload auto-save end-to-end", () => {
     //    waits on every image/font, which on this dev build never settles
     //    cleanly under the R3F WebGL-failure storm in headless Chromium.
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    // sidebarMode is persisted server-side per user; an earlier spec may
+    // have left the sidebar in Plan/Analyze mode where the Explore tab
+    // (and MY UPLOADS) is display:none. Force Explore before asserting.
+    await ensureExploreMode(page);
     const optimisticRow = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(optimisticRow).toBeVisible({ timeout: 30_000 });
     await expect(optimisticRow).toContainText(expectedName);
@@ -222,6 +287,7 @@ test.describe("upload auto-save end-to-end", () => {
     //    pre-Task-#122 bug where the upload completed but no DB row was
     //    written, so the optimistic cache entry disappeared on refetch.
     await page.reload({ waitUntil: "domcontentloaded" });
+    await ensureExploreMode(page);
     const persistedRow = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(persistedRow).toBeVisible({ timeout: 30_000 });
     await expect(persistedRow).toContainText(expectedName);
