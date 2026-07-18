@@ -61,12 +61,13 @@
 - **Risk:** Persisted settings live in `settingsStore`, but several UI values are mirrored by hand: each `uiStore` setter must remember to also call `useSettingsStore.setState(...)`. A new setter that forgets the mirror silently stops persisting that setting — the user's choice reverts on next load with no error anywhere. The sentinel tests (`check:mock-drift`, settings coverage sentinel) catch some drift but not a forgotten mirror in a brand-new setter.
 - **Recommended fix:** Consolidate mirrored keys into one store, or add a small helper/middleware that updates both stores from a single declaration so the mirror can't be forgotten.
 
-### Finding 5 — AI upscale request not aborted on unmount
+### Finding 5 — AI upscale request not aborted on unmount — FIXED
 - **File and line:** `artifacts/bathyscan/src/hooks/useUpscaledHeatmap.ts:289`
 - **Category:** Async & timing
 - **Severity:** Medium
 - **Risk:** The hook guards setState with `isMountedRef`, so nothing crashes — but the `authorizedFetch` to `/api/poe/upscale` keeps running after the user navigates away. Upscale calls cost Poe credits and server time; rapid toggling of the heatmap can stack several concurrent paid requests whose results are all thrown away.
 - **Recommended fix:** Create an `AbortController` per request, pass its signal to `authorizedFetch`, and abort in the effect cleanup / when `cacheKey` changes.
+- **Resolution:** Fixed. Each Poe upscale request now creates an `AbortController` whose signal is passed to `authorizedFetch`; the request is aborted on unmount (effect cleanup), on `invalidate()`, and when a new request supersedes it. AbortError is swallowed silently. Covered by tests in `useUpscaledHeatmap.afterUnmount.test.ts`.
 
 ### Finding 6 — `jobId` destructured from finalize response without validation
 - **File and line:** `artifacts/bathyscan/src/components/DatasetPanel.tsx:1614`

@@ -207,3 +207,81 @@ describe("useUpscaledHeatmap — isMountedRef unmount guard", () => {
     unmount();
   });
 });
+
+describe("useUpscaledHeatmap — in-flight request abort", () => {
+  function getPassedSignal(): AbortSignal {
+    const init = vi.mocked(authorizedFetch).mock.calls[0]?.[1];
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    return init!.signal as AbortSignal;
+  }
+
+  it("passes an AbortSignal to authorizedFetch and aborts it on unmount", async () => {
+    const fetchDeferred = deferred<Response>();
+    vi.mocked(authorizedFetch).mockReturnValue(fetchDeferred.promise);
+
+    const { result, unmount } = renderHook(() => useUpscaledHeatmap());
+    const canvas = makeFakeCanvas();
+    const { transform, grid } = makeTransformAndGrid();
+
+    act(() => {
+      void result.current.requestUpscaleIfNeeded(
+        canvas,
+        transform as never,
+        grid as never,
+      );
+    });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    const signal = getPassedSignal();
+    expect(signal.aborted).toBe(false);
+
+    unmount();
+    expect(signal.aborted).toBe(true);
+
+    // Settle the fetch as an abort rejection — must be swallowed silently.
+    await act(async () => {
+      fetchDeferred.reject(new DOMException("Aborted", "AbortError"));
+      await vi.runAllTimersAsync();
+    });
+    expect(vi.mocked(idbSet)).not.toHaveBeenCalled();
+  });
+
+  it("aborts the in-flight request when invalidate() is called", async () => {
+    const fetchDeferred = deferred<Response>();
+    vi.mocked(authorizedFetch).mockReturnValue(fetchDeferred.promise);
+
+    const { result, unmount } = renderHook(() => useUpscaledHeatmap());
+    const canvas = makeFakeCanvas();
+    const { transform, grid } = makeTransformAndGrid();
+
+    act(() => {
+      void result.current.requestUpscaleIfNeeded(
+        canvas,
+        transform as never,
+        grid as never,
+      );
+    });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    const signal = getPassedSignal();
+    expect(signal.aborted).toBe(false);
+
+    act(() => {
+      result.current.invalidate();
+    });
+    expect(signal.aborted).toBe(true);
+
+    await act(async () => {
+      fetchDeferred.reject(new DOMException("Aborted", "AbortError"));
+      await vi.runAllTimersAsync();
+    });
+
+    expect(vi.mocked(idbSet)).not.toHaveBeenCalled();
+    expect(result.current.isUpscaling).toBe(false);
+    unmount();
+  });
+});

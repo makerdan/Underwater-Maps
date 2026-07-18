@@ -179,11 +179,16 @@ export function useUpscaledHeatmap() {
   const inFlightRef = useRef(false);
   const lastKeyRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      // Abort any in-flight Poe upscale — the result would be thrown away,
+      // and each request costs Poe credits and server time.
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
     };
   }, []);
 
@@ -198,6 +203,10 @@ export function useUpscaledHeatmap() {
    */
   const invalidate = useCallback(() => {
     const keyToRemove = lastKeyRef.current;
+    // The displayed key is being invalidated — any in-flight upscale for it
+    // is now stale, so abort rather than paying for a thrown-away result.
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
     setUpscaledBitmap(null);
     lastKeyRef.current = null;
     if (keyToRemove) {
@@ -284,12 +293,19 @@ export function useUpscaledHeatmap() {
       lastKeyRef.current = cacheKey;
       setIsUpscaling(true);
 
+      // Abort any previous in-flight request (different cache key) and create
+      // a fresh controller for this one so cleanup/invalidate can cancel it.
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       try {
         const imageBase64 = canvas.toDataURL("image/png");
         const response = await authorizedFetch(`${API_BASE}/api/poe/upscale`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ imageBase64, upscaleFactor: factor }),
+          signal: controller.signal,
         });
 
         if (!response.ok) {
@@ -323,10 +339,18 @@ export function useUpscaledHeatmap() {
           setUpscaledBitmap(img);
         }
       } catch (err) {
-        console.warn("[upscale] Upscale error (silent fallback):", err);
+        if (err instanceof DOMException && err.name === "AbortError") {
+          // Intentional cancellation (unmount / invalidate / superseded key) —
+          // not an error; fall back silently to the raw bitmap.
+        } else {
+          console.warn("[upscale] Upscale error (silent fallback):", err);
+        }
         lastKeyRef.current = null;
       } finally {
         inFlightRef.current = false;
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
         if (isMountedRef.current) {
           setIsUpscaling(false);
         }
