@@ -35,6 +35,13 @@ if ! pnpm run check:docs-stale 2>/dev/null; then
   git diff --cached --quiet || git commit -m "chore: auto-regenerate API route docs [post-merge]"
   echo "[post-merge] API route docs updated."
 fi
+# Re-register tiered validation commands so they survive future merges and are
+# always available on a fresh environment. The commands are defined in
+# scripts/register-validation-commands.mjs; agent sessions call
+# setValidationCommand() from the code_execution sandbox to apply them.
+# Invoking the script here documents intent; actual Replit-platform registration
+# must be done by an agent after merge using the setValidationCommand tool.
+node scripts/register-validation-commands.mjs 2>/dev/null || true
 # Sync to GitHub mirror. Skipped (with a log message) if either secret is
 # absent so contributors without the GitHub secret don't break CI.
 if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_REPO_URL}" ]; then

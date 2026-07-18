@@ -75,6 +75,18 @@ All AI calls in this project MUST go through `@workspace/poe`. Importing `openai
 
 ## Pillar 2 — Validation & Regression Testing
 
+### Tier selection — read this before running any validation
+
+Always load the `.agents/skills/validation-tiers/SKILL.md` skill before choosing a validation command. The project has three tiers:
+
+| Command | Steps | When |
+|---|---|---|
+| `test-fast` | typecheck + lint (~5 min, budget enforced by `tierFast`) | UI copy / style / new component only |
+| `test-standard` | + unit tests + doc/catalog checks (~20 min, `tierStandard`) | bug fix, new feature on existing endpoint, new settings key |
+| `test-heavy` | all 10 steps (~45 min, `aggregate`) | new route, schema migration, auth/security change, multi-package refactor |
+
+Running `test-heavy` for a copy change wastes 45 minutes. Running `test-fast` for a schema migration misses real regressions. Use the decision table in the validation-tiers skill to pick correctly.
+
 ### Contract-first pattern
 
 The source of truth for all request/response shapes is `lib/api-spec/openapi.yaml`. The frontend client and Zod validators are generated from it by Orval. Never hand-write types that duplicate the spec.

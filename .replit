@@ -40,6 +40,14 @@ args = "test-heavy"
 task = "workflow.run"
 args = "e2e-repro"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-fast"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-standard"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -99,12 +107,12 @@ isValidation = true
 name = "test-heavy"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "node scripts/validation-lock.mjs -- node scripts/test-heavy-serial.mjs"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs aggregate -- node scripts/run-tier.mjs full"
 
 [[workflows.workflow]]
 name = "e2e-repro"
@@ -116,6 +124,28 @@ isValidation = true
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "node scripts/validation-lock.mjs -- bash -c 'set -o pipefail; node scripts/kill-port-holders.mjs --e2e && npx playwright test 2>&1 | tee .local/tmp/full-e2e.log'"
+
+[[workflows.workflow]]
+name = "test-fast"
+author = "agent"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast"
+
+[[workflows.workflow]]
+name = "test-standard"
+author = "agent"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard"
 
 [agent]
 stack = "PNPM_WORKSPACE"

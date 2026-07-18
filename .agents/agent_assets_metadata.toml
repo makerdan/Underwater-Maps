@@ -41,3 +41,15 @@ id = "L34sPG5nmSf6kq5w8Flfu"
 uri = "file://bug-audit-report.md"
 type = "text"
 title = "Bug & Error Audit Report — BathyScan"
+
+[[outputs]]
+id = "78itKheEA2qJhzX5EuC73"
+uri = "file://.agents/skills/validation-tiers/SKILL.md"
+type = "text"
+title = "validation-tiers skill"
+
+[[outputs]]
+id = "VH262b5aB8QtFemw7vfiM"
+uri = "file://.agents/skills/GoPoe-or-GoHome/SKILL.md"
+type = "text"
+title = "GoPoe-or-GoHome skill (updated)"

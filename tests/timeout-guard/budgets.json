@@ -39,5 +39,11 @@
   },
   "aggregate": {
     "totalBudgetMs": 2700000
+  },
+  "tierFast": {
+    "runBudgetMs": 300000
+  },
+  "tierStandard": {
+    "runBudgetMs": 1200000
   }
 }
