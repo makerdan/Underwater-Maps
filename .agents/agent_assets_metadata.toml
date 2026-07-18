@@ -35,3 +35,9 @@ id = "wiG-1U99As6jiE8tCgFTz"
 uri = "file://exports/bug-audit-skill.zip"
 type = "unspecified"
 title = "Bug-Audit Skill"
+
+[[outputs]]
+id = "L34sPG5nmSf6kq5w8Flfu"
+uri = "file://bug-audit-report.md"
+type = "text"
+title = "Bug & Error Audit Report — BathyScan"
