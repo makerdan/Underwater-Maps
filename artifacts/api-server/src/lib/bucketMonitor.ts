@@ -119,6 +119,32 @@ export function getJobByObjectKey(objectKey: string): BucketJob | undefined {
 
 // ─── Processing pipeline ──────────────────────────────────────────────────
 
+/**
+ * Maximum number of processObject pipelines (download → gunzip → parse →
+ * grid → DB insert) allowed to run concurrently. A burst of pending uploads
+ * (bulk upload, backlog after downtime) is processed a few at a time so
+ * memory and DB connections stay bounded — parse work alone can peak over
+ * 1 GB RSS per file.
+ */
+export const PROCESS_CONCURRENCY_CAP = 3;
+
+let activeProcessCount = 0;
+const processWaitQueue: Array<() => void> = [];
+
+async function withProcessSlot<T>(fn: () => Promise<T>): Promise<T> {
+  while (activeProcessCount >= PROCESS_CONCURRENCY_CAP) {
+    await new Promise<void>((resolve) => processWaitQueue.push(resolve));
+  }
+  activeProcessCount++;
+  try {
+    return await fn();
+  } finally {
+    activeProcessCount--;
+    const next = processWaitQueue.shift();
+    if (next) next();
+  }
+}
+
 const DECOMPRESS_MAX_BYTES = 200 * 1024 * 1024;
 const TEMP_DIR = path.join(os.tmpdir(), "bathyscan-gcs");
 const TEXT_EXTENSIONS = new Set(["csv", "xyz", "txt"]);
@@ -202,7 +228,6 @@ export async function processObject(bucketName: string, objectKey: string): Prom
   // Extract userId from path: pending-datasets/<userId>/<uuid>/<filename>
   const parts = objectKey.split("/");
   const userId = parts[1] ?? "unknown";
-  const fileName = parts[parts.length - 1] ?? "file";
 
   const job: BucketJob = {
     objectKey,
@@ -211,6 +236,20 @@ export async function processObject(bucketName: string, objectKey: string): Prom
     userId,
   };
   activeJobs.set(objectKey, job);
+
+  // The job is registered above (so scan() dedupes re-queued keys) but the
+  // heavy pipeline waits for a concurrency slot before doing any work.
+  await withProcessSlot(() => runProcessPipeline(bucketName, objectKey, job));
+}
+
+async function runProcessPipeline(
+  bucketName: string,
+  objectKey: string,
+  job: BucketJob,
+): Promise<void> {
+  const parts = objectKey.split("/");
+  const userId = parts[1] ?? "unknown";
+  const fileName = parts[parts.length - 1] ?? "file";
 
   await fs.promises.mkdir(TEMP_DIR, { recursive: true });
   const tmpBase = path.join(TEMP_DIR, crypto.randomUUID());
