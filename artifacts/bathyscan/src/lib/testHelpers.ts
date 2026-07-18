@@ -31,6 +31,7 @@ import { useClassificationStore } from "./classificationStore";
 import { useHabitatStore } from "./habitatStore";
 import type { SpeciesId } from "./habitat";
 import { haversineDistance } from "./geo";
+import { getSimulatedTreatmentMap } from "./simulatedTreatmentRegistry";
 import { queryClient } from "./queryClient";
 import { runMarkerDelete, type DeleteMarkerMutation } from "./markerActions";
 import {
@@ -700,6 +701,13 @@ export interface BathyTestApi {
    * or null when no suggestion is pending.
    */
   getShallowSuggestionDatasetId: () => string | null;
+
+  /**
+   * Simulated-terrain rainbow treatment — per-dataset map of whether the
+   * mounted TerrainMesh has activated the rainbow "SIMULATED" treatment.
+   * Key = datasetId, value = true only when the grid is synthetic.
+   */
+  getSimulatedTreatment: () => Record<string, boolean>;
 }
 
 declare global {
@@ -910,6 +918,7 @@ export function installTestHelpers(): void {
     clearPaletteSuggestion: () => usePaletteSuggestionStore.getState().clear(),
     isPaletteSuggestionDismissed: (datasetId) =>
       usePaletteSuggestionStore.getState().isDismissed(datasetId),
+    getSimulatedTreatment: () => getSimulatedTreatmentMap(),
     setColormapUserSet: (v) => useSettingsStore.getState().setColormapUserSet(v),
     getColormapUserSet: () => useSettingsStore.getState().colormapUserSet,
     setColormapThemeByUser: (theme) =>

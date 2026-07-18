@@ -108,7 +108,7 @@ task = "shell.exec"
 args = "pnpm audit --audit-level=moderate"
 
 [workflows.workflow.metadata]
-isValidation = true
+outputType = "console"
 
 [[workflows.workflow]]
 name = "test-e2e-palette"

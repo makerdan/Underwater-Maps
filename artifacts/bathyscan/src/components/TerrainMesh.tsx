@@ -2,7 +2,9 @@ import React, { useMemo, useEffect, useRef, useCallback } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { TerrainData } from "@workspace/api-client-react";
-import { buildTerrainGeometry, buildTerrainSkirtGeometry, computeZoneWeights, computeSlopeAttribute, applyColormapToVertexColors, WORLD_SIZE } from "@/lib/terrain";
+import { buildTerrainGeometry, buildTerrainSkirtGeometry, computeZoneWeights, computeSlopeAttribute, applyColormapToVertexColors, isSyntheticGrid, WORLD_SIZE } from "@/lib/terrain";
+import { SimulatedTerrainLabel } from "@/components/SimulatedTerrainLabel";
+import { registerSimulatedTreatment } from "@/lib/simulatedTreatmentRegistry";
 import { getTerrainTextures } from "@/lib/textures";
 import { createTerrainShaderMaterial, getPlaceholderHabitatTexture } from "@/lib/terrainShader";
 import { useClassificationStore } from "@/lib/classificationStore";
@@ -254,6 +256,23 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       material.uniforms["uGridMaxDepth"]!.value = grid.maxDepth;
     }, [grid, material]);
 
+    // Simulated (synthetic) data — activate the rainbow banding override and
+    // the floating "SIMULATED" labels. Never active for real bathymetry.
+    const synthetic = isSyntheticGrid(grid);
+    useEffect(() => {
+      material.uniforms["uSynthetic"]!.value = synthetic ? 1 : 0;
+    }, [synthetic, material]);
+
+    // Dev/e2e-only: report the treatment state so headless tests can assert
+    // the rainbow path activates only for synthetic grids. Tree-shaken in prod.
+    useEffect(() => {
+      if (!import.meta.env.DEV) return;
+      const id = grid.datasetId;
+      if (!id) return;
+      registerSimulatedTreatment(id, synthetic);
+      return () => registerSimulatedTreatment(id, null);
+    }, [grid.datasetId, synthetic]);
+
     // Trigger fade-in whenever the loaded grid changes.
     useEffect(() => {
       material.uniforms["uOpacity"]!.value = 0;
@@ -399,6 +418,10 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       material.uniforms["uHighlightMin"]!.value  = params.min;
       material.uniforms["uHighlightMax"]!.value  = params.max;
 
+      // Advance the simulated-data rainbow animation clock (cheap even when
+      // uSynthetic is 0 — the shader branch is skipped for real data).
+      material.uniforms["uTime"]!.value = state.clock.elapsedTime;
+
       // Habitat overlay — suppressed when float-texture linear filtering is unsupported
       material.uniforms["uShowHabitat"]!.value = (activeSpecies && floatTextureLinear) ? 1 : 0;
       material.uniforms["uHabitatIntensity"]!.value = habitatOverlayIntensity;
@@ -412,17 +435,22 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     // unaffected by the user's visual exaggeration preference.
     const yScale = Math.max(0.1, terrainExaggeration || 1);
     return (
-      <group scale={[1, yScale, 1]}>
-        <mesh
-          ref={ref}
-          geometry={geometry}
-          material={material}
-          onPointerDown={paintMode ? onPointerDown : undefined}
-          onPointerMove={paintMode ? onPointerMove : undefined}
-          onPointerUp={paintMode ? onPointerUp : undefined}
-        />
-        <mesh geometry={skirtGeometry} material={skirtMaterial} raycast={() => null} />
-      </group>
+      <>
+        <group scale={[1, yScale, 1]}>
+          <mesh
+            ref={ref}
+            geometry={geometry}
+            material={material}
+            onPointerDown={paintMode ? onPointerDown : undefined}
+            onPointerMove={paintMode ? onPointerMove : undefined}
+            onPointerUp={paintMode ? onPointerUp : undefined}
+          />
+          <mesh geometry={skirtGeometry} material={skirtMaterial} raycast={() => null} />
+        </group>
+        {/* Floating "SIMULATED" billboards — outside the exaggeration group so
+            the text is never vertically stretched. */}
+        {synthetic && <SimulatedTerrainLabel />}
+      </>
     );
   },
 );

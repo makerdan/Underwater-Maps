@@ -740,3 +740,14 @@ export function lonLatToWorldXZ(
   const z = ((lat - grid.minLat) / latRange) * WORLD_SIZE - WORLD_SIZE / 2;
   return { x, z };
 }
+
+/**
+ * True when a terrain grid's data source is synthetic (procedurally
+ * generated fallback) rather than real surveyed bathymetry. Drives the
+ * rainbow "SIMULATED" treatment in the 3D scene and Overview Map.
+ */
+export function isSyntheticGrid(
+  grid: Pick<TerrainData, "synthetic" | "dataSource">,
+): boolean {
+  return grid.synthetic === true || grid.dataSource === "synthetic";
+}

@@ -25,7 +25,7 @@ import { useUiStore, useTimelineVisible } from "@/lib/uiStore";
 import type { SelectedHotspot } from "@/lib/uiStore";
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
-import { lonLatToWorldXZ } from "@/lib/terrain";
+import { lonLatToWorldXZ, isSyntheticGrid } from "@/lib/terrain";
 import {
   buildHeatmapBitmap,
   buildContourLines,
@@ -38,6 +38,7 @@ import {
   normaliseLon,
   renderHeatmap,
   renderHeatmapAtBbox,
+  renderSyntheticHatch,
   renderContourLines,
   renderGridLines,
   renderScaleBar,
@@ -1095,6 +1096,19 @@ export const OverviewMap: React.FC = () => {
         }
       }
       ctx.globalAlpha = 1.0;
+
+      // Simulated-data rainbow hatch — drawn over any coverage area whose
+      // grid reports a synthetic data source. Real-data areas are untouched.
+      if (visibleNow.length > 1) {
+        for (const v of visibleNow) {
+          const og = v.overviewGrid;
+          if (og && isSyntheticGrid(og)) {
+            renderSyntheticHatch(ctx, og, worldGrid, t);
+          }
+        }
+      } else if (isSyntheticGrid(grid)) {
+        renderSyntheticHatch(ctx, grid, worldGrid, t);
+      }
 
       // Dataset boundary outlines — thin dashed borders drawn over the heatmap
       // patches so the edges of each dataset are clearly visible.

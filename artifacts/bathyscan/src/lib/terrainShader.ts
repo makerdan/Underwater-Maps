@@ -94,6 +94,10 @@ const fragmentShader = /* glsl */ `
   uniform float     uHabitatIntensity; // Blend strength multiplier [0,1]
   uniform vec3      uHabitatColor;     // Overlay tint colour (default amber)
 
+  // Simulated (synthetic) terrain — rainbow banding override
+  uniform float uSynthetic; // 0=real data 1=synthetic
+  uniform float uTime;      // seconds, drives slow band animation
+
   varying vec2  vUv;
   varying vec4  vZoneWeight;
   varying vec3  vColor;
@@ -161,6 +165,22 @@ const fragmentShader = /* glsl */ `
 
     float lighting = ambient + diffuse + lampDiff;
     finalColor *= lighting;
+
+    // ── Simulated-data rainbow banding ─────────────────────────────────────
+    // Overrides the depth palette with an unmistakably artificial animated
+    // rainbow so synthetic bathymetry can never be confused with real sonar.
+    // Bands follow world height (contour-like stripes) and drift slowly over
+    // time. Intentionally distinct from every user-selectable colormap.
+    if (uSynthetic > 0.5) {
+      float band = fract(-vWorldPos.y * 0.35 + uTime * 0.08);
+      vec3 rainbow = 0.5 + 0.5 * cos(6.28318 * (band + vec3(0.0, 0.333, 0.667)));
+      // Hard-edged banding: quantise into 7 discrete stripes for a clearly
+      // synthetic "test pattern" look rather than a smooth gradient.
+      float q = floor(band * 7.0) / 7.0;
+      vec3 quantRainbow = 0.5 + 0.5 * cos(6.28318 * (q + vec3(0.0, 0.333, 0.667)));
+      vec3 simColor = mix(rainbow, quantRainbow, 0.65);
+      finalColor = mix(finalColor, simColor * max(lighting, 0.55), 0.85);
+    }
 
     // ── Zone overlay tint ──────────────────────────────────────────────────
     if (uZoneOverlay > 0.0) {
@@ -305,6 +325,10 @@ export function createTerrainShaderMaterial(
       uShowHabitat:      { value: 0 },
       uHabitatIntensity: { value: 0.4 },
       uHabitatColor:     { value: new THREE.Color(1.0, 0.6, 0.1) }, // default amber
+      // Simulated-data rainbow override — OFF by default; TerrainMesh enables
+      // it only when the loaded grid reports a synthetic data source.
+      uSynthetic: { value: 0 },
+      uTime:      { value: 0 },
     },
     transparent: true,
     side: THREE.DoubleSide,

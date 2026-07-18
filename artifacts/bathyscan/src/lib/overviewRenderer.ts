@@ -1659,3 +1659,78 @@ export function buildIntertidalHotspotDescriptors(
 
   return { pins, dataMap };
 }
+
+// ---------------------------------------------------------------------------
+// Simulated (synthetic) data overlay — rainbow hatch over affected areas
+// ---------------------------------------------------------------------------
+
+/** Rainbow stripe colours used for the synthetic-data hatch (display sRGB). */
+export const SYNTHETIC_HATCH_COLORS = [
+  "#ef4444", // red
+  "#f97316", // orange
+  "#eab308", // yellow
+  "#22c55e", // green
+  "#3b82f6", // blue
+  "#a855f7", // violet
+] as const;
+
+/**
+ * Draw a diagonal rainbow hatch plus a "SIMULATED" caption over a dataset's
+ * bounding box on the Overview Map. Called only for grids whose data source
+ * is synthetic — real-data coverage is never touched.
+ */
+export function renderSyntheticHatch(
+  ctx: CanvasRenderingContext2D,
+  dataBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+  worldGrid: TerrainData,
+  t: OverviewTransform,
+): void {
+  const [x0, y0] = lonLatToCanvas(dataBbox.minLon, dataBbox.maxLat, worldGrid, t);
+  const [x1, y1] = lonLatToCanvas(dataBbox.maxLon, dataBbox.minLat, worldGrid, t);
+  const w = x1 - x0;
+  const h = y1 - y0;
+  if (w <= 0 || h <= 0) return;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x0, y0, w, h);
+  ctx.clip();
+
+  // Diagonal rainbow stripes (45°), cycling through the six hatch colours.
+  const stripe = Math.max(6, Math.min(14, Math.min(w, h) / 12));
+  ctx.globalAlpha = 0.4;
+  ctx.lineWidth = stripe * 0.55;
+  let colorIdx = 0;
+  for (let d = -h; d < w + h; d += stripe) {
+    ctx.strokeStyle = SYNTHETIC_HATCH_COLORS[colorIdx % SYNTHETIC_HATCH_COLORS.length]!;
+    colorIdx++;
+    ctx.beginPath();
+    ctx.moveTo(x0 + d, y0);
+    ctx.lineTo(x0 + d + h, y0 + h);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1.0;
+
+  // Amber warning border around the simulated area.
+  ctx.strokeStyle = "rgba(245,158,11,0.9)";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x0 + 0.75, y0 + 0.75, w - 1.5, h - 1.5);
+
+  // Caption — only when the patch is large enough to keep it legible.
+  if (w >= 60 && h >= 24) {
+    const fontPx = Math.max(9, Math.min(14, w / 12));
+    ctx.font = `700 ${fontPx}px 'JetBrains Mono', monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const cx = x0 + w / 2;
+    const cy = y0 + h / 2;
+    const label = "⚠ SIMULATED";
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = "rgba(2,8,24,0.75)";
+    ctx.fillRect(cx - tw / 2 - 6, cy - fontPx * 0.9, tw + 12, fontPx * 1.8);
+    ctx.fillStyle = "#f59e0b";
+    ctx.fillText(label, cx, cy);
+  }
+
+  ctx.restore();
+}
