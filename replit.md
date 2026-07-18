@@ -438,6 +438,7 @@ Authentication is handled by **Clerk** across all surfaces:
 
 | Method | Path | Purpose |
 |---|---|---|
+| POST | `/datasets/point-radius-query` | Find catalog datasets whose coverage intersects a circle around a point |
 | GET | `/efh/:id` | Essential Fish Habitat zones for a specific dataset |
 | GET | `/terrain/land` | Fetch a land-elevation (DEM) grid for a bounding box |
 | GET | `/terrain/satellite-tile` | Proxy a satellite/aerial imagery PNG for a bounding box |

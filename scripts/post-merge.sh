@@ -24,9 +24,17 @@ bash scripts/check-e2e-user-ids.sh
 # consumes enough memory to get OOM-killed mid-run. Tests are covered by the
 # validation system (test-unit workflow) and pre-existing failures are tracked
 # in the backlog.
-# Guardrail: fail immediately if the generated API route tables in README.md
-# or replit.md are out of sync with lib/api-spec/openapi.yaml.
-pnpm run check:docs-stale
+# Guardrail: keep generated API route tables in README.md and replit.md in
+# sync with lib/api-spec/openapi.yaml. Auto-regenerate if stale (task agents
+# frequently add new routes without running `pnpm run docs`) and commit the
+# result so the check passes cleanly.
+if ! pnpm run check:docs-stale 2>/dev/null; then
+  echo "[post-merge] API route docs were stale — regenerating and committing..."
+  pnpm run docs
+  git add README.md replit.md
+  git diff --cached --quiet || git commit -m "chore: auto-regenerate API route docs [post-merge]"
+  echo "[post-merge] API route docs updated."
+fi
 # Sync to GitHub mirror. Skipped (with a log message) if either secret is
 # absent so contributors without the GitHub secret don't break CI.
 if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_REPO_URL}" ]; then
