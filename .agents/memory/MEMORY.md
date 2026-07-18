@@ -48,4 +48,5 @@
 - [Validation serialization lock](validation-serialization-lock.md) — heavy validation steps wrap scripts/validation-lock.mjs so run budgets start after lock acquisition; concurrency caused false budget breaches.
 - [Settings sync flush races](settings-sync-flush-races.md) — serialize PUT flushes (old snapshot lands last = silent revert); one-way hasSeenOnboarding apply must not cancel intentional local resets.
 - [Live-mode follow e2e pitfalls](live-mode-follow-e2e.md) — enterLiveMode auto-engages follow; useFrame logic never runs in the headless stub canvas; seedTerrain needs a real preset id.
+- [Skill frontmatter YAML must parse](skill-frontmatter-yaml.md) — unquoted colon in a SKILL.md description breaks YAML and silently hides the skill from skillSearch; use a >- block scalar.
 - [Stale workflow log tails](stale-workflow-logs.md) — after restart_workflow, tailing the latest /tmp/logs file can show the PREVIOUS run; use refresh_all_logs.
