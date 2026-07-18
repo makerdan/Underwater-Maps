@@ -1,0 +1,41 @@
+# #2353 - Cache upscaled heatmaps on the server
+
+## What & Why
+
+Every heatmap upscale request that reaches the API server triggers a fresh, paid call to the Poe TopazLabs model -- the server has no cache. The browser caches results locally (in-memory + IndexedDB, 7-day TTL), but that cache doesn't help across devices, browsers, users, incognito sessions, cleared caches, or after the 7-day expiry. Add a server-side cache so an identical image at the same upscale factor is only ever paid for once, and repeat requests are served from storage.
+
+## Done looks like
+
+- Requesting an upscale for an image the server has already upscaled (same image bytes, same factor) returns the stored result without calling Poe -- noticeably faster and at zero AI cost.
+- The cache survives server restarts.
+- The cache cannot grow without bound: entries expire after a TTL and total size is capped, with oldest-first eviction.
+- Two simultaneous requests for the same image+factor result in only one Poe call (single-flight de-duplication).
+- Cache hits and misses are observable in server logs so cost savings can be verified.
+
+## Out of scope
+
+- Changing the client-side caching (in-memory / IndexedDB) -- it stays as the first line of defense.
+- Changing the upscale trigger conditions, factors, or the Topaz model/prompt.
+- Moving the cache to object storage or the database (disk cache following the existing zone-cache pattern is sufficient; revisit only if deploy topology demands it).
+
+## Steps
+
+1. **Content-addressed cache in the upscale route** -- Before calling Poe, derive a strong content hash (sha256) of the exact input image bytes plus the upscale factor and check a persistent server-side cache; on hit, return the stored upscaled image immediately. On a successful Poe response, store the result under that key. A cache hit requires the requester to already possess the exact image bytes, so content-addressed sharing leaks nothing -- but follow whatever partitioning decision matches the existing zone-cache precedent (it is userId-partitioned) and document the choice.
+
+2. **Disk persistence with eviction** -- Persist entries to disk following the established zone-cache pattern (safe hex filenames, path-traversal guards, schema-validated reads treated as miss on failure, startup hydration/sweep). Because upscaled PNGs are much larger than zone JSON, enforce both a TTL and a total-bytes cap (not just a file-count cap), evicting oldest first. Register the in-memory layer with the existing cache registry so tests can clear it.
+
+3. **Single-flight de-duplication** -- If a Poe upscale for a given cache key is already in flight, make concurrent requests for the same key await that one result instead of issuing duplicate paid calls. Ensure failures don't get cached and don't wedge later requests for the same key. Coordinate with the request-cancellation behavior added by the abandoned-upscale work: an aborted request must not leave a poisoned in-flight entry, and only completed results are cached.
+
+4. **Observability + tests** -- Log cache hit/miss/store events with the key prefix and payload size. Add unit tests covering: hit returns stored image without a Poe call, miss calls Poe and stores, corrupt/oversized disk entries are treated as misses, TTL and byte-cap eviction, and single-flight behavior under concurrent requests.
+
+## Relevant files
+
+- `artifacts/api-server/src/routes/poe.ts:1914-2049`
+- `artifacts/api-server/src/routes/poe.ts:258-554`
+- `artifacts/api-server/src/lib/cacheRegistry.ts`
+- `artifacts/api-server/src/lib/env.ts`
+- `artifacts/bathyscan/src/hooks/useUpscaledHeatmap.ts`
+
+Dependencies
+
+Stop paying for AI heatmap upscales the user already navigated away from
