@@ -10,7 +10,7 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
-const { mockState, setSidebarModeSpy, isMobileRef } = vi.hoisted(() => {
+const { mockState, setSidebarModeSpy, isMobileRef, appStateRef, driftStateRef } = vi.hoisted(() => {
   const setSidebarModeSpy = vi.fn();
   return {
     setSidebarModeSpy,
@@ -19,6 +19,8 @@ const { mockState, setSidebarModeSpy, isMobileRef } = vi.hoisted(() => {
       setSidebarMode: setSidebarModeSpy,
     },
     isMobileRef: { value: false },
+    appStateRef: { tidalOverlay: false, realisticMode: false },
+    driftStateRef: { driftPlannerActive: false },
   };
 });
 
@@ -26,6 +28,17 @@ vi.mock("@/lib/uiStore", () => ({
   useUiStore: Object.assign(
     (sel: (s: typeof mockState) => unknown) => sel(mockState),
     { getState: () => mockState },
+  ),
+}));
+
+vi.mock("@/lib/context", () => ({
+  useAppState: () => appStateRef,
+}));
+
+vi.mock("@/lib/driftStore", () => ({
+  useDriftStore: Object.assign(
+    (sel: (s: typeof driftStateRef) => unknown) => sel(driftStateRef),
+    { getState: () => driftStateRef },
   ),
 }));
 
@@ -47,6 +60,9 @@ beforeEach(() => {
   setSidebarModeSpy.mockClear();
   mockState.sidebarMode = "explore";
   isMobileRef.value = false;
+  appStateRef.tidalOverlay = false;
+  appStateRef.realisticMode = false;
+  driftStateRef.driftPlannerActive = false;
 });
 
 describe("SidebarModeTabs — desktop (text-only)", () => {
@@ -103,5 +119,40 @@ describe("SidebarModeTabs — mobile (icon-only)", () => {
     render(<SidebarModeTabs />);
     fireEvent.click(screen.getByTestId("sidebar-mode-tab-live"));
     expect(setSidebarModeSpy).toHaveBeenCalledWith("live");
+  });
+});
+
+describe("SidebarModeTabs — feature-active indicator dots", () => {
+  it("shows no dots when all relocated features are off", () => {
+    render(<SidebarModeTabs />);
+    for (const mode of MODES) {
+      expect(screen.queryByTestId(`sidebar-mode-tab-${mode}-indicator`)).toBeNull();
+    }
+  });
+
+  it("shows Explore dot when tidal overlay is active", () => {
+    appStateRef.tidalOverlay = true;
+    render(<SidebarModeTabs />);
+    expect(screen.getByTestId("sidebar-mode-tab-explore-indicator")).toBeInTheDocument();
+    expect(screen.queryByTestId("sidebar-mode-tab-live-indicator")).toBeNull();
+  });
+
+  it("shows Live dot when realistic (Drive Boat) mode is active", () => {
+    appStateRef.realisticMode = true;
+    render(<SidebarModeTabs />);
+    expect(screen.getByTestId("sidebar-mode-tab-live-indicator")).toBeInTheDocument();
+  });
+
+  it("shows Plan dot when drift planner is active", () => {
+    driftStateRef.driftPlannerActive = true;
+    render(<SidebarModeTabs />);
+    expect(screen.getByTestId("sidebar-mode-tab-plan-indicator")).toBeInTheDocument();
+  });
+
+  it("dots do not add visible text on mobile (icon-only) tabs", () => {
+    isMobileRef.value = true;
+    appStateRef.tidalOverlay = true;
+    render(<SidebarModeTabs />);
+    expect(screen.getByTestId("sidebar-mode-tab-explore").textContent).toBe("");
   });
 });

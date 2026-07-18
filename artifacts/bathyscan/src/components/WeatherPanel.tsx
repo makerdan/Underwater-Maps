@@ -833,6 +833,27 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
         >×</button>
       </div>
       )}
+      {embedded && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+          {/* The old top-right DRIFT toolbar toggle was the only way to turn
+              the planner off; embedded mode now needs its own affordance. */}
+          <button
+            data-testid="stop-planning-button"
+            onClick={onClose}
+            title="Stop drift planning"
+            style={{
+              background: "none",
+              border: "1px solid rgba(148,163,184,0.35)",
+              borderRadius: 3,
+              color: "#94a3b8",
+              cursor: "pointer",
+              fontSize: 11,
+              letterSpacing: "0.14em",
+              padding: "2px 8px",
+            }}
+          >✕ STOP PLANNING</button>
+        </div>
+      )}
 
       {/* Location context badge */}
       {terrain && (

@@ -410,6 +410,37 @@ describe("PUT /api/settings — globalFontSize (new v16 field)", () => {
   });
 });
 
+describe("PUT /api/settings — hasSeenToolbarRelocationHint (v23 field)", () => {
+  it("round-trips true and false", async () => {
+    for (const value of [true, false]) {
+      const res = await request(app)
+        .put("/api/settings")
+        .set(AUTH)
+        .send({ hasSeenToolbarRelocationHint: value });
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("hasSeenToolbarRelocationHint", value);
+    }
+  });
+
+  it("returns 400 when hasSeenToolbarRelocationHint is not a boolean", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ hasSeenToolbarRelocationHint: "yes" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("defaults to false when omitted from the payload", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ fogDensity: 0.012 });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("hasSeenToolbarRelocationHint", false);
+  });
+});
+
 describe("PUT /api/settings — paletteShallow", () => {
   it("accepts a valid 6-digit hex colour", async () => {
     const res = await request(app)

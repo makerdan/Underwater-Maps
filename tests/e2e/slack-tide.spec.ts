@@ -38,14 +38,19 @@ async function ensurePlanTab(page: Page): Promise<void> {
   }
 }
 
-async function clickTopBarToggle(page: Page, label: string): Promise<void> {
-  // Multiple hidden buttons can contain the same label (e.g. Plan-tab
-  // DriftTimeline "⛵ DRIFT" while the tab is display:none) — filter visible.
-  const btn = page.locator(`button:has-text('${label}'):visible`).first();
-  await expect(btn).toBeVisible({ timeout: 10_000 });
-  // Use dispatchEvent to bypass any canvas element that may sit on top of
-  // the toolbar button in headless mode (z-order intercept).
-  await btn.dispatchEvent("click");
+/**
+ * Enable the Drift Planner via the Plan tab's "Start Planning" button (the
+ * old top-right DRIFT toolbar toggle was removed — Drift is now enabled only
+ * from Plan › Drift & Route).
+ */
+async function startDriftPlanning(page: Page): Promise<void> {
+  await ensurePlanTab(page);
+  const startBtn = page.locator("[data-testid='start-planning-button']");
+  if (await startBtn.isVisible().catch(() => false)) {
+    // Use dispatchEvent to bypass any canvas element that may sit on top
+    // in headless mode (z-order intercept).
+    await startBtn.dispatchEvent("click");
+  }
 }
 
 /** Force the WeatherPanel into "estimated conditions" mode so the manual
@@ -220,13 +225,8 @@ test.describe("Slack-tide visuals", () => {
       )
       .catch(() => {});
 
-    // The DRIFT toggle and Drift Planner section live in the Plan sidebar
-    // tab (hidden in Explore). Enable via the test bridge and open Plan.
-    await page.evaluate(() =>
-      (window as unknown as { __bathyTest?: { setDriftPlannerActive?: (v: boolean) => void } }).__bathyTest?.setDriftPlannerActive?.(true),
-    );
-    await page.getByRole("button", { name: "Plan", exact: true }).dispatchEvent("click");
-    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 5_000 });
+    await startDriftPlanning(page);
+    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 10_000 });
 
     // Manual override panel must be present.
     await expect(page.locator("text=MANUAL OVERRIDE")).toBeVisible({ timeout: 10_000 });
@@ -299,13 +299,8 @@ test.describe("Slack-tide visuals", () => {
       )
       .catch(() => {});
 
-    // The DRIFT toggle and Drift Planner section live in the Plan sidebar
-    // tab (hidden in Explore). Enable via the test bridge and open Plan.
-    await page.evaluate(() =>
-      (window as unknown as { __bathyTest?: { setDriftPlannerActive?: (v: boolean) => void } }).__bathyTest?.setDriftPlannerActive?.(true),
-    );
-    await page.getByRole("button", { name: "Plan", exact: true }).dispatchEvent("click");
-    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 5_000 });
+    await startDriftPlanning(page);
+    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("text=MANUAL OVERRIDE")).toBeVisible({ timeout: 10_000 });
 
     // Baseline: timeline shows the angled-line copy ("N° from vertical").

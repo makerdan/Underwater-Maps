@@ -58,13 +58,13 @@ test.describe("Tide station prediction panel", () => {
         const key = "bathyscan:settings";
         const raw = localStorage.getItem(key);
         const parsed = raw ? JSON.parse(raw) : { state: {}, version: 0 };
-        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true };
         localStorage.setItem(key, JSON.stringify(parsed));
       } catch {}
     });
     await page.request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": E2E_USER_ID },
-      data: { showTidePanel: true, autoLoadTidal: true, hasSeenOnboarding: true },
+      data: { showTidePanel: true, autoLoadTidal: true, hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true },
     });
     // Nearest-station lookup → a station 42 miles away so the distance
     // caveat renders alongside the normal station metadata.

@@ -196,7 +196,7 @@ const ThermalLegend: React.FC = () => {
 };
 
 export const OverlaysToolsPanel: React.FC = () => {
-  const { terrain } = useAppState();
+  const { terrain, tidalOverlay, setTidalOverlay } = useAppState();
   const { toast } = useToast();
   const collapsed = usePanelCollapseStore((s) => s.collapsed.overlaysTools);
   const toggle = usePanelCollapseStore((s) => s.toggle);
@@ -527,13 +527,52 @@ export const OverlaysToolsPanel: React.FC = () => {
               />
             </div>
             <ViewscreenTooltip
-              label="Draws tidal flow arrows using the surface-conditions feed (shared with Wind and Current). Does not open the Tide data panel — use the TIDAL 3D DATA button in the top bar for the animated water plane, NOAA station data, and depth-layer selector."
+              label="Draws tidal flow arrows using the surface-conditions feed (shared with Wind and Current). Does not open the Tide data panel — use the TIDAL 3D toggle just below for the animated water plane, NOAA station data, and depth-layer selector."
               side="right"
             >
               <button
                 className="help-inline-icon"
                 onClick={e => e.stopPropagation()}
                 aria-label="About TIDE overlay"
+              >
+                ℹ
+              </button>
+            </ViewscreenTooltip>
+          </div>
+
+          {/* Tidal 3D Data — moved here from the old top-right viewscreen
+              toolbar. Enabling it switches the sidebar to the Plan tab so the
+              tide tools are in view. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <ToggleButton
+                testId="tidal-overlay-toggle"
+                active={tidalOverlay}
+                onClick={() => {
+                  const next = !tidalOverlay;
+                  setTidalOverlay(next);
+                  if (next) {
+                    const ui = useUiStore.getState();
+                    ui.setSidebarMode('plan');
+                    ui.setSidePaneCollapsed(false);
+                  }
+                }}
+                label="🌐 TIDAL 3D"
+                tooltip={tidalOverlay ? "Hide 3D water plane, NOAA station data, and tidal panel" : "Show 3D water plane, NOAA station data, and tidal panel"}
+                activeBg="rgba(0,229,255,0.10)"
+                activeBorder="rgba(0,229,255,0.45)"
+                activeColor="#00e5ff"
+                activeGlow="0 0 8px rgba(0,229,255,0.5)"
+              />
+            </div>
+            <ViewscreenTooltip
+              label="Enables the animated 3D water plane, fetches NOAA station data, and opens the Tide Panel (height, time scrubber, slack jumps, depth-layer arrows). Distinct from the 🌊 TIDE overlay above, which draws surface-conditions flow arrows. Turning it on switches the sidebar to the Plan tab."
+              side="right"
+            >
+              <button
+                className="help-inline-icon"
+                onClick={e => e.stopPropagation()}
+                aria-label="About TIDAL 3D DATA"
               >
                 ℹ
               </button>

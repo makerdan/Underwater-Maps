@@ -52,8 +52,8 @@ const STEPS: Step[] = [
   {
     title: "Toggle overlays",
     description:
-      'Use the "TIDAL" button (top-right) to enable current and water-level overlays. The Overlays panel on the left lets you layer wind, current-speed, and habitat data.',
-    region: "top-right-mid",
+      'Use the 🌐 TIDAL 3D toggle in the Explore tab\u2019s Overlays panel (left sidebar) to enable current and water-level overlays. The same panel lets you layer wind, current-speed, and habitat data.',
+    region: "left",
     icon: "◎",
   },
   {

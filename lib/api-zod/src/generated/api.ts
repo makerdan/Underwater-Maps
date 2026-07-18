@@ -1315,6 +1315,7 @@ export const getSettingsResponseColormapUserSetDefault = false;
 export const getSettingsResponseTelemetryOptInDefault = false;
 export const getSettingsResponseLlmDisclosureAcknowledgedDefault = false;
 export const getSettingsResponseHasSeenOnboardingDefault = false;
+export const getSettingsResponseHasSeenToolbarRelocationHintDefault = false;
 export const getSettingsResponseDatasetFolderExpandedDefault = {  };
 export const getSettingsResponseCrosshairMenuGamepadButtonDefault = 3;
 export const getSettingsResponseCrosshairMenuGamepadButtonMin = 0;
@@ -1492,6 +1493,7 @@ export const GetSettingsResponse = zod.object({
   "telemetryOptIn": zod.boolean().default(getSettingsResponseTelemetryOptInDefault).describe('Whether the user has opted in to anonymous usage telemetry.'),
   "llmDisclosureAcknowledged": zod.boolean().default(getSettingsResponseLlmDisclosureAcknowledgedDefault).describe('Whether the user has read and dismissed the one-time AI\/LLM data-sharing disclosure.'),
   "hasSeenOnboarding": zod.boolean().default(getSettingsResponseHasSeenOnboardingDefault).describe('Set to true once the user completes or skips the first-time guided tour. Synced cross-device.'),
+  "hasSeenToolbarRelocationHint": zod.boolean().default(getSettingsResponseHasSeenToolbarRelocationHintDefault).describe('Set to true once the user dismisses the one-time hint explaining that the Drive Boat, Tidal 3D, and Drift toggles moved into the left sidebar. Synced cross-device.'),
   "datasetFolderExpanded": zod.record(zod.string(), zod.boolean()).default(getSettingsResponseDatasetFolderExpandedDefault).describe('Expand\/collapse state for dataset library folders, keyed by folder id.'),
   "bookmarks": zod.record(zod.string(), zod.array(zod.object({
   "id": zod.string().describe('Unique bookmark id (UUID).'),
@@ -1748,6 +1750,7 @@ export const putSettingsBodyColormapUserSetDefault = false;
 export const putSettingsBodyTelemetryOptInDefault = false;
 export const putSettingsBodyLlmDisclosureAcknowledgedDefault = false;
 export const putSettingsBodyHasSeenOnboardingDefault = false;
+export const putSettingsBodyHasSeenToolbarRelocationHintDefault = false;
 export const putSettingsBodyDatasetFolderExpandedDefault = {  };
 export const putSettingsBodyCrosshairMenuGamepadButtonDefault = 3;
 export const putSettingsBodyCrosshairMenuGamepadButtonMin = 0;
@@ -1925,6 +1928,7 @@ export const PutSettingsBody = zod.object({
   "telemetryOptIn": zod.boolean().default(putSettingsBodyTelemetryOptInDefault).describe('Whether the user has opted in to anonymous usage telemetry.'),
   "llmDisclosureAcknowledged": zod.boolean().default(putSettingsBodyLlmDisclosureAcknowledgedDefault).describe('Whether the user has read and dismissed the one-time AI\/LLM data-sharing disclosure.'),
   "hasSeenOnboarding": zod.boolean().default(putSettingsBodyHasSeenOnboardingDefault).describe('Set to true once the user completes or skips the first-time guided tour. Synced cross-device.'),
+  "hasSeenToolbarRelocationHint": zod.boolean().default(putSettingsBodyHasSeenToolbarRelocationHintDefault).describe('Set to true once the user dismisses the one-time hint explaining that the Drive Boat, Tidal 3D, and Drift toggles moved into the left sidebar. Synced cross-device.'),
   "datasetFolderExpanded": zod.record(zod.string(), zod.boolean()).default(putSettingsBodyDatasetFolderExpandedDefault).describe('Expand\/collapse state for dataset library folders, keyed by folder id.'),
   "bookmarks": zod.record(zod.string(), zod.array(zod.object({
   "id": zod.string().describe('Unique bookmark id (UUID).'),
@@ -2176,6 +2180,7 @@ export const putSettingsResponseColormapUserSetDefault = false;
 export const putSettingsResponseTelemetryOptInDefault = false;
 export const putSettingsResponseLlmDisclosureAcknowledgedDefault = false;
 export const putSettingsResponseHasSeenOnboardingDefault = false;
+export const putSettingsResponseHasSeenToolbarRelocationHintDefault = false;
 export const putSettingsResponseDatasetFolderExpandedDefault = {  };
 export const putSettingsResponseCrosshairMenuGamepadButtonDefault = 3;
 export const putSettingsResponseCrosshairMenuGamepadButtonMin = 0;
@@ -2353,6 +2358,7 @@ export const PutSettingsResponse = zod.object({
   "telemetryOptIn": zod.boolean().default(putSettingsResponseTelemetryOptInDefault).describe('Whether the user has opted in to anonymous usage telemetry.'),
   "llmDisclosureAcknowledged": zod.boolean().default(putSettingsResponseLlmDisclosureAcknowledgedDefault).describe('Whether the user has read and dismissed the one-time AI\/LLM data-sharing disclosure.'),
   "hasSeenOnboarding": zod.boolean().default(putSettingsResponseHasSeenOnboardingDefault).describe('Set to true once the user completes or skips the first-time guided tour. Synced cross-device.'),
+  "hasSeenToolbarRelocationHint": zod.boolean().default(putSettingsResponseHasSeenToolbarRelocationHintDefault).describe('Set to true once the user dismisses the one-time hint explaining that the Drive Boat, Tidal 3D, and Drift toggles moved into the left sidebar. Synced cross-device.'),
   "datasetFolderExpanded": zod.record(zod.string(), zod.boolean()).default(putSettingsResponseDatasetFolderExpandedDefault).describe('Expand\/collapse state for dataset library folders, keyed by folder id.'),
   "bookmarks": zod.record(zod.string(), zod.array(zod.object({
   "id": zod.string().describe('Unique bookmark id (UUID).'),

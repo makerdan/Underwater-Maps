@@ -11,7 +11,7 @@ The **TIDAL 3D** toggle activates a full suite of animated tidal visualisation f
 
 ## What TIDAL 3D activates
 
-Turning on TIDAL 3D (the button appears in the Plan tab sidebar and in the HUD) activates:
+Turning on TIDAL 3D (the 🌐 TIDAL 3D toggle in the Explore tab's Overlays panel — turning it on switches the sidebar to the Plan tab) activates:
 
 1. **Animated 3D water plane** — a rendered water surface at the current tide height, rising and falling as you scrub the time slider.
 2. **NOAA station data fetch** — the app queries the nearest NOAA harmonic station (within 100 km) for tide height and tidal current predictions.
@@ -24,7 +24,7 @@ There are two separate controls:
 
 | Control | What it does |
 | --- | --- |
-| **TIDAL 3D button** (Plan tab / HUD) | Loads NOAA data, activates the Tidal panel, raises the animated water plane |
+| **🌐 TIDAL 3D toggle** (Overlays panel, Explore tab) | Loads NOAA data, activates the Tidal panel, raises the animated water plane |
 | **🌊 TIDE toggle** (Overlays panel, Explore tab) | Shows or hides the tidal-flow arrows on the scene — works independently once TIDAL 3D is on |
 
 You can turn 🌊 TIDE arrows off without turning off TIDAL 3D (to hide clutter while keeping the water plane and height readout). You can also turn 🌊 TIDE on before TIDAL 3D is active, but no arrows will appear until station data is loaded.

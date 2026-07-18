@@ -146,13 +146,13 @@ function patchOnboardingSeen() {
       const parsed: { state?: Record<string, unknown>; version?: number } = raw
         ? JSON.parse(raw)
         : {};
-      parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+      parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true };
       localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
     } catch {
       try {
         localStorage.setItem(
           "bathyscan:settings",
-          JSON.stringify({ state: { hasSeenOnboarding: true }, version: 0 }),
+          JSON.stringify({ state: { hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true }, version: 0 }),
         );
       } catch {
         // localStorage blocked (unlikely in tests, but guard anyway).

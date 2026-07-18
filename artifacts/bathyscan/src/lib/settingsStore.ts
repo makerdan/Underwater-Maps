@@ -407,6 +407,13 @@ export interface SettingsState {
    */
   hasSeenOnboarding: boolean;
 
+  /**
+   * Set to true once the user dismisses the one-time hint explaining that
+   * the Drive Boat, Tidal 3D, and Drift toggles moved into the left sidebar.
+   * Synced cross-device.
+   */
+  hasSeenToolbarRelocationHint: boolean;
+
   /** Per-dataset saved camera spawn positions (set via "Set as home" context menu). */
   datasetHomePositions: Record<string, DatasetHomePosition>;
 
@@ -664,6 +671,7 @@ interface SettingsActions {
 
   // Onboarding
   setHasSeenOnboarding: (v: boolean) => void;
+  setHasSeenToolbarRelocationHint: (v: boolean) => void;
 
   // Last session
   setLastSession: (v: LastSession | null) => void;
@@ -949,6 +957,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   // Onboarding
   hasSeenOnboarding: false,
+  hasSeenToolbarRelocationHint: false,
 
   datasetHomePositions: {},
   datasetFolderExpanded: {},
@@ -1051,7 +1060,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   account: ["telemetryOptIn", "llmDisclosureAcknowledged"],
   environment: ["waterType"],
   shortcuts: ["keyBindings", "crosshairMenuGamepadButton"],
-  onboarding: ["hasSeenOnboarding"],
+  onboarding: ["hasSeenOnboarding", "hasSeenToolbarRelocationHint"],
 };
 
 /**
@@ -1245,6 +1254,7 @@ export const useSettingsStore = create<SettingsStore>()(
 
         // Onboarding
         setHasSeenOnboarding: setter("hasSeenOnboarding"),
+        setHasSeenToolbarRelocationHint: setter("hasSeenToolbarRelocationHint"),
 
         // Last session
         setLastSession: setter("lastSession"),

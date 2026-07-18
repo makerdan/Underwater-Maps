@@ -211,8 +211,15 @@ test.describe("Tide HUD scrubber slack visuals", () => {
 
     // 2. The hour-slider container should render at least one purple slack
     //    band overlay. The bands sit inside the slider track wrapping the
-    //    range input.
-    const sliderInput = page.locator("input[type='range']").first();
+    //    range input. Scope the lookup to the TidePanel root: when the real
+    //    NOAA station is reachable the Conditions section renders its own
+    //    "Scrub tide prediction time" range input earlier in the DOM, so a
+    //    page-wide .first() would grab the wrong slider (which never has
+    //    slack-band gradients) and fail deterministically.
+    const sliderInput = page
+      .locator("[data-testid='tide-panel']")
+      .locator("input[type='range']")
+      .first();
     await expect(sliderInput).toBeVisible({ timeout: 10_000 });
     const sliderTrack = sliderInput.locator("..");
     // Bands use a purple linear-gradient. Browsers may serialize the rgba()

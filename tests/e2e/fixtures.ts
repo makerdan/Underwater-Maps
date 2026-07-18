@@ -58,10 +58,10 @@ export const DEFAULT_SETTINGS = {
   colormapTheme: "ocean",
   showCompassMinimap: true,
   hasSeenOnboarding: true,
-  // sidebarMode persists server-side per user, and the e2e user is shared
-  // across spec files. Without an explicit reset here, a spec that switches
-  // to Plan/Live leaves the NEXT spec loading with the Explore tab hidden
-  // (coord search, crosshair menu, dataset panels all live in Explore).
+  hasSeenToolbarRelocationHint: true,
+  // sidebarMode persists server-side per user; a spec that switches to Plan
+  // (or Live) would otherwise leak that mode into the next spec, hiding the
+  // Explore tab's DatasetPanel and breaking remove-dataset flows.
   sidebarMode: "explore",
   panelCollapse: {},
 } as const;

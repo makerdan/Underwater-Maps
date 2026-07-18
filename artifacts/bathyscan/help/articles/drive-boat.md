@@ -16,7 +16,7 @@ order: 8.6
 
 The HUD speed indicator changes from unitless dot-tiers to **knots**. The Throttle panel becomes the primary speed control.
 
-Alternatively, you can toggle Realistic Speed Mode from a button in the HUD without opening Settings.
+Alternatively, you can use the **Drive Boat** toggle at the top of the **Live tab** in the left sidebar without opening Settings.
 
 ## Step 2 — Open the Throttle panel
 

@@ -602,12 +602,12 @@ test.describe("LocationBadge on data panels", () => {
       await ensureTerrainLoaded(page);
       await openPlanTab(page);
 
-      // Enable the Drift Planner via the test bridge — the DRIFT HUD toggle
-      // is unreliable under headless z-order; this matches drift-planner.spec.ts.
-      await page.waitForFunction(() => Boolean((window as unknown as { __bathyTest?: { setDriftPlannerActive?: unknown } }).__bathyTest?.setDriftPlannerActive), null, { timeout: 10_000 });
-      await page.evaluate(() =>
-        (window as unknown as { __bathyTest?: { setDriftPlannerActive?: (v: boolean) => void } }).__bathyTest?.setDriftPlannerActive?.(true),
-      );
+      // Drift is now enabled via the Plan tab's "Start Planning" button
+      // (the old top-right DRIFT toolbar toggle was removed).
+      await ensurePlanTab(page);
+      const startBtn = page.locator("[data-testid='start-planning-button']");
+      await expect(startBtn).toBeVisible({ timeout: 10_000 });
+      await startBtn.dispatchEvent("click");
 
       const weatherPanel = page.locator("[data-testid='weather-panel']");
       await expect(weatherPanel).toBeVisible({ timeout: 8_000 });
@@ -635,12 +635,12 @@ test.describe("LocationBadge on data panels", () => {
       await ensureTerrainLoaded(page);
       await openPlanTab(page);
 
-      // Enable the Drift Planner via the test bridge — the DRIFT HUD toggle
-      // is unreliable under headless z-order; this matches drift-planner.spec.ts.
-      await page.waitForFunction(() => Boolean((window as unknown as { __bathyTest?: { setDriftPlannerActive?: unknown } }).__bathyTest?.setDriftPlannerActive), null, { timeout: 10_000 });
-      await page.evaluate(() =>
-        (window as unknown as { __bathyTest?: { setDriftPlannerActive?: (v: boolean) => void } }).__bathyTest?.setDriftPlannerActive?.(true),
-      );
+      // Drift is now enabled via the Plan tab's "Start Planning" button
+      // (the old top-right DRIFT toolbar toggle was removed).
+      await ensurePlanTab(page);
+      const startBtn = page.locator("[data-testid='start-planning-button']");
+      await expect(startBtn).toBeVisible({ timeout: 10_000 });
+      await startBtn.dispatchEvent("click");
 
       const weatherPanel = page.locator("[data-testid='weather-panel']");
       await expect(weatherPanel).toBeVisible({ timeout: 8_000 });

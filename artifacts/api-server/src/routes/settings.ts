@@ -172,6 +172,7 @@ export const DEFAULT_SETTINGS = {
   telemetryOptIn: false,
   llmDisclosureAcknowledged: false,
   hasSeenOnboarding: false,
+  hasSeenToolbarRelocationHint: false,
   datasetFolderExpanded: {} as Record<string, boolean>,
   bookmarks: {} as Record<string, unknown[]>,
   keyBindings: {} as Record<string, string>,

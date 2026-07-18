@@ -10,6 +10,8 @@
  */
 import React from "react";
 import { useUiStore } from "@/lib/uiStore";
+import { useAppState } from "@/lib/context";
+import { useDriftStore } from "@/lib/driftStore";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { SidebarMode } from "@/lib/settingsStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -87,6 +89,18 @@ export const SidebarModeTabs: React.FC = () => {
   const sidebarMode = useUiStore((s) => s.sidebarMode);
   const setSidebarMode = useUiStore((s) => s.setSidebarMode);
   const isMobile = useIsMobile();
+  const { tidalOverlay, realisticMode } = useAppState();
+  const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+
+  // Per-tab "feature active" indicator dots: a tab shows a dot when a
+  // feature homed under it is currently enabled, so relocated toggles
+  // (Tidal 3D, Drive Boat, Drift) stay discoverable while the sidebar is
+  // on another tab.
+  const tabIndicator: Partial<Record<SidebarMode, boolean>> = {
+    explore: tidalOverlay,
+    live: realisticMode,
+    plan: driftPlannerActive,
+  };
 
   return (
     <div
@@ -140,9 +154,27 @@ export const SidebarModeTabs: React.FC = () => {
                 textShadow: isActive ? "0 0 6px rgba(0,229,255,0.5)" : "none",
                 transition: "background 0.15s, color 0.15s, border-color 0.15s",
                 whiteSpace: "nowrap",
+                position: "relative",
               }}
             >
               {isMobile ? tab.icon : tab.label}
+              {tabIndicator[tab.mode] && (
+                <span
+                  data-testid={`sidebar-mode-tab-${tab.mode}-indicator`}
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    top: 4,
+                    right: 5,
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: "#00e5ff",
+                    boxShadow: "0 0 5px rgba(0,229,255,0.8)",
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
             </button>
           </ViewscreenTooltip>
         );

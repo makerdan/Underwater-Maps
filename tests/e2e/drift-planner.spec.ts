@@ -4,7 +4,7 @@ import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
  * Drift Planner end-to-end tests
  *
  * Covers:
- *   - Toggling Drift Planner on/off from the top toolbar
+ *   - Toggling Drift Planner on/off from the Plan tab (Start/Stop Planning)
  *   - WeatherPanel render (real or estimated-conditions banner)
  *   - DriftTimeline 24-hour chip row + scrubber interaction
  *   - × close button restoring the off state
@@ -90,7 +90,7 @@ test.describe("Drift Planner", () => {
         const key = "bathyscan:settings";
         const raw = localStorage.getItem(key);
         const parsed = raw ? JSON.parse(raw) : { state: {}, version: 0 };
-        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true };
         localStorage.setItem(key, JSON.stringify(parsed));
       } catch {}
     });
@@ -98,7 +98,7 @@ test.describe("Drift Planner", () => {
     // persist hasSeenOnboarding on the server too (same as tide-station spec).
     await page.request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": E2E_USER_ID },
-      data: { hasSeenOnboarding: true },
+      data: { hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true },
     });
     await mockOkSurfaceConditions(page);
     await page.goto("/");
@@ -219,7 +219,7 @@ test.describe("Drift Planner", () => {
     );
   });
 
-  test("DRIFT toolbar toggle hides the Drift Planner panel", async ({ page }) => {
+  test("STOP PLANNING button hides the Drift Planner panel", async ({ page }) => {
     if (!(await appIsSignedIn(page))) {
       test.skip(true, "Canvas not visible — landing page shown");
       return;
@@ -228,10 +228,11 @@ test.describe("Drift Planner", () => {
     const panel = page.locator("[data-testid='weather-panel']");
     await expect(panel).toBeVisible({ timeout: 5_000 });
 
-    // The embedded Plan-mode panel has no × header button; the top toolbar
-    // "◉ DRIFT" button toggles the planner off.
-    const toolbarToggle = page.locator("button:has-text('◉ DRIFT')").first();
-    await toolbarToggle.dispatchEvent("click");
+    // The old top-right "◉ DRIFT" toolbar toggle was removed; the embedded
+    // Plan-mode panel now has its own STOP PLANNING button.
+    const stopBtn = page.locator("[data-testid='stop-planning-button']");
+    await expect(stopBtn).toBeVisible({ timeout: 5_000 });
+    await stopBtn.dispatchEvent("click");
 
     await expect(panel).toBeHidden({ timeout: 3_000 });
     // Hour chips also disappear, and the empty state returns.

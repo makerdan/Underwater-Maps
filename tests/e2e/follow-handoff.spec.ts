@@ -66,7 +66,7 @@ function injectSettings(
 }
 
 const BASE = {
-  hasSeenOnboarding: true,
+  hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true,
   sidePaneCollapsed: false,
   sidebarMode: "explore",
   llmDisclosureAcknowledged: true,

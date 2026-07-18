@@ -55,6 +55,7 @@ The **Overlays** panel in the Explore tab contains buttons that toggle environme
 | ◼ SUBSTRATE | Tints the seafloor by classified substrate type |
 | 💨 WIND | Overlays surface wind-direction arrows — available any time the toggle is on |
 | 🌊 TIDE | Overlays tidal-flow arrows — available any time the toggle is on |
+| 🌐 TIDAL 3D | Activates the animated water plane, NOAA station data, and Tidal panel (switches the sidebar to the Plan tab) |
 | ↬ CURRENT | Overlays sub-surface current arrows — available any time the toggle is on |
 | 🛩 NOAA WEATHER STATIONS | Toggles NOAA ASOS/AWOS station pins (saltwater only) |
 | 🌿 RAWS WEATHER STATIONS | Toggles AOOS RAWS land station pins (saltwater only) |

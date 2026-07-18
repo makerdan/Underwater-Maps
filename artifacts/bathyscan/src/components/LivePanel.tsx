@@ -13,6 +13,8 @@
  * lib/liveMode.ts — this component is a pure view over the stores.
  */
 import React from "react";
+import { useAppState } from "@/lib/context";
+import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
 import { useCameraStore } from "@/lib/cameraStore";
@@ -59,6 +61,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 export const LivePanel: React.FC = () => {
+  const { realisticMode, setRealisticMode } = useAppState();
   const gpsActive = useGpsStore((s) => s.active);
   const gpsPosition = useGpsStore((s) => s.position);
   const gpsError = useGpsStore((s) => s.error);
@@ -148,6 +151,38 @@ export const LivePanel: React.FC = () => {
       data-testid="live-panel"
       style={{ display: "flex", flexDirection: "column", gap: 8 }}
     >
+      {/* ── Drive Boat (realistic throttle mode) — moved here from the old
+             top-right viewscreen toolbar ── */}
+      <ViewscreenTooltip
+        label={realisticMode ? "Disable realistic boat throttle mode" : "Enable realistic boat throttle mode — throttle panel and boat physics"}
+        side="right"
+      >
+        <button
+          data-testid="drive-boat-toggle"
+          aria-pressed={realisticMode}
+          onClick={() => setRealisticMode(!realisticMode)}
+          style={{
+            width: "100%",
+            padding: "10px 12px",
+            borderRadius: 6,
+            border: `1px solid ${realisticMode ? "rgba(34,211,238,0.6)" : "rgba(0,229,255,0.35)"}`,
+            background: realisticMode ? "rgba(34,211,238,0.14)" : "rgba(0,229,255,0.07)",
+            color: realisticMode ? "#22d3ee" : "#00e5ff",
+            fontFamily: MONO,
+            fontSize: 15,
+            fontWeight: 700,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+            textShadow: realisticMode ? "0 0 6px rgba(34,211,238,0.5)" : "none",
+            transition: "background 0.15s, color 0.15s, border-color 0.15s",
+            textAlign: "left",
+          }}
+        >
+          {realisticMode ? "◉" : "○"} Drive Boat
+        </button>
+      </ViewscreenTooltip>
+
       {/* ── GPS status ── */}
       <div data-testid="live-gps-status" style={cardStyle}>
         <div style={labelStyle}>GPS Status</div>

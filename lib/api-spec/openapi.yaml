@@ -5466,6 +5466,10 @@ components:
           type: boolean
           default: false
           description: Set to true once the user completes or skips the first-time guided tour. Synced cross-device.
+        hasSeenToolbarRelocationHint:
+          type: boolean
+          default: false
+          description: Set to true once the user dismisses the one-time hint explaining that the Drive Boat, Tidal 3D, and Drift toggles moved into the left sidebar. Synced cross-device.
         datasetFolderExpanded:
           type: object
           additionalProperties:

@@ -84,7 +84,7 @@ async function getSidebarMode(page: Parameters<typeof test.beforeEach>[0]["page"
 // sidePaneCollapsed=false ensures the sidebar is open.
 // sidebarMode='explore' sets a known starting mode.
 const BASE = {
-  hasSeenOnboarding: true,
+  hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true,
   sidePaneCollapsed: false,
   sidebarMode: "explore",
   llmDisclosureAcknowledged: true,

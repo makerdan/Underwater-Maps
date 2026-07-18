@@ -110,7 +110,7 @@ test.describe("Drift Planner — Drift vs Trolling modes", () => {
         const key = "bathyscan:settings";
         const raw = localStorage.getItem(key);
         const parsed = raw ? JSON.parse(raw) : { state: {}, version: 0 };
-        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true };
+        parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true };
         localStorage.setItem(key, JSON.stringify(parsed));
       } catch {}
     });
@@ -118,7 +118,7 @@ test.describe("Drift Planner — Drift vs Trolling modes", () => {
     // persist hasSeenOnboarding on the server too (same as tide-station spec).
     await page.request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": E2E_USER_ID },
-      data: { hasSeenOnboarding: true },
+      data: { hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true },
     });
     await mockOkSurfaceConditions(page);
     await page.goto("/");

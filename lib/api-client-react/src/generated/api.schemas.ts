@@ -1111,6 +1111,8 @@ export interface UserSettings {
   llmDisclosureAcknowledged?: boolean;
   /** Set to true once the user completes or skips the first-time guided tour. Synced cross-device. */
   hasSeenOnboarding?: boolean;
+  /** Set to true once the user dismisses the one-time hint explaining that the Drive Boat, Tidal 3D, and Drift toggles moved into the left sidebar. Synced cross-device. */
+  hasSeenToolbarRelocationHint?: boolean;
   /** Expand/collapse state for dataset library folders, keyed by folder id. */
   datasetFolderExpanded?: UserSettingsDatasetFolderExpanded;
   /** Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions. */

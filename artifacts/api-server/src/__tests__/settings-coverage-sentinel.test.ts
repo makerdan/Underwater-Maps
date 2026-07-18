@@ -213,6 +213,9 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   "timelineCurrentTime",
   "timelineRange",
   "sidebarMode",
+
+  // ── v23 toolbar-relocation hint (me.test.ts) ──────────────────────────────
+  "hasSeenToolbarRelocationHint",
 ]);
 
 describe("PutSettingsBody field-coverage sentinel", () => {

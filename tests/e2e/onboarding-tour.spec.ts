@@ -69,7 +69,7 @@ function patchOnboardingLocalStorage(value: boolean) {
     const parsed: { state?: Record<string, unknown>; version?: number } = raw
       ? JSON.parse(raw)
       : {};
-    parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: value };
+    parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: value, hasSeenToolbarRelocationHint: true };
     localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
   } catch {
     // If the key doesn't exist yet, write a minimal seed so Zustand's
@@ -77,7 +77,7 @@ function patchOnboardingLocalStorage(value: boolean) {
     try {
       localStorage.setItem(
         "bathyscan:settings",
-        JSON.stringify({ state: { hasSeenOnboarding: value }, version: 0 }),
+        JSON.stringify({ state: { hasSeenOnboarding: value, hasSeenToolbarRelocationHint: true }, version: 0 }),
       );
     } catch {
       // localStorage blocked (unlikely in tests, but guard anyway).
@@ -96,7 +96,7 @@ async function setServerOnboardingFlag(
 ) {
   await request.put(`${API_URL}/api/settings`, {
     headers: { "x-e2e-user-id": E2E_USER_ID },
-    data: { hasSeenOnboarding: value },
+    data: { hasSeenOnboarding: value, hasSeenToolbarRelocationHint: true },
   });
 }
 

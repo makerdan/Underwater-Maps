@@ -119,10 +119,18 @@ test.describe("Help-icon deep links", () => {
   test("Throttle panel help icon → 'Throttle Panel' article", async ({ page }) => {
     test.setTimeout(60_000);
 
-    // ThrottlePanel only mounts when "DRIVE BOAT" boat-throttle mode is on.
-    const realisticBtn = page.locator("button", { hasText: /\bDRIVE BOAT\b/ }).first();
+    // ThrottlePanel only mounts when Drive Boat (boat-throttle) mode is on.
+    // The Drive Boat toggle moved from the old top-right toolbar to the top
+    // of the Live sidebar tab.
+    const liveTab = page.locator("[data-testid='sidebar-mode-tab-live']");
+    await expect(liveTab).toBeVisible({ timeout: 10_000 });
+    if ((await liveTab.getAttribute("aria-pressed").catch(() => null)) !== "true") {
+      await liveTab.dispatchEvent("click");
+      await expect(liveTab).toHaveAttribute("aria-pressed", "true");
+    }
+    const realisticBtn = page.locator("[data-testid='drive-boat-toggle']");
     await expect(realisticBtn).toBeVisible({ timeout: 10_000 });
-    if (((await realisticBtn.textContent()) ?? "").trim().startsWith("○")) {
+    if ((await realisticBtn.getAttribute("aria-pressed").catch(() => null)) !== "true") {
       await realisticBtn.dispatchEvent("click");
     }
 
@@ -222,12 +230,14 @@ test.describe("Help-icon deep links", () => {
         .catch(() => {});
     }
 
-    // Enable the tidal overlay via the top-right toolbar so <TidePanel /> mounts.
+    // Enable the tidal overlay so <TidePanel /> mounts.
     // NOTE: The sidebar's [data-testid="overlay-toggle-tide"] controls the
     // surface-current-arrows overlay (useUiStore.tideOverlayActive) which is
     // independent from TidePanel mounting. TidePanel mounts when
     // `tidalOverlay` (context) is true — that state is toggled by the
-    // top-bar TIDAL button [data-testid="tidal-overlay-toggle"].
+    // 🌐 TIDAL 3D toggle [data-testid="tidal-overlay-toggle"], which now
+    // lives in the Explore tab's Overlays panel (clicking it on also
+    // auto-switches the sidebar to the Plan tab).
     const tidalBtn = page.locator("[data-testid='tidal-overlay-toggle']");
     await expect(tidalBtn).toBeVisible({ timeout: 10_000 });
     // `autoLoadTidal` may cause a useEffect to enable the overlay shortly

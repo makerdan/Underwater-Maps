@@ -26,6 +26,7 @@ import { OverlaysToolsPanel } from "@/components/OverlaysToolsPanel";
 import { DatasetPanel } from "@/components/DatasetPanel";
 import { SidebarSection, SidebarSectionGroup } from "@/components/SidebarSection";
 import { SidebarModeTabs } from "@/components/SidebarModeTabs";
+import { ToolbarRelocationHint } from "@/components/ToolbarRelocationHint";
 import { LivePanel } from "@/components/LivePanel";
 import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
@@ -1436,6 +1437,7 @@ function Main() {
                         Predict where your boat and fishing line will drift based on tidal currents and wind over a 24-hour window.
                       </div>
                       <button
+                        data-testid="start-planning-button"
                         onClick={() => setDriftPlannerActive(true)}
                         style={{
                           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -1609,100 +1611,12 @@ function Main() {
           </div>
         )}
 
-        {/* Tidal + Realistic toggle buttons — top-right of scene */}
-        <div className="absolute top-3 right-16 z-20 flex gap-2">
-          <ViewscreenTooltip
-            label={realisticMode ? "Disable realistic boat throttle mode" : "Enable realistic boat throttle mode"}
-            side="bottom"
-          >
-          <button
-            onClick={() => setRealisticMode(!realisticMode)}
-            style={{
-              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              fontSize: 15,
-              letterSpacing: "0.18em",
-              padding: "4px 10px",
-              borderRadius: 3,
-              border: `1px solid ${realisticMode ? "rgba(34,211,238,0.5)" : "rgba(0,229,255,0.15)"}`,
-              background: realisticMode ? "rgba(34,211,238,0.12)" : "rgba(0,10,20,0.75)",
-              color: realisticMode ? "#22d3ee" : "#94a3b8",
-              textShadow: realisticMode ? "0 0 8px rgba(34,211,238,0.5)" : "none",
-              cursor: "pointer",
-              userSelect: "none",
-              backdropFilter: "blur(4px)",
-              transition: "all 0.15s ease",
-            }}
-          >
-            {realisticMode ? "◉" : "○"} DRIVE BOAT
-          </button>
-          </ViewscreenTooltip>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <ViewscreenTooltip
-            label={tidalOverlay ? "Hide 3D water plane, NOAA station data, and tidal panel" : "Show 3D water plane, NOAA station data, and tidal panel"}
-            side="bottom"
-          >
-          <button
-            data-testid="tidal-overlay-toggle"
-            aria-pressed={tidalOverlay}
-            onClick={() => setTidalOverlay(!tidalOverlay)}
-            style={{
-              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              fontSize: 15,
-              letterSpacing: "0.18em",
-              padding: "4px 10px",
-              borderRadius: 3,
-              border: `1px solid ${tidalOverlay ? "rgba(0,229,255,0.45)" : "rgba(0,229,255,0.15)"}`,
-              background: tidalOverlay ? "rgba(0,229,255,0.1)" : "rgba(0,10,20,0.75)",
-              color: tidalOverlay ? "#00e5ff" : "#94a3b8",
-              textShadow: tidalOverlay ? "0 0 8px rgba(0,229,255,0.5)" : "none",
-              cursor: "pointer",
-              userSelect: "none",
-              backdropFilter: "blur(4px)",
-              transition: "all 0.15s ease",
-            }}
-          >
-            {tidalOverlay ? "◉" : "○"} TIDAL 3D DATA
-          </button>
-          </ViewscreenTooltip>
-          <ViewscreenTooltip
-            label="Enables the animated 3D water plane, fetches NOAA station data, and opens the Tide Panel (height, time scrubber, slack jumps, depth-layer arrows). Distinct from the 🌊 TIDE overlay in the left panel, which draws surface-conditions flow arrows."
-            side="bottom"
-          >
-          <button
-            className="help-inline-icon"
-            onClick={e => e.stopPropagation()}
-            aria-label="About TIDAL 3D DATA"
-          >
-            ℹ
-          </button>
-          </ViewscreenTooltip>
-          </div>
-          <ViewscreenTooltip
-            label={driftPlannerActive ? "Disable Drift Planner" : "Enable Drift Planner — boat drift, line angle, tidal path"}
-            side="bottom"
-          >
-          <button
-            onClick={() => setDriftPlannerActive(!driftPlannerActive)}
-            style={{
-              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              fontSize: 15,
-              letterSpacing: "0.18em",
-              padding: "4px 10px",
-              borderRadius: 3,
-              border: `1px solid ${driftPlannerActive ? "rgba(251,191,36,0.5)" : "rgba(0,229,255,0.15)"}`,
-              background: driftPlannerActive ? "rgba(251,191,36,0.1)" : "rgba(0,10,20,0.75)",
-              color: driftPlannerActive ? "#fbbf24" : "#94a3b8",
-              textShadow: driftPlannerActive ? "0 0 8px rgba(251,191,36,0.5)" : "none",
-              cursor: "pointer",
-              userSelect: "none",
-              backdropFilter: "blur(4px)",
-              transition: "all 0.15s ease",
-            }}
-          >
-            {driftPlannerActive ? "◉" : "○"} DRIFT
-          </button>
-          </ViewscreenTooltip>
-        </div>
+        {/* The Drive Boat / Tidal 3D / Drift toggles that used to live here
+            (top-right toolbar) have moved into the left sidebar:
+            Tidal 3D → Explore › Overlays & Tools, Drive Boat → Live panel,
+            Drift → Plan › Drift & Route "Start Planning". A one-time
+            relocation hint is shown in their old spot. */}
+        <ToolbarRelocationHint />
 
         {/* One-tap GPS catch quick-drop — floating thumb-reachable button,
             bottom-right above the minimap. Renders only while GPS tracking
