@@ -1,6 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { renderHook } from "@testing-library/react";
 import * as THREE from "three";
-import { bakeWaterTempTexture } from "@/hooks/useWaterTempTexture";
+import {
+  bakeWaterTempTexture,
+  useWaterTempTexture,
+  type TempSample,
+} from "@/hooks/useWaterTempTexture";
 
 describe("bakeWaterTempTexture", () => {
   it("returns null for null samples", () => {
@@ -87,5 +92,57 @@ describe("bakeWaterTempTexture", () => {
     const tex = bakeWaterTempTexture(samples)!;
     expect(tex.image.height).toBe(25);
     tex.dispose();
+  });
+});
+
+describe("useWaterTempTexture disposal", () => {
+  const samplesA: TempSample[] = [
+    { depthM: 0, celsius: 20 },
+    { depthM: 100, celsius: 5 },
+  ];
+  const samplesB: TempSample[] = [
+    { depthM: 0, celsius: 18 },
+    { depthM: 50, celsius: 8 },
+    { depthM: 200, celsius: 4 },
+  ];
+
+  it("disposes the previous texture when samples change identity", () => {
+    const { result, rerender } = renderHook(
+      ({ samples }: { samples: TempSample[] }) => useWaterTempTexture(samples),
+      { initialProps: { samples: samplesA } },
+    );
+    const first = result.current!;
+    const disposeSpy = vi.spyOn(first, "dispose");
+
+    rerender({ samples: samplesB });
+    const second = result.current!;
+    expect(second).not.toBe(first);
+    expect(disposeSpy).toHaveBeenCalledTimes(1);
+
+    second.dispose();
+  });
+
+  it("disposes the current texture on unmount", () => {
+    const { result, unmount } = renderHook(() => useWaterTempTexture(samplesA));
+    const tex = result.current!;
+    const disposeSpy = vi.spyOn(tex, "dispose");
+
+    unmount();
+    expect(disposeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not dispose when rerendered with the same samples reference", () => {
+    const { result, rerender } = renderHook(
+      ({ samples }: { samples: TempSample[] }) => useWaterTempTexture(samples),
+      { initialProps: { samples: samplesA } },
+    );
+    const first = result.current!;
+    const disposeSpy = vi.spyOn(first, "dispose");
+
+    rerender({ samples: samplesA });
+    expect(result.current).toBe(first);
+    expect(disposeSpy).not.toHaveBeenCalled();
+
+    first.dispose();
   });
 });

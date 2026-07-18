@@ -13,7 +13,7 @@
  * The returned texture is a stable reference — it is recreated only when
  * the samples array identity changes.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { tempToColor } from "@/lib/thermalColormap";
 
@@ -63,13 +63,34 @@ export function bakeWaterTempTexture(
  * React hook wrapper around `bakeWaterTempTexture`. Memoises the DataTexture
  * so it is only rebuilt when `samples` changes identity.
  *
- * The caller is NOT responsible for disposing the returned texture; a new
- * texture will be created on each rebuild and the old one is not automatically
- * disposed by this hook. Use the returned texture inside a component that
- * manages its own cleanup via useEffect.
+ * The hook owns the texture's GPU lifetime: when a rebuild replaces the
+ * texture, the previous one is disposed, and the current texture is disposed
+ * on unmount. Disposal of the replaced texture happens in an effect on the
+ * component calling this hook — because parent effects run after child
+ * effects, any consumer component (e.g. WaterTempVolumeLayer) has already
+ * rebound its uniform to the new texture by then, so the disposed texture is
+ * never left bound to a live uniform (which would cause three.js to silently
+ * re-upload it).
  */
 export function useWaterTempTexture(
   samples: TempSample[] | null | undefined,
 ): THREE.DataTexture | null {
-  return useMemo(() => bakeWaterTempTexture(samples), [samples]);
+  const texture = useMemo(() => bakeWaterTempTexture(samples), [samples]);
+  const prevTexRef = useRef<THREE.DataTexture | null>(null);
+
+  useEffect(() => {
+    const prev = prevTexRef.current;
+    if (prev && prev !== texture) prev.dispose();
+    prevTexRef.current = texture;
+  }, [texture]);
+
+  useEffect(
+    () => () => {
+      prevTexRef.current?.dispose();
+      prevTexRef.current = null;
+    },
+    [],
+  );
+
+  return texture;
 }
