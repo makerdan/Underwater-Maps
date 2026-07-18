@@ -24,8 +24,8 @@
     "build-aoos-intertidal-pow": "tsx ./src/build-aoos-intertidal-pow.ts",
     "scheduled-refresh-aoos-intertidal-pow": "tsx ./src/scheduled-refresh-aoos-intertidal-pow.ts",
     "process-large-datasets": "tsx ./src/process-large-datasets.ts",
-    "test": "node --import tsx --test ./src/lib/scheduled-refresh.test.ts",
-    "test:unit": "node --import tsx --test ./src/lib/scheduled-refresh.test.ts",
+    "test": "node --import tsx --test ./src/lib/scheduled-refresh.test.ts ./src/validation-lock.test.mjs",
+    "test:unit": "node --import tsx --test ./src/lib/scheduled-refresh.test.ts ./src/validation-lock.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
