@@ -10,6 +10,7 @@ import { EfhFeatureType } from "@workspace/api-client-react";
 import {
   buildHeatmapBitmap,
   buildContourLines,
+  MAX_CONTOUR_SEGMENTS,
   lonLatToCanvas,
   canvasToLonLat,
   renderViewCone,
@@ -923,6 +924,39 @@ describe("buildContourLines — edge cases and degenerate grids", () => {
       maxDepth: 5,
     });
     expect(buildContourLines(grid, 100)).toEqual([]);
+  });
+});
+
+describe("buildContourLines — max segments guard", () => {
+  it("never emits more than MAX_CONTOUR_SEGMENTS segments", () => {
+    // High-resolution grid + very fine interval → would generate far more
+    // segments than the cap without the guard. Alternating depths force a
+    // crossing in every cell at every iso-level.
+    const W = 256;
+    const H = 256;
+    const depths: number[] = new Array(W * H);
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c < W; c++) {
+        depths[r * W + c] = (r + c) % 2 === 0 ? 0 : 100;
+      }
+    }
+    const grid = makeGrid({ width: W, height: H, depths, minDepth: 0, maxDepth: 100 });
+    const segs = buildContourLines(grid, 0.5);
+    expect(segs.length).toBeLessThanOrEqual(MAX_CONTOUR_SEGMENTS);
+    expect(segs.length).toBe(MAX_CONTOUR_SEGMENTS);
+  });
+
+  it("small grids with fine intervals are unaffected by the cap", () => {
+    const grid = makeGrid({
+      width: 2,
+      height: 2,
+      depths: [0, 0, 2, 2],
+      minDepth: 0,
+      maxDepth: 2,
+    });
+    const segs = buildContourLines(grid, 0.5);
+    expect(segs.length).toBeGreaterThan(0);
+    expect(segs.length).toBeLessThan(MAX_CONTOUR_SEGMENTS);
   });
 });
 

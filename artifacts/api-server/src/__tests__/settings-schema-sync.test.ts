@@ -40,3 +40,23 @@ describe("DEFAULT_SETTINGS ↔ PutSettingsBody schema sync", () => {
     ).toEqual([]);
   });
 });
+
+describe("PutSettingsBody accepts the full UI ranges for shallow-dataset polish fields", () => {
+  it("terrainExaggeration accepts the slider range [1, 20] and rejects out-of-range values", () => {
+    const shape = PutSettingsBody.shape.terrainExaggeration;
+    expect(shape.safeParse(1).success).toBe(true);
+    expect(shape.safeParse(5).success).toBe(true);
+    expect(shape.safeParse(20).success).toBe(true);
+    expect(shape.safeParse(0.8).success).toBe(false);
+    expect(shape.safeParse(21).success).toBe(false);
+  });
+
+  it("contourInterval accepts the fine 0.5 interval and rejects values below it", () => {
+    const shape = PutSettingsBody.shape.contourInterval;
+    expect(shape.safeParse(0.5).success).toBe(true);
+    expect(shape.safeParse(1).success).toBe(true);
+    expect(shape.safeParse(1000).success).toBe(true);
+    expect(shape.safeParse(0.25).success).toBe(false);
+    expect(shape.safeParse(1001).success).toBe(false);
+  });
+});

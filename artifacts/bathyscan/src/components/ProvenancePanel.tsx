@@ -12,6 +12,7 @@ import type { TerrainData } from "@workspace/api-client-react";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useClassificationStore } from "@/lib/classificationStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 import { useLandTerrainStore } from "@/lib/landTerrainStore";
 import { HelpIcon } from "@/components/help/HelpButton";
 
@@ -82,6 +83,13 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
   const zoneSource = useClassificationStore((s) => s.source);
   const substrateFp = useClassificationStore((s) => s.currentSubstrateFp);
   const substrateGrounded = !!substrateFp && substrateFp !== "00000000";
+
+  const terrainExaggeration = useSettingsStore((s) => s.terrainExaggeration);
+  const contourInterval = useSettingsStore((s) => s.contourInterval);
+  const contoursEnabled = useSettingsStore((s) => s.contoursEnabled);
+  const units = useSettingsStore((s) => s.units);
+  const intervalUnit =
+    units === "metric" ? "m" : units === "nautical" ? "fm" : "ft";
 
   const landGridLoaded = useLandTerrainStore((s) => s.landGrid !== null);
   const showCopernicusBadge = terrain.hasTopography || landGridLoaded;
@@ -331,6 +339,21 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
             <span>
               {Math.abs(terrain.maxLon - terrain.minLon).toFixed(2)}° ×{" "}
               {Math.abs(terrain.maxLat - terrain.minLat).toFixed(2)}°
+            </span>
+
+            <span style={{ color: "#cbd5e1" }}>Vertical exaggeration:</span>
+            <span data-testid="provenance-exaggeration">
+              {terrainExaggeration % 1 === 0
+                ? terrainExaggeration.toFixed(0)
+                : terrainExaggeration.toFixed(1)}
+              × {terrainExaggeration > 1 ? "(exaggerated — not true-to-life)" : "(true-to-life)"}
+            </span>
+
+            <span style={{ color: "#cbd5e1" }}>Contour interval:</span>
+            <span data-testid="provenance-contour-interval">
+              {contoursEnabled
+                ? `${contourInterval % 1 === 0 ? contourInterval.toFixed(0) : contourInterval.toFixed(1)} ${intervalUnit}`
+                : "Contours off"}
             </span>
 
             {zoneSource && (

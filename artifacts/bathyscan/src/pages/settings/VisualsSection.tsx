@@ -16,11 +16,16 @@ function ContourIntervalRow() {
   const s = useSettingsStore(useShallow((s) => s));
   const isMetric = s.units === "metric";
   const isNautical = s.units === "nautical";
-  const sliderMin  = isMetric ? 5  : isNautical ? 5  : 10;
-  const sliderMax  = isMetric ? 50 : isNautical ? 50 : 200;
-  const sliderStep = isMetric ? 5  : isNautical ? 1  : 10;
-  const formatInterval = (v: number) =>
-    isMetric ? `${v} m` : isNautical ? `${v} fm` : `${v} ft`;
+  // Fine intervals (0.5 m / 0.5 fm / 1 ft) make shallow inshore surveys
+  // readable; buildContourLines has a MAX_CONTOUR_SEGMENTS guard so small
+  // intervals cannot generate unbounded geometry.
+  const sliderMin  = isMetric ? 0.5 : isNautical ? 0.5 : 1;
+  const sliderMax  = isMetric ? 50  : isNautical ? 50  : 200;
+  const sliderStep = isMetric ? 0.5 : isNautical ? 0.5 : 1;
+  const formatInterval = (v: number) => {
+    const n = v % 1 === 0 ? v.toFixed(0) : v.toFixed(1);
+    return isMetric ? `${n} m` : isNautical ? `${n} fm` : `${n} ft`;
+  };
   const unitLabel = isMetric ? "metres" : isNautical ? "fathoms" : "feet";
   const prevUnitsRef = useRef(s.units);
   useEffect(() => {
@@ -91,12 +96,16 @@ export function VisualsSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>BASICS</div>
         <SliderRow
-          label="Terrain Exaggeration"
+          label="Vertical Exaggeration"
           value={s.terrainExaggeration}
-          min={0.25} max={3.0} step={0.05}
-          format={(v) => `${v.toFixed(2)}×`}
+          min={1} max={20} step={0.5}
+          format={(v) => `${v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)}× vertical exaggeration`}
           onChange={s.setTerrainExaggeration}
-          sublabel="Vertical stretch applied to terrain"
+          sublabel={
+            s.terrainExaggeration > 1
+              ? "Scale is exaggerated — not true-to-life"
+              : "Vertical stretch applied to terrain"
+          }
         />
         <ToggleRow
           label="Marine Snow Effect"

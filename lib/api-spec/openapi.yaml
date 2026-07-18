@@ -4686,9 +4686,9 @@ components:
           description: Overall graphics quality preset. "custom" means the user has individually adjusted one or more visual knobs.
         terrainExaggeration:
           type: number
-          minimum: 0.0
-          maximum: 10.0
-          default: 0.8
+          minimum: 1.0
+          maximum: 20.0
+          default: 1.0
           description: Vertical exaggeration factor applied to terrain depth for visual clarity.
         enableMarineSnow:
           type: boolean
@@ -4790,7 +4790,7 @@ components:
           description: Draw iso-depth contour lines on the 2D overview map.
         contourInterval:
           type: number
-          minimum: 1
+          minimum: 0.5
           maximum: 1000
           default: 10
           description: Spacing between contour lines in the user's active unit system (metres for metric, feet for imperial/nautical).

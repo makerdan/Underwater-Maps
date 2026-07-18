@@ -24,6 +24,23 @@ describe("settingsStore", () => {
     expect(useSettingsStore.getState().schemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
   });
 
+  it("terrainExaggeration defaults to 1× (slider minimum) so UI and renderer agree", () => {
+    expect(DEFAULT_SETTINGS.terrainExaggeration).toBe(1);
+    expect(useSettingsStore.getState().terrainExaggeration).toBe(1);
+  });
+
+  it("setTerrainExaggeration clamps into the [1, 20] slider range", () => {
+    const s = useSettingsStore.getState();
+    s.setTerrainExaggeration(0.5);
+    expect(useSettingsStore.getState().terrainExaggeration).toBe(1);
+    s.setTerrainExaggeration(25);
+    expect(useSettingsStore.getState().terrainExaggeration).toBe(20);
+    s.setTerrainExaggeration(5);
+    expect(useSettingsStore.getState().terrainExaggeration).toBe(5);
+    s.setTerrainExaggeration(Number.NaN);
+    expect(useSettingsStore.getState().terrainExaggeration).toBe(1);
+  });
+
   it("toggles showAdvancedEverywhere", () => {
     useSettingsStore.getState().setShowAdvancedEverywhere(true);
     expect(useSettingsStore.getState().showAdvancedEverywhere).toBe(true);

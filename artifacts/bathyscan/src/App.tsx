@@ -92,6 +92,7 @@ import { initialViewParams } from "@/lib/viewUrl";
 import { resolveDefaultDataset } from "@/lib/defaultMapLoadLogic";
 import { useUrlSync } from "@/hooks/useUrlSync";
 import { usePaletteSuggestion } from "@/hooks/usePaletteSuggestion";
+import { ShallowDatasetBanner } from "@/components/ShallowDatasetBanner";
 import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import { OnboardingOverlay } from "@/components/OnboardingOverlay";
 import { useWebglContextStore } from "@/lib/webglContextStore";
@@ -1955,6 +1956,7 @@ function HomeRoute() {
           <Toaster />
         </TooltipProvider>
         <PaletteSuggestionMount />
+        <ShallowDatasetBanner />
       </Show>
       <Show when="signed-out">
         <LandingPage />
@@ -1981,6 +1983,7 @@ function SettingsRoute() {
       <Show when="signed-in">
         <ServerSettingsSyncMount />
         <PaletteSuggestionMount />
+        <ShallowDatasetBanner />
         <Settings />
       </Show>
       <Show when="signed-out">

@@ -110,7 +110,7 @@ export const DEFAULT_SETTINGS = {
   renderDistance: 400,
   lastSession: null as null,
   qualityPreset: "medium",
-  terrainExaggeration: 0.8,
+  terrainExaggeration: 1,
   enableMarineSnow: true,
   fogColor: "#020818",
   ambientLightIntensity: 0.05,
@@ -249,6 +249,18 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
       saltwater: merged.zoneOverlaySlots,
       freshwater: DEFAULT_SETTINGS.zoneOverlaySlots.freshwater,
     };
+  }
+
+  // Migration for legacy rows: terrainExaggeration was widened to the
+  // [1, 20] slider range (old default was 0.8, below the new minimum) and
+  // contourInterval now allows fine 0.5 intervals with a 0.5 floor. Clamp
+  // stored out-of-range values so schema validation never 500s for rows
+  // written before the range change.
+  if (typeof merged.terrainExaggeration === "number") {
+    merged.terrainExaggeration = Math.min(20, Math.max(1, merged.terrainExaggeration));
+  }
+  if (typeof merged.contourInterval === "number") {
+    merged.contourInterval = Math.min(1000, Math.max(0.5, merged.contourInterval));
   }
 
   let validated: z.infer<typeof GetSettingsResponse>;

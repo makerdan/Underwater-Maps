@@ -31,3 +31,4 @@
 - [vitest v3 sequencer types](vitest-v3-sequencer-types.md) — BaseSequencer.sort() takes TestFile[] in v3; WorkspaceSpec (v2 name) doesn't exist and causes silent failure.
 - [Rate-limit prefill pattern](rate-limit-prefill-pattern.md) — use __prefillRateLimitMemory(key, count) to set bucket state directly in tests; avoids 43+ s combined sleep waits.
 - [pg.Pool needs error listener](pg-pool-error-listener.md) — unlistened 'error' on pg.Pool causes uncaughtException → process.exit(1); add pool.on('error') in lib/db/src/index.ts.
+- [Workflow limit and validation upsert](workflow-limit-validation-upsert.md) — configureWorkflow blocked at 10/10 (hidden Project meta counts); setValidationCommand upsert bypasses it. Onboarding overlay blocks Home-route e2e clicks.

@@ -50,6 +50,7 @@ import { useSettingsStore } from "./settingsStore";
 import type { LastSession } from "./settingsStore";
 import { usePaletteStore } from "./paletteStore";
 import { usePaletteSuggestionStore } from "../hooks/usePaletteSuggestion";
+import { useShallowSuggestionStore } from "../hooks/useShallowSuggestion";
 import { worldXZToLonLat } from "./terrain";
 import { callRegisteredResetCamera } from "./resetCameraRegistry";
 import { applyCameraSpawn } from "./cameraSpawn";
@@ -686,6 +687,19 @@ export interface BathyTestApi {
   setColormapUserSet: (v: boolean) => void;
   getColormapUserSet: () => boolean;
   setColormapThemeByUser: (theme: string) => void;
+  /** Current terrainExaggeration value from the settings store. */
+  getTerrainExaggeration: () => number;
+  /** Current contourInterval (in user units) from the settings store. */
+  getContourInterval: () => number;
+  /** Whether depth contours are enabled in the settings store. */
+  getContoursEnabled: () => boolean;
+  /** Current units system from the settings store. */
+  getUnits: () => "metric" | "imperial" | "nautical";
+  /**
+   * datasetId of the pending shallow-dataset suggestion (banner visible),
+   * or null when no suggestion is pending.
+   */
+  getShallowSuggestionDatasetId: () => string | null;
 }
 
 declare global {
@@ -1354,6 +1368,12 @@ export function installTestHelpers(): void {
     setWhatsHerePinned: (v) => useUiStore.getState().setWhatsHerePinned(v),
     isWhatsHerePinned: () => useUiStore.getState().whatsHerePinned,
     setSubstrateColorMode: (v) => useUiStore.getState().setSubstrateColorMode(v),
+    getTerrainExaggeration: () => useSettingsStore.getState().terrainExaggeration,
+    getContourInterval: () => useSettingsStore.getState().contourInterval,
+    getContoursEnabled: () => useSettingsStore.getState().contoursEnabled,
+    getUnits: () => useSettingsStore.getState().units,
+    getShallowSuggestionDatasetId: () =>
+      useShallowSuggestionStore.getState().suggestionDatasetId,
     moveCameraGeo: (geo) =>
       useCameraStore.getState().setCameraGeo({
         lon: geo.lon,

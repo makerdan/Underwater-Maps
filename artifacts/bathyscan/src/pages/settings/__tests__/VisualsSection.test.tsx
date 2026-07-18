@@ -127,9 +127,9 @@ describe("VisualsSection", () => {
     expect(screen.getByText("QUALITY PRESET")).toBeInTheDocument();
   });
 
-  it("renders Terrain Exaggeration label", () => {
+  it("renders Vertical Exaggeration label", () => {
     render(<VisualsSection />);
-    expect(screen.getByText("Terrain Exaggeration")).toBeInTheDocument();
+    expect(screen.getByText("Vertical Exaggeration")).toBeInTheDocument();
   });
 
   it("renders Marine Snow Effect label", () => {

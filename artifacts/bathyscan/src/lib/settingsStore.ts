@@ -60,7 +60,22 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 23;
+export const SETTINGS_SCHEMA_VERSION = 24;
+
+/** Supported vertical-exaggeration range (matches the Settings slider). */
+export const TERRAIN_EXAGGERATION_MIN = 1;
+export const TERRAIN_EXAGGERATION_MAX = 20;
+
+/**
+ * Normalize a vertical-exaggeration value into the supported [1, 20] range.
+ * Store setters and the persist migration both apply this, so the renderer,
+ * the Settings slider, and the Provenance panel always agree on the value.
+ * Non-finite input falls back to the 1× (true-to-life) default.
+ */
+export function clampTerrainExaggeration(v: unknown): number {
+  const n = typeof v === "number" && Number.isFinite(v) ? v : TERRAIN_EXAGGERATION_MIN;
+  return Math.min(TERRAIN_EXAGGERATION_MAX, Math.max(TERRAIN_EXAGGERATION_MIN, n));
+}
 
 export type SidebarMode = 'explore' | 'plan' | 'analyze';
 
@@ -789,7 +804,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   // Visuals
   qualityPreset: "medium",
-  terrainExaggeration: 0.8,
+  terrainExaggeration: 1,
   enableMarineSnow: true,
   particleDensity: "sparse",
   enableCaustics: false,
@@ -1071,7 +1086,8 @@ export const useSettingsStore = create<SettingsStore>()(
           const preset = QUALITY_PRESETS[v];
           set({ ...preset, qualityPreset: v });
         },
-        setTerrainExaggeration: setter("terrainExaggeration"),
+        setTerrainExaggeration: (v) =>
+          set({ terrainExaggeration: clampTerrainExaggeration(v) }),
         setEnableMarineSnow: setter("enableMarineSnow"),
         setParticleDensity: (v) => set({ particleDensity: v, qualityPreset: "custom" }),
         setEnableCaustics: (v) => set({ enableCaustics: v, qualityPreset: "custom" }),
@@ -1330,6 +1346,7 @@ export const useSettingsStore = create<SettingsStore>()(
               else if (k === "colormapTheme") safeVal = toValidColormapTheme(serverVal);
               else if (k === "waterType") safeVal = toValidWaterType(serverVal);
               else if (k === "defaultSpeedTier") safeVal = toValidDefaultSpeedTier(serverVal);
+              else if (k === "terrainExaggeration") safeVal = clampTerrainExaggeration(serverVal);
               applied[k] = safeVal;
               nextSnap[k] = safeVal;
             }
@@ -1561,6 +1578,11 @@ export const useSettingsStore = create<SettingsStore>()(
           // that slipped in before migration ran (e.g. from a cross-device sync
           // or a manually edited localStorage entry).
           mergedState.joystickMode = toValidJoystickMode(mergedState.joystickMode);
+          // v23 → v24: terrainExaggeration is now normalized to the slider's
+          // [1, 20] range (old default was 0.8, below the supported minimum).
+          mergedState.terrainExaggeration = clampTerrainExaggeration(
+            mergedState.terrainExaggeration,
+          );
           mergedState.colormapTheme = toValidColormapTheme(mergedState.colormapTheme);
           mergedState.waterType = toValidWaterType(mergedState.waterType);
           mergedState.defaultSpeedTier = toValidDefaultSpeedTier(mergedState.defaultSpeedTier);
@@ -1578,6 +1600,7 @@ export const useSettingsStore = create<SettingsStore>()(
           colormapTheme: toValidColormapTheme(cur.colormapTheme),
           waterType: toValidWaterType(cur.waterType),
           defaultSpeedTier: toValidDefaultSpeedTier(cur.defaultSpeedTier),
+          terrainExaggeration: clampTerrainExaggeration(cur.terrainExaggeration),
         };
       },
       // After localStorage rehydrates, treat the persisted values as the

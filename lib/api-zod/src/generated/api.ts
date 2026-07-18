@@ -994,9 +994,8 @@ export const getSettingsResponseRenderDistanceMin = 50;
 export const getSettingsResponseRenderDistanceMax = 2000;
 
 export const getSettingsResponseQualityPresetDefault = `medium`;
-export const getSettingsResponseTerrainExaggerationDefault = 0.8;
-export const getSettingsResponseTerrainExaggerationMin = 0;
-export const getSettingsResponseTerrainExaggerationMax = 10;
+export const getSettingsResponseTerrainExaggerationDefault = 1;
+export const getSettingsResponseTerrainExaggerationMax = 20;
 
 export const getSettingsResponseEnableMarineSnowDefault = true;
 export const getSettingsResponseFogColorDefault = `#020818`;
@@ -1030,6 +1029,7 @@ export const getSettingsResponseTimeFormatDefault = `local`;
 export const getSettingsResponseTemperatureUnitDefault = `auto`;
 export const getSettingsResponseContoursEnabledDefault = true;
 export const getSettingsResponseContourIntervalDefault = 10;
+export const getSettingsResponseContourIntervalMin = 0.5;
 export const getSettingsResponseContourIntervalMax = 1000;
 
 export const getSettingsResponseDefaultDepthPoleColorDefault = `#22d3ee`;
@@ -1192,7 +1192,7 @@ export const GetSettingsResponse = zod.object({
   "datasetId": zod.string()
 }).nullish().describe('Last camera position and active dataset. Restored on load when cameraSpawnBehaviour is \"last\". Null when no session has been saved yet.'),
   "qualityPreset": zod.enum(['low', 'medium', 'high', 'ultra', 'custom']).default(getSettingsResponseQualityPresetDefault).describe('Overall graphics quality preset. \"custom\" means the user has individually adjusted one or more visual knobs.'),
-  "terrainExaggeration": zod.number().min(getSettingsResponseTerrainExaggerationMin).max(getSettingsResponseTerrainExaggerationMax).default(getSettingsResponseTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
+  "terrainExaggeration": zod.number().min(1).max(getSettingsResponseTerrainExaggerationMax).default(getSettingsResponseTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
   "enableMarineSnow": zod.boolean().default(getSettingsResponseEnableMarineSnowDefault).describe('Render animated marine snow particle effect in the 3D scene.'),
   "fogColor": zod.string().regex(getSettingsResponseFogColorRegExp).default(getSettingsResponseFogColorDefault).describe('RGB hex colour of the underwater fog.'),
   "ambientLightIntensity": zod.number().min(getSettingsResponseAmbientLightIntensityMin).max(getSettingsResponseAmbientLightIntensityMax).default(getSettingsResponseAmbientLightIntensityDefault).describe('Intensity of the ambient (omnidirectional) scene light.'),
@@ -1215,7 +1215,7 @@ export const GetSettingsResponse = zod.object({
   "timeFormat": zod.enum(['utc', 'local', '12h', '24h']).default(getSettingsResponseTimeFormatDefault).describe('How timestamps are displayed in the HUD and panels.'),
   "temperatureUnit": zod.enum(['auto', 'celsius', 'fahrenheit']).default(getSettingsResponseTemperatureUnitDefault).describe('Temperature display unit. \"auto\" follows the global units selector (metric=°C, imperial=°F).'),
   "contoursEnabled": zod.boolean().default(getSettingsResponseContoursEnabledDefault).describe('Draw iso-depth contour lines on the 2D overview map.'),
-  "contourInterval": zod.number().min(1).max(getSettingsResponseContourIntervalMax).default(getSettingsResponseContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
+  "contourInterval": zod.number().min(getSettingsResponseContourIntervalMin).max(getSettingsResponseContourIntervalMax).default(getSettingsResponseContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
   "defaultDepthPoleColor": zod.string().regex(getSettingsResponseDefaultDepthPoleColorRegExp).default(getSettingsResponseDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
   "markerClusterThreshold": zod.number().min(getSettingsResponseMarkerClusterThresholdMin).max(getSettingsResponseMarkerClusterThresholdMax).default(getSettingsResponseMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(getSettingsResponseAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
@@ -1417,9 +1417,8 @@ export const putSettingsBodyRenderDistanceMin = 50;
 export const putSettingsBodyRenderDistanceMax = 2000;
 
 export const putSettingsBodyQualityPresetDefault = `medium`;
-export const putSettingsBodyTerrainExaggerationDefault = 0.8;
-export const putSettingsBodyTerrainExaggerationMin = 0;
-export const putSettingsBodyTerrainExaggerationMax = 10;
+export const putSettingsBodyTerrainExaggerationDefault = 1;
+export const putSettingsBodyTerrainExaggerationMax = 20;
 
 export const putSettingsBodyEnableMarineSnowDefault = true;
 export const putSettingsBodyFogColorDefault = `#020818`;
@@ -1453,6 +1452,7 @@ export const putSettingsBodyTimeFormatDefault = `local`;
 export const putSettingsBodyTemperatureUnitDefault = `auto`;
 export const putSettingsBodyContoursEnabledDefault = true;
 export const putSettingsBodyContourIntervalDefault = 10;
+export const putSettingsBodyContourIntervalMin = 0.5;
 export const putSettingsBodyContourIntervalMax = 1000;
 
 export const putSettingsBodyDefaultDepthPoleColorDefault = `#22d3ee`;
@@ -1615,7 +1615,7 @@ export const PutSettingsBody = zod.object({
   "datasetId": zod.string()
 }).nullish().describe('Last camera position and active dataset. Restored on load when cameraSpawnBehaviour is \"last\". Null when no session has been saved yet.'),
   "qualityPreset": zod.enum(['low', 'medium', 'high', 'ultra', 'custom']).default(putSettingsBodyQualityPresetDefault).describe('Overall graphics quality preset. \"custom\" means the user has individually adjusted one or more visual knobs.'),
-  "terrainExaggeration": zod.number().min(putSettingsBodyTerrainExaggerationMin).max(putSettingsBodyTerrainExaggerationMax).default(putSettingsBodyTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
+  "terrainExaggeration": zod.number().min(1).max(putSettingsBodyTerrainExaggerationMax).default(putSettingsBodyTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
   "enableMarineSnow": zod.boolean().default(putSettingsBodyEnableMarineSnowDefault).describe('Render animated marine snow particle effect in the 3D scene.'),
   "fogColor": zod.string().regex(putSettingsBodyFogColorRegExp).default(putSettingsBodyFogColorDefault).describe('RGB hex colour of the underwater fog.'),
   "ambientLightIntensity": zod.number().min(putSettingsBodyAmbientLightIntensityMin).max(putSettingsBodyAmbientLightIntensityMax).default(putSettingsBodyAmbientLightIntensityDefault).describe('Intensity of the ambient (omnidirectional) scene light.'),
@@ -1638,7 +1638,7 @@ export const PutSettingsBody = zod.object({
   "timeFormat": zod.enum(['utc', 'local', '12h', '24h']).default(putSettingsBodyTimeFormatDefault).describe('How timestamps are displayed in the HUD and panels.'),
   "temperatureUnit": zod.enum(['auto', 'celsius', 'fahrenheit']).default(putSettingsBodyTemperatureUnitDefault).describe('Temperature display unit. \"auto\" follows the global units selector (metric=°C, imperial=°F).'),
   "contoursEnabled": zod.boolean().default(putSettingsBodyContoursEnabledDefault).describe('Draw iso-depth contour lines on the 2D overview map.'),
-  "contourInterval": zod.number().min(1).max(putSettingsBodyContourIntervalMax).default(putSettingsBodyContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
+  "contourInterval": zod.number().min(putSettingsBodyContourIntervalMin).max(putSettingsBodyContourIntervalMax).default(putSettingsBodyContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
   "defaultDepthPoleColor": zod.string().regex(putSettingsBodyDefaultDepthPoleColorRegExp).default(putSettingsBodyDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
   "markerClusterThreshold": zod.number().min(putSettingsBodyMarkerClusterThresholdMin).max(putSettingsBodyMarkerClusterThresholdMax).default(putSettingsBodyMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(putSettingsBodyAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
@@ -1835,9 +1835,8 @@ export const putSettingsResponseRenderDistanceMin = 50;
 export const putSettingsResponseRenderDistanceMax = 2000;
 
 export const putSettingsResponseQualityPresetDefault = `medium`;
-export const putSettingsResponseTerrainExaggerationDefault = 0.8;
-export const putSettingsResponseTerrainExaggerationMin = 0;
-export const putSettingsResponseTerrainExaggerationMax = 10;
+export const putSettingsResponseTerrainExaggerationDefault = 1;
+export const putSettingsResponseTerrainExaggerationMax = 20;
 
 export const putSettingsResponseEnableMarineSnowDefault = true;
 export const putSettingsResponseFogColorDefault = `#020818`;
@@ -1871,6 +1870,7 @@ export const putSettingsResponseTimeFormatDefault = `local`;
 export const putSettingsResponseTemperatureUnitDefault = `auto`;
 export const putSettingsResponseContoursEnabledDefault = true;
 export const putSettingsResponseContourIntervalDefault = 10;
+export const putSettingsResponseContourIntervalMin = 0.5;
 export const putSettingsResponseContourIntervalMax = 1000;
 
 export const putSettingsResponseDefaultDepthPoleColorDefault = `#22d3ee`;
@@ -2033,7 +2033,7 @@ export const PutSettingsResponse = zod.object({
   "datasetId": zod.string()
 }).nullish().describe('Last camera position and active dataset. Restored on load when cameraSpawnBehaviour is \"last\". Null when no session has been saved yet.'),
   "qualityPreset": zod.enum(['low', 'medium', 'high', 'ultra', 'custom']).default(putSettingsResponseQualityPresetDefault).describe('Overall graphics quality preset. \"custom\" means the user has individually adjusted one or more visual knobs.'),
-  "terrainExaggeration": zod.number().min(putSettingsResponseTerrainExaggerationMin).max(putSettingsResponseTerrainExaggerationMax).default(putSettingsResponseTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
+  "terrainExaggeration": zod.number().min(1).max(putSettingsResponseTerrainExaggerationMax).default(putSettingsResponseTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
   "enableMarineSnow": zod.boolean().default(putSettingsResponseEnableMarineSnowDefault).describe('Render animated marine snow particle effect in the 3D scene.'),
   "fogColor": zod.string().regex(putSettingsResponseFogColorRegExp).default(putSettingsResponseFogColorDefault).describe('RGB hex colour of the underwater fog.'),
   "ambientLightIntensity": zod.number().min(putSettingsResponseAmbientLightIntensityMin).max(putSettingsResponseAmbientLightIntensityMax).default(putSettingsResponseAmbientLightIntensityDefault).describe('Intensity of the ambient (omnidirectional) scene light.'),
@@ -2056,7 +2056,7 @@ export const PutSettingsResponse = zod.object({
   "timeFormat": zod.enum(['utc', 'local', '12h', '24h']).default(putSettingsResponseTimeFormatDefault).describe('How timestamps are displayed in the HUD and panels.'),
   "temperatureUnit": zod.enum(['auto', 'celsius', 'fahrenheit']).default(putSettingsResponseTemperatureUnitDefault).describe('Temperature display unit. \"auto\" follows the global units selector (metric=°C, imperial=°F).'),
   "contoursEnabled": zod.boolean().default(putSettingsResponseContoursEnabledDefault).describe('Draw iso-depth contour lines on the 2D overview map.'),
-  "contourInterval": zod.number().min(1).max(putSettingsResponseContourIntervalMax).default(putSettingsResponseContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
+  "contourInterval": zod.number().min(putSettingsResponseContourIntervalMin).max(putSettingsResponseContourIntervalMax).default(putSettingsResponseContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
   "defaultDepthPoleColor": zod.string().regex(putSettingsResponseDefaultDepthPoleColorRegExp).default(putSettingsResponseDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
   "markerClusterThreshold": zod.number().min(putSettingsResponseMarkerClusterThresholdMin).max(putSettingsResponseMarkerClusterThresholdMax).default(putSettingsResponseMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(putSettingsResponseAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),

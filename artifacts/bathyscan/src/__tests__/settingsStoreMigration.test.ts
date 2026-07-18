@@ -176,6 +176,18 @@ describe("settingsStore migration — current-version snapshot preserves user pr
     );
     expect(result["units"]).toBe("nautical");
   });
+
+  it("v23→v24: legacy terrainExaggeration 0.8 is clamped up to the 1× slider minimum", async () => {
+    const result = await rehydrate({ terrainExaggeration: 0.8, keyBindings: {} });
+    expect(result["terrainExaggeration"]).toBe(1);
+  });
+
+  it("in-range terrainExaggeration is preserved; out-of-range is clamped during migration", async () => {
+    const kept = await rehydrate({ terrainExaggeration: 5, keyBindings: {} });
+    expect(kept["terrainExaggeration"]).toBe(5);
+    const clamped = await rehydrate({ terrainExaggeration: 99, keyBindings: {} });
+    expect(clamped["terrainExaggeration"]).toBe(20);
+  });
 });
 
 // ---------------------------------------------------------------------------

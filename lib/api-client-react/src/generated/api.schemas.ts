@@ -928,8 +928,8 @@ export interface UserSettings {
   qualityPreset?: UserSettingsQualityPreset;
   /**
      * Vertical exaggeration factor applied to terrain depth for visual clarity.
-     * @minimum 0
-     * @maximum 10
+     * @minimum 1
+     * @maximum 20
      */
   terrainExaggeration?: number;
   /** Render animated marine snow particle effect in the 3D scene. */
@@ -993,7 +993,7 @@ export interface UserSettings {
   contoursEnabled?: boolean;
   /**
      * Spacing between contour lines in the user's active unit system (metres for metric, feet for imperial/nautical).
-     * @minimum 1
+     * @minimum 0.5
      * @maximum 1000
      */
   contourInterval?: number;

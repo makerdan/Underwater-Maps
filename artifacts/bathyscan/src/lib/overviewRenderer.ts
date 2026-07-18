@@ -1169,7 +1169,17 @@ function isoFrac(a: number, b: number, iso: number): number {
 }
 
 /**
+ * Hard cap on the number of contour segments buildContourLines will emit.
+ * Very fine intervals (e.g. 0.25 m on a deep, high-resolution grid) could
+ * otherwise generate millions of segments and stall both the 2D overview
+ * canvas and the 3D line geometry. When the cap is hit, generation stops —
+ * the shallowest levels (built first) are kept, deeper levels are dropped.
+ */
+export const MAX_CONTOUR_SEGMENTS = 200_000;
+
+/**
  * Run marching-squares on a depth grid and return all iso-depth line segments.
+ * Output is capped at MAX_CONTOUR_SEGMENTS.
  *
  * @param grid      - The terrain data (depths in metres).
  * @param intervalMetres - Spacing between contour levels in metres.
@@ -1214,6 +1224,7 @@ export function buildContourLines(
         ];
 
         for (const [eA, eB] of MARCHING_EDGES[idx]!) {
+          if (segments.length >= MAX_CONTOUR_SEGMENTS) return segments;
           const [x0, y0] = edgePts[eA]!;
           const [x1, y1] = edgePts[eB]!;
           segments.push({ depth: isoDepth, x0, y0, x1, y1 });
