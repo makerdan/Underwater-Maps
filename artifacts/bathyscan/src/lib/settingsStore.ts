@@ -362,6 +362,10 @@ export interface SettingsState {
    * Persisted and synced cross-device like all other settings.
    */
   defaultMapLoad: DefaultMapLoad | null;
+  /** Last-used radius value for the manual coordinate search (in coordSearchRadiusUnit). */
+  coordSearchRadius: number;
+  /** Unit for coordSearchRadius: kilometres or nautical miles. */
+  coordSearchRadiusUnit: "km" | "nmi";
 
   // ── Accessibility ────────────────────────────────────────────────────
   reducedMotion: boolean;
@@ -626,6 +630,8 @@ interface SettingsActions {
   setDefaultRegion: (v: string) => void;
   setAutoLoadLastDataset: (v: boolean) => void;
   setDefaultMapLoad: (v: DefaultMapLoad | null) => void;
+  setCoordSearchRadius: (v: number) => void;
+  setCoordSearchRadiusUnit: (v: "km" | "nmi") => void;
 
   // Accessibility
   setReducedMotion: (v: boolean) => void;
@@ -906,6 +912,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   defaultRegion: "",
   autoLoadLastDataset: true,
   defaultMapLoad: null,
+  coordSearchRadius: 10,
+  coordSearchRadiusUnit: "km",
 
   // Accessibility
   reducedMotion: false,
@@ -1012,7 +1020,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   gps: [
     "autoStartTrailRecording", "defaultTrailColor", "gpsRecordingInterval", "trailRetention",
   ],
-  data: ["defaultRegion", "autoLoadLastDataset", "defaultMapLoad"],
+  data: ["defaultRegion", "autoLoadLastDataset", "defaultMapLoad", "coordSearchRadius", "coordSearchRadiusUnit"],
   accessibility: [
     "reducedMotion", "colorBlindSafePalette", "largeHudText", "highContrastHud", "brightDaylight",
     "colormapUserSet", "globalFontSize",
@@ -1195,6 +1203,8 @@ export const useSettingsStore = create<SettingsStore>()(
         setDefaultRegion: setter("defaultRegion"),
         setAutoLoadLastDataset: setter("autoLoadLastDataset"),
         setDefaultMapLoad: setter("defaultMapLoad"),
+        setCoordSearchRadius: setter("coordSearchRadius"),
+        setCoordSearchRadiusUnit: setter("coordSearchRadiusUnit"),
 
         // Accessibility
         setReducedMotion: setter("reducedMotion"),
@@ -1573,6 +1583,14 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).tripMinDurationH === undefined) {
             migratedTripWindow.tripMinDurationH = DEFAULT_SETTINGS.tripMinDurationH;
           }
+          // v24 → v25: inject manual coordinate-search radius defaults.
+          const migratedCoordSearch: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).coordSearchRadius === undefined) {
+            migratedCoordSearch.coordSearchRadius = DEFAULT_SETTINGS.coordSearchRadius;
+          }
+          if ((rest as Record<string, unknown>).coordSearchRadiusUnit === undefined) {
+            migratedCoordSearch.coordSearchRadiusUnit = DEFAULT_SETTINGS.coordSearchRadiusUnit;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1586,6 +1604,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedSidebarMode,
             ...migratedHealthBadge,
             ...migratedTripWindow,
+            ...migratedCoordSearch,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

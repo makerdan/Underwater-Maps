@@ -191,6 +191,16 @@ interface NceiGeoportalSource {
     };
   };
   bbox?: number[];
+  /** Abstract in the current (2026) geoportal index schema. */
+  description?: string;
+  /**
+   * Current (2026) geoportal index spatial field — an array of GeoJSON-like
+   * envelopes: { type: "envelope", coordinates: [[minLon, maxLat], [maxLon, minLat]] }.
+   */
+  envelope_geo?: Array<{
+    type?: string;
+    coordinates?: number[][];
+  }>;
   links?: Array<{ href: string; rel?: string; title?: string }>;
   /**
    * ISO 19115 spatial resolution — NCEI Geoportal exposes this as an array;
@@ -279,7 +289,7 @@ function extractResolutionM(source: NceiGeoportalSource): number | null {
   }
 
   // 3. Abstract text — common NOAA resolution patterns
-  const text = source.abstract ?? "";
+  const text = source.abstract ?? source.description ?? "";
   if (!text) return null;
 
   // "1/3 arc-second", "1/9 arc-second" — fractional forms
@@ -324,10 +334,23 @@ export function normalizeNceiHit(hit: NceiGeoportalHit): NceiPortalResult | null
   const name = source.title?.trim();
   if (!name) return null;
 
-  const rawBbox: number[] | undefined =
+  let rawBbox: number[] | undefined =
     source.extent?.spatial?.bbox?.[0] ??
     source.bbox ??
     undefined;
+
+  // Current (2026) geoportal index schema: envelope_geo carries
+  // [[minLon, maxLat], [maxLon, minLat]] (upper-left, lower-right).
+  if (!rawBbox || rawBbox.length < 4) {
+    const env = source.envelope_geo?.find(
+      (e) => e?.type === "envelope" && Array.isArray(e.coordinates) && e.coordinates.length >= 2,
+    );
+    const ul = env?.coordinates?.[0];
+    const lr = env?.coordinates?.[1];
+    if (ul && lr && ul.length >= 2 && lr.length >= 2) {
+      rawBbox = [ul[0]!, lr[1]!, lr[0]!, ul[1]!]; // minLon, minLat, maxLon, maxLat
+    }
+  }
 
   if (!rawBbox || rawBbox.length < 4) return null;
 
@@ -365,7 +388,7 @@ export function normalizeNceiHit(hit: NceiGeoportalHit): NceiPortalResult | null
   return {
     id: hit._id,
     name,
-    description: source.abstract?.trim() ?? null,
+    description: (source.abstract ?? source.description)?.trim() ?? null,
     sourceAgency: "NOAA/NCEI",
     resolutionMMin: extractResolutionM(source),
     resolutionMMax: extractResolutionM(source),
@@ -387,8 +410,8 @@ interface SearchCacheEntry {
 const searchCache = new Map<string, SearchCacheEntry>();
 registerCache(() => searchCache.clear());
 
-function makeCacheKey(q: string, bbox: string, from: number, max: number): string {
-  return `${q.toLowerCase().trim()}|${bbox.trim()}|${from}|${max}`;
+function makeCacheKey(q: string, bbox: string, from: number, max: number, broad: boolean): string {
+  return `${q.toLowerCase().trim()}|${bbox.trim()}|${from}|${max}|${broad ? "broad" : "bathy"}`;
 }
 
 function getCachedResults(cacheKey: string): NceiPortalResult[] | null {
@@ -419,10 +442,10 @@ router.get("/ncei/search", asyncHandler(async (req, res): Promise<void> => {
     });
     return;
   }
-  const { q: rawQ, bbox, from, max } = queryParsed.data;
+  const { q: rawQ, bbox, from, max, broad } = queryParsed.data;
   const q = rawQ.trim();
 
-  const cacheKey = makeCacheKey(q, bbox, from, max);
+  const cacheKey = makeCacheKey(q, bbox, from, max, broad);
   const cached = getCachedResults(cacheKey);
   if (cached) {
     res.json(cached);
@@ -430,8 +453,12 @@ router.get("/ncei/search", asyncHandler(async (req, res): Promise<void> => {
   }
 
   const params = new URLSearchParams({
-    q: q || "bathymetry",
-    f: "json",
+    // `broad` skips the implicit "bathymetry" keyword so the reference
+    // listing ("Other data in this area") can surface all record types.
+    // NOTE: no `f` param — the geoportal returns the raw Elasticsearch wire
+    // format (hits.hits) by default, which is what we parse. `f=json` now
+    // yields an atom-style shape with a `results` array instead.
+    q: q || (broad ? "" : "bathymetry"),
     max: String(max),
     from: String(from),
   });

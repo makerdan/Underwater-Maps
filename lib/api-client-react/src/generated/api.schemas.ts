@@ -2939,6 +2939,13 @@ q?: string;
  */
 bbox?: string;
 /**
+ * When true and q is empty, skip the implicit "bathymetry" keyword
+default so the search returns all NCEI record types in the area
+(used by the "Other data in this area" reference listing).
+
+ */
+broad?: boolean;
+/**
  * 1-based result offset for pagination (default 1)
  * @minimum 1
  */

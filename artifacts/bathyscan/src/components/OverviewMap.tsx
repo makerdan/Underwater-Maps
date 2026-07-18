@@ -9,15 +9,20 @@ import {
   useGetDatasets,
   getGetDatasetsQueryKey,
   usePostDatasetsBboxQuery,
+  usePostDatasetsPointRadiusQuery,
   useGetDatasetsMySaves,
   getGetDatasetsMySavesQueryKey,
   usePostDatasetsCatalogIdSave,
+  useGetNceiSearch,
+  getGetNceiSearchQueryKey,
 } from "@workspace/api-client-react";
 import type {
   Marker,
   GpsTrail,
   DatasetCatalogSearchResult,
+  NceiPortalResult,
 } from "@workspace/api-client-react";
+import { classifyNceiDataType, NCEI_TYPE_BADGE_COLORS } from "@/lib/nceiClassify";
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
@@ -100,6 +105,7 @@ import {
   registerSubstrateFeatureGetter,
 } from "@/lib/testHelpers";
 import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
+import { approxBboxForRadius } from "@/lib/coordinateParser";
 import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
 
 interface TooltipState {
@@ -408,7 +414,68 @@ export const OverviewMap: React.FC = () => {
     setSelectedBbox(null);
     setBboxResults(null);
     setBboxError(null);
+    useUiStore.getState().clearCoordSearchArea();
   }, []);
+
+  // --- Manual coordinate + radius search (queued from the Find Data panel) ---
+  const pointRadiusQuery = usePostDatasetsPointRadiusQuery();
+  const pendingCoordSearch = useUiStore((s) => s.pendingCoordSearch);
+  const coordSearchArea = useUiStore((s) => s.coordSearchArea);
+  // Mirror into a ref so the rAF loop can paint the circle without
+  // re-registering; mark dirty whenever the area changes.
+  const coordSearchAreaRef = useRef<typeof coordSearchArea>(null);
+  useEffect(() => {
+    coordSearchAreaRef.current = coordSearchArea;
+    dirtyRef.current = true;
+  }, [coordSearchArea]);
+
+  useEffect(() => {
+    if (!pendingCoordSearch) return;
+    const { lat, lon, radiusKm } = pendingCoordSearch;
+    const ui = useUiStore.getState();
+    ui.clearPendingCoordSearch();
+
+    // Immediately show an approximate search area while the server responds.
+    const approx = approxBboxForRadius(lat, lon, radiusKm);
+    ui.setCoordSearchArea({ lat, lon, radiusKm, bbox: approx });
+    setSelectedBbox(approx);
+    setBboxResults(null);
+    setBboxError(null);
+
+    // Tween the minimap to frame the search circle (same pattern as fit-to-data).
+    const canvas = canvasRef.current;
+    const currentTransform = transformRef.current;
+    if (canvas && currentTransform) {
+      const targetTransform = computeFitTransform(
+        { minLon: approx.west, maxLon: approx.east, minLat: approx.south, maxLat: approx.north },
+        canvas.width,
+        canvas.height,
+      );
+      fitAnimRef.current = {
+        from: { ...currentTransform },
+        to: targetTransform,
+        startTime: performance.now(),
+        duration: 400,
+      };
+      dirtyRef.current = true;
+    }
+
+    void (async () => {
+      try {
+        const res = await pointRadiusQuery.mutateAsync({
+          data: { lat, lon, radius: radiusKm, unit: "km" },
+        });
+        useUiStore.getState().setCoordSearchArea({ lat, lon, radiusKm: res.radiusKm, bbox: res.bbox });
+        setSelectedBbox(res.bbox);
+        setBboxResults(res.datasets);
+      } catch (err) {
+        const e = err as { details?: string; message?: string };
+        setBboxError(e?.details ?? e?.message ?? "Coordinate search failed");
+        setBboxResults(null);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCoordSearch]);
 
   // Compute the union bbox of all visible datasets that have a loaded overview
   // grid and animate the minimap transform to frame it.
@@ -1244,6 +1311,39 @@ export const OverviewMap: React.FC = () => {
           height: Math.abs(dr.lat - dl.lat),
           ...(isDownload ? { strokeColor: "rgba(251,191,36,0.85)", fillColor: "rgba(251,191,36,0.06)" } : {}),
         });
+      } else if (coordSearchAreaRef.current) {
+        // Manual coordinate search — draw a circle (not a rectangle) centred
+        // on the searched point, sized from its bbox, plus a crosshair.
+        const area = coordSearchAreaRef.current;
+        const { north, south, east, west } = area.bbox;
+        const [cx, cy] = lonLatToCanvas(area.lon, area.lat, worldGrid, t);
+        const [ex] = lonLatToCanvas(east, area.lat, worldGrid, t);
+        const [wx] = lonLatToCanvas(west, area.lat, worldGrid, t);
+        const [, ny] = lonLatToCanvas(area.lon, north, worldGrid, t);
+        const [, sy] = lonLatToCanvas(area.lon, south, worldGrid, t);
+        const rx = Math.abs(ex - wx) / 2;
+        const ry = Math.abs(sy - ny) / 2;
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(0,229,255,0.06)";
+        ctx.fill();
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = "rgba(0,229,255,0.85)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Centre crosshair
+        const CH = 6;
+        ctx.beginPath();
+        ctx.moveTo(cx - CH, cy);
+        ctx.lineTo(cx + CH, cy);
+        ctx.moveTo(cx, cy - CH);
+        ctx.lineTo(cx, cy + CH);
+        ctx.strokeStyle = "rgba(0,229,255,0.95)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
       } else if (selectedBboxRef.current) {
         const { north, south, east, west } = selectedBboxRef.current;
         const { x0, y0, x1, y1 } = bboxToCanvasCorners(north, south, east, west);
@@ -2403,6 +2503,35 @@ export const OverviewMap: React.FC = () => {
                     <span style={{ fontSize: 12, color: "#c084fc", opacity: 0.85 }}>● ON</span>
                   )}
                 </button>
+
+                {/* Coordinate search row — opens the Find Data panel's coordinate form */}
+                <button
+                  data-testid="overview-coord-search"
+                  role="menuitem"
+                  onClick={() => {
+                    setToolsPopoverOpen(false);
+                    useUiStore.getState().setFindDataPanelOpen(true);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "7px 10px",
+                    background: "transparent",
+                    border: "none",
+                    borderTop: "1px solid rgba(0,229,255,0.07)",
+                    color: "#cbd5e1",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 13.5,
+                    letterSpacing: "0.1em",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ width: 14, textAlign: "center", flexShrink: 0 }}>⌖</span>
+                  <span style={{ flex: 1 }}>COORD SEARCH</span>
+                </button>
               </div>
           </div>
 
@@ -3158,6 +3287,134 @@ interface BboxQueryPanelProps {
   savingIds: Set<string>;
 }
 
+/**
+ * Collapsed "Other data in this area" section — lists non-bathymetry NCEI
+ * records (oceanographic, geophysical, climate …) for the selected area as a
+ * reference-only listing. Fetches lazily on first expand using the `broad`
+ * NCEI proxy parameter so all record types are returned.
+ */
+const OtherDataSection: React.FC<{
+  bbox: { north: number; south: number; east: number; west: number };
+}> = ({ bbox }) => {
+  const [expanded, setExpanded] = useState(false);
+  const bboxString = `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`;
+  const nceiParams = { bbox: bboxString, broad: true, max: 30 };
+  const { data, isLoading, isError } = useGetNceiSearch(nceiParams, {
+    query: {
+      queryKey: getGetNceiSearchQueryKey(nceiParams),
+      enabled: expanded,
+      staleTime: 5 * 60_000,
+    },
+  });
+  const others = React.useMemo(() => {
+    if (!data) return [];
+    return (data as NceiPortalResult[])
+      .map((r) => ({ r, type: classifyNceiDataType(r.name, r.description) }))
+      .filter((x) => x.type !== "bathymetry");
+  }, [data]);
+
+  return (
+    <div data-testid="overview-other-data-section" style={{ borderTop: "1px solid rgba(0,229,255,0.12)" }}>
+      <button
+        data-testid="overview-other-data-toggle"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          background: "none",
+          border: "none",
+          color: "#7dd3fc",
+          padding: "8px 12px",
+          cursor: "pointer",
+          fontSize: 12.5,
+          letterSpacing: "0.12em",
+          fontFamily: "'JetBrains Mono', monospace",
+          textAlign: "left",
+        }}
+      >
+        <span style={{ fontSize: 11 }}>{expanded ? "▾" : "▸"}</span>
+        <span style={{ flex: 1 }}>OTHER DATA IN THIS AREA</span>
+        {expanded && !isLoading && !isError && (
+          <span style={{ color: "#64748b" }}>{others.length}</span>
+        )}
+      </button>
+      {expanded && (
+        <div style={{ padding: "0 12px 10px", maxHeight: 220, overflowY: "auto" }}>
+          {isLoading && (
+            <div style={{ fontSize: 12.5, color: "#94a3b8", padding: "6px 0" }}>Searching NCEI…</div>
+          )}
+          {isError && (
+            <div style={{ fontSize: 12.5, color: "#fca5a5", padding: "6px 0" }}>
+              ⚠ Could not load NCEI records for this area.
+            </div>
+          )}
+          {!isLoading && !isError && others.length === 0 && (
+            <div style={{ fontSize: 12.5, color: "#94a3b8", padding: "6px 0" }}>
+              No non-bathymetry NCEI records found here.
+            </div>
+          )}
+          {others.map(({ r, type }) => {
+            const badgeColor = NCEI_TYPE_BADGE_COLORS[type];
+            return (
+              <div
+                key={r.id}
+                data-testid="overview-other-data-card"
+                style={{
+                  padding: "6px 8px",
+                  marginBottom: 5,
+                  background: "rgba(255,255,255,0.02)",
+                  border: "1px solid rgba(148,163,184,0.12)",
+                  borderRadius: 3,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span
+                    data-testid="overview-other-data-badge"
+                    style={{
+                      fontSize: 10,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      color: badgeColor,
+                      border: `1px solid ${badgeColor}55`,
+                      borderRadius: 3,
+                      padding: "1px 5px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {type}
+                  </span>
+                  {!r.wcsAvailable && (
+                    <span style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.06em" }}>
+                      REFERENCE ONLY
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 13, color: "#cbd5e1", marginTop: 3, lineHeight: 1.35 }}>
+                  {r.metadataUrl ? (
+                    <a
+                      href={r.metadataUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "#cbd5e1", textDecoration: "underline dotted" }}
+                    >
+                      {r.name}
+                    </a>
+                  ) : (
+                    r.name
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
   bbox,
   results,
@@ -3382,6 +3639,9 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
           );
         })}
       </div>
+
+      {/* Non-bathymetry NCEI reference records for this area */}
+      <OtherDataSection bbox={bbox} />
     </div>
   );
 };

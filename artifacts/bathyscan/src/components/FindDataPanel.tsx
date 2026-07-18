@@ -39,6 +39,8 @@ import {
 import { useAppState } from "@/lib/context";
 import { useAuth } from "@/lib/clerkCompat";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useUiStore } from "@/lib/uiStore";
+import { CoordinateSearchForm } from "@/components/CoordinateSearchForm";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -942,13 +944,21 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   // convert its coverageBbox to the "minLon,minLat,maxLon,maxLat" string
   // format expected by GET /ncei/search. This seeds nearby NCEI results
   // automatically without requiring the user to type a query.
+  // An active manual coordinate search (circle on the Overview Map) takes
+  // precedence over the loaded dataset's coverage bbox so the NCEI tab
+  // surfaces records around the searched point.
+  const coordSearchArea = useUiStore((s) => s.coordSearchArea);
   const viewportBboxString = useMemo<string | undefined>(() => {
+    if (coordSearchArea) {
+      const b = coordSearchArea.bbox;
+      return `${b.west},${b.south},${b.east},${b.north}`;
+    }
     if (!currentDatasetId) return undefined;
     const activeSave = mySaves.find((s) => s.datasetId === currentDatasetId);
     const bbox = activeSave?.catalog?.coverageBbox;
     if (!bbox) return undefined;
     return `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
-  }, [currentDatasetId, mySaves]);
+  }, [coordSearchArea, currentDatasetId, mySaves]);
 
   // Reset NCEI pagination whenever the query or bbox seed changes
   useEffect(() => {
@@ -1353,6 +1363,35 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             {isSearching && (
               <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>Searching…</div>
             )}
+
+            {/* Manual coordinate + radius search */}
+            <details
+              data-testid="coord-search-section"
+              style={{
+                marginTop: 10,
+                border: "1px solid rgba(0,229,255,0.12)",
+                borderRadius: 4,
+                background: "rgba(255,255,255,0.02)",
+              }}
+            >
+              <summary
+                data-testid="coord-search-toggle"
+                style={{
+                  cursor: "pointer",
+                  padding: "7px 10px",
+                  fontSize: 12,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  color: "#7dd3fc",
+                  userSelect: "none",
+                }}
+              >
+                📍 Search by coordinates
+              </summary>
+              <div style={{ padding: "8px 10px 10px" }}>
+                <CoordinateSearchForm onSubmitted={onClose} />
+              </div>
+            </details>
           </div>
 
           {/* Results */}

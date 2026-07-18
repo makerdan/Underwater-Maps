@@ -2803,6 +2803,7 @@ avoid returning non-ocean datasets from the NCEI catalog.
 
  * @summary Search the NCEI Bathymetry Geoportal
  */
+export const getNceiSearchQueryBroadDefault = false;
 export const getNceiSearchQueryFromDefault = 1;
 
 export const getNceiSearchQueryMaxDefault = 20;
@@ -2813,6 +2814,7 @@ export const getNceiSearchQueryMaxMax = 100;
 export const GetNceiSearchQueryParams = zod.object({
   "q": zod.coerce.string().optional().describe('Free-text keyword query (e.g. \"Sitka bathymetry\", \"Alaska DEM\")'),
   "bbox": zod.coerce.string().optional().describe('Spatial filter as \"minLon,minLat,maxLon,maxLat\"'),
+  "broad": zod.coerce.boolean().default(getNceiSearchQueryBroadDefault).describe('When true and q is empty, skip the implicit \"bathymetry\" keyword\ndefault so the search returns all NCEI record types in the area\n(used by the \"Other data in this area\" reference listing).\n'),
   "from": zod.coerce.number().min(1).default(getNceiSearchQueryFromDefault).describe('1-based result offset for pagination (default 1)'),
   "max": zod.coerce.number().min(1).max(getNceiSearchQueryMaxMax).default(getNceiSearchQueryMaxDefault).describe('Maximum number of results to return per page (default 20)')
 })

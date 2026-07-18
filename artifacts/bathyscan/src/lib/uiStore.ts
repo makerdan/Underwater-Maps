@@ -115,6 +115,22 @@ export interface SelectedSubstrate {
   creditUrl: string;
 }
 
+/** A manual coordinate-search request queued for the OverviewMap to run. */
+export interface CoordSearchRequest {
+  lat: number;
+  lon: number;
+  /** Search radius in kilometres (already converted from the chosen unit). */
+  radiusKm: number;
+}
+
+/** The active coordinate-search area (centre + radius + derived bbox). */
+export interface CoordSearchArea {
+  lat: number;
+  lon: number;
+  radiusKm: number;
+  bbox: { north: number; south: number; east: number; west: number };
+}
+
 interface UiStore {
   pendingDropIn: DropInTarget | null;
   setPendingDropIn: (target: DropInTarget | null) => void;
@@ -249,6 +265,15 @@ interface UiStore {
    */
   scrubDatetime: Date | null;
   setScrubDatetime: (d: Date | null) => void;
+  /** Queued manual coordinate search — consumed by OverviewMap when it opens. */
+  pendingCoordSearch: CoordSearchRequest | null;
+  setPendingCoordSearch: (req: CoordSearchRequest | null) => void;
+  clearPendingCoordSearch: () => void;
+  /** Active coordinate-search area (circle drawn on the OverviewMap; also
+   *  provides a derived bbox for the Find Data NCEI tab). */
+  coordSearchArea: CoordSearchArea | null;
+  setCoordSearchArea: (area: CoordSearchArea | null) => void;
+  clearCoordSearchArea: () => void;
   /** Whether the user has already seen the one-time two-finger orbit hint toast. */
   hasSeenOrbitTouchHint: boolean;
   setHasSeenOrbitTouchHint: (seen: boolean) => void;
@@ -388,6 +413,12 @@ export const useUiStore = create<UiStore>((set, get) => {
           ? { findDataPanelOpen: true, openFindDataCount: state.openFindDataCount + 1 }
           : { findDataPanelOpen: false },
       ),
+    pendingCoordSearch: null,
+    setPendingCoordSearch: (req) => set({ pendingCoordSearch: req }),
+    clearPendingCoordSearch: () => set({ pendingCoordSearch: null }),
+    coordSearchArea: null,
+    setCoordSearchArea: (area) => set({ coordSearchArea: area }),
+    clearCoordSearchArea: () => set({ coordSearchArea: null }),
     scrubDatetime: null,
     setScrubDatetime: (d) => set({ scrubDatetime: d }),
 

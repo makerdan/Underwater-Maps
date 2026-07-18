@@ -205,10 +205,23 @@ vi.mock("@/components/ViewscreenTooltip", () => ({
   }) => children,
 }));
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (sel: (s: { waterType: string }) => unknown) =>
-    sel({ waterType: "saltwater" }),
-}));
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
+  const mockUseSettingsStore = (sel: (s: { waterType: string }) => unknown) =>
+    sel({ waterType: "saltwater" });
+  // uiStore.ts reads DEFAULT_SETTINGS and useSettingsStore.persist/setState at
+  // module init — keep those real so importing uiStore doesn't crash.
+  Object.assign(mockUseSettingsStore, {
+    persist: actual.useSettingsStore.persist,
+    setState: actual.useSettingsStore.setState,
+    getState: actual.useSettingsStore.getState,
+    subscribe: actual.useSettingsStore.subscribe,
+  });
+  return {
+    ...actual,
+    useSettingsStore: mockUseSettingsStore,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Helpers

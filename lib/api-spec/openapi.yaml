@@ -1794,6 +1794,16 @@ paths:
             type: string
           description: Spatial filter as "minLon,minLat,maxLon,maxLat"
         - in: query
+          name: broad
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: |
+            When true and q is empty, skip the implicit "bathymetry" keyword
+            default so the search returns all NCEI record types in the area
+            (used by the "Other data in this area" reference listing).
+        - in: query
           name: from
           required: false
           schema:

@@ -79,6 +79,11 @@ export const NceiSearchQuerySchema = zod.object({
       },
       { message: "bbox must be 'minLon,minLat,maxLon,maxLat' with four finite numbers" },
     ),
+  broad: zod
+    .enum(["true", "false"])
+    .optional()
+    .default("false")
+    .transform((v) => v === "true"),
   from: zod
     .string()
     .optional()
