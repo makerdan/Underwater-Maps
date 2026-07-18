@@ -29,9 +29,12 @@ export const REPORT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../.
  * @param {Array<{name: string, durationMs: number}>} [opts.slowest]
  * @param {string[]} [opts.suggestions]
  * @param {string} [opts.extra]
+ * @param {object} [opts.loadContext]  system-load snapshot at breach time
+ *   ({load1, cpuCount, otherRunners, overloaded}) so reports can distinguish
+ *   "budget breach under load" from a real hang.
  */
 export function emitBreachReport(opts) {
-  const { layer, name, elapsedMs, budgetMs, slowest = [], suggestions = [], extra } = opts;
+  const { layer, name, elapsedMs, budgetMs, slowest = [], suggestions = [], extra, loadContext } = opts;
   const lines = [
     "",
     "════════════════════════════════════════════════════════════════",
@@ -64,7 +67,7 @@ export function emitBreachReport(opts) {
     const file = resolve(REPORT_DIR, `${stamp}-${layer}.json`);
     writeFileSync(
       file,
-      JSON.stringify({ layer, name, elapsedMs, budgetMs, slowest, suggestions: allSuggestions, at: new Date().toISOString() }, null, 2),
+      JSON.stringify({ layer, name, elapsedMs, budgetMs, slowest, suggestions: allSuggestions, loadContext, at: new Date().toISOString() }, null, 2),
     );
     console.error(`Diagnostic report written to ${file}`);
   } catch (err) {

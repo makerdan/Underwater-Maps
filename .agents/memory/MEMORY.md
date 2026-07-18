@@ -12,6 +12,7 @@
 - [Error boundary retry must use componentDidCatch](error-boundary-retry.md) — componentDidUpdate's prevState.hasError stays true→true on re-catch; use componentDidCatch for retry scheduling instead.
 - [fetchJsonWithProgress missing Bearer token](fetchjsonwithprogress-auth.md) — fetchJsonWithProgress bypasses customFetch auth wiring; any caller on an authed route must pass getAuthToken() result via init.headers.
 - [Running long test suites](long-test-runs.md) — bathyscan unit ~7.5 min; run via temporarily narrowed test-unit workflow, not bash; budgets live in tests/timeout-guard/budgets.json.
+- [Serialized heavy test suites](test-heavy-serialized.md) — unit+palette+e2e run as one serialized test-heavy validation command; never re-parallelize; breach reports carry an under-load verdict.
 - [Long-running commands](long-running-commands.md) — nohup/setsid background jobs die when the shell call ends; use a temp validation command or a workflow for >2 min runs.
 - [Replit proxy needs native WS ping to stay alive](replit-proxy-ws-ping.md) — Replit mTLS proxy drops WS after ~30 s idle; only opcode-0x9 frames reset the timer, not JSON data frames. Fix: hmrNativePingPlugin() in vite.config.ts.
 - [Disposed texture uniform resurrect](disposed-texture-uniform-resurrect.md) — three.js re-uploads a disposed texture still bound to a uniform; rebind (placeholder) before dispose or it leaks forever.

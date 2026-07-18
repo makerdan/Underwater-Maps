@@ -17,6 +17,7 @@
  * scripts/test-all-steps.mjs so a breach report can attribute time to steps.
  */
 import { spawn, spawnSync } from "node:child_process";
+import { loadavg, cpus } from "node:os";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -71,10 +72,69 @@ const child = spawn(command[0], command.slice(1), {
   env: { ...process.env, TIMEOUT_GUARD_RUN_START: String(start) },
 });
 
+/**
+ * Snapshot system load and other concurrently-running test runners at breach
+ * time so the report can distinguish "budget breach under load" (machine
+ * overloaded by parallel suites — the tests themselves are fine) from a real
+ * hang inside this run.
+ */
+function captureLoadContext() {
+  const [load1] = loadavg();
+  const cpuCount = cpus().length || 1;
+  let otherRunners = [];
+  try {
+    const ps = spawnSync("ps", ["-eo", "pid,ppid,pgid,args"], { encoding: "utf8" });
+    if (ps.status === 0) {
+      const rows = ps.stdout
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((l) => {
+          const m = l.match(/^(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/);
+          return m ? { pid: m[1], ppid: m[2], pgid: m[3], args: m[4] } : null;
+        })
+        .filter(Boolean);
+      const byPid = new Map(rows.map((r) => [r.pid, r]));
+      // Exclude everything belonging to this run itself:
+      //  - the wrapped run's process group (child.pid is the group leader),
+      //  - this wrapper's own process group, and
+      //  - the full ancestor chain (parent shells, pnpm, and orchestrators
+      //    like test-heavy-serial.mjs that invoked this wrapper — they are
+      //    part of THIS run, not concurrent load).
+      const ownRow = byPid.get(String(process.pid));
+      const excludedPgids = new Set([String(child.pid), ownRow?.pgid].filter(Boolean));
+      const ancestorPids = new Set();
+      for (let cur = ownRow, hops = 0; cur && hops < 30; hops++) {
+        ancestorPids.add(cur.pid);
+        excludedPgids.add(cur.pgid);
+        cur = byPid.get(cur.ppid);
+      }
+      otherRunners = rows
+        .filter((r) => /vitest|playwright|run-with-timeout|test-heavy-serial/.test(r.args))
+        .filter((r) => !excludedPgids.has(r.pgid) && !ancestorPids.has(r.pid))
+        .filter((r) => !r.args.includes("ps -eo"))
+        .map((r) => `${r.pid} ${r.args}`)
+        .slice(0, 10);
+    }
+  } catch { /* ps unavailable — load1 alone still helps */ }
+  const overloaded = load1 > cpuCount * 1.5 || otherRunners.length > 0;
+  return { load1, cpuCount, otherRunners, overloaded };
+}
+
 let breached = false;
 const timer = setTimeout(() => {
   breached = true;
+  const loadCtx = captureLoadContext();
+  const loadLines = [
+    `Load context at breach: loadavg(1m)=${loadCtx.load1.toFixed(1)} on ${loadCtx.cpuCount} CPUs; ${loadCtx.otherRunners.length} other test-runner process(es) detected.`,
+    ...loadCtx.otherRunners.map((r) => `  other runner: ${r}`),
+    loadCtx.overloaded
+      ? "VERDICT: LIKELY BUDGET BREACH UNDER LOAD — other suites were running in parallel and/or the machine was overloaded. Re-run this suite alone (or via the serialized test-heavy command) before treating this as a real hang."
+      : "VERDICT: NO CONCURRENT LOAD DETECTED — this looks like a real hang or genuinely slow run, not machine contention.",
+  ];
   emitBreachReport({
+    loadContext: loadCtx,
+    extra: loadLines.join("\n"),
     layer,
     name: label,
     elapsedMs: Date.now() - start,

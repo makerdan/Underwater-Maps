@@ -205,7 +205,7 @@ describe("CoordinateSearchForm — radius unit persistence & conversion", () => 
 describe("CoordinateSearchForm — GPS fill", () => {
   it("fills immediately when a GPS fix already exists", () => {
     useGpsStore.setState({
-      position: { latitude: 55.123456, longitude: -132.654321, accuracy: 5, timestamp: 0 },
+      position: { latitude: 55.123456, longitude: -132.654321, accuracy: 5, timestamp: 0, speed: null, heading: null },
     });
     render(<CoordinateSearchForm />);
     fireEvent.click(screen.getByTestId("coord-search-gps-fill"));
@@ -226,7 +226,7 @@ describe("CoordinateSearchForm — GPS fill", () => {
     );
 
     act(() => {
-      useGpsStore.setState({ position: { latitude: 58.3, longitude: -134.42, accuracy: 5, timestamp: 0 } });
+      useGpsStore.setState({ position: { latitude: 58.3, longitude: -134.42, accuracy: 5, timestamp: 0, speed: null, heading: null } });
     });
     expect(screen.getByTestId("coord-search-input")).toHaveValue(
       "58.300000, -134.420000",

@@ -51,6 +51,14 @@ function resolveE2ePorts() {
 }
 
 const argv = process.argv.slice(2);
+// --include-own-tree: also kill holders that belong to this process's own
+// ancestor tree (but never the ancestors themselves). Needed by the
+// serialized heavy-test runner: orphaned webServers from a finished step get
+// reparented under the still-alive workflow supervisor (a subreaper), so the
+// normal own-tree exemption would wrongly protect them and the next step
+// fails with "port already used". Only safe BETWEEN steps, when nothing in
+// our tree should legitimately hold the swept ports.
+const includeOwnTree = argv.includes("--include-own-tree");
 let ports = [];
 if (argv.includes("--e2e")) {
   ports = resolveE2ePorts();
@@ -279,7 +287,7 @@ async function freePort(port) {
       console.error(`kill-port-holders: refusing to kill own ancestor pid ${holder} holding port ${port}.`);
       return false;
     }
-    if (isOwnedByProtected(holder)) {
+    if (!includeOwnTree && isOwnedByProtected(holder)) {
       console.log(
         `kill-port-holders: port ${port} held by pid ${holder}, which belongs to this run's own process tree — leaving it alone.`,
       );
