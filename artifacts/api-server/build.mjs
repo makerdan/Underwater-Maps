@@ -147,6 +147,15 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
       console.log(`  copied runtime asset: ${name}`);
     }
   }
+
+  // laz-perf's Emscripten loader resolves its .wasm file relative to the
+  // bundled entrypoint (dist/index.mjs) at runtime; without this copy every
+  // .laz upload fails with "ENOENT ... dist/laz-perf.wasm".
+  const lazPerfWasm = require.resolve("laz-perf/lib/node/laz-perf.wasm", {
+    paths: [artifactDir],
+  });
+  await copyFile(lazPerfWasm, path.join(distDir, "laz-perf.wasm"));
+  console.log("  copied runtime asset: laz-perf.wasm");
 }
 
 buildAll().catch((err) => {

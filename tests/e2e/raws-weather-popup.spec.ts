@@ -249,34 +249,15 @@ test.describe("RAWS weather popup", () => {
       { timeout: 8_000 },
     );
 
-    const { cx, cy } = (await pinPos.jsonValue()) as {
-      datasetId: string;
-      cx: number;
-      cy: number;
-    };
+    void pinPos; // position confirmed painted — click goes to the SVG pin below
 
-    // Dispatch a real click on the OverviewMap canvas at the pin coordinates.
-    // The click handler computes: mx = e.clientX - rect.left, so we must pass
-    // viewport-space clientX/clientY = canvasRect.{left,top} + canvas-relative cx/cy.
+    // RAWS pin clicks are handled by onClick on the SVG <g> overlay elements
+    // (the canvas click handler no longer hit-tests pins). Click the pin's
+    // SVG group directly via dispatchEvent (bypasses canvas z-order overlap).
     await expect(page.locator(OVERVIEW_CANVAS_TESTID)).toBeVisible();
-    await page.evaluate(
-      ({ cx: pinCx, cy: pinCy, testid }) => {
-        const canvas = document.querySelector(
-          `[data-testid="${testid}"]`,
-        ) as HTMLCanvasElement | null;
-        if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        canvas.dispatchEvent(
-          new MouseEvent("click", {
-            bubbles: true,
-            cancelable: true,
-            clientX: rect.left + pinCx,
-            clientY: rect.top + pinCy,
-          }),
-        );
-      },
-      { cx, cy, testid: "overview-map-canvas" },
-    );
+    const pinEl = page.locator(`[data-testid="raws-pin-${RAWS_DATASET_ID}"]`);
+    await expect(pinEl).toBeAttached({ timeout: 5_000 });
+    await pinEl.dispatchEvent("click");
 
     const popover = page.locator(POPOVER_TESTID);
     await expect(popover).toBeVisible({ timeout: 8_000 });
@@ -328,6 +309,27 @@ test.describe("RAWS weather popup", () => {
       );
       return;
     }
+
+    // Seed terrain around the mock station: the popover only renders when
+    // OverviewMap has an overview grid (overviewGrid gate), which requires
+    // loaded terrain.
+    await page.evaluate(() =>
+      window.__bathyTest?.seedTerrain?.({
+        minLat: 60,
+        maxLat: 62.5,
+        minLon: -152,
+        maxLon: -147.5,
+        centerLat: 61.2,
+        centerLon: -149.9,
+      }),
+    ).catch(() => {});
+    await page
+      .waitForFunction(
+        () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+        null,
+        { timeout: 5_000 },
+      )
+      .catch(() => {});
 
     await openOverviewMap(page);
 
@@ -394,6 +396,27 @@ test.describe("RAWS weather popup", () => {
       );
       return;
     }
+
+    // Seed terrain around the mock station: the popover only renders when
+    // OverviewMap has an overview grid (overviewGrid gate), which requires
+    // loaded terrain.
+    await page.evaluate(() =>
+      window.__bathyTest?.seedTerrain?.({
+        minLat: 60,
+        maxLat: 62.5,
+        minLon: -152,
+        maxLon: -147.5,
+        centerLat: 61.2,
+        centerLon: -149.9,
+      }),
+    ).catch(() => {});
+    await page
+      .waitForFunction(
+        () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+        null,
+        { timeout: 5_000 },
+      )
+      .catch(() => {});
 
     await openOverviewMap(page);
 

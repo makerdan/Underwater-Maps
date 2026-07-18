@@ -58,6 +58,10 @@ export const DEFAULT_SETTINGS = {
   colormapTheme: "ocean",
   showCompassMinimap: true,
   hasSeenOnboarding: true,
+  // sidebarMode persists server-side per user; a spec that switches to Plan
+  // (or Live) would otherwise leak that mode into the next spec, hiding the
+  // Explore tab's DatasetPanel and breaking remove-dataset flows.
+  sidebarMode: "explore",
   panelCollapse: {},
 } as const;
 

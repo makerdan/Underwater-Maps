@@ -1687,6 +1687,7 @@ export const useSettingsStore = create<SettingsStore>()(
   ),
 );
 
+
 /**
  * Returns true when any setting in the given section has changed since the
  * last successful save (server PUT for signed-in users, or localStorage

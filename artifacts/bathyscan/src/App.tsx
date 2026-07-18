@@ -1900,7 +1900,7 @@ function Main() {
       {/* Onboarding overlay — shown to new users after the scene is ready.
           Suppressed while the WebGL context is lost/recovering so a recovery
           remount doesn't re-trigger the tour mid-session. */}
-      <OnboardingGuard terrain={terrain} />
+      <OnboardingGuard terrain={terrain} settingsReady={settingsReady} />
     </div>
   );
 }
@@ -1913,9 +1913,19 @@ function Main() {
  * Before the first terrain loads we don't mount at all so the overlay doesn't
  * flash during the initial data-load phase.
  */
-function OnboardingGuard({ terrain }: { terrain: unknown }) {
+function OnboardingGuard({
+  terrain,
+  settingsReady,
+}: {
+  terrain: unknown;
+  settingsReady: boolean;
+}) {
   const contextLost = useWebglContextStore((s) => s.contextLost);
   if (!terrain) return null;
+  // Never mount before the server settings have settled: a signed-in user
+  // whose hasSeenOnboarding=true lives server-side must not see the tour
+  // flash (and intercept clicks) during the pre-hydration window.
+  if (!settingsReady) return null;
   return <OnboardingOverlay suppressed={contextLost} />;
 }
 

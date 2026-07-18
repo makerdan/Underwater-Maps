@@ -11,6 +11,17 @@ import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
  * does not depend on live NOAA data being reachable from the test env.
  */
 
+/** Switch the sidebar to the Plan tab (TidePanel lives there, display:none otherwise). */
+async function ensurePlanTab(page: Page): Promise<void> {
+  const planTab = page.locator("[data-testid='sidebar-mode-tab-plan']");
+  await expect(planTab).toBeVisible({ timeout: 10_000 });
+  const pressed = await planTab.getAttribute("aria-pressed").catch(() => null);
+  if (pressed !== "true") {
+    await planTab.dispatchEvent("click");
+    await expect(planTab).toHaveAttribute("aria-pressed", "true");
+  }
+}
+
 async function appIsSignedIn(page: Page): Promise<boolean> {
   return page
     .locator("canvas")
@@ -185,6 +196,8 @@ test.describe("Tide HUD scrubber slack visuals", () => {
     // Wait for the TidePanel to mount. TidePanel is always rendered embedded
     // inside the sidebar so its standalone "TIDAL OVERLAY" header is never
     // shown — check the root element (data-testid="tide-panel") instead.
+    // TidePanel lives in the Plan sidebar tab (display:none on Explore).
+    await ensurePlanTab(page);
     await expect(page.locator("[data-testid='tide-panel']")).toBeVisible({ timeout: 5_000 });
 
     // The "Time scrub" section is always rendered, even if the station data
@@ -215,6 +228,17 @@ test.describe("Tide HUD scrubber slack visuals", () => {
     // The ticks are rendered on top of the range input (higher z-index and
     // later in DOM order) so a real mouse hover lands on them, matching what
     // a user experiences.
+    // The time-scrub controls live inside a collapsible Advanced section;
+    // when collapsed its toggle intercepts pointer events over the ticks.
+    const advToggle = page.locator("[data-testid='advanced-toggle-tidePanelTimeScrub']");
+    if ((await advToggle.count()) > 0) {
+      const expanded = await advToggle.getAttribute("aria-expanded").catch(() => null);
+      if (expanded !== "true") {
+        await advToggle.dispatchEvent("click");
+        await expect(advToggle).toHaveAttribute("aria-expanded", "true", { timeout: 5_000 });
+      }
+    }
+
     const ticks = sliderTrack.locator("div[style*='cursor: pointer']");
     const tickCount = await ticks.count();
     expect(tickCount).toBeGreaterThan(0);

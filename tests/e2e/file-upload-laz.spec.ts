@@ -89,6 +89,31 @@ async function uploadLazViaDropzone(page: Page, filename: string): Promise<void>
   await input.dispatchEvent("change");
 }
 
+
+/**
+ * Seed synthetic terrain via the test bridge. The sidebar's "Your Data"
+ * section (host of the MY UPLOADS dataset tree) renders an empty state
+ * until a terrain is loaded, so API-path tests must seed one before
+ * asserting on btn-user-dataset-* rows.
+ */
+async function seedTerrainForSidebar(page: Page): Promise<void> {
+  await page
+    .waitForFunction(
+      () => Boolean(window.__bathyTest?.isTestBridgeReady?.()),
+      null,
+      { timeout: 10_000 },
+    )
+    .catch(() => {});
+  await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
+  await page
+    .waitForFunction(
+      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+      null,
+      { timeout: 5_000 },
+    )
+    .catch(() => {});
+}
+
 test.describe("LAZ file-upload flow", () => {
   test.beforeAll(async ({ request }) => {
     const probe = await request.get(`${API_BASE}/api/datasets`);
@@ -154,12 +179,14 @@ test.describe("LAZ file-upload flow", () => {
 
     // Load the app and confirm the new row is visible in MY UPLOADS.
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     const row = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(expectedName);
 
     // Reload — the row must survive a hard refresh (DB-backed, not just cache).
     await page.reload({ waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     const persistedRow = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(persistedRow).toBeVisible({ timeout: 30_000 });
     await expect(persistedRow).toContainText(expectedName);
@@ -225,6 +252,7 @@ test.describe("LAZ file-upload flow", () => {
     // Hard reload: the row must still be present once React Query re-fetches
     // from the DB (regression guard for "vanish on refresh").
     await page.reload({ waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     const persistedRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });

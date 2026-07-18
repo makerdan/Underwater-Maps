@@ -28,8 +28,20 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
     .catch(() => false);
 }
 
+async function ensurePlanTab(page: Page): Promise<void> {
+  const planTab = page.locator("[data-testid='sidebar-mode-tab-plan']");
+  await expect(planTab).toBeVisible({ timeout: 10_000 });
+  const pressed = await planTab.getAttribute("aria-pressed").catch(() => null);
+  if (pressed !== "true") {
+    await planTab.dispatchEvent("click");
+    await expect(planTab).toHaveAttribute("aria-pressed", "true");
+  }
+}
+
 async function clickTopBarToggle(page: Page, label: string): Promise<void> {
-  const btn = page.locator(`button:has-text('${label}')`).first();
+  // Multiple hidden buttons can contain the same label (e.g. Plan-tab
+  // DriftTimeline "⛵ DRIFT" while the tab is display:none) — filter visible.
+  const btn = page.locator(`button:has-text('${label}'):visible`).first();
   await expect(btn).toBeVisible({ timeout: 10_000 });
   // Use dispatchEvent to bypass any canvas element that may sit on top of
   // the toolbar button in headless mode (z-order intercept).
@@ -170,6 +182,9 @@ test.describe("Slack-tide visuals", () => {
 
     // TidePanel renders once tidalOverlay=true AND effectiveTidalData!==null,
     // both of which we just set synchronously. Give React one tick to commit.
+    // TidePanel now lives inside the Plan sidebar tab (display:none otherwise).
+    await ensurePlanTab(page);
+
     const tidalMounted = page.locator("[data-testid='tide-panel']").first();
     await expect(tidalMounted).toBeVisible({ timeout: 5_000 });
 
@@ -207,7 +222,8 @@ test.describe("Slack-tide visuals", () => {
       .catch(() => {});
 
     await clickTopBarToggle(page, "DRIFT");
-    await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });
+    await ensurePlanTab(page);
+    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 10_000 });
 
     // Manual override panel must be present.
     await expect(page.locator("text=MANUAL OVERRIDE")).toBeVisible({ timeout: 10_000 });
@@ -281,7 +297,8 @@ test.describe("Slack-tide visuals", () => {
       .catch(() => {});
 
     await clickTopBarToggle(page, "DRIFT");
-    await expect(page.locator("text=DRIFT PLANNER")).toBeVisible({ timeout: 5_000 });
+    await ensurePlanTab(page);
+    await expect(page.locator("[data-testid='weather-panel']")).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("text=MANUAL OVERRIDE")).toBeVisible({ timeout: 10_000 });
 
     // Baseline: timeline shows the angled-line copy ("N° from vertical").

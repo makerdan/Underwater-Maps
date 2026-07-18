@@ -242,7 +242,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
 
         {/* Substrate row */}
         {substrateActive && (
-          <div style={rowStyle}>
+          <div style={rowStyle} data-testid="whats-here-substrate-row">
             <span style={labelStyle}>Substrate</span>
             <span style={substrateName ? valueStyle : { ...valueStyle, color: "#475569" }}>
               {substrateName ?? "—"}

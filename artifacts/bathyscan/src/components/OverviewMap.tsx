@@ -2099,6 +2099,7 @@ export const OverviewMap: React.FC = () => {
               return (
                 <g
                   key={`raws-${pin.datasetId}`}
+                  data-testid={`raws-pin-${pin.datasetId}`}
                   style={{ cursor: "pointer", pointerEvents: "all" }}
                   onClick={(e) => {
                     e.stopPropagation();

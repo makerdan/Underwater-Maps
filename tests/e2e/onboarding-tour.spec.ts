@@ -347,6 +347,7 @@ test.describe("Onboarding tour overlay", () => {
     // Help window should close.
     await expect(helpWindow).toHaveCount(0, { timeout: 5_000 });
 
+
     // Overlay should now be visible on the main scene.
     await expect(dialog).toBeVisible({ timeout: 20_000 });
     await expect(dialog).toContainText("STEP 1 OF 5");

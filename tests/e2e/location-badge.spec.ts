@@ -86,10 +86,16 @@ async function mockStallingSurfaceConditions(page: Page): Promise<void> {
  * during a re-fetch, so TidePanel stays mounted with tidalLoading=true.
  */
 async function mockTidalFirstFastThenStall(page: Page): Promise<void> {
-  let callCount = 0;
   await page.route(/\/api\/tidal(\?|$)/, async (route) => {
-    callCount++;
-    if (callCount === 1) {
+    // The initial fetch carries either no datetime or one near "now"; the
+    // "Tomorrow" scrub re-fetch is clamped by timelineStore.setTime to the
+    // range end (now + 12 h). Fulfill near-now requests fast and stall far-out
+    // ones (threshold 6 h splits the two cleanly). (Call-count ordering is
+    // unreliable: other components also hit /api/tidal.)
+    const url = new URL(route.request().url());
+    const dt = url.searchParams.get("datetime");
+    const farOut = dt !== null && Math.abs(new Date(dt).getTime() - Date.now()) > 6 * 3_600_000;
+    if (!farOut) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -117,7 +123,7 @@ async function mockTidalFirstFastThenStall(page: Page): Promise<void> {
         }),
       });
     }
-    // callCount > 1: do nothing — route stalls, keeping loading=true
+    // far-out datetime requests: do nothing — route stalls, keeping loading=true
   });
 }
 
@@ -207,6 +213,22 @@ async function ensureTerrainLoaded(page: Page): Promise<void> {
     } else {
       await page.waitForTimeout(500).catch(() => {});
     }
+  }
+}
+
+/**
+ * Switch the sidebar to the Plan tab. The sidebar restructure moved
+ * ForecastStrip, TidePanel, and the embedded WeatherPanel (Drift Planner)
+ * into the Plan tab — inactive tabs render display:none, so their panels
+ * are hidden until the tab is selected.
+ */
+async function ensurePlanTab(page: Page): Promise<void> {
+  const planTab = page.locator("[data-testid='sidebar-mode-tab-plan']");
+  await expect(planTab).toBeVisible({ timeout: 10_000 });
+  const pressed = await planTab.getAttribute("aria-pressed").catch(() => null);
+  if (pressed !== "true") {
+    await planTab.dispatchEvent("click");
+    await expect(planTab).toHaveAttribute("aria-pressed", "true");
   }
 }
 
@@ -306,6 +328,7 @@ test.describe("LocationBadge on data panels", () => {
       }
 
       await ensureTerrainLoaded(page);
+      await ensurePlanTab(page);
 
       const forecastSection = page.locator("[data-testid='sidebar-section-forecast']");
       await expect(forecastSection).toBeVisible({ timeout: 15_000 });
@@ -357,6 +380,7 @@ test.describe("LocationBadge on data panels", () => {
       }
 
       await ensureTerrainLoaded(page);
+      await ensurePlanTab(page);
 
       const forecastSection = page.locator("[data-testid='sidebar-section-forecast']");
       await expect(forecastSection).toBeVisible({ timeout: 15_000 });
@@ -483,6 +507,7 @@ test.describe("LocationBadge on data panels", () => {
 
       await ensureTerrainLoaded(page);
       await ensureTidalOverlayOn(page);
+      await ensurePlanTab(page);
 
       const tidePanel = page.locator("[data-testid='tide-panel']");
       await expect(tidePanel).toBeVisible({ timeout: 20_000 });
@@ -510,6 +535,7 @@ test.describe("LocationBadge on data panels", () => {
 
       await ensureTerrainLoaded(page);
       await ensureTidalOverlayOn(page);
+      await ensurePlanTab(page);
 
       const tidePanel = page.locator("[data-testid='tide-panel']");
       await expect(tidePanel).toBeVisible({ timeout: 20_000 });
@@ -523,7 +549,16 @@ test.describe("LocationBadge on data panels", () => {
       // a new useTidalData fetch with a datetime param. The second tidal call
       // stalls, but data from the first call is preserved — so TidePanel stays
       // mounted with loading=true, producing the loading badge.
-      const tomorrowBtn = tidePanel.locator("button").filter({ hasText: /Mon|Tue|Wed|Thu|Fri|Sat|Sun|\d+\/\d+/ }).first();
+      // Day buttons live inside the collapsible "Time scrub" Advanced section;
+      // expand it first so the tomorrow button (offset 1) is interactable.
+      const advToggle = page.locator("[data-testid='advanced-toggle-tidePanelTimeScrub']");
+      if ((await advToggle.count()) > 0) {
+        const expanded = await advToggle.getAttribute("aria-expanded").catch(() => null);
+        if (expanded !== "true") {
+          await advToggle.dispatchEvent("click");
+        }
+      }
+      const tomorrowBtn = tidePanel.locator("[data-testid='tide-day-btn-1']");
       await expect(tomorrowBtn).toBeVisible({ timeout: 10_000 });
       await tomorrowBtn.dispatchEvent("click");
 
@@ -551,9 +586,12 @@ test.describe("LocationBadge on data panels", () => {
 
       await ensureTerrainLoaded(page);
 
-      const driftBtn = page.locator("button:has-text('DRIFT')").first();
+      // Multiple buttons contain "DRIFT" (hidden DriftTimeline/HUD variants) —
+      // scope to the visible top-right HUD toggle.
+      const driftBtn = page.locator("button:has-text('DRIFT'):visible").first();
       await expect(driftBtn).toBeVisible({ timeout: 10_000 });
       await driftBtn.dispatchEvent("click");
+      await ensurePlanTab(page);
 
       const weatherPanel = page.locator("[data-testid='weather-panel']");
       await expect(weatherPanel).toBeVisible({ timeout: 8_000 });
@@ -580,9 +618,12 @@ test.describe("LocationBadge on data panels", () => {
 
       await ensureTerrainLoaded(page);
 
-      const driftBtn = page.locator("button:has-text('DRIFT')").first();
+      // Multiple buttons contain "DRIFT" (hidden DriftTimeline/HUD variants) —
+      // scope to the visible top-right HUD toggle.
+      const driftBtn = page.locator("button:has-text('DRIFT'):visible").first();
       await expect(driftBtn).toBeVisible({ timeout: 10_000 });
       await driftBtn.dispatchEvent("click");
+      await ensurePlanTab(page);
 
       const weatherPanel = page.locator("[data-testid='weather-panel']");
       await expect(weatherPanel).toBeVisible({ timeout: 8_000 });

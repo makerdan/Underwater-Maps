@@ -145,6 +145,31 @@ async function assertViewerRendersDataset(page: Page, rowTestId: string, expecte
 // BAG
 // ---------------------------------------------------------------------------
 
+
+/**
+ * Seed synthetic terrain via the test bridge. The sidebar's "Your Data"
+ * section (host of the MY UPLOADS dataset tree) renders an empty state
+ * until a terrain is loaded, so API-path tests must seed one before
+ * asserting on btn-user-dataset-* rows.
+ */
+async function seedTerrainForSidebar(page: Page): Promise<void> {
+  await page
+    .waitForFunction(
+      () => Boolean(window.__bathyTest?.isTestBridgeReady?.()),
+      null,
+      { timeout: 10_000 },
+    )
+    .catch(() => {});
+  await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
+  await page
+    .waitForFunction(
+      () => Boolean(window.__bathyTest?.getTerrainSummary?.()),
+      null,
+      { timeout: 5_000 },
+    )
+    .catch(() => {});
+}
+
 test.describe("BAG file-upload flow", () => {
   test.beforeAll(async ({ request }) => {
     const probe = await request.get(`${API_BASE}/api/datasets`);
@@ -202,11 +227,13 @@ test.describe("BAG file-upload flow", () => {
     expect(body.savedDatasetMeta?.name).toBe(expectedName);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     const row = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(expectedName);
 
     await page.reload({ waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     await assertViewerRendersDataset(page, `btn-user-dataset-${savedId}`, expectedName);
     await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
   });
@@ -253,6 +280,7 @@ test.describe("BAG file-upload flow", () => {
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     const persistedRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });
@@ -264,6 +292,7 @@ test.describe("BAG file-upload flow", () => {
 
     // Navigate without noCanvas=1 to confirm the 3D viewer renders the dataset.
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     await assertViewerRendersDataset(
       page,
       `btn-user-dataset-${savedRow!.id}`,
@@ -358,11 +387,13 @@ test.describe("NMEA file-upload flow", () => {
     expect(body.savedDatasetMeta?.name).toBe(expectedName);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     const row = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(expectedName);
 
     await page.reload({ waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     await assertViewerRendersDataset(page, `btn-user-dataset-${savedId}`, expectedName);
     await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
   });
@@ -404,6 +435,7 @@ test.describe("NMEA file-upload flow", () => {
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     const persistedRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });
@@ -415,6 +447,7 @@ test.describe("NMEA file-upload flow", () => {
 
     // Navigate without noCanvas=1 to confirm the 3D viewer renders the dataset.
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     await assertViewerRendersDataset(
       page,
       `btn-user-dataset-${savedRow!.id}`,
@@ -508,11 +541,13 @@ test.describe("GPX file-upload flow", () => {
     expect(body.savedDatasetMeta?.name).toBe(expectedName);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     const row = page.getByTestId(`btn-user-dataset-${savedId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(expectedName);
 
     await page.reload({ waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     await assertViewerRendersDataset(page, `btn-user-dataset-${savedId}`, expectedName);
     await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
   });
@@ -554,6 +589,7 @@ test.describe("GPX file-upload flow", () => {
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     const persistedRow = page
       .getByTestId(/^btn-user-dataset-/)
       .filter({ hasText: expectedName });
@@ -565,6 +601,7 @@ test.describe("GPX file-upload flow", () => {
 
     // Navigate without noCanvas=1 to confirm the 3D viewer renders the dataset.
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    await seedTerrainForSidebar(page);
     await assertViewerRendersDataset(
       page,
       `btn-user-dataset-${savedRow!.id}`,

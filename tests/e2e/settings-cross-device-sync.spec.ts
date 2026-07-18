@@ -83,7 +83,7 @@ test.describe("Settings cross-device sync", () => {
     await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
     const lastSynced = page.locator('[data-testid="last-synced-row"]');
     await expect(lastSynced).toBeVisible({ timeout: 5_000 });
-    await expect(lastSynced).toContainText("Last sync:");
+    await expect(lastSynced).toContainText("LAST SYNCED:");
     await expect(lastSynced).not.toContainText("—");
 
     // ── Device B: clear local persistence and reload ─────────────────────
@@ -110,7 +110,7 @@ test.describe("Settings cross-device sync", () => {
     await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
     const lastSyncedAfter = page.locator('[data-testid="last-synced-row"]');
     await expect(lastSyncedAfter).toBeVisible({ timeout: 5_000 });
-    await expect(lastSyncedAfter).toContainText("Last sync:");
+    await expect(lastSyncedAfter).toContainText("LAST SYNCED:");
     await expect(lastSyncedAfter).not.toContainText("—");
 
     // ── Cleanup: restore defaults so we don't pollute the shared dev

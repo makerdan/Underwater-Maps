@@ -603,6 +603,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                 return (
                   <ViewscreenTooltip key={offset} label={dayTip} side="bottom">
                   <button
+                    data-testid={`tide-day-btn-${offset}`}
                     onClick={() => setDay(offset)}
                     style={{
                       fontSize: 15,

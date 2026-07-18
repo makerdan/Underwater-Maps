@@ -89,7 +89,19 @@ export function requestSettingsSync(): void {
 // or the server already acknowledged the write before the helper was called)
 // rather than timing out after 5 s.
 let _pendingDebounce = false;
-let _flushInFlight = false;
+// Counter (not boolean): serialized flushes can be queued while a previous
+// one is still in flight, and each must keep the "in flight" signal alive
+// until its own settle.
+let _flushInFlight = 0;
+
+// ─── Flush serialization chain ───────────────────────────────────────────────
+// Every flush() body runs strictly after the previous one has settled. Without
+// this, an immediate flush (e.g. onboarding Skip calling flushServerSync)
+// races an already-in-flight debounced PUT that carries an OLDER snapshot —
+// and whichever PUT the server processes last wins, silently reverting the
+// newer edit. The chain never rejects (errors are surfaced to each caller via
+// its own returned promise, not the chain).
+let _flushChain: Promise<void> = Promise.resolve();
 
 // ─── Consecutive flush failure tracking ──────────────────────────────────────
 // Counts how many debounce-triggered flush() calls have failed back-to-back.
@@ -187,6 +199,13 @@ let _ackedPaletteRev = 0;
 // (hydration is excluded via _hydrating). flush() acknowledges the revs it
 // captured once the server accepts the PUT. While an edit rev is ahead of
 // its acked rev, GET responses must NOT hydrate (clobber) that store.
+// True once the user has locally edited hasSeenOnboarding this page load
+// (e.g. "Take the tour" / "Replay tour" reset it to false, or the overlay's
+// Skip/Done set it to true). While set, the one-way "server says seen →
+// force local seen" apply below must NOT run: it would silently cancel an
+// intentional reset made before the first GET hydration lands.
+let _onboardingLocallyEdited = false;
+
 let _settingsEditRev = 0;
 let _ackedSettingsRev = 0;
 let _panelEditRev = 0;
@@ -196,7 +215,7 @@ let _ackedZoneRev = 0;
 
 /** True when a debounce timer is armed OR a PUT is currently in flight. */
 export function hasPendingOrInFlightSettingsSync(): boolean {
-  return _pendingDebounce || _flushInFlight;
+  return _pendingDebounce || _flushInFlight > 0;
 }
 
 // ─── Singleton guard ──────────────────────────────────────────────────────────
@@ -362,6 +381,13 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     // would leave the startup auto-select effect stuck when the first GET
     // arrives while the user already has a change queued to flush.
     setSettingsReady(true);
+    // Remember whether this is the FIRST hydration since page load. The
+    // one-way hasSeenOnboarding apply below must only run on the first
+    // hydration: later GETs (route remounts, refetches) can carry a stale
+    // `true` while the user just intentionally reset the flag to false
+    // (Replay tour / "Take the tour"), and re-applying would silently cancel
+    // the reset before its PUT lands.
+    const isFirstHydration = !_serverSettled;
     _serverSettled = true;
 
     const serverRec = serverSettings as Record<string, unknown>;
@@ -386,6 +412,19 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       const settingsClean = _settingsEditRev === _ackedSettingsRev;
       if (settingsClean) {
         hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
+      } else if (
+        isFirstHydration &&
+        !_onboardingLocallyEdited &&
+        serverRec.hasSeenOnboarding === true &&
+        !useSettingsStore.getState().hasSeenOnboarding
+      ) {
+        // hasSeenOnboarding is a one-way flag: once the server says the tour
+        // was completed/skipped, it must never re-show — even when full field
+        // hydration is skipped because unrelated local edits are unflushed
+        // (e.g. an overlay toggled in the first frames after boot). Without
+        // this, a pre-hydration edit leaves the local default (false) in
+        // place and the guided tour overlay pops over the whole app.
+        useSettingsStore.setState({ hasSeenOnboarding: true });
       }
 
       // Only hydrate the palette when it has no unflushed local edits —
@@ -489,8 +528,12 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       markAllSaved(null);
       return;
     }
-    _flushInFlight = true;
-    try {
+    // Mark in-flight BEFORE queuing on the chain so
+    // waitForServerSettingsSync sees the outstanding write even while this
+    // flush is waiting for a previous one to settle.
+    _flushInFlight++;
+    const run = async (): Promise<void> => {
+      try {
       // Never send a full-state PUT before the initial server state is known
       // (first GET applied or errored). Doing so would overwrite newer server
       // values with un-hydrated local defaults. Wait briefly for settle; on
@@ -523,9 +566,15 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       // escalated one.
       _consecutiveFlushFailures = 0;
       _backOffStep = 0;
-    } finally {
-      _flushInFlight = false;
-    }
+      } finally {
+        _flushInFlight--;
+      }
+    };
+    // Serialize: run strictly after the previous flush settles so an older
+    // snapshot's PUT can never land after (and clobber) a newer one.
+    const result = _flushChain.then(run, run);
+    _flushChain = result.catch(() => {});
+    return result;
   }, [isSignedIn, saveSettingsAsync, markAllSaved]);
 
   // ── Debounced PUT subscription ─────────────────────────────────────────────
@@ -572,7 +621,21 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       return JSON.stringify({ sw: s.saltwater, fw: s.freshwater });
     };
 
+    // `lastSession` is written automatically by the debounced camera-position
+    // saver (App.tsx) — it is NOT a user edit. If it bumped _settingsEditRev,
+    // a camera write landing before the first GET settles would mark the
+    // store "dirty" and permanently block server hydration (leaving e.g.
+    // hasSeenOnboarding at its local default and re-showing the tour). We
+    // therefore track user edits on a snapshot that excludes lastSession,
+    // while still scheduling a sync so lastSession itself gets persisted.
+    const stableSnap = () => {
+      const { lastSession: _ls, ...rest } = getDataSnapshot();
+      return JSON.stringify(rest);
+    };
+
     let lastSettings = JSON.stringify(getDataSnapshot());
+    let lastSettingsStable = stableSnap();
+    let lastHasSeenOnboarding = useSettingsStore.getState().hasSeenOnboarding;
     let lastPaletteRev = palRev();
     let lastPanel = panelSnap();
     let lastZone = zoneSnap();
@@ -581,12 +644,22 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       const cur = JSON.stringify(getDataSnapshot());
       if (cur !== lastSettings) {
         lastSettings = cur;
+        const curStable = stableSnap();
+        const stableChanged = curStable !== lastSettingsStable;
+        lastSettingsStable = curStable;
         // Server hydration mutates the store too (zustand notifies
         // synchronously); refresh the snapshot but never echo a PUT.
         if (!_hydrating) {
-          _settingsEditRev++;
+          if (stableChanged) _settingsEditRev++;
+          // Flag intentional local edits of hasSeenOnboarding so the one-way
+          // "server seen → force local seen" apply never cancels them.
+          const curHasSeen = useSettingsStore.getState().hasSeenOnboarding;
+          if (curHasSeen !== lastHasSeenOnboarding) {
+            _onboardingLocallyEdited = true;
+          }
           scheduleSync();
         }
+        lastHasSeenOnboarding = useSettingsStore.getState().hasSeenOnboarding;
       }
     });
     const unsubPalette = usePaletteStore.subscribe(() => {

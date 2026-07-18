@@ -31,7 +31,7 @@ const BAR_HEIGHT = 48;
  * plus its default `bottom: 16` offset. The bar shifts up by this amount when
  * a profile is active so the two panels don't overlap.
  */
-const DEPTH_PROFILE_CLEARANCE = 230;
+const DEPTH_PROFILE_CLEARANCE = 360;
 
 /** 1 wall-clock second = 1 timeline minute (60 000 ms). */
 const MS_PER_WALL_SEC = 60_000;

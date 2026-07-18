@@ -33,7 +33,7 @@ const TIDE_ACTIVE_NOTICE = "[data-testid='tide-timeline-active-notice']";
 const DEPTH_PANEL        = "[data-testid='depth-profile-panel']";
 
 // Must match DEPTH_PROFILE_CLEARANCE in TimelineScrubBar.tsx
-const DEPTH_PROFILE_CLEARANCE = 230;
+const DEPTH_PROFILE_CLEARANCE = 360;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -65,6 +65,17 @@ async function patchTideOverlay(page: Page, active: boolean): Promise<void> {
   );
 }
 
+/** Switch the sidebar to the Plan tab (TidePanel lives there, display:none otherwise). */
+async function ensurePlanTab(page: Page): Promise<void> {
+  const planTab = page.locator("[data-testid='sidebar-mode-tab-plan']");
+  await expect(planTab).toBeVisible({ timeout: 10_000 });
+  const pressed = await planTab.getAttribute("aria-pressed").catch(() => null);
+  if (pressed !== "true") {
+    await planTab.dispatchEvent("click");
+    await expect(planTab).toHaveAttribute("aria-pressed", "true");
+  }
+}
+
 async function waitForTestApi(page: Page): Promise<void> {
   await page.waitForFunction(() => Boolean(window.__bathyTest), null, {
     timeout: 10_000,
@@ -81,6 +92,25 @@ async function stubEmptyLists(page: Page): Promise<void> {
   await page.route("**/api/user/datasets**", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
   );
+}
+
+
+/**
+ * Ensure the tide overlay is ON and the scrubber visible. The localStorage
+ * pre-patch in patchTideOverlay can be overwritten by server-side settings
+ * hydration (overlay flags are server-persisted), so fall back to clicking
+ * the HUD tide toggle when the scrubber is still hidden after load.
+ */
+async function ensureScrubberVisible(page: Page): Promise<void> {
+  const bar = page.locator(SCRUB_BAR);
+  await expect(bar).toBeAttached({ timeout: 10_000 });
+  const hidden = await bar.getAttribute("aria-hidden").catch(() => null);
+  if (hidden === "true") {
+    const toggle = page.locator(TIDE_TOGGLE);
+    await expect(toggle).toBeVisible({ timeout: 10_000 });
+    await toggle.dispatchEvent("click");
+  }
+  await expect(bar).toHaveAttribute("aria-hidden", "false", { timeout: 10_000 });
 }
 
 // ── 1. Overlay visibility gate ────────────────────────────────────────────────
@@ -135,7 +165,40 @@ test.describe("Timeline scrubber — TidePanel cursor sync", () => {
   test("moving scrubber propagates time to TidePanel (tide-timeline-active-notice visible)", async ({ page }) => {
     await patchTideOverlay(page, true);
     await page.goto("/");
-    await expect(page.locator(SCRUB_BAR)).toHaveAttribute("aria-hidden", "false", { timeout: 10_000 });
+    await ensureScrubberVisible(page);
+
+    // The Plan-tab TidePanel only mounts when effectiveTidalData !== null.
+    // Live NOAA fetches are unreliable in this env — feed deterministic tidal
+    // data through the test bridge (same pattern as tide-scrubber.spec.ts).
+    await waitForTestApi(page);
+    await page.evaluate(() => {
+      const bt = window.__bathyTest;
+      if (!bt) return;
+      bt.seedTerrain?.();
+      bt.setTidalOverlay?.(true);
+      bt.feedTidalData?.({
+        available: true,
+        tideHeight: 1.23,
+        currentDirection: 90,
+        currentSpeed: 0.8,
+        stationName: "Mock Station",
+        stationId: "MOCK1",
+        isPredicted: true,
+        source: "estimated",
+        nextEvent: {
+          type: "high",
+          time: new Date(Date.now() + 60 * 60_000).toISOString(),
+          height: 1.5,
+        },
+        slack: {
+          isSlack: false,
+          phase: "flooding",
+          minutesToSlack: 15,
+          minutesSinceSlack: 0,
+          nextReversalAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+        },
+      });
+    });
 
     const input = page.locator(SCRUBBER_INPUT);
     await expect(input).toBeVisible({ timeout: 5_000 });
@@ -153,7 +216,9 @@ test.describe("Timeline scrubber — TidePanel cursor sync", () => {
     });
 
     // App.tsx forwards useTimelineStore.currentTime as scrubDatetime to TidePanel;
-    // TidePanel renders tide-timeline-active-notice whenever scrubDatetime is non-null
+    // TidePanel renders tide-timeline-active-notice whenever scrubDatetime is non-null.
+    // TidePanel lives in the Plan sidebar tab (hidden on the default Explore tab).
+    await ensurePlanTab(page);
     await expect(page.locator(TIDE_ACTIVE_NOTICE)).toBeVisible({ timeout: 5_000 });
   });
 });
@@ -164,7 +229,7 @@ test.describe("Timeline scrubber — mid-play deactivation", () => {
   test("deactivating tide overlay mid-play stops playback and hides scrubber", async ({ page }) => {
     await patchTideOverlay(page, true);
     await page.goto("/");
-    await expect(page.locator(SCRUB_BAR)).toHaveAttribute("aria-hidden", "false", { timeout: 10_000 });
+    await ensureScrubberVisible(page);
 
     // Start playing
     await page.locator(PLAY_PAUSE).click();
@@ -197,7 +262,7 @@ test.describe("Timeline scrubber — depth-profile non-overlap", () => {
     await stubEmptyLists(page);
     await page.goto("/");
     await waitForTestApi(page);
-    await expect(page.locator(SCRUB_BAR)).toHaveAttribute("aria-hidden", "false", { timeout: 10_000 });
+    await ensureScrubberVisible(page);
 
     // Open depth profile start point
     await page.evaluate(() => {
@@ -231,6 +296,10 @@ test.describe("Timeline scrubber — depth-profile non-overlap", () => {
     );
     expect(parseInt(bottomStyle, 10)).toBeGreaterThanOrEqual(DEPTH_PROFILE_CLEARANCE);
 
+    // The bar animates upward (transition: bottom 0.2s) — let it settle before
+    // measuring bounding boxes, otherwise the box is captured mid-transition.
+    await page.waitForTimeout(600);
+
     // Secondary: scrubber box must not overlap the depth-profile panel
     const scrubBox   = await page.locator(SCRUB_BAR).boundingBox();
     const profileBox = await page.locator(DEPTH_PANEL).boundingBox();
@@ -258,7 +327,7 @@ test.describe("Timeline scrubber — no-forecast fallback", () => {
     await page.goto("/");
 
     // Scrubber should appear despite API failures (falls back to ±12 h default range)
-    await expect(page.locator(SCRUB_BAR)).toHaveAttribute("aria-hidden", "false", { timeout: 10_000 });
+    await ensureScrubberVisible(page);
 
     // Input must be accessible and hold a value within [0, 10000]
     const input = page.locator(SCRUBBER_INPUT);

@@ -45,3 +45,4 @@
 - [Collapsed details hide e2e targets](details-collapse-e2e-visibility.md) — controls inside collapsed <details> are hidden not missing; click the summary toggle first or toBeVisible() times out deterministically.
 - [Validation lock reentrancy](validation-lock-reentrancy.md) — double-wrapped validation-lock (workflow + npm script) self-deadlocks; nested wrappers skip via VALIDATION_LOCK_HELD_PID ancestor check.
 - [Validation serialization lock](validation-serialization-lock.md) — heavy validation steps wrap scripts/validation-lock.mjs so run budgets start after lock acquisition; concurrency caused false budget breaches.
+- [Settings sync flush races](settings-sync-flush-races.md) — serialize PUT flushes (old snapshot lands last = silent revert); one-way hasSeenOnboarding apply must not cancel intentional local resets.

@@ -34,6 +34,14 @@ test.describe("keyboard focus trap — RemoveDatasetConfirmDialog", () => {
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await waitForTestApi(page);
+    // The sidebar's Explore tab shows an empty state (no DatasetPanel, so no
+    // remove buttons) until a terrain is loaded — seed one via the test
+    // bridge before injecting synthetic visible-dataset rows.
+    await page.waitForFunction(
+      () => Boolean(window.__bathyTest) && window.__bathyTest!.seedTerrain({}),
+      null,
+      { timeout: 15_000 },
+    );
   });
 
   test("Cancel receives focus on open", async ({ page }) => {
