@@ -1157,13 +1157,18 @@ function Main() {
       <AppHeader />
 
       <div className="relative flex-1 overflow-hidden">
-        {/* 3D Scene — fills everything */}
-        <TourScene
-          tidalData={effectiveTidalData}
-          tidalDataMap={tidalDataMap}
-          tidalOverlay={tidalOverlay}
-          depthLayer={depthLayer}
-        />
+        {/* 3D Scene — fills everything. Wrapped in an ErrorBoundary so a
+            render error in the Canvas subtree (R3F components rethrow into
+            the parent React tree) degrades to a contained fallback instead
+            of white-screening the whole app. */}
+        <ErrorBoundary label="the 3D scene">
+          <TourScene
+            tidalData={effectiveTidalData}
+            tidalDataMap={tidalDataMap}
+            tidalOverlay={tidalOverlay}
+            depthLayer={depthLayer}
+          />
+        </ErrorBoundary>
 
         {/* HUD + depth scale — pointer-events:none overlay.
             z-30 so the HUD's interactive button clusters sit above the
@@ -1265,6 +1270,12 @@ function Main() {
                 </button>
               </ViewscreenTooltip>
             </div>
+            {/* ── Sidebar shell boundary: a render error in tab logic or any
+                panel not covered by its own boundary collapses to a contained
+                fallback (with retry) instead of white-screening the app. The
+                HIDE button above stays outside so the pane can still be
+                collapsed even when the sidebar content is broken. ── */}
+            <ErrorBoundary label="the sidebar">
             {/* ── Mode tabs (always visible, above all panels) ── */}
             <SidebarModeTabs />
 
@@ -1607,6 +1618,7 @@ function Main() {
             <div className="sidebar-footer-wrap" style={{ flexShrink: 0 }}>
               <ConditionsLegend />
             </div>
+            </ErrorBoundary>
             <div style={{ height: "2in", flexShrink: 0 }} aria-hidden="true" />
           </div>
         )}
