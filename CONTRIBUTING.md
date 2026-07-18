@@ -115,7 +115,7 @@ Regenerate any bundle whose builder script you edit:
 | `usSeabedSubstrate.gen.json` | `pnpm --filter @workspace/scripts run build-usseabed-substrate` |
 | `txLakeSubstrate.gen.json` | `pnpm --filter @workspace/scripts run build-tx-lake-substrate` |
 | `txFreshwaterEfhData.gen.json` | `pnpm --filter @workspace/scripts run build-tx-freshwater-efh` |
-| `lakeRayRobertsTerrain.gen.json` | `pnpm --filter @workspace/scripts run build-lake-ray-roberts-terrain` |
+| `demoTerrain.gen.json` | `pnpm --filter @workspace/scripts run build-lake-ray-roberts-terrain` |
 
 Run the command from the workspace root, then **commit the updated `.gen.json` file** alongside your script change. The hash-drift test is the automated guard that catches bundles left out of sync.
 

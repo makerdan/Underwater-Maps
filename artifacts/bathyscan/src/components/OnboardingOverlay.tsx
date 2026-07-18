@@ -2,7 +2,7 @@
  * OnboardingOverlay — first-time guided tour for new BathyScan users.
  *
  * Shows a 5-step modal walking through the core actions:
- *   1. Pick a dataset
+ *   1. Find data near you (or load the demo)
  *   2. Orbit / fly the scene
  *   3. Drop a marker
  *   4. Toggle an overlay
@@ -29,9 +29,9 @@ interface Step {
 
 const STEPS: Step[] = [
   {
-    title: "Pick a dataset",
+    title: "Find data near you",
     description:
-      "Open the dataset panel on the left side of the screen to load a bathymetric survey. Choose from built-in ocean/lake datasets or upload your own sonar file.",
+      "Open the Find Data panel on the left to discover bathymetric surveys near your location or search by place name. Try the demo dataset (Lake Ray Roberts, TX) to explore the viewer, then load a dataset from your area.",
     region: "left",
     icon: "◉",
   },

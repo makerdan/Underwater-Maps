@@ -39,6 +39,62 @@ import {
   type DatasetMeta,
 } from "../terrain.js";
 
+/**
+ * Metadata for the four Southern Alaska AOIs that were former presets.
+ * Kept here so the resolver smoke-tests can still exercise the CRM source
+ * against real bboxes after these entries were removed from PRESET_DATASETS.
+ */
+const FORMER_S_ALASKA_META: Record<string, DatasetMeta> = {
+  "kodiak-island": {
+    id: "kodiak-island",
+    name: "Kodiak Island — Gulf of Alaska",
+    description: "Kodiak Island and Chiniak Bay",
+    waterType: "saltwater",
+    minDepth: 5,
+    maxDepth: 360,
+    centerLon: -152.5,
+    centerLat: 57.8,
+    bbox: { minLon: -153.5, minLat: 57.0, maxLon: -151.5, maxLat: 58.6 },
+    hasTopography: true,
+  },
+  "kachemak-bay": {
+    id: "kachemak-bay",
+    name: "Kachemak Bay — Homer / Cook Inlet",
+    description: "Homer Spit, Kachemak Bay, and lower Cook Inlet approaches",
+    waterType: "saltwater",
+    minDepth: 2,
+    maxDepth: 200,
+    centerLon: -151.5,
+    centerLat: 59.6,
+    bbox: { minLon: -152.5, minLat: 59.0, maxLon: -150.5, maxLat: 60.2 },
+    hasTopography: true,
+  },
+  "resurrection-bay": {
+    id: "resurrection-bay",
+    name: "Resurrection Bay — Seward / Kenai Fjords",
+    description: "Seward, Resurrection Bay, and Kenai Fjords approaches",
+    waterType: "saltwater",
+    minDepth: 5,
+    maxDepth: 280,
+    centerLon: -149.5,
+    centerLat: 60.0,
+    bbox: { minLon: -150.5, minLat: 59.4, maxLon: -148.5, maxLat: 60.6 },
+    hasTopography: true,
+  },
+  "prince-william-sound": {
+    id: "prince-william-sound",
+    name: "Prince William Sound — Valdez / Western Approaches",
+    description: "Valdez Arm, Port Valdez, and western Prince William Sound approaches",
+    waterType: "saltwater",
+    minDepth: 10,
+    maxDepth: 760,
+    centerLon: -147.5,
+    centerLat: 60.8,
+    bbox: { minLon: -148.5, minLat: 60.2, maxLon: -146.5, maxLat: 61.4 },
+    hasTopography: true,
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -102,10 +158,15 @@ function makeFlatAsciiGrid(n: number, uniformElev = -10): string {
   return header + "\n" + rows.join("\n");
 }
 
-/** Pull the DatasetMeta from PRESET_DATASETS by id (throws if not found). */
+/**
+ * Resolve a DatasetMeta by id. Checks PRESET_DATASETS first; falls back to
+ * FORMER_S_ALASKA_META for the four Southern Alaska AOIs that were removed
+ * from PRESET_DATASETS (they are still valid resolver targets via
+ * DATASET_SOURCE_PRIORITY).
+ */
 function getPreset(id: string): DatasetMeta {
-  const meta = PRESET_DATASETS.find((d) => d.id === id);
-  if (!meta) throw new Error(`PRESET_DATASETS has no entry for '${id}'`);
+  const meta = PRESET_DATASETS.find((d) => d.id === id) ?? FORMER_S_ALASKA_META[id];
+  if (!meta) throw new Error(`no DatasetMeta found for '${id}'`);
   return meta;
 }
 
@@ -142,12 +203,12 @@ describe("Southern Alaska CRM — unit tests (stubbed WCS fetch)", () => {
     }
   });
 
-  it("every Southern Alaska AOI is present in PRESET_DATASETS", () => {
+  it("every Southern Alaska AOI has an entry in DATASET_SOURCE_PRIORITY", () => {
     for (const aoi of S_ALASKA_AOIS) {
       expect(
-        PRESET_DATASETS.some((d) => d.id === aoi),
-        `PRESET_DATASETS is missing an entry for '${aoi}'`,
-      ).toBe(true);
+        DATASET_SOURCE_PRIORITY[aoi],
+        `DATASET_SOURCE_PRIORITY is missing an entry for '${aoi}'`,
+      ).toBeDefined();
     }
   });
 

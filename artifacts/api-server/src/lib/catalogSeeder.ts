@@ -548,7 +548,6 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     endpointUrl:
       "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
     accessNotes:
-      "Available in BathyScan as the 'Kodiak Island — Gulf of Alaska' preset. " +
       "Uses the NCEI Southern Alaska CRM (DEM ID 703) as primary bathymetry source.",
     description:
       "Bathymetric coverage for Kodiak Island and Chiniak Bay — premier halibut and rockfish grounds " +
@@ -574,7 +573,6 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     endpointUrl:
       "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
     accessNotes:
-      "Available in BathyScan as the 'Kachemak Bay — Homer / Cook Inlet' preset. " +
       "Uses the NCEI Southern Alaska CRM (DEM ID 703) as primary bathymetry source.",
     description:
       "Bathymetric coverage for Homer Spit, Kachemak Bay, and lower Cook Inlet approaches — one of " +
@@ -600,7 +598,6 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     endpointUrl:
       "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
     accessNotes:
-      "Available in BathyScan as the 'Resurrection Bay — Seward / Kenai Fjords' preset. " +
       "Uses the NCEI Southern Alaska CRM (DEM ID 703) as primary bathymetry source.",
     description:
       "Bathymetric coverage for Seward, Resurrection Bay, and Kenai Fjords approaches — a glacially " +
@@ -627,7 +624,6 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     endpointUrl:
       "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
     accessNotes:
-      "Available in BathyScan as the 'Prince William Sound — Valdez / Western Approaches' preset. " +
       "Uses the NCEI Southern Alaska CRM (DEM ID 703) as primary bathymetry source.",
     description:
       "Bathymetric coverage for Valdez Arm, Port Valdez, and western Prince William Sound approaches — " +

@@ -63,14 +63,14 @@ const CASES: BundleCase[] = [
       "pnpm --filter @workspace/scripts run build-tx-lake-substrate",
   },
   {
-    name: "Lake Ray Roberts terrain (lakeRayRobertsTerrain.gen.json)",
+    name: "Lake Ray Roberts terrain demo bundle (demoTerrain.gen.json)",
     // Thin wrapper delegates to the shared Texas-reservoir pipeline; hash
     // both so an edit to either trips the drift check.
     builderPath: [
       "scripts/src/build-lake-ray-roberts-terrain.ts",
       "scripts/src/lib/texas-reservoir-terrain.ts",
     ],
-    bundlePath: "artifacts/api-server/src/lib/lakeRayRobertsTerrain.gen.json",
+    bundlePath: "artifacts/api-server/src/lib/demoTerrain.gen.json",
     refreshCommand:
       "pnpm --filter @workspace/scripts run build-lake-ray-roberts-terrain",
   },

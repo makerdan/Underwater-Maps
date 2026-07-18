@@ -7,11 +7,11 @@ import { test, expect, API_URL, E2E_USER_ID } from "./fixtures";
  * (waterType subscription around lines 229–285):
  *   - clicking the WaterTypeToggle updates the active button state
  *   - the DatasetPanel filters to datasets of the new water type
- *     (saltwater preset ids disappear, freshwater preset ids appear)
+ *     (demo/freshwater preset appears when freshwater is active)
  *   - the depth colormap auto-switches from "ocean" → "freshwater"
  *     (the scene hue proxy — terrain mesh and depth bar are keyed by it)
- *   - switching back to saltwater restores the ocean colormap and the
- *     saltwater dataset list
+ *   - switching back to saltwater restores the ocean colormap and hides
+ *     the freshwater demo preset
  *
  * The toggle and DatasetPanel only mount once the user is signed in.
  * The e2e webServer sets VITE_DEV_AUTH_BYPASS=1 so the canvas-gated UI
@@ -19,7 +19,6 @@ import { test, expect, API_URL, E2E_USER_ID } from "./fixtures";
  * failing the run.
  */
 
-const SALTWATER_DATASET = "btn-dataset-thorne-bay";
 const FRESHWATER_DATASET = "btn-dataset-lake-ray-roberts";
 
 test.describe("Water-type toggle", () => {
@@ -73,21 +72,6 @@ test.describe("Water-type toggle", () => {
     }
     await expect(freshBtn).toBeVisible();
 
-    // Wait for the saltwater dataset list to populate (also confirms the
-    // store has hydrated to saltwater from the server reset above).
-    const saltDatasetVisible = await page
-      .locator(`[data-testid="${SALTWATER_DATASET}"]`)
-      .waitFor({ state: "visible", timeout: 20_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!saltDatasetVisible) {
-      test.skip(
-        true,
-        `${SALTWATER_DATASET} not found — DatasetPicker may not list this preset in this environment`,
-      );
-      return;
-    }
-
     // ---- Sanity: starts in saltwater mode ---------------------------------
     // The active button uses its theme color (#00e5ff for salt), inactive
     // collapses to #475569. Compare via computed style.
@@ -125,10 +109,8 @@ test.describe("Water-type toggle", () => {
     // The fresh button's color flipped from inactive → its active hue.
     expect(activeFreshColor).not.toBe(inactiveFreshColor);
 
-    // DatasetPanel filters by waterType: a freshwater preset appears, the
-    // saltwater preset disappears.
+    // DatasetPanel filters by waterType: the freshwater demo preset appears.
     await expect(page.locator(`[data-testid="${FRESHWATER_DATASET}"]`)).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(`[data-testid="${SALTWATER_DATASET}"]`)).toHaveCount(0);
 
     // Scene-hue proxy: the colormap auto-switched from "ocean" → "freshwater".
     // Check the in-memory Zustand store directly via the TestBridge so we
@@ -147,9 +129,8 @@ test.describe("Water-type toggle", () => {
     await expect(saltBtn).toBeVisible({ timeout: 20_000 });
     await saltBtn.dispatchEvent("click");
 
-    // Saltwater dataset reappears; freshwater preset is filtered out again.
-    await expect(page.locator(`[data-testid="${SALTWATER_DATASET}"]`)).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator(`[data-testid="${FRESHWATER_DATASET}"]`)).toHaveCount(0);
+    // Freshwater demo preset is filtered out again (saltwater mode, no saltwater presets).
+    await expect(page.locator(`[data-testid="${FRESHWATER_DATASET}"]`)).toHaveCount(0, { timeout: 10_000 });
 
     // Colormap restored to "ocean", verified via the in-memory Zustand store.
     await expect

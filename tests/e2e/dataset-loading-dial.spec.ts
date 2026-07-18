@@ -17,19 +17,15 @@ test.describe("dataset row loading dial", () => {
     // below is the real gate before interacting with the dataset picker.
     await page.waitForLoadState("domcontentloaded");
 
-    const target = page.locator('[data-testid="btn-dataset-thorne-bay"]');
-    const visible = await target.isVisible({ timeout: 10_000 }).catch(() => false);
+    // Lake Ray Roberts (demo preset) is the sole built-in preset — use it as
+    // the trigger so a real terrain load runs. Its presence also confirms the
+    // user is signed in and the DatasetPanel is mounted.
+    const trigger = page.locator('[data-testid="btn-dataset-lake-ray-roberts"]');
+    const visible = await trigger.isVisible({ timeout: 10_000 }).catch(() => false);
     if (!visible) {
       test.skip(true, "Dataset picker not visible — user is not signed in");
       return;
     }
-
-    // Pick a non-default dataset so a real load runs. Lake Ray Roberts is a
-    // freshwater preset present in the seed catalog and always different
-    // from whatever the page boots with.
-    const other = page.locator('[data-testid="btn-dataset-lake-ray-roberts"]');
-    const otherVisible = await other.isVisible({ timeout: 5_000 }).catch(() => false);
-    const trigger = otherVisible ? other : target;
 
     await trigger.click();
 

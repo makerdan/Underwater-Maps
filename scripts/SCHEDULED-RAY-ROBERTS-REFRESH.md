@@ -23,7 +23,7 @@ pnpm --filter @workspace/scripts run scheduled-refresh-lake-ray-roberts-terrain
 
 That command:
 
-1. Hashes the currently committed `lakeRayRobertsTerrain.gen.json` (if any).
+1. Hashes the currently committed `demoTerrain.gen.json` (if any).
 2. Re-runs the full build pipeline.
 3. Hashes the freshly generated bundle.
 4. If the hashes differ, logs a clear, greppable alert
@@ -35,7 +35,7 @@ That command:
 Scheduled Deployments do **not** have write access back to the git repo, which
 is why this surfaces an alert instead of committing automatically. Acting on
 the alert is a single PR: re-run the same command locally and commit the
-regenerated `artifacts/api-server/src/lib/lakeRayRobertsTerrain.gen.json`.
+regenerated `artifacts/api-server/src/lib/demoTerrain.gen.json`.
 
 ## Replit Scheduled Deployment — one-time setup
 

@@ -134,90 +134,18 @@ export interface DatasetMeta {
 // Preset dataset definitions
 // ---------------------------------------------------------------------------
 
-export const PRESET_DATASETS: DatasetMeta[] = [
-  {
-    id: "thorne-bay",
-    name: "Thorne Bay — SE Alaska",
-    description:
-      "Clarence Strait and Thorne Bay, Prince of Wales Island — Inside Passage fishing grounds with rocky seafloor, kelp forests, and deep fjord channels (50-mi radius)",
-    waterType: "saltwater",
-    minDepth: 10,
-    maxDepth: 370,
-    centerLon: -132.53,
-    centerLat: 55.69,
-    bbox: { minLon: -133.5, minLat: 55.0, maxLon: -131.5, maxLat: 56.5 },
-    hasTopography: true,
-    hasEfh: true,
-  },
-  // -------------------------------------------------------------------------
-  // Southern Alaska AOIs — NCEI Southern Alaska CRM (DEM ID 703) footprint
-  // ~130 °W to ~170 °W, 54 °N to 62 °N: Gulf of Alaska, Kodiak, Cook Inlet,
-  // Prince William Sound, Resurrection Bay.
-  // -------------------------------------------------------------------------
-  {
-    id: "kodiak-island",
-    name: "Kodiak Island — Gulf of Alaska",
-    description:
-      "Kodiak Island and Chiniak Bay — premier halibut and rockfish grounds on the eastern Gulf of Alaska shelf; rocky headlands, kelp-studded passages, and deep submarine canyons reaching 300+ m",
-    waterType: "saltwater",
-    minDepth: 5,
-    maxDepth: 360,
-    centerLon: -152.5,
-    centerLat: 57.8,
-    bbox: { minLon: -153.5, minLat: 57.0, maxLon: -151.5, maxLat: 58.6 },
-    hasTopography: true,
-  },
-  {
-    id: "kachemak-bay",
-    name: "Kachemak Bay — Homer / Cook Inlet",
-    description:
-      "Homer Spit, Kachemak Bay, and lower Cook Inlet approaches — one of Alaska's most productive inshore fisheries, featuring halibut flats, salmon staging corridors, and steep-walled fjord arms to 180 m",
-    waterType: "saltwater",
-    minDepth: 2,
-    maxDepth: 200,
-    centerLon: -151.5,
-    centerLat: 59.6,
-    bbox: { minLon: -152.5, minLat: 59.0, maxLon: -150.5, maxLat: 60.2 },
-    hasTopography: true,
-  },
-  {
-    id: "resurrection-bay",
-    name: "Resurrection Bay — Seward / Kenai Fjords",
-    description:
-      "Seward, Resurrection Bay, and Kenai Fjords approaches — glacially carved fjord reaching 275 m depth; renowned halibut, salmon, and lingcod fishery at the mouth of the Gulf of Alaska",
-    waterType: "saltwater",
-    minDepth: 5,
-    maxDepth: 280,
-    centerLon: -149.5,
-    centerLat: 60.0,
-    bbox: { minLon: -150.5, minLat: 59.4, maxLon: -148.5, maxLat: 60.6 },
-    hasTopography: true,
-  },
-  {
-    id: "prince-william-sound",
-    name: "Prince William Sound — Valdez / Western Approaches",
-    description:
-      "Valdez Arm, Port Valdez, and western Prince William Sound approaches — sheltered deep-water fjord system (sill depth ~175 m, basin to 750 m) with strong salmon, halibut, and shrimp fisheries among forested islands",
-    waterType: "saltwater",
-    minDepth: 10,
-    maxDepth: 760,
-    centerLon: -147.5,
-    centerLat: 60.8,
-    bbox: { minLon: -148.5, minLat: 60.2, maxLon: -146.5, maxLat: 61.4 },
-    hasTopography: true,
-  },
-];
+export const PRESET_DATASETS: DatasetMeta[] = [];
 
 export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
   {
     id: "lake-ray-roberts",
-    name: "Lake Ray Roberts (TX)",
+    name: "Demo: Lake Ray Roberts (TX)",
     description:
-      "Lake Ray Roberts, Denton County, TX. Bathymetry + topography are " +
+      "Demo dataset — Lake Ray Roberts, Denton County, TX. Bathymetry + topography are " +
       "served from a pre-built USGS 3DEP-derived bundle (pool elevation " +
       "192.79 m, surveyed max depth ≈ 28 m) — see " +
       "scripts/src/build-lake-ray-roberts-terrain.ts for the build " +
-      "pipeline and lakeRayRobertsTerrain.gen.json for the bundle " +
+      "pipeline and demoTerrain.gen.json for the bundle " +
       "itself. The 'bundled-survey' source is registered first in " +
       "DATASET_SOURCE_PRIORITY so the viewer always gets the real " +
       "surveyed grid instead of falling through to NCEI/GEBCO.",
@@ -870,7 +798,7 @@ function loadBundledTerrain(fileName: string): BundledTerrain | null {
  * null — the ranked resolver then falls through to the next source.
  */
 export const BUNDLED_TERRAIN: Record<string, BundledTerrain | null> = {
-  "lake-ray-roberts": loadBundledTerrain("lakeRayRobertsTerrain.gen.json"),
+  "lake-ray-roberts": loadBundledTerrain("demoTerrain.gen.json"),
 };
 
 /** Resample a bundled grid to the requested resolution by nearest neighbour. */

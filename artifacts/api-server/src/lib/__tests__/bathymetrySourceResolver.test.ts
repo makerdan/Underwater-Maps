@@ -4,8 +4,8 @@
  * Covers:
  *  - Registry shape (every source declares a scope, dataSource, label,
  *    fetch, and credit URL; scopes match the expected vocabulary).
- *  - The per-AOI priority map has entries for all bundled presets (SE Alaska
- *    saltwater and inland TX freshwater) and references only known source ids.
+ *  - The per-AOI priority map has entries for inland TX freshwater preset
+ *    and SE Alaska legacy resolver targets, references only known source ids.
  *  - Inland TX reservoirs (Ray Roberts, Texoma) lead with `bundled-survey`.
  *  - Ranked-fallback behaviour using a synthetic AOI that exercises the
  *    default priority list.
@@ -57,7 +57,7 @@ describe("BATHYMETRY_SOURCES registry", () => {
 });
 
 describe("DATASET_SOURCE_PRIORITY", () => {
-  it("has ranked priority entries for SE Alaska and inland TX presets", () => {
+  it("has ranked priority entries for inland TX preset and SE Alaska resolver targets", () => {
     expect(Object.keys(DATASET_SOURCE_PRIORITY).length).toBeGreaterThan(0);
     expect(DATASET_SOURCE_PRIORITY["thorne-bay"]).toBeDefined();
     expect(DATASET_SOURCE_PRIORITY["lake-ray-roberts"]).toBeDefined();

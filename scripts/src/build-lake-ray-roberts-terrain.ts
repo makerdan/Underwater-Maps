@@ -17,7 +17,7 @@
  * or "usace".
  *
  * Output:
- *   artifacts/api-server/src/lib/lakeRayRobertsTerrain.gen.json
+ *   artifacts/api-server/src/lib/demoTerrain.gen.json
  *
  * Usage:
  *   pnpm --filter @workspace/scripts run build-lake-ray-roberts-terrain
@@ -53,7 +53,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../..");
 const OUT_PATH = resolve(
   REPO_ROOT,
-  "artifacts/api-server/src/lib/lakeRayRobertsTerrain.gen.json",
+  "artifacts/api-server/src/lib/demoTerrain.gen.json",
 );
 
 /**
