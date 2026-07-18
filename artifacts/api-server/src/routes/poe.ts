@@ -753,10 +753,23 @@ export function heuristicClassifyByDepth(
 }
 
 function buildClassifySystemPrompt(waterType: "saltwater" | "freshwater"): string {
+  const rleInstructions = `OUTPUT ONLY VALID JSON. No explanation, no preamble, no markdown, no code fences. Your entire response must be a single JSON object and nothing else.
+
+Use run-length encoding to describe the 32×32 grid (1024 cells, row-major order). The JSON format is:
+{"zones": [["label", count], ["label", count], ...]}
+where each pair encodes a run of consecutive identical labels, and the total count across all pairs must equal exactly 1024.
+
+Example (for illustration only — do not copy these labels):
+{"zones": [["sandy_shelf", 300], ["silt_plain", 400], ["basalt_rock", 324]]}`;
+
   if (waterType === "freshwater") {
-    return `You are an expert limnologist and freshwater bathymetric analyst. You will be shown a greyscale depth map of a lake or reservoir where darker pixels represent shallower depths and lighter pixels represent deeper depths. Classify each cell of the 32×32 grid into one of these freshwater substrate types: aquatic_vegetation, sandy_lake_bed, rocky_shoreline, silt_deep, gravel_bed, bedrock_shelf, submerged_wood, clay_flat. Return exactly 1024 labels in row-major order. Use limnological reasoning.`;
+    return `${rleInstructions}
+
+You are an expert limnologist and freshwater bathymetric analyst. You will be shown a greyscale depth map of a lake or reservoir where darker pixels represent shallower depths and lighter pixels represent deeper depths. Classify each cell of the 32×32 grid into one of these freshwater substrate types: aquatic_vegetation, sandy_lake_bed, rocky_shoreline, silt_deep, gravel_bed, bedrock_shelf, submerged_wood, clay_flat. Use limnological reasoning.`;
   }
-  return `You are an expert marine geologist and bathymetric data analyst. You will be shown a greyscale depth map where darker pixels represent shallower depths and lighter pixels represent deeper depths. Classify each cell of the 32×32 grid into one of: sandy_shelf, coarse_sediment, silt_plain, basalt_rock, volcanic_vent_field, trench_wall, seamount_flank, coral_reef_potential. Return exactly 1024 labels in row-major order. Favour geological reasoning over simple depth thresholds.`;
+  return `${rleInstructions}
+
+You are an expert marine geologist and bathymetric data analyst. You will be shown a greyscale depth map where darker pixels represent shallower depths and lighter pixels represent deeper depths. Classify each cell of the 32×32 grid into one of: sandy_shelf, coarse_sediment, silt_plain, basalt_rock, volcanic_vent_field, trench_wall, seamount_flank, coral_reef_potential. Favour geological reasoning over simple depth thresholds.`;
 }
 
 /**
@@ -792,21 +805,52 @@ function renderSubstrateGroundTruth(
   ].join("\n");
 }
 
-function buildClassifyZoneSchema(waterType: "saltwater" | "freshwater") {
-  const zones = waterType === "freshwater" ? FRESHWATER_ZONES : SALTWATER_ZONES;
-  return {
-    type: "object",
-    properties: {
-      zones: {
-        type: "array",
-        items: { type: "string", enum: zones },
-        minItems: 1024,
-        maxItems: 1024,
-      },
-    },
-    required: ["zones"],
-    additionalProperties: false,
-  };
+/**
+ * Decode a run-length encoded zones array from the AI response into a flat
+ * 1024-element label array. Each element in `rle` is [label, count].
+ *
+ * Tolerates:
+ *   • Flat string arrays (legacy / fallback path where model ignores RLE)
+ *   • RLE pairs where total count != 1024 (truncate or pad with fallback zone)
+ *   • Invalid/unknown zone names (replaced with first valid zone for that water type)
+ *
+ * Returns null only when the input is completely unparseable (not an array).
+ */
+function decodeRleZones(
+  raw: unknown,
+  waterType: "saltwater" | "freshwater",
+): string[] | null {
+  const validZones = (waterType === "freshwater" ? FRESHWATER_ZONES : SALTWATER_ZONES) as readonly string[];
+  const fallback = validZones[0]!;
+  const TARGET = 1024;
+
+  if (!Array.isArray(raw)) return null;
+
+  // Detect flat array of strings (model ignored RLE instruction)
+  if (raw.length > 0 && typeof raw[0] === "string") {
+    const flat = raw as string[];
+    if (flat.length >= TARGET) return flat.slice(0, TARGET).map((z) => validZones.includes(z) ? z : fallback);
+    // Pad to 1024 with last zone or fallback
+    const padded = flat.map((z) => validZones.includes(z) ? z : fallback);
+    while (padded.length < TARGET) padded.push(padded[padded.length - 1] ?? fallback);
+    return padded;
+  }
+
+  // RLE: each element should be [label, count]
+  const out: string[] = [];
+  for (const entry of raw) {
+    if (!Array.isArray(entry) || entry.length < 2) continue;
+    const label = typeof entry[0] === "string" && validZones.includes(entry[0]) ? entry[0] : fallback;
+    const count = typeof entry[1] === "number" && entry[1] > 0 ? Math.floor(entry[1]) : 1;
+    for (let i = 0; i < count && out.length < TARGET; i++) {
+      out.push(label);
+    }
+    if (out.length >= TARGET) break;
+  }
+
+  if (out.length === 0) return null;
+  while (out.length < TARGET) out.push(out[out.length - 1] ?? fallback);
+  return out;
 }
 
 /**
@@ -832,7 +876,7 @@ async function classifyOneTileAi(
   try {
     const result = await withRetry(async () => {
       const input = buildVisionInput(
-        `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.`,
+        `Classify the seafloor/lake-bed zones in this depth map.`,
         gridBase64,
       );
 
@@ -852,11 +896,7 @@ async function classifyOneTileAi(
           model: POE_MODELS.CLASSIFY,
           input,
           instructions: buildClassifySystemPrompt(waterType),
-          output_format: {
-            type: "json_schema",
-            schema: buildClassifyZoneSchema(waterType),
-          },
-          max_output_tokens: 8192,
+          max_output_tokens: 2048,
           temperature: 0.1,
           truncation: "auto",
           metadata: { datasetId, waterType },
@@ -871,17 +911,16 @@ async function classifyOneTileAi(
       throw new ZoneParseError("content-filtered or empty response from Poe");
     }
 
-    let parsed: { zones: string[] };
+    // Try to parse the output text as JSON. If it's wrapped in prose/markdown,
+    // extract the first `{...}` block and try again.
+    let rawParsed: unknown;
     try {
-      parsed = JSON.parse(result.output_text) as { zones: string[] };
+      rawParsed = JSON.parse(result.output_text);
     } catch {
-      // Before giving up, try to salvage a JSON object embedded in prose text
-      // (e.g. model wraps the payload in an explanation paragraph). Match the
-      // first `{ ... }` block in the output and attempt to parse that instead.
       const embeddedMatch = result.output_text.match(/\{[\s\S]*\}/);
       if (embeddedMatch) {
         try {
-          parsed = JSON.parse(embeddedMatch[0]) as { zones: string[] };
+          rawParsed = JSON.parse(embeddedMatch[0]);
         } catch {
           throw new ZoneParseError(
             `Poe returned invalid JSON for zone classification: ${result.output_text.slice(0, 200)}`,
@@ -894,9 +933,17 @@ async function classifyOneTileAi(
       }
     }
 
+    const parsed = rawParsed as { zones?: unknown };
+    const zones = decodeRleZones(parsed.zones, waterType);
+    if (!zones) {
+      throw new ZoneParseError(
+        `Poe returned unparseable zones payload: ${result.output_text.slice(0, 200)}`,
+      );
+    }
+
     poeBreaker.recordSuccess();
     return {
-      zones: parsed.zones,
+      zones,
       usage: {
         input_tokens: result.usage?.input_tokens ?? 0,
         output_tokens: result.usage?.output_tokens ?? 0,
@@ -1235,8 +1282,8 @@ router.post("/classify", asyncHandler(async (req, res) => {
 
     const result = await withRetry(async () => {
       const promptText = substratePrompt
-        ? `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.\n\n${substratePrompt}\n\nFor every cell where a substrate label is provided above, you MUST output that exact label. Only reason from the depth map for cells marked "?".`
-        : `Classify the seafloor/lake-bed zones in this depth map. Return exactly 1024 zone labels for the 32×32 grid.`;
+        ? `Classify the seafloor/lake-bed zones in this depth map.\n\n${substratePrompt}\n\nFor every cell where a substrate label is provided above, you MUST output that exact label. Only reason from the depth map for cells marked "?".`
+        : `Classify the seafloor/lake-bed zones in this depth map.`;
       const input = buildVisionInput(promptText, gridBase64);
 
       const response = await (client as unknown as {
@@ -1255,11 +1302,7 @@ router.post("/classify", asyncHandler(async (req, res) => {
           model: POE_MODELS.CLASSIFY,
           input,
           instructions: buildClassifySystemPrompt(waterType),
-          output_format: {
-            type: "json_schema",
-            schema: buildClassifyZoneSchema(waterType),
-          },
-          max_output_tokens: 8192,
+          max_output_tokens: 2048,
           temperature: 0.1,
           truncation: "auto",
           metadata: { datasetId: datasetId ?? "unknown", waterType },
@@ -1273,16 +1316,16 @@ router.post("/classify", asyncHandler(async (req, res) => {
     // The Poe client is a stateless HTTP wrapper (OpenAI-compatible) so
     // re-using the same instance across retry attempts is safe.
 
-    let parsedRaw: { zones: string[] };
+    // Try to parse the output text as JSON. Extract the first `{...}` block
+    // when the model wraps its payload in prose or markdown.
+    let rawParsed: unknown;
     try {
-      parsedRaw = JSON.parse(result.output_text) as { zones: string[] };
+      rawParsed = JSON.parse(result.output_text);
     } catch {
-      // Attempt to salvage a JSON object embedded in prose (model wrapped its
-      // payload in an explanation paragraph). Match the first `{ … }` block.
       const embeddedMatch = result.output_text?.match(/\{[\s\S]*\}/);
       if (embeddedMatch) {
         try {
-          parsedRaw = JSON.parse(embeddedMatch[0]) as { zones: string[] };
+          rawParsed = JSON.parse(embeddedMatch[0]);
         } catch {
           throw new ZoneParseError(
             `Poe returned invalid JSON for zone classification: ${(result.output_text ?? "").slice(0, 200)}`,
@@ -1294,14 +1337,21 @@ router.post("/classify", asyncHandler(async (req, res) => {
         );
       }
     }
-    let zones = parsedRaw.zones;
+
+    const parsedObj = rawParsed as { zones?: unknown };
+    let zones = decodeRleZones(parsedObj.zones, waterType);
+    if (!zones) {
+      throw new ZoneParseError(
+        `Poe returned unparseable zones payload: ${(result.output_text ?? "").slice(0, 200)}`,
+      );
+    }
 
     // Post-AI reconciliation — covered cells in surveyed substrate are the
     // source of truth. The prompt instructs the model to honour them, but we
     // enforce it server-side so model drift / hallucination can't override
     // measured reality. Uncovered cells (no polygon coverage) are left as the
     // model produced them.
-    if (substrate.hasCoverage && Array.isArray(zones) && zones.length === substrate.labels.length) {
+    if (substrate.hasCoverage && zones.length === substrate.labels.length) {
       const reconciled = zones.slice();
       for (let i = 0; i < substrate.labels.length; i++) {
         const lbl = substrate.labels[i];
@@ -1364,36 +1414,41 @@ router.post("/classify", asyncHandler(async (req, res) => {
     ) {
       poeBreaker.recordFailure();
     }
-    // Depth-based fallback — if the client supplied a 1024-length depth grid
-    // we always return *some* overlay so uploads aren't left blank when the
-    // AI is unavailable (missing key, rate limit, network error, malformed
-    // JSON, etc.). Heuristic results are NEVER written to globalPoeCache /
-    // datasetZonesCache / disk so a later successful AI call can still take
-    // over and be cached normally. We still ground covered cells in observed
-    // substrate so the overlay matches surveyed reality where available.
-    if (Array.isArray(depths32) && depths32.length === 1024) {
-      logger.warn(
-        { err },
-        `[poe/classify] AI unavailable (${(err as Error)?.message ?? "unknown"}) — returning depth-based heuristic`,
-      );
-      const substrateZoneLabels = substrate.hasCoverage
-        ? substrate.labels.map((l) => (l ? substrateToZone(l, waterType) : null))
-        : null;
-      const zones = heuristicClassifyByDepth(depths32, waterType, substrateZoneLabels);
-      res.json({
-        zones,
-        fromCache: false,
-        source: "heuristic",
-        substrateFp,
-        coarseWidth: TILE_SIZE,
-        coarseHeight: TILE_SIZE,
-        tilesTotal: 1,
-        tilesAi: 0,
-        tilesHeuristic: 1,
-      });
-      return;
-    }
-    handlePoeError(err, res);
+    // Depth-based fallback — always return a 200 with *some* overlay so the
+    // frontend never sees a non-2xx from this endpoint. Heuristic results are
+    // NEVER written to globalPoeCache / datasetZonesCache / disk so a later
+    // successful AI call can take over and be cached normally.
+    // If depths32 is available (the normal path — client always sends it) we
+    // compute a genuine depth-banded heuristic; otherwise we emit a uniform
+    // fill of the first zone, which is still a valid 200 response.
+    logger.warn(
+      { err },
+      `[poe/classify] AI unavailable (${(err as Error)?.message ?? "unknown"}) — returning depth-based heuristic`,
+    );
+    const substrateZoneLabels = substrate.hasCoverage
+      ? substrate.labels.map((l) => (l ? substrateToZone(l, waterType) : null))
+      : null;
+    const validDepths = Array.isArray(depths32) && depths32.length === 1024 ? depths32 : null;
+    const fallbackZone = (waterType === "freshwater" ? FRESHWATER_ZONES : SALTWATER_ZONES)[0]!;
+    const zones = validDepths
+      ? heuristicClassifyByDepth(validDepths, waterType, substrateZoneLabels)
+      : new Array<string>(1024).fill(fallbackZone);
+    res.json({
+      zones,
+      fromCache: false,
+      source: "heuristic",
+      substrateFp,
+      coarseWidth: TILE_SIZE,
+      coarseHeight: TILE_SIZE,
+      tilesTotal: 1,
+      tilesAi: 0,
+      tilesHeuristic: 1,
+    });
+    return;
+    // NOTE: handlePoeError is intentionally NOT called here. The classify
+    // endpoint always returns 200 — either AI labels or a heuristic fill.
+    // Surfacing Poe infrastructure errors as 4xx/5xx to the browser causes
+    // the frontend to show an error banner even though the overlay is usable.
   }
 }));
 
