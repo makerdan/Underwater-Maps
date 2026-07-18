@@ -47,29 +47,34 @@ const STEPS = 5;
  * Inject hasSeenOnboarding into localStorage before the page script runs.
  * Zustand's persist middleware reads localStorage on first access, so
  * patching it here guarantees the initial render has the right value.
+ *
+ * IMPORTANT: this must be passed to addInitScript as
+ * `page.addInitScript(patchOnboardingLocalStorage, value)` — Playwright
+ * serializes only the function SOURCE, so a closure-captured `value`
+ * (the old `patchOnboardingLocalStorage(value)` factory pattern) arrives
+ * in the page as `undefined`, JSON.stringify drops the key, and the seed
+ * silently does nothing.
  */
 function patchOnboardingLocalStorage(value: boolean) {
-  return () => {
+  try {
+    const raw = localStorage.getItem("bathyscan:settings");
+    const parsed: { state?: Record<string, unknown>; version?: number } = raw
+      ? JSON.parse(raw)
+      : {};
+    parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: value };
+    localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+  } catch {
+    // If the key doesn't exist yet, write a minimal seed so Zustand's
+    // persist migration picks up the override (it merges with defaults).
     try {
-      const raw = localStorage.getItem("bathyscan:settings");
-      const parsed: { state?: Record<string, unknown>; version?: number } = raw
-        ? JSON.parse(raw)
-        : {};
-      parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: value };
-      localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+      localStorage.setItem(
+        "bathyscan:settings",
+        JSON.stringify({ state: { hasSeenOnboarding: value }, version: 0 }),
+      );
     } catch {
-      // If the key doesn't exist yet, write a minimal seed so Zustand's
-      // persist migration picks up the override (it merges with defaults).
-      try {
-        localStorage.setItem(
-          "bathyscan:settings",
-          JSON.stringify({ state: { hasSeenOnboarding: value }, version: 0 }),
-        );
-      } catch {
-        // localStorage blocked (unlikely in tests, but guard anyway).
-      }
+      // localStorage blocked (unlikely in tests, but guard anyway).
     }
-  };
+  }
 }
 
 /**
@@ -131,7 +136,7 @@ test.describe("Onboarding tour overlay", () => {
     test.setTimeout(90_000);
 
     await setServerOnboardingFlag(request, false);
-    await page.addInitScript(patchOnboardingLocalStorage(false));
+    await page.addInitScript(patchOnboardingLocalStorage, false);
     await page.goto("/");
 
     const ok = await ensureSceneLoaded(page);
@@ -157,7 +162,7 @@ test.describe("Onboarding tour overlay", () => {
     test.setTimeout(90_000);
 
     await setServerOnboardingFlag(request, false);
-    await page.addInitScript(patchOnboardingLocalStorage(false));
+    await page.addInitScript(patchOnboardingLocalStorage, false);
     await page.goto("/");
 
     const ok = await ensureSceneLoaded(page);
@@ -194,7 +199,7 @@ test.describe("Onboarding tour overlay", () => {
     test.setTimeout(90_000);
 
     await setServerOnboardingFlag(request, false);
-    await page.addInitScript(patchOnboardingLocalStorage(false));
+    await page.addInitScript(patchOnboardingLocalStorage, false);
     await page.goto("/");
 
     const ok = await ensureSceneLoaded(page);
@@ -227,7 +232,7 @@ test.describe("Onboarding tour overlay", () => {
     test.setTimeout(90_000);
 
     await setServerOnboardingFlag(request, true);
-    await page.addInitScript(patchOnboardingLocalStorage(true));
+    await page.addInitScript(patchOnboardingLocalStorage, true);
     await page.goto("/");
 
     const ok = await ensureSceneLoaded(page);
@@ -251,7 +256,7 @@ test.describe("Onboarding tour overlay", () => {
     // Start with hasSeenOnboarding: true so the overlay is not visible before
     // we click the replay button.
     await setServerOnboardingFlag(request, true);
-    await page.addInitScript(patchOnboardingLocalStorage(true));
+    await page.addInitScript(patchOnboardingLocalStorage, true);
 
     // Navigate directly to /settings — no need to wait for the 3D scene.
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
@@ -307,7 +312,7 @@ test.describe("Onboarding tour overlay", () => {
 
     // Start with hasSeenOnboarding: true so the overlay is absent initially.
     await setServerOnboardingFlag(request, true);
-    await page.addInitScript(patchOnboardingLocalStorage(true));
+    await page.addInitScript(patchOnboardingLocalStorage, true);
     await page.goto("/");
 
     const ok = await ensureSceneLoaded(page);

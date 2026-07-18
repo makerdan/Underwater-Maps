@@ -30,7 +30,8 @@
 - [js-yaml override breaks orval ESM import](js-yaml-override-breaks-orval.md) — js-yaml v4.2.0 doesn't exist; >=4.2.0 resolves to v5.x which breaks orval's default ESM import. Never add a js-yaml override; accept the 4.1.1 audit finding as build-only low-severity.
 - [vitest v3 sequencer types](vitest-v3-sequencer-types.md) — BaseSequencer.sort() takes TestFile[] in v3; WorkspaceSpec (v2 name) doesn't exist and causes silent failure.
 - [Rate-limit prefill pattern](rate-limit-prefill-pattern.md) — use __prefillRateLimitMemory(key, count) to set bucket state directly in tests; avoids 43+ s combined sleep waits.
-- [Playwright globalSetup port sweep self-DOS](kill-port-holders-webserver-order.md) — Playwright spawns webServers before globalSetup; port sweeps there must skip holders in the invoker's ancestor tree.
+- [Playwright globalSetup port sweep self-DOS](kill-port-holders-webserver-order.md) — webServers spawn before globalSetup AND port pre-check runs before the command; sweep at config-load time with env guard, skip own-tree holders.
+- [Playwright addInitScript drops closures](playwright-addinitscript-closures.md) — factory-closure init scripts lose captured values silently; pass values as addInitScript's second arg.
 - [pg.Pool needs error listener](pg-pool-error-listener.md) — unlistened 'error' on pg.Pool causes uncaughtException → process.exit(1); add pool.on('error') in lib/db/src/index.ts.
 - [Workflow limit and validation upsert](workflow-limit-validation-upsert.md) — configureWorkflow blocked at 10/10 (hidden Project meta counts); setValidationCommand upsert bypasses it. Onboarding overlay blocks Home-route e2e clicks.
 - [Workflow limit counter goes stale](workflow-limit-stale-counter.md) — configureWorkflow keeps rejecting "10/10" after a removal; listWorkflows() shows truth, retry after a few minutes.

@@ -22,7 +22,13 @@
  * created during a bypass session can be cleaned up predictably.
  */
 
-export const FAKE_DEV_USER_ID = "dev-user-bypass";
+// Overridable per e2e suite (VITE_E2E_USER_ID) so two concurrently running
+// Playwright suites (e.g. the full run and the palette run) do not share the
+// same server-side settings rows and clobber each other's PUT /api/settings.
+// Dev-only: import.meta.env reads are DCE'd out of production builds along
+// with the rest of the bypass machinery.
+export const FAKE_DEV_USER_ID: string =
+  (import.meta.env.DEV && import.meta.env.VITE_E2E_USER_ID) || "dev-user-bypass";
 
 export const FAKE_DEV_USER = {
   id: FAKE_DEV_USER_ID,

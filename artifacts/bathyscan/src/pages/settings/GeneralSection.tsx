@@ -1,4 +1,5 @@
 import React from "react";
+import { useLocation } from "wouter";
 import { useShallow } from "zustand/react/shallow";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { DefaultMapLoadPicker } from "@/components/DefaultMapLoadPicker";
@@ -9,6 +10,12 @@ import { FONT } from "./styles";
 
 export function GeneralSection() {
   const s = useSettingsStore(useShallow((s) => s));
+  const [, setLocation] = useLocation();
+
+  const handleReplayTour = () => {
+    s.setHasSeenOnboarding(false);
+    setLocation("/");
+  };
   return (
     <>
       <h2 style={S.sectionTitle}>◈ GENERAL</h2>
@@ -121,6 +128,56 @@ export function GeneralSection() {
           ]}
           sublabel="No bundled preset regions are available. Upload your own data or save a dataset from Find Data to use as a default."
         />
+      </div>
+      {/* Guided tour card */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>GUIDED TOUR</div>
+        <div style={S.row}>
+          <div>
+            <div style={S.label}>Replay tour</div>
+            <div style={S.sublabel}>
+              Walk through the 5 core actions — datasets, flying, markers, overlays, and AI.
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid="replay-tour-btn"
+            onClick={handleReplayTour}
+            style={{
+              background: "rgba(0,229,255,0.08)",
+              border: "1px solid rgba(0,229,255,0.3)",
+              borderRadius: 4,
+              color: "#00e5ff",
+              fontSize: 9,
+              letterSpacing: "0.15em",
+              padding: "6px 14px",
+              cursor: "pointer",
+              fontFamily: FONT,
+              transition: "background 0.1s",
+              flexShrink: 0,
+            }}
+          >
+            ▶ REPLAY TOUR
+          </button>
+        </div>
+        <div style={{ ...S.row, borderBottom: "none" }}>
+          <div>
+            <div style={S.label}>Tour status</div>
+            <div style={S.sublabel}>
+              Whether you have already completed or skipped the guided tour.
+            </div>
+          </div>
+          <span
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.15em",
+              color: s.hasSeenOnboarding ? "#4ade80" : "#fbbf24",
+              fontFamily: FONT,
+            }}
+          >
+            {s.hasSeenOnboarding ? "✓ COMPLETED" : "NOT STARTED"}
+          </span>
+        </div>
       </div>
     </>
   );

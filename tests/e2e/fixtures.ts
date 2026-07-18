@@ -41,7 +41,19 @@ export function apiUrl(path: string): string {
   return `${API_URL}${path}`;
 }
 
-export const E2E_USER_ID = "dev-user-bypass";
+// Per-suite bypass identity. A suite relocated onto its own ports (e.g. the
+// palette workflow sets E2E_API_PORT=3261) automatically gets a distinct
+// user id so it never shares server-side settings rows with a concurrently
+// running default-port suite — two suites PUTting /api/settings as the same
+// user clobber each other and produce phantom sync failures. Explicitly
+// overridable via E2E_USER_ID. playwright.config.ts imports this constant and
+// passes it to the frontend webServer as VITE_E2E_USER_ID so the browser-side
+// header injection uses the same identity.
+const suitePortSuffix = process.env["E2E_API_PORT"]
+  ? `-${process.env["E2E_API_PORT"]}`
+  : "";
+export const E2E_USER_ID =
+  process.env["E2E_USER_ID"] ?? `dev-user-bypass${suitePortSuffix}`;
 
 export const DEFAULT_SETTINGS = {
   units: "metric",

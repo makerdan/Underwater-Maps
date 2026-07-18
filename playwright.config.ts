@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { defineConfig, devices } from "@playwright/test";
 import budgets from "./tests/timeout-guard/budgets.json";
 import {
@@ -6,6 +7,31 @@ import {
   E2E_WEB_URL,
   E2E_API_URL,
 } from "./tests/e2e/ports";
+// Per-suite bypass identity — single source of truth in fixtures.ts (derived
+// from E2E_API_PORT / E2E_USER_ID) so the specs and the browser-side header
+// injection can never disagree.
+import { E2E_USER_ID } from "./tests/e2e/fixtures";
+
+// ── Stale-port sweep at config-load time ────────────────────────────────────
+// Playwright's webServer manager probes each webServer URL BEFORE spawning the
+// command; when `reuseExistingServer: false` and a stale holder (e.g. an
+// orphaned server from a SIGKILLed previous run) is bound to the port, the run
+// aborts with "port is already used" without ever executing the sweep that is
+// prepended to the webServer command below. The only hook that runs earlier
+// than that probe is this config module's evaluation in the runner process, so
+// the sweep lives here. The PW_E2E_PORT_SWEEP_DONE guard makes it run exactly
+// once per invocation: worker processes and report subprocesses inherit the
+// runner's env and skip it, so a mid-run config reload can never kill the
+// live servers (kill-port-holders additionally never touches this process's
+// own ancestor tree).
+if (!process.env["PW_E2E_PORT_SWEEP_DONE"]) {
+  process.env["PW_E2E_PORT_SWEEP_DONE"] = "1";
+  spawnSync(
+    process.execPath,
+    ["scripts/kill-port-holders.mjs", String(E2E_API_PORT), String(E2E_WEB_PORT)],
+    { stdio: "inherit", cwd: __dirname, timeout: 15_000 },
+  );
+}
 
 export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.ts",
@@ -113,7 +139,20 @@ export default defineConfig({
       // always returns 200 immediately) rather than /api/datasets (which would
       // require an x-e2e-user-id header to avoid a 401 and performs a DB query
       // on every poll, masking startup failures under slow queries).
-      command: `pnpm --filter @workspace/api-server run build:e2e && PORT=${E2E_API_PORT} E2E_AUTH_BYPASS=1 pnpm --filter @workspace/api-server run start:e2e`,
+      // Port sweep runs INSIDE this command (not only in globalSetup) because
+      // Playwright spawns webServer processes BEFORE globalSetup executes —
+      // a stale holder of the API port (e.g. an orphaned server from a
+      // SIGKILLed previous run or a misdirected dev workflow) would otherwise
+      // EADDRINUSE this boot before the globalSetup sweep ever runs.
+      // kill-port-holders.mjs skips holders in this run's own process tree,
+      // so it can never kill the sibling Vite webServer or Playwright itself.
+      //
+      // DB_CONNECTION_TIMEOUT_MS is raised from the 5 s default: during e2e
+      // boots many workflows hit the managed Postgres at once and cold
+      // connection setup can exceed 5 s, producing "Connection terminated due
+      // to connection timeout" on the startup queries. A 30 s acquire window
+      // rides out that transient contention instead of failing.
+      command: `node scripts/kill-port-holders.mjs ${E2E_API_PORT} && pnpm --filter @workspace/api-server run build:e2e && PORT=${E2E_API_PORT} E2E_AUTH_BYPASS=1 DB_CONNECTION_TIMEOUT_MS=30000 pnpm --filter @workspace/api-server run start:e2e`,
       url: `${E2E_API_URL}/api/healthz`,
       reuseExistingServer: false,
       timeout: 60_000,
@@ -127,7 +166,11 @@ export default defineConfig({
       // With this set, canvas-gated specs (drift-planner, slack-tide,
       // gps-trail, smoke, currents) render the authenticated UI and assert
       // instead of skipping on "canvas not visible".
-      command: `PORT=${E2E_WEB_PORT} BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 VITE_E2E_PRESERVE_BUFFER=1 E2E_API_SERVER_URL=${E2E_API_URL} pnpm --filter @workspace/bathyscan run dev`,
+      // VITE_E2E_USER_ID keeps the browser-side bypass identity in lockstep
+      // with tests/e2e/fixtures.ts E2E_USER_ID (both read the same E2E_USER_ID
+      // env var), so a secondary suite on its own ports uses its own settings
+      // rows and cannot clobber a concurrently running suite's state.
+      command: `PORT=${E2E_WEB_PORT} BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 VITE_E2E_PRESERVE_BUFFER=1 VITE_E2E_USER_ID=${E2E_USER_ID} E2E_API_SERVER_URL=${E2E_API_URL} pnpm --filter @workspace/bathyscan run dev`,
       url: E2E_WEB_URL,
       reuseExistingServer: false,
       timeout: 60_000,

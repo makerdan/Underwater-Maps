@@ -78,12 +78,13 @@ test.describe("Settings cross-device sync", () => {
     await saveBtn.click();
     await expect(saveBtn).toHaveAttribute("data-state", "saved", { timeout: 10_000 });
 
-    // Account tab should now show a populated "Last synced" row.
+    // Account tab should now show a populated "Last sync" row (rendered in
+    // the Profile card; shows an em-dash placeholder until first sync).
     await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
     const lastSynced = page.locator('[data-testid="last-synced-row"]');
     await expect(lastSynced).toBeVisible({ timeout: 5_000 });
-    await expect(lastSynced).toContainText("LAST SYNCED:");
-    await expect(lastSynced).not.toContainText("NEVER");
+    await expect(lastSynced).toContainText("Last sync:");
+    await expect(lastSynced).not.toContainText("—");
 
     // ── Device B: clear local persistence and reload ─────────────────────
     // localStorage is where zustand-persist stores the settings snapshot
@@ -104,13 +105,13 @@ test.describe("Settings cross-device sync", () => {
       timeout: 10_000,
     });
 
-    // The Account tab's Last synced row should be populated again from the
-    // server's __updatedAt stamp (not the post-clear "NEVER" placeholder).
+    // The Account tab's Last sync row should be populated again from the
+    // server's __updatedAt stamp (not the post-clear "—" placeholder).
     await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
     const lastSyncedAfter = page.locator('[data-testid="last-synced-row"]');
     await expect(lastSyncedAfter).toBeVisible({ timeout: 5_000 });
-    await expect(lastSyncedAfter).toContainText("LAST SYNCED:");
-    await expect(lastSyncedAfter).not.toContainText("NEVER");
+    await expect(lastSyncedAfter).toContainText("Last sync:");
+    await expect(lastSyncedAfter).not.toContainText("—");
 
     // ── Cleanup: restore defaults so we don't pollute the shared dev
     //    user's server-side row for subsequent test runs.
