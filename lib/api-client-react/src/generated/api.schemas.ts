@@ -1294,7 +1294,7 @@ export interface TerrainData {
   resolution: number;
   width: number;
   height: number;
-  /** Row-major flat array of depth values (metres, positive = below surface). Null entries represent unfilled cells (survey gaps); clients render them as flat no-data tiles at the water surface. */
+  /** Row-major flat array of depth values (metres, positive = below surface). Null entries represent unfilled cells (survey gaps) that the IDW interpolation could not reach; clients should render them as flat no-data tiles at the water surface. */
   depths: (number | null)[];
   minDepth: number;
   maxDepth: number;
