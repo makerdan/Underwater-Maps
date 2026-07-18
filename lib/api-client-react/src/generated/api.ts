@@ -75,6 +75,9 @@ import type {
   GetTidalParams,
   GetTidalSchedule200,
   GetTidalScheduleParams,
+  GetTidesStation200,
+  GetTidesStationId200,
+  GetTidesStationParams,
   GetTrailsIdPointsParams,
   GetTrailsParams,
   GetUploadJobStatus200,
@@ -5927,6 +5930,169 @@ export function useGetTidal<TData = Awaited<ReturnType<typeof getTidal>>, TError
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetTidalQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTidesStationUrl = (params: GetTidesStationParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/tides/station?${stringifiedParams}` : `/api/tides/station`
+}
+
+/**
+ * Resolves the nearest NOAA water-level station to the given coordinates (e.g. a dataset bbox centroid) with the great-circle distance in statute miles. No distance cutoff is applied — the client decides whether to show a distance caveat.
+ * @summary Nearest NOAA tide station to a point
+ */
+export const getTidesStation = async (params: GetTidesStationParams, options?: RequestInit): Promise<GetTidesStation200> => {
+
+  return customFetch<GetTidesStation200>(getGetTidesStationUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTidesStationQueryKey = (params?: GetTidesStationParams,) => {
+    return [
+    `/api/tides/station`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetTidesStationQueryOptions = <TData = Awaited<ReturnType<typeof getTidesStation>>, TError = ErrorType<ApiError>>(params: GetTidesStationParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidesStation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTidesStationQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTidesStation>>> = ({ signal }) => getTidesStation(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTidesStation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTidesStationQueryResult = NonNullable<Awaited<ReturnType<typeof getTidesStation>>>
+export type GetTidesStationQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Nearest NOAA tide station to a point
+ */
+
+export function useGetTidesStation<TData = Awaited<ReturnType<typeof getTidesStation>>, TError = ErrorType<ApiError>>(
+ params: GetTidesStationParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidesStation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTidesStationQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTidesStationIdUrl = (stationId: string,) => {
+
+
+
+
+  return `/api/tides/${stationId}`
+}
+
+/**
+ * Returns a full 31-day window of 6-minute NOAA tide predictions in feet above MLLW, fetched in a single NOAA call and cached server-side for 24 hours. The window starts at UTC midnight of the current day.
+ * @summary 31-day window of 6-minute tide predictions for a station
+ */
+export const getTidesStationId = async (stationId: string, options?: RequestInit): Promise<GetTidesStationId200> => {
+
+  return customFetch<GetTidesStationId200>(getGetTidesStationIdUrl(stationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTidesStationIdQueryKey = (stationId: string,) => {
+    return [
+    `/api/tides/${stationId}`
+    ] as const;
+    }
+
+
+export const getGetTidesStationIdQueryOptions = <TData = Awaited<ReturnType<typeof getTidesStationId>>, TError = ErrorType<ApiError>>(stationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidesStationId>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTidesStationIdQueryKey(stationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTidesStationId>>> = ({ signal }) => getTidesStationId(stationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(stationId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTidesStationId>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTidesStationIdQueryResult = NonNullable<Awaited<ReturnType<typeof getTidesStationId>>>
+export type GetTidesStationIdQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary 31-day window of 6-minute tide predictions for a station
+ */
+
+export function useGetTidesStationId<TData = Awaited<ReturnType<typeof getTidesStationId>>, TError = ErrorType<ApiError>>(
+ stationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTidesStationId>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTidesStationIdQueryOptions(stationId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

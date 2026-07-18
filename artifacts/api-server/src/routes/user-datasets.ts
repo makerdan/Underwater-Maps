@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { db, customDatasetsTable, datasetFoldersTable, type StoredTerrainJson, type GeorefControlPoint } from "@workspace/db";
+import { db, customDatasetsTable, datasetFoldersTable, type StoredTerrainJson, type GeorefControlPoint, type StoredTideStation } from "@workspace/db";
 import { MAX_TERRAIN_JSON_BYTES } from "../lib/constants.js";
 import {
   GetUserDatasetsResponse,
@@ -44,6 +44,7 @@ function metaJson(row: {
   createdAt: Date;
   needsGeoreferencing?: boolean | null;
   pendingRasterGzBase64?: string | null;
+  tideStationJson?: StoredTideStation | null;
 }) {
   return {
     id: row.id,
@@ -56,6 +57,7 @@ function metaJson(row: {
     ...(row.needsGeoreferencing && row.pendingRasterGzBase64
       ? { hasRasterImage: true as const }
       : {}),
+    ...(row.tideStationJson ? { tideStation: row.tideStationJson } : {}),
   };
 }
 
@@ -86,6 +88,7 @@ router.get("/user/datasets", requireAuth, asyncHandler(async (req, res): Promise
       createdAt: customDatasetsTable.createdAt,
       needsGeoreferencing: customDatasetsTable.needsGeoreferencing,
       pendingRasterGzBase64: customDatasetsTable.pendingRasterGzBase64,
+      tideStationJson: customDatasetsTable.tideStationJson,
     })
     .from(customDatasetsTable)
     .where(eq(customDatasetsTable.userId, userId))
@@ -179,6 +182,7 @@ router.post("/user/datasets/:id/duplicate", requireAuth, asyncHandler(async (req
       terrainJson: source.terrainJson,
       overviewJson: source.overviewJson,
       folderId: source.folderId,
+      tideStationJson: source.tideStationJson,
     })
     .returning();
   if (!created) {

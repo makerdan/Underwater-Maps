@@ -47,7 +47,7 @@ function isAdmin(userId: string): boolean {
   return allowedIds.includes(userId);
 }
 
-interface NoaaStation {
+export interface NoaaStation {
   id: string;
   name: string;
   lat: number;
@@ -83,7 +83,7 @@ interface TidalResponse {
   slack?: SlackBlock;
 }
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -110,7 +110,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-type StationListType = "waterlevels" | "currentpredictions";
+export type StationListType = "waterlevels" | "currentpredictions";
 
 /**
  * In-memory cache of NOAA station lists, keyed by station-list type
@@ -137,6 +137,12 @@ const stationListsFailureCache = new Map<StationListType, number>();
 const STATION_LISTS_FAILURE_TTL_MS = 60 * 1000;
 registerCache(() => { stationListsCache.clear(); stationListsFailureCache.clear(); });
 
+/** Test-only: clear the station-list caches so fetch mocks take effect. */
+export function __clearStationListCachesForTests(): void {
+  stationListsCache.clear();
+  stationListsFailureCache.clear();
+}
+
 function stationListTtlMs(data: NoaaStation[]): number {
   return data.length === 0 ? STATION_LISTS_EMPTY_TTL_MS : STATION_LISTS_TTL_MS;
 }
@@ -158,7 +164,7 @@ async function loadStations(type: StationListType): Promise<NoaaStation[] | null
   }
 }
 
-async function getStationList(type: StationListType): Promise<NoaaStation[] | null> {
+export async function getStationList(type: StationListType): Promise<NoaaStation[] | null> {
   const now = Date.now();
   const cached = stationListsCache.get(type);
   if (cached && now - cached.ts < stationListTtlMs(cached.data)) {

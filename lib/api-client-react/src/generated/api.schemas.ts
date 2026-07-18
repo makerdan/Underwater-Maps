@@ -1416,6 +1416,19 @@ export interface TerrainUploadInput {
 }
 
 /**
+ * Nearest NOAA tide station binding stored on a user dataset at upload time
+ */
+export interface StoredTideStation {
+  /** 7-digit NOAA station id */
+  stationId: string;
+  stationName: string;
+  lat: number;
+  lon: number;
+  /** Great-circle distance from the dataset bbox centroid, statute miles */
+  distanceMiles: number;
+}
+
+/**
  * Metadata for a user-saved custom terrain dataset
  */
 export interface UserDatasetMeta {
@@ -1439,6 +1452,8 @@ export interface UserDatasetMeta {
   Absent when the raster exceeded the storage cap or has been cleared.
    */
   hasRasterImage?: boolean;
+  /** Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature. */
+  tideStation?: StoredTideStation;
 }
 
 /**
@@ -1453,6 +1468,19 @@ export interface UploadResult {
   savedDatasetMeta?: UserDatasetMeta;
   /** Human-readable error string returned when the auto-save to the user's account failed. The terrain itself is still returned so the session is usable. */
   saveError?: string;
+}
+
+/**
+ * A NOAA water-level station with its distance from the queried point
+ */
+export interface TideStation {
+  /** 7-digit NOAA station id */
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  /** Great-circle distance from the queried point, statute miles */
+  distanceMiles: number;
 }
 
 /**
@@ -3090,6 +3118,52 @@ export type GetTidal200 = {
   currentSpeed?: number;
   nextEvent?: GetTidal200NextEvent;
   source?: GetTidal200Source;
+};
+
+export type GetTidesStationParams = {
+/**
+ * Latitude in decimal degrees
+ */
+lat: number;
+/**
+ * Longitude in decimal degrees
+ */
+lon: number;
+};
+
+export type GetTidesStation200 = {
+  available: boolean;
+  station?: TideStation;
+};
+
+export type GetTidesStationId200Datum = typeof GetTidesStationId200Datum[keyof typeof GetTidesStationId200Datum];
+
+
+export const GetTidesStationId200Datum = {
+  MLLW: 'MLLW',
+} as const;
+
+export type GetTidesStationId200Units = typeof GetTidesStationId200Units[keyof typeof GetTidesStationId200Units];
+
+
+export const GetTidesStationId200Units = {
+  feet: 'feet',
+} as const;
+
+export type GetTidesStationId200PredictionsItem = {
+  /** Sample timestamp (UTC, 6-minute cadence) */
+  t: string;
+  /** Predicted tide height in feet above MLLW */
+  v: number;
+};
+
+export type GetTidesStationId200 = {
+  stationId: string;
+  windowStart: string;
+  windowEnd: string;
+  datum: GetTidesStationId200Datum;
+  units: GetTidesStationId200Units;
+  predictions: GetTidesStationId200PredictionsItem[];
 };
 
 export type GetTidalScheduleParams = {

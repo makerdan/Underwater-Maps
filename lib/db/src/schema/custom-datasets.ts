@@ -79,6 +79,21 @@ export interface GeorefControlPoint {
   lat: number;
 }
 
+/**
+ * Nearest NOAA tide station binding resolved from the dataset's bbox
+ * centroid at upload/processing time. Null when resolution failed (NOAA
+ * unreachable) or the dataset predates the tides feature.
+ */
+export interface StoredTideStation {
+  stationId: string;
+  stationName: string;
+  /** Station location (WGS84). */
+  lat: number;
+  lon: number;
+  /** Great-circle distance from the dataset centroid, statute miles. */
+  distanceMiles: number;
+}
+
 export const customDatasetsTable = pgTable("custom_datasets", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull(),
@@ -121,6 +136,12 @@ export const customDatasetsTable = pgTable("custom_datasets", {
    * Set when the user submits the georeferencing wizard; null until then.
    */
   georefControlPointsJson: jsonb("georef_control_points_json").$type<GeorefControlPoint[]>(),
+  /**
+   * Nearest NOAA tide station resolved from the dataset bbox centroid when
+   * the upload was processed. Used by the tide-prediction engine so the
+   * client does not need to re-resolve the station on every load.
+   */
+  tideStationJson: jsonb("tide_station_json").$type<StoredTideStation>(),
 }, (table) => [
   index("custom_datasets_user_id_idx").on(table.userId),
 ]);

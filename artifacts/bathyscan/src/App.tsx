@@ -31,6 +31,9 @@ import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
 import { TidePanel } from "@/components/TidePanel";
 import { useTidalSchedule } from "@/hooks/useTidalSchedule";
+import { TideStationPanel } from "@/components/TideStationPanel";
+import { useTidalStore } from "@/lib/tidalStore";
+import { interpolateTideHeightFt, FEET_TO_METERS } from "@/lib/tidePrediction";
 import { CurrentsPanel } from "@/components/CurrentsPanel";
 import { useCurrentsStore } from "@/lib/currentsStore";
 import { ThrottlePanel } from "@/components/ThrottlePanel";
@@ -440,7 +443,67 @@ function Main() {
 
   // E2E test bridge: when non-null, overrides live tidal fetch data so tests
   // can inject tidal state without going through the useTidalData HTTP path.
-  const effectiveTidalData = (tidalDataOverride as typeof tidalData) ?? tidalData;
+  const effectiveTidalDataRaw = (tidalDataOverride as typeof tidalData) ?? tidalData;
+
+  // ── NOAA tide-prediction engine ──────────────────────────────────────────
+  // Nearest station + 31-day 6-minute prediction window (feet above MLLW),
+  // resolved from the primary dataset centroid and cached server-side 24 h.
+  const tideSamples = useTidalStore((s) => s.samples);
+  const resolveTideStation = useTidalStore((s) => s.resolveStation);
+  const resetTidalStore = useTidalStore((s) => s.reset);
+
+  // Real-time clock: ticks every minute, paused while the tab is hidden and
+  // refreshed immediately when the tab becomes visible again.
+  const [tideNowMs, setTideNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === "visible") setTideNowMs(Date.now());
+    };
+    const interval = setInterval(tick, 60_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, []);
+
+  // Resolve the nearest tide station whenever the tidal overlay is active for
+  // a dataset centroid; clear the store when the overlay/dataset goes away.
+  useEffect(() => {
+    if (!tidalOverlay || centerLat === null || centerLon === null) {
+      resetTidalStore();
+      return;
+    }
+    void resolveTideStation(centerLat, centerLon);
+  }, [tidalOverlay, centerLat, centerLon, resolveTideStation, resetTidalStore]);
+
+  // Trip-planning scrub time for the tide-station panel. Null means live
+  // ("Tide now") mode. Kept separate from the global timeline store, whose
+  // currentTime is always a Date and has no notion of "live".
+  const [tidePlanTime, setTidePlanTime] = useState<Date | null>(null);
+
+  // Interpolated prediction at the active time (planning scrub when set,
+  // otherwise the real-time minute clock).
+  const tideActiveMs = tidePlanTime ? tidePlanTime.getTime() : tideNowMs;
+  const predictedTideFt = useMemo(
+    () => (tideSamples ? interpolateTideHeightFt(tideSamples, tideActiveMs) : null),
+    [tideSamples, tideActiveMs],
+  );
+
+  // When the prediction engine has data, it overrides the coarse tideHeight
+  // from /api/tidal (converted feet → metres) so the 3D water plane and tide
+  // panel shift with the interpolated 6-minute prediction curve.
+  const effectiveTidalData = useMemo(() => {
+    if (
+      predictedTideFt === null ||
+      !effectiveTidalDataRaw ||
+      !("available" in effectiveTidalDataRaw) ||
+      !effectiveTidalDataRaw.available
+    ) {
+      return effectiveTidalDataRaw;
+    }
+    return { ...effectiveTidalDataRaw, tideHeight: predictedTideFt * FEET_TO_METERS };
+  }, [effectiveTidalDataRaw, predictedTideFt]);
 
   // Aggregate crosshair data for the "What's Here?" card.
   const whatsHereData = useWhatsHere(effectiveTidalData, tidalOverlay, terrain);
@@ -1269,6 +1332,15 @@ function Main() {
               {/* (1) Conditions — Tides + Currents stacked under one collapse */}
               <SidebarSectionGroup>
                 <SidebarSection id="conditions" title="Conditions">
+                  {tidalOverlay && (
+                    <ErrorBoundary label="tide station panel">
+                      <TideStationPanel
+                        scrubDatetime={tidePlanTime}
+                        onScrubChange={setTidePlanTime}
+                        nowMs={tideNowMs}
+                      />
+                    </ErrorBoundary>
+                  )}
                   {showTidePanel && tidalOverlay && effectiveTidalData !== null ? (
                     <ErrorBoundary label="tide panel">
                       <TidePanel

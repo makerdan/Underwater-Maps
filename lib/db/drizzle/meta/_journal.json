@@ -50,6 +50,13 @@
       "when": 1784080624574,
       "tag": "0012_schema_baseline_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784338543820,
+      "tag": "0007_add_tide_station",
+      "breakpoints": true
     }
   ]
 }

@@ -315,7 +315,14 @@ export const PostDatasetsUploadResponse = zod.object({
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
-  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n')
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
+  "tideStation": zod.object({
+  "stationId": zod.string().describe('7-digit NOAA station id'),
+  "stationName": zod.string(),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
 }).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch'),
   "saveError": zod.string().optional().describe('Human-readable error string returned when the auto-save to the user\'s account failed. The terrain itself is still returned so the session is usable.')
 }).describe('Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller\'s dataset library; `savedDatasetId` carries the new row\'s UUID.')
@@ -333,7 +340,14 @@ export const GetUserDatasetsResponseItem = zod.object({
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
-  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n')
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
+  "tideStation": zod.object({
+  "stationId": zod.string().describe('7-digit NOAA station id'),
+  "stationName": zod.string(),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
 }).describe('Metadata for a user-saved custom terrain dataset')
 export const GetUserDatasetsResponse = zod.array(GetUserDatasetsResponseItem)
 
@@ -529,7 +543,14 @@ export const PostUserDatasetsIdGeorefResponse = zod.object({
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
-  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n')
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
+  "tideStation": zod.object({
+  "stationId": zod.string().describe('7-digit NOAA station id'),
+  "stationName": zod.string(),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 
@@ -560,7 +581,14 @@ export const PatchUserDatasetsIdMoveResponse = zod.object({
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
-  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n')
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
+  "tideStation": zod.object({
+  "stationId": zod.string().describe('7-digit NOAA station id'),
+  "stationName": zod.string(),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 
@@ -591,7 +619,14 @@ export const PatchUserDatasetsIdRenameResponse = zod.object({
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
-  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n')
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
+  "tideStation": zod.object({
+  "stationId": zod.string().describe('7-digit NOAA station id'),
+  "stationName": zod.string(),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 
@@ -3368,6 +3403,51 @@ export const GetTidalResponse = zod.object({
   "height": zod.number().optional()
 }).optional(),
   "source": zod.enum(['noaa', 'estimated']).optional()
+})
+
+
+/**
+ * Resolves the nearest NOAA water-level station to the given coordinates (e.g. a dataset bbox centroid) with the great-circle distance in statute miles. No distance cutoff is applied — the client decides whether to show a distance caveat.
+ * @summary Nearest NOAA tide station to a point
+ */
+export const GetTidesStationQueryParams = zod.object({
+  "lat": zod.coerce.number().describe('Latitude in decimal degrees'),
+  "lon": zod.coerce.number().describe('Longitude in decimal degrees')
+})
+
+export const GetTidesStationResponse = zod.object({
+  "available": zod.boolean(),
+  "station": zod.object({
+  "id": zod.string().describe('7-digit NOAA station id'),
+  "name": zod.string(),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "distanceMiles": zod.number().describe('Great-circle distance from the queried point, statute miles')
+}).optional().describe('A NOAA water-level station with its distance from the queried point')
+})
+
+
+/**
+ * Returns a full 31-day window of 6-minute NOAA tide predictions in feet above MLLW, fetched in a single NOAA call and cached server-side for 24 hours. The window starts at UTC midnight of the current day.
+ * @summary 31-day window of 6-minute tide predictions for a station
+ */
+export const getTidesStationIdPathStationIdRegExp = new RegExp('^\\d{7}$');
+
+
+export const GetTidesStationIdParams = zod.object({
+  "stationId": zod.coerce.string().regex(getTidesStationIdPathStationIdRegExp).describe('7-digit NOAA station id')
+})
+
+export const GetTidesStationIdResponse = zod.object({
+  "stationId": zod.string(),
+  "windowStart": zod.coerce.date(),
+  "windowEnd": zod.coerce.date(),
+  "datum": zod.enum(['MLLW']),
+  "units": zod.enum(['feet']),
+  "predictions": zod.array(zod.object({
+  "t": zod.coerce.date().describe('Sample timestamp (UTC, 6-minute cadence)'),
+  "v": zod.number().describe('Predicted tide height in feet above MLLW')
+}))
 })
 
 

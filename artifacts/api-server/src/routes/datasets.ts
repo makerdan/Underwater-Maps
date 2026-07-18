@@ -9,7 +9,8 @@ import multer from "multer";
 import { eq, and, inArray, or, lt } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { z } from "zod";
-import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable, uploadCalibrationTable, type StoredTerrainJson } from "@workspace/db";
+import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable, uploadCalibrationTable, type StoredTerrainJson, type StoredTideStation } from "@workspace/db";
+import { findNearestTideStation } from "./tides.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -54,6 +55,37 @@ import {
   TerrainSatelliteQuerySchema,
   TerrainDownloadInfoQuerySchema,
 } from "./schemas.js";
+
+/**
+ * Best-effort resolution of the nearest NOAA tide station for a freshly
+ * gridded terrain (bbox centroid). Never throws — returns null when the
+ * bbox is unusable or the NOAA catalogue is unreachable, so dataset saves
+ * are never blocked by tide-station lookup failures.
+ */
+async function resolveTideStationForTerrain(terrain: {
+  minLon: number;
+  maxLon: number;
+  minLat: number;
+  maxLat: number;
+}): Promise<StoredTideStation | null> {
+  try {
+    const lat = (terrain.minLat + terrain.maxLat) / 2;
+    const lon = (terrain.minLon + terrain.maxLon) / 2;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    const s = await findNearestTideStation(lat, lon);
+    if (!s) return null;
+    return {
+      stationId: s.id,
+      stationName: s.name,
+      lat: s.lat,
+      lon: s.lon,
+      distanceMiles: s.distanceMiles,
+    };
+  } catch (err) {
+    logger.warn({ err }, "[datasets] tide-station resolution failed (non-fatal)");
+    return null;
+  }
+}
 
 // ─── Chunked-upload session + job stores ──────────────────────────────────────
 // Sessions: keyed by uploadId, created on the first chunk, used to enforce
@@ -1096,6 +1128,7 @@ async function processUploadJob(
             hyd93FeaturesJson: tarHyd93Features.length > 0 ? tarHyd93Features : null,
             needsGeoreferencing: needsGeoreferencing ?? null,
             pendingRasterGzBase64: pendingRasterGzBase64 ?? null,
+            tideStationJson: await resolveTideStationForTerrain(terrain),
           })
           .returning({ id: customDatasetsTable.id });
 
@@ -1155,6 +1188,7 @@ async function processUploadJob(
         maxDepth: terrain.maxDepth,
         terrainJson: terrain as unknown as StoredTerrainJson,
         overviewJson: overview as unknown as StoredTerrainJson,
+        tideStationJson: await resolveTideStationForTerrain(terrain),
       })
       .returning({ id: customDatasetsTable.id });
 
@@ -2054,6 +2088,7 @@ router.post(
         maxDepth: terrain.maxDepth,
         terrainJson: terrain as unknown as StoredTerrainJson,
         overviewJson: overview as unknown as StoredTerrainJson,
+        tideStationJson: await resolveTideStationForTerrain(terrain),
       })
       .returning({
         id: customDatasetsTable.id,
