@@ -108,6 +108,32 @@ describe("PUT /api/settings — HTTP validation", () => {
     expect(res.status).toBe(200);
   });
 
+  it("accepts a valid tripMinDurationH and rejects out-of-range / non-integer values", async () => {
+    const ok = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-trip")
+      .send({ tripMinDurationH: 4 });
+    expect(ok.status).toBe(200);
+
+    const tooBig = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-trip")
+      .send({ tripMinDurationH: 13 });
+    expect(tooBig.status).toBe(400);
+
+    const negative = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-trip")
+      .send({ tripMinDurationH: -1 });
+    expect(negative.status).toBe(400);
+
+    const fractional = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-trip")
+      .send({ tripMinDurationH: 2.5 });
+    expect(fractional.status).toBe(400);
+  });
+
   it("returns 400 when fogDensity is a string (wrong type)", async () => {
     const res = await request(app)
       .put("/api/settings")

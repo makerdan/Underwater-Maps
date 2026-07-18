@@ -60,7 +60,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 24;
+export const SETTINGS_SCHEMA_VERSION = 25;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -293,6 +293,12 @@ export interface SettingsState {
 
   // ── Tidal Defaults ───────────────────────────────────────────────────
   autoLoadTidal: boolean;
+  /**
+   * Minimum trip length in hours for the Trip Window finder. Windows
+   * shorter than this are dimmed so they can't be mistaken for usable
+   * outings. 0 = no minimum (show every window normally).
+   */
+  tripMinDurationH: number;
   defaultTidalDepthLayer: TidalDepthLayer;
   currentArrowDensity: CurrentArrowDensity;
   /**
@@ -584,6 +590,7 @@ interface SettingsActions {
 
   // Tidal
   setAutoLoadTidal: (v: boolean) => void;
+  setTripMinDurationH: (v: number) => void;
   setDefaultTidalDepthLayer: (v: TidalDepthLayer) => void;
   setCurrentArrowDensity: (v: CurrentArrowDensity) => void;
   setLayerArrowDensity: (layer: TidalDepthLayer, density: CurrentArrowDensity) => void;
@@ -863,6 +870,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   // Tidal
   autoLoadTidal: false,
+  tripMinDurationH: 0,
   defaultTidalDepthLayer: "surface",
   currentArrowDensity: "normal",
   layerArrowDensity: { surface: "normal", mid: "normal", "near-bottom": "normal" },
@@ -982,7 +990,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "visibleMarkerTypes", "privateMarkers", "markerClusterThreshold",
   ],
   tidal: [
-    "autoLoadTidal", "defaultTidalDepthLayer", "currentArrowDensity",
+    "autoLoadTidal", "tripMinDurationH", "defaultTidalDepthLayer", "currentArrowDensity",
     "layerArrowDensity", "windOverlayStyle", "tideOverlayStyle", "currentOverlayStyle",
     "weatherStationsActive", "rawsOverlayActive", "windOverlayActive",
     "tideOverlayActive", "currentOverlayActive", "currentDepthLayers",
@@ -1148,6 +1156,7 @@ export const useSettingsStore = create<SettingsStore>()(
 
         // Tidal
         setAutoLoadTidal: setter("autoLoadTidal"),
+        setTripMinDurationH: setter("tripMinDurationH"),
         setDefaultTidalDepthLayer: setter("defaultTidalDepthLayer"),
         setCurrentArrowDensity: setter("currentArrowDensity"),
         setLayerArrowDensity: (layer, density) =>
@@ -1558,6 +1567,11 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).showHealthBadge === undefined) {
             migratedHealthBadge.showHealthBadge = DEFAULT_SETTINGS.showHealthBadge;
           }
+          // v24 → v25: inject tripMinDurationH default (0 = show all windows).
+          const migratedTripWindow: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).tripMinDurationH === undefined) {
+            migratedTripWindow.tripMinDurationH = DEFAULT_SETTINGS.tripMinDurationH;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1570,6 +1584,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedTimeline,
             ...migratedSidebarMode,
             ...migratedHealthBadge,
+            ...migratedTripWindow,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

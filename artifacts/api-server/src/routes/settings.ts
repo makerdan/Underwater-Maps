@@ -137,6 +137,7 @@ export const DEFAULT_SETTINGS = {
   defaultDepthPoleColor: "#22d3ee",
   markerClusterThreshold: 25,
   autoLoadTidal: false,
+  tripMinDurationH: 0,
   defaultTidalDepthLayer: "surface",
   currentArrowDensity: "normal",
   layerArrowDensity: { surface: "normal", mid: "normal", "near-bottom": "normal" } as Record<string, string>,

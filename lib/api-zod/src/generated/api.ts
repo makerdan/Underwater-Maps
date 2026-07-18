@@ -1074,6 +1074,10 @@ export const getSettingsResponseMarkerClusterThresholdMin = 0;
 export const getSettingsResponseMarkerClusterThresholdMax = 500;
 
 export const getSettingsResponseAutoLoadTidalDefault = false;
+export const getSettingsResponseTripMinDurationHDefault = 0;
+export const getSettingsResponseTripMinDurationHMin = 0;
+export const getSettingsResponseTripMinDurationHMax = 12;
+
 export const getSettingsResponseDefaultTidalDepthLayerDefault = `surface`;
 export const getSettingsResponseCurrentArrowDensityDefault = `normal`;
 export const getSettingsResponseWindOverlayStyleDefault = `arrows`;
@@ -1254,6 +1258,7 @@ export const GetSettingsResponse = zod.object({
   "defaultDepthPoleColor": zod.string().regex(getSettingsResponseDefaultDepthPoleColorRegExp).default(getSettingsResponseDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
   "markerClusterThreshold": zod.number().min(getSettingsResponseMarkerClusterThresholdMin).max(getSettingsResponseMarkerClusterThresholdMax).default(getSettingsResponseMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(getSettingsResponseAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
+  "tripMinDurationH": zod.number().min(getSettingsResponseTripMinDurationHMin).max(getSettingsResponseTripMinDurationHMax).int().default(getSettingsResponseTripMinDurationHDefault).describe('Minimum trip length in hours for the Trip Window finder. Windows shorter than this are dimmed. 0 = show all windows.'),
   "defaultTidalDepthLayer": zod.enum(['surface', 'mid', 'near-bottom']).default(getSettingsResponseDefaultTidalDepthLayerDefault).describe('Depth layer pre-selected in the tidal overlay controls.'),
   "currentArrowDensity": zod.enum(['sparse', 'normal', 'dense']).default(getSettingsResponseCurrentArrowDensityDefault).describe('Global density of current direction arrows shown across all depth layers.'),
   "layerArrowDensity": zod.object({
@@ -1497,6 +1502,10 @@ export const putSettingsBodyMarkerClusterThresholdMin = 0;
 export const putSettingsBodyMarkerClusterThresholdMax = 500;
 
 export const putSettingsBodyAutoLoadTidalDefault = false;
+export const putSettingsBodyTripMinDurationHDefault = 0;
+export const putSettingsBodyTripMinDurationHMin = 0;
+export const putSettingsBodyTripMinDurationHMax = 12;
+
 export const putSettingsBodyDefaultTidalDepthLayerDefault = `surface`;
 export const putSettingsBodyCurrentArrowDensityDefault = `normal`;
 export const putSettingsBodyWindOverlayStyleDefault = `arrows`;
@@ -1677,6 +1686,7 @@ export const PutSettingsBody = zod.object({
   "defaultDepthPoleColor": zod.string().regex(putSettingsBodyDefaultDepthPoleColorRegExp).default(putSettingsBodyDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
   "markerClusterThreshold": zod.number().min(putSettingsBodyMarkerClusterThresholdMin).max(putSettingsBodyMarkerClusterThresholdMax).default(putSettingsBodyMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(putSettingsBodyAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
+  "tripMinDurationH": zod.number().min(putSettingsBodyTripMinDurationHMin).max(putSettingsBodyTripMinDurationHMax).int().default(putSettingsBodyTripMinDurationHDefault).describe('Minimum trip length in hours for the Trip Window finder. Windows shorter than this are dimmed. 0 = show all windows.'),
   "defaultTidalDepthLayer": zod.enum(['surface', 'mid', 'near-bottom']).default(putSettingsBodyDefaultTidalDepthLayerDefault).describe('Depth layer pre-selected in the tidal overlay controls.'),
   "currentArrowDensity": zod.enum(['sparse', 'normal', 'dense']).default(putSettingsBodyCurrentArrowDensityDefault).describe('Global density of current direction arrows shown across all depth layers.'),
   "layerArrowDensity": zod.object({
@@ -1915,6 +1925,10 @@ export const putSettingsResponseMarkerClusterThresholdMin = 0;
 export const putSettingsResponseMarkerClusterThresholdMax = 500;
 
 export const putSettingsResponseAutoLoadTidalDefault = false;
+export const putSettingsResponseTripMinDurationHDefault = 0;
+export const putSettingsResponseTripMinDurationHMin = 0;
+export const putSettingsResponseTripMinDurationHMax = 12;
+
 export const putSettingsResponseDefaultTidalDepthLayerDefault = `surface`;
 export const putSettingsResponseCurrentArrowDensityDefault = `normal`;
 export const putSettingsResponseWindOverlayStyleDefault = `arrows`;
@@ -2095,6 +2109,7 @@ export const PutSettingsResponse = zod.object({
   "defaultDepthPoleColor": zod.string().regex(putSettingsResponseDefaultDepthPoleColorRegExp).default(putSettingsResponseDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
   "markerClusterThreshold": zod.number().min(putSettingsResponseMarkerClusterThresholdMin).max(putSettingsResponseMarkerClusterThresholdMax).default(putSettingsResponseMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(putSettingsResponseAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
+  "tripMinDurationH": zod.number().min(putSettingsResponseTripMinDurationHMin).max(putSettingsResponseTripMinDurationHMax).int().default(putSettingsResponseTripMinDurationHDefault).describe('Minimum trip length in hours for the Trip Window finder. Windows shorter than this are dimmed. 0 = show all windows.'),
   "defaultTidalDepthLayer": zod.enum(['surface', 'mid', 'near-bottom']).default(putSettingsResponseDefaultTidalDepthLayerDefault).describe('Depth layer pre-selected in the tidal overlay controls.'),
   "currentArrowDensity": zod.enum(['sparse', 'normal', 'dense']).default(putSettingsResponseCurrentArrowDensityDefault).describe('Global density of current direction arrows shown across all depth layers.'),
   "layerArrowDensity": zod.object({

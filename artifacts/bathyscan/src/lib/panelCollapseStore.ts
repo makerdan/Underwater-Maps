@@ -13,6 +13,7 @@ export type PanelId =
   | "conditions"
   | "driftRoute"
   | "forecast"
+  | "tripWindows"
   | "seafloorClassification"
   | "markersAccordion"
   | "uploadTerrainAccordion"
@@ -44,6 +45,7 @@ export const DEFAULTS: Record<PanelId, boolean> = {
   conditions: false,
   driftRoute: false,
   forecast: false,
+  tripWindows: false,
   seafloorClassification: false,
   markersAccordion: true,
   uploadTerrainAccordion: true,

@@ -4990,6 +4990,12 @@ components:
           type: boolean
           default: false
           description: Automatically load tidal current data when a dataset is opened.
+        tripMinDurationH:
+          type: integer
+          minimum: 0
+          maximum: 12
+          default: 0
+          description: Minimum trip length in hours for the Trip Window finder. Windows shorter than this are dimmed. 0 = show all windows.
         defaultTidalDepthLayer:
           type: string
           enum: [surface, mid, near-bottom]

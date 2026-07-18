@@ -165,6 +165,7 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   "defaultDepthPoleColor",
   "markerClusterThreshold",
   "autoLoadTidal",
+  "tripMinDurationH",      // settings-validation.test.ts
   "defaultTidalDepthLayer",
   "currentArrowDensity",
   "layerArrowDensity",

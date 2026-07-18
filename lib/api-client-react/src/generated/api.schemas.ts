@@ -1010,6 +1010,12 @@ export interface UserSettings {
   markerClusterThreshold?: number;
   /** Automatically load tidal current data when a dataset is opened. */
   autoLoadTidal?: boolean;
+  /**
+     * Minimum trip length in hours for the Trip Window finder. Windows shorter than this are dimmed. 0 = show all windows.
+     * @minimum 0
+     * @maximum 12
+     */
+  tripMinDurationH?: number;
   /** Depth layer pre-selected in the tidal overlay controls. */
   defaultTidalDepthLayer?: UserSettingsDefaultTidalDepthLayer;
   /** Global density of current direction arrows shown across all depth layers. */

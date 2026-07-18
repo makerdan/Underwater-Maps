@@ -89,6 +89,7 @@ import { RoutesPanel } from "@/components/RoutesPanel";
 import "@/components/help/help.css";
 import { ConditionsLegend } from "@/components/ConditionsLegend";
 import { ForecastStrip } from "@/components/ForecastStrip";
+import { TripWindowPanel } from "@/components/TripWindowPanel";
 import { SimulatedDataConfirmDialog } from "@/components/SimulatedDataConfirmDialog";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { initialViewParams } from "@/lib/viewUrl";
@@ -1439,6 +1440,14 @@ function Main() {
               <SidebarSectionGroup>
                 <SidebarSection id="forecast" title="Forecast">
                   <ForecastStrip />
+                </SidebarSection>
+              </SidebarSectionGroup>
+
+              <SidebarSectionGroup>
+                <SidebarSection id="tripWindows" title="Trip Windows">
+                  <ErrorBoundary label="trip window panel">
+                    <TripWindowPanel />
+                  </ErrorBoundary>
                 </SidebarSection>
               </SidebarSectionGroup>
 
