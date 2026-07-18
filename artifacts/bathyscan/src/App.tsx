@@ -39,6 +39,7 @@ import { CurrentsPanel } from "@/components/CurrentsPanel";
 import { useCurrentsStore } from "@/lib/currentsStore";
 import { ThrottlePanel } from "@/components/ThrottlePanel";
 import { MarkerForm } from "@/components/MarkerForm";
+import { QuickDropButton } from "@/components/QuickDropButton";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { ContextMenu } from "@/components/ContextMenu";
 import { MeasurementBanner } from "@/components/MeasurementBanner";
@@ -1679,6 +1680,11 @@ function Main() {
           </button>
           </ViewscreenTooltip>
         </div>
+
+        {/* One-tap GPS catch quick-drop — floating thumb-reachable button,
+            bottom-right above the minimap. Renders only while GPS tracking
+            is active with a fix and terrain is loaded. */}
+        <QuickDropButton />
 
         {/* Throttle panel — bottom-right above minimap, visible when realistic mode is on */}
         {realisticMode && (

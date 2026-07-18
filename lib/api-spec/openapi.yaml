@@ -6019,6 +6019,15 @@ components:
         notes:
           type: string
           nullable: true
+        catchSeq:
+          type: integer
+          nullable: true
+          description: Per-user sequential catch number assigned by quick-drop ("Catch N"); null for manually created markers
+        conditions:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/MarkerConditions"
+          description: Frozen conditions snapshot captured at quick-drop time; null when not a quick-drop marker
         createdAt:
           type: string
           format: date-time
@@ -6031,6 +6040,75 @@ components:
         - type
         - label
         - createdAt
+
+    MarkerConditions:
+      type: object
+      description: >
+        Frozen snapshot of conditions at the moment a quick-drop marker was
+        created. Every data field is nullable — missing sources never block a
+        drop; each source field records where the value came from.
+      properties:
+        capturedAt:
+          type: string
+          format: date-time
+          description: Client timestamp of the drop
+        gpsAccuracyM:
+          type: number
+          nullable: true
+          description: Reported GPS accuracy radius in metres
+        speedMps:
+          type: number
+          nullable: true
+          description: GPS ground speed in metres/second
+        headingDeg:
+          type: number
+          nullable: true
+          description: GPS heading in degrees true (0–360)
+        depthM:
+          type: number
+          nullable: true
+          description: Seafloor depth in metres under the drop position, sampled from the loaded terrain
+        depthSource:
+          type: string
+          enum: [terrain, unavailable]
+        tideHeightM:
+          type: number
+          nullable: true
+          description: Cached tidal height in metres (MLLW) at drop time
+        currentSpeedKt:
+          type: number
+          nullable: true
+          description: Cached current speed prediction in knots
+        currentDirDeg:
+          type: number
+          nullable: true
+          description: Cached current direction prediction in degrees true
+        tideSource:
+          type: string
+          enum: [pack, unavailable]
+          description: Where the tide/current values came from (offline pack) or unavailable
+        windSpeedKnots:
+          type: number
+          nullable: true
+        windDirDeg:
+          type: number
+          nullable: true
+        tempC:
+          type: number
+          nullable: true
+        weatherObservedAt:
+          type: string
+          nullable: true
+          description: ISO timestamp of the cached weather observation
+        weatherSource:
+          type: string
+          enum: [pack, unavailable]
+      required:
+        - capturedAt
+        - depthSource
+        - tideSource
+        - weatherSource
+      additionalProperties: false
 
     CatchEntry:
       type: object
@@ -7272,6 +7350,18 @@ components:
           type: string
           nullable: true
           maxLength: 280
+        quickCatch:
+          type: boolean
+          default: false
+          description: >
+            When true, the server assigns the user's next sequential catch
+            number and overrides the label with "Catch N". Used by the
+            one-tap GPS quick-drop.
+        conditions:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/MarkerConditions"
+          description: Optional frozen conditions snapshot captured at drop time
       required:
         - datasetId
         - lon

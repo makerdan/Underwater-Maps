@@ -92,7 +92,14 @@ const markersTableStub = {
   label: "label",
   notes: "notes",
   userId: "userId",
+  catchSeq: "catchSeq",
+  conditions: "conditions",
   createdAt: "createdAt",
+};
+
+const catchCountersTableStub = {
+  userId: "userId",
+  lastSeq: "lastSeq",
 };
 
 const datasetFoldersTableStub = {
@@ -250,6 +257,7 @@ export function createDbMock(options: DbMockOptions = {}) {
     disabledPresetsTable: disabledPresetsTableStub,
     userCatalogSavesTable: userCatalogSavesTableStub,
     markersTable: markersTableStub,
+    catchCountersTable: catchCountersTableStub,
     datasetFoldersTable: datasetFoldersTableStub,
     gpsTrailsTable: gpsTrailsTableStub,
     datasetCatalogTable: datasetCatalogTableStub,

@@ -42,6 +42,7 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
   and: vi.fn((...args: unknown[]) => args),
   lt: vi.fn(() => "lt-condition"),
+  sql: vi.fn(() => "sql-fragment"),
 }));
 
 // Mock @clerk/express so tests control auth without a real Clerk tenant.

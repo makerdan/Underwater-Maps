@@ -1630,6 +1630,65 @@ export const MarkerType = {
   school_carp: 'school_carp',
 } as const;
 
+export type MarkerConditionsDepthSource = typeof MarkerConditionsDepthSource[keyof typeof MarkerConditionsDepthSource];
+
+
+export const MarkerConditionsDepthSource = {
+  terrain: 'terrain',
+  unavailable: 'unavailable',
+} as const;
+
+/**
+ * Where the tide/current values came from (offline pack) or unavailable
+ */
+export type MarkerConditionsTideSource = typeof MarkerConditionsTideSource[keyof typeof MarkerConditionsTideSource];
+
+
+export const MarkerConditionsTideSource = {
+  pack: 'pack',
+  unavailable: 'unavailable',
+} as const;
+
+export type MarkerConditionsWeatherSource = typeof MarkerConditionsWeatherSource[keyof typeof MarkerConditionsWeatherSource];
+
+
+export const MarkerConditionsWeatherSource = {
+  pack: 'pack',
+  unavailable: 'unavailable',
+} as const;
+
+/**
+ * Frozen snapshot of conditions at the moment a quick-drop marker was created. Every data field is nullable — missing sources never block a drop; each source field records where the value came from.
+
+ */
+export interface MarkerConditions {
+  /** Client timestamp of the drop */
+  capturedAt: string;
+  /** Reported GPS accuracy radius in metres */
+  gpsAccuracyM?: number | null;
+  /** GPS ground speed in metres/second */
+  speedMps?: number | null;
+  /** GPS heading in degrees true (0–360) */
+  headingDeg?: number | null;
+  /** Seafloor depth in metres under the drop position, sampled from the loaded terrain */
+  depthM?: number | null;
+  depthSource: MarkerConditionsDepthSource;
+  /** Cached tidal height in metres (MLLW) at drop time */
+  tideHeightM?: number | null;
+  /** Cached current speed prediction in knots */
+  currentSpeedKt?: number | null;
+  /** Cached current direction prediction in degrees true */
+  currentDirDeg?: number | null;
+  /** Where the tide/current values came from (offline pack) or unavailable */
+  tideSource: MarkerConditionsTideSource;
+  windSpeedKnots?: number | null;
+  windDirDeg?: number | null;
+  tempC?: number | null;
+  /** ISO timestamp of the cached weather observation */
+  weatherObservedAt?: string | null;
+  weatherSource: MarkerConditionsWeatherSource;
+}
+
 export interface Marker {
   /** UUID primary key */
   id: string;
@@ -1642,6 +1701,10 @@ export interface Marker {
   type: MarkerType;
   label: string;
   notes?: string | null;
+  /** Per-user sequential catch number assigned by quick-drop ("Catch N"); null for manually created markers */
+  catchSeq?: number | null;
+  /** Frozen conditions snapshot captured at quick-drop time; null when not a quick-drop marker */
+  conditions?: MarkerConditions | null;
   createdAt: string;
 }
 
@@ -2601,6 +2664,11 @@ export interface MarkerInput {
   label: string;
   /** @maxLength 280 */
   notes?: string | null;
+  /** When true, the server assigns the user's next sequential catch number and overrides the label with "Catch N". Used by the one-tap GPS quick-drop.
+   */
+  quickCatch?: boolean;
+  /** Optional frozen conditions snapshot captured at drop time */
+  conditions?: MarkerConditions | null;
 }
 
 export type SavedRouteWaypointsItem = {

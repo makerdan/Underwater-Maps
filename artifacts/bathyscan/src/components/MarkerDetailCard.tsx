@@ -127,6 +127,58 @@ export const MarkerDetailCard: React.FC = () => {
           </>
         )}
       </div>
+      {marker.conditions && (
+        <div
+          data-testid="marker-conditions-snapshot"
+          style={{
+            marginTop: 10,
+            paddingTop: 8,
+            borderTop: `1px solid ${color}33`,
+          }}
+        >
+          <div style={{ color: "#94a3b8", fontSize: 13.5, letterSpacing: "0.12em", marginBottom: 5 }}>
+            CONDITIONS AT DROP
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 12px", fontSize: 13.5 }}>
+            {(() => {
+              const c = marker.conditions;
+              const rows: [string, string][] = [];
+              if (c.gpsAccuracyM != null) rows.push(["GPS ±", `${c.gpsAccuracyM.toFixed(0)} m`]);
+              if (c.speedMps != null) rows.push(["SPEED", `${(c.speedMps * 1.94384).toFixed(1)} kt`]);
+              if (c.headingDeg != null) rows.push(["HEADING", `${c.headingDeg.toFixed(0)}°`]);
+              if (c.depthSource === "terrain" && c.depthM != null)
+                rows.push(["DEPTH", formatDepth(c.depthM, { units })]);
+              if (c.tideSource === "pack") {
+                if (c.tideHeightM != null) rows.push(["TIDE", `${c.tideHeightM.toFixed(2)} m`]);
+                if (c.currentSpeedKt != null)
+                  rows.push([
+                    "CURRENT",
+                    `${c.currentSpeedKt.toFixed(1)} kt${c.currentDirDeg != null ? ` @ ${c.currentDirDeg.toFixed(0)}°` : ""}`,
+                  ]);
+              }
+              if (c.weatherSource === "pack") {
+                if (c.windSpeedKnots != null)
+                  rows.push([
+                    "WIND",
+                    `${c.windSpeedKnots.toFixed(0)} kt${c.windDirDeg != null ? ` @ ${c.windDirDeg.toFixed(0)}°` : ""}`,
+                  ]);
+                if (c.tempC != null) rows.push(["AIR TEMP", formatTemperature(c.tempC)]);
+              }
+              if (rows.length === 0) rows.push(["SNAPSHOT", "no data captured"]);
+              return rows.map(([k, v]) => (
+                <React.Fragment key={k}>
+                  <span style={{ color: "#94a3b8" }}>{k}</span>
+                  <span style={{ color: "#cbd5e1" }}>{v}</span>
+                </React.Fragment>
+              ));
+            })()}
+            <span style={{ color: "#94a3b8" }}>CAPTURED</span>
+            <span style={{ color: "#e2e8f0" }}>
+              {new Date(marker.conditions.capturedAt).toLocaleString()}
+            </span>
+          </div>
+        </div>
+      )}
       {marker.notes && marker.type !== "depth_pole" && (
         <div
           style={{

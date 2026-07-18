@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { and, eq } from "drizzle-orm";
-import { db, markersTable } from "@workspace/db";
+import { and, eq, sql } from "drizzle-orm";
+import { db, markersTable, catchCountersTable } from "@workspace/db";
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -33,12 +33,48 @@ router.post("/markers", requireAuth, asyncHandler(async (req, res): Promise<void
     return;
   }
 
-  const { datasetId, lon, lat, depth, type = "custom", label, notes } = parsed.data;
+  const { datasetId, lon, lat, depth, type = "custom", label, notes, quickCatch, conditions } = parsed.data;
   const userId = (req as AuthenticatedRequest).clerkUserId;
+
+  let finalLabel = label;
+  let catchSeq: number | null = null;
+
+  if (quickCatch) {
+    // Atomically allocate the user's next catch number. The counter is
+    // monotonically increasing and never decremented on delete, so numbers
+    // are never reused.
+    const [counter] = await db
+      .insert(catchCountersTable)
+      .values({ userId, lastSeq: 1 })
+      .onConflictDoUpdate({
+        target: catchCountersTable.userId,
+        set: { lastSeq: sql`${catchCountersTable.lastSeq} + 1` },
+      })
+      .returning({ lastSeq: catchCountersTable.lastSeq });
+    catchSeq = counter!.lastSeq;
+    finalLabel = `Catch ${catchSeq}`;
+  }
+
+  // Serialize conditions for jsonb storage (capturedAt arrives as a Date
+  // from zod.coerce.date()).
+  const conditionsJson = conditions
+    ? (JSON.parse(JSON.stringify(conditions)) as Record<string, unknown>)
+    : null;
 
   const [created] = await db
     .insert(markersTable)
-    .values({ datasetId, lon, lat, depth, type, label, notes: notes ?? null, userId })
+    .values({
+      datasetId,
+      lon,
+      lat,
+      depth,
+      type,
+      label: finalLabel,
+      notes: notes ?? null,
+      userId,
+      catchSeq,
+      conditions: conditionsJson,
+    })
     .returning();
 
   res.status(201).json(created);

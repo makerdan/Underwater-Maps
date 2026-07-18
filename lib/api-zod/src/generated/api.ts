@@ -728,6 +728,24 @@ export const GetMarkersResponseItem = zod.object({
   "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish', 'salmon', 'tuna', 'halibut', 'shark', 'swordfish', 'rockfish', 'cod', 'mahi_mahi', 'grouper', 'snapper', 'crab', 'lobster', 'shrimp', 'krill', 'jellyfish', 'octopus', 'squid', 'sea_urchin', 'starfish', 'sea_turtle', 'school_herring', 'school_sardine', 'school_mackerel', 'school_tuna', 'school_anchovy', 'catfish', 'crappie', 'bluegill', 'sunfish', 'carp', 'yellow_perch', 'muskie', 'largemouth_bass', 'smallmouth_bass', 'channel_catfish', 'freshwater_shrimp', 'freshwater_crab', 'snapping_turtle', 'bullfrog', 'beaver_dam', 'lily_pad', 'cattail', 'reed_bed', 'submerged_grass', 'spring', 'school_perch', 'school_bluegill', 'school_bass', 'school_crappie', 'school_carp']),
   "label": zod.string(),
   "notes": zod.string().nullish(),
+  "catchSeq": zod.number().nullish().describe('Per-user sequential catch number assigned by quick-drop (\"Catch N\"); null for manually created markers'),
+  "conditions": zod.object({
+  "capturedAt": zod.coerce.date().describe('Client timestamp of the drop'),
+  "gpsAccuracyM": zod.number().nullish().describe('Reported GPS accuracy radius in metres'),
+  "speedMps": zod.number().nullish().describe('GPS ground speed in metres\/second'),
+  "headingDeg": zod.number().nullish().describe('GPS heading in degrees true (0–360)'),
+  "depthM": zod.number().nullish().describe('Seafloor depth in metres under the drop position, sampled from the loaded terrain'),
+  "depthSource": zod.enum(['terrain', 'unavailable']),
+  "tideHeightM": zod.number().nullish().describe('Cached tidal height in metres (MLLW) at drop time'),
+  "currentSpeedKt": zod.number().nullish().describe('Cached current speed prediction in knots'),
+  "currentDirDeg": zod.number().nullish().describe('Cached current direction prediction in degrees true'),
+  "tideSource": zod.enum(['pack', 'unavailable']).describe('Where the tide\/current values came from (offline pack) or unavailable'),
+  "windSpeedKnots": zod.number().nullish(),
+  "windDirDeg": zod.number().nullish(),
+  "tempC": zod.number().nullish(),
+  "weatherObservedAt": zod.string().nullish().describe('ISO timestamp of the cached weather observation'),
+  "weatherSource": zod.enum(['pack', 'unavailable'])
+}).describe('Frozen snapshot of conditions at the moment a quick-drop marker was created. Every data field is nullable — missing sources never block a drop; each source field records where the value came from.\n').nullish().describe('Frozen conditions snapshot captured at quick-drop time; null when not a quick-drop marker'),
   "createdAt": zod.coerce.date()
 })
 export const GetMarkersResponse = zod.array(GetMarkersResponseItem)
@@ -741,7 +759,7 @@ export const postMarkersBodyLabelMax = 60;
 
 export const postMarkersBodyNotesMax = 280;
 
-
+export const postMarkersBodyQuickCatchDefault = false;
 
 export const PostMarkersBody = zod.object({
   "datasetId": zod.string(),
@@ -750,7 +768,25 @@ export const PostMarkersBody = zod.object({
   "depth": zod.number(),
   "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish', 'salmon', 'tuna', 'halibut', 'shark', 'swordfish', 'rockfish', 'cod', 'mahi_mahi', 'grouper', 'snapper', 'crab', 'lobster', 'shrimp', 'krill', 'jellyfish', 'octopus', 'squid', 'sea_urchin', 'starfish', 'sea_turtle', 'school_herring', 'school_sardine', 'school_mackerel', 'school_tuna', 'school_anchovy', 'catfish', 'crappie', 'bluegill', 'sunfish', 'carp', 'yellow_perch', 'muskie', 'largemouth_bass', 'smallmouth_bass', 'channel_catfish', 'freshwater_shrimp', 'freshwater_crab', 'snapping_turtle', 'bullfrog', 'beaver_dam', 'lily_pad', 'cattail', 'reed_bed', 'submerged_grass', 'spring', 'school_perch', 'school_bluegill', 'school_bass', 'school_crappie', 'school_carp']).default(postMarkersBodyTypeDefault),
   "label": zod.string().min(1).max(postMarkersBodyLabelMax),
-  "notes": zod.string().max(postMarkersBodyNotesMax).nullish()
+  "notes": zod.string().max(postMarkersBodyNotesMax).nullish(),
+  "quickCatch": zod.boolean().default(postMarkersBodyQuickCatchDefault).describe('When true, the server assigns the user\'s next sequential catch number and overrides the label with \"Catch N\". Used by the one-tap GPS quick-drop.\n'),
+  "conditions": zod.object({
+  "capturedAt": zod.coerce.date().describe('Client timestamp of the drop'),
+  "gpsAccuracyM": zod.number().nullish().describe('Reported GPS accuracy radius in metres'),
+  "speedMps": zod.number().nullish().describe('GPS ground speed in metres\/second'),
+  "headingDeg": zod.number().nullish().describe('GPS heading in degrees true (0–360)'),
+  "depthM": zod.number().nullish().describe('Seafloor depth in metres under the drop position, sampled from the loaded terrain'),
+  "depthSource": zod.enum(['terrain', 'unavailable']),
+  "tideHeightM": zod.number().nullish().describe('Cached tidal height in metres (MLLW) at drop time'),
+  "currentSpeedKt": zod.number().nullish().describe('Cached current speed prediction in knots'),
+  "currentDirDeg": zod.number().nullish().describe('Cached current direction prediction in degrees true'),
+  "tideSource": zod.enum(['pack', 'unavailable']).describe('Where the tide\/current values came from (offline pack) or unavailable'),
+  "windSpeedKnots": zod.number().nullish(),
+  "windDirDeg": zod.number().nullish(),
+  "tempC": zod.number().nullish(),
+  "weatherObservedAt": zod.string().nullish().describe('ISO timestamp of the cached weather observation'),
+  "weatherSource": zod.enum(['pack', 'unavailable'])
+}).describe('Frozen snapshot of conditions at the moment a quick-drop marker was created. Every data field is nullable — missing sources never block a drop; each source field records where the value came from.\n').nullish().describe('Optional frozen conditions snapshot captured at drop time')
 })
 
 
@@ -791,6 +827,24 @@ export const PatchMarkersIdResponse = zod.object({
   "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish', 'salmon', 'tuna', 'halibut', 'shark', 'swordfish', 'rockfish', 'cod', 'mahi_mahi', 'grouper', 'snapper', 'crab', 'lobster', 'shrimp', 'krill', 'jellyfish', 'octopus', 'squid', 'sea_urchin', 'starfish', 'sea_turtle', 'school_herring', 'school_sardine', 'school_mackerel', 'school_tuna', 'school_anchovy', 'catfish', 'crappie', 'bluegill', 'sunfish', 'carp', 'yellow_perch', 'muskie', 'largemouth_bass', 'smallmouth_bass', 'channel_catfish', 'freshwater_shrimp', 'freshwater_crab', 'snapping_turtle', 'bullfrog', 'beaver_dam', 'lily_pad', 'cattail', 'reed_bed', 'submerged_grass', 'spring', 'school_perch', 'school_bluegill', 'school_bass', 'school_crappie', 'school_carp']),
   "label": zod.string(),
   "notes": zod.string().nullish(),
+  "catchSeq": zod.number().nullish().describe('Per-user sequential catch number assigned by quick-drop (\"Catch N\"); null for manually created markers'),
+  "conditions": zod.object({
+  "capturedAt": zod.coerce.date().describe('Client timestamp of the drop'),
+  "gpsAccuracyM": zod.number().nullish().describe('Reported GPS accuracy radius in metres'),
+  "speedMps": zod.number().nullish().describe('GPS ground speed in metres\/second'),
+  "headingDeg": zod.number().nullish().describe('GPS heading in degrees true (0–360)'),
+  "depthM": zod.number().nullish().describe('Seafloor depth in metres under the drop position, sampled from the loaded terrain'),
+  "depthSource": zod.enum(['terrain', 'unavailable']),
+  "tideHeightM": zod.number().nullish().describe('Cached tidal height in metres (MLLW) at drop time'),
+  "currentSpeedKt": zod.number().nullish().describe('Cached current speed prediction in knots'),
+  "currentDirDeg": zod.number().nullish().describe('Cached current direction prediction in degrees true'),
+  "tideSource": zod.enum(['pack', 'unavailable']).describe('Where the tide\/current values came from (offline pack) or unavailable'),
+  "windSpeedKnots": zod.number().nullish(),
+  "windDirDeg": zod.number().nullish(),
+  "tempC": zod.number().nullish(),
+  "weatherObservedAt": zod.string().nullish().describe('ISO timestamp of the cached weather observation'),
+  "weatherSource": zod.enum(['pack', 'unavailable'])
+}).describe('Frozen snapshot of conditions at the moment a quick-drop marker was created. Every data field is nullable — missing sources never block a drop; each source field records where the value came from.\n').nullish().describe('Frozen conditions snapshot captured at quick-drop time; null when not a quick-drop marker'),
   "createdAt": zod.coerce.date()
 })
 

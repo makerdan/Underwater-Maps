@@ -71,6 +71,13 @@
       "when": 1784340216387,
       "tag": "0014_add_conversations_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784340216388,
+      "tag": "0015_add_quick_drop_conditions",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,10 @@ export interface GpsPosition {
   latitude: number;
   accuracy: number;
   timestamp: number;
+  /** Ground speed in metres/second (null when the device doesn't report it). */
+  speed: number | null;
+  /** Heading in degrees true, 0–360 (null when stationary or unreported). */
+  heading: number | null;
 }
 
 interface GpsStore {
@@ -47,6 +51,11 @@ export const useGpsStore = create<GpsStore>((set, get) => ({
             latitude: pos.coords.latitude,
             accuracy: pos.coords.accuracy,
             timestamp: pos.timestamp,
+            speed: pos.coords.speed ?? null,
+            heading:
+              pos.coords.heading != null && isFinite(pos.coords.heading)
+                ? ((pos.coords.heading % 360) + 360) % 360
+                : null,
           },
         });
       },
