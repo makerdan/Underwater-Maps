@@ -40,7 +40,7 @@ const H = vi.hoisted(() => {
     col: string;
   }
   interface Cond {
-    kind: "eq" | "and";
+    kind: "eq" | "and" | "lt";
     col?: ColRef;
     val?: unknown;
     parts?: Cond[];
@@ -113,6 +113,12 @@ const H = vi.hoisted(() => {
     }
     if (cond.kind === "and") {
       return (cond.parts ?? []).every((p) => matchWhere(row, p));
+    }
+    if (cond.kind === "lt") {
+      const v = row[cond.col!.col];
+      return v instanceof Date && cond.val instanceof Date
+        ? v.getTime() < cond.val.getTime()
+        : (v as number) < (cond.val as number);
     }
     return true;
   }
@@ -557,6 +563,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
+import { recoverStuckSaves } from "../catalog-saves.js";
 
 const E2E_USER = "user_catalog_saves_integration";
 const CATALOG_ID = H.CATALOG_ENTRY.id;
@@ -868,6 +875,65 @@ describe("catalog save → materialize → fetch round trip", () => {
     },
     15_000,
   );
+
+  it("recoverStuckSaves marks stale queued and processing rows failed but leaves fresh rows alone", async () => {
+    const staleDate = new Date(Date.now() - 60 * 60 * 1000); // 1h old
+    const freshDate = new Date(); // just now
+    H.dbState.saves.push(
+      {
+        id: "00000000-0000-0000-0000-00000000a001",
+        userId: E2E_USER,
+        catalogId: "stale-queued",
+        status: "queued",
+        requestedAt: staleDate,
+        readyAt: null,
+        cacheKey: null,
+        errorMessage: null,
+        folderId: null,
+        datasetId: null,
+      },
+      {
+        id: "00000000-0000-0000-0000-00000000a002",
+        userId: E2E_USER,
+        catalogId: "fresh-queued",
+        status: "queued",
+        requestedAt: freshDate,
+        readyAt: null,
+        cacheKey: null,
+        errorMessage: null,
+        folderId: null,
+        datasetId: null,
+      },
+      {
+        id: "00000000-0000-0000-0000-00000000a003",
+        userId: E2E_USER,
+        catalogId: "stale-processing",
+        status: "processing",
+        requestedAt: staleDate,
+        readyAt: null,
+        cacheKey: null,
+        errorMessage: null,
+        folderId: null,
+        datasetId: null,
+      },
+    );
+
+    await recoverStuckSaves();
+
+    const byId = (id: string) =>
+      H.dbState.saves.find((r) => r["id"] === id)!;
+    const staleQueued = byId("00000000-0000-0000-0000-00000000a001");
+    expect(staleQueued["status"]).toBe("failed");
+    expect(staleQueued["errorMessage"]).toMatch(/never started processing/);
+
+    const freshQueued = byId("00000000-0000-0000-0000-00000000a002");
+    expect(freshQueued["status"]).toBe("queued");
+    expect(freshQueued["errorMessage"]).toBeNull();
+
+    const staleProcessing = byId("00000000-0000-0000-0000-00000000a003");
+    expect(staleProcessing["status"]).toBe("failed");
+    expect(staleProcessing["errorMessage"]).toMatch(/timed out/);
+  });
 
   it("returns 404 for an unknown catalog id", async () => {
     const res = await request(app)

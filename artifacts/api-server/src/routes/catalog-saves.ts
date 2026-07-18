@@ -71,7 +71,7 @@ void seedDatasetCatalog();
 // and not on a recurring schedule — the fire-and-forget materializeSave
 // function always transitions to "ready" or "failed" on its own, so rows
 // only get permanently stuck across process restarts.
-async function recoverStuckSaves(): Promise<void> {
+export async function recoverStuckSaves(): Promise<void> {
   const STUCK_THRESHOLD_MS = 10 * 60 * 1000;
   try {
     const cutoff = new Date(Date.now() - STUCK_THRESHOLD_MS);
@@ -93,6 +93,30 @@ async function recoverStuckSaves(): Promise<void> {
       logger.warn(
         { count: updated.length },
         `[catalog-saves] recoverStuckSaves: marked ${updated.length} stuck processing row(s) as failed`,
+      );
+    }
+    // Rows can also freeze in "queued" forever: if the process died between
+    // the insert and the fire-and-forget materializeSave kickoff (or the
+    // kickoff never ran), nothing ever transitions them. Apply the same
+    // stale-age cutoff and surface them as failed + retryable.
+    const updatedQueued = await db
+      .update(userCatalogSavesTable)
+      .set({
+        status: "failed",
+        errorMessage:
+          "This save never started processing (the server was likely restarted before materialization began). Please retry.",
+      })
+      .where(
+        and(
+          eq(userCatalogSavesTable.status, "queued"),
+          lt(userCatalogSavesTable.requestedAt, cutoff),
+        ),
+      )
+      .returning({ id: userCatalogSavesTable.id });
+    if (updatedQueued.length > 0) {
+      logger.warn(
+        { count: updatedQueued.length },
+        `[catalog-saves] recoverStuckSaves: marked ${updatedQueued.length} stuck queued row(s) as failed`,
       );
     }
   } catch (err) {
