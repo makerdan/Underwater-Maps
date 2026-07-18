@@ -102,7 +102,7 @@ function resetZoneStore() {
 }
 
 function navigateToMapOverlays() {
-  fireEvent.click(screen.getByText("MAP & OVERLAYS"));
+  fireEvent.click(screen.getByText("DISPLAY & OVERLAYS"));
 }
 
 beforeEach(() => {

@@ -88,7 +88,7 @@ describe("SectionSaveButton (signed-out)", () => {
   it("clicking SAVE on a dirty section shows ✓ SAVED feedback without issuing a PUT", async () => {
     render(<Settings />);
     // Switch to the HUD tab.
-    fireEvent.click(screen.getByText(/HUD & LAYOUT/));
+    fireEvent.click(screen.getByText("DISPLAY & OVERLAYS"));
 
     const saveBtn = await screen.findByTestId("save-section-hud-btn");
     expect(saveBtn.getAttribute("data-dirty")).toBe("false");

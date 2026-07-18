@@ -1317,7 +1317,7 @@ export const GetSettingsResponse = zod.object({
   "start": zod.string().describe('Range start as ISO 8601 string.'),
   "end": zod.string().describe('Range end as ISO 8601 string.')
 }).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
-  "sidebarMode": zod.enum(['explore', 'plan', 'analyze']).default(getSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
+  "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(getSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -1745,7 +1745,7 @@ export const PutSettingsBody = zod.object({
   "start": zod.string().describe('Range start as ISO 8601 string.'),
   "end": zod.string().describe('Range end as ISO 8601 string.')
 }).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
-  "sidebarMode": zod.enum(['explore', 'plan', 'analyze']).default(putSettingsBodySidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
+  "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(putSettingsBodySidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -2168,7 +2168,7 @@ export const PutSettingsResponse = zod.object({
   "start": zod.string().describe('Range start as ISO 8601 string.'),
   "end": zod.string().describe('Range end as ISO 8601 string.')
 }).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
-  "sidebarMode": zod.enum(['explore', 'plan', 'analyze']).default(putSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
+  "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(putSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
 }).describe('Per-user application settings with sensible defaults')
 
 

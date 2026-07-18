@@ -47,7 +47,7 @@ async function setTooltipsViaSettings(
   // No networkidle wait here — the explicit `expect(expander).toBeVisible`
   // below auto-waits for the DOM we actually depend on, and /settings still
   // streams several background fetches.
-  await page.locator('button:has-text("HUD & LAYOUT")').first().click();
+  await page.locator('button:has-text("DISPLAY & OVERLAYS")').first().click();
 
   // AdvancedDisclosure renders a <div data-testid="hud-advanced"> containing
   // a <button aria-expanded={open}> as its first child. Open it if closed.

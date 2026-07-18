@@ -273,6 +273,7 @@ async function freePort(port) {
   }
 
   const victims = new Set();
+  let skippedSiblings = 0;
   for (const holder of holders) {
     if (PROTECTED.has(holder)) {
       console.error(`kill-port-holders: refusing to kill own ancestor pid ${holder} holding port ${port}.`);

@@ -49,8 +49,8 @@ async function nudgeHudOpacity(page: Page, _hint: number): Promise<void> {
 async function gotoHudTab(page: Page): Promise<void> {
   await page.goto("/settings");
   await page.waitForLoadState("domcontentloaded");
-  await page.locator('button:has-text("HUD & LAYOUT")').first().click();
-  await expect(page.locator("text=◈ HUD").first()).toBeVisible({ timeout: 5_000 });
+  await page.locator('button:has-text("DISPLAY & OVERLAYS")').first().click();
+  await expect(page.locator("text=◈ DISPLAY").first()).toBeVisible({ timeout: 5_000 });
 }
 
 test.describe("Settings — per-section Save buttons", () => {

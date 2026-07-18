@@ -179,7 +179,7 @@ export const DEFAULT_SETTINGS = {
   showWaterTempLayer: false,
   timelineCurrentTime: null as string | null,
   timelineRange: null as { start: string; end: string } | null,
-  sidebarMode: "explore" as "explore" | "plan" | "analyze",
+  sidebarMode: "explore" as "explore" | "plan" | "analyze" | "live",
 };
 
 /**

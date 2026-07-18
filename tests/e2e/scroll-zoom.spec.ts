@@ -197,14 +197,11 @@ test.describe("BathyScan — scroll-to-zoom controls", () => {
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
     await waitForTestApi(page);
-    await page.locator('button:has-text("CAMERA & CTRL")').first().click();
+    await page.locator('button:has-text("NAVIGATION")').first().click();
 
-    // The Settings page renders rows as a div whose first child contains the
-    // label text and whose second child contains the `<input type="range">`.
-    const slider = page
-      .locator('div:has(> div > div:text-is("Mouse Wheel Zoom Sensitivity"))')
-      .locator('input[type="range"]')
-      .first();
+    // SliderRow gives each range input a deterministic id derived from its
+    // label ("Mouse Wheel Zoom Sensitivity" → slider-mouse-wheel-zoom-sensitivity).
+    const slider = page.locator("#slider-mouse-wheel-zoom-sensitivity");
     await expect(slider).toBeVisible({ timeout: 5_000 });
 
     // Set the slider to its maximum (3.0) using the native input setter so

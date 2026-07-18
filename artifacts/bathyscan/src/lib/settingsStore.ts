@@ -77,7 +77,7 @@ export function clampTerrainExaggeration(v: unknown): number {
   return Math.min(TERRAIN_EXAGGERATION_MAX, Math.max(TERRAIN_EXAGGERATION_MIN, n));
 }
 
-export type SidebarMode = 'explore' | 'plan' | 'analyze';
+export type SidebarMode = 'explore' | 'plan' | 'analyze' | 'live';
 
 /**
  * Standard-mapping gamepad button index used to trigger the crosshair
@@ -508,6 +508,7 @@ export interface SettingsState {
    * 'explore' = DatasetPanel + OverlaysToolsPanel
    * 'plan'    = TidePanel + CurrentsPanel + WeatherPanel / DriftPlanner
    * 'analyze' = HabitatPanel + SeafloorClassificationPanel + QueryPanel
+   * 'live'    = on-the-water Live panel (GPS follow + trail recording)
    * Persisted so the user's last mode survives page reloads.
    */
   sidebarMode: SidebarMode;

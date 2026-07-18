@@ -5234,7 +5234,7 @@ components:
           required: [start, end]
         sidebarMode:
           type: string
-          enum: [explore, plan, analyze]
+          enum: [explore, plan, analyze, live]
           default: explore
           description: Which contextual mode the left sidebar shows. Persisted so the user's last mode survives page reloads.
 

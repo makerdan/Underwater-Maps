@@ -36,6 +36,7 @@ import { create } from "zustand";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import type { EfhSpeciesProperties } from "@workspace/api-client-react";
 import { useSettingsStore, DEFAULT_SETTINGS, type SidebarMode } from "./settingsStore";
+import { onSidebarModeChange } from "./liveMode";
 
 export const CURRENT_DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-bottom"];
 
@@ -321,6 +322,7 @@ function validDepthLayers(raw: unknown): DepthLayer[] {
 // the initial render sees the correct persisted overlay/toggle state rather
 // than the DEFAULT_SETTINGS fallbacks used during store construction.
 function applySettingsToUiStore(s: typeof DEFAULT_SETTINGS) {
+  const prevSidebarMode = useUiStore.getState().sidebarMode;
   useUiStore.setState({
     zoneOverlayEnabled: s.zoneOverlayEnabled,
     zonePaintMode: s.zonePaintMode,
@@ -343,6 +345,9 @@ function applySettingsToUiStore(s: typeof DEFAULT_SETTINGS) {
     sidePaneCollapsed: s.sidePaneCollapsed,
     sidebarMode: s.sidebarMode ?? 'explore',
   });
+  // Resume Live-mode orchestration (GPS watch, follow, trail recording) when
+  // a persisted 'live' sidebar mode is restored on page load.
+  onSidebarModeChange(prevSidebarMode, s.sidebarMode ?? 'explore');
 }
 
 export const useUiStore = create<UiStore>((set, get) => {
@@ -576,8 +581,12 @@ export const useUiStore = create<UiStore>((set, get) => {
     // ── Sidebar mode (persisted via settingsStore) ──────────────────────────
     sidebarMode: s.sidebarMode ?? 'explore',
     setSidebarMode: (mode) => {
+      const prev = get().sidebarMode;
       set({ sidebarMode: mode });
       useSettingsStore.setState({ sidebarMode: mode });
+      // Live-mode orchestration: start/stop GPS follow + trail recording on
+      // transitions into/out of 'live'. Runs after both stores are committed.
+      onSidebarModeChange(prev, mode);
     },
   };
 });

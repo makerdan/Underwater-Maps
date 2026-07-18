@@ -38,11 +38,9 @@ test.describe("Settings page", () => {
     const expectedTabs = [
       "GENERAL",
       "VISUALS",            // "VISUALS & PERF"
-      "CAMERA & CTRL",
-      "HUD & LAYOUT",
-      "MAP & OVERLAYS",
-      "MARKERS & TRAILS",
-      "TIDES & CURRENTS",
+      "NAVIGATION",
+      "DISPLAY & OVERLAYS",
+      "MAP LAYERS",
       "DATA & STORAGE",
       "ACCESSIBILITY",
       "ACCOUNT & PRIVACY",
@@ -56,14 +54,14 @@ test.describe("Settings page", () => {
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
 
-    await page.locator('button:has-text("CAMERA & CTRL")').first().click();
-    await expect(page.locator("text=◈ CAMERA").first()).toBeVisible({ timeout: 5_000 });
+    await page.locator('button:has-text("NAVIGATION")').first().click();
+    await expect(page.locator("text=◈ NAVIGATION").first()).toBeVisible({ timeout: 5_000 });
 
-    await page.locator('button:has-text("HUD & LAYOUT")').first().click();
-    await expect(page.locator("text=◈ HUD").first()).toBeVisible({ timeout: 5_000 });
+    await page.locator('button:has-text("DISPLAY & OVERLAYS")').first().click();
+    await expect(page.locator("text=◈ DISPLAY").first()).toBeVisible({ timeout: 5_000 });
 
-    await page.locator('button:has-text("MARKERS & TRAILS")').first().click();
-    await expect(page.locator("text=◈ MARKERS").first()).toBeVisible({ timeout: 5_000 });
+    await page.locator('button:has-text("MAP LAYERS")').first().click();
+    await expect(page.locator("text=◈ MAP LAYERS").first()).toBeVisible({ timeout: 5_000 });
 
     await page.locator('button:has-text("DATA & STORAGE")').first().click();
     await expect(page.locator("text=◈ DATA").first()).toBeVisible({ timeout: 5_000 });
@@ -104,13 +102,14 @@ test.describe("Settings page", () => {
     await expect(page.locator("text=RESET ALL SETTINGS")).toBeVisible({ timeout: 10_000 });
   });
 
-  test("Offline tab shows pending markers count", async ({ page }) => {
+  test("Data & Storage tab shows cached terrain data card", async ({ page }) => {
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
 
     await page.locator('button:has-text("DATA & STORAGE")').first().click();
-    const count = page.locator("[data-testid='pending-markers-count']");
-    await expect(count).toBeVisible({ timeout: 5_000 });
+    // The PENDING SYNC card only renders when offline items are queued, so
+    // assert on the always-present CACHED TERRAIN DATA card instead.
+    await expect(page.locator("text=CACHED TERRAIN DATA").first()).toBeVisible({ timeout: 5_000 });
   });
 
   test("← BACK navigates back to the home route", async ({ page }) => {
@@ -130,16 +129,20 @@ test.describe("Settings page", () => {
     await expect(page.getByRole("button", { name: "DELETE ALL MY MARKERS" })).toBeVisible();
   });
 
-  test("danger zone delete button requires confirmation", async ({ page }) => {
+  test("danger zone delete button offers a 5 s UNDO window", async ({ page }) => {
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
 
     await page.locator('button:has-text("ACCOUNT & PRIVACY")').first().click();
     await page.getByRole("button", { name: "DELETE ALL MY MARKERS" }).click();
 
-    await expect(page.locator("text=Are you sure?")).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator("text=YES, DELETE ALL")).toBeVisible();
-    await expect(page.locator("text=CANCEL")).toBeVisible();
+    // Deletion is deferred behind a 5-second undo window instead of a modal.
+    await expect(page.locator("text=tap UNDO to cancel")).toBeVisible({ timeout: 5_000 });
+    const undoBtn = page.locator("[data-testid='undo-delete-markers']");
+    await expect(undoBtn).toBeVisible();
+    // Cancel so the deletion never fires.
+    await undoBtn.click();
+    await expect(page.getByRole("button", { name: "DELETE ALL MY MARKERS" })).toBeVisible({ timeout: 5_000 });
   });
 
   test("RESET ALL SETTINGS restores colormap to ocean after a change", async ({ page }) => {
@@ -269,20 +272,20 @@ test.describe("Settings page", () => {
     await expect(caustics).toHaveAttribute("aria-checked", String(causticsExpected));
 
     // ── HUD & Layout tab: change HUD Opacity to a non-default value. ────
-    await page.locator('button:has-text("HUD & LAYOUT")').first().click();
-    await expect(page.locator("text=◈ HUD").first()).toBeVisible({ timeout: 5_000 });
+    await page.locator('button:has-text("DISPLAY & OVERLAYS")').first().click();
+    await expect(page.locator("text=◈ DISPLAY").first()).toBeVisible({ timeout: 5_000 });
     const hudOpacityTarget = 0.5; // default is 0.75
     await setSliderByLabel("HUD Opacity", hudOpacityTarget);
 
-    // ── Camera & Controls tab: bump Mouse Sensitivity off its default. ──
-    await page.locator('button:has-text("CAMERA & CTRL")').first().click();
-    await expect(page.locator("text=◈ CAMERA").first()).toBeVisible({ timeout: 5_000 });
+    // ── Navigation tab: bump Mouse Sensitivity off its default. ──
+    await page.locator('button:has-text("NAVIGATION")').first().click();
+    await expect(page.locator("text=◈ NAVIGATION").first()).toBeVisible({ timeout: 5_000 });
     const mouseSensTarget = 2.3; // default is 1.0
     await setSliderByLabel("Mouse Sensitivity", mouseSensTarget);
 
-    // ── Markers tab: flip the Show Marker Labels toggle. ────────────────
-    await page.locator('button:has-text("MARKERS")').first().click();
-    await expect(page.locator("text=◈ MARKERS").first()).toBeVisible({ timeout: 5_000 });
+    // ── Map Layers tab: flip the Show Marker Labels toggle. ────────────────
+    await page.locator('button:has-text("MAP LAYERS")').first().click();
+    await expect(page.locator("text=◈ MAP LAYERS").first()).toBeVisible({ timeout: 5_000 });
     const labels = toggleByLabel("Show Marker Labels");
     await expect(labels).toBeVisible({ timeout: 5_000 });
     const labelsInitial = await labels.getAttribute("aria-checked");
@@ -314,8 +317,8 @@ test.describe("Settings page", () => {
     const causticsAfter = toggleByLabel("Caustics Effect");
     await expect(causticsAfter).toHaveAttribute("aria-checked", String(causticsExpected));
 
-    await page.locator('button:has-text("MARKERS")').first().click();
-    await expect(page.locator("text=◈ MARKERS").first()).toBeVisible({ timeout: 5_000 });
+    await page.locator('button:has-text("MAP LAYERS")').first().click();
+    await expect(page.locator("text=◈ MAP LAYERS").first()).toBeVisible({ timeout: 5_000 });
     const labelsAfter = toggleByLabel("Show Marker Labels");
     await expect(labelsAfter).toHaveAttribute("aria-checked", String(labelsExpected));
 

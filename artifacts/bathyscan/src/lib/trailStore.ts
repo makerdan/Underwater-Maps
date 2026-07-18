@@ -34,12 +34,69 @@ interface TrailStore {
   beforeUnloadCleanup: (() => void) | null;
   isOverflowing: boolean;
   startRecording: (intervalMs?: number) => void;
+  /**
+   * Resume recording without clearing previously recorded points — used by
+   * Live mode so switching tabs pauses (rather than resets) the trail.
+   */
+  resumeRecording: (intervalMs?: number) => void;
+  /**
+   * Change the sampling interval of an active recording session in place.
+   * No-op when not recording.
+   */
+  setSamplingInterval: (intervalMs: number) => void;
   addPoint: (pos: GpsPosition) => void;
   stopRecording: () => TrailGpsPoint[];
   clearPoints: () => void;
 }
 
 const DEFAULT_INTERVAL_MS = 10_000;
+
+type Get = () => TrailStore;
+type Set = (partial: Partial<TrailStore>) => void;
+
+/**
+ * Shared implementation for startRecording / resumeRecording.
+ * When `preservePoints` is true, previously recorded points (and startedAt /
+ * isOverflowing state) are kept so the session continues where it left off.
+ */
+function beginRecording(get: Get, set: Set, intervalMs: number, preservePoints: boolean): void {
+  const { recording, intervalId, beforeUnloadCleanup: prevCleanup, startedAt } = get();
+  if (recording) return;
+
+  // Clean up any leftover interval / listener from a previous aborted session.
+  if (intervalId) clearInterval(intervalId);
+  if (prevCleanup) window.removeEventListener("beforeunload", prevCleanup);
+
+  const now = Date.now();
+  set({
+    recording: true,
+    intervalId: null,
+    beforeUnloadCleanup: null,
+    ...(preservePoints
+      ? { startedAt: startedAt ?? now }
+      : { currentPoints: [], startedAt: now, isOverflowing: false }),
+  });
+
+  // Sample immediately, then on every interval tick.
+  const sample = () => {
+    const pos = useGpsStore.getState().position;
+    if (pos) get().addPoint(pos);
+  };
+
+  sample();
+  const id = setInterval(sample, intervalMs);
+
+  // Guard against the page closing while a trail is still recording.
+  // The handler is stored in Zustand state (not on the timer-id primitive,
+  // which is a number and throws when you assign properties to it in strict
+  // ES-module mode) so stopRecording() can remove it on a normal stop.
+  const cleanup = () => {
+    clearInterval(id);
+  };
+  window.addEventListener("beforeunload", cleanup, { once: true });
+
+  set({ intervalId: id, beforeUnloadCleanup: cleanup });
+}
 
 export const useTrailStore = create<TrailStore>((set, get) => ({
   recording: false,
@@ -50,36 +107,27 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
   isOverflowing: false,
 
   startRecording: (intervalMs = DEFAULT_INTERVAL_MS) => {
-    const { recording, intervalId, beforeUnloadCleanup: prevCleanup } = get();
-    if (recording) return;
+    beginRecording(get, set, intervalMs, /* preservePoints */ false);
+  },
 
-    // Clean up any leftover interval / listener from a previous aborted session.
+  resumeRecording: (intervalMs = DEFAULT_INTERVAL_MS) => {
+    beginRecording(get, set, intervalMs, /* preservePoints */ true);
+  },
+
+  setSamplingInterval: (intervalMs) => {
+    const { recording, intervalId, beforeUnloadCleanup } = get();
+    if (!recording) return;
+
     if (intervalId) clearInterval(intervalId);
-    if (prevCleanup) window.removeEventListener("beforeunload", prevCleanup);
+    if (beforeUnloadCleanup) {
+      window.removeEventListener("beforeunload", beforeUnloadCleanup);
+    }
 
-    const now = Date.now();
-    set({
-      recording: true,
-      currentPoints: [],
-      startedAt: now,
-      intervalId: null,
-      beforeUnloadCleanup: null,
-      isOverflowing: false,
-    });
-
-    // Sample immediately, then on every interval tick.
     const sample = () => {
       const pos = useGpsStore.getState().position;
       if (pos) get().addPoint(pos);
     };
-
-    sample();
     const id = setInterval(sample, intervalMs);
-
-    // Guard against the page closing while a trail is still recording.
-    // The handler is stored in Zustand state (not on the timer-id primitive,
-    // which is a number and throws when you assign properties to it in strict
-    // ES-module mode) so stopRecording() can remove it on a normal stop.
     const cleanup = () => {
       clearInterval(id);
     };

@@ -26,6 +26,7 @@ import { OverlaysToolsPanel } from "@/components/OverlaysToolsPanel";
 import { DatasetPanel } from "@/components/DatasetPanel";
 import { SidebarSection, SidebarSectionGroup } from "@/components/SidebarSection";
 import { SidebarModeTabs } from "@/components/SidebarModeTabs";
+import { LivePanel } from "@/components/LivePanel";
 import { Minimap } from "@/components/Minimap";
 import { ControlsLegend } from "@/components/ControlsLegend";
 import { AppHeader } from "@/components/AppHeader";
@@ -1040,13 +1041,13 @@ function Main() {
         if (store.overviewOpen) store.setOverviewOpen(false);
         if (store.whatsHereOpen) store.setWhatsHereOpen(false);
       }
-      // M — cycle sidebar modes: Explore → Plan → Analyze → Explore
+      // M — cycle sidebar modes: Explore → Plan → Analyze → Live → Explore
       if (e.code === "KeyM" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const el = e.target as HTMLElement | null;
         const tag = el?.tagName ?? "";
         if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT" && !el?.isContentEditable) {
           const store = useUiStore.getState();
-          const MODES = ['explore', 'plan', 'analyze'] as const;
+          const MODES = ['explore', 'plan', 'analyze', 'live'] as const;
           const idx = MODES.indexOf(store.sidebarMode);
           const next = MODES[(idx + 1) % MODES.length] as typeof MODES[number];
           store.setSidebarMode(next);
@@ -1562,6 +1563,15 @@ function Main() {
                   </button>
                 </ViewscreenTooltip>
               )}
+            </div>
+
+            {/* ══════════════════════════════════════════════════
+                LIVE MODE — on-the-water panel: GPS status,
+                depth below position, trail recording, Follow Me
+                and Dive-to-GPS actions.
+            ══════════════════════════════════════════════════ */}
+            <div style={{ display: sidebarMode === 'live' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
+              <LivePanel />
             </div>
 
             {/* ── Footer: Conditions Legend (pinned bottom, all modes) ──

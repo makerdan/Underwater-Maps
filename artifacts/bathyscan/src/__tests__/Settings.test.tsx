@@ -65,7 +65,7 @@ vi.mock("idb-keyval", () => ({
 const mockClearUpscaleCache = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 vi.mock("@/hooks/useUpscaledHeatmap", () => ({
   clearUpscaleCache: mockClearUpscaleCache,
-  getUpscaleCacheInfo: vi.fn(() => Promise.resolve({ count: 0, bytes: 0 })),
+  getUpscaleCacheInfo: vi.fn(() => Promise.resolve({ count: 1, bytes: 2048 })),
 }));
 
 const mockToast = vi.hoisted(() => vi.fn());
@@ -80,7 +80,12 @@ import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 const mockCachesDelete = vi.fn(() => Promise.resolve(true));
 const mockCachesKeys = vi.fn(() => Promise.resolve(["terrain-v1", "tiles-v1"]));
 const mockCachesOpen = vi.fn(() =>
-  Promise.resolve({ keys: () => Promise.resolve([]), match: () => Promise.resolve(undefined) }),
+  Promise.resolve({
+    keys: () =>
+      Promise.resolve([{ url: "https://example.com/api/datasets/demo/terrain" }]),
+    match: () => Promise.resolve(undefined),
+    delete: () => Promise.resolve(true),
+  }),
 );
 
 beforeEach(() => {
@@ -108,14 +113,11 @@ describe("Settings page", () => {
     const expected = [
       "GENERAL",
       "VISUALS & PERF",
-      "CAMERA & CTRL",
-      "HUD & LAYOUT",
-      "MAP & OVERLAYS",
-      "MARKERS & TRAILS",
-      "TIDES & CURRENTS",
+      "NAVIGATION",
+      "DISPLAY & OVERLAYS",
+      "MAP LAYERS",
       "DATA & STORAGE",
       "ACCESSIBILITY",
-      "SHORTCUTS",
       "ACCOUNT & PRIVACY",
     ];
     for (const label of expected) {
@@ -157,7 +159,7 @@ describe("Settings page", () => {
 
   it("HUD section exposes the Show UI tooltips toggle (default ON)", () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("HUD & LAYOUT"));
+    fireEvent.click(screen.getByText("DISPLAY & OVERLAYS"));
     // Toggle lives inside the HUD AdvancedDisclosure (collapsed by default).
     const disclosure = screen.getByTestId("hud-advanced");
     fireEvent.click(within(disclosure).getByRole("button"));
@@ -178,7 +180,7 @@ describe("Settings page", () => {
 
   it("exposes mouse / touchpad / pinch zoom sensitivity sliders defaulting to 1×", () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("CAMERA & CTRL"));
+    fireEvent.click(screen.getByText("NAVIGATION"));
     expect(screen.getByText("Mouse Wheel Zoom Sensitivity")).toBeInTheDocument();
     expect(screen.getByText("Touchpad Zoom Sensitivity")).toBeInTheDocument();
     expect(screen.getByText("Mobile Pinch Zoom Sensitivity")).toBeInTheDocument();
@@ -278,7 +280,7 @@ describe("Settings page", () => {
       expect(screen.getByTestId("clear-all-cache-btn")).toBeInTheDocument(),
     );
     expect(screen.getByTestId("clear-all-cache-btn")).toHaveTextContent(
-      "CLEAR ALL CACHED DATA",
+      "CLEAR ALL CACHE",
     );
   });
 

@@ -298,14 +298,14 @@ test.describe("Bathymetric currents — interaction coverage", () => {
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
 
-    const tab = page.locator('button:has-text("CURRENTS")').first();
+    const tab = page.locator('button:has-text("MAP LAYERS")').first();
     const tabVisible = await tab.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!tabVisible) {
       test.skip(true, "Settings tabs not visible — landing page shown (e2e auth bypass inactive)");
       return;
     }
     await tab.click();
-    await expect(page.locator("text=◈ TIDES & CURRENTS")).toBeVisible({
+    await expect(page.locator("text=TIDES & CURRENTS").first()).toBeVisible({
       timeout: 3_000,
     });
   });

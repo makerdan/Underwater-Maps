@@ -147,7 +147,12 @@ test("panel collapse state is preserved across mode switches", async ({ page }) 
   expect(stillCollapsed).toBe(true);
 });
 
-test("M key cycles through all three modes in order", async ({ page }) => {
+test("M key cycles through all four modes in order", async ({ page, context }) => {
+  // Cycling passes through Live mode, which starts a GPS watch — grant the
+  // permission and mock a position so the transition is side-effect free.
+  await context.grantPermissions(["geolocation"]).catch(() => {});
+  await context.setGeolocation({ latitude: 11.3733, longitude: 142.1951, accuracy: 8 });
+
   injectSettings(page, BASE);
   await page.goto("/");
   await waitForSidebarTabs(page);
@@ -158,6 +163,7 @@ test("M key cycles through all three modes in order", async ({ page }) => {
   const exploreTab = page.locator('[data-testid="sidebar-mode-tab-explore"]');
   const planTab = page.locator('[data-testid="sidebar-mode-tab-plan"]');
   const analyzeTab = page.locator('[data-testid="sidebar-mode-tab-analyze"]');
+  const liveTab = page.locator('[data-testid="sidebar-mode-tab-live"]');
 
   // Starting in explore mode
   await expect(exploreTab).toHaveAttribute("aria-pressed", "true");
@@ -169,6 +175,10 @@ test("M key cycles through all three modes in order", async ({ page }) => {
   // M → analyze
   await page.keyboard.press("m");
   await expect(analyzeTab).toHaveAttribute("aria-pressed", "true", { timeout: 5_000 });
+
+  // M → live
+  await page.keyboard.press("m");
+  await expect(liveTab).toHaveAttribute("aria-pressed", "true", { timeout: 5_000 });
 
   // M → explore (wraps)
   await page.keyboard.press("m");

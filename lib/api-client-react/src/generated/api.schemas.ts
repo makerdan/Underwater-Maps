@@ -736,6 +736,7 @@ export const UserSettingsSidebarMode = {
   explore: 'explore',
   plan: 'plan',
   analyze: 'analyze',
+  live: 'live',
 } as const;
 
 /**

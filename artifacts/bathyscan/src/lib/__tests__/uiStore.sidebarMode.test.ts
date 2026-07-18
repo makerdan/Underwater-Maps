@@ -8,14 +8,39 @@
  * - Persistence round-trip: setSidebarMode writes through to settingsStore.
  * - Mode switch does NOT mutate any other uiStore field.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// Live-mode transitions trigger toast notifications on GPS errors; mock the
+// toast module so jsdom tests stay silent and side-effect free.
+vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
+
 import { useUiStore } from "../uiStore";
 import { useSettingsStore } from "../settingsStore";
+import { useTrailStore } from "../trailStore";
+import { useGpsStore } from "../gpsStore";
+import { useCameraStore } from "../cameraStore";
+import { __resetLiveModeForTests } from "../liveMode";
 
 // Reset both stores to a known baseline before each test so tests are isolated.
 beforeEach(() => {
+  // Stub geolocation so setSidebarMode('live') orchestration is inert but
+  // well-behaved in jsdom.
+  Object.defineProperty(globalThis.navigator, "geolocation", {
+    value: { watchPosition: vi.fn(() => 1), clearWatch: vi.fn() },
+    configurable: true,
+  });
+  __resetLiveModeForTests();
+  useGpsStore.setState({ active: false, position: null, error: null, watchId: null });
+  useCameraStore.setState({ gpsFollowMode: false });
   useUiStore.setState({ sidebarMode: "explore" });
   useSettingsStore.setState({ sidebarMode: "explore" });
+});
+
+afterEach(() => {
+  __resetLiveModeForTests();
+  const trail = useTrailStore.getState();
+  if (trail.recording) trail.stopRecording();
+  useTrailStore.getState().clearPoints();
 });
 
 describe("uiStore — sidebarMode default", () => {
@@ -42,6 +67,18 @@ describe("uiStore — sidebarMode transitions", () => {
     expect(useUiStore.getState().sidebarMode).toBe("explore");
   });
 
+  it("analyze → live", () => {
+    useUiStore.getState().setSidebarMode("analyze");
+    useUiStore.getState().setSidebarMode("live");
+    expect(useUiStore.getState().sidebarMode).toBe("live");
+  });
+
+  it("live → explore", () => {
+    useUiStore.getState().setSidebarMode("live");
+    useUiStore.getState().setSidebarMode("explore");
+    expect(useUiStore.getState().sidebarMode).toBe("explore");
+  });
+
   it("setting same mode twice leaves mode unchanged", () => {
     useUiStore.getState().setSidebarMode("plan");
     useUiStore.getState().setSidebarMode("plan");
@@ -50,8 +87,8 @@ describe("uiStore — sidebarMode transitions", () => {
 });
 
 describe("uiStore — sidebarMode shortcut cycle logic", () => {
-  it("cycles explore → plan → analyze → explore in order", () => {
-    const MODES = ["explore", "plan", "analyze"] as const;
+  it("cycles explore → plan → analyze → live → explore in order", () => {
+    const MODES = ["explore", "plan", "analyze", "live"] as const;
 
     function cycleMode(): void {
       const store = useUiStore.getState();
@@ -65,6 +102,8 @@ describe("uiStore — sidebarMode shortcut cycle logic", () => {
     expect(useUiStore.getState().sidebarMode).toBe("plan");
     cycleMode();
     expect(useUiStore.getState().sidebarMode).toBe("analyze");
+    cycleMode();
+    expect(useUiStore.getState().sidebarMode).toBe("live");
     cycleMode();
     expect(useUiStore.getState().sidebarMode).toBe("explore");
   });
@@ -87,8 +126,13 @@ describe("uiStore — sidebarMode persistence round-trip", () => {
     expect(useSettingsStore.getState().sidebarMode).toBe("explore");
   });
 
+  it("setSidebarMode('live') writes through to settingsStore", () => {
+    useUiStore.getState().setSidebarMode("live");
+    expect(useSettingsStore.getState().sidebarMode).toBe("live");
+  });
+
   it("uiStore and settingsStore remain in sync after each transition", () => {
-    const MODES = ["explore", "plan", "analyze"] as const;
+    const MODES = ["explore", "plan", "analyze", "live"] as const;
     for (const mode of MODES) {
       useUiStore.getState().setSidebarMode(mode);
       expect(useUiStore.getState().sidebarMode).toBe(mode);
