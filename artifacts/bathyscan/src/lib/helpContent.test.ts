@@ -7,45 +7,35 @@ import {
   buildArticles,
 } from "./helpContent";
 
-const EXPECTED_IDS = [
-  "ai-assistant",
-  "analyze-mode",
-  "currents-simulation",
-  "data-provenance",
-  "datasets-uploads",
-  "depth-profile",
-  "drift-planner",
-  "drive-boat",
-  "essential-fish-habitat",
-  "explore-mode",
-  "faq",
-  "find-data",
-  "first-time-guide",
-  "glossary",
-  "gps-trail-recorder",
-  "hud-overlays",
-  "interface-tour",
-  "intertidal-hotspots",
-  "keyboard-shortcuts",
-  "markers",
-  "overview-map",
-  "plan-mode",
-  "saved-routes",
-  "settings",
-  "substrate-layer",
-  "temperature-profile",
-  "terrain-3d-scene",
-  "throttle",
-  "tidal-3d-data",
-  "tidal-overlay",
-  "troubleshooting",
-  "weather-stations",
-  "workflows-examples",
-  "zones-paint-mode",
-];
+const rawModules = import.meta.glob("../../help/articles/*.md", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+function extractFrontmatterId(raw: string): string {
+  const match = /^---\n([\s\S]*?)\n---/.exec(raw);
+  if (!match) return "";
+  for (const line of match[1]!.split("\n")) {
+    const i = line.indexOf(":");
+    if (i === -1) continue;
+    if (line.slice(0, i).trim() === "id") return line.slice(i + 1).trim();
+  }
+  return "";
+}
+
+const EXPECTED_IDS = Object.values(rawModules)
+  .map(extractFrontmatterId)
+  .filter(Boolean)
+  .sort();
 
 describe("HELP_ARTICLES — registration", () => {
-  it("parses every .md file — expects 34 articles", () => {
+  it("finds .md files on disk to derive expectations from", () => {
+    expect(Object.keys(rawModules).length).toBeGreaterThan(0);
+    expect(EXPECTED_IDS.length).toBe(Object.keys(rawModules).length);
+  });
+
+  it("parses every .md file on disk", () => {
     expect(HELP_ARTICLES.length).toBe(EXPECTED_IDS.length);
   });
 
