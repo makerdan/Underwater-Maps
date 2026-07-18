@@ -290,6 +290,15 @@ interface UiStore {
    */
   sidebarMode: SidebarMode;
   setSidebarMode: (mode: SidebarMode) => void;
+  /**
+   * Pending follow-mode dataset handoff — set when the user taps
+   * "Load & keep following" on the out-of-bounds suggestion toast.
+   * Consumed by App.tsx: it switches the active dataset and re-enables
+   * GPS follow mode once that dataset's terrain is loaded.
+   */
+  pendingFollowHandoff: string | null;
+  requestFollowHandoff: (datasetId: string) => void;
+  clearFollowHandoff: () => void;
 }
 
 // ── Device-local helpers (hasSeenOrbitTouchHint only) ────────────────────────
@@ -413,6 +422,9 @@ export const useUiStore = create<UiStore>((set, get) => {
           ? { findDataPanelOpen: true, openFindDataCount: state.openFindDataCount + 1 }
           : { findDataPanelOpen: false },
       ),
+    pendingFollowHandoff: null,
+    requestFollowHandoff: (datasetId) => set({ pendingFollowHandoff: datasetId }),
+    clearFollowHandoff: () => set({ pendingFollowHandoff: null }),
     pendingCoordSearch: null,
     setPendingCoordSearch: (req) => set({ pendingCoordSearch: req }),
     clearPendingCoordSearch: () => set({ pendingCoordSearch: null }),

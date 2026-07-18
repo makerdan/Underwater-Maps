@@ -20,6 +20,7 @@ import { renderHook, act } from "@testing-library/react";
 import * as THREE from "three";
 
 const toastSpy = vi.hoisted(() => vi.fn());
+const handoffSpy = vi.hoisted(() => vi.fn(async () => {}));
 
 let capturedFrameCallback: (() => void) | null = null;
 let camera: THREE.PerspectiveCamera;
@@ -33,6 +34,12 @@ vi.mock("@react-three/fiber", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({
   toast: (...args: unknown[]) => toastSpy(...args),
+}));
+
+// The out-of-bounds toast (pause or dataset suggestion) is now owned by the
+// datasetHandoff module; the hook just fires handleFollowOutOfBounds.
+vi.mock("@/lib/datasetHandoff", () => ({
+  handleFollowOutOfBounds: (...args: unknown[]) => handoffSpy(...args),
 }));
 
 // GPS target maps to world (100, 0, 100) so a lerp visibly moves the camera
@@ -98,6 +105,7 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
   beforeEach(() => {
     capturedFrameCallback = null;
     toastSpy.mockClear();
+    handoffSpy.mockClear();
     camera = new THREE.PerspectiveCamera();
     nowMs = 1_000_000;
     dateNowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
@@ -255,8 +263,9 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
     runFrame();
     expect(useCameraStore.getState().gpsFollowMode).toBe(false);
     expect(useCameraStore.getState().followPausedByInteraction).toBe(false);
-    expect(toastSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Follow mode paused" }),
+    expect(handoffSpy).toHaveBeenCalledWith(
+      POS_OUT.longitude,
+      POS_OUT.latitude,
     );
 
     // Delay elapsing later must not re-enable follow mode.

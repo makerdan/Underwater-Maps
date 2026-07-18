@@ -40,6 +40,7 @@ import { useCurrentsStore } from "@/lib/currentsStore";
 import { ThrottlePanel } from "@/components/ThrottlePanel";
 import { MarkerForm } from "@/components/MarkerForm";
 import { QuickDropButton } from "@/components/QuickDropButton";
+import { WakeLockManager } from "@/components/WakeLockManager";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { ContextMenu } from "@/components/ContextMenu";
 import { MeasurementBanner } from "@/components/MeasurementBanner";
@@ -810,6 +811,28 @@ function Main() {
   // sync even when DatasetPanel is hidden (e.g. when the user picks a dataset
   // from FindDataPanel while the side pane is collapsed).
   useActiveDatasetSync();
+
+  // Follow-mode dataset handoff: when the out-of-bounds suggestion toast's
+  // "Load & follow" action fires (datasetHandoff.tsx), it stores the target
+  // dataset id in uiStore. Switch the active dataset once, then re-enable GPS
+  // follow mode as soon as that dataset's terrain is committed to context.
+  const pendingFollowHandoff = useUiStore((s) => s.pendingFollowHandoff);
+  const followHandoffRequestedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingFollowHandoff) {
+      followHandoffRequestedRef.current = null;
+      return;
+    }
+    if (followHandoffRequestedRef.current !== pendingFollowHandoff) {
+      followHandoffRequestedRef.current = pendingFollowHandoff;
+      setDatasetId(pendingFollowHandoff);
+      return;
+    }
+    if (terrain?.datasetId === pendingFollowHandoff) {
+      useCameraStore.getState().setGpsFollowMode(true);
+      useUiStore.getState().clearFollowHandoff();
+    }
+  }, [pendingFollowHandoff, terrain, setDatasetId]);
 
   useEffect(() => {
     if (terrain) {
@@ -1685,6 +1708,9 @@ function Main() {
             bottom-right above the minimap. Renders only while GPS tracking
             is active with a fix and terrain is loaded. */}
         <QuickDropButton />
+
+        {/* Screen wake lock while Live mode / GPS follow is active. */}
+        <WakeLockManager />
 
         {/* Throttle panel — bottom-right above minimap, visible when realistic mode is on */}
         {realisticMode && (

@@ -1083,7 +1083,10 @@ export function installTestHelpers(): void {
       if (appSetDatasetId) appSetDatasetId(base.datasetId);
       // Also seed the terrain store's overviewGrid so components that read
       // from terrainStore (OverviewMap, minimap) see terrain immediately.
-      useTerrainStore.getState().setGrids({ overviewGrid: base });
+      // Seed BOTH grids: overviewGrid for minimap/LivePanel depth reads, and
+      // activeGrid so visibleDatasets[0].activeGrid is populated — the GPS
+      // follow out-of-bounds check only consults entries with an activeGrid.
+      useTerrainStore.getState().setGrids({ activeGrid: base, overviewGrid: base });
       return true;
     },
     getTerrainSummary: () => {

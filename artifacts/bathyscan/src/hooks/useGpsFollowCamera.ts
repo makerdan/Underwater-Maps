@@ -20,7 +20,7 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { lonLatToWorldXZ, getTerrainSurfaceY } from "@/lib/terrain";
-import { toast } from "@/hooks/use-toast";
+import { runFollowBoundsCheck } from "@/lib/followBoundsCheck";
 
 /** World units above terrain surface the camera hovers in follow mode. */
 const FOLLOW_HEIGHT = 8;
@@ -37,62 +37,24 @@ export function useGpsFollowCamera(): void {
   const lookMatrix = useRef(new THREE.Matrix4());
   const upVec = useRef(new THREE.Vector3(0, 1, 0));
   const euler = useRef(new THREE.Euler());
-  const outOfBoundsToastFired = useRef(false);
+  const checkState = useRef({ toastFired: false });
 
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
 
   useEffect(() => {
     useCameraStore.getState().setGpsFollowMode(false);
-    outOfBoundsToastFired.current = false;
+    checkState.current.toastFired = false;
   }, [primaryDatasetId]);
 
   useFrame(() => {
-    const followMode = useCameraStore.getState().gpsFollowMode;
-    if (!followMode) {
-      outOfBoundsToastFired.current = false;
-      return;
-    }
+    // GPS-loss / out-of-bounds checks (shared with the dev stub watcher);
+    // disables follow mode itself and fires the handoff toast when needed.
+    if (!runFollowBoundsCheck(checkState.current)) return;
 
-    const gpsActive = useGpsStore.getState().active;
     const position = useGpsStore.getState().position;
     const activeGrid = useTerrainStore.getState().activeGrid;
-
-    if (!gpsActive || !position || !activeGrid) {
-      useCameraStore.getState().setGpsFollowMode(false);
-      return;
-    }
-
+    if (!position || !activeGrid) return;
     const { longitude: lon, latitude: lat } = position;
-
-    // Multi-primary: stay in follow mode if the GPS position is within ANY
-    // visible dataset's bounds. Only deactivate when outside all of them.
-    // Fallback: if visibleDatasets is empty (e.g. legacy setState path), check
-    // against activeGrid directly so the single-dataset path keeps working.
-    const visibleDatasets = useTerrainStore.getState().visibleDatasets;
-    const gridsToCheck = visibleDatasets.length > 0
-      ? visibleDatasets.filter((v) => v.activeGrid).map((v) => v.activeGrid!)
-      : [activeGrid];
-    const insideAny = gridsToCheck.some((g) =>
-      lat >= g.minLat &&
-      lat <= g.maxLat &&
-      lon >= g.minLon &&
-      lon <= g.maxLon,
-    );
-
-    if (!insideAny) {
-      useCameraStore.getState().setGpsFollowMode(false);
-      if (!outOfBoundsToastFired.current) {
-        outOfBoundsToastFired.current = true;
-        toast({
-          title: "Follow mode paused",
-          description: "GPS position left the dataset — follow mode paused.",
-          duration: 4000,
-        });
-      }
-      return;
-    }
-
-    outOfBoundsToastFired.current = false;
 
     // Interaction pause: while the user is manually steering, skip the
     // camera lerp but keep the GPS-loss and out-of-bounds checks above

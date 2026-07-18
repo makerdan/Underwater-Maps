@@ -34,11 +34,14 @@ import { ToastAction } from "@/components/ui/toast";
 import { gatherConditionsSnapshot } from "@/lib/quickDrop";
 import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { useUiStore } from "@/lib/uiStore";
 
 const LONG_PRESS_MS = 500;
 
 export const QuickDropButton: React.FC = () => {
   const gpsActive = useGpsStore((s) => s.active);
+  // Glove-friendly Live mode: grow the drop button for wet/gloved thumbs.
+  const gloveUi = useUiStore((s) => s.sidebarMode) === "live";
   const position = useGpsStore((s) => s.position);
   const { terrain } = useAppState();
   const isOnline = useOfflineStore((s) => s.isOnline);
@@ -179,13 +182,13 @@ export const QuickDropButton: React.FC = () => {
           bottom: 148,
           right: 16,
           zIndex: 32,
-          width: 64,
-          height: 64,
+          width: gloveUi ? 84 : 64,
+          height: gloveUi ? 84 : 64,
           borderRadius: "50%",
           border: "2px solid rgba(0,229,255,0.5)",
           background: busy ? "rgba(2,8,24,0.7)" : "rgba(0,229,255,0.18)",
           color: "#00e5ff",
-          fontSize: 28,
+          fontSize: gloveUi ? 36 : 28,
           cursor: busy ? "wait" : "pointer",
           backdropFilter: "blur(6px)",
           boxShadow: "0 4px 16px rgba(0,0,0,0.5)",

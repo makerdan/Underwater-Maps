@@ -90,6 +90,13 @@ export const HUD: React.FC = () => {
 
   const whatsHereOpen = useUiStore((s) => s.whatsHereOpen);
   const setWhatsHereOpen = useUiStore((s) => s.setWhatsHereOpen);
+  const sidebarMode = useUiStore((s) => s.sidebarMode);
+  // Glove-friendly Live mode: enlarge the HUD GPS controls (Dive-to-GPS,
+  // Follow toggle) so they stay tappable with wet or gloved hands.
+  const gloveUi = sidebarMode === "live";
+  const gloveButtonStyle: React.CSSProperties = gloveUi
+    ? { minWidth: 64, minHeight: 56, fontSize: 17, padding: "10px 16px" }
+    : {};
 
   const showCrosshairGps = useSettingsStore((s) => s.showCrosshairGps);
   const showHeading = useSettingsStore((s) => s.showHeading);
@@ -438,6 +445,7 @@ export const HUD: React.FC = () => {
                 cursor: "pointer",
                 letterSpacing: "0.1em",
                 ...(IS_TOUCH_DEVICE ? { minWidth: 44, minHeight: 44 } : {}),
+                ...gloveButtonStyle,
               }}
             >
               {isNarrow ? "📍" : "📍 DIVE TO GPS"}
@@ -480,6 +488,7 @@ export const HUD: React.FC = () => {
                 letterSpacing: "0.1em",
                 opacity: gpsInBounds ? 1 : 0.5,
                 ...(IS_TOUCH_DEVICE ? { minWidth: 44, minHeight: 44 } : {}),
+                ...gloveButtonStyle,
               }}
             >
               {isNarrow ? (gpsFollowMode ? "🔵" : "🎯") : (gpsFollowMode ? "🔵 FOLLOWING" : "🎯 FOLLOW ME")}

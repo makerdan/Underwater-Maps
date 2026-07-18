@@ -4,8 +4,8 @@
  * Verifies that when GPS follow mode is active and the live GPS position
  * drifts outside the active dataset grid:
  *  - setGpsFollowMode(false) is called on cameraStore.
- *  - A "Follow mode paused" toast is emitted.
- *  - The toast is only fired once per exit event (de-duplication).
+ *  - The out-of-bounds handoff (dataset suggestion search + toast) fires.
+ *  - The handoff is only fired once per exit event (de-duplication).
  *
  * Also verifies that no side-effects fire when the position stays in bounds,
  * and that follow mode is disabled when GPS becomes inactive mid-follow.
@@ -20,7 +20,7 @@ import { renderHook, act } from "@testing-library/react";
 import * as THREE from "three";
 
 // ── Hoist spy so it is available inside the vi.mock factory ───────────────
-const toastSpy = vi.hoisted(() => vi.fn());
+const handoffSpy = vi.hoisted(() => vi.fn(async () => {}));
 
 // ── Capture the useFrame callback so we can drive it manually ─────────────
 let capturedFrameCallback: (() => void) | null = null;
@@ -32,9 +32,9 @@ vi.mock("@react-three/fiber", () => ({
   },
 }));
 
-// ── Spy on toast ───────────────────────────────────────────────────────────
-vi.mock("@/hooks/use-toast", () => ({
-  toast: (...args: unknown[]) => toastSpy(...args),
+// ── Spy on the out-of-bounds handoff (owns both toast variants) ────────────
+vi.mock("@/lib/datasetHandoff", () => ({
+  handleFollowOutOfBounds: (...args: unknown[]) => handoffSpy(...args),
 }));
 
 // ── Stub terrain helpers so the in-bounds render path doesn't throw ───────
@@ -67,10 +67,10 @@ const ACTIVE_GRID = {
 } as unknown as import("@workspace/api-client-react").TerrainData;
 
 /** GPS position inside ACTIVE_GRID bounds. */
-const POS_IN = { longitude: 5, latitude: 5, accuracy: 5, timestamp: 0 };
+const POS_IN = { longitude: 5, latitude: 5, accuracy: 5, timestamp: 0, speed: null, heading: null };
 
 /** GPS position outside ACTIVE_GRID bounds. */
-const POS_OUT = { longitude: 50, latitude: 50, accuracy: 5, timestamp: 0 };
+const POS_OUT = { longitude: 50, latitude: 50, accuracy: 5, timestamp: 0, speed: null, heading: null };
 
 function mountHook() {
   return renderHook(() => useGpsFollowCamera());
@@ -87,7 +87,7 @@ function runFrame() {
 describe("useGpsFollowCamera — bounds-exit behaviour", () => {
   beforeEach(() => {
     capturedFrameCallback = null;
-    toastSpy.mockClear();
+    handoffSpy.mockClear();
 
     // Reset stores to a known baseline.
     useCameraStore.setState({ gpsFollowMode: false });
@@ -117,7 +117,7 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
     unmount();
   });
 
-  it("emits a 'Follow mode paused' toast when GPS drifts outside the active grid", () => {
+  it("triggers the out-of-bounds handoff with the exit lon/lat", () => {
     const { unmount } = mountHook();
 
     act(() => {
@@ -128,14 +128,12 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
 
     runFrame();
 
-    expect(toastSpy).toHaveBeenCalledTimes(1);
-    expect(toastSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Follow mode paused" }),
-    );
+    expect(handoffSpy).toHaveBeenCalledTimes(1);
+    expect(handoffSpy).toHaveBeenCalledWith(POS_OUT.longitude, POS_OUT.latitude);
     unmount();
   });
 
-  it("fires the out-of-bounds toast only once per exit event", () => {
+  it("fires the out-of-bounds handoff only once per exit event", () => {
     const { unmount } = mountHook();
 
     act(() => {
@@ -144,17 +142,17 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
       useTerrainStore.setState({ activeGrid: ACTIVE_GRID });
     });
 
-    // First frame: exits bounds, toast fires once, follow mode disabled.
+    // First frame: exits bounds, handoff fires once, follow mode disabled.
     runFrame();
-    // Subsequent frames: follow mode is false, callback returns early — no toast.
+    // Subsequent frames: follow mode is false, callback returns early.
     runFrame();
     runFrame();
 
-    expect(toastSpy).toHaveBeenCalledTimes(1);
+    expect(handoffSpy).toHaveBeenCalledTimes(1);
     unmount();
   });
 
-  it("does NOT disable follow mode or emit toast when position is inside bounds", () => {
+  it("does NOT disable follow mode or trigger the handoff when position is inside bounds", () => {
     const { unmount } = mountHook();
 
     act(() => {
@@ -166,11 +164,11 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
     runFrame();
 
     expect(useCameraStore.getState().gpsFollowMode).toBe(true);
-    expect(toastSpy).not.toHaveBeenCalled();
+    expect(handoffSpy).not.toHaveBeenCalled();
     unmount();
   });
 
-  it("disables follow mode when GPS becomes inactive mid-follow (no toast)", () => {
+  it("disables follow mode when GPS becomes inactive mid-follow (no handoff)", () => {
     const { unmount } = mountHook();
 
     act(() => {
@@ -182,7 +180,7 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
     runFrame();
 
     expect(useCameraStore.getState().gpsFollowMode).toBe(false);
-    expect(toastSpy).not.toHaveBeenCalled();
+    expect(handoffSpy).not.toHaveBeenCalled();
     unmount();
   });
 
@@ -199,7 +197,7 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
     runFrame();
 
     expect(useCameraStore.getState().gpsFollowMode).toBe(false);
-    expect(toastSpy).not.toHaveBeenCalled();
+    expect(handoffSpy).not.toHaveBeenCalled();
     unmount();
   });
 });

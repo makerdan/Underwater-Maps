@@ -20,12 +20,15 @@ import { registerTestThreeCamera } from "@/lib/testHelpers";
 import { TidalWaterPlane } from "@/components/TidalWaterPlane";
 import { TidalCurrentArrows, type DepthLayer } from "@/components/TidalCurrentArrows";
 import { MarkerLayer } from "@/components/MarkerLayer";
+import { TrailLayer } from "@/components/TrailLayer";
 import { DepthPoleLayer, DepthPoleDomLabels } from "@/components/DepthPoleLayer";
 import { GpsMarker } from "@/components/GpsMarker";
 import { DepthProfileLine } from "@/components/DepthProfileLine";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
 import { useTerrainStore } from "@/lib/terrainStore";
+import { useGpsStore } from "@/lib/gpsStore";
+import { runFollowBoundsCheck } from "@/lib/followBoundsCheck";
 import { WaterSurfacePlane } from "@/components/WaterSurfacePlane";
 import { WaterTempVolumeLayer } from "@/components/WaterTempVolumeLayer";
 import { LandmassMesh } from "@/components/LandmassMesh";
@@ -82,6 +85,28 @@ function hostHasWebGL(): boolean {
   }
   return _hostHasWebGLCache;
 }
+
+// ---------------------------------------------------------------------------
+// StubFollowBoundsWatcher — dev/e2e-only. When the R3F Canvas is replaced by
+// the stub (no WebGL), useGpsFollowCamera never mounts, so its per-frame
+// GPS-loss / out-of-bounds follow checks never run. This watcher mirrors
+// them on gpsStore/cameraStore/terrainStore updates using the same shared
+// runFollowBoundsCheck helper. Only mounted inside the DEV + auth-bypass
+// stub branch, so it is dead-code eliminated from production builds.
+const StubFollowBoundsWatcher: React.FC = () => {
+  React.useEffect(() => {
+    const state = { toastFired: false };
+    const run = () => runFollowBoundsCheck(state);
+    run();
+    const unsubs = [
+      useGpsStore.subscribe(run),
+      useCameraStore.subscribe(run),
+      useTerrainStore.subscribe(run),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, []);
+  return null;
+};
 
 // ---------------------------------------------------------------------------
 // LandTerrainMesh — above-water Copernicus DEM 90 m land terrain.
@@ -630,6 +655,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       {terrain && <ThermalCursorTracker terrain={terrain} terrainMeshRef={terrainMeshRef} />}
       {terrain && <CurrentsSceneContents terrain={terrain} />}
       <MarkerLayer />
+      <TrailLayer />
       <DepthPoleLayer />
       <GpsMarker />
       <DepthProfileLine />
@@ -859,6 +885,11 @@ export const TourScene: React.FC<TourSceneProps> = ({
           className="relative w-full h-full"
           data-testid="tour-scene-canvas-disabled"
         >
+          {/* GPS-follow bounds watcher: the real Canvas isn't mounted here,
+              so useGpsFollowCamera's per-frame out-of-bounds check never
+              runs. Mirror it on GPS/store updates so follow-mode handoff
+              behaviour stays testable in headless (no-WebGL) e2e runs. */}
+          <StubFollowBoundsWatcher />
           {/* Stub canvas mirroring three.js's `data-engine` attribute so
               `canvas[data-engine^="three.js"]` selectors used across the
               e2e suite continue to match. Renders nothing visible — its

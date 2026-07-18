@@ -274,8 +274,10 @@ export const LivePanel: React.FC = () => {
                     border: `1px solid ${selected ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.1)"}`,
                     borderRadius: 3,
                     color: selected ? "#00e5ff" : "#94a3b8",
-                    fontSize: 13.5,
-                    padding: "4px 8px",
+                    fontSize: 15,
+                    padding: "10px 12px",
+                    minHeight: 44,
+                    minWidth: 48,
                     cursor: "pointer",
                     fontFamily: MONO,
                   }}
