@@ -9,6 +9,24 @@ const GithubOwnerRepoSchema = z.object({
   repo: z.string().min(1, "repo is required").max(100).regex(/^[a-zA-Z0-9_.-]+$/, "repo contains invalid characters"),
 });
 
+const PutGithubContentsBody = z.object({
+  message: z.string({ required_error: "'message' is required", invalid_type_error: "'message' must be a string" }).min(1, "'message' must not be empty"),
+  content: z.string({ required_error: "'content' is required", invalid_type_error: "'content' must be a string" }).min(1, "'content' must not be empty"),
+  sha: z.string().optional(),
+  branch: z.string().optional(),
+});
+
+const DeleteGithubContentsBody = z.object({
+  message: z.string({ required_error: "'message' is required", invalid_type_error: "'message' must be a string" }).min(1, "'message' must not be empty"),
+  sha: z.string({ required_error: "'sha' is required", invalid_type_error: "'sha' must be a string" }).min(1, "'sha' must not be empty"),
+  branch: z.string().optional(),
+});
+
+const PostGithubDispatchBody = z.object({
+  ref: z.string({ required_error: "'ref' is required", invalid_type_error: "'ref' must be a string" }).min(1, "'ref' must not be empty"),
+  inputs: z.record(z.string()).optional(),
+});
+
 const router = Router();
 
 /**
@@ -27,6 +45,31 @@ function handleGithubError(res: Response, err: unknown): void {
   res
     .status(typeof status === "number" ? status : 500)
     .json({ error: "github_error", details: message });
+}
+
+/**
+ * Returns true if the path contains no `..` traversal segments.
+ * Exported for unit testing; also called from route handlers for defense-in-depth.
+ */
+export function isPathSafe(path: string): boolean {
+  return !path.split("/").some((seg) => seg === "..");
+}
+
+/**
+ * Extracts the wildcard path param and rejects path traversal sequences.
+ * Returns { ok: true, path } or { ok: false } (after writing the 400 response).
+ */
+function extractSafePath(
+  params: Record<string, string | string[]>,
+  res: Response,
+): { ok: true; path: string } | { ok: false } {
+  const rawPath = params["path"];
+  const path = Array.isArray(rawPath) ? rawPath.join("/") : (rawPath ?? "");
+  if (!isPathSafe(path)) {
+    res.status(400).json({ error: "invalid_params", details: "path traversal not allowed" });
+    return { ok: false };
+  }
+  return { ok: true, path };
 }
 
 /**
@@ -67,9 +110,9 @@ router.get(
       return;
     }
     const { owner, repo } = paramsParsed.data;
-    const params = req.params as Record<string, string | string[]>;
-    const rawPath = params["path"];
-    const path = Array.isArray(rawPath) ? rawPath.join("/") : (rawPath ?? "");
+    const pathResult = extractSafePath(req.params as Record<string, string | string[]>, res);
+    if (!pathResult.ok) return;
+    const { path } = pathResult;
     const ref = typeof req.query["ref"] === "string" ? req.query["ref"] : undefined;
 
     let octokit;
@@ -102,25 +145,23 @@ router.put(
   "/repos/:owner/:repo/contents/*path",
   requireAuth,
   asyncHandler(async (req, res): Promise<void> => {
-    const params = req.params as Record<string, string | string[]>;
-    const owner = params["owner"] as string;
-    const repo = params["repo"] as string;
-    const rawPath = params["path"];
-    const path = Array.isArray(rawPath) ? rawPath.join("/") : (rawPath ?? "");
-    const { message, content, sha, branch } = req.body as {
-      message: string;
-      content: string;
-      sha?: string;
-      branch?: string;
-    };
-
-    if (!message || !content) {
-      res.status(400).json({
-        error: "invalid_request",
-        details: "Both 'message' (commit message) and 'content' (base64-encoded) are required.",
-      });
+    const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      res.status(400).json({ error: "invalid_params", details: paramsParsed.error.issues.map((i) => i.message).join("; ") });
       return;
     }
+    const { owner, repo } = paramsParsed.data;
+
+    const pathResult = extractSafePath(req.params as Record<string, string | string[]>, res);
+    if (!pathResult.ok) return;
+    const { path } = pathResult;
+
+    const bodyParsed = PutGithubContentsBody.safeParse(req.body);
+    if (!bodyParsed.success) {
+      res.status(400).json({ error: "invalid_request", details: bodyParsed.error.issues.map((i) => i.message).join("; ") });
+      return;
+    }
+    const { message, content, sha, branch } = bodyParsed.data;
 
     let octokit;
     try {
@@ -155,24 +196,23 @@ router.delete(
   "/repos/:owner/:repo/contents/*path",
   requireAuth,
   asyncHandler(async (req, res): Promise<void> => {
-    const params = req.params as Record<string, string | string[]>;
-    const owner = params["owner"] as string;
-    const repo = params["repo"] as string;
-    const rawPath = params["path"];
-    const path = Array.isArray(rawPath) ? rawPath.join("/") : (rawPath ?? "");
-    const { message, sha, branch } = req.body as {
-      message: string;
-      sha: string;
-      branch?: string;
-    };
-
-    if (!message || !sha) {
-      res.status(400).json({
-        error: "invalid_request",
-        details: "Both 'message' (commit message) and 'sha' (blob SHA) are required.",
-      });
+    const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      res.status(400).json({ error: "invalid_params", details: paramsParsed.error.issues.map((i) => i.message).join("; ") });
       return;
     }
+    const { owner, repo } = paramsParsed.data;
+
+    const pathResult = extractSafePath(req.params as Record<string, string | string[]>, res);
+    if (!pathResult.ok) return;
+    const { path } = pathResult;
+
+    const bodyParsed = DeleteGithubContentsBody.safeParse(req.body);
+    if (!bodyParsed.success) {
+      res.status(400).json({ error: "invalid_request", details: bodyParsed.error.issues.map((i) => i.message).join("; ") });
+      return;
+    }
+    const { message, sha, branch } = bodyParsed.data;
 
     let octokit;
     try {
@@ -206,22 +246,21 @@ router.post(
   "/repos/:owner/:repo/actions/workflows/:workflow_id/dispatches",
   requireAuth,
   asyncHandler(async (req, res): Promise<void> => {
-    const params = req.params as Record<string, string>;
-    const owner = params["owner"] as string;
-    const repo = params["repo"] as string;
-    const workflow_id = params["workflow_id"] as string;
-    const { ref, inputs } = req.body as {
-      ref: string;
-      inputs?: Record<string, string>;
-    };
-
-    if (!ref) {
-      res.status(400).json({
-        error: "invalid_request",
-        details: "'ref' (branch or tag name) is required.",
-      });
+    const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      res.status(400).json({ error: "invalid_params", details: paramsParsed.error.issues.map((i) => i.message).join("; ") });
       return;
     }
+    const { owner, repo } = paramsParsed.data;
+    const params = req.params as Record<string, string>;
+    const workflow_id = params["workflow_id"] as string;
+
+    const bodyParsed = PostGithubDispatchBody.safeParse(req.body);
+    if (!bodyParsed.success) {
+      res.status(400).json({ error: "invalid_request", details: bodyParsed.error.issues.map((i) => i.message).join("; ") });
+      return;
+    }
+    const { ref, inputs } = bodyParsed.data;
 
     let octokit;
     try {
@@ -352,4 +391,3 @@ router.get(
 );
 
 export default router;
-

@@ -10,6 +10,7 @@
  *   GET  /repos/:owner/:repo/actions/runs — list runs
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import http from "http";
 import express from "express";
 import request from "supertest";
 
@@ -36,7 +37,7 @@ vi.mock("@clerk/express", () => ({
   getAuth: vi.fn(() => ({ userId: null })),
 }));
 
-import githubRouter from "../github.js";
+import githubRouter, { isPathSafe } from "../github.js";
 import { getGithubClient } from "../../lib/github.js";
 
 const getGithubClientMock = getGithubClient as ReturnType<typeof vi.fn>;
@@ -48,6 +49,48 @@ function makeApp() {
   app.use(express.json());
   app.use(githubRouter);
   return app;
+}
+
+/**
+ * Sends a raw HTTP request to an ephemeral server, bypassing the URL
+ * normalization that supertest/Node.js apply before dispatch.  This lets us
+ * send literal `..` segments and confirm Express route handlers reject them.
+ */
+function rawRequest(
+  app: express.Express,
+  method: string,
+  rawPath: string,
+  headers: Record<string, string> = {},
+  body?: unknown,
+): Promise<{ status: number; body: unknown }> {
+  return new Promise((resolve, reject) => {
+    const server = app.listen(0, "127.0.0.1", () => {
+      const port = (server.address() as { port: number }).port;
+      const bodyStr = body !== undefined ? JSON.stringify(body) : undefined;
+      const reqHeaders: Record<string, string> = {
+        "x-e2e-user-id": "user_e2e_github_test",
+        ...headers,
+        ...(bodyStr !== undefined
+          ? { "content-type": "application/json", "content-length": String(Buffer.byteLength(bodyStr)) }
+          : {}),
+      };
+      const req = http.request(
+        { host: "127.0.0.1", port, path: rawPath, method, headers: reqHeaders },
+        (res) => {
+          let raw = "";
+          res.on("data", (c: Buffer) => { raw += c.toString(); });
+          res.on("end", () => {
+            server.close();
+            try { resolve({ status: res.statusCode ?? 0, body: JSON.parse(raw) }); }
+            catch { resolve({ status: res.statusCode ?? 0, body: raw }); }
+          });
+        },
+      );
+      req.on("error", (e) => { server.close(); reject(e); });
+      if (bodyStr !== undefined) req.write(bodyStr);
+      req.end();
+    });
+  });
 }
 
 beforeEach(() => {
@@ -92,6 +135,32 @@ describe("GET /repos — list repositories", () => {
   });
 });
 
+describe("isPathSafe — path traversal guard", () => {
+  it("allows a normal file path", () => {
+    expect(isPathSafe("src/components/App.tsx")).toBe(true);
+  });
+
+  it("allows an empty path", () => {
+    expect(isPathSafe("")).toBe(true);
+  });
+
+  it("allows a path whose segment merely contains dots (not pure '..')", () => {
+    expect(isPathSafe("foo..bar/baz")).toBe(true);
+  });
+
+  it("rejects a pure '..' segment", () => {
+    expect(isPathSafe("../secret")).toBe(false);
+  });
+
+  it("rejects '..' in the middle of a path", () => {
+    expect(isPathSafe("foo/../secret")).toBe(false);
+  });
+
+  it("rejects a path that is only '..'", () => {
+    expect(isPathSafe("..")).toBe(false);
+  });
+});
+
 describe("GET /repos/:owner/:repo/contents/*path — read file", () => {
   it("returns 400 for invalid owner characters", async () => {
     const res = await request(makeApp())
@@ -99,6 +168,13 @@ describe("GET /repos/:owner/:repo/contents/*path — read file", () => {
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid_params");
+  });
+
+  it("returns 400 for path traversal '..' segment (raw request bypasses client normalization)", async () => {
+    const res = await rawRequest(makeApp(), "GET", "/repos/owner/repo/contents/../secret");
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toBe("invalid_params");
+    expect((res.body as { details: string }).details).toMatch(/traversal/);
   });
 
   it("returns file content on success", async () => {
@@ -114,6 +190,25 @@ describe("GET /repos/:owner/:repo/contents/*path — read file", () => {
 });
 
 describe("PUT /repos/:owner/:repo/contents/*path — create/update file", () => {
+  it("returns 400 for invalid owner characters", async () => {
+    const res = await request(makeApp())
+      .put("/repos/bad owner/repo/contents/file.txt")
+      .set("x-e2e-user-id", E2E_USER)
+      .send({ message: "add file", content: "aGVsbG8=" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_params");
+  });
+
+  it("returns 400 for path traversal '..' segment (raw request bypasses client normalization)", async () => {
+    const res = await rawRequest(makeApp(), "PUT", "/repos/owner/repo/contents/../secret", {}, {
+      message: "add file",
+      content: "aGVsbG8=",
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toBe("invalid_params");
+    expect((res.body as { details: string }).details).toMatch(/traversal/);
+  });
+
   it("returns 400 when message is missing", async () => {
     const res = await request(makeApp())
       .put("/repos/owner/repo/contents/file.txt")
@@ -132,6 +227,24 @@ describe("PUT /repos/:owner/:repo/contents/*path — create/update file", () => 
     expect(res.body.error).toBe("invalid_request");
   });
 
+  it("returns 400 when message is not a string", async () => {
+    const res = await request(makeApp())
+      .put("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-user-id", E2E_USER)
+      .send({ message: 42, content: "aGVsbG8=" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("returns 400 when content is not a string", async () => {
+    const res = await request(makeApp())
+      .put("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-user-id", E2E_USER)
+      .send({ message: "add file", content: true });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
   it("returns file result on success", async () => {
     octokitMock.repos.createOrUpdateFileContents.mockResolvedValue({
       data: { commit: { sha: "abc123" }, content: { name: "file.txt" } },
@@ -145,6 +258,25 @@ describe("PUT /repos/:owner/:repo/contents/*path — create/update file", () => 
 });
 
 describe("DELETE /repos/:owner/:repo/contents/*path — delete file", () => {
+  it("returns 400 for invalid owner characters", async () => {
+    const res = await request(makeApp())
+      .delete("/repos/bad owner/repo/contents/file.txt")
+      .set("x-e2e-user-id", E2E_USER)
+      .send({ message: "delete file", sha: "abc123" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_params");
+  });
+
+  it("returns 400 for path traversal '..' segment (raw request bypasses client normalization)", async () => {
+    const res = await rawRequest(makeApp(), "DELETE", "/repos/owner/repo/contents/../secret", {}, {
+      message: "delete file",
+      sha: "abc123",
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toBe("invalid_params");
+    expect((res.body as { details: string }).details).toMatch(/traversal/);
+  });
+
   it("returns 400 when message is missing", async () => {
     const res = await request(makeApp())
       .delete("/repos/owner/repo/contents/file.txt")
@@ -162,14 +294,41 @@ describe("DELETE /repos/:owner/:repo/contents/*path — delete file", () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid_request");
   });
+
+  it("returns 400 when sha is not a string", async () => {
+    const res = await request(makeApp())
+      .delete("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-user-id", E2E_USER)
+      .send({ message: "delete file", sha: 99 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
 });
 
 describe("POST /repos/:owner/:repo/actions/workflows/:workflow_id/dispatches", () => {
+  it("returns 400 for invalid owner characters", async () => {
+    const res = await request(makeApp())
+      .post("/repos/bad owner/repo/actions/workflows/deploy/dispatches")
+      .set("x-e2e-user-id", E2E_USER)
+      .send({ ref: "main" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_params");
+  });
+
   it("returns 400 when ref is missing", async () => {
     const res = await request(makeApp())
       .post("/repos/owner/repo/actions/workflows/deploy/dispatches")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("returns 400 when ref is not a string", async () => {
+    const res = await request(makeApp())
+      .post("/repos/owner/repo/actions/workflows/deploy/dispatches")
+      .set("x-e2e-user-id", E2E_USER)
+      .send({ ref: 123 });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid_request");
   });
