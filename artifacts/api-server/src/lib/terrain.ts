@@ -105,8 +105,11 @@ export interface TerrainGrid {
  *       (Kodiak Island, Kachemak Bay, Resurrection Bay, Prince William Sound)
  *       with CRM ranked first. Previously cached grids for those AOIs must
  *       be rebuilt with the new regional source.
+ *   8 — Task #2379: Unfilled/nodata cells now use NaN sentinel (serialised as
+ *       JSON null) instead of 0 so the client can render flat no-data tiles
+ *       instead of surface spikes. Previously cached grids must be rebuilt.
  */
-export const TERRAIN_CACHE_VERSION = 7;
+export const TERRAIN_CACHE_VERSION = 8;
 
 export interface DatasetMeta {
   id: string;
@@ -560,9 +563,10 @@ async function fetchNceiGrid(
   }
 
   // NCEI elevation is negative for ocean depth; convert to positive depth.
-  // No-data cells (no coverage) are set to 0 (sea surface).
+  // No-data cells (no coverage) are left as NaN — the JSON serialiser turns
+  // these into null so clients can render flat no-data tiles instead of spikes.
   // Positive elevation cells are land — captured in the topography array.
-  const depths: number[] = new Array(resolution * resolution).fill(0);
+  const depths: number[] = new Array(resolution * resolution).fill(NaN);
   const topography: number[] = new Array(resolution * resolution).fill(0);
   let minDepth = Infinity;
   let maxDepth = -Infinity;
@@ -574,20 +578,22 @@ async function fetchNceiGrid(
       const srcCol = Math.min(ncols - 1, Math.floor((col / resolution) * ncols));
       const elev = values[srcRow * ncols + srcCol];
 
-      let depth = 0;
-      let elevation = 0;
+      // Only write a depth value when we have real data (elev !== nodata).
+      // Nodata cells stay NaN from the initialisation above.
       if (elev !== undefined && elev !== nodata) {
-        if (elev < 0) depth = -elev;
-        else if (elev > 0) {
+        let depth = 0;
+        let elevation = 0;
+        if (elev < 0) {
+          depth = -elev;
+        } else if (elev > 0) {
           elevation = elev;
           landCellCount++;
         }
+        depths[row * resolution + col] = depth;
+        topography[row * resolution + col] = elevation;
+        if (depth < minDepth) minDepth = depth;
+        if (depth > maxDepth) maxDepth = depth;
       }
-
-      depths[row * resolution + col] = depth;
-      topography[row * resolution + col] = elevation;
-      if (depth < minDepth) minDepth = depth;
-      if (depth > maxDepth) maxDepth = depth;
     }
   }
 
@@ -698,9 +704,11 @@ async function fetchGebcoGrid(
 
   // GEBCO uses row-major, top-to-bottom, left-to-right
   // Convert elevation (negative = ocean) to positive depth.
+  // No-data cells (elev === nodata) are left as NaN — the JSON serialiser
+  // turns these into null so clients render flat no-data tiles.
   // Positive elevations (land) are captured in the topography array so the
   // client can render landmass meshes that meet the bathymetry seamlessly.
-  const depths: number[] = new Array(resolution * resolution).fill(0);
+  const depths: number[] = new Array(resolution * resolution).fill(NaN);
   const topography: number[] = new Array(resolution * resolution).fill(0);
   let minDepth = Infinity;
   let maxDepth = -Infinity;
@@ -713,21 +721,22 @@ async function fetchGebcoGrid(
       const srcCol = Math.min(ncols - 1, Math.floor((col / resolution) * ncols));
       const elev = values[srcRow * ncols + srcCol];
 
-      let depth = 0;
-      let elevation = 0;
+      // Only write a depth value when we have real data (elev !== nodata).
+      // Nodata cells stay NaN from the initialisation above.
       if (elev !== undefined && elev !== nodata) {
+        let depth = 0;
+        let elevation = 0;
         if (elev < 0) {
           depth = -elev; // positive depth below sea level
         } else if (elev > 0) {
           elevation = elev; // metres above sea level (land)
           landCellCount++;
         }
+        depths[row * resolution + col] = depth;
+        topography[row * resolution + col] = elevation;
+        if (depth < minDepth) minDepth = depth;
+        if (depth > maxDepth) maxDepth = depth;
       }
-
-      depths[row * resolution + col] = depth;
-      topography[row * resolution + col] = elevation;
-      if (depth < minDepth) minDepth = depth;
-      if (depth > maxDepth) maxDepth = depth;
     }
   }
 
@@ -1262,10 +1271,13 @@ export async function buildTerrainGrid(
     smoothSpikes(depths, N, maxDepth - minDepth);
   }
 
-  // Recompute min/max after smoothing (values may have shifted)
+  // Recompute min/max after smoothing (values may have shifted).
+  // NaN cells (no-data sentinels) are excluded from the depth range —
+  // they sit at the water surface on the client, not in the depth range.
   minDepth = Infinity;
   maxDepth = -Infinity;
   for (let i = 0; i < depths.length; i++) {
+    if (Number.isNaN(depths[i]!)) continue;
     if (depths[i]! < minDepth) minDepth = depths[i]!;
     if (depths[i]! > maxDepth) maxDepth = depths[i]!;
   }
@@ -1457,6 +1469,10 @@ export function smoothSpikes(depths: number[], N: number, depthRange: number): v
         const idx   = row * N + col;
         const depth = depths[idx]!;
 
+        // NaN cells have no real depth — skip marking them; they are
+        // handled as flat no-data tiles by the client.
+        if (Number.isNaN(depth)) continue;
+
         // 4-connected neighbour indices (-1 = out of bounds)
         const up    = row > 0       ? (row - 1) * N + col : -1;
         const down  = row < N - 1   ? (row + 1) * N + col : -1;
@@ -1466,7 +1482,10 @@ export function smoothSpikes(depths: number[], N: number, depthRange: number): v
         const nbrs = [up, down, left, right];
         for (const nIdx of nbrs) {
           if (nIdx < 0) continue;
-          const normDiff = Math.abs(depth - depths[nIdx]!) * invRange;
+          const nDepth = depths[nIdx]!;
+          // Skip NaN neighbours — they carry no slope information.
+          if (Number.isNaN(nDepth)) continue;
+          const normDiff = Math.abs(depth - nDepth) * invRange;
           if (Math.atan2(normDiff, cellSpacing) > SPIKE_ANGLE_THRESHOLD) {
             toSmooth[idx] = 1;
             anyMarked = true;
@@ -1478,7 +1497,7 @@ export function smoothSpikes(depths: number[], N: number, depthRange: number): v
 
     if (!anyMarked) break;
 
-    // Replace marked cells with the average of their valid neighbours
+    // Replace marked cells with the average of their valid (non-NaN) neighbours
     for (let row = 0; row < N; row++) {
       for (let col = 0; col < N; col++) {
         const idx = row * N + col;
@@ -1486,10 +1505,14 @@ export function smoothSpikes(depths: number[], N: number, depthRange: number): v
 
         let sum   = 0;
         let count = 0;
-        if (row > 0)     { sum += depths[(row - 1) * N + col]!; count++; }
-        if (row < N - 1) { sum += depths[(row + 1) * N + col]!; count++; }
-        if (col > 0)     { sum += depths[row * N + (col - 1)]!; count++; }
-        if (col < N - 1) { sum += depths[row * N + (col + 1)]!; count++; }
+        const tryNbr = (nIdx: number): void => {
+          const v = depths[nIdx]!;
+          if (!Number.isNaN(v)) { sum += v; count++; }
+        };
+        if (row > 0)     tryNbr((row - 1) * N + col);
+        if (row < N - 1) tryNbr((row + 1) * N + col);
+        if (col > 0)     tryNbr(row * N + (col - 1));
+        if (col < N - 1) tryNbr(row * N + (col + 1));
 
         if (count > 0) depths[idx] = sum / count;
       }
@@ -1714,8 +1737,11 @@ export function gridPoints(
     counts[idx]!++;
   }
 
-  // Step 2: average bins that received multiple points
-  const depths: number[] = new Array(N * N).fill(0);
+  // Step 2: average bins that received multiple points.
+  // Initialise with NaN so cells not reached by any survey point or IDW
+  // stay NaN — the JSON serialiser turns NaN into null so the client can
+  // render flat no-data tiles instead of surface spikes.
+  const depths: number[] = new Array(N * N).fill(NaN);
   for (let i = 0; i < N * N; i++) {
     if (counts[i]! > 0) {
       depths[i] = depthSums[i]! / counts[i]!;
@@ -1848,20 +1874,25 @@ export function gridPoints(
 
   // Step 4: smooth spikes before computing final min/max (skipped when the
   // user has disabled "Smooth terrain spikes" — raw bathymetry).
+  // NaN cells (survey gaps) are excluded from the depth range passed to
+  // smoothSpikes; the spike-smoother itself also skips NaN cells.
   if (smoothing) {
     let roughMin = Infinity;
     let roughMax = -Infinity;
     for (let i = 0; i < N * N; i++) {
+      if (Number.isNaN(depths[i]!)) continue;
       if (depths[i]! < roughMin) roughMin = depths[i]!;
       if (depths[i]! > roughMax) roughMax = depths[i]!;
     }
     smoothSpikes(depths, N, roughMax - roughMin);
   }
 
-  // Step 5: compute min/max after fill and smoothing
+  // Step 5: compute min/max after fill and smoothing.
+  // NaN cells are excluded — they sit at the water surface on the client.
   let minDepth = Infinity;
   let maxDepth = -Infinity;
   for (let i = 0; i < N * N; i++) {
+    if (Number.isNaN(depths[i]!)) continue;
     if (depths[i]! < minDepth) minDepth = depths[i]!;
     if (depths[i]! > maxDepth) maxDepth = depths[i]!;
   }

@@ -390,4 +390,47 @@ describe("applyColormapToVertexColors — band-boundary live repaint", () => {
       expect(colors[i]).toBeLessThanOrEqual(1);
     }
   });
+
+  it("null depth cells are skipped — their colour is not overwritten by the colormap", () => {
+    // depths: real value at index 0, survey gap (null) at index 1
+    const depths: (number | null)[] = [500, null];
+    const colors = new Float32Array(6);
+    // Pre-fill index 1 with the no-data steel-blue (as buildTerrainGeometry does)
+    colors[3] = 0.35;
+    colors[4] = 0.45;
+    colors[5] = 0.55;
+    applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean"));
+    // Index 0 should have been written by the colormap.
+    const anyNonZero = colors[0] !== 0 || colors[1] !== 0 || colors[2] !== 0;
+    expect(anyNonZero).toBe(true);
+    // Index 1 (null cell) must retain its no-data steel-blue exactly.
+    expect(colors[3]).toBeCloseTo(0.35, 5);
+    expect(colors[4]).toBeCloseTo(0.45, 5);
+    expect(colors[5]).toBeCloseTo(0.55, 5);
+  });
+});
+
+import { NO_DATA_COLOR } from "../lib/terrain";
+
+describe("buildTerrainGeometry — null depth (survey-gap) cells", () => {
+  it("null depth vertex is placed at Y=0 (water surface)", () => {
+    const N = 2;
+    const grid = makeGrid(N, { depths: [null, 500, 500, 1000] as unknown as number[], minDepth: 0, maxDepth: 1000 });
+    const geo = buildTerrainGeometry(grid);
+    const positions = (geo as unknown as { attributes: { position: { array: Float32Array } } }).attributes?.position?.array;
+    if (!positions) return;
+    // First vertex (null depth) → Y should be exactly 0
+    expect(positions[1]).toBe(0);
+  });
+
+  it("null depth vertex receives the steel-blue no-data colour", () => {
+    const N = 2;
+    const grid = makeGrid(N, { depths: [null, 500, 500, 1000] as unknown as number[], minDepth: 0, maxDepth: 1000 });
+    const geo = buildTerrainGeometry(grid);
+    const colorAttr = (geo as unknown as { attributes: { color: { array: Float32Array } } }).attributes?.color?.array;
+    if (!colorAttr) return;
+    expect(colorAttr[0]).toBeCloseTo(NO_DATA_COLOR.r, 5);
+    expect(colorAttr[1]).toBeCloseTo(NO_DATA_COLOR.g, 5);
+    expect(colorAttr[2]).toBeCloseTo(NO_DATA_COLOR.b, 5);
+  });
 });

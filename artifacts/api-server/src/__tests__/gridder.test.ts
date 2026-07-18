@@ -23,13 +23,21 @@ describe("gridPoints", () => {
     expect(grid.resolution).toBe(32);
   });
 
-  it("contains no NaN or Infinity cells after IDW fill", () => {
+  it("cells are either a finite depth or NaN (survey gap); no Infinity values", () => {
+    // makePoints produces a diagonal line, so IDW may leave corner cells as NaN
+    // — that is the correct behaviour now (survey gaps → null on the client).
     const pts = makePoints(25);
     const grid = gridPoints(pts, 32, "test", "Test Grid");
     for (const d of grid.depths) {
-      expect(Number.isFinite(d)).toBe(true);
-      expect(Number.isNaN(d)).toBe(false);
+      // Each cell must be either a valid finite depth or NaN (no-data sentinel).
+      expect(Number.isFinite(d) || Number.isNaN(d)).toBe(true);
+      // Infinity in either direction is always wrong.
+      expect(d).not.toBe(Infinity);
+      expect(d).not.toBe(-Infinity);
     }
+    // At least some cells should have real depth data from IDW.
+    const finiteCells = grid.depths.filter(Number.isFinite);
+    expect(finiteCells.length).toBeGreaterThan(0);
   });
 
   it("computes non-zero minDepth and maxDepth", () => {
@@ -68,9 +76,15 @@ describe("gridPoints", () => {
     const elapsed = Date.now() - start;
     expect(elapsed).toBeLessThan(10_000);
     expect(grid.depths).toHaveLength(256 * 256);
+    // A sparse collinear track will leave many corner cells as NaN (survey gaps).
+    // Each cell must be either a finite depth or NaN — never Infinity.
     for (const d of grid.depths) {
-      expect(Number.isFinite(d)).toBe(true);
+      expect(Number.isFinite(d) || Number.isNaN(d)).toBe(true);
+      expect(d).not.toBe(Infinity);
+      expect(d).not.toBe(-Infinity);
     }
+    // Cells along the track must have real depth data.
+    expect(grid.depths.filter(Number.isFinite).length).toBeGreaterThan(0);
     expect(grid.maxDepth).toBeGreaterThan(grid.minDepth);
   });
 

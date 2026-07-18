@@ -21,6 +21,9 @@ export const MAX_DEPTH_WORLD = 50;
  *   immediately after mount, so baking colours here would be wasted work.
  * - Recomputes vertex normals for correct lighting.
  */
+/** Steel-blue colour for no-data (null depth) tiles — visually distinct from the depth colormap. */
+export const NO_DATA_COLOR = { r: 0.35, g: 0.45, b: 0.55 } as const;
+
 export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
   const { resolution: N, depths, minDepth, maxDepth } = grid;
   const depthRange = (maxDepth - minDepth) || 1;
@@ -32,7 +35,19 @@ export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
   const colors = new Float32Array(positions.length);
 
   for (let i = 0; i < depths.length; i++) {
-    const depth = depths[i] ?? 0;
+    const depth = depths[i];
+
+    // Null (or undefined) depth → survey gap: render as flat tile at the
+    // water surface (t = 0) using a distinct muted steel-blue colour that
+    // the colormap pass will NOT overwrite (see applyColormapToVertexColors).
+    if (depth === null || depth === undefined) {
+      positions[i * 3 + 1] = 0;
+      colors[i * 3]     = NO_DATA_COLOR.r;
+      colors[i * 3 + 1] = NO_DATA_COLOR.g;
+      colors[i * 3 + 2] = NO_DATA_COLOR.b;
+      continue;
+    }
+
     const t = (depth - minDepth) / depthRange;
     const clampedT = Math.max(0, Math.min(1, t));
 
@@ -80,7 +95,9 @@ export function buildTerrainSkirtGeometry(grid: TerrainData): THREE.BufferGeomet
   const half = WORLD_SIZE / 2;
   const step = WORLD_SIZE / Math.max(1, N - 1);
 
-  const topY = (depth: number): number => {
+  // Null depth = survey gap → render at water surface (t = 0, y = 0).
+  const topY = (depth: number | null | undefined): number => {
+    if (depth === null || depth === undefined) return 0;
     const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
     return -t * MAX_DEPTH_WORLD;
   };
@@ -120,7 +137,7 @@ export function buildTerrainSkirtGeometry(grid: TerrainData): THREE.BufferGeomet
     north.push({
       x: -half + col * step,
       z: -half,
-      y: topY(depths[col] ?? 0),
+      y: topY(depths[col]),
     });
   }
   addWall(north, [0, 0, -1], true);
@@ -131,7 +148,7 @@ export function buildTerrainSkirtGeometry(grid: TerrainData): THREE.BufferGeomet
     south.push({
       x: -half + col * step,
       z: half,
-      y: topY(depths[(N - 1) * N + col] ?? 0),
+      y: topY(depths[(N - 1) * N + col]),
     });
   }
   addWall(south, [0, 0, 1], false);
@@ -142,7 +159,7 @@ export function buildTerrainSkirtGeometry(grid: TerrainData): THREE.BufferGeomet
     west.push({
       x: -half,
       z: -half + row * step,
-      y: topY(depths[row * N] ?? 0),
+      y: topY(depths[row * N]),
     });
   }
   addWall(west, [-1, 0, 0], false);
@@ -153,7 +170,7 @@ export function buildTerrainSkirtGeometry(grid: TerrainData): THREE.BufferGeomet
     east.push({
       x: half,
       z: -half + row * step,
-      y: topY(depths[row * N + (N - 1)] ?? 0),
+      y: topY(depths[row * N + (N - 1)]),
     });
   }
   addWall(east, [1, 0, 0], true);
@@ -250,8 +267,12 @@ export function computeZoneWeights(
     for (let col = 0; col < N; col++) {
       const idx = row * N + col;
 
-      // Normalised depth [0 = shallow, 1 = deepest]
-      const depth = depths[idx] ?? 0;
+      // Normalised depth [0 = shallow, 1 = deepest].
+      // Null cells (survey gaps) are treated as shallowest (t = 0 → sand zone)
+      // since their actual depth is unknown; the no-data colour takes precedence
+      // over zone weights for these cells anyway.
+      const rawDepth = depths[idx];
+      const depth = rawDepth === null || rawDepth === undefined ? minDepth : rawDepth;
       const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
 
       // Base zone weights via soft overlapping ramps
@@ -262,8 +283,10 @@ export function computeZoneWeights(
 
       // Slope override: steep faces expose hard basalt regardless of depth
       const tOf = (r: number, c: number): number => {
-        const d = depths[r * N + c] ?? 0;
-        return (d - minDepth) / depthRange;
+        const d = depths[r * N + c];
+        // Null cells → treat as minDepth (surface) for slope computation
+        const dv = d === null || d === undefined ? minDepth : d;
+        return (dv - minDepth) / depthRange;
       };
       const r0 = Math.max(0, row - 1);
       const r1 = Math.min(N - 1, row + 1);
@@ -375,8 +398,10 @@ export function computeSlopeAttribute(grid: TerrainData): Float32Array {
   const slopes = new Float32Array(N * N);
 
   const tOf = (r: number, c: number): number => {
-    const d = depths[Math.max(0, Math.min(N - 1, r)) * N + Math.max(0, Math.min(N - 1, c))] ?? 0;
-    return (d - minDepth) / depthRange;
+    const d = depths[Math.max(0, Math.min(N - 1, r)) * N + Math.max(0, Math.min(N - 1, c))];
+    // Null cells (survey gaps) → treat as surface for slope computation
+    const dv = d === null || d === undefined ? minDepth : d;
+    return (dv - minDepth) / depthRange;
   };
 
   for (let row = 0; row < N; row++) {
@@ -525,19 +550,23 @@ export function getTerrainSurfaceY(
  * Write per-vertex RGB values into a pre-allocated Float32Array using a
  * colormap function. Each vertex occupies 3 consecutive entries (R, G, B).
  *
+ * Null depth entries represent survey gaps (no-data cells). Those indices are
+ * skipped so the no-data steel-blue colour written by buildTerrainGeometry is
+ * preserved — the depth colormap must not overwrite it.
+ *
  * Extracted from the TerrainMesh vertex-recolor useEffect so the same logic
  * can be unit-tested without a React or Three.js rendering context. The
  * caller is responsible for setting `colorAttr.needsUpdate = true` after
  * calling this function.
  *
- * @param depths     - depth value per vertex (metres)
+ * @param depths     - depth value per vertex (metres); null = survey gap
  * @param minDepth   - minimum depth in the grid (metres)
  * @param maxDepth   - maximum depth in the grid (metres)
  * @param colors     - Float32Array of length depths.length × 3 (mutated in-place)
  * @param toColor    - colormap function returned by getColormap(); maps t∈[0,1] → {r,g,b}
  */
 export function applyColormapToVertexColors(
-  depths: ArrayLike<number>,
+  depths: ArrayLike<number | null>,
   minDepth: number,
   maxDepth: number,
   colors: Float32Array,
@@ -545,7 +574,10 @@ export function applyColormapToVertexColors(
 ): void {
   const depthRange = (maxDepth - minDepth) || 1;
   for (let i = 0; i < depths.length; i++) {
-    const depth = (depths as number[])[i] ?? 0;
+    const depth = (depths as (number | null)[])[i];
+    // Null depth = survey gap — preserve the no-data colour already set by
+    // buildTerrainGeometry; do not overwrite it with the depth colormap.
+    if (depth === null || depth === undefined) continue;
     const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
     const c = toColor(t);
     colors[i * 3]     = c.r;
