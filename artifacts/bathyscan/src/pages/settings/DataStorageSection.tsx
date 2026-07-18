@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { clear as idbClear } from "idb-keyval";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -40,6 +40,20 @@ export function DataStorageSection() {
   const [packClearing, setPackClearing] = useState<string | null>(null);
   const [helpClearing, setHelpClearing] = useState(false);
   const { toast } = useToast();
+
+  // Track transient-message timers so they can be cleared on unmount —
+  // otherwise a setState fires after teardown (React warning in the app,
+  // an unhandled "window is not defined" error in unit tests).
+  const msgTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const scheduleMsgReset = useCallback((fn: () => void, ms: number) => {
+    msgTimersRef.current.push(setTimeout(fn, ms));
+  }, []);
+  useEffect(() => {
+    const timers = msgTimersRef.current;
+    return () => {
+      for (const t of timers) clearTimeout(t);
+    };
+  }, []);
 
   const refreshUpscaleInfo = useCallback(async () => {
     const info = await getUpscaleCacheInfo();
@@ -100,7 +114,7 @@ export function DataStorageSection() {
     setAllClearedMsg(true);
     await refresh();
     setClearing(null);
-    setTimeout(() => setAllClearedMsg(false), 3000);
+    scheduleMsgReset(() => setAllClearedMsg(false), 3000);
   };
 
   const handleClearUpscaleCache = async () => {
@@ -109,7 +123,7 @@ export function DataStorageSection() {
     await refreshUpscaleInfo();
     setClearing(null);
     setUpscaleClearMsg(true);
-    setTimeout(() => setUpscaleClearMsg(false), 3000);
+    scheduleMsgReset(() => setUpscaleClearMsg(false), 3000);
     toast({ title: "Enhanced image cache cleared", duration: 3000 });
   };
 

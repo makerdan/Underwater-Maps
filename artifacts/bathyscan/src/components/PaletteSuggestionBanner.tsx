@@ -30,7 +30,11 @@ const THEME_LABELS: Record<ColormapTheme, string> = {
 export function PaletteSuggestionBanner() {
   const suggestion = usePaletteSuggestionStore((s) => s.suggestion);
   const suggestionDatasetId = usePaletteSuggestionStore((s) => s.suggestionDatasetId);
-  const isDismissed = usePaletteSuggestionStore((s) => s.isDismissed);
+  // Subscribe to the dismissed-set itself (not just the isDismissed helper):
+  // dismiss() only mutates dismissedDatasetIds, so without this subscription
+  // the component never re-renders after a dismissal and the banner stays
+  // visible until some unrelated parent render happens to rescue it.
+  const dismissedDatasetIds = usePaletteSuggestionStore((s) => s.dismissedDatasetIds);
   const dismiss = usePaletteSuggestionStore((s) => s.dismiss);
   const currentTheme = useSettingsStore((s) => s.colormapTheme);
   const setColormapThemeByUser = useSettingsStore((s) => s.setColormapThemeByUser);
@@ -38,7 +42,7 @@ export function PaletteSuggestionBanner() {
 
   if (
     !suggestion ||
-    isDismissed(suggestionDatasetId) ||
+    (suggestionDatasetId !== null && dismissedDatasetIds.has(suggestionDatasetId)) ||
     suggestion.theme === currentTheme
   ) {
     return null;

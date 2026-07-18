@@ -1,5 +1,5 @@
 import { test as base, expect } from "@playwright/test";
-import { E2E_API_URL } from "./ports";
+import { E2E_API_URL, E2E_RUN_SUFFIX } from "./ports";
 import type { Page, Locator, APIRequestContext, APIResponse } from "@playwright/test";
 
 /**
@@ -49,11 +49,8 @@ export function apiUrl(path: string): string {
 // overridable via E2E_USER_ID. playwright.config.ts imports this constant and
 // passes it to the frontend webServer as VITE_E2E_USER_ID so the browser-side
 // header injection uses the same identity.
-const suitePortSuffix = process.env["E2E_API_PORT"]
-  ? `-${process.env["E2E_API_PORT"]}`
-  : "";
 export const E2E_USER_ID =
-  process.env["E2E_USER_ID"] ?? `dev-user-bypass${suitePortSuffix}`;
+  process.env["E2E_USER_ID"] ?? `dev-user-bypass${E2E_RUN_SUFFIX}`;
 
 export const DEFAULT_SETTINGS = {
   units: "metric",

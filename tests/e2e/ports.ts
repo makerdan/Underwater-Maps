@@ -39,6 +39,25 @@ export const E2E_API_PORT = envPort("E2E_API_PORT", 3161);
  */
 export const E2E_BUNDLE_TEST_PORT = envPort("E2E_BUNDLE_TEST_PORT", 4173);
 
+/**
+ * Per-run output directory for the api-server E2E build, keyed by the API
+ * port so parallel e2e runs (e.g. the main suite on the default ports and
+ * the palette suite on relocated ports) never race on the same dist folder.
+ * The default-port run keeps the historical "dist-e2e" name.
+ */
+export const E2E_DIST_DIR =
+  process.env["E2E_DIST_DIR"] ??
+  (E2E_API_PORT === 3161 ? "dist-e2e" : `dist-e2e-${E2E_API_PORT}`);
+
+/**
+ * Per-run identity suffix, keyed by the API port the same way E2E_DIST_DIR
+ * is. Parallel e2e runs must not share server-side user rows (settings,
+ * onboarding flags, datasets) or one run's writes clobber the other's
+ * assertions mid-test. The default-port run keeps the historical bare
+ * identity (empty suffix).
+ */
+export const E2E_RUN_SUFFIX = E2E_API_PORT === 3161 ? "" : `-${E2E_API_PORT}`;
+
 /** Base URL of the bathyscan frontend during E2E runs. */
 export const E2E_WEB_URL = `http://localhost:${E2E_WEB_PORT}`;
 

@@ -55,6 +55,14 @@ const STEPS = 5;
  * in the page as `undefined`, JSON.stringify drops the key, and the seed
  * silently does nothing.
  */
+// IMPORTANT: this function is serialized by Playwright and executed in the
+// browser, so it must not close over any outer variables — `value` arrives
+// as the init-script argument (the second parameter of page.addInitScript).
+// A previous version returned a closure capturing `value`; Playwright only
+// serializes the function source, so `value` was a ReferenceError at runtime
+// and the seed silently never landed (both writes were swallowed by the
+// try/catch), leaving the test's starting state to a race between server
+// hydration and the first local settings edit.
 function patchOnboardingLocalStorage(value: boolean) {
   try {
     const raw = localStorage.getItem("bathyscan:settings");

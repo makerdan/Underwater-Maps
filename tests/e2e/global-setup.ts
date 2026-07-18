@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, statSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { E2E_DIST_DIR } from "./ports";
 
 // Playwright always invokes global-setup from the repo root (where
 // playwright.config.ts lives), so process.cwd() reliably gives us the
@@ -65,7 +66,7 @@ function mtimeMs(filePath: string): number {
 // E2E build check — skip if dist-e2e/index.mjs is newer than all source files
 // ---------------------------------------------------------------------------
 
-const distEntry = resolve(apiServerDir, "dist-e2e/index.mjs");
+const distEntry = resolve(apiServerDir, E2E_DIST_DIR, "index.mjs");
 
 function isBuildStale(): boolean {
   const distMtime = mtimeMs(distEntry);
@@ -119,10 +120,15 @@ export default function globalSetup() {
   // --- Codegen ---
   if (codegenMissing) {
     console.log("[global-setup] Generated API files missing — running codegen…");
-    execSync("pnpm --filter @workspace/api-spec run codegen", {
-      cwd: root,
-      stdio: "inherit",
-    });
+    // Use the locked wrapper (codegen:generate) so a concurrent validation
+    // workflow's codegen never races with this one, then emit lib .d.ts.
+    execSync(
+      "pnpm --filter @workspace/api-spec run codegen:generate && pnpm -w run typecheck:libs",
+      {
+        cwd: root,
+        stdio: "inherit",
+      },
+    );
     console.log("[global-setup] Codegen complete.");
   } else {
     console.log("[global-setup] Generated API files present — skipping codegen.");
@@ -130,17 +136,17 @@ export default function globalSetup() {
 
   // --- E2E server build ---
   if (isBuildStale()) {
-    console.log("[global-setup] dist-e2e/ is missing or stale — building api-server…");
+    console.log(`[global-setup] ${E2E_DIST_DIR}/ is missing or stale — building api-server…`);
     // Call build.mjs directly (not via `pnpm run build`) so that DIST_DIR is
     // unambiguously inherited by the Node.js process and not at risk of being
     // dropped or overridden by pnpm's script runner.
     execSync("node ./build.mjs", {
       cwd: apiServerDir,
       stdio: "inherit",
-      env: { ...process.env, DIST_DIR: "dist-e2e" },
+      env: { ...process.env, DIST_DIR: E2E_DIST_DIR },
     });
     console.log("[global-setup] api-server build complete.");
   } else {
-    console.log("[global-setup] dist-e2e/index.mjs is current — skipping build.");
+    console.log(`[global-setup] ${E2E_DIST_DIR}/index.mjs is current — skipping build.`);
   }
 }

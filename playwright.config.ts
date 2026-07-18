@@ -6,9 +6,10 @@ import {
   E2E_API_PORT,
   E2E_WEB_URL,
   E2E_API_URL,
+  E2E_DIST_DIR,
 } from "./tests/e2e/ports";
 // Per-suite bypass identity — single source of truth in fixtures.ts (derived
-// from E2E_API_PORT / E2E_USER_ID) so the specs and the browser-side header
+// from E2E_RUN_SUFFIX / E2E_USER_ID) so the specs and the browser-side header
 // injection can never disagree.
 import { E2E_USER_ID } from "./tests/e2e/fixtures";
 
@@ -132,8 +133,10 @@ export default defineConfig({
       // valid dist-e2e/index.mjs. On a warm dev loop esbuild is fast enough
       // (~1–2 s) that the safety net cost is negligible.
       //
-      // The output directory is dist-e2e/ (not dist/) so this process never
-      // races with the regular API Server dev workflow over the same folder.
+      // The output directory is E2E_DIST_DIR (dist-e2e/ for the default-port
+      // run, dist-e2e-<port>/ for relocated runs like the palette suite) so
+      // this process never races with the regular API Server dev workflow —
+      // or with a parallel e2e run on other ports — over the same folder.
       //
       // Health-check URL is /api/healthz (a public, no-auth endpoint that
       // always returns 200 immediately) rather than /api/datasets (which would
@@ -152,7 +155,7 @@ export default defineConfig({
       // connection setup can exceed 5 s, producing "Connection terminated due
       // to connection timeout" on the startup queries. A 30 s acquire window
       // rides out that transient contention instead of failing.
-      command: `node scripts/kill-port-holders.mjs ${E2E_API_PORT} && pnpm --filter @workspace/api-server run build:e2e && PORT=${E2E_API_PORT} E2E_AUTH_BYPASS=1 DB_CONNECTION_TIMEOUT_MS=30000 pnpm --filter @workspace/api-server run start:e2e`,
+      command: `node scripts/kill-port-holders.mjs ${E2E_API_PORT} && DIST_DIR=${E2E_DIST_DIR} pnpm --filter @workspace/api-server run build:e2e && PORT=${E2E_API_PORT} DIST_DIR=${E2E_DIST_DIR} E2E_AUTH_BYPASS=1 DB_CONNECTION_TIMEOUT_MS=30000 pnpm --filter @workspace/api-server run start:e2e`,
       url: `${E2E_API_URL}/api/healthz`,
       reuseExistingServer: false,
       timeout: 60_000,
@@ -167,9 +170,10 @@ export default defineConfig({
       // gps-trail, smoke, currents) render the authenticated UI and assert
       // instead of skipping on "canvas not visible".
       // VITE_E2E_USER_ID keeps the browser-side bypass identity in lockstep
-      // with tests/e2e/fixtures.ts E2E_USER_ID (both read the same E2E_USER_ID
-      // env var), so a secondary suite on its own ports uses its own settings
-      // rows and cannot clobber a concurrently running suite's state.
+      // with tests/e2e/fixtures.ts E2E_USER_ID (both derive from the same
+      // run suffix / E2E_USER_ID env var), so a secondary suite on its own
+      // ports uses its own settings rows and cannot clobber a concurrently
+      // running suite's state.
       command: `PORT=${E2E_WEB_PORT} BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 VITE_E2E_PRESERVE_BUFFER=1 VITE_E2E_USER_ID=${E2E_USER_ID} E2E_API_SERVER_URL=${E2E_API_URL} pnpm --filter @workspace/bathyscan run dev`,
       url: E2E_WEB_URL,
       reuseExistingServer: false,

@@ -138,8 +138,10 @@ export function AccountSection() {
               {user.primaryEmailAddress?.emailAddress ?? "(none)"}
             </div>
             <div data-testid="last-synced-row">
-              <span style={{ color: "#94a3b8" }}>Last sync: </span>
-              {lastSyncedAt ? formatLastSynced(lastSyncedAt) : "—"}
+              <span style={{ color: "#94a3b8" }}>LAST SYNCED: </span>
+              <span style={{ color: lastSyncedAt ? "#e2e8f0" : "#94a3b8" }}>
+                {lastSyncedAt ? formatLastSynced(lastSyncedAt) : "NEVER"}
+              </span>
             </div>
           </div>
           <div style={{ padding: "0 16px 14px" }}>

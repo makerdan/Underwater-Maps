@@ -22,13 +22,14 @@
  * created during a bypass session can be cleaned up predictably.
  */
 
-// Overridable per e2e suite (VITE_E2E_USER_ID) so two concurrently running
-// Playwright suites (e.g. the full run and the palette run) do not share the
-// same server-side settings rows and clobber each other's PUT /api/settings.
-// Dev-only: import.meta.env reads are DCE'd out of production builds along
-// with the rest of the bypass machinery.
+// Per-run override: parallel e2e runs pass VITE_E2E_USER_ID (see the
+// webServer command in playwright.config.ts) so relocated suites use a
+// port-suffixed identity and never share server-side rows with the
+// default-port run. DEV-gated so production builds keep the constant and
+// tree-shake the env read.
 export const FAKE_DEV_USER_ID: string =
-  (import.meta.env.DEV && import.meta.env.VITE_E2E_USER_ID) || "dev-user-bypass";
+  (import.meta.env.DEV && (import.meta.env.VITE_E2E_USER_ID as string | undefined)) ||
+  "dev-user-bypass";
 
 export const FAKE_DEV_USER = {
   id: FAKE_DEV_USER_ID,

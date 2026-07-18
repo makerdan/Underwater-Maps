@@ -129,15 +129,14 @@ export function GeneralSection() {
           sublabel="No bundled preset regions are available. Upload your own data or save a dataset from Find Data to use as a default."
         />
       </div>
-      {/* Guided tour card */}
+      {/* Guided Tour card — restored after the Settings.tsx split dropped it
+          (e2e contract: replay-tour-btn lives in the GENERAL tab). */}
       <div style={S.card}>
         <div style={S.cardHeader}>GUIDED TOUR</div>
         <div style={S.row}>
           <div>
-            <div style={S.label}>Replay tour</div>
-            <div style={S.sublabel}>
-              Walk through the 5 core actions — datasets, flying, markers, overlays, and AI.
-            </div>
+            <div style={S.label}>Replay App Tour</div>
+            <div style={S.sublabel}>Reset the onboarding tour and restart it from the beginning</div>
           </div>
           <button
             type="button"

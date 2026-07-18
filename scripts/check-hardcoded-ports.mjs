@@ -113,7 +113,7 @@ function* walk(entry) {
   }
   if (!stat.isDirectory()) return;
   for (const name of fs.readdirSync(entry)) {
-    if (SKIP_DIRS.has(name)) continue;
+    if (SKIP_DIRS.has(name) || name.startsWith("dist-e2e-")) continue;
     yield* walk(path.join(entry, name));
   }
 }
