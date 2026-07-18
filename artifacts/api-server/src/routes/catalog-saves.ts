@@ -251,6 +251,117 @@ router.post("/datasets/bbox-query", asyncHandler(async (req, res): Promise<void>
 }));
 
 // ---------------------------------------------------------------------------
+// POST /datasets/point-radius-query
+//
+// "Give me datasets around this point" — converts a center point + radius
+// into a latitude-corrected bounding box (the longitude span widens toward
+// the poles) and returns catalog entries whose coverage intersects it, in
+// the same response shape as /datasets/bbox-query so clients can render
+// results identically. The circle is approximated by its bounding box,
+// matching the existing bbox intersection logic.
+// ---------------------------------------------------------------------------
+
+const PointRadiusQueryBody = z.object({
+  lat: z.number().finite(),
+  lon: z.number().finite(),
+  radius: z.number().finite(),
+  unit: z.enum(["km", "nmi"]).optional().default("km"),
+  dataType: z.enum(["bathymetry", "substrate", "habitat", "lidar", "chart"]).optional(),
+  waterType: z.enum(["saltwater", "freshwater"]).optional(),
+});
+
+// Mean km per degree of latitude, and per degree of longitude at the equator.
+const KM_PER_DEG_LAT = 110.574;
+const KM_PER_DEG_LON_EQUATOR = 111.32;
+const KM_PER_NMI = 1.852;
+
+// Radius caps derived from the bbox-route limits so a point-radius query can
+// never construct a bbox the bbox route itself would reject:
+//   * min: half of MIN_BBOX_DEG in latitude terms (bbox spans 2 × radius)
+//   * max: half of MAX_BBOX_LAT_DEG in latitude terms
+const MIN_RADIUS_KM = (MIN_BBOX_DEG / 2) * KM_PER_DEG_LAT;   // ≈ 0.0055 km (~5.5 m)
+const MAX_RADIUS_KM = (MAX_BBOX_LAT_DEG / 2) * KM_PER_DEG_LAT; // ≈ 9399 km
+
+router.post("/datasets/point-radius-query", asyncHandler(async (req, res): Promise<void> => {
+  const parsed = PointRadiusQueryBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "),
+    });
+    return;
+  }
+
+  const { dataType, waterType, unit } = parsed.data;
+  const lat = parsed.data.lat;
+  const lon = normalizeLon(parsed.data.lon);
+  const radiusKm = unit === "nmi" ? parsed.data.radius * KM_PER_NMI : parsed.data.radius;
+
+  if (lat < -90 || lat > 90) {
+    res.status(400).json({ error: "invalid_point", details: "lat must be between -90 and 90" });
+    return;
+  }
+  if (radiusKm < MIN_RADIUS_KM) {
+    res.status(400).json({
+      error: "invalid_radius",
+      details: `radius too small (min ${MIN_RADIUS_KM.toFixed(4)} km)`,
+    });
+    return;
+  }
+  if (radiusKm > MAX_RADIUS_KM) {
+    res.status(400).json({
+      error: "invalid_radius",
+      details: `radius too large (max ${Math.floor(MAX_RADIUS_KM)} km)`,
+    });
+    return;
+  }
+
+  // Latitude-aware conversion: one degree of longitude shrinks by cos(lat),
+  // so the longitude half-span of the circle widens toward the poles.
+  const latDelta = radiusKm / KM_PER_DEG_LAT;
+  const kmPerDegLon = KM_PER_DEG_LON_EQUATOR * Math.cos((lat * Math.PI) / 180);
+  const lonDelta = kmPerDegLon > 0 ? radiusKm / kmPerDegLon : Infinity;
+
+  const north = Math.min(90, lat + latDelta);
+  const south = Math.max(-90, lat - latDelta);
+  const east = lon + lonDelta;
+  const west = lon - lonDelta;
+
+  if (!isFinite(lonDelta) || east - west > MAX_BBOX_LON_DEG) {
+    res.status(400).json({
+      error: "invalid_radius",
+      details: `radius spans more than ${MAX_BBOX_LON_DEG}° of longitude at this latitude — reduce the radius or move away from the pole`,
+    });
+    return;
+  }
+  if (east > 180 || west < -180) {
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: "search circle crosses the antimeridian (antimeridian-crossing queries are not supported)",
+    });
+    return;
+  }
+
+  const results = await searchCatalog({
+    dataType,
+    waterType,
+    minLon: west,
+    minLat: south,
+    maxLon: east,
+    maxLat: north,
+  });
+  res.json({
+    center: { lat, lon },
+    radiusKm,
+    bbox: { north, south, east, west },
+    datasets: results.map((r) => ({
+      ...toCatalogResponse(r, r.createdAt),
+      relevanceScore: r.relevanceScore,
+    })),
+  });
+}));
+
+// ---------------------------------------------------------------------------
 // POST /datasets/catalog/:id/save  (auth-gated)
 // ---------------------------------------------------------------------------
 

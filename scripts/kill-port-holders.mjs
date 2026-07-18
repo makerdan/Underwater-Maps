@@ -170,6 +170,27 @@ function selfAncestors() {
 
 const PROTECTED = selfAncestors();
 
+/**
+ * A holder is "our own" if walking its parent chain reaches one of our
+ * ancestors (other than PID 1) before hitting init. Playwright starts its
+ * webServer BEFORE globalSetup runs, so the current run's servers are sibling
+ * subtrees under the same Playwright process — killing them would sabotage
+ * the very run this sweep is protecting. Stale servers from a dead previous
+ * run are reparented to PID 1 and therefore never match.
+ */
+function isOwnedByProtected(pid) {
+  let current = pid;
+  for (let i = 0; i < 64; i++) {
+    const s = statOf(current);
+    if (!s) return false;
+    const parent = s.ppid;
+    if (parent <= 1) return false;
+    if (PROTECTED.has(parent)) return true;
+    current = parent;
+  }
+  return false;
+}
+
 // Wrapper comms we are allowed to climb through / consider part of a stale
 // dev-server tree. Anything else (workflow supervisors, editors, the TS
 // language server, system daemons) is a hard boundary.
@@ -257,10 +278,21 @@ async function freePort(port) {
       console.error(`kill-port-holders: refusing to kill own ancestor pid ${holder} holding port ${port}.`);
       return false;
     }
+    if (isOwnedByProtected(holder)) {
+      console.log(
+        `kill-port-holders: port ${port} held by pid ${holder}, which belongs to this run's own process tree — leaving it alone.`,
+      );
+      continue;
+    }
     const root = treeRootOf(holder);
     for (const pid of subtreeOf(root)) {
       if (!PROTECTED.has(pid)) victims.add(pid);
     }
+  }
+
+  if (victims.size === 0) {
+    // Every holder belongs to this run's own process tree — nothing to kill.
+    return true;
   }
 
   console.log(

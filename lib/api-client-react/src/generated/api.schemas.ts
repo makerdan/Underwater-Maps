@@ -2848,6 +2848,80 @@ export type PostDatasetsBboxQuery200 = {
   datasets: DatasetCatalogSearchResult[];
 };
 
+/**
+ * Radius unit — kilometers or nautical miles
+ */
+export type PostDatasetsPointRadiusQueryBodyUnit = typeof PostDatasetsPointRadiusQueryBodyUnit[keyof typeof PostDatasetsPointRadiusQueryBodyUnit];
+
+
+export const PostDatasetsPointRadiusQueryBodyUnit = {
+  km: 'km',
+  nmi: 'nmi',
+} as const;
+
+export type PostDatasetsPointRadiusQueryBodyDataType = typeof PostDatasetsPointRadiusQueryBodyDataType[keyof typeof PostDatasetsPointRadiusQueryBodyDataType];
+
+
+export const PostDatasetsPointRadiusQueryBodyDataType = {
+  bathymetry: 'bathymetry',
+  substrate: 'substrate',
+  habitat: 'habitat',
+  lidar: 'lidar',
+  chart: 'chart',
+} as const;
+
+export type PostDatasetsPointRadiusQueryBodyWaterType = typeof PostDatasetsPointRadiusQueryBodyWaterType[keyof typeof PostDatasetsPointRadiusQueryBodyWaterType];
+
+
+export const PostDatasetsPointRadiusQueryBodyWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
+
+export type PostDatasetsPointRadiusQueryBody = {
+  /**
+     * Center latitude in decimal degrees
+     * @minimum -90
+     * @maximum 90
+     */
+  lat: number;
+  /**
+     * Center longitude in decimal degrees
+     * @minimum -180
+     * @maximum 180
+     */
+  lon: number;
+  /**
+     * Search radius in the selected unit
+     * @minimum 0
+     */
+  radius: number;
+  /** Radius unit — kilometers or nautical miles */
+  unit?: PostDatasetsPointRadiusQueryBodyUnit;
+  dataType?: PostDatasetsPointRadiusQueryBodyDataType;
+  waterType?: PostDatasetsPointRadiusQueryBodyWaterType;
+};
+
+export type PostDatasetsPointRadiusQuery200Center = {
+  lat: number;
+  lon: number;
+};
+
+export type PostDatasetsPointRadiusQuery200Bbox = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
+
+export type PostDatasetsPointRadiusQuery200 = {
+  center: PostDatasetsPointRadiusQuery200Center;
+  /** The radius converted to kilometers */
+  radiusKm: number;
+  bbox: PostDatasetsPointRadiusQuery200Bbox;
+  datasets: DatasetCatalogSearchResult[];
+};
+
 export type GetNceiSearchParams = {
 /**
  * Free-text keyword query (e.g. "Sitka bathymetry", "Alaska DEM")

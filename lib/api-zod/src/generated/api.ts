@@ -2705,6 +2705,81 @@ export const PostDatasetsBboxQueryResponse = zod.object({
 
 
 /**
+ * Converts a center point plus radius into a latitude-corrected bounding
+box (the longitude span widens toward the poles) and returns the
+dataset catalog entries whose coverage bbox intersects it. The circle
+is approximated by its bounding box, matching the bbox-query
+intersection logic, and the response reuses the same dataset shape.
+
+Validation rules:
+  * lat must be within [-90, 90]; lon is normalized to [-180, 180]
+  * radius must be at least ~0.0055 km (half the minimum bbox span)
+    and at most ~9399 km (half the maximum bbox latitude span)
+  * unit selects kilometers (km, default) or nautical miles (nmi)
+  * circles whose bbox would span more than 180° of longitude at the
+    given latitude are rejected (too close to a pole)
+  * circles whose bbox would cross the antimeridian are rejected
+
+ * @summary Find catalog datasets whose coverage intersects a circle around a point
+ */
+export const postDatasetsPointRadiusQueryBodyLatMin = -90;
+export const postDatasetsPointRadiusQueryBodyLatMax = 90;
+
+export const postDatasetsPointRadiusQueryBodyLonMin = -180;
+export const postDatasetsPointRadiusQueryBodyLonMax = 180;
+
+export const postDatasetsPointRadiusQueryBodyRadiusMin = 0;
+
+export const postDatasetsPointRadiusQueryBodyUnitDefault = `km`;
+
+export const PostDatasetsPointRadiusQueryBody = zod.object({
+  "lat": zod.number().min(postDatasetsPointRadiusQueryBodyLatMin).max(postDatasetsPointRadiusQueryBodyLatMax).describe('Center latitude in decimal degrees'),
+  "lon": zod.number().min(postDatasetsPointRadiusQueryBodyLonMin).max(postDatasetsPointRadiusQueryBodyLonMax).describe('Center longitude in decimal degrees'),
+  "radius": zod.number().min(postDatasetsPointRadiusQueryBodyRadiusMin).describe('Search radius in the selected unit'),
+  "unit": zod.enum(['km', 'nmi']).default(postDatasetsPointRadiusQueryBodyUnitDefault).describe('Radius unit — kilometers or nautical miles'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']).optional(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional()
+})
+
+export const PostDatasetsPointRadiusQueryResponse = zod.object({
+  "center": zod.object({
+  "lat": zod.number(),
+  "lon": zod.number()
+}),
+  "radiusKm": zod.number().describe('The radius converted to kilometers'),
+  "bbox": zod.object({
+  "north": zod.number(),
+  "south": zod.number(),
+  "east": zod.number(),
+  "west": zod.number()
+}),
+  "datasets": zod.array(zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog').and(zod.object({
+  "relevanceScore": zod.number().describe('0–1 relevance to the search query')
+})))
+})
+
+
+/**
  * Proxies a keyword + optional bounding-box search against the NCEI
 Bathymetry Geoportal (ncei.noaa.gov/maps/bathymetry/). Results are
 normalised, filtered to records with a valid bbox, and cached for

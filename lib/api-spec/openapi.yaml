@@ -1690,6 +1690,85 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /datasets/point-radius-query:
+    post:
+      operationId: postDatasetsPointRadiusQuery
+      tags: [datasets]
+      summary: Find catalog datasets whose coverage intersects a circle around a point
+      description: |
+        Converts a center point plus radius into a latitude-corrected bounding
+        box (the longitude span widens toward the poles) and returns the
+        dataset catalog entries whose coverage bbox intersects it. The circle
+        is approximated by its bounding box, matching the bbox-query
+        intersection logic, and the response reuses the same dataset shape.
+
+        Validation rules:
+          * lat must be within [-90, 90]; lon is normalized to [-180, 180]
+          * radius must be at least ~0.0055 km (half the minimum bbox span)
+            and at most ~9399 km (half the maximum bbox latitude span)
+          * unit selects kilometers (km, default) or nautical miles (nmi)
+          * circles whose bbox would span more than 180° of longitude at the
+            given latitude are rejected (too close to a pole)
+          * circles whose bbox would cross the antimeridian are rejected
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lat, lon, radius]
+              properties:
+                lat: { type: number, minimum: -90, maximum: 90, description: Center latitude in decimal degrees }
+                lon: { type: number, minimum: -180, maximum: 180, description: Center longitude in decimal degrees }
+                radius: { type: number, minimum: 0, description: Search radius in the selected unit }
+                unit:
+                  type: string
+                  enum: [km, nmi]
+                  default: km
+                  description: Radius unit — kilometers or nautical miles
+                dataType:
+                  type: string
+                  enum: [bathymetry, substrate, habitat, lidar, chart]
+                waterType:
+                  type: string
+                  enum: [saltwater, freshwater]
+      responses:
+        "200":
+          description: Catalog entries intersecting the circle's bounding box, ordered by relevance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [center, radiusKm, bbox, datasets]
+                properties:
+                  center:
+                    type: object
+                    required: [lat, lon]
+                    properties:
+                      lat: { type: number }
+                      lon: { type: number }
+                  radiusKm:
+                    type: number
+                    description: The radius converted to kilometers
+                  bbox:
+                    type: object
+                    required: [north, south, east, west]
+                    properties:
+                      north: { type: number }
+                      south: { type: number }
+                      east:  { type: number }
+                      west:  { type: number }
+                  datasets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DatasetCatalogSearchResult"
+        "400":
+          description: Invalid center point, radius out of range, or circle crossing the antimeridian / spanning too much longitude
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /ncei/search:
     get:
       operationId: getNceiSearch

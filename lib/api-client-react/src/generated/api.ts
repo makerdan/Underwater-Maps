@@ -114,6 +114,8 @@ import type {
   PoeUpscaleBody,
   PostDatasetsBboxQuery200,
   PostDatasetsBboxQueryBody,
+  PostDatasetsPointRadiusQuery200,
+  PostDatasetsPointRadiusQueryBody,
   PostDatasetsUploadBody,
   PostGithubWorkflowDispatchBody,
   PutGithubFileContents200,
@@ -4018,6 +4020,92 @@ export const usePostDatasetsBboxQuery = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getPostDatasetsBboxQueryMutationOptions(options));
+    }
+
+export const getPostDatasetsPointRadiusQueryUrl = () => {
+
+
+
+
+  return `/api/datasets/point-radius-query`
+}
+
+/**
+ * Converts a center point plus radius into a latitude-corrected bounding
+box (the longitude span widens toward the poles) and returns the
+dataset catalog entries whose coverage bbox intersects it. The circle
+is approximated by its bounding box, matching the bbox-query
+intersection logic, and the response reuses the same dataset shape.
+
+Validation rules:
+  * lat must be within [-90, 90]; lon is normalized to [-180, 180]
+  * radius must be at least ~0.0055 km (half the minimum bbox span)
+    and at most ~9399 km (half the maximum bbox latitude span)
+  * unit selects kilometers (km, default) or nautical miles (nmi)
+  * circles whose bbox would span more than 180° of longitude at the
+    given latitude are rejected (too close to a pole)
+  * circles whose bbox would cross the antimeridian are rejected
+
+ * @summary Find catalog datasets whose coverage intersects a circle around a point
+ */
+export const postDatasetsPointRadiusQuery = async (postDatasetsPointRadiusQueryBody: PostDatasetsPointRadiusQueryBody, options?: RequestInit): Promise<PostDatasetsPointRadiusQuery200> => {
+
+  return customFetch<PostDatasetsPointRadiusQuery200>(getPostDatasetsPointRadiusQueryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      postDatasetsPointRadiusQueryBody,)
+  }
+);}
+
+
+
+
+export const getPostDatasetsPointRadiusQueryMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsPointRadiusQuery>>, TError,{data: BodyType<PostDatasetsPointRadiusQueryBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsPointRadiusQuery>>, TError,{data: BodyType<PostDatasetsPointRadiusQueryBody>}, TContext> => {
+
+const mutationKey = ['postDatasetsPointRadiusQuery'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsPointRadiusQuery>>, {data: BodyType<PostDatasetsPointRadiusQueryBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postDatasetsPointRadiusQuery(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostDatasetsPointRadiusQueryMutationResult = NonNullable<Awaited<ReturnType<typeof postDatasetsPointRadiusQuery>>>
+    export type PostDatasetsPointRadiusQueryMutationBody = BodyType<PostDatasetsPointRadiusQueryBody>
+    export type PostDatasetsPointRadiusQueryMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Find catalog datasets whose coverage intersects a circle around a point
+ */
+export const usePostDatasetsPointRadiusQuery = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsPointRadiusQuery>>, TError,{data: BodyType<PostDatasetsPointRadiusQueryBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postDatasetsPointRadiusQuery>>,
+        TError,
+        {data: BodyType<PostDatasetsPointRadiusQueryBody>},
+        TContext
+      > => {
+      return useMutation(getPostDatasetsPointRadiusQueryMutationOptions(options));
     }
 
 export const getGetNceiSearchUrl = (params?: GetNceiSearchParams,) => {

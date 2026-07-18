@@ -38,11 +38,11 @@ args = "test-settings-validation"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "audit"
+args = "test-e2e-palette"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "test-e2e-palette"
+args = "audit"
 
 [[workflows.workflow]]
 name = "typecheck"
@@ -100,23 +100,23 @@ args = "pnpm --filter @workspace/api-server run test:validation"
 isValidation = true
 
 [[workflows.workflow]]
+name = "test-e2e-palette"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash -c 'set -o pipefail; mkdir -p .local/tmp && E2E_WEB_PORT=3250 E2E_API_PORT=3261 npx playwright test tests/e2e/palette-cross-device-sync.spec.ts tests/e2e/onboarding-tour.spec.ts tests/e2e/settings-cross-device-sync.spec.ts tests/e2e/settings-save-buttons.spec.ts tests/e2e/zone-colour-server-sync.spec.ts tests/e2e/tooltips.spec.ts tests/e2e/adaptive-palette.spec.ts 2>&1 | tee .local/tmp/palette-e2e.log'"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
 name = "audit"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm audit --audit-level=moderate"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "test-e2e-palette"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "bash -c 'set -o pipefail; mkdir -p .local/tmp && npx playwright test tests/e2e/palette-cross-device-sync.spec.ts tests/e2e/onboarding-tour.spec.ts tests/e2e/settings-cross-device-sync.spec.ts tests/e2e/settings-save-buttons.spec.ts tests/e2e/zone-colour-server-sync.spec.ts tests/e2e/tooltips.spec.ts tests/e2e/adaptive-palette.spec.ts 2>&1 | tee .local/tmp/palette-e2e.log'"
 
 [workflows.workflow.metadata]
 isValidation = true
