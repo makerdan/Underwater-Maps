@@ -26,7 +26,7 @@
  */
 
 import { Router } from "express";
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, desc, asc } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { CatalogSearchQuerySchema, CatalogIdParamSchema, SaveIdParamSchema } from "./schemas.js";
@@ -128,6 +128,20 @@ void recoverStuckSaves();
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Extract the real created date from a catalog entry. Rows loaded from the DB
+ * carry a `created_at` timestamp (Date at runtime) even though the
+ * CatalogSeedEntry interface doesn't declare it. Returning a stable value
+ * keeps repeated responses byte-identical so react-query structural sharing
+ * can skip re-renders during polling.
+ */
+function entryCreatedAtIso(entry: CatalogSeedEntry): string | undefined {
+  const raw = (entry as CatalogSeedEntry & { createdAt?: Date | string }).createdAt;
+  if (raw instanceof Date) return raw.toISOString();
+  if (typeof raw === "string") return raw;
+  return undefined;
+}
 
 function toCatalogResponse(entry: CatalogSeedEntry, createdAt?: string) {
   return {
@@ -926,7 +940,8 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
   const rows = await db
     .select()
     .from(userCatalogSavesTable)
-    .where(eq(userCatalogSavesTable.userId, userId));
+    .where(eq(userCatalogSavesTable.userId, userId))
+    .orderBy(desc(userCatalogSavesTable.requestedAt), asc(userCatalogSavesTable.id));
 
   const entries = await getCatalogEntries();
   const entryMap = new Map(entries.map((e) => [e.id, e]));
@@ -1040,7 +1055,7 @@ export function formatSaveRow(
     cacheKey: row.cacheKey ?? null,
     errorMessage: row.errorMessage ?? null,
     datasetId: row.datasetId ?? null,
-    catalog: entry ? { ...toCatalogResponse(entry), createdAt: new Date().toISOString() } : null,
+    catalog: entry ? toCatalogResponse(entry, entryCreatedAtIso(entry)) : null,
   };
 }
 

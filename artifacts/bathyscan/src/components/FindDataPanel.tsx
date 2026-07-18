@@ -1220,7 +1220,15 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     };
   }, []);
 
-  const visibleSaves = mySaves.filter((s) => !pendingDeleteSaveIds.has(s.id));
+  // Defensive stable sort (newest requested first, id tiebreaker) so the list
+  // can't jump between polls even if the server ever returns unordered rows.
+  const visibleSaves = mySaves
+    .filter((s) => !pendingDeleteSaveIds.has(s.id))
+    .sort((a, b) => {
+      const t = new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime();
+      if (t !== 0) return t;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
 
   const handleSave = useCallback(
     async (id: string) => {
