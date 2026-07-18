@@ -339,3 +339,19 @@ test("page reload restores the previously active sidebar mode", async ({ page })
   await waitForSidebarTabs(page);
   await expect(exploreTab).toHaveAttribute("aria-pressed", "true", { timeout: 8_000 });
 });
+
+test("mobile viewport: icon-only tabs remain clickable", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  injectSettings(page, BASE);
+  await page.goto("/");
+  await waitForSidebarTabs(page);
+
+  const planTab = page.locator('[data-testid="sidebar-mode-tab-plan"]');
+  // Icon-only: no visible text, but the accessible name is preserved.
+  await expect(planTab).toHaveText("");
+  await expect(planTab).toHaveAttribute("aria-label", "Plan");
+  await expect(planTab.locator("svg")).toBeAttached();
+
+  await planTab.click();
+  await expect(planTab).toHaveAttribute("aria-pressed", "true", { timeout: 5_000 });
+});

@@ -1,5 +1,7 @@
 /**
- * SidebarModeTabs — three icon+label tabs for Explore / Plan / Analyze modes.
+ * SidebarModeTabs — mode tabs for Explore / Plan / Analyze / Live.
+ *
+ * Desktop: text-only labels. Mobile (useIsMobile): icon-only with aria-label.
  *
  * Placed at the top of the left sidebar, above the panel groups.
  * Active mode is stored in uiStore (mirrored to settingsStore for persistence).
@@ -8,6 +10,7 @@
  */
 import React from "react";
 import { useUiStore } from "@/lib/uiStore";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { SidebarMode } from "@/lib/settingsStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
@@ -18,15 +21,17 @@ interface ModeTab {
   icon: React.ReactNode;
 }
 
+const ICON_SIZE = 20;
+
 const CompassIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="12" cy="12" r="10" />
     <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
   </svg>
 );
 
 const RouteIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="6" cy="19" r="3" />
     <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
     <circle cx="18" cy="5" r="3" />
@@ -34,7 +39,7 @@ const RouteIcon = () => (
 );
 
 const ChartIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <line x1="18" y1="20" x2="18" y2="10" />
     <line x1="12" y1="20" x2="12" y2="4" />
     <line x1="6" y1="20" x2="6" y2="14" />
@@ -42,7 +47,7 @@ const ChartIcon = () => (
 );
 
 const LiveIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="12" cy="12" r="2" />
     <path d="M16.24 7.76a6 6 0 0 1 0 8.49" />
     <path d="M7.76 16.24a6 6 0 0 1 0-8.49" />
@@ -81,6 +86,7 @@ const TABS: ModeTab[] = [
 export const SidebarModeTabs: React.FC = () => {
   const sidebarMode = useUiStore((s) => s.sidebarMode);
   const setSidebarMode = useUiStore((s) => s.setSidebarMode);
+  const isMobile = useIsMobile();
 
   return (
     <div
@@ -106,14 +112,15 @@ export const SidebarModeTabs: React.FC = () => {
               type="button"
               data-testid={`sidebar-mode-tab-${tab.mode}`}
               aria-pressed={isActive}
+              aria-label={tab.label}
               onClick={() => setSidebarMode(tab.mode)}
               style={{
                 flex: 1,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 5,
-                padding: "7px 4px",
+                padding: isMobile ? "12px 4px" : "8px 2px",
+                minHeight: isMobile ? 44 : undefined,
                 background: isActive
                   ? "rgba(0,229,255,0.12)"
                   : "transparent",
@@ -126,16 +133,16 @@ export const SidebarModeTabs: React.FC = () => {
                   : "2px solid transparent",
                 cursor: "pointer",
                 color: isActive ? "#00e5ff" : "#64748b",
-                fontSize: 13.5,
-                letterSpacing: "0.18em",
+                fontSize: 11.5,
+                letterSpacing: "0.06em",
                 textTransform: "uppercase",
                 fontWeight: isActive ? 700 : 400,
                 textShadow: isActive ? "0 0 6px rgba(0,229,255,0.5)" : "none",
                 transition: "background 0.15s, color 0.15s, border-color 0.15s",
+                whiteSpace: "nowrap",
               }}
             >
-              {tab.icon}
-              {tab.label}
+              {isMobile ? tab.icon : tab.label}
             </button>
           </ViewscreenTooltip>
         );
