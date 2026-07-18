@@ -51,4 +51,4 @@
 - [Skill frontmatter YAML must parse](skill-frontmatter-yaml.md) — unquoted colon in a SKILL.md description breaks YAML and silently hides the skill from skillSearch; use a >- block scalar.
 - [Stale workflow log tails](stale-workflow-logs.md) — after restart_workflow, tailing the latest /tmp/logs file can show the PREVIOUS run; use refresh_all_logs.
 - [Playwright dispatchEvent arg order](playwright-dispatchevent-options.md) — timeout goes in the 3rd arg; `{timeout}` as 2nd arg is eventInit and the call hangs to test timeout on absent elements.
-- [Upload event-loop freeze](upload-event-loop-freeze.md) — api-server event loop stalls ~160s during browser-path LAZ upload e2e; parse itself is 500ms; profile server, don't chase test code.
+- [Sparse-track gridder blowup](upload-event-loop-freeze.md) — minutes-long upload "freezes" were O(N⁴) IDW ring-fill on sparse tracks in the parse worker; healthz stayed fast — profile the worker, not the server.

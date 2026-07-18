@@ -55,6 +55,25 @@ describe("gridPoints", () => {
     expect(grid.maxLat).toBeCloseTo(22, 2);
   });
 
+  it("fills a sparse GPS-track grid at the default 256 resolution in seconds, not minutes", () => {
+    // Regression: ~12 collinear points (NMEA/GPX track) at resolution 256 used
+    // to trigger O(N⁴) ring expansion in the IDW fill — the parse worker spun
+    // for 150+ seconds and uploads appeared frozen at 60% progress.
+    const pts = [];
+    for (let i = 0; i < 12; i++) {
+      pts.push({ lon: -132.5 + i * 0.001, lat: 55.2 + i * 0.001, depth: 5 + i });
+    }
+    const start = Date.now();
+    const grid = gridPoints(pts, 256, "sparse", "Sparse Track");
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(10_000);
+    expect(grid.depths).toHaveLength(256 * 256);
+    for (const d of grid.depths) {
+      expect(Number.isFinite(d)).toBe(true);
+    }
+    expect(grid.maxDepth).toBeGreaterThan(grid.minDepth);
+  });
+
   it("clamps resolution below minimum to 32", () => {
     const pts = makePoints(30);
     expect(gridPoints(pts, 1, "t", "T").resolution).toBe(32);

@@ -1725,7 +1725,87 @@ export function gridPoints(
   // Step 3: inverse-distance-weighted (IDW) fill for sparse (empty) cells.
   // For each empty cell we expand outward in concentric Chebyshev rings until
   // we accumulate at least K weighted samples, then stop. Weight = 1 / dist².
+  //
+  // PERFORMANCE GUARD — direct fill for sparse occupancy:
+  // When very few cells are occupied (e.g. a GPS track: ~N points along a
+  // line), the ring expansion rarely collects K_MIN neighbours early, so
+  // nearly every empty cell scans the entire grid → O(N⁴) total work.  At the
+  // default N=256 that is billions of iterations and the parse worker spins
+  // for minutes (uploads appear frozen at 60% progress).  When the occupied
+  // count is small (≤ 8·N — covers line/track-shaped data at any resolution),
+  // we instead iterate the occupied-cell list directly per empty cell:
+  // select the K_MIN-th smallest Chebyshev distance (the radius the ring
+  // algorithm would have stopped at) and accumulate 1/dist² weights for all
+  // occupied cells within it.  This produces the same result as the ring
+  // walk in O(N² · occupied) time.
   const K_MIN = 8; // minimum neighbours to find before stopping
+  const occupiedIdx: number[] = [];
+  for (let i = 0; i < N * N; i++) {
+    if (counts[i]! > 0) occupiedIdx.push(i);
+  }
+  const DIRECT_FILL_MAX_OCCUPIED = 8 * N;
+
+  if (occupiedIdx.length > 0 && occupiedIdx.length <= DIRECT_FILL_MAX_OCCUPIED) {
+    const occ = occupiedIdx.length;
+    const occRow = new Int32Array(occ);
+    const occCol = new Int32Array(occ);
+    for (let k = 0; k < occ; k++) {
+      occRow[k] = Math.floor(occupiedIdx[k]! / N);
+      occCol[k] = occupiedIdx[k]! % N;
+    }
+    const target = Math.min(K_MIN, occ);
+    // Reusable buffer holding the `target` smallest Chebyshev distances seen.
+    const nearest = new Int32Array(target);
+    const chebs = new Int32Array(occ);
+
+    for (let i = 0; i < N * N; i++) {
+      if (counts[i]! > 0) continue;
+      const row = Math.floor(i / N);
+      const col = i % N;
+
+      // Pass 1: Chebyshev distances + track the `target` smallest.
+      let filled = 0;
+      for (let k = 0; k < occ; k++) {
+        const dr = Math.abs(occRow[k]! - row);
+        const dc = Math.abs(occCol[k]! - col);
+        const cheb = dr > dc ? dr : dc;
+        chebs[k] = cheb;
+        // Insertion into the small `nearest` max-at-end buffer.
+        if (filled < target) {
+          let j = filled++;
+          while (j > 0 && nearest[j - 1]! > cheb) {
+            nearest[j] = nearest[j - 1]!;
+            j--;
+          }
+          nearest[j] = cheb;
+        } else if (cheb < nearest[target - 1]!) {
+          let j = target - 1;
+          while (j > 0 && nearest[j - 1]! > cheb) {
+            nearest[j] = nearest[j - 1]!;
+            j--;
+          }
+          nearest[j] = cheb;
+        }
+      }
+      const rStop = nearest[filled - 1]!; // radius the ring walk would stop at
+
+      // Pass 2: accumulate IDW weights for all occupied cells within rStop.
+      let weightedSum = 0;
+      let weightSum = 0;
+      for (let k = 0; k < occ; k++) {
+        if (chebs[k]! > rStop) continue;
+        const dr = occRow[k]! - row;
+        const dc = occCol[k]! - col;
+        const dist2 = dr * dr + dc * dc;
+        const w = dist2 === 0 ? 1e12 : 1 / dist2;
+        weightedSum += depths[occupiedIdx[k]!]! * w;
+        weightSum += w;
+      }
+      if (weightSum > 0) {
+        depths[i] = weightedSum / weightSum;
+      }
+    }
+  } else {
   for (let i = 0; i < N * N; i++) {
     if (counts[i]! > 0) continue; // cell already has data
 
@@ -1763,6 +1843,7 @@ export function gridPoints(
     if (weightSum > 0) {
       depths[i] = weightedSum / weightSum;
     }
+  }
   }
 
   // Step 4: smooth spikes before computing final min/max (skipped when the

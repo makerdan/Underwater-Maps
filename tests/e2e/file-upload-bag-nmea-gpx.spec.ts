@@ -468,8 +468,11 @@ test.describe("NMEA file-upload flow", () => {
     const filename = `survey-e2e-bad-${Date.now()}.nmea`;
     await uploadBufferViaDropzone(page, noSentences, filename, "text/plain");
 
-    // The server returns details: "File must contain at least 10 valid (lon, lat, depth) rows"
-    const errorText = page.getByText(/at least 10 valid/i).first();
+    // The server returns NMEA-specific details ("no valid depth+position pairs")
+    // or the generic insufficient-data message ("at least 10 valid ... rows").
+    const errorText = page
+      .getByText(/no valid depth\+position pairs|at least 10 valid/i)
+      .first();
     await expect(errorText).toBeVisible({ timeout: 15_000 });
 
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
