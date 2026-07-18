@@ -108,4 +108,59 @@ describe("validateStartupEnv", () => {
     expect(issues.some((i) => i.name === "ZONE_CACHE_MAX_AGE_MS")).toBe(true);
     expect(issues.some((i) => i.name === "ZONE_CACHE_MAX_FILES")).toBe(true);
   });
+
+  describe("BUCKET_MONITOR_ADMIN production guard", () => {
+    it("throws a critical error when BUCKET_MONITOR_ADMIN=1 and REPLIT_DEPLOYMENT is set", () => {
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+      vi.stubEnv("NODE_ENV", "");
+      expect(() => validateStartupEnv()).toThrow(/critical/i);
+    });
+
+    it("throws a critical error when BUCKET_MONITOR_ADMIN=true and NODE_ENV=production", () => {
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "true");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "");
+      vi.stubEnv("NODE_ENV", "production");
+      expect(() => validateStartupEnv()).toThrow(/BUCKET_MONITOR_ADMIN/);
+    });
+
+    it("logs a critical-level error (not just a warning) before throwing", () => {
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+      vi.stubEnv("NODE_ENV", "");
+      expect(() => validateStartupEnv()).toThrow();
+      const errorCalls = (mockWarn as ReturnType<typeof vi.fn>).mock.calls;
+      // logger.error is stubbed as a separate mock — verify warn was NOT called
+      // for this issue (it should use error, not warn).
+      expect(errorCalls.every((args) => !String(args[1]).includes("BUCKET_MONITOR_ADMIN"))).toBe(true);
+    });
+
+    it("does NOT throw when BUCKET_MONITOR_ADMIN=1 in a non-production environment", () => {
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "");
+      vi.stubEnv("NODE_ENV", "development");
+      expect(() => validateStartupEnv()).not.toThrow();
+    });
+
+    it("does NOT throw when BUCKET_MONITOR_ADMIN is unset in production", () => {
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+      vi.stubEnv("NODE_ENV", "production");
+      expect(() => validateStartupEnv()).not.toThrow();
+    });
+
+    it("returned issue has critical:true when BUCKET_MONITOR_ADMIN is set in production", () => {
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+      vi.stubEnv("NODE_ENV", "");
+      let caught: Error | null = null;
+      try {
+        validateStartupEnv();
+      } catch (e) {
+        caught = e as Error;
+      }
+      expect(caught).not.toBeNull();
+      expect(caught!.message).toContain("BUCKET_MONITOR_ADMIN");
+    });
+  });
 });

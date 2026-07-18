@@ -14,6 +14,8 @@ import { validateStartupEnv } from "./lib/env";
 
 // Validate format-sensitive env vars once at startup. Malformed values are
 // logged loudly here (and safe fallbacks apply at each point of use).
+// Throws on critical misconfigurations (e.g. BUCKET_MONITOR_ADMIN=1 in
+// production) so the process exits before serving any requests.
 validateStartupEnv();
 
 const app: Express = express();

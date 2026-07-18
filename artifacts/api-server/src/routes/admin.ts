@@ -13,6 +13,9 @@ import { AdminRateLimitUsageQuerySchema } from "./schemas.js";
 const router = Router();
 
 function isAdmin(userId: string): boolean {
+  // BUCKET_MONITOR_ADMIN is a dev-only shortcut that bypasses per-user ID
+  // checks. It must NEVER be set in a production deployment — validateStartupEnv()
+  // will refuse to start the server if it detects this combination.
   const flag = process.env["BUCKET_MONITOR_ADMIN"] ?? "";
   if (flag === "1" || flag === "true") return true;
 

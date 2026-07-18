@@ -11,6 +11,8 @@ export interface EnvIssue {
   name: string;
   value: string;
   problem: string;
+  /** When true the caller must abort startup — the configuration is unsafe for production. */
+  critical?: boolean;
 }
 
 /**
@@ -115,10 +117,43 @@ export function validateStartupEnv(): EnvIssue[] {
     }
   }
 
+  // BUCKET_MONITOR_ADMIN=1 is a dev-only shortcut that grants every
+  // authenticated user full admin access. Allowing this in production would
+  // expose bucket-monitor, large-dataset diff, and rate-limit usage endpoints
+  // to all users. Treat this combination as a critical startup failure.
+  const bucketAdminFlag = process.env["BUCKET_MONITOR_ADMIN"] ?? "";
+  const isProduction =
+    process.env["NODE_ENV"] === "production" ||
+    Boolean(process.env["REPLIT_DEPLOYMENT"]);
+  if ((bucketAdminFlag === "1" || bucketAdminFlag === "true") && isProduction) {
+    issues.push({
+      name: "BUCKET_MONITOR_ADMIN",
+      value: bucketAdminFlag,
+      problem:
+        "must not be set in production — it grants every authenticated user full admin access. Remove it or restrict access via ADMIN_USER_IDS instead.",
+      critical: true,
+    });
+  }
+
   for (const issue of issues) {
-    logger.warn(
-      { name: issue.name, value: issue.value },
-      `[env] ${issue.name} ${issue.problem}`,
+    if (issue.critical) {
+      logger.error(
+        { name: issue.name, value: issue.value },
+        `[env] CRITICAL: ${issue.name} ${issue.problem}`,
+      );
+    } else {
+      logger.warn(
+        { name: issue.name, value: issue.value },
+        `[env] ${issue.name} ${issue.problem}`,
+      );
+    }
+  }
+
+  const criticalIssues = issues.filter((i) => i.critical);
+  if (criticalIssues.length > 0) {
+    throw new Error(
+      `Server startup aborted due to ${criticalIssues.length} critical env configuration issue(s). ` +
+        criticalIssues.map((i) => `${i.name}: ${i.problem}`).join("; "),
     );
   }
 
