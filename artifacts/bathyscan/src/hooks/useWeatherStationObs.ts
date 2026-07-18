@@ -35,6 +35,17 @@ interface CacheEntry {
 
 const localCache = new Map<string, CacheEntry>();
 
+interface PendingEntry {
+  promise: Promise<WeatherStationObs | null>;
+  controller: AbortController;
+  refCount: number;
+}
+
+// In-flight requests keyed by cache key so concurrent callers share one
+// network request.  Entries are removed when the fetch settles, or aborted
+// and removed when the last subscriber unmounts.
+const pendingCache = new Map<string, PendingEntry>();
+
 /**
  * Snap a Date to the start of its UTC 15-minute slot.
  * NOAA METAR observations are typically hourly, but the nearest-obs crossover
@@ -89,23 +100,46 @@ export function useWeatherStationObs(
     }
 
     let cancelled = false;
-    const controller = new AbortController();
     setIsLoading(true);
     setIsError(false);
 
-    const exactTime = targetTimeExactRef.current ?? targetTime15MinKey;
-    const url =
-      `${API_BASE}/api/weather-station-obs` +
-      `?stationId=${encodeURIComponent(stationId)}` +
-      `&time=${encodeURIComponent(exactTime)}`;
+    let pending = pendingCache.get(cacheKey);
+    if (!pending) {
+      const controller = new AbortController();
+      const exactTime = targetTimeExactRef.current ?? targetTime15MinKey;
+      const url =
+        `${API_BASE}/api/weather-station-obs` +
+        `?stationId=${encodeURIComponent(stationId)}` +
+        `&time=${encodeURIComponent(exactTime)}`;
 
-    fetch(url, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as { available: boolean; observation?: WeatherStationObs };
-        if (!cancelled) {
+      const promise = fetch(url, { signal: controller.signal })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const json = (await res.json()) as {
+            available: boolean;
+            observation?: WeatherStationObs;
+          };
           const obs = json.available && json.observation ? json.observation : null;
           localCache.set(cacheKey, { obs, fetchedAt: Date.now() });
+          return obs;
+        })
+        .finally(() => {
+          if (pendingCache.get(cacheKey) === entry) {
+            pendingCache.delete(cacheKey);
+          }
+        });
+
+      const entry: PendingEntry = { promise, controller, refCount: 0 };
+      pendingCache.set(cacheKey, entry);
+      pending = entry;
+    }
+
+    const subscribed = pending;
+    subscribed.refCount += 1;
+
+    subscribed.promise
+      .then((obs) => {
+        if (!cancelled) {
           setObservation(obs);
           setIsLoading(false);
         }
@@ -120,7 +154,11 @@ export function useWeatherStationObs(
 
     return () => {
       cancelled = true;
-      controller.abort();
+      subscribed.refCount -= 1;
+      if (subscribed.refCount <= 0 && pendingCache.get(cacheKey) === subscribed) {
+        subscribed.controller.abort();
+        pendingCache.delete(cacheKey);
+      }
     };
   }, [stationId, targetTime15MinKey, enabled]);
 
