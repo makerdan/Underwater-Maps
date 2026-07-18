@@ -35,7 +35,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
 });
 
 // ── Import component after mocks ──────────────────────────────────────────────
-import { TimelineScrubBar } from "@/components/TimelineScrubBar";
+import { TimelineScrubBar, DEPTH_PROFILE_CLEARANCE } from "@/components/TimelineScrubBar";
 import { useUiStore } from "@/lib/uiStore";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -43,8 +43,6 @@ import { useUiStore } from "@/lib/uiStore";
 const T0 = new Date("2024-06-01T00:00:00Z");
 const T12 = new Date("2024-06-01T12:00:00Z");
 const T24 = new Date("2024-06-02T00:00:00Z");
-
-const DEPTH_PROFILE_CLEARANCE = 340;
 
 function resetAllOverlays() {
   useUiStore.setState({
