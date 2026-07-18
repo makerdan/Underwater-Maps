@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "precodegen:generate": "node -e \"const fs=require('fs'),path=require('path'),root=path.resolve(__dirname,'..','..'); ['lib/api-client-react/src/generated','lib/api-zod/src/generated'].forEach(d=>fs.mkdirSync(path.resolve(root,d),{recursive:true}));\"",
-    "codegen": "orval --config ./orval.config.ts && node ./scripts/patch-zod-band-boundaries.mjs && node ./scripts/patch-zod-integer-settings.mjs && pnpm -w run typecheck:libs",
+    "codegen": "node ./scripts/codegen-locked.mjs && pnpm -w run typecheck:libs",
     "codegen:generate": "node ./scripts/codegen-locked.mjs",
     "check:codegen": "node ./scripts/check-codegen.mjs"
   },

@@ -41,3 +41,4 @@
 - [E2E global-setup port sweep](e2e-global-setup-port-sweep.md) — Playwright boots webServer before globalSetup; port sweeps there must exempt own-tree holders or they kill their own servers.
 - [NCEI geoportal response format](ncei-geoportal-response-format.md) — f=json now returns atom shape (empty results); omit f for ES hits.hits format; bbox lives in envelope_geo.
 - [Plan sidebar e2e breakage](plan-sidebar-e2e-breakage.md) — sidebar tabs restructure broke many e2e specs: Plan tab gating, server-persisted sidebarMode, terrain-gated Explore panel, onboarding overlay, initScript reload re-seeding.
+- [Validation serialization lock](validation-serialization-lock.md) — heavy validation steps wrap scripts/validation-lock.mjs so run budgets start after lock acquisition; concurrency caused false budget breaches.
