@@ -134,6 +134,32 @@ describe("PUT /api/settings — HTTP validation", () => {
     expect(fractional.status).toBe(400);
   });
 
+  it("accepts a valid followResumeDelaySec and rejects out-of-range values", async () => {
+    const ok = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-follow")
+      .send({ followResumeDelaySec: 45 });
+    expect(ok.status).toBe(200);
+
+    const tooSmall = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-follow")
+      .send({ followResumeDelaySec: 2 });
+    expect(tooSmall.status).toBe(400);
+
+    const tooBig = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-follow")
+      .send({ followResumeDelaySec: 500 });
+    expect(tooBig.status).toBe(400);
+
+    const wrongType = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-follow")
+      .send({ followResumeDelaySec: "soon" });
+    expect(wrongType.status).toBe(400);
+  });
+
   it("returns 400 when fogDensity is a string (wrong type)", async () => {
     const res = await request(app)
       .put("/api/settings")

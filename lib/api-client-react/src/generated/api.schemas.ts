@@ -1083,6 +1083,12 @@ export interface UserSettings {
   defaultTrailColor?: string;
   /** Number of days of GPS trail history to retain locally. "all" disables automatic pruning. */
   trailRetention?: UserSettingsTrailRetention;
+  /**
+     * Seconds of inactivity after a manual camera interaction before GPS Follow Me mode automatically resumes tracking.
+     * @minimum 5
+     * @maximum 120
+     */
+  followResumeDelaySec?: number;
   /** Automatically reload the most recently used dataset when the app starts. */
   autoLoadLastDataset?: boolean;
   /** Dataset to load automatically on every app start. Null means use the built-in default. */

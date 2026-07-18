@@ -1301,6 +1301,10 @@ export const getSettingsResponseAutoStartTrailRecordingDefault = false;
 export const getSettingsResponseDefaultTrailColorDefault = `#ff6600`;
 export const getSettingsResponseDefaultTrailColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const getSettingsResponseTrailRetentionDefault = `30`;
+export const getSettingsResponseFollowResumeDelaySecDefault = 20;
+export const getSettingsResponseFollowResumeDelaySecMin = 5;
+export const getSettingsResponseFollowResumeDelaySecMax = 120;
+
 export const getSettingsResponseAutoLoadLastDatasetDefault = true;
 export const getSettingsResponseReducedMotionDefault = false;
 export const getSettingsResponseColorBlindSafePaletteDefault = false;
@@ -1473,6 +1477,7 @@ export const GetSettingsResponse = zod.object({
   "autoStartTrailRecording": zod.boolean().default(getSettingsResponseAutoStartTrailRecordingDefault).describe('Automatically start GPS trail recording when the app loads.'),
   "defaultTrailColor": zod.string().regex(getSettingsResponseDefaultTrailColorRegExp).default(getSettingsResponseDefaultTrailColorDefault).describe('Default hex colour applied to new GPS trail recordings.'),
   "trailRetention": zod.enum(['7', '30', '90', 'all']).default(getSettingsResponseTrailRetentionDefault).describe('Number of days of GPS trail history to retain locally. \"all\" disables automatic pruning.'),
+  "followResumeDelaySec": zod.number().min(getSettingsResponseFollowResumeDelaySecMin).max(getSettingsResponseFollowResumeDelaySecMax).default(getSettingsResponseFollowResumeDelaySecDefault).describe('Seconds of inactivity after a manual camera interaction before GPS Follow Me mode automatically resumes tracking.'),
   "autoLoadLastDataset": zod.boolean().default(getSettingsResponseAutoLoadLastDatasetDefault).describe('Automatically reload the most recently used dataset when the app starts.'),
   "defaultMapLoad": zod.object({
   "kind": zod.enum(['preset', 'upload']).describe('Whether this is a built-in preset or a user-uploaded dataset.'),
@@ -1729,6 +1734,10 @@ export const putSettingsBodyAutoStartTrailRecordingDefault = false;
 export const putSettingsBodyDefaultTrailColorDefault = `#ff6600`;
 export const putSettingsBodyDefaultTrailColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const putSettingsBodyTrailRetentionDefault = `30`;
+export const putSettingsBodyFollowResumeDelaySecDefault = 20;
+export const putSettingsBodyFollowResumeDelaySecMin = 5;
+export const putSettingsBodyFollowResumeDelaySecMax = 120;
+
 export const putSettingsBodyAutoLoadLastDatasetDefault = true;
 export const putSettingsBodyReducedMotionDefault = false;
 export const putSettingsBodyColorBlindSafePaletteDefault = false;
@@ -1901,6 +1910,7 @@ export const PutSettingsBody = zod.object({
   "autoStartTrailRecording": zod.boolean().default(putSettingsBodyAutoStartTrailRecordingDefault).describe('Automatically start GPS trail recording when the app loads.'),
   "defaultTrailColor": zod.string().regex(putSettingsBodyDefaultTrailColorRegExp).default(putSettingsBodyDefaultTrailColorDefault).describe('Default hex colour applied to new GPS trail recordings.'),
   "trailRetention": zod.enum(['7', '30', '90', 'all']).default(putSettingsBodyTrailRetentionDefault).describe('Number of days of GPS trail history to retain locally. \"all\" disables automatic pruning.'),
+  "followResumeDelaySec": zod.number().min(putSettingsBodyFollowResumeDelaySecMin).max(putSettingsBodyFollowResumeDelaySecMax).default(putSettingsBodyFollowResumeDelaySecDefault).describe('Seconds of inactivity after a manual camera interaction before GPS Follow Me mode automatically resumes tracking.'),
   "autoLoadLastDataset": zod.boolean().default(putSettingsBodyAutoLoadLastDatasetDefault).describe('Automatically reload the most recently used dataset when the app starts.'),
   "defaultMapLoad": zod.object({
   "kind": zod.enum(['preset', 'upload']).describe('Whether this is a built-in preset or a user-uploaded dataset.'),
@@ -2152,6 +2162,10 @@ export const putSettingsResponseAutoStartTrailRecordingDefault = false;
 export const putSettingsResponseDefaultTrailColorDefault = `#ff6600`;
 export const putSettingsResponseDefaultTrailColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const putSettingsResponseTrailRetentionDefault = `30`;
+export const putSettingsResponseFollowResumeDelaySecDefault = 20;
+export const putSettingsResponseFollowResumeDelaySecMin = 5;
+export const putSettingsResponseFollowResumeDelaySecMax = 120;
+
 export const putSettingsResponseAutoLoadLastDatasetDefault = true;
 export const putSettingsResponseReducedMotionDefault = false;
 export const putSettingsResponseColorBlindSafePaletteDefault = false;
@@ -2324,6 +2338,7 @@ export const PutSettingsResponse = zod.object({
   "autoStartTrailRecording": zod.boolean().default(putSettingsResponseAutoStartTrailRecordingDefault).describe('Automatically start GPS trail recording when the app loads.'),
   "defaultTrailColor": zod.string().regex(putSettingsResponseDefaultTrailColorRegExp).default(putSettingsResponseDefaultTrailColorDefault).describe('Default hex colour applied to new GPS trail recordings.'),
   "trailRetention": zod.enum(['7', '30', '90', 'all']).default(putSettingsResponseTrailRetentionDefault).describe('Number of days of GPS trail history to retain locally. \"all\" disables automatic pruning.'),
+  "followResumeDelaySec": zod.number().min(putSettingsResponseFollowResumeDelaySecMin).max(putSettingsResponseFollowResumeDelaySecMax).default(putSettingsResponseFollowResumeDelaySecDefault).describe('Seconds of inactivity after a manual camera interaction before GPS Follow Me mode automatically resumes tracking.'),
   "autoLoadLastDataset": zod.boolean().default(putSettingsResponseAutoLoadLastDatasetDefault).describe('Automatically reload the most recently used dataset when the app starts.'),
   "defaultMapLoad": zod.object({
   "kind": zod.enum(['preset', 'upload']).describe('Whether this is a built-in preset or a user-uploaded dataset.'),

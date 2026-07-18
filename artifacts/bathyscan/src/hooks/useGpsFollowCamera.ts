@@ -17,6 +17,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useCameraStore } from "@/lib/cameraStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { lonLatToWorldXZ, getTerrainSurfaceY } from "@/lib/terrain";
 import { toast } from "@/hooks/use-toast";
@@ -92,6 +93,21 @@ export function useGpsFollowCamera(): void {
     }
 
     outOfBoundsToastFired.current = false;
+
+    // Interaction pause: while the user is manually steering, skip the
+    // camera lerp but keep the GPS-loss and out-of-bounds checks above
+    // active (those fully disable follow mode). Once the configured
+    // inactivity delay elapses, clear the pause — the lerp below then
+    // glides the camera smoothly back onto the GPS position.
+    const camStore = useCameraStore.getState();
+    if (camStore.followPausedByInteraction) {
+      const delayMs =
+        useSettingsStore.getState().followResumeDelaySec * 1000;
+      if (Date.now() - camStore.followLastInteractionAt < delayMs) {
+        return;
+      }
+      camStore.resumeFollow();
+    }
 
     const { x, z } = lonLatToWorldXZ(lon, lat, activeGrid);
     const surfaceY = getTerrainSurfaceY(activeGrid, x, z);

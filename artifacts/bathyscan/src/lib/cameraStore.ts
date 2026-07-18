@@ -39,6 +39,25 @@ interface CameraStore {
   /** When true, the camera continuously tracks the live GPS position. */
   gpsFollowMode: boolean;
   setGpsFollowMode: (v: boolean) => void;
+
+  /**
+   * True while follow mode is temporarily paused because the user manually
+   * moved the camera (drag / rotate / zoom / keys / joystick). Follow mode
+   * remains "on" (gpsFollowMode stays true) and auto-resumes after a period
+   * of inactivity. Explicit toggle-off, GPS loss and out-of-bounds fully
+   * disable follow mode instead (gpsFollowMode → false, paused cleared).
+   */
+  followPausedByInteraction: boolean;
+  /** Epoch ms of the most recent manual camera interaction while paused. */
+  followLastInteractionAt: number;
+  /**
+   * Record a manual camera interaction during follow mode: enters (or
+   * refreshes) the paused state and resets the inactivity timer. No-op when
+   * follow mode is off.
+   */
+  pauseFollowForInteraction: () => void;
+  /** Clear the paused state (used by the auto-resume timer). */
+  resumeFollow: () => void;
 }
 
 export const useCameraStore = create<CameraStore>((set) => ({
@@ -61,5 +80,18 @@ export const useCameraStore = create<CameraStore>((set) => ({
   setIsOrbitingTouch: (v) => set({ isOrbitingTouch: v }),
 
   gpsFollowMode: false,
-  setGpsFollowMode: (v) => set({ gpsFollowMode: v }),
+  // Turning follow mode on or off always clears any interaction-pause state
+  // so a fresh session never inherits a stale pause/timer.
+  setGpsFollowMode: (v) =>
+    set({ gpsFollowMode: v, followPausedByInteraction: false, followLastInteractionAt: 0 }),
+
+  followPausedByInteraction: false,
+  followLastInteractionAt: 0,
+  pauseFollowForInteraction: () =>
+    set((state) =>
+      state.gpsFollowMode
+        ? { followPausedByInteraction: true, followLastInteractionAt: Date.now() }
+        : state,
+    ),
+  resumeFollow: () => set({ followPausedByInteraction: false, followLastInteractionAt: 0 }),
 }));

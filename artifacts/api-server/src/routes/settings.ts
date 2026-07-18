@@ -160,6 +160,7 @@ export const DEFAULT_SETTINGS = {
   autoStartTrailRecording: false,
   defaultTrailColor: "#ff6600",
   trailRetention: "30",
+  followResumeDelaySec: 20,
   autoLoadLastDataset: true,
   defaultMapLoad: null as null,
   reducedMotion: false,

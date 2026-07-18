@@ -60,7 +60,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 25;
+export const SETTINGS_SCHEMA_VERSION = 26;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -352,6 +352,11 @@ export interface SettingsState {
   defaultTrailColor: string;
   gpsRecordingInterval: number;
   trailRetention: TrailRetention;
+  /**
+   * Seconds of inactivity after a manual camera interaction before GPS
+   * Follow Me mode automatically resumes tracking. Range 5–120, default 20.
+   */
+  followResumeDelaySec: number;
 
   // ── Data & Storage ───────────────────────────────────────────────────
   defaultRegion: string;
@@ -635,6 +640,7 @@ interface SettingsActions {
   setDefaultTrailColor: (v: string) => void;
   setGpsRecordingInterval: (ms: number) => void;
   setTrailRetention: (v: TrailRetention) => void;
+  setFollowResumeDelaySec: (v: number) => void;
 
   // Data
   setDefaultRegion: (v: string) => void;
@@ -919,6 +925,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   defaultTrailColor: "#ff6600",
   gpsRecordingInterval: 1000,
   trailRetention: "30",
+  followResumeDelaySec: 20,
 
   // Data
   defaultRegion: "",
@@ -1034,6 +1041,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   gps: [
     "autoStartTrailRecording", "defaultTrailColor", "gpsRecordingInterval", "trailRetention",
+    "followResumeDelaySec",
   ],
   data: ["defaultRegion", "autoLoadLastDataset", "defaultMapLoad", "coordSearchRadius", "coordSearchRadiusUnit"],
   accessibility: [
@@ -1213,6 +1221,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setDefaultTrailColor: setter("defaultTrailColor"),
         setGpsRecordingInterval: setter("gpsRecordingInterval"),
         setTrailRetention: setter("trailRetention"),
+        setFollowResumeDelaySec: setter("followResumeDelaySec"),
 
         // Data
         setDefaultRegion: setter("defaultRegion"),
@@ -1610,6 +1619,12 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).coordSearchRadiusUnit === undefined) {
             migratedCoordSearch.coordSearchRadiusUnit = DEFAULT_SETTINGS.coordSearchRadiusUnit;
           }
+          // v25 → v26: inject followResumeDelaySec default (20s inactivity
+          // before Follow Me auto-resumes after a manual camera interaction).
+          const migratedFollowResume: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).followResumeDelaySec === undefined) {
+            migratedFollowResume.followResumeDelaySec = DEFAULT_SETTINGS.followResumeDelaySec;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1624,6 +1639,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedHealthBadge,
             ...migratedTripWindow,
             ...migratedCoordSearch,
+            ...migratedFollowResume,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

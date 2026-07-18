@@ -69,6 +69,8 @@ export const LivePanel: React.FC = () => {
 
   const gpsFollowMode = useCameraStore((s) => s.gpsFollowMode);
   const setGpsFollowMode = useCameraStore((s) => s.setGpsFollowMode);
+  const followPausedByInteraction = useCameraStore((s) => s.followPausedByInteraction);
+  const followResumeDelaySec = useSettingsStore((s) => s.followResumeDelaySec);
 
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
   const units = useSettingsStore((s) => s.units);
@@ -291,12 +293,26 @@ export const LivePanel: React.FC = () => {
         type="button"
         data-testid="live-follow-toggle"
         aria-pressed={gpsFollowMode}
+        data-follow-paused={gpsFollowMode && followPausedByInteraction ? "true" : "false"}
         disabled={!gpsActive}
         onClick={() => setGpsFollowMode(!gpsFollowMode)}
         style={bigButtonStyle(gpsFollowMode, gpsActive)}
       >
-        {gpsFollowMode ? "◉ Following You" : "○ Follow Me"}
+        {gpsFollowMode
+          ? followPausedByInteraction
+            ? "◌ Follow Paused — Resuming Soon"
+            : "◉ Following You"
+          : "○ Follow Me"}
       </button>
+      {gpsFollowMode && followPausedByInteraction && (
+        <div
+          data-testid="live-follow-paused-hint"
+          style={{ fontSize: 12, color: "#94a3b8", fontFamily: MONO, marginTop: -4 }}
+        >
+          You have the camera — follow resumes after {followResumeDelaySec}s of
+          inactivity.
+        </div>
+      )}
 
       <button
         type="button"

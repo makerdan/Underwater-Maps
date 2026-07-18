@@ -166,6 +166,7 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   "markerClusterThreshold",
   "autoLoadTidal",
   "tripMinDurationH",      // settings-validation.test.ts
+  "followResumeDelaySec",  // settings-validation.test.ts
   "defaultTidalDepthLayer",
   "currentArrowDensity",
   "layerArrowDensity",

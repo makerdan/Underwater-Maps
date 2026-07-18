@@ -241,6 +241,22 @@ describe("settingsStore migration — v14→v15 overlay toggle keys are present 
 });
 
 // ---------------------------------------------------------------------------
+// v25 → v26: followResumeDelaySec injected for existing users
+// ---------------------------------------------------------------------------
+
+describe("settingsStore migration — v25→v26 followResumeDelaySec", () => {
+  it("injects the default (20) when absent from an old snapshot", async () => {
+    const result = await rehydrate({ units: "metric" });
+    expect(result["followResumeDelaySec"]).toBe(20);
+  });
+
+  it("preserves an explicit pre-existing followResumeDelaySec value", async () => {
+    const result = await rehydrate({ units: "metric", followResumeDelaySec: 45 });
+    expect(result["followResumeDelaySec"]).toBe(45);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Minimal snapshot gets DEFAULT_SETTINGS keys
 // ---------------------------------------------------------------------------
 

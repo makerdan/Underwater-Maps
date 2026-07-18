@@ -39,15 +39,26 @@ import {
 } from "@/lib/orbitMath";
 import { toast } from "@/hooks/use-toast";
 
-/** Exit GPS follow mode with a toast. No-op when already off. */
-function exitFollowMode(): void {
-  if (!useCameraStore.getState().gpsFollowMode) return;
-  useCameraStore.getState().setGpsFollowMode(false);
-  toast({
-    title: "Follow mode off",
-    description: "Camera control returned to you.",
-    duration: 3000,
-  });
+/**
+ * Pause GPS follow mode for a manual camera interaction. Follow mode stays
+ * "on" and auto-resumes after the configured inactivity delay (see
+ * useGpsFollowCamera). Shows a subtle toast only on the initial off→paused
+ * transition; repeated interactions just refresh the inactivity timer.
+ * No-op when follow mode is off.
+ */
+function pauseFollowMode(): void {
+  const state = useCameraStore.getState();
+  if (!state.gpsFollowMode) return;
+  const wasPaused = state.followPausedByInteraction;
+  state.pauseFollowForInteraction();
+  if (!wasPaused) {
+    const delaySec = useSettingsStore.getState().followResumeDelaySec;
+    toast({
+      title: "Follow paused",
+      description: `You have the camera — following resumes after ${delaySec}s of inactivity.`,
+      duration: 3000,
+    });
+  }
 }
 
 // Module-level tracker: the dataset ID for which the initial camera spawn was
@@ -280,7 +291,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         }
       }
 
-      // Exit GPS follow mode on any movement key so the user isn't trapped.
+      // Pause GPS follow mode on any movement key so the user isn't trapped.
       const movementCodes = [
         getBoundKey(bindings, "moveForward"),
         getBoundKey(bindings, "moveBackward"),
@@ -291,7 +302,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         "ShiftRight",
         "KeyW", "KeyA", "KeyS", "KeyD",
       ];
-      if (movementCodes.includes(e.code)) exitFollowMode();
+      if (movementCodes.includes(e.code)) pauseFollowMode();
 
       // Drop GPS pin: open the marker form pinned at the crosshair.
       if (e.code === getBoundKey(bindings, "dropGpsPin")) {
@@ -395,7 +406,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           orbitState.current.active = true;
         }
         if (orbitState.current.active) {
-          exitFollowMode();
+          pauseFollowMode();
           applyOrbitDrag(camera, orbitState.current.target, dx, dy, {
             sensitivity: sensitivityRef.current,
             invertY: invertMouseYRef.current,
@@ -404,12 +415,13 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         return;
       }
       if (!isLocked.current) return;
-      // Pointer-locked mouse look exits follow mode on first real movement.
+      // Pointer-locked mouse look pauses follow mode on any real movement
+      // (and keeps refreshing the inactivity timer while paused), then falls
+      // through so the user can actually look around while paused.
       const dx = e.movementX ?? 0;
       const dy = e.movementY ?? 0;
       if ((Math.abs(dx) > 0 || Math.abs(dy) > 0) && useCameraStore.getState().gpsFollowMode) {
-        exitFollowMode();
-        return;
+        pauseFollowMode();
       }
       const sens = sensitivityRef.current * 0.002;
       const dyScaled = invertMouseYRef.current ? -dy : dy;
@@ -429,6 +441,8 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     };
 
     const handleWheel = (e: WheelEvent) => {
+      // Wheel zoom is a manual camera interaction — pause follow mode.
+      pauseFollowMode();
       // While orbiting, wheel dollies toward/away from the orbit target,
       // not along the view direction.
       if (orbitState.current.active) {
@@ -536,6 +550,9 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         const dist = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
         const midX = (pts[0]!.x + pts[1]!.x) / 2;
         const midY = (pts[0]!.y + pts[1]!.y) / 2;
+
+        // Two-finger pinch/orbit is a manual camera interaction — pause follow.
+        pauseFollowMode();
 
         // Pinch dolly toward/away from the orbit target.
         const pinchDelta = dist - lastPinchDist;
@@ -838,21 +855,40 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       useUiStore.getState().clearPendingDropIn();
     }
 
-    // 2a. Joystick exit-follow-mode gate — sampled before the movement guard
-    // so that any non-deadzone joystick input can exit follow mode even while
-    // follow mode is active (the movement gate below would otherwise prevent
-    // the exitFollowMode() calls from being reached).
+    // 2a. Joystick pause-follow-mode gate — sampled before the movement guard
+    // so that any non-deadzone joystick input can pause follow mode (and keep
+    // refreshing the inactivity timer) even while follow mode is active.
     const joy = useJoystickStore.getState();
     const DEAD = 0.05;
     if (
       Math.abs(joy.moveX) > DEAD || Math.abs(joy.moveY) > DEAD ||
       Math.abs(joy.lookX) > DEAD || Math.abs(joy.lookY) > DEAD
     ) {
-      exitFollowMode();
+      pauseFollowMode();
     }
 
-    // 2. WASD movement (suspended during an active orbit gesture or GPS follow mode)
-    if (!orbitState.current.active && !useCameraStore.getState().gpsFollowMode) {
+    // 2b'. Movement keys held while follow mode is paused keep refreshing the
+    // inactivity timer (keydown auto-repeat is not guaranteed, so poll here).
+    {
+      const camState = useCameraStore.getState();
+      if (camState.gpsFollowMode && camState.followPausedByInteraction) {
+        const b = keyBindingsRef.current;
+        const held = [
+          getBoundKey(b, "moveForward"), getBoundKey(b, "moveBackward"),
+          getBoundKey(b, "strafeLeft"), getBoundKey(b, "strafeRight"),
+          getBoundKey(b, "ascend"), getBoundKey(b, "descend"), "ShiftRight",
+        ].some((code) => keys.current[code]);
+        if (held) camState.pauseFollowForInteraction();
+      }
+    }
+
+    // 2. WASD movement (suspended during an active orbit gesture, and while
+    // GPS follow mode is actively steering the camera — manual movement is
+    // allowed again while follow is paused for interaction).
+    const camStateForMove = useCameraStore.getState();
+    const followSteering =
+      camStateForMove.gpsFollowMode && !camStateForMove.followPausedByInteraction;
+    if (!orbitState.current.active && !followSteering) {
       const isRealistic = realisticModeRef.current && terrainRef.current !== null;
       const grid = terrainRef.current;
 

@@ -116,7 +116,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm run test:e2e"
+args = "node scripts/validation-lock.mjs -- pnpm run test:e2e"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [agent]
 stack = "PNPM_WORKSPACE"

@@ -81,6 +81,14 @@ export function MapLayersSection() {
           ]}
           sublabel="How often GPS track points are recorded"
         />
+        <SliderRow
+          label="Follow Resume Delay"
+          value={s.followResumeDelaySec}
+          min={5} max={120} step={5}
+          format={(v) => `${v}s`}
+          onChange={s.setFollowResumeDelaySec}
+          sublabel="After you move the camera in Follow Me mode, following resumes after this many seconds of inactivity"
+        />
       </div>
       <AdvancedDisclosure testId="markers-advanced">
         <div style={S.card}>
