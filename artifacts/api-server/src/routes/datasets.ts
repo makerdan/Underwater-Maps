@@ -2069,6 +2069,28 @@ router.post(
   const gridId = crypto.randomUUID();
 
   const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
+
+  // Sparse-survey guard: reject uploads where fewer than 30% of grid cells
+  // received a direct depth measurement (the rest are IDW-interpolated).
+  // Default threshold: 70% no-data (< 30% coverage) → 422.
+  // TEXT_EXTENSIONS (csv/xyz/txt) are plain delimited files where "coverage"
+  // depends entirely on the requested resolution, not the survey area, so they
+  // bypass the check.  NMEA and GPX are real-area surveys and ARE included.
+  const MAX_NODATA_PERCENT = 70;
+  const coveragePercent = terrain.coveragePercent ?? 100;
+  const isTextPointSurvey = TEXT_EXTENSIONS.has(fileExt);
+  if (!isTextPointSurvey && coveragePercent < (100 - MAX_NODATA_PERCENT)) {
+    res.status(422).json({
+      error: "sparse_survey",
+      details:
+        `Survey coverage is too sparse: only ${coveragePercent.toFixed(2)}% of the ` +
+        `${terrain.resolution}×${terrain.resolution} grid has direct soundings. ` +
+        `Upload a denser track or a larger survey area to avoid large no-data regions.`,
+      coveragePercent,
+    });
+    return;
+  }
+
   const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
 
   let savedDatasetId: string | undefined;
@@ -2125,6 +2147,7 @@ router.post(
     PostDatasetsUploadResponse.parse({
       terrain,
       overview,
+      coveragePercent,
       savedDatasetId,
       savedDatasetMeta,
       saveError,

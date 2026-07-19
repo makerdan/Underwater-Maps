@@ -55,7 +55,7 @@ import type { LastSession } from "./settingsStore";
 import { usePaletteStore } from "./paletteStore";
 import { usePaletteSuggestionStore } from "../hooks/usePaletteSuggestion";
 import { useShallowSuggestionStore } from "../hooks/useShallowSuggestion";
-import { worldXZToLonLat } from "./terrain";
+import { worldXZToLonLat, buildTerrainGeometry } from "./terrain";
 import { callRegisteredResetCamera } from "./resetCameraRegistry";
 import { applyCameraSpawn } from "./cameraSpawn";
 import { hasPendingOrInFlightSettingsSync, isServerSettled } from "../hooks/useServerSettingsSync";
@@ -744,6 +744,22 @@ export interface BathyTestApi {
     idb: { count: number; bytes: number };
     mem: { count: number; bytes: number };
   }>;
+
+  /**
+   * Inspect the active terrain grid for null-depth cells and verify that their
+   * geometry vertices sit at Y = 0 (flat at the water surface) rather than
+   * producing depth spikes.
+   *
+   * Returns null when no active grid is loaded.
+   *
+   * Used by the null-cell-terrain E2E regression test.
+   */
+  getActiveTerrainNullCellStats: () => {
+    totalCells: number;
+    nullCells: number;
+    /** true iff every null-depth cell has its geometry Y-position at 0 (±0.001). */
+    allNullAtZero: boolean;
+  } | null;
 }
 
 declare global {
@@ -1482,5 +1498,44 @@ export function installTestHelpers(): void {
         heading: geo.heading,
         altitude: geo.altitude,
       }),
+
+    getActiveTerrainNullCellStats: () => {
+      const { visibleDatasets, primaryDatasetId } = useTerrainStore.getState();
+      const entry =
+        visibleDatasets.find((d) => d.datasetId === primaryDatasetId) ??
+        visibleDatasets[0];
+      const grid = entry?.activeGrid;
+      if (!grid) return null;
+
+      const depths = grid.depths;
+      const totalCells = depths.length;
+      const nullIndices: number[] = [];
+      for (let i = 0; i < depths.length; i++) {
+        const d = depths[i];
+        if (d === null || d === undefined || Number.isNaN(d as number)) {
+          nullIndices.push(i);
+        }
+      }
+      const nullCells = nullIndices.length;
+      if (nullCells === 0) {
+        return { totalCells, nullCells, allNullAtZero: true };
+      }
+
+      // Build the geometry (CPU-only, no WebGL needed) and check Y values.
+      // buildTerrainGeometry places vertex i at positions[i*3+1]=0 for null
+      // depths (see terrain.ts:44 "positions[i * 3 + 1] = 0").
+      const geometry = buildTerrainGeometry(grid);
+      const posAttr = geometry.getAttribute("position");
+      let allNullAtZero = true;
+      for (const idx of nullIndices) {
+        const y = posAttr?.getY(idx) ?? 0;
+        if (Math.abs(y) > 0.001) {
+          allNullAtZero = false;
+          break;
+        }
+      }
+      geometry.dispose();
+      return { totalCells, nullCells, allNullAtZero };
+    },
   };
 }

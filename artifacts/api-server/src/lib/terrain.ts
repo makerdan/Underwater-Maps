@@ -41,6 +41,13 @@ export interface TerrainGrid {
   centerLon: number;
   centerLat: number;
   /**
+   * Percentage (0–100) of N×N grid cells that received at least one direct
+   * depth measurement before IDW interpolation.  Only present on
+   * upload-derived grids (gridPoints output); undefined for
+   * preset/WCS-fetched grids.
+   */
+  coveragePercent?: number;
+  /**
    * Row-major NxN array of above-water elevation values (metres above sea
    * level, 0 for water cells). Present when the upstream source includes
    * land coverage (GEBCO/NCEI) and the dataset bbox actually contains
@@ -1897,6 +1904,8 @@ export function gridPoints(
     if (depths[i]! > maxDepth) maxDepth = depths[i]!;
   }
 
+  const coveragePercent = (occupiedIdx.length / (N * N)) * 100;
+
   return {
     datasetId,
     name,
@@ -1913,5 +1922,6 @@ export function gridPoints(
     maxLat,
     centerLon: (minLon + maxLon) / 2,
     centerLat: (minLat + maxLat) / 2,
+    coveragePercent,
   };
 }

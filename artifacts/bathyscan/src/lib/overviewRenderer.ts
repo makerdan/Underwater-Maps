@@ -13,6 +13,21 @@ import type { UnitsSystem, ColormapTheme } from "./settingsStore";
 import type { SelectedHotspot } from "./uiStore";
 import { getColormap } from "./colormap";
 import { formatDepth } from "./units";
+import { NO_DATA_COLOR } from "./terrain";
+
+// Convert a linear-sRGB channel value (as used by THREE.js vertex colours and
+// NO_DATA_COLOR) to a display-sRGB byte for the 2D canvas context.
+// Mirrors the THREE.Color.convertLinearToSRGB() path used below for colormap
+// colours so the no-data steel-blue looks the same in the minimap as in the 3D
+// terrain mesh.
+function linearToSRGBByte(c: number): number {
+  const s = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
+  return Math.max(0, Math.min(255, Math.round(s * 255)));
+}
+
+const NO_DATA_CANVAS_R = linearToSRGBByte(NO_DATA_COLOR.r);
+const NO_DATA_CANVAS_G = linearToSRGBByte(NO_DATA_COLOR.g);
+const NO_DATA_CANVAS_B = linearToSRGBByte(NO_DATA_COLOR.b);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -213,14 +228,27 @@ export function buildHeatmapBitmap(
     for (let col = 0; col < W; col++) {
       // Flip Y so row 0 (top of canvas) maps to the northernmost data row,
       // matching Minimap.tsx's North-up convention.
-      const depth = depths[(H - 1 - row) * W + col] ?? minDepth;
-      const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
+      const rawDepth = depths[(H - 1 - row) * W + col];
+      const i = (row * W + col) * 4;
+
+      // Null / NaN depth → survey gap: render as the NO_DATA_COLOR steel-blue
+      // so coverage boundaries are visible at a glance, matching the 3D
+      // terrain mesh which places null-depth vertices at the water surface
+      // with the same muted colour (see buildTerrainGeometry in terrain.ts).
+      if (rawDepth === null || rawDepth === undefined || Number.isNaN(rawDepth as number)) {
+        imageData.data[i]     = NO_DATA_CANVAS_R;
+        imageData.data[i + 1] = NO_DATA_CANVAS_G;
+        imageData.data[i + 2] = NO_DATA_CANVAS_B;
+        imageData.data[i + 3] = 255;
+        continue;
+      }
+
+      const t = Math.max(0, Math.min(1, (rawDepth - minDepth) / depthRange));
       // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
       // display-space sRGB bytes for 2D canvas, matching the legend strip and
       // the colormapCanvas helper in colormap.ts.
       const lin = toColor(t);
       const c = lin.clone().convertLinearToSRGB();
-      const i = (row * W + col) * 4;
       imageData.data[i]     = Math.max(0, Math.min(255, Math.round(c.r * 255)));
       imageData.data[i + 1] = Math.max(0, Math.min(255, Math.round(c.g * 255)));
       imageData.data[i + 2] = Math.max(0, Math.min(255, Math.round(c.b * 255)));

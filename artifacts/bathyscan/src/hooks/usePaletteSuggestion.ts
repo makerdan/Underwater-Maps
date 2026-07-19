@@ -82,7 +82,7 @@ export function usePaletteSuggestion(): void {
   useEffect(() => {
     if (!activeGrid?.depths || activeGrid.depths.length === 0) return;
 
-    const profile = computeDepthProfile(activeGrid.depths);
+    const profile = computeDepthProfile(activeGrid.depths.filter((d): d is number => d !== null));
     if (!profile) return;
 
     const suggestion = suggestColormap(profile);

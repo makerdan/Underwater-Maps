@@ -133,23 +133,32 @@ function makeValidGzLas(): Buffer {
 }
 
 /**
- * Builds a gzip-compressed GPX file with `pointCount` track points.
- * Each trkpt has a negative <ele> value so parseGpxTerrain produces valid
- * positive-downward depth points (≥10 required by the upload handler).
+ * Builds a gzip-compressed GPX file with a 20×20 grid of track points.
+ * Lat varies only with row, lon only with col, so the 400 points form a true
+ * 2-D grid spanning 19°×19°.  At res=32 (32×32=1024 cells, 0.59°/cell) each
+ * 1°-spaced point lands in a distinct cell → ~39 % coverage — above the 30 %
+ * sparse-survey threshold.  Each trkpt has a negative <ele> so parseGpxTerrain
+ * produces valid positive-downward depth values.
  */
-function makeValidGzGpx(pointCount = 12): Buffer {
-  const trkpts = Array.from({ length: pointCount }, (_, i) => {
-    const lat = (11.0 + i * 0.01).toFixed(4);
-    const lon = (142.0 + i * 0.01).toFixed(4);
-    const ele = -(1000 + i * 50);
-    return `      <trkpt lat="${lat}" lon="${lon}"><ele>${ele}.0</ele></trkpt>`;
-  }).join("\n");
+function makeValidGzGpx(): Buffer {
+  const COLS = 20;
+  const ROWS = 20;
+  const trkpts: string[] = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      // lat varies with row only, lon varies with col only → true 2-D grid.
+      const lat = (11.0 + r * 1.0).toFixed(4);
+      const lon = (142.0 + c * 1.0).toFixed(4);
+      const ele = -(1000 + (r * COLS + c) * 2);
+      trkpts.push(`      <trkpt lat="${lat}" lon="${lon}"><ele>${ele}.0</ele></trkpt>`);
+    }
+  }
 
   const gpx = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
   <trk>
     <trkseg>
-${trkpts}
+${trkpts.join("\n")}
     </trkseg>
   </trk>
 </gpx>`;
@@ -157,23 +166,35 @@ ${trkpts}
 }
 
 /**
- * Builds a gzip-compressed NMEA file with `pointCount` paired position+depth
- * sentences.  No checksums are appended — the validator accepts checksum-free
- * sentences — so we can keep the fixture straightforward.
+ * Builds a gzip-compressed NMEA file with a 20×20 grid of position+depth
+ * sentence pairs.  Lat varies only with row (48°–67°N), lon only with col
+ * (011°–030°E), giving a true 2-D grid spanning 19°×19°.  At res=32 each
+ * 1°-spaced point lands in a distinct cell → ~39 % coverage — above the 30 %
+ * sparse-survey threshold.  No checksums — the validator accepts them absent.
  */
-function makeValidGzNmea(pointCount = 12): Buffer {
+function makeValidGzNmea(): Buffer {
+  const COLS = 20;
+  const ROWS = 20;
   const lines: string[] = [];
-  for (let i = 0; i < pointCount; i++) {
-    // GPGGA: lat 4807.038+i N, lon 01131.000+i E
-    const latDeg = 48 + i;
-    const latMins = "07.038";
-    const lonDeg = String(11 + i).padStart(3, "0");
-    const lonMins = "31.000";
-    lines.push(
-      `$GPGGA,12${String(i).padStart(2, "0")}00,${latDeg}${latMins},N,${lonDeg}${lonMins},E,1,08,0.9,0.0,M,0.0,M,,`,
-    );
-    const depthM = (50 + i * 10).toFixed(1);
-    lines.push(`$SDDBT,164.0,f,${depthM},M,27.0,F`);
+  let seq = 0;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      // GPGGA latitude: DDMM.MMM — lat varies with row only.
+      const latDeg = 48 + r;           // 48–67 degrees
+      const latField = `${latDeg}00.000`;  // e.g. "4800.000"
+      // GPGGA longitude: DDDMM.MMM — lon varies with col only.
+      const lonDeg = String(11 + c).padStart(3, "0");  // "011"–"030"
+      const lonField = `${lonDeg}00.000`;  // e.g. "01100.000"
+      const hh = String(Math.floor(seq / 3600) % 24).padStart(2, "0");
+      const mm = String(Math.floor(seq / 60) % 60).padStart(2, "0");
+      const ss = String(seq % 60).padStart(2, "0");
+      lines.push(
+        `$GPGGA,${hh}${mm}${ss},${latField},N,${lonField},E,1,08,0.9,0.0,M,0.0,M,,`,
+      );
+      const depthM = (50 + (r * COLS + c) * 2).toFixed(1);
+      lines.push(`$SDDBT,164.0,f,${depthM},M,27.0,F`);
+      seq++;
+    }
   }
   return zlib.gzipSync(Buffer.from(lines.join("\n"), "utf8"));
 }
@@ -211,24 +232,26 @@ describe("POST /api/datasets/upload — .gz upload", () => {
   );
 
   it(
-    "accepts a valid gzip-compressed LAS file and returns 200 with terrain data",
+    "rejects a sparse gzip-compressed LAS file with 422 + coveragePercent",
     async () => {
       const gzBuf = makeValidGzLas();
 
       const res = await request(app)
         .post("/api/datasets/upload")
         .set(AUTHED_HEADER)
+        // The survey_1_2.las fixture is sparse at res=32 (<30% grid coverage).
+        // The sparse-survey guard (Task #2403) rejects it with 422.
         .field("resolution", "32")
         .attach("file", gzBuf, {
           filename: "survey.las.gz",
           contentType: "application/gzip",
         });
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty("terrain");
-      expect(res.body.terrain).toHaveProperty("depths");
-      expect(Array.isArray(res.body.terrain.depths)).toBe(true);
-      expect(res.body).toHaveProperty("overview");
+      expect(res.status).toBe(422);
+      expect(res.body).toHaveProperty("error", "sparse_survey");
+      expect(res.body).toHaveProperty("coveragePercent");
+      expect(typeof res.body.coveragePercent).toBe("number");
+      expect(res.body.coveragePercent).toBeLessThan(30);
     },
     15_000,
   );

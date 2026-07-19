@@ -33,15 +33,18 @@ function freshLockFile() {
  */
 function runLock({ lockFile, waitersDir, flags = [], env = {}, args = ["node", "-e", "process.exit(0)"] }) {
   const allArgs = [...flags, "--", ...args];
+  // Strip all reentrancy markers from the inherited env so tests are isolated
+  // from any outer validation-lock wrapper (e.g. the unit-cpu lock that wraps
+  // the test:unit step when run via run-tier.mjs standard).
+  const cleanEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => !k.startsWith("VALIDATION_LOCK_HELD_PID")),
+  );
   const child = spawn(process.execPath, [script, ...allArgs], {
     env: {
-      ...process.env,
+      ...cleanEnv,
       VALIDATION_LOCK_FILE: lockFile,
       ...(waitersDir ? { VALIDATION_LOCK_WAITERS_DIR: waitersDir } : {}),
       VALIDATION_LOCK_POLL_MS: "50",
-      // Clear reentrancy markers so spawned wrappers exercise the locking logic.
-      VALIDATION_LOCK_HELD_PID: "",
-      VALIDATION_LOCK_HELD_PID_GLOBAL: "",
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],

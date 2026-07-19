@@ -97,31 +97,32 @@ function loadBagFixture(): Buffer {
 
 describe("POST /api/datasets/upload — .bag upload", () => {
   it(
-    "accepts a valid BAG file and returns 200 with terrain and overview grids",
+    "rejects a sparse BAG fixture with 422 + coveragePercent (sparse-survey guard)",
     async () => {
       const bagBuf = loadBagFixture();
 
       const res = await request(app)
         .post("/api/datasets/upload")
         .set(AUTHED_HEADER)
+        // The test BAG fixture is sparse at res=32 (<30% grid coverage).
+        // The sparse-survey guard (Task #2403) rejects it with 422.
         .field("resolution", "32")
         .attach("file", bagBuf, {
           filename: "survey.bag",
           contentType: "application/octet-stream",
         });
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty("terrain");
-      expect(res.body.terrain).toHaveProperty("depths");
-      expect(Array.isArray(res.body.terrain.depths)).toBe(true);
-      expect(res.body).toHaveProperty("overview");
-      expect(res.body.overview).toHaveProperty("depths");
+      expect(res.status).toBe(422);
+      expect(res.body).toHaveProperty("error", "sparse_survey");
+      expect(res.body).toHaveProperty("coveragePercent");
+      expect(typeof res.body.coveragePercent).toBe("number");
+      expect(res.body.coveragePercent).toBeLessThan(30);
     },
     20_000,
   );
 
   it(
-    "stores the parsed dataset in the database (db.insert called with correct userId)",
+    "does not insert into the database when BAG is sparse (422 aborts before db write)",
     async () => {
       const bagBuf = loadBagFixture();
 
@@ -134,21 +135,16 @@ describe("POST /api/datasets/upload — .bag upload", () => {
           contentType: "application/octet-stream",
         });
 
-      expect(res.status).toBe(200);
-
-      // db.insert().values() should have been called with the authenticated userId
-      expect(dbMockState.valuesMock).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: "user_bag_upload_tests" }),
-      );
-
-      // savedDatasetId is echoed from the DB returning() row
-      expect(res.body).toHaveProperty("savedDatasetId", "bag-test-dataset-id");
+      expect(res.status).toBe(422);
+      // db.insert().values() must NOT have been called — sparse rejection happens
+      // before the dataset is persisted.
+      expect(dbMockState.valuesMock).not.toHaveBeenCalled();
     },
     20_000,
   );
 
   it(
-    "returns 200 with terrain depths that are all positive and finite",
+    "returns coveragePercent < 30 in the 422 body for a sparse BAG file",
     async () => {
       const bagBuf = loadBagFixture();
 
@@ -161,15 +157,9 @@ describe("POST /api/datasets/upload — .bag upload", () => {
           contentType: "application/octet-stream",
         });
 
-      expect(res.status).toBe(200);
-
-      const depths: (number | null)[] = res.body.terrain.depths;
-      const nonNull = depths.filter((d): d is number => d !== null);
-      expect(nonNull.length).toBeGreaterThan(0);
-      for (const d of nonNull) {
-        expect(Number.isFinite(d)).toBe(true);
-        expect(d).toBeGreaterThan(0);
-      }
+      expect(res.status).toBe(422);
+      expect(res.body).toHaveProperty("coveragePercent");
+      expect(res.body.coveragePercent).toBeLessThan(30);
     },
     20_000,
   );
