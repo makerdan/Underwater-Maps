@@ -235,9 +235,7 @@ describe("DepthProfilePanel — confirmSave unmount guard", () => {
       await Promise.resolve();
     });
 
-    expect(consoleSpy).not.toHaveBeenCalledWith(
-      expect.stringMatching(/unmounted|state update/i),
-    );
+    expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 
@@ -262,9 +260,7 @@ describe("DepthProfilePanel — confirmSave unmount guard", () => {
       await Promise.resolve();
     });
 
-    expect(consoleSpy).not.toHaveBeenCalledWith(
-      expect.stringMatching(/unmounted|state update/i),
-    );
+    expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 
@@ -291,9 +287,7 @@ describe("DepthProfilePanel — confirmSave unmount guard", () => {
       await Promise.resolve();
     });
 
-    expect(consoleSpy).not.toHaveBeenCalledWith(
-      expect.stringMatching(/unmounted|state update/i),
-    );
+    expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 });
@@ -320,10 +314,14 @@ describe("DepthProfilePanel — addAllFeatures unmount guard", () => {
   });
 
   it("does not call setBulkPending(false) when unmounted before mutations settle", async () => {
-    let resolveAll!: (value: unknown) => void;
-    mutateAsyncMock.mockImplementation(
-      () => new Promise((res) => { resolveAll = res; }),
-    );
+    const deferreds = Array.from({ length: 4 }, () => {
+      let resolve!: (value: unknown) => void;
+      const promise = new Promise<unknown>((res) => { resolve = res; });
+      return { promise, resolve };
+    });
+    deferreds.forEach(({ promise }) => {
+      mutateAsyncMock.mockImplementationOnce(() => promise);
+    });
 
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -340,22 +338,25 @@ describe("DepthProfilePanel — addAllFeatures unmount guard", () => {
     unmount();
 
     await act(async () => {
-      resolveAll({ id: "m1" });
+      deferreds.forEach(({ resolve }) => resolve({ id: "m1" }));
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(consoleSpy).not.toHaveBeenCalledWith(
-      expect.stringMatching(/unmounted|state update/i),
-    );
+    expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 
   it("does not throw when mutations reject after unmount", async () => {
-    let rejectAll!: (err: Error) => void;
-    mutateAsyncMock.mockImplementation(
-      () => new Promise((_, rej) => { rejectAll = rej; }),
-    );
+    const deferreds = Array.from({ length: 4 }, () => {
+      let reject!: (err: Error) => void;
+      const promise = new Promise<unknown>((_, rej) => { reject = rej; });
+      promise.catch(() => {}); // suppress unhandled-rejection when Promise.all bails early
+      return { promise, reject };
+    });
+    deferreds.forEach(({ promise }) => {
+      mutateAsyncMock.mockImplementationOnce(() => promise);
+    });
 
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -372,14 +373,12 @@ describe("DepthProfilePanel — addAllFeatures unmount guard", () => {
     unmount();
 
     await act(async () => {
-      rejectAll(new Error("Mutation failed"));
+      deferreds.forEach(({ reject }) => reject(new Error("Mutation failed")));
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(consoleSpy).not.toHaveBeenCalledWith(
-      expect.stringMatching(/unmounted|state update/i),
-    );
+    expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 });

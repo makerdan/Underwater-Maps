@@ -166,6 +166,10 @@ describe("buildArticles — malformed article handling", () => {
     const result = buildArticles({ "bad1.md": bad1, "bad2.md": bad2, "good.md": good });
     expect(result).toHaveLength(1);
     expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenNthCalledWith(1, expect.stringContaining("missing or empty 'id' field"));
+    expect(warnSpy).toHaveBeenNthCalledWith(1, expect.stringContaining("bad1.md"));
+    expect(warnSpy).toHaveBeenNthCalledWith(2, expect.stringContaining("missing or empty 'id' field"));
+    expect(warnSpy).toHaveBeenNthCalledWith(2, expect.stringContaining("bad2.md"));
     warnSpy.mockRestore();
   });
 });
