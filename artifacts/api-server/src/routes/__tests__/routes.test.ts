@@ -19,9 +19,19 @@ import request from "supertest";
 
 const mockWarn = vi.hoisted(() => vi.fn());
 
-vi.mock("pino-http", () => ({
-  default: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
-}));
+vi.mock("pino-http", () => {
+  const pinoMock = vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next());
+  const childMock = vi.fn(() => ({
+    child: childMock,
+    levels: { values: { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 }, labels: {} },
+  }));
+  return {
+    default: Object.assign(pinoMock, {
+      child: childMock,
+      levels: { values: { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 }, labels: {} },
+    }),
+  };
+});
 
 vi.mock("../../lib/logger.js", () => ({
   logger: {
@@ -29,12 +39,12 @@ vi.mock("../../lib/logger.js", () => ({
     info: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),
-    child: vi.fn(() => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() })),
-    bindings: () => ({}),
-    levels: {
-      values: { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 },
-      labels: { 10: "trace", 20: "debug", 30: "info", 40: "warn", 50: "error", 60: "fatal" },
-    },
+    child: vi.fn(() => ({
+      warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn(),
+      levels: { values: { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 }, labels: {} },
+      child: vi.fn(() => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() })),
+    })),
+    levels: { values: { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 }, labels: {} },
   },
 }));
 
@@ -154,8 +164,9 @@ vi.mock("@clerk/shared/keys", () => ({
   publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
 }));
 
-vi.mock("pino-http", () => ({
-  default: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+vi.mock("drizzle-orm", () => ({
+  and: (..._args: unknown[]) => null,
+  eq: (..._args: unknown[]) => null,
 }));
 
 import app from "../../app.js";

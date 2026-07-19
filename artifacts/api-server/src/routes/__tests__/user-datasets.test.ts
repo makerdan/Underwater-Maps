@@ -163,7 +163,29 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
   PatchMarkersIdBody: {
     safeParse: () => ({ success: false, error: { message: "noop" } }),
   },
-  };
+  GetCatchesQueryParams: { safeParse: () => ({ success: false }) },
+  GetMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
+  PostMarkersMarkerIdCatchesBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchCatchesIdParams: { safeParse: () => ({ success: false }) },
+  PatchCatchesIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  DeleteCatchesIdParams: { safeParse: () => ({ success: false }) },
+  PostRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  GetRoutesQuerySchema: { safeParse: () => ({ success: false }) },
+  RouteIdParamSchema: { safeParse: () => ({ success: false }) },
+  PostTrollingPresetsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchTrollingPresetsIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  DeleteTrollingPresetsIdParams: { safeParse: () => ({ success: false }) },
+  PostTrollingPresetFoldersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchTrollingPresetFoldersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  GetUserFoldersResponse: { parse: (x: unknown) => x },
+  PostUserFoldersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  DeepHealthCheckResponse: { parse: (x: unknown) => x },
+  GetSettingsResponse: { parse: (x: unknown) => x },
+  HealthCheckResponse: { parse: (x: unknown) => x },
+  NceiSearchQuerySchema: { safeParse: () => ({ success: false }) },
+  PutSettingsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+};
 });
 
 vi.mock("@clerk/express", () => ({

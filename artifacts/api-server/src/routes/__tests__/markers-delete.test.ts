@@ -51,47 +51,61 @@ vi.mock("@workspace/db", () => {
     markersTable,
     catchEntriesTable,
     catchCountersTable,
+    pool: { query: () => Promise.resolve({ rows: [] }), connect: async () => ({ release: () => {}, query: async () => ({ rows: [] }) }) },
+    userCatalogSavesTable: { __tableName: "user_catalog_saves" as const },
+    datasetCatalogTable: { __tableName: "dataset_catalog" as const },
+    customDatasetsTable: { __tableName: "custom_datasets" as const },
+    userSettingsTable: { __tableName: "user_settings" as const },
+    uploadJobsTable: { __tableName: "upload_jobs" as const },
+    disabledPresetsTable: { __tableName: "disabled_presets" as const },
+    uploadCalibrationTable: { __tableName: "upload_calibration" as const },
+    datasetFoldersTable: { __tableName: "dataset_folders" as const },
+    routesTable: { __tableName: "routes" as const },
+    trollingPresetFoldersTable: { __tableName: "trolling_preset_folders" as const },
+    trollingPresetsTable: { __tableName: "trolling_presets" as const },
+    gpsTrailsTable: { __tableName: "gps_trails" as const },
+    gpsTrailPointsTable: { __tableName: "gps_trail_points" as const },
   };
 });
 
-vi.mock("@workspace/api-zod", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@workspace/api-zod")>();
+vi.mock("@workspace/api-zod", () => {
+  const noErr = { issues: [] } as const;
   const uuidParse = (key: string) => ({
     safeParse: (p: Record<string, unknown>) => {
       const v = p[key];
       return typeof v === "string" && /^[0-9a-f-]{36}$/.test(v)
         ? { success: true, data: { [key]: v } }
-        : { success: false, error: { issues: [] } };
+        : { success: false, error: noErr };
     },
   });
 
-  const overrides = {
-    GetMarkersQueryParams: { safeParse: () => ({ success: false, error: { issues: [] } }) },
+  return {
+    GetMarkersQueryParams: { safeParse: () => ({ success: false, error: noErr }) },
     PostMarkersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PatchMarkersIdParams: uuidParse("id"),
     PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     DeleteMarkersIdParams: uuidParse("id"),
-    GetCatchesQueryParams: { safeParse: () => ({ success: false }) },
-    GetMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
-    PostMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
+    GetCatchesQueryParams: { safeParse: () => ({ success: false, error: noErr }) },
+    GetMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false, error: noErr }) },
+    PostMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false, error: noErr }) },
     PostMarkersMarkerIdCatchesBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    PatchCatchesIdParams: { safeParse: () => ({ success: false }) },
+    PatchCatchesIdParams: { safeParse: () => ({ success: false, error: noErr }) },
     PatchCatchesIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    DeleteCatchesIdParams: { safeParse: () => ({ success: false }) },
+    DeleteCatchesIdParams: { safeParse: () => ({ success: false, error: noErr }) },
     GetUserDatasetsResponse: { parse: (x: unknown) => x },
     GetUserDatasetsIdTerrainResponse: { parse: (x: unknown) => x },
     GetUserDatasetsIdOverviewResponse: { parse: (x: unknown) => x },
-    PatchUserDatasetsIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchUserDatasetsIdMoveBody: { safeParse: () => ({ success: false, error: noErr }) },
     PatchUserDatasetsIdMoveResponse: { parse: (x: unknown) => x },
-    PatchUserDatasetsIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchUserDatasetsIdRenameBody: { safeParse: () => ({ success: false, error: noErr }) },
     PatchUserDatasetsIdRenameResponse: { parse: (x: unknown) => x },
     PostRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    GetRoutesQuerySchema: { safeParse: () => ({ success: false }) },
-    RouteIdParamSchema: { safeParse: () => ({ success: false }) },
+    GetRoutesQuerySchema: { safeParse: () => ({ success: false, error: noErr }) },
+    RouteIdParamSchema: { safeParse: () => ({ success: false, error: noErr }) },
     PostTrollingPresetsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PatchTrollingPresetsIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    DeleteTrollingPresetsIdParams: { safeParse: () => ({ success: false }) },
+    DeleteTrollingPresetsIdParams: { safeParse: () => ({ success: false, error: noErr }) },
     PostTrollingPresetFoldersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PatchTrollingPresetFoldersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     GetUserFoldersResponse: { parse: (x: unknown) => x },
@@ -105,8 +119,12 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
     GetDatasetsIdTerrainResponse: { parse: (x: unknown) => x },
     GetDatasetsIdOverviewResponse: { parse: (x: unknown) => x },
     PostDatasetsUploadResponse: { parse: (x: unknown) => x },
+    DeepHealthCheckResponse: { parse: (x: unknown) => x },
+    GetSettingsResponse: { parse: (x: unknown) => x },
+    HealthCheckResponse: { parse: (x: unknown) => x },
+    NceiSearchQuerySchema: { safeParse: () => ({ success: false, error: noErr }) },
+    PutSettingsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
   };
-  return { ...actual, ...overrides };
 });
 
 const deletedObjectPaths: string[] = [];

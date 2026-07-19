@@ -78,6 +78,21 @@ vi.mock("@workspace/db", () => {
     db: { select, insert, update, delete: del },
     markersTable,
     catchEntriesTable,
+    catchCountersTable: { __tableName: "catch_counters" as const, userId: "userId", lastSeq: "lastSeq" },
+    pool: { query: () => Promise.resolve({ rows: [] }), connect: async () => ({ release: () => {}, query: async () => ({ rows: [] }) }) },
+    userCatalogSavesTable: { __tableName: "user_catalog_saves" as const },
+    datasetCatalogTable: { __tableName: "dataset_catalog" as const },
+    customDatasetsTable: { __tableName: "custom_datasets" as const },
+    userSettingsTable: { __tableName: "user_settings" as const },
+    uploadJobsTable: { __tableName: "upload_jobs" as const },
+    disabledPresetsTable: { __tableName: "disabled_presets" as const },
+    uploadCalibrationTable: { __tableName: "upload_calibration" as const },
+    datasetFoldersTable: { __tableName: "dataset_folders" as const },
+    routesTable: { __tableName: "routes" as const },
+    trollingPresetFoldersTable: { __tableName: "trolling_preset_folders" as const },
+    trollingPresetsTable: { __tableName: "trolling_presets" as const },
+    gpsTrailsTable: { __tableName: "gps_trails" as const },
+    gpsTrailPointsTable: { __tableName: "gps_trail_points" as const },
   };
 });
 
@@ -85,12 +100,13 @@ const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 
 vi.mock("@workspace/api-zod", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@workspace/api-zod")>();
+  const noErr = { issues: [] } as const;
   const uuidParse = (key: string) => ({
     safeParse: (p: Record<string, unknown>) => {
       const v = p[key];
       return typeof v === "string" && /^[0-9a-f-]{36}$/.test(v)
         ? { success: true, data: { [key]: v } }
-        : { success: false, error: { issues: [] } };
+        : { success: false, error: noErr };
     },
   });
   const overrides = {
@@ -98,7 +114,7 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
       safeParse: (q: Record<string, unknown>) =>
         q["datasetId"]
           ? { success: true, data: { datasetId: q["datasetId"] } }
-          : { success: false, error: { issues: [] } },
+          : { success: false, error: noErr },
     },
     GetMarkersMarkerIdCatchesParams: uuidParse("markerId"),
     PostMarkersMarkerIdCatchesParams: uuidParse("markerId"),
@@ -135,13 +151,18 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
     PatchUserDatasetsIdRenameResponse: { parse: (x: unknown) => x },
     GetUserFoldersResponse: { parse: (x: unknown) => x },
     PostUserFoldersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    GetRoutesQuerySchema: { safeParse: () => ({ success: false }) },
+    RouteIdParamSchema: { safeParse: () => ({ success: false }) },
     PatchUserFoldersIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PatchUserFoldersIdRenameResponse: { parse: (x: unknown) => x },
     PatchUserFoldersIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PatchUserFoldersIdMoveResponse: { parse: (x: unknown) => x },
     DeleteUserFoldersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    GetRoutesQuerySchema: { safeParse: () => ({ success: false }) },
-    RouteIdParamSchema: { safeParse: () => ({ success: false }) },
+    DeepHealthCheckResponse: { parse: (x: unknown) => x },
+    HealthCheckResponse: { parse: (x: unknown) => x },
+    NceiSearchQuerySchema: { safeParse: () => ({ success: false }) },
+    PutSettingsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    GetSettingsResponse: { parse: (x: unknown) => x },
     GetDatasetsResponse: { parse: (x: unknown) => x },
     GetDatasetsIdTerrainResponse: { parse: (x: unknown) => x },
     GetDatasetsIdOverviewResponse: { parse: (x: unknown) => x },
