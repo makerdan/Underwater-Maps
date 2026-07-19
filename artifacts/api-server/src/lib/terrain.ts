@@ -22,7 +22,8 @@ export type TerrainDataSource =
   | "synthetic"
   | "twdb"
   | "usace"
-  | "usgs-3dep";
+  | "usgs-3dep"
+  | "noaa-great-lakes";
 
 export interface TerrainGrid {
   datasetId: string;
@@ -292,6 +293,101 @@ const NCEI_COVERAGES = {
 
 type NceiCoverageKey = keyof typeof NCEI_COVERAGES;
 
+// ---------------------------------------------------------------------------
+// USGS 3DEP WCS — continental US freshwater elevation
+// ---------------------------------------------------------------------------
+
+const USGS_3DEP_WCS =
+  "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer";
+
+/** Approximate continental US bounding box for 3DEP guard. */
+const CONUS_BOUNDS = { minLon: -130, maxLon: -60, minLat: 24, maxLat: 50 };
+
+/**
+ * Returns true when the given bbox center is within continental US.
+ * Used to fast-fail the 3DEP fetcher for ocean/non-CONUS bboxes.
+ */
+function isWithinConus(bbox: {
+  minLon: number; maxLon: number; minLat: number; maxLat: number;
+}): boolean {
+  const centerLon = (bbox.minLon + bbox.maxLon) / 2;
+  const centerLat = (bbox.minLat + bbox.maxLat) / 2;
+  return (
+    centerLon >= CONUS_BOUNDS.minLon &&
+    centerLon <= CONUS_BOUNDS.maxLon &&
+    centerLat >= CONUS_BOUNDS.minLat &&
+    centerLat <= CONUS_BOUNDS.maxLat
+  );
+}
+
+// ---------------------------------------------------------------------------
+// NOAA Great Lakes DEMs — lake-specific high-resolution mosaics
+// ---------------------------------------------------------------------------
+
+const GREAT_LAKES_WCS =
+  "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Great_Lakes_mosaics/ImageServer/WCSServer";
+
+interface GreatLakeCoverage {
+  coverage: string;
+  label: string;
+  bounds: { minLon: number; maxLon: number; minLat: number; maxLat: number };
+}
+
+/**
+ * Coverage IDs and approximate bounding boxes for each Great Lake.
+ * Ordered from largest to smallest so the first match is always the
+ * most-specific lake when bboxes overlap at narrow straits.
+ */
+const GREAT_LAKE_COVERAGES: GreatLakeCoverage[] = [
+  {
+    coverage: "superior_lld",
+    label: "NOAA Great Lakes DEM — Lake Superior",
+    bounds: { minLon: -92.2, maxLon: -84.3, minLat: 46.3, maxLat: 49.0 },
+  },
+  {
+    coverage: "michigan_lld",
+    label: "NOAA Great Lakes DEM — Lake Michigan",
+    bounds: { minLon: -88.1, maxLon: -84.7, minLat: 41.6, maxLat: 46.1 },
+  },
+  {
+    coverage: "huron_lld",
+    label: "NOAA Great Lakes DEM — Lake Huron",
+    bounds: { minLon: -84.6, maxLon: -79.6, minLat: 43.0, maxLat: 46.6 },
+  },
+  {
+    coverage: "erie_lld",
+    label: "NOAA Great Lakes DEM — Lake Erie",
+    bounds: { minLon: -83.5, maxLon: -78.8, minLat: 41.4, maxLat: 43.0 },
+  },
+  {
+    coverage: "ontario_lld",
+    label: "NOAA Great Lakes DEM — Lake Ontario",
+    bounds: { minLon: -79.9, maxLon: -75.9, minLat: 43.1, maxLat: 44.3 },
+  },
+];
+
+/**
+ * Returns the Great Lake coverage whose bbox best overlaps the given bbox,
+ * or null when the center falls outside all Great Lakes.
+ */
+function matchGreatLakeCoverage(bbox: {
+  minLon: number; maxLon: number; minLat: number; maxLat: number;
+}): GreatLakeCoverage | null {
+  const centerLon = (bbox.minLon + bbox.maxLon) / 2;
+  const centerLat = (bbox.minLat + bbox.maxLat) / 2;
+  for (const lake of GREAT_LAKE_COVERAGES) {
+    if (
+      centerLon >= lake.bounds.minLon &&
+      centerLon <= lake.bounds.maxLon &&
+      centerLat >= lake.bounds.minLat &&
+      centerLat <= lake.bounds.maxLat
+    ) {
+      return lake;
+    }
+  }
+  return null;
+}
+
 /**
  * Concrete bathymetry-source registry. Each entry conforms to the
  * `BathymetrySource` contract above. The resolver looks up entries by id
@@ -373,6 +469,37 @@ export const BATHYMETRY_SOURCES = {
       return { ...r };
     },
   },
+  /** NOAA Great Lakes DEM mosaics — high-resolution lake-floor DEMs for
+   *  all five Great Lakes served via NCEI's WCS infrastructure. Routes to
+   *  the correct lake-specific coverage (superior/michigan/huron/erie/ontario)
+   *  based on the bbox center. Throws immediately for non-Great-Lakes bboxes
+   *  so the resolver falls through to 3DEP/GEBCO without a network call. */
+  "noaa-great-lakes-dem": {
+    id: "noaa-great-lakes-dem",
+    label: "NOAA Great Lakes DEM",
+    scope: "regional",
+    dataSource: "noaa-great-lakes" as TerrainDataSource,
+    creditUrl: "https://www.ncei.noaa.gov/products/great-lakes-bathymetry",
+    async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
+      const r = await fetchGreatLakesGrid(meta.bbox, N);
+      return { ...r };
+    },
+  },
+  /** USGS 3DEP best-available DEM (~1–10 m where lidar exists, 1/3 arc-second
+   *  seamless elsewhere). Covers all of continental US. Excellent for inland
+   *  reservoir pre-impoundment bathymetry and freshwater lake terrain.
+   *  Throws immediately for non-CONUS or all-ocean bboxes. */
+  "usgs-3dep": {
+    id: "usgs-3dep",
+    label: "USGS 3DEP",
+    scope: "national",
+    dataSource: "usgs-3dep",
+    creditUrl: "https://www.usgs.gov/3d-elevation-program",
+    async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
+      const r = await fetchUsgs3depGrid(meta.bbox, N);
+      return { ...r };
+    },
+  },
   /** GEBCO 2024 global grid (~400 m). Last-resort upstream before
    *  synthetic — covers everywhere on the ocean but is too coarse for
    *  most inshore fishing-grade detail. */
@@ -442,8 +569,24 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   ],
 };
 
-/** Default ranked list for AOIs without an explicit entry. */
-const DEFAULT_SOURCE_PRIORITY: readonly BathymetrySourceId[] = ["gebco"];
+/**
+ * Default ranked list for AOIs without an explicit entry.
+ *
+ * Order rationale (highest specificity first):
+ *   1. noaa-great-lakes-dem — lake-specific high-resolution DEMs; throws
+ *      immediately for non-Great-Lakes bboxes (no network cost).
+ *   2. usgs-3dep — continental US DEM; throws immediately for non-CONUS or
+ *      all-ocean bboxes (no network cost after the bounds check).
+ *   3. gebco — global ~400 m fallback; always available but coarse.
+ *
+ * Both freshwater fetchers fast-fail via guards so the added entries add
+ * zero latency for ocean/saltwater AOIs that use the default list.
+ */
+const DEFAULT_SOURCE_PRIORITY: readonly BathymetrySourceId[] = [
+  "noaa-great-lakes-dem",
+  "usgs-3dep",
+  "gebco",
+];
 
 export function getDatasetSourcePriority(
   datasetId: string,
@@ -617,6 +760,249 @@ async function fetchNceiGrid(
 
   // Require at least ~0.5% land cells to consider topography meaningful
   const hasTopography = landCellCount > resolution * resolution * 0.005;
+
+  return { depths, minDepth, maxDepth, topography, hasTopography };
+}
+
+// ---------------------------------------------------------------------------
+// USGS 3DEP WCS fetch — continental US freshwater terrain
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch elevation data from the USGS 3D Elevation Program (3DEP) WCS for a
+ * given bounding box and derive a bathymetry + topography grid from it.
+ *
+ * 3DEP elevation values are metres above the NAVD 88 vertical datum (positive
+ * up). For freshwater lakes, the pool surface sits at a fixed elevation and
+ * the lake floor appears as lower elevation. We estimate the pool surface as
+ * the 85th-percentile elevation in the bbox (the rim/surrounding terrain),
+ * then compute:
+ *   depth      = max(0, p85 − cell_elev)   (positive for cells below surface)
+ *   topography = max(0, cell_elev − p85)   (positive for cells above surface)
+ *
+ * Guards:
+ *  - Throws immediately when the bbox center falls outside continental US
+ *    (lon -130 to -60, lat 24 to 50) — fast-fail for ocean/non-CONUS AOIs.
+ *  - Throws when the resulting depth range is < 1 m (flat/ocean tile — no
+ *    meaningful lake coverage for this bbox).
+ *  - Throws when all raw elevation values are ≤ 0 (ocean/open-water cell —
+ *    the saltwater threshold guard from the task spec).
+ *
+ * Callers should catch and fall through to the next source in the chain.
+ */
+async function fetchUsgs3depGrid(
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+  resolution: number,
+): Promise<{ depths: number[]; minDepth: number; maxDepth: number; topography: number[]; hasTopography: boolean }> {
+  if (!isWithinConus(bbox)) {
+    throw new Error("USGS 3DEP: bbox center is outside continental US — skipping");
+  }
+
+  const { minLon, minLat, maxLon, maxLat } = bbox;
+  const params = new URLSearchParams({
+    SERVICE: "WCS",
+    VERSION: "1.0.0",
+    REQUEST: "GetCoverage",
+    COVERAGE: "DEP3Elevation",
+    CRS: "EPSG:4326",
+    BBOX: `${minLon},${minLat},${maxLon},${maxLat}`,
+    FORMAT: "image/x-aaigrid",
+    WIDTH: String(resolution),
+    HEIGHT: String(resolution),
+  });
+
+  const url = `${USGS_3DEP_WCS}?${params.toString()}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000);
+  let text: string;
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) throw new Error(`USGS 3DEP WCS returned HTTP ${resp.status}`);
+    text = await resp.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (text.trim().startsWith("<") || text.trim().startsWith("<?")) {
+    throw new Error("USGS 3DEP WCS returned an XML response (coverage unavailable)");
+  }
+
+  const { ncols, nrows, nodata, values } = parseAsciiGrid(text);
+  if (!ncols || !nrows || values.length === 0) {
+    throw new Error("USGS 3DEP WCS returned an empty or invalid ASCII grid");
+  }
+
+  // Filter out nodata values and verify this isn't an all-ocean tile.
+  const validValues = values.filter((v) => v !== nodata && isFinite(v));
+  if (validValues.length === 0) {
+    throw new Error("USGS 3DEP WCS returned all-nodata grid — no elevation data for bbox");
+  }
+  const allBelowSeaLevel = validValues.every((v) => v <= 0);
+  if (allBelowSeaLevel) {
+    throw new Error("USGS 3DEP WCS returned all-ocean/sea-level values — bbox is dominated by saltwater");
+  }
+
+  // Estimate pool/lake-surface elevation as the 85th percentile of all valid
+  // values. This approximates the rim/surrounding-terrain level so that:
+  //   - Lake cells (below the rim) get positive depth values
+  //   - Land cells (above the rim) get positive topography values
+  const sorted = validValues.slice().sort((a, b) => a - b);
+  const p85 = sorted[Math.floor(0.85 * sorted.length)] ?? sorted[sorted.length - 1]!;
+
+  const depths: number[] = new Array(resolution * resolution).fill(NaN);
+  const topography: number[] = new Array(resolution * resolution).fill(0);
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+  let landCellCount = 0;
+
+  for (let row = 0; row < resolution; row++) {
+    for (let col = 0; col < resolution; col++) {
+      const srcRow = Math.min(nrows - 1, Math.floor((row / resolution) * nrows));
+      const srcCol = Math.min(ncols - 1, Math.floor((col / resolution) * ncols));
+      const elev = values[srcRow * ncols + srcCol];
+
+      if (elev === undefined || elev === nodata || !isFinite(elev)) continue;
+
+      const idx = row * resolution + col;
+      if (elev <= p85) {
+        const depth = p85 - elev;
+        depths[idx] = depth;
+        if (depth < minDepth) minDepth = depth;
+        if (depth > maxDepth) maxDepth = depth;
+      } else {
+        depths[idx] = 0;
+        topography[idx] = elev - p85;
+        landCellCount++;
+      }
+    }
+  }
+
+  if (!isFinite(minDepth)) minDepth = 0;
+  if (!isFinite(maxDepth)) maxDepth = 0;
+
+  // Guard: a grid with negligible depth range likely has no real lake coverage
+  if (maxDepth - minDepth < 1) {
+    throw new Error(`USGS 3DEP WCS returned near-flat grid (range ${(maxDepth - minDepth).toFixed(2)} m) — likely no lake coverage`);
+  }
+
+  const hasTopography = landCellCount > resolution * resolution * 0.005;
+  logger.info(
+    { minDepth, maxDepth, hasTopography, landCellCount },
+    `[terrain] USGS 3DEP: resolved grid (depth range ${minDepth.toFixed(1)}–${maxDepth.toFixed(1)} m, p85_elev=${p85.toFixed(1)} m)`,
+  );
+
+  return { depths, minDepth, maxDepth, topography, hasTopography };
+}
+
+// ---------------------------------------------------------------------------
+// NOAA Great Lakes DEM WCS fetch
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch bathymetric data from the NOAA Great Lakes DEM WCS for a given
+ * bounding box. Routes to the correct lake-specific coverage
+ * (superior_lld / michigan_lld / huron_lld / erie_lld / ontario_lld) by
+ * matching the bbox center to the lake's approximate geographic bounds.
+ *
+ * Great Lakes DEM elevation values are metres below the International Great
+ * Lakes Datum (IGLD 85), sign-inverted from the NCEI convention:
+ *   positive = above datum (land/topography)
+ *   negative = below datum (lake floor = positive depth)
+ *
+ * Returns the same shape as `fetchNceiGrid`. Throws when:
+ *  - The bbox center doesn't fall within any Great Lake.
+ *  - The upstream WCS returns an error or empty grid.
+ *  - The resulting depth range is < 1 m (no real lake coverage).
+ */
+async function fetchGreatLakesGrid(
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+  resolution: number,
+): Promise<{ depths: number[]; minDepth: number; maxDepth: number; topography: number[]; hasTopography: boolean }> {
+  const lake = matchGreatLakeCoverage(bbox);
+  if (!lake) {
+    throw new Error("NOAA Great Lakes DEM: bbox center does not fall within any Great Lake — skipping");
+  }
+
+  const { minLon, minLat, maxLon, maxLat } = bbox;
+  const params = new URLSearchParams({
+    SERVICE: "WCS",
+    VERSION: "1.0.0",
+    REQUEST: "GetCoverage",
+    COVERAGE: lake.coverage,
+    CRS: "EPSG:4326",
+    BBOX: `${minLon},${minLat},${maxLon},${maxLat}`,
+    FORMAT: "image/x-aaigrid",
+    WIDTH: String(resolution),
+    HEIGHT: String(resolution),
+  });
+
+  const url = `${GREAT_LAKES_WCS}?${params.toString()}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  let text: string;
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) throw new Error(`NOAA Great Lakes WCS returned HTTP ${resp.status}`);
+    text = await resp.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (text.trim().startsWith("<") || text.trim().startsWith("<?")) {
+    throw new Error(`NOAA Great Lakes WCS returned an XML response for ${lake.coverage} (coverage unavailable)`);
+  }
+
+  const { ncols, nrows, nodata, values } = parseAsciiGrid(text);
+  if (!ncols || !nrows || values.length === 0) {
+    throw new Error(`NOAA Great Lakes WCS returned an empty or invalid ASCII grid for ${lake.coverage}`);
+  }
+
+  // Great Lakes DEM uses the same sign convention as NCEI: negative = below
+  // datum (lake floor), positive = above datum (land/topography).
+  const depths: number[] = new Array(resolution * resolution).fill(NaN);
+  const topography: number[] = new Array(resolution * resolution).fill(0);
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+  let landCellCount = 0;
+
+  for (let row = 0; row < resolution; row++) {
+    for (let col = 0; col < resolution; col++) {
+      const srcRow = Math.min(nrows - 1, Math.floor((row / resolution) * nrows));
+      const srcCol = Math.min(ncols - 1, Math.floor((col / resolution) * ncols));
+      const elev = values[srcRow * ncols + srcCol];
+
+      if (elev === undefined || elev === nodata || !isFinite(elev)) continue;
+
+      const idx = row * resolution + col;
+      if (elev < 0) {
+        const depth = -elev;
+        depths[idx] = depth;
+        if (depth < minDepth) minDepth = depth;
+        if (depth > maxDepth) maxDepth = depth;
+      } else if (elev > 0) {
+        depths[idx] = 0;
+        topography[idx] = elev;
+        landCellCount++;
+      } else {
+        depths[idx] = 0;
+      }
+    }
+  }
+
+  if (!isFinite(minDepth)) minDepth = 0;
+  if (!isFinite(maxDepth)) maxDepth = 0;
+
+  if (maxDepth - minDepth < 1) {
+    throw new Error(`NOAA Great Lakes WCS (${lake.coverage}) near-flat grid (range ${(maxDepth - minDepth).toFixed(2)} m) — likely no lake-floor coverage`);
+  }
+
+  const hasTopography = landCellCount > resolution * resolution * 0.005;
+  logger.info(
+    { lake: lake.coverage, minDepth, maxDepth, hasTopography },
+    `[terrain] NOAA Great Lakes DEM (${lake.label}): resolved grid (depth range ${minDepth.toFixed(1)}–${maxDepth.toFixed(1)} m)`,
+  );
 
   return { depths, minDepth, maxDepth, topography, hasTopography };
 }
@@ -1188,6 +1574,253 @@ export async function buildNceiTerrainForBbox(
       : {}),
   };
 
+  return grid;
+}
+
+// ---------------------------------------------------------------------------
+// Disk caches for catalog-facing freshwater builders
+// ---------------------------------------------------------------------------
+
+const USGS_3DEP_DISK_CACHE_DIR = process.env["USGS_3DEP_CACHE_DIR"] ?? "/tmp/3dep-cache";
+const GREAT_LAKES_DISK_CACHE_DIR = process.env["GREAT_LAKES_CACHE_DIR"] ?? "/tmp/great-lakes-cache";
+
+async function readFreshwaterDiskCache(
+  cacheDir: string,
+  key: string,
+): Promise<TerrainGrid | null> {
+  try {
+    const file = path.join(cacheDir, `${key}.json`);
+    const raw = await fsPromises.readFile(file, "utf8");
+    const parsed = JSON.parse(raw) as TerrainGrid;
+    const version = parsed.version ?? 1;
+    if (version < TERRAIN_CACHE_VERSION) {
+      fsPromises.unlink(file).catch(() => {});
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function writeFreshwaterDiskCache(
+  cacheDir: string,
+  key: string,
+  grid: TerrainGrid,
+): Promise<void> {
+  try {
+    await fsPromises.mkdir(cacheDir, { recursive: true });
+    const file = path.join(cacheDir, `${key}.json`);
+    const stamped: TerrainGrid = { ...grid, version: TERRAIN_CACHE_VERSION };
+    await fsPromises.writeFile(file, JSON.stringify(stamped), "utf8");
+  } catch (err) {
+    logger.warn(
+      { err, key, cacheDir },
+      `[terrain] Failed to write freshwater disk cache for ${key}: ${(err as Error).message}`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// USGS 3DEP terrain builder — catalog "Save" pipeline entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a TerrainGrid for an arbitrary bbox by fetching from the USGS 3DEP
+ * WCS. Mirrors `buildGebcoTerrainForBbox` so the catalog "Save" pipeline can
+ * materialize freshwater lake entries over continental US without the preset
+ * registry.
+ *
+ * Results are disk-cached under `/tmp/3dep-cache` (keyed by a sanitised bbox
+ * hash) to avoid redundant upstream requests during development and
+ * re-materialization. Throws on upstream failure — the materializer writes
+ * the error into the save row's `errorMessage` so users see a clear
+ * "coverage unavailable" state and can retry.
+ */
+export async function buildUsgs3depTerrainForBbox(
+  meta: {
+    datasetId: string;
+    name: string;
+    waterType: "saltwater" | "freshwater";
+    bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+  },
+  resolution = 256,
+  options: { smoothing?: boolean } = {},
+): Promise<TerrainGrid> {
+  const N = Math.max(32, Math.min(512, resolution));
+  const smoothing = options.smoothing ?? true;
+
+  const cacheKey = `3dep-${meta.datasetId.replace(/[^a-z0-9-]/gi, "_")}-${N}${smoothing ? "" : "-raw"}`;
+  const cached = await readFreshwaterDiskCache(USGS_3DEP_DISK_CACHE_DIR, cacheKey);
+  if (cached) {
+    logger.info({ cacheKey }, `[terrain] USGS 3DEP disk cache hit: ${cacheKey}`);
+    return cached;
+  }
+
+  const { depths, topography, hasTopography } = await fetchUsgs3depGrid(meta.bbox, N);
+
+  if (smoothing) {
+    let mn = Infinity, mx = -Infinity;
+    for (const d of depths) {
+      if (Number.isNaN(d)) continue;
+      if (d < mn) mn = d;
+      if (d > mx) mx = d;
+    }
+    if (!isFinite(mn)) mn = 0;
+    if (!isFinite(mx)) mx = 0;
+    smoothSpikes(depths, N, Math.max(1, mx - mn));
+  }
+
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+  for (const d of depths) {
+    if (Number.isNaN(d)) continue;
+    if (d < minDepth) minDepth = d;
+    if (d > maxDepth) maxDepth = d;
+  }
+  if (!isFinite(minDepth)) minDepth = 0;
+  if (!isFinite(maxDepth)) maxDepth = 0;
+
+  const centerLon = (meta.bbox.minLon + meta.bbox.maxLon) / 2;
+  const centerLat = (meta.bbox.minLat + meta.bbox.maxLat) / 2;
+
+  const grid: TerrainGrid = {
+    datasetId: meta.datasetId,
+    name: meta.name,
+    waterType: meta.waterType,
+    resolution: N,
+    width: N,
+    height: N,
+    depths,
+    minDepth: Math.round(minDepth),
+    maxDepth: Math.round(maxDepth),
+    minLon: meta.bbox.minLon,
+    maxLon: meta.bbox.maxLon,
+    minLat: meta.bbox.minLat,
+    maxLat: meta.bbox.maxLat,
+    centerLon,
+    centerLat,
+    dataSource: "usgs-3dep",
+    bathymetrySource: "usgs-3dep",
+    bathymetrySourceLabel: "USGS 3DEP",
+    bathymetryCreditUrl: "https://www.usgs.gov/3d-elevation-program",
+    version: TERRAIN_CACHE_VERSION,
+    ...(hasTopography && topography
+      ? {
+          topography,
+          hasTopography: true,
+          topographySource: "usgs-3dep" as const,
+          topographySourceLabel: "USGS 3DEP",
+          topographyCreditUrl: "https://www.usgs.gov/3d-elevation-program",
+        }
+      : {}),
+  };
+
+  await writeFreshwaterDiskCache(USGS_3DEP_DISK_CACHE_DIR, cacheKey, grid);
+  return grid;
+}
+
+// ---------------------------------------------------------------------------
+// NOAA Great Lakes DEM builder — catalog "Save" pipeline entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a TerrainGrid for an arbitrary bbox by fetching from the NOAA Great
+ * Lakes DEM WCS. Routes to the correct lake-specific coverage based on bbox
+ * center (superior/michigan/huron/erie/ontario). Mirrors
+ * `buildGebcoTerrainForBbox` so the catalog "Save" pipeline can materialize
+ * Great Lakes entries without the preset registry.
+ *
+ * Results are disk-cached under `/tmp/great-lakes-cache`. Throws on upstream
+ * failure so the materializer can surface a clear error state.
+ */
+export async function buildGreatLakesTerrainForBbox(
+  meta: {
+    datasetId: string;
+    name: string;
+    waterType: "saltwater" | "freshwater";
+    bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+  },
+  resolution = 256,
+  options: { smoothing?: boolean } = {},
+): Promise<TerrainGrid> {
+  const N = Math.max(32, Math.min(512, resolution));
+  const smoothing = options.smoothing ?? true;
+
+  const cacheKey = `gl-${meta.datasetId.replace(/[^a-z0-9-]/gi, "_")}-${N}${smoothing ? "" : "-raw"}`;
+  const cached = await readFreshwaterDiskCache(GREAT_LAKES_DISK_CACHE_DIR, cacheKey);
+  if (cached) {
+    logger.info({ cacheKey }, `[terrain] Great Lakes disk cache hit: ${cacheKey}`);
+    return cached;
+  }
+
+  const lake = matchGreatLakeCoverage(meta.bbox);
+  if (!lake) {
+    throw new Error(
+      `No Great Lakes DEM coverage found for bbox center (${((meta.bbox.minLon + meta.bbox.maxLon) / 2).toFixed(2)}, ${((meta.bbox.minLat + meta.bbox.maxLat) / 2).toFixed(2)})`,
+    );
+  }
+
+  const { depths, topography, hasTopography } = await fetchGreatLakesGrid(meta.bbox, N);
+
+  if (smoothing) {
+    let mn = Infinity, mx = -Infinity;
+    for (const d of depths) {
+      if (Number.isNaN(d)) continue;
+      if (d < mn) mn = d;
+      if (d > mx) mx = d;
+    }
+    if (!isFinite(mn)) mn = 0;
+    if (!isFinite(mx)) mx = 0;
+    smoothSpikes(depths, N, Math.max(1, mx - mn));
+  }
+
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+  for (const d of depths) {
+    if (Number.isNaN(d)) continue;
+    if (d < minDepth) minDepth = d;
+    if (d > maxDepth) maxDepth = d;
+  }
+  if (!isFinite(minDepth)) minDepth = 0;
+  if (!isFinite(maxDepth)) maxDepth = 0;
+
+  const centerLon = (meta.bbox.minLon + meta.bbox.maxLon) / 2;
+  const centerLat = (meta.bbox.minLat + meta.bbox.maxLat) / 2;
+
+  const grid: TerrainGrid = {
+    datasetId: meta.datasetId,
+    name: meta.name,
+    waterType: meta.waterType,
+    resolution: N,
+    width: N,
+    height: N,
+    depths,
+    minDepth: Math.round(minDepth),
+    maxDepth: Math.round(maxDepth),
+    minLon: meta.bbox.minLon,
+    maxLon: meta.bbox.maxLon,
+    minLat: meta.bbox.minLat,
+    maxLat: meta.bbox.maxLat,
+    centerLon,
+    centerLat,
+    dataSource: "noaa-great-lakes",
+    bathymetrySource: "noaa-great-lakes",
+    bathymetrySourceLabel: lake.label,
+    bathymetryCreditUrl: "https://www.ncei.noaa.gov/products/great-lakes-bathymetry",
+    version: TERRAIN_CACHE_VERSION,
+    ...(hasTopography && topography
+      ? {
+          topography,
+          hasTopography: true,
+          topographySource: "noaa-great-lakes" as const,
+          topographySourceLabel: lake.label,
+          topographyCreditUrl: "https://www.ncei.noaa.gov/products/great-lakes-bathymetry",
+        }
+      : {}),
+  };
+
+  await writeFreshwaterDiskCache(GREAT_LAKES_DISK_CACHE_DIR, cacheKey, grid);
   return grid;
 }
 

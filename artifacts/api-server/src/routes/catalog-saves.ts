@@ -44,6 +44,8 @@ import {
   buildTerrainGrid,
   buildGebcoTerrainForBbox,
   buildNceiTerrainForBbox,
+  buildUsgs3depTerrainForBbox,
+  buildGreatLakesTerrainForBbox,
   ALL_PRESET_DATASETS,
 } from "../lib/terrain.js";
 import {
@@ -614,6 +616,40 @@ export async function buildCatalogGrids(
     return { terrain, overview };
   }
 
+  // NOAA Great Lakes DEM — high-resolution lake-floor mosaics for all five
+  // Great Lakes. Detected by id prefix or by the bbox center falling within
+  // a known Great Lake's geographic bounds. Ranked highest-specificity among
+  // freshwater sources so Great Lakes entries always resolve here rather than
+  // falling through to 3DEP or GEBCO.
+  if (isGreatLakesBathymetryEntry(entry)) {
+    const meta = {
+      datasetId: entry.id,
+      name: entry.name,
+      waterType: entry.waterType,
+      bbox: entry.coverageBbox,
+    };
+    const terrain = await buildGreatLakesTerrainForBbox(meta, 256, { smoothing: true });
+    const overview = await buildGreatLakesTerrainForBbox(meta, 64, { smoothing: true });
+    return { terrain, overview };
+  }
+
+  // USGS 3DEP — continental US DEM for inland freshwater lakes and reservoirs.
+  // Activated for freshwater bathymetry entries whose bbox center falls within
+  // continental US (lon -130 to -60, lat 24 to 50). Ocean and non-CONUS
+  // entries fall through to GEBCO/NCEI automatically because fetchUsgs3depGrid
+  // throws for out-of-scope bboxes.
+  if (isUsgs3depBathymetryEntry(entry)) {
+    const meta = {
+      datasetId: entry.id,
+      name: entry.name,
+      waterType: entry.waterType,
+      bbox: entry.coverageBbox,
+    };
+    const terrain = await buildUsgs3depTerrainForBbox(meta, 256, { smoothing: true });
+    const overview = await buildUsgs3depTerrainForBbox(meta, 64, { smoothing: true });
+    return { terrain, overview };
+  }
+
   // GEBCO 2024 global grid — fetched directly from the GEBCO WCS using the
   // entry's coverageBbox. The same fetcher already backs the preset pipeline
   // as its global-fallback source, so behaviour matches what users see when
@@ -829,6 +865,47 @@ function buildHabitatGrid(
     habitatPolygons: collection,
   };
   return grid;
+}
+
+/**
+ * Returns true for NOAA Great Lakes DEM catalog entries. Detection is by:
+ *  - Explicit id prefix `noaa-great-lakes-*`
+ *  - Source agency matching "NOAA" and the id or name mentioning a Great Lake
+ * Used to route materialization to `buildGreatLakesTerrainForBbox`.
+ */
+function isGreatLakesBathymetryEntry(entry: CatalogSeedEntry): boolean {
+  if (entry.dataType !== "bathymetry") return false;
+  if (entry.waterType !== "freshwater") return false;
+  if (entry.id.startsWith("noaa-great-lakes-")) return true;
+  const nameAndId = `${entry.id} ${entry.name}`.toLowerCase();
+  const greatLakeTerms = ["lake superior", "lake michigan", "lake huron", "lake erie", "lake ontario", "great lake"];
+  return greatLakeTerms.some((t) => nameAndId.includes(t));
+}
+
+/**
+ * Returns true for freshwater bathymetry entries whose bbox center falls
+ * within continental US and that are not already matched by a more-specific
+ * router (Great Lakes, NCEI, GEBCO). Routes materialization to
+ * `buildUsgs3depTerrainForBbox` so inland lake/reservoir entries resolve via
+ * real 3DEP elevation data instead of the synthetic fallback.
+ *
+ * ID prefix `usgs-3dep-*` is an explicit signal; otherwise any
+ * freshwater + USGS-sourced bathymetry entry qualifies.
+ */
+function isUsgs3depBathymetryEntry(entry: CatalogSeedEntry): boolean {
+  if (entry.dataType !== "bathymetry") return false;
+  if (entry.waterType !== "freshwater") return false;
+  if (entry.id.startsWith("usgs-3dep-")) return true;
+  if (/\bUSGS\b/i.test(entry.sourceAgency)) return true;
+  // Generic freshwater bathymetry entry with a bbox inside continental US —
+  // use 3DEP as the national-coverage fallback before GEBCO.
+  const centerLon = (entry.coverageBbox.minLon + entry.coverageBbox.maxLon) / 2;
+  const centerLat = (entry.coverageBbox.minLat + entry.coverageBbox.maxLat) / 2;
+  return (
+    entry.waterType === "freshwater" &&
+    centerLon >= -130 && centerLon <= -60 &&
+    centerLat >= 24 && centerLat <= 50
+  );
 }
 
 function isGebcoBathymetryEntry(entry: CatalogSeedEntry): boolean {
