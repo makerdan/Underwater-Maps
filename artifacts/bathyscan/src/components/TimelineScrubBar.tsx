@@ -254,7 +254,19 @@ export const TimelineScrubBar: React.FC = () => {
                 data-testid={`timeline-tide-marker-${e.kind}`}
                 title={label}
                 aria-label={label}
-                role="img"
+                role="button"
+                tabIndex={visible ? 0 : -1}
+                onClick={() => {
+                  setTime(new Date(e.tMs));
+                  if (isPlaying) setPlaying(false);
+                }}
+                onKeyDown={(ev) => {
+                  if (ev.key === "Enter" || ev.key === " ") {
+                    ev.preventDefault();
+                    setTime(new Date(e.tMs));
+                    if (isPlaying) setPlaying(false);
+                  }
+                }}
                 style={{
                   position: "absolute",
                   left: `${pct}%`,
@@ -268,6 +280,14 @@ export const TimelineScrubBar: React.FC = () => {
                   boxShadow: `0 0 4px ${color}`,
                   pointerEvents: "auto",
                   zIndex: 1,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+                onFocus={(ev) => {
+                  ev.currentTarget.style.boxShadow = `0 0 0 2px #0f172a, 0 0 0 4px ${color}`;
+                }}
+                onBlur={(ev) => {
+                  ev.currentTarget.style.boxShadow = `0 0 4px ${color}`;
                 }}
               />
             );
