@@ -1022,7 +1022,7 @@ async function classifyOneTileAi(
   gridBase64: string,
   waterType: "saltwater" | "freshwater",
   datasetId: string,
-): Promise<{ zones: string[]; usage: { input_tokens: number; output_tokens: number } }> {
+): Promise<{ zones: string[]; usage: { input_tokens: number; output_tokens: number }; poeSucceeded: boolean }> {
   if (poeBreaker.isOpen()) {
     throw new Error("poe_circuit_open");
   }
@@ -1106,6 +1106,7 @@ async function classifyOneTileAi(
         input_tokens: result.usage?.input_tokens ?? 0,
         output_tokens: result.usage?.output_tokens ?? 0,
       },
+      poeSucceeded: true,
     };
   } catch (poeErr) {
     // ZoneParseError means the model returned unparseable text (a quality
@@ -1121,8 +1122,9 @@ async function classifyOneTileAi(
 
     // OpenAI vision fallback for tiles — runs before giving up and returning
     // null (which triggers per-tile heuristic in runTiledClassify). If the
-    // tile succeeds via OpenAI the result is source "ai" from the caller's
-    // perspective and gets written to the tile cache normally.
+    // tile succeeds via OpenAI the result is cached normally but poeSucceeded
+    // is false so the caller can accurately count how many tiles Poe failed on
+    // (even when OpenAI rescued the output quality).
     const promptTextForFallback = `Classify the seafloor/lake-bed zones in this depth map.`;
     try {
       const oaiResult = await classifyOneTileWithOpenAi(
@@ -1134,7 +1136,7 @@ async function classifyOneTileAi(
         { provider: "openai", model: OPENAI_CLASSIFY_MODEL },
         "[poe/classify] tile-level OpenAI vision fallback succeeded",
       );
-      return oaiResult;
+      return { ...oaiResult, poeSucceeded: false };
     } catch (oaiErr) {
       logger.warn(
         { err: oaiErr },
@@ -1217,12 +1219,20 @@ async function runTiledClassify(opts: {
 
       try {
         const gridBase64 = tileDepthsToPngDataUrl(depths);
-        const { zones, usage } = await classifyOneTileAi(gridBase64, waterType, datasetId);
+        const { zones, usage, poeSucceeded } = await classifyOneTileAi(gridBase64, waterType, datasetId);
         if (!Array.isArray(zones) || zones.length !== TILE_SIZE * TILE_SIZE) {
           throw new Error(`tile classifier returned ${zones?.length ?? 0} labels`);
         }
         globalPoeCache.set(tileCacheKey, JSON.stringify(zones));
-        tilesAi++;
+        // Count against poeSucceeded, not whether we got zones: a tile rescued
+        // by the OpenAI fallback still represents a Poe failure and must be
+        // reported in tilesHeuristic so partial AI outages are visible even
+        // when OpenAI compensates for output quality.
+        if (poeSucceeded) {
+          tilesAi++;
+        } else {
+          tilesHeuristic++;
+        }
         totalInputTokens += usage.input_tokens;
         totalOutputTokens += usage.output_tokens;
         return zones;
