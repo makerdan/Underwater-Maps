@@ -132,9 +132,9 @@ const POE_HELP_TIMEOUT_MS = 30_000;
 // ---------------------------------------------------------------------------
 
 /** OpenAI model used for help Q&A fallback (chat completions, no vision). */
-export const OPENAI_HELP_MODEL = "gpt-4o";
+export const OPENAI_HELP_MODEL = "gpt-5";
 /** OpenAI model used for classify vision fallback (supports image_url). */
-export const OPENAI_CLASSIFY_MODEL = "gpt-4o";
+export const OPENAI_CLASSIFY_MODEL = "gpt-5";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type OpenAiClient = any;
