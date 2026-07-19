@@ -104,7 +104,9 @@ function saveSlots(
   try {
     const key = waterType === "freshwater" ? LS_KEY_FRESHWATER : LS_KEY_SALTWATER;
     localStorage.setItem(key, JSON.stringify(slots));
-  } catch {}
+  } catch (err) {
+    console.warn("[zone-overlay] Failed to persist zone slots to localStorage — continuing", err);
+  }
 }
 
 /** One-time migration: if the legacy flat key exists, copy it to saltwater and delete it. */
@@ -117,7 +119,9 @@ function migrateLegacyKey(): void {
       localStorage.setItem(LS_KEY_SALTWATER, legacy);
     }
     localStorage.removeItem(LS_KEY_LEGACY);
-  } catch {}
+  } catch (err) {
+    console.warn("[zone-overlay] Failed to migrate legacy zone overlay key — continuing", err);
+  }
 }
 
 // Run migration once at module load time

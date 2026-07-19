@@ -50,8 +50,8 @@ export async function flushPendingTrails(apiBase: string): Promise<void> {
         }),
       });
       if (res.ok) localStorage.removeItem(key);
-    } catch {
-      // leave key for next retry
+    } catch (err) {
+      console.warn("[offline-flush] Failed to flush pending trail", key, "— leaving for next retry:", err);
     }
   }
 }
@@ -75,8 +75,8 @@ export async function flushPendingMarkers(apiBase: string): Promise<void> {
         body: JSON.stringify(payload),
       });
       if (res.ok) await del(key);
-    } catch {
-      // leave for next retry
+    } catch (err) {
+      console.warn("[offline-flush] Failed to flush pending marker", key, "— leaving for next retry:", err);
     }
   }
 }
