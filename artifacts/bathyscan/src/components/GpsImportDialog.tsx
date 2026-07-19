@@ -148,9 +148,11 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const [isImporting, setIsImporting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [importProgress, setImportProgress] = useState<{
-    current: number;
-    total: number;
-    itemKind: "marker" | "route";
+    markersDone: number;
+    markersTotal: number;
+    routesDone: number;
+    routesTotal: number;
+    currentKind: "marker" | "route";
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importingRef = useRef(false);
@@ -377,8 +379,13 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     const wpToImport = importWaypoints ? parsed.waypoints : [];
     const routesToImport: ParsedRoute[] = importableRoutes;
 
-    const totalItems = wpToImport.length + routesToImport.length;
-    setImportProgress({ current: 0, total: totalItems, itemKind: "marker" });
+    setImportProgress({
+      markersDone: 0,
+      markersTotal: wpToImport.length,
+      routesDone: 0,
+      routesTotal: routesToImport.length,
+      currentKind: "marker",
+    });
     setPhase({ kind: "importing" });
     importStartTimeRef.current = Date.now();
 
@@ -391,7 +398,6 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     for (let wi = 0; wi < wpToImport.length; wi++) {
       if (cancelRequestedRef.current) break;
       const w = wpToImport[wi]!;
-      setImportProgress({ current: wi, total: totalItems, itemKind: "marker" });
       const label = sanitize(clamp(w.name || "Imported point", MARKER_LABEL_MAX)) || "Imported point";
       const notes = w.notes ? sanitize(clamp(w.notes, MARKER_NOTES_MAX)) : undefined;
       // Depth: prefer parsed depth; fall back to 0 (surface) when unknown.
@@ -417,6 +423,9 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         }
         markersFail++;
       }
+      setImportProgress((prev) =>
+        prev ? { ...prev, markersDone: prev.markersDone + 1 } : prev,
+      );
     }
 
     if (cancelRequestedRef.current) {
@@ -429,19 +438,20 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     let downsampled = 0;
     const safeHeading = clampNumber(headingDeg, HEADING_MIN, HEADING_MAX);
     const safeSpeed = clampNumber(speedKnots, SPEED_MIN, SPEED_MAX);
+    if (routesToImport.length > 0) {
+      setImportProgress((prev) => (prev ? { ...prev, currentKind: "route" } : prev));
+    }
     for (let ri = 0; ri < routesToImport.length; ri++) {
       if (cancelRequestedRef.current) break;
       const r = routesToImport[ri]!;
-      setImportProgress({
-        current: wpToImport.length + ri,
-        total: totalItems,
-        itemKind: "route",
-      });
       // When a dataset is active, re-assert in-bounds as defence in depth.
       // When no dataset (dataset-free import), keep all route points.
       let pts = bounds ? r.points.filter((p) => isInBounds(p.lon, p.lat, bounds)) : r.points;
       if (pts.length < 2) {
         presetsFail++;
+        setImportProgress((prev) =>
+          prev ? { ...prev, routesDone: prev.routesDone + 1 } : prev,
+        );
         continue;
       }
       if (pts.length > TROLLING_PRESET_WAYPOINTS_MAX) {
@@ -461,6 +471,9 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       } catch {
         presetsFail++;
       }
+      setImportProgress((prev) =>
+        prev ? { ...prev, routesDone: prev.routesDone + 1 } : prev,
+      );
     }
 
     if (cancelRequestedRef.current) {
@@ -613,8 +626,12 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             >
               {isCancelling
                 ? "Cancelling…"
-                : importProgress && importProgress.total > 0
-                  ? `Importing ${importProgress.itemKind} ${importProgress.current + 1} of ${importProgress.total}…`
+                : importProgress
+                  ? importProgress.currentKind === "marker" && importProgress.markersTotal > 0
+                    ? `Saving markers… ${importProgress.markersDone} / ${importProgress.markersTotal}`
+                    : importProgress.currentKind === "route" && importProgress.routesTotal > 0
+                      ? `Saving routes… ${importProgress.routesDone} / ${importProgress.routesTotal}`
+                      : "Importing…"
                   : "Importing — please wait…"}
             </span>
           )}
@@ -736,91 +753,94 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                 <div style={{ color: "#fbbf24", fontSize: 15.5 }}>
                   Cancelling — cleaning up saved markers…
                 </div>
-              ) : importProgress && importProgress.total > 0 ? (
-                <>
-                  <div
-                    data-testid="gps-import-progress-text"
-                    style={{ marginBottom: 12, fontSize: 15.5 }}
-                  >
-                    {isCancelling ? "Stopping after current request…" : (
-                      <>
-                        Importing {importProgress.itemKind}{" "}
-                        <strong style={{ color: "#00e5ff" }}>{importProgress.current + 1}</strong>{" "}
-                        of{" "}
-                        <strong style={{ color: "#00e5ff" }}>{importProgress.total}</strong>…
-                      </>
-                    )}
-                  </div>
-                  <div
-                    role="progressbar"
-                    aria-valuenow={importProgress.current + 1}
-                    aria-valuemin={1}
-                    aria-valuemax={importProgress.total}
-                    aria-label={`Importing ${importProgress.itemKind} ${importProgress.current + 1} of ${importProgress.total}`}
-                    data-testid="gps-import-progress-bar"
-                    style={{
-                      height: 6,
-                      background: "rgba(0,229,255,0.12)",
-                      borderRadius: 3,
-                      overflow: "hidden",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${Math.round(((importProgress.current + 1) / importProgress.total) * 100)}%`,
-                        background: "#00e5ff",
-                        borderRadius: 3,
-                        transition: "width 0.15s ease",
-                      }}
-                    />
-                  </div>
-                  {(() => {
-                    if (importProgress.current < 2 || !importStartTimeRef.current) return (
-                      <div style={{ height: 20, marginBottom: 8 }} />
-                    );
-                    const elapsed = Date.now() - importStartTimeRef.current;
-                    const rate = elapsed / importProgress.current;
-                    const remaining = importProgress.total - importProgress.current;
-                    const etaSec = Math.ceil((rate * remaining) / 1000);
-                    if (etaSec <= 0) return <div style={{ height: 20, marginBottom: 8 }} />;
-                    return (
+              ) : importProgress ? (
+                (() => {
+                  const isMarkerPhase = importProgress.currentKind === "marker";
+                  const done = isMarkerPhase ? importProgress.markersDone : importProgress.routesDone;
+                  const total = isMarkerPhase ? importProgress.markersTotal : importProgress.routesTotal;
+                  const kindLabel = isMarkerPhase ? "markers" : "routes";
+                  const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+                  return (
+                    <>
                       <div
-                        data-testid="gps-import-eta"
-                        style={{ fontSize: 13.5, color: "#64748b", marginBottom: 8, letterSpacing: "0.04em" }}
+                        data-testid="gps-import-progress-text"
+                        style={{ marginBottom: 12, fontSize: 15.5 }}
                       >
-                        ~{etaSec} s remaining
+                        Saving {kindLabel}…{" "}
+                        <strong style={{ color: "#00e5ff" }}>{done}</strong>
+                        {" / "}
+                        <strong style={{ color: "#00e5ff" }}>{total}</strong>
                       </div>
-                    );
-                  })()}
+                      <div
+                        role="progressbar"
+                        aria-valuenow={done}
+                        aria-valuemin={0}
+                        aria-valuemax={total}
+                        aria-label={`Saving ${kindLabel}: ${done} of ${total}`}
+                        data-testid="gps-import-progress-bar"
+                        style={{
+                          height: 6,
+                          background: "rgba(0,229,255,0.12)",
+                          borderRadius: 3,
+                          overflow: "hidden",
+                          marginBottom: 16,
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${progressPct}%`,
+                            background: "#00e5ff",
+                            borderRadius: 3,
+                            transition: "width 0.15s ease",
+                          }}
+                        />
+                      </div>
+                      {(() => {
+                        if (done < 2 || !importStartTimeRef.current) return (
+                          <div style={{ height: 20, marginBottom: 8 }} />
+                        );
+                        const elapsed = Date.now() - importStartTimeRef.current;
+                        const rate = elapsed / done;
+                        const remaining = total - done;
+                        const etaSec = Math.ceil((rate * remaining) / 1000);
+                        if (etaSec <= 0) return <div style={{ height: 20, marginBottom: 8 }} />;
+                        return (
+                          <div
+                            data-testid="gps-import-eta"
+                            style={{ fontSize: 13.5, color: "#64748b", marginBottom: 8, letterSpacing: "0.04em" }}
+                          >
+                            ~{etaSec} s remaining
+                          </div>
+                        );
+                      })()}
+                      <button
+                        onClick={() => void cancelImport()}
+                        disabled={isCancelling}
+                        data-testid="gps-import-cancel-btn"
+                        style={{
+                          ...btnStyle("ghost"),
+                          marginTop: 8,
+                          opacity: isCancelling ? 0.5 : 1,
+                        }}
+                      >
+                        Cancel import
+                      </button>
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <div style={{ marginBottom: 16 }}>Importing…</div>
                   <button
-                    onClick={() => void cancelImport()}
-                    disabled={isCancelling}
+                    type="button"
                     data-testid="gps-import-cancel-btn"
-                    style={{
-                      ...btnStyle("ghost"),
-                      marginTop: 8,
-                      opacity: isCancelling ? 0.5 : 1,
-                    }}
+                    onClick={cancelImport}
+                    style={btnStyle("ghost")}
                   >
                     Cancel import
                   </button>
                 </>
-              ) : (
-                <div style={{ marginBottom: 16 }}>
-                  {isCancelling ? "Stopping after current request…" : "Importing…"}
-                </div>
-              )}
-              {!isCancelling && (
-                <button
-                  type="button"
-                  data-testid="gps-import-cancel-btn"
-                  onClick={cancelImport}
-                  style={btnStyle("ghost")}
-                >
-                  Cancel import
-                </button>
               )}
             </div>
           )}
