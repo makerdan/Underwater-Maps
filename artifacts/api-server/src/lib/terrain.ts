@@ -567,6 +567,76 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
     "ncei-dem-global-mosaic",
     "gebco",
   ],
+  // ---------------------------------------------------------------------------
+  // Great Lakes — NOAA NCEI Great Lakes DEM (single routing source) first.
+  // ---------------------------------------------------------------------------
+  "fw-lake-superior": ["noaa-great-lakes-dem", "gebco"],
+  "fw-lake-michigan": ["noaa-great-lakes-dem", "gebco"],
+  "fw-lake-huron": ["noaa-great-lakes-dem", "gebco"],
+  "fw-lake-erie": ["noaa-great-lakes-dem", "gebco"],
+  "fw-lake-ontario": ["noaa-great-lakes-dem", "gebco"],
+  // ---------------------------------------------------------------------------
+  // Northeast freshwater lakes — USGS 3DEP first, GEBCO fallback.
+  // ---------------------------------------------------------------------------
+  "fw-lake-george-ny": ["usgs-3dep", "gebco"],
+  "fw-lake-champlain": ["usgs-3dep", "gebco"],
+  "fw-seneca-lake-ny": ["usgs-3dep", "gebco"],
+  "fw-cayuga-lake-ny": ["usgs-3dep", "gebco"],
+  "fw-oneida-lake-ny": ["usgs-3dep", "gebco"],
+  "fw-lake-placid-ny": ["usgs-3dep", "gebco"],
+  "fw-saranac-lake-ny": ["usgs-3dep", "gebco"],
+  "fw-lake-winnipesaukee-nh": ["usgs-3dep", "gebco"],
+  "fw-sebago-lake-me": ["usgs-3dep", "gebco"],
+  "fw-moosehead-lake-me": ["usgs-3dep", "gebco"],
+  "fw-quabbin-reservoir-ma": ["usgs-3dep", "gebco"],
+  "fw-lake-memphremagog-vt": ["usgs-3dep", "gebco"],
+  // ---------------------------------------------------------------------------
+  // Midwest freshwater lakes — MN DNR / WI / MI entries use 3DEP fallback.
+  // ---------------------------------------------------------------------------
+  "fw-lake-minnetonka-mn": ["usgs-3dep", "gebco"],
+  "fw-mille-lacs-lake-mn": ["usgs-3dep", "gebco"],
+  "fw-leech-lake-mn": ["usgs-3dep", "gebco"],
+  "fw-red-lake-mn": ["usgs-3dep", "gebco"],
+  "fw-lake-of-the-woods": ["usgs-3dep", "gebco"],
+  "fw-lake-winnebago-wi": ["usgs-3dep", "gebco"],
+  "fw-gull-lake-mi": ["usgs-3dep", "gebco"],
+  // ---------------------------------------------------------------------------
+  // Western freshwater lakes — 3DEP for reservoirs; ScienceBase stubs noted.
+  // ---------------------------------------------------------------------------
+  "fw-lake-tahoe": ["usgs-3dep", "gebco"],
+  "fw-lake-powell": ["usgs-3dep", "gebco"],
+  "fw-lake-mead": ["usgs-3dep", "gebco"],
+  "fw-crater-lake-or": ["usgs-3dep", "gebco"],
+  "fw-flathead-lake-mt": ["usgs-3dep", "gebco"],
+  "fw-shasta-lake-ca": ["usgs-3dep", "gebco"],
+  "fw-lake-chelan-wa": ["usgs-3dep", "gebco"],
+  "fw-upper-klamath-lake-or": ["usgs-3dep", "gebco"],
+  "fw-flaming-gorge": ["usgs-3dep", "gebco"],
+  "fw-lake-havasu": ["usgs-3dep", "gebco"],
+  // ---------------------------------------------------------------------------
+  // Southeast and TVA lakes — USACE district entries use 3DEP fallback.
+  // ---------------------------------------------------------------------------
+  "fw-lake-okeechobee-fl": ["usgs-3dep", "gebco"],
+  "fw-lake-lanier-ga": ["usgs-3dep", "gebco"],
+  "fw-lake-of-the-ozarks-mo": ["usgs-3dep", "gebco"],
+  "fw-table-rock-lake-mo": ["usgs-3dep", "gebco"],
+  "fw-kentucky-lake": ["usgs-3dep", "gebco"],
+  "fw-lake-barkley": ["usgs-3dep", "gebco"],
+  "fw-norris-lake-tn": ["usgs-3dep", "gebco"],
+  "fw-fontana-lake-nc": ["usgs-3dep", "gebco"],
+  "fw-smith-mountain-lake-va": ["usgs-3dep", "gebco"],
+  "fw-clarks-hill-reservoir": ["usgs-3dep", "gebco"],
+  // ---------------------------------------------------------------------------
+  // Southwest / Texas Highland Lakes — USACE + LCRA + 3DEP.
+  // ---------------------------------------------------------------------------
+  "fw-lake-travis-tx": ["usgs-3dep", "gebco"],
+  "fw-canyon-lake-tx": ["usgs-3dep", "gebco"],
+  "fw-lake-lbj-tx": ["usgs-3dep", "gebco"],
+  "fw-inks-lake-tx": ["usgs-3dep", "gebco"],
+  "fw-lake-buchanan-tx": ["usgs-3dep", "gebco"],
+  "fw-elephant-butte-nm": ["usgs-3dep", "gebco"],
+  "fw-cochiti-lake-nm": ["usgs-3dep", "gebco"],
+  "fw-navajo-lake-nm": ["usgs-3dep", "gebco"],
 };
 
 /**
