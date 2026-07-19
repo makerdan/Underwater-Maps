@@ -95,23 +95,73 @@ Gate: the project runs browser/e2e tests. If not, skip this phase.
 Gate: two or more heavy suites, or suites that share generated files,
 database state, or ports. If not, skip this phase.
 
-Wrap each heavy command in a small **crash-safe serialization lock**. A
-template ships with this skill: `scripts/serial-lock.mjs`. Required
-properties:
+Wrap each heavy command in a **crash-safe serialization lock** using
+`scripts/validation-lock.mjs`:
 
-- **Reentrancy-safe**: the holder exports its PID in an env var; a nested
-  locked command checks that PID against its own ancestors and skips
-  acquisition. Without this, a wrapped command that invokes another wrapped
-  command deadlocks against itself.
+```
+node scripts/validation-lock.mjs [--resource <name>] [--priority <1-9>] -- <command...>
+```
+
+### Named-resource striping
+
+Pass `--resource <name>` to acquire a per-resource lock
+(`.local/validation-lock-<name>.lock`) instead of a single global lock.
+Steps that don't conflict with each other use different resource names and
+run in parallel; steps sharing a resource serialize. The default resource
+is `global` (backward-compatible).
+
+**Step-to-resource mapping (this project's conventions):**
+
+| Step | Resource |
+|---|---|
+| `typecheck` (regenerates `lib/api-zod/src/generated/api.ts`) | `codegen` |
+| `test:unit` | `unit-cpu` |
+| `test:e2e` steps | `e2e-port` and `unit-cpu` |
+| `lint`, `check:*` | *(none — run unwrapped)* |
+
+### Priority queue
+
+Pass `--priority <N>` (1 = highest, 9 = lowest; default 5) to influence
+acquisition order when multiple steps wait for the same resource. Each
+waiting process writes a manifest entry to
+`.local/validation-waiters-<name>/<pid>.json`. On each poll tick,
+lower-priority waiters yield to higher-priority ones that have been queued
+longer than a short grace period (default 2 s).
+
+**Recommended tier assignments:** fast-tier steps → `1`, standard-tier →
+`2`, heavy-tier → `3`.
+
+### Per-resource reentrancy
+
+The holder exports `VALIDATION_LOCK_HELD_PID_<RESOURCE_UPPER>` (e.g.
+`VALIDATION_LOCK_HELD_PID_CODEGEN`, `VALIDATION_LOCK_HELD_PID_UNIT_CPU`)
+into its child environment. A nested wrapper for the same resource detects
+this env var and runs its command directly, skipping re-acquisition.
+For the `global` resource, the legacy `VALIDATION_LOCK_HELD_PID` variable
+is also checked and exported for backward compatibility.
+
+### Required properties
+
+- **Reentrancy-safe**: nested wrappers for the same resource skip
+  acquisition (see above). Without this, a wrapped command that invokes
+  another wrapped command for the same resource deadlocks until the
+  max-hold safety valve fires.
 - **Crash-safe**: the lockfile stores the holder PID; waiters check holder
   liveness so a crashed run can never block future runs forever. Layered
-  staleness checks (dead PID, stale heartbeat for PID-reuse cases, max-hold
-  safety valve for hung-but-alive holders).
+  staleness checks: dead PID, stale heartbeat (for PID-reuse cases), and
+  max-hold safety valve for hung-but-alive holders.
 - **Loud on takeover**: forcibly cleared stale locks are logged as
   incidents, never silently absorbed.
 - **Budgets start after acquisition**: all time budgets/timeouts must start
   ticking AFTER the lock is acquired, or queued runs falsely appear timed
   out while merely waiting their turn.
+
+### Anti-pattern: double-wrapping causes deadlock
+
+Inner steps of a serial runner must use their **unwrapped** variants (e.g.
+`test:e2e:run`, not `test:e2e`). Calling a lock-wrapped command from inside
+another locked step holding the same resource self-deadlocks until the
+max-hold safety valve fires (default 2 hours).
 
 ## Phase 5 (CONDITIONAL — only if the project has codegen/generated files)
 
@@ -180,4 +230,4 @@ listing its adaptation points (port list, lock path, env-guard variable
 names).
 
 - `scripts/free-ports.mjs` — canonical port cleanup (Phase 2).
-- `scripts/serial-lock.mjs` — crash-safe serialization lock (Phase 4).
+- `scripts/validation-lock.mjs` — crash-safe serialization lock with named-resource striping and priority queue (Phase 4).

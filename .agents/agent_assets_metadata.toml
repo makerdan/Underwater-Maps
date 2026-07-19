@@ -58,13 +58,13 @@ title = "GoPoe-or-GoHome skill (updated)"
 id = "0u8VubUptAZSAhP64fs9-"
 uri = "file://.agents/skills/Port-Authority/SKILL.md"
 type = "text"
-title = "Port-Authority/SKILL.md"
+title = "Port-Authority SKILL.md"
 
 [[outputs]]
 id = "lMrqDGd-JkGO5qJGnqnA7"
 uri = "file://.agents/skills/Port-Authority-Heavy/SKILL.md"
 type = "text"
-title = "Port-Authority-Heavy/SKILL.md"
+title = "Port-Authority-Heavy SKILL.md"
 
 [[outputs]]
 id = "-VoSsGRoF6SIEVHcKKGlk"

@@ -38,8 +38,12 @@ ad-hoc shells.
 
 Prefer **one serialized command** over one workflow per suite, run behind
 the serialization lock from the standard skill (Phase 4's
-`serial-lock.mjs`). The right consolidation command depends on the task's
-risk tier (see the `validation-tiers` skill for the full decision table):
+`validation-lock.mjs`). Use named resources (`--resource unit-cpu`,
+`--resource codegen`, `--resource e2e-port`) rather than the default global
+lock — this allows non-conflicting steps to run in parallel while still
+serializing genuinely conflicting ones. The right consolidation command
+depends on the task's risk tier (see the `validation-tiers` skill for the
+full decision table):
 
 - **`test-heavy`** (all steps: unit + e2e + schema + audit) — correct for
   schema migrations, new API routes, auth/security changes, and
