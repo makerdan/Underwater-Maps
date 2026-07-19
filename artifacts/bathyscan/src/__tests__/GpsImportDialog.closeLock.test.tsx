@@ -19,14 +19,14 @@ import type { TerrainData } from "@workspace/api-client-react";
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
 
-const mutateAsyncMarkers = vi.hoisted(() => vi.fn<() => Promise<unknown>>());
-const mutateAsyncPresets = vi.hoisted(() => vi.fn<() => Promise<unknown>>());
+const mockPostMarkers = vi.hoisted(() => vi.fn<() => Promise<unknown>>());
+const mockPostTrollingPresets = vi.hoisted(() => vi.fn<() => Promise<unknown>>());
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
 vi.mock("@workspace/api-client-react", () => ({
-  usePostMarkers: () => ({ mutateAsync: mutateAsyncMarkers, isPending: false }),
-  usePostTrollingPresets: () => ({ mutateAsync: mutateAsyncPresets, isPending: false }),
+  postMarkers: mockPostMarkers,
+  postTrollingPresets: mockPostTrollingPresets,
   getGetMarkersQueryKey: (...a: unknown[]) => ["markers", ...a],
   getGetTrollingPresetsQueryKey: () => ["trollingPresets"],
   MarkerInputType: { custom: "custom" },
@@ -81,7 +81,7 @@ function setupParseMock() {
   };
   (parseGpsFile as ReturnType<typeof vi.fn>).mockResolvedValue({
     result: parsedResult,
-    meta: { columns: [], sampleRows: [] },
+    meta: { columns: [], sampleRows: [], allRows: [], fileType: "self-describing" },
   });
   (partitionByBounds as ReturnType<typeof vi.fn>).mockReturnValue({
     inside: parsedResult,
@@ -99,9 +99,9 @@ describe("GpsImportDialog close-lock during import", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupParseMock();
-    // Make marker mutation hang forever — simulates in-flight POST
-    mutateAsyncMarkers.mockReturnValue(new Promise(() => {}));
-    mutateAsyncPresets.mockReturnValue(new Promise(() => {}));
+    // Make raw POST calls hang forever — simulates in-flight requests
+    mockPostMarkers.mockReturnValue(new Promise(() => {}));
+    mockPostTrollingPresets.mockReturnValue(new Promise(() => {}));
   });
 
   async function renderAndReachPreview(onClose: ReturnType<typeof vi.fn>) {

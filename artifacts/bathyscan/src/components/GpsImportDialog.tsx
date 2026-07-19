@@ -35,13 +35,16 @@ import {
 import {
   parseGpsFile,
   partitionByBounds,
+  applyColumnAssignment,
   countPoints,
   isInBounds,
   type Bounds,
   type ParseResult,
   type ParsedRoute,
   type RawColumnMeta,
+  type ColumnAssignment,
 } from "@/lib/gpsImport";
+import { ColumnMappingStep } from "@/components/ColumnMappingStep";
 import {
   SALTWATER_MARKER_TYPES,
   FRESHWATER_MARKER_TYPES,
@@ -72,6 +75,13 @@ type Phase =
   | { kind: "pick" }
   | { kind: "parsing"; fileName: string }
   | {
+      kind: "mapping";
+      fileName: string;
+      meta: RawColumnMeta;
+      /** Pre-selected assignment from a previous mapping or auto-detection. */
+      initialAssignment: ColumnAssignment | null;
+    }
+  | {
       kind: "preview";
       fileName: string;
       /** Editable, bounds-filtered import payload. */
@@ -83,6 +93,8 @@ type Phase =
       outsideRoutePoints: number;
       /** Column metadata from the parser; consumed by the column-mapping UI. */
       meta: RawColumnMeta;
+      /** The column assignment used to produce this result (null for auto-detected). */
+      columnAssignment: ColumnAssignment | null;
     }
   | { kind: "importing" }
   | { kind: "error"; message: string };
@@ -173,46 +185,51 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     [terrain],
   );
 
+  /** Advance from parsed data to either the mapping step or the preview step. */
+  const advanceFromParsed = useCallback(
+    (
+      fileName: string,
+      result: ParseResult,
+      meta: RawColumnMeta,
+      columnAssignment: ColumnAssignment | null,
+    ) => {
+      const hasLatCol = meta.columns.some((c) => c.mappedAlias === "lat");
+      const hasLonCol = meta.columns.some((c) => c.mappedAlias === "lon");
+      const needsMapping = meta.columns.length > 0 && (!hasLatCol || !hasLonCol);
+
+      if (needsMapping) {
+        setPhase({ kind: "mapping", fileName, meta, initialAssignment: columnAssignment });
+        return;
+      }
+
+      const part = partitionByBounds(result, bounds);
+      setPhase({
+        kind: "preview",
+        fileName,
+        parsed: part.inside,
+        original: result,
+        outsideWp: part.outsideWaypoints,
+        outsideRoutes: part.outsideRoutes,
+        outsideRoutePoints: part.outsideRoutePoints,
+        meta,
+        columnAssignment,
+      });
+      setImportWaypoints(part.inside.waypoints.length > 0);
+      setImportRoutes(part.inside.routes.length > 0);
+    },
+    [bounds],
+  );
+
   const onFileChosen = useCallback(
     async (file: File) => {
       setPhase({ kind: "parsing", fileName: file.name });
       setImportProgress(null);
       try {
         const { result, meta } = await parseGpsFile(file);
-        if (bounds) {
-          // Dataset mode: filter points to the dataset bounding box.
-          const part = partitionByBounds(result, bounds);
-          setPhase({
-            kind: "preview",
-            fileName: file.name,
-            parsed: part.inside,
-            original: result,
-            outsideWp: part.outsideWaypoints,
-            outsideRoutes: part.outsideRoutes,
-            outsideRoutePoints: part.outsideRoutePoints,
-            meta,
-          });
-          // Default checkboxes to whichever the file actually contains.
-          setImportWaypoints(part.inside.waypoints.length > 0);
-          setImportRoutes(part.inside.routes.length > 0);
-        } else {
-          // Dataset-free mode: accept all points, no bounds filtering.
-          setPhase({
-            kind: "preview",
-            fileName: file.name,
-            parsed: result,
-            original: result,
-            outsideWp: 0,
-            outsideRoutes: 0,
-            outsideRoutePoints: 0,
-            meta,
-          });
-          setImportWaypoints(result.waypoints.length > 0);
-          setImportRoutes(result.routes.length > 0);
-        }
         // Reset heading/speed to dialog defaults on each new file.
         setHeadingDeg(DEFAULT_HEADING_DEG);
         setSpeedKnots(DEFAULT_SPEED_KNOTS);
+        advanceFromParsed(file.name, result, meta, null);
       } catch (err) {
         setPhase({
           kind: "error",
@@ -220,8 +237,43 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         });
       }
     },
-    [bounds],
+    [advanceFromParsed],
   );
+
+  /** Called when the user confirms the column mapping step. */
+  const onMappingConfirm = useCallback(
+    (assignment: ColumnAssignment) => {
+      if (phase.kind !== "mapping") return;
+      const { fileName, meta } = phase;
+      const result = applyColumnAssignment(meta, assignment);
+      const part = partitionByBounds(result, bounds);
+      setPhase({
+        kind: "preview",
+        fileName,
+        parsed: part.inside,
+        original: result,
+        outsideWp: part.outsideWaypoints,
+        outsideRoutes: part.outsideRoutes,
+        outsideRoutePoints: part.outsideRoutePoints,
+        meta,
+        columnAssignment: assignment,
+      });
+      setImportWaypoints(part.inside.waypoints.length > 0);
+      setImportRoutes(part.inside.routes.length > 0);
+    },
+    [phase, bounds],
+  );
+
+  /** Called from the "Edit column mapping" link on the preview step. */
+  const onEditMapping = useCallback(() => {
+    if (phase.kind !== "preview") return;
+    setPhase({
+      kind: "mapping",
+      fileName: phase.fileName,
+      meta: phase.meta,
+      initialAssignment: phase.columnAssignment,
+    });
+  }, [phase]);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -636,6 +688,15 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             </>
           )}
 
+          {phase.kind === "mapping" && (
+            <ColumnMappingStep
+              meta={phase.meta}
+              initialAssignment={phase.initialAssignment}
+              onConfirm={onMappingConfirm}
+              onBack={() => setPhase({ kind: "pick" })}
+            />
+          )}
+
           {phase.kind === "preview" && (
             <PreviewPanel
               phase={phase}
@@ -658,6 +719,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               onCancel={onClose}
               onConfirm={() => void doImport()}
               isImporting={isImporting}
+              onEditMapping={phase.meta.columns.length > 0 ? onEditMapping : undefined}
             />
           )}
 
@@ -772,6 +834,8 @@ interface PreviewPanelProps {
   onCancel: () => void;
   onConfirm: () => void;
   isImporting: boolean;
+  /** Present only for CSV/Excel imports; opens the column-mapping step. */
+  onEditMapping?: () => void;
 }
 
 const PreviewPanel: React.FC<PreviewPanelProps> = ({
@@ -795,6 +859,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
   onCancel,
   onConfirm,
   isImporting,
+  onEditMapping,
 }) => {
   const { parsed, original } = phase;
   const insideWpCount = parsed.waypoints.length;
@@ -809,8 +874,29 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
 
   return (
     <>
-      <div style={{ marginBottom: 10, color: "#e2e8f0" }}>
+      <div style={{ marginBottom: 10, color: "#e2e8f0", display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <strong style={{ color: "#cbd5e1" }}>{phase.fileName}</strong>
+        {onEditMapping && (
+          <button
+            type="button"
+            data-testid="gps-import-edit-column-mapping"
+            onClick={onEditMapping}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              color: "#22d3ee",
+              fontSize: 14,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              letterSpacing: "0.04em",
+              textDecoration: "underline",
+              textUnderlineOffset: "2px",
+            }}
+          >
+            Edit column mapping
+          </button>
+        )}
       </div>
 
       {bounds && <PreviewMap original={original} bounds={bounds} />}

@@ -11,7 +11,9 @@ import {
   partitionByBounds,
   countPoints,
   isInBounds,
+  applyColumnAssignment,
   MAX_IMPORT_POINTS,
+  type RawColumnMeta,
 } from "../lib/gpsImport";
 
 const SAMPLE_GPX = `<?xml version="1.0" encoding="UTF-8"?>
@@ -211,8 +213,12 @@ describe("parseCsv", () => {
     expect(quoted.notes).toBe("has, comma");
   });
 
-  it("throws when no lat/lon columns are present", () => {
-    expect(() => parseCsv("foo,bar\n1,2")).toThrow(/lat/i);
+  it("returns empty waypoints (not throws) when no lat/lon columns are present", () => {
+    const { result, meta } = parseCsv("foo,bar\n1,2");
+    expect(result.waypoints).toHaveLength(0);
+    expect(meta.columns).toHaveLength(2);
+    expect(meta.columns[0]).toEqual({ header: "foo", mappedAlias: null });
+    expect(meta.fileType).toBe("csv");
   });
 
   it("flips elevation to depth when no depth column is present", () => {
@@ -285,20 +291,27 @@ describe("parseExcel", () => {
     expect(result.waypoints[0]!.lon).toBe(142.5);
   });
 
-  it("throws ParseError when lat column is missing", async () => {
+  it("returns empty waypoints (not throws) when lat column is missing", async () => {
     const file = makeXlsxFile([
       ["longitude", "name"],
       [142.5, "Test"],
     ]);
-    await expect(parseExcel(file)).rejects.toThrow(/lat/i);
+    const { result, meta } = await parseExcel(file);
+    expect(result.waypoints).toHaveLength(0);
+    expect(meta.columns.some((c) => c.mappedAlias === "lon")).toBe(true);
+    expect(meta.columns.some((c) => c.mappedAlias === "lat")).toBe(false);
+    expect(meta.fileType).toBe("excel");
   });
 
-  it("throws ParseError when lon column is missing", async () => {
+  it("returns empty waypoints (not throws) when lon column is missing", async () => {
     const file = makeXlsxFile([
       ["lat", "name"],
       [11.35, "Test"],
     ]);
-    await expect(parseExcel(file)).rejects.toThrow(/lon/i);
+    const { result, meta } = await parseExcel(file);
+    expect(result.waypoints).toHaveLength(0);
+    expect(meta.columns.some((c) => c.mappedAlias === "lat")).toBe(true);
+    expect(meta.columns.some((c) => c.mappedAlias === "lon")).toBe(false);
   });
 
   it("skips rows with out-of-range or non-numeric coordinates", async () => {
@@ -440,6 +453,18 @@ describe("parseGpsFile", () => {
     const file = new File([rows.join("\n")], "big.csv");
     await expect(parseGpsFile(file)).rejects.toThrow(/Too many/);
   });
+
+  it("does not throw when CSV has unrecognised columns (needs mapping step)", async () => {
+    // POS_LAT / POS_LON / WAYPOINT_NAME are not in any alias group
+    const csv = "POS_LAT,POS_LON,WAYPOINT_NAME\n11.35,142.5,Challenger";
+    const file = new File([csv], "nonstandard.csv", { type: "text/csv" });
+    const { result, meta } = await parseGpsFile(file);
+    expect(result.waypoints).toHaveLength(0);
+    expect(meta.columns).toHaveLength(3);
+    expect(meta.columns.every((c) => c.mappedAlias === null)).toBe(true);
+    expect(meta.fileType).toBe("csv");
+    expect(meta.allRows).toHaveLength(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -533,5 +558,104 @@ describe("countPoints", () => {
     const r = parseGpx(SAMPLE_GPX);
     // 2 waypoints + 3 route points + 3 track points = 8
     expect(countPoints(r)).toBe(8);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyColumnAssignment
+// ---------------------------------------------------------------------------
+
+function makeMeta(
+  headers: string[],
+  dataRows: Record<string, string>[],
+): RawColumnMeta {
+  return {
+    columns: headers.map((h) => ({ header: h, mappedAlias: null })),
+    sampleRows: dataRows.slice(0, 5),
+    allRows: dataRows,
+    fileType: "csv",
+  };
+}
+
+describe("applyColumnAssignment", () => {
+  const rows: Record<string, string>[] = [
+    { LATI: "11.35", LONG: "142.5", WAYPOINT_NAME: "Challenger", DEPTH_M: "10500", CAT: "fish", NOTES: "deep" },
+    { LATI: "11.40", LONG: "142.55", WAYPOINT_NAME: "Sibling", DEPTH_M: "", CAT: "", NOTES: "" },
+    { LATI: "not_a_number", LONG: "142.6", WAYPOINT_NAME: "Bad", DEPTH_M: "", CAT: "", NOTES: "" },
+    { LATI: "", LONG: "", WAYPOINT_NAME: "Empty", DEPTH_M: "", CAT: "", NOTES: "" },
+  ];
+  const meta = makeMeta(["LATI", "LONG", "WAYPOINT_NAME", "DEPTH_M", "CAT", "NOTES"], rows);
+
+  it("maps non-standard columns to lat/lon and returns correct waypoints", () => {
+    const result = applyColumnAssignment(meta, {
+      lat: "LATI",
+      lon: "LONG",
+      name: "WAYPOINT_NAME",
+      depth: "DEPTH_M",
+      type: "CAT",
+      notes: "NOTES",
+    });
+    expect(result.waypoints).toHaveLength(2);
+    const first = result.waypoints[0]!;
+    expect(first.lat).toBe(11.35);
+    expect(first.lon).toBe(142.5);
+    expect(first.name).toBe("Challenger");
+    expect(first.depth).toBe(10500);
+    expect(first.type).toBe("fish");
+    expect(first.notes).toBe("deep");
+    expect(first.source).toBe("waypoint");
+  });
+
+  it("skips rows with non-finite or out-of-range coordinates", () => {
+    const result = applyColumnAssignment(meta, {
+      lat: "LATI",
+      lon: "LONG",
+      name: null,
+      depth: null,
+      type: null,
+      notes: null,
+    });
+    expect(result.waypoints).toHaveLength(2);
+  });
+
+  it("returns empty result when lat or lon assignment is null", () => {
+    const result = applyColumnAssignment(meta, {
+      lat: null,
+      lon: "LONG",
+      name: null,
+      depth: null,
+      type: null,
+      notes: null,
+    });
+    expect(result.waypoints).toHaveLength(0);
+    expect(result.routes).toHaveLength(0);
+  });
+
+  it("skips optional fields when assignment is null", () => {
+    const result = applyColumnAssignment(meta, {
+      lat: "LATI",
+      lon: "LONG",
+      name: null,
+      depth: null,
+      type: null,
+      notes: null,
+    });
+    expect(result.waypoints).toHaveLength(2);
+    expect(result.waypoints[0]!.name).toBeUndefined();
+    expect(result.waypoints[0]!.depth).toBeUndefined();
+  });
+
+  it("treats the assigned depth column as depth (no sign flip)", () => {
+    const depthRows = [{ LAT: "11.35", LON: "142.5", D: "100" }];
+    const depthMeta = makeMeta(["LAT", "LON", "D"], depthRows);
+    const result = applyColumnAssignment(depthMeta, {
+      lat: "LAT",
+      lon: "LON",
+      name: null,
+      depth: "D",
+      type: null,
+      notes: null,
+    });
+    expect(result.waypoints[0]!.depth).toBe(100);
   });
 });

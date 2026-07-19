@@ -44,6 +44,19 @@ export interface ParseResult {
 }
 
 /**
+ * User-supplied mapping from canonical field names to the raw header string
+ * they have assigned. `null` means the field is intentionally skipped.
+ */
+export interface ColumnAssignment {
+  lat: string | null;
+  lon: string | null;
+  name: string | null;
+  depth: string | null;
+  type: string | null;
+  notes: string | null;
+}
+
+/**
  * Column metadata emitted alongside ParseResult.
  *
  * Consumed by the column-mapping UI step that follows. Callers that do not
@@ -59,6 +72,14 @@ export interface RawColumnMeta {
   columns: { header: string; mappedAlias: string | null }[];
   /** Up to the first 5 data rows, keyed by the original header string. */
   sampleRows: Record<string, string>[];
+  /**
+   * All data rows (keyed by original header string). Used by
+   * `applyColumnAssignment` so the dialog can re-parse without re-reading
+   * the file after the user adjusts the column mapping.
+   */
+  allRows: Record<string, string>[];
+  /** "csv" | "excel" | "self-describing" — determines localStorage behaviour. */
+  fileType: "csv" | "excel" | "self-describing";
 }
 
 export interface Bounds {
@@ -77,8 +98,12 @@ export interface Bounds {
  * parser. Returns a `ParseResult` together with `RawColumnMeta` for the
  * column-mapping UI.
  *
+ * Unlike the individual parsers, this function does NOT throw when lat/lon
+ * columns are absent in a CSV/Excel file — instead it returns an empty
+ * ParseResult so the dialog can show the column-mapping step.
+ *
  * Throws a descriptive Error on unsupported extension, malformed content, or
- * zero parseable points.
+ * zero parseable points when the format is self-describing (GPX/KML/KMZ).
  */
 export async function parseGpsFile(
   file: File,
@@ -106,7 +131,15 @@ export async function parseGpsFile(
   }
 
   const total = countPoints(result);
-  if (total === 0) {
+
+  // For column-based formats (CSV / Excel) with no recognised lat/lon columns
+  // the result will have zero points — that is not an error; the dialog will
+  // show the column-mapping step so the user can assign columns manually.
+  const hasLatCol = meta.columns.some((c) => c.mappedAlias === "lat");
+  const hasLonCol = meta.columns.some((c) => c.mappedAlias === "lon");
+  const needsMapping = meta.columns.length > 0 && (!hasLatCol || !hasLonCol);
+
+  if (total === 0 && !needsMapping) {
     throw new Error("No parseable coordinates found in this file.");
   }
   if (total > MAX_IMPORT_POINTS) {
@@ -122,6 +155,52 @@ export function countPoints(result: ParseResult): number {
   let n = result.waypoints.length;
   for (const r of result.routes) n += r.points.length;
   return n;
+}
+
+// ---------------------------------------------------------------------------
+// applyColumnAssignment
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-parse all raw rows from a previous CSV / Excel parse using a user-supplied
+ * column assignment. Produces a new `ParseResult` driven by the assignment
+ * instead of auto-detection.
+ *
+ * Depth semantics: the assigned "depth" column is treated as depth in metres
+ * (positive below surface), consistent with how `ParsedPoint.depth` is
+ * stored elsewhere.
+ *
+ * Rows that produce non-finite or out-of-range lat/lon are skipped silently.
+ */
+export function applyColumnAssignment(
+  meta: RawColumnMeta,
+  assignment: ColumnAssignment,
+): ParseResult {
+  const waypoints: ParsedPoint[] = [];
+
+  for (const row of meta.allRows) {
+    if (!assignment.lat || !assignment.lon) break;
+
+    const latRaw = row[assignment.lat] ?? "";
+    const lonRaw = row[assignment.lon] ?? "";
+    const lat = parseFloat(latRaw);
+    const lon = parseFloat(lonRaw);
+    if (!isFiniteCoord(lat, lon)) continue;
+
+    let depth: number | undefined;
+    if (assignment.depth) {
+      const d = parseFloat(row[assignment.depth] ?? "");
+      if (Number.isFinite(d)) depth = d;
+    }
+
+    const name = assignment.name ? (row[assignment.name] ?? "").trim() || undefined : undefined;
+    const notes = assignment.notes ? (row[assignment.notes] ?? "").trim() || undefined : undefined;
+    const type = assignment.type ? (row[assignment.type] ?? "").trim() || undefined : undefined;
+
+    waypoints.push({ lat, lon, name, notes, depth, type, source: "waypoint" });
+  }
+
+  return { waypoints, routes: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -333,7 +412,12 @@ function resolveAliases(
 }
 
 /** Sentinel empty meta used for self-describing formats (GPX, KML, KMZ). */
-const EMPTY_META: RawColumnMeta = { columns: [], sampleRows: [] };
+const EMPTY_META: RawColumnMeta = {
+  columns: [],
+  sampleRows: [],
+  allRows: [],
+  fileType: "self-describing",
+};
 
 // ---------------------------------------------------------------------------
 // CSV
@@ -343,23 +427,24 @@ const EMPTY_META: RawColumnMeta = { columns: [], sampleRows: [] };
  * Parse a CSV with a header row. Detects lat/lon columns by common header
  * aliases (case-insensitive). Optional name, depth/elevation, type, and notes
  * columns are picked up when present.
+ *
+ * Does NOT throw when lat/lon columns are missing — returns empty waypoints
+ * so the caller (GpsImportDialog) can show the column-mapping step instead.
  */
 export function parseCsv(text: string): { result: ParseResult; meta: RawColumnMeta } {
   // Strip a UTF-8 BOM if present so the first header field matches cleanly.
   const stripped = text.replace(/^\uFEFF/, "");
   const rows = splitCsv(stripped);
   if (rows.length < 2) {
-    return { result: { waypoints: [], routes: [] }, meta: EMPTY_META };
+    return {
+      result: { waypoints: [], routes: [] },
+      meta: EMPTY_META,
+    };
   }
   const rawHeaders = rows[0]!.map((h) => h.trim());
   const header = rawHeaders.map((h) => h.toLowerCase());
   const latIdx = findHeader(header, LAT_KEYS);
   const lonIdx = findHeader(header, LON_KEYS);
-  if (latIdx < 0 || lonIdx < 0) {
-    throw new Error(
-      "CSV is missing a latitude or longitude column (expected headers like 'lat'/'lon').",
-    );
-  }
   const nameIdx = findHeader(header, NAME_KEYS);
   const depthIdx = findHeader(header, DEPTH_KEYS);
   const elevIdx = findHeader(header, ELEV_KEYS);
@@ -367,45 +452,58 @@ export function parseCsv(text: string): { result: ParseResult; meta: RawColumnMe
   const notesIdx = findHeader(header, NOTES_KEYS);
 
   const sampleRows: Record<string, string>[] = [];
-  const waypoints: ParsedPoint[] = [];
+  const allRows: Record<string, string>[] = [];
+
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]!;
-    // Skip wholly empty rows (trailing newlines, etc.).
     if (row.every((c) => c.trim() === "")) continue;
-    // Collect up to 5 sample rows (before coordinate validation so we
-    // capture what the user actually sent, not just valid rows).
-    if (sampleRows.length < 5) {
-      const entry: Record<string, string> = {};
-      for (let j = 0; j < rawHeaders.length; j++) {
-        entry[rawHeaders[j]!] = row[j] ?? "";
-      }
-      sampleRows.push(entry);
+    const entry: Record<string, string> = {};
+    for (let j = 0; j < rawHeaders.length; j++) {
+      entry[rawHeaders[j]!] = row[j] ?? "";
     }
-    const lat = parseFloat(row[latIdx] ?? "");
-    const lon = parseFloat(row[lonIdx] ?? "");
+    allRows.push(entry);
+    if (sampleRows.length < 5) sampleRows.push(entry);
+  }
+
+  const meta: RawColumnMeta = {
+    columns: resolveAliases(rawHeaders),
+    sampleRows,
+    allRows,
+    fileType: "csv",
+  };
+
+  // If lat/lon columns are missing, return empty result so the dialog can
+  // show the column-mapping step.
+  if (latIdx < 0 || lonIdx < 0) {
+    return { result: { waypoints: [], routes: [] }, meta };
+  }
+
+  const waypoints: ParsedPoint[] = [];
+  for (const row of allRows) {
+    const lat = parseFloat(row[rawHeaders[latIdx]!] ?? "");
+    const lon = parseFloat(row[rawHeaders[lonIdx]!] ?? "");
     if (!isFiniteCoord(lat, lon)) continue;
     let depth: number | undefined;
     if (depthIdx >= 0) {
-      const d = parseFloat(row[depthIdx] ?? "");
+      const d = parseFloat(row[rawHeaders[depthIdx]!] ?? "");
       if (Number.isFinite(d)) depth = d;
     } else if (elevIdx >= 0) {
-      const e = parseFloat(row[elevIdx] ?? "");
+      const e = parseFloat(row[rawHeaders[elevIdx]!] ?? "");
       // Elevation is positive above sea level; flip sign for depth.
       if (Number.isFinite(e)) depth = -e;
     }
     waypoints.push({
       lat,
       lon,
-      name: nameIdx >= 0 ? (row[nameIdx] ?? "").trim() || undefined : undefined,
-      notes: notesIdx >= 0 ? (row[notesIdx] ?? "").trim() || undefined : undefined,
-      type: typeIdx >= 0 ? (row[typeIdx] ?? "").trim() || undefined : undefined,
+      name: nameIdx >= 0 ? (row[rawHeaders[nameIdx]!] ?? "").trim() || undefined : undefined,
+      notes: notesIdx >= 0 ? (row[rawHeaders[notesIdx]!] ?? "").trim() || undefined : undefined,
+      type: typeIdx >= 0 ? (row[rawHeaders[typeIdx]!] ?? "").trim() || undefined : undefined,
       depth,
       source: "waypoint",
     });
   }
 
   const result: ParseResult = { waypoints, routes: [] };
-  const meta: RawColumnMeta = { columns: resolveAliases(rawHeaders), sampleRows };
   return { result, meta };
 }
 
@@ -473,6 +571,9 @@ function splitCsv(text: string): string[][] {
  * Parse an Excel file (.xlsx or .xls). Reads the first non-empty worksheet,
  * detects lat/lon and optional columns by the same alias table used for CSV,
  * and returns waypoints in the same shape as `parseCsv`.
+ *
+ * Does NOT throw when lat/lon columns are missing — returns empty waypoints
+ * so the caller (GpsImportDialog) can show the column-mapping step instead.
  */
 export async function parseExcel(
   file: File,
@@ -522,12 +623,6 @@ export async function parseExcel(
 
   const latIdx = findHeader(header, LAT_KEYS);
   const lonIdx = findHeader(header, LON_KEYS);
-  if (latIdx < 0 || lonIdx < 0) {
-    throw new Error(
-      "Excel file is missing a latitude or longitude column (expected headers like 'lat'/'lon').",
-    );
-  }
-
   const nameIdx = findHeader(header, NAME_KEYS);
   const depthIdx = findHeader(header, DEPTH_KEYS);
   const elevIdx = findHeader(header, ELEV_KEYS);
@@ -535,44 +630,58 @@ export async function parseExcel(
   const notesIdx = findHeader(header, NOTES_KEYS);
 
   const sampleRows: Record<string, string>[] = [];
-  const waypoints: ParsedPoint[] = [];
+  const allRows: Record<string, string>[] = [];
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i] as string[];
-    // Skip wholly empty rows.
     if (row.every((c) => String(c ?? "").trim() === "")) continue;
-    // Capture up to 5 sample rows for the column-mapping UI.
-    if (sampleRows.length < 5) {
-      const entry: Record<string, string> = {};
-      for (let j = 0; j < rawHeaders.length; j++) {
-        entry[rawHeaders[j]!] = String(row[j] ?? "");
-      }
-      sampleRows.push(entry);
+    const entry: Record<string, string> = {};
+    for (let j = 0; j < rawHeaders.length; j++) {
+      entry[rawHeaders[j]!] = String(row[j] ?? "");
     }
-    const lat = parseFloat(String(row[latIdx] ?? ""));
-    const lon = parseFloat(String(row[lonIdx] ?? ""));
+    allRows.push(entry);
+    if (sampleRows.length < 5) sampleRows.push(entry);
+  }
+
+  const meta: RawColumnMeta = {
+    columns: resolveAliases(rawHeaders),
+    sampleRows,
+    allRows,
+    fileType: "excel",
+  };
+
+  // If lat/lon columns are missing, return empty result so the dialog can
+  // show the column-mapping step.
+  if (latIdx < 0 || lonIdx < 0) {
+    return { result: { waypoints: [], routes: [] }, meta };
+  }
+
+  const waypoints: ParsedPoint[] = [];
+
+  for (const row of allRows) {
+    const lat = parseFloat(String(row[rawHeaders[latIdx]!] ?? ""));
+    const lon = parseFloat(String(row[rawHeaders[lonIdx]!] ?? ""));
     if (!isFiniteCoord(lat, lon)) continue;
     let depth: number | undefined;
     if (depthIdx >= 0) {
-      const d = parseFloat(String(row[depthIdx] ?? ""));
+      const d = parseFloat(String(row[rawHeaders[depthIdx]!] ?? ""));
       if (Number.isFinite(d)) depth = d;
     } else if (elevIdx >= 0) {
-      const e = parseFloat(String(row[elevIdx] ?? ""));
+      const e = parseFloat(String(row[rawHeaders[elevIdx]!] ?? ""));
       if (Number.isFinite(e)) depth = -e;
     }
     waypoints.push({
       lat,
       lon,
-      name: nameIdx >= 0 ? String(row[nameIdx] ?? "").trim() || undefined : undefined,
-      notes: notesIdx >= 0 ? String(row[notesIdx] ?? "").trim() || undefined : undefined,
-      type: typeIdx >= 0 ? String(row[typeIdx] ?? "").trim() || undefined : undefined,
+      name: nameIdx >= 0 ? String(row[rawHeaders[nameIdx]!] ?? "").trim() || undefined : undefined,
+      notes: notesIdx >= 0 ? String(row[rawHeaders[notesIdx]!] ?? "").trim() || undefined : undefined,
+      type: typeIdx >= 0 ? String(row[rawHeaders[typeIdx]!] ?? "").trim() || undefined : undefined,
       depth,
       source: "waypoint",
     });
   }
 
   const result: ParseResult = { waypoints, routes: [] };
-  const meta: RawColumnMeta = { columns: resolveAliases(rawHeaders), sampleRows };
   return { result, meta };
 }
 
