@@ -27,7 +27,7 @@
  * Usage:
  *   node scripts/check-lock-skill-sync.mjs
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -158,6 +158,47 @@ function checkAnchors(source, anchors) {
   }
   return failures;
 }
+
+// ---------------------------------------------------------------------------
+// Startup existence checks
+// ---------------------------------------------------------------------------
+
+(function checkScriptPathsExist() {
+  const checks = [
+    {
+      path: LOCK_SCRIPT,
+      constant: "LOCK_SCRIPT",
+      rel: "scripts/validation-lock.mjs",
+    },
+    {
+      path: FREE_PORTS_SCRIPT,
+      constant: "FREE_PORTS_SCRIPT",
+      rel: "scripts/kill-port-holders.mjs",
+    },
+  ];
+  let missing = false;
+  for (const { path, constant, rel } of checks) {
+    if (!existsSync(path)) {
+      console.error(
+        `[check-lock-skill-sync] ERROR: target script not found: ${path}`,
+      );
+      console.error(
+        `  The ${constant} constant in scripts/check-lock-skill-sync.mjs points at "${rel}",`,
+      );
+      console.error(
+        `  but that file does not exist. If the script was renamed or replaced,`,
+      );
+      console.error(
+        `  update the ${constant} constant (and its anchor list) to point at the new file,`,
+      );
+      console.error(
+        `  then update Port-Authority SKILL.md so the documentation stays accurate.`,
+      );
+      missing = true;
+    }
+  }
+  if (missing) process.exit(1);
+})();
 
 // ---------------------------------------------------------------------------
 // Run checks
