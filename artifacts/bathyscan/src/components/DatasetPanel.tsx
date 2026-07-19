@@ -1685,9 +1685,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         const err = await lastResp!.json().catch(() => ({})) as unknown as { details?: string; error?: string };
         throw new Error(err.details ?? err.error ?? "Failed to get upload URL");
       }
-      const data = await lastResp!.json() as { uploadUrl: string; objectKey: string };
-      uploadUrl = data.uploadUrl;
-      objectKey = data.objectKey;
+      const rawData = await lastResp!.json().catch(() => ({})) as unknown as { uploadUrl?: unknown; objectKey?: unknown };
+      if (typeof rawData?.uploadUrl !== "string" || !rawData.uploadUrl ||
+          typeof rawData?.objectKey !== "string" || !rawData.objectKey) {
+        throw new Error("Server returned an invalid upload URL response — please retry.");
+      }
+      uploadUrl = rawData.uploadUrl;
+      objectKey = rawData.objectKey;
     } catch (err) {
       setGcsPhase("error");
       setGcsError(err instanceof Error ? err.message : "Failed to request upload URL");
@@ -1739,12 +1743,69 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           // non-JSON body (e.g. HTML error page) would throw an unhandled
           // parse error rather than flowing to the .catch transient-error path.
           if (!r.ok) throw new Error(`Poll failed: HTTP ${r.status}`);
-          return r.json() as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[]; soundingCount?: number; substrateCount?: number; parseWarnings?: string[] }>;
+          // Use .catch(() => null) so a malformed 2xx body (non-JSON or empty)
+          // produces null rather than throwing into the .catch transient handler.
+          // The second .then validates the shape before accessing any fields.
+          return r.json().catch(() => null) as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[]; soundingCount?: number; substrateCount?: number; parseWarnings?: string[] } | null>;
         })
         .then((job) => {
+          // Null means the 2xx body was not valid JSON — stop polling immediately.
+          // This is distinct from a transient network error; treat it as a real failure.
+          if (job === null || typeof job?.status !== "string") {
+            clearInterval(pollIntervalId);
+            gcsPollIntervalRef.current = null;
+            clearTimeout(gcsWatchdogTimeoutRef.current ?? undefined);
+            gcsWatchdogTimeoutRef.current = null;
+            const malformedMsg = "Server returned an unreadable response while checking upload status — please retry.";
+            setGcsPhase("error");
+            setGcsError(malformedMsg);
+            setGcsServerStatus(null);
+            toast({
+              title: "Upload processing failed",
+              description: malformedMsg,
+              variant: "destructive",
+            });
+            return;
+          }
+
           // Track server-reported queued/processing sub-status for UI display.
           if (job.status === "queued" || job.status === "processing") {
             setGcsServerStatus(job.status);
+          }
+
+          const knownStatuses = new Set(["queued", "processing", "done", "failed"]);
+          if (!knownStatuses.has(job.status)) {
+            clearInterval(pollIntervalId);
+            gcsPollIntervalRef.current = null;
+            clearTimeout(gcsWatchdogTimeoutRef.current ?? undefined);
+            gcsWatchdogTimeoutRef.current = null;
+            const unknownMsg = `Upload processing returned an unexpected status ("${job.status}") — please retry.`;
+            setGcsPhase("error");
+            setGcsError(unknownMsg);
+            setGcsServerStatus(null);
+            toast({
+              title: "Upload processing failed",
+              description: unknownMsg,
+              variant: "destructive",
+            });
+            return;
+          }
+
+          if (job.status === "done" && !job.datasetId) {
+            clearInterval(pollIntervalId);
+            gcsPollIntervalRef.current = null;
+            clearTimeout(gcsWatchdogTimeoutRef.current ?? undefined);
+            gcsWatchdogTimeoutRef.current = null;
+            const missingIdMsg = "Processing completed but the server did not return a dataset ID — please retry.";
+            setGcsPhase("error");
+            setGcsError(missingIdMsg);
+            setGcsServerStatus(null);
+            toast({
+              title: "Upload processing failed",
+              description: missingIdMsg,
+              variant: "destructive",
+            });
+            return;
           }
 
           if (job.status === "done" && job.datasetId) {
