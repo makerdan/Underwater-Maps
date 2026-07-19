@@ -157,6 +157,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelRequestedRef = useRef(false);
   const savedMarkerIdsRef = useRef<string[]>([]);
+  const importStartTimeRef = useRef<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef);
 
@@ -359,6 +360,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     importingRef.current = true;
     cancelRequestedRef.current = false;
     savedMarkerIdsRef.current = [];
+    importStartTimeRef.current = null;
     setIsImporting(true);
     setIsCancelling(false);
     const { parsed } = phase;
@@ -378,6 +380,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     const totalItems = wpToImport.length + routesToImport.length;
     setImportProgress({ current: 0, total: totalItems, itemKind: "marker" });
     setPhase({ kind: "importing" });
+    importStartTimeRef.current = Date.now();
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -760,7 +763,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                       background: "rgba(0,229,255,0.12)",
                       borderRadius: 3,
                       overflow: "hidden",
-                      marginBottom: 16,
+                      marginBottom: 8,
                     }}
                   >
                     <div
@@ -773,13 +776,31 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                       }}
                     />
                   </div>
+                  {(() => {
+                    if (importProgress.current < 2 || !importStartTimeRef.current) return (
+                      <div style={{ height: 20, marginBottom: 8 }} />
+                    );
+                    const elapsed = Date.now() - importStartTimeRef.current;
+                    const rate = elapsed / importProgress.current;
+                    const remaining = importProgress.total - importProgress.current;
+                    const etaSec = Math.ceil((rate * remaining) / 1000);
+                    if (etaSec <= 0) return <div style={{ height: 20, marginBottom: 8 }} />;
+                    return (
+                      <div
+                        data-testid="gps-import-eta"
+                        style={{ fontSize: 13.5, color: "#64748b", marginBottom: 8, letterSpacing: "0.04em" }}
+                      >
+                        ~{etaSec} s remaining
+                      </div>
+                    );
+                  })()}
                   <button
                     onClick={() => void cancelImport()}
                     disabled={isCancelling}
                     data-testid="gps-import-cancel-btn"
                     style={{
                       ...btnStyle("ghost"),
-                      marginTop: 16,
+                      marginTop: 8,
                       opacity: isCancelling ? 0.5 : 1,
                     }}
                   >
