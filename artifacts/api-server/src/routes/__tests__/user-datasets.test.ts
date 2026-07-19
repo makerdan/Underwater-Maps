@@ -128,10 +128,10 @@ vi.mock("@workspace/api-zod", () => ({
   PatchUserDatasetsIdMoveBody: {
     safeParse: (b: unknown) => {
       if (typeof b !== "object" || b === null)
-        return { success: false, error: { message: "invalid" } };
+        return { success: false, error: { issues: [], message: "invalid" } };
       const body = b as Record<string, unknown>;
       if (!("folderId" in body))
-        return { success: false, error: { message: "folderId required" } };
+        return { success: false, error: { issues: [], message: "folderId required" } };
       return { success: true, data: { folderId: body["folderId"] ?? null } };
     },
   },
@@ -139,10 +139,10 @@ vi.mock("@workspace/api-zod", () => ({
   PatchUserDatasetsIdRenameBody: {
     safeParse: (b: unknown) => {
       if (typeof b !== "object" || b === null)
-        return { success: false, error: { message: "invalid" } };
+        return { success: false, error: { issues: [], message: "invalid" } };
       const body = b as Record<string, unknown>;
       if (typeof body["name"] !== "string")
-        return { success: false, error: { message: "name is required" } };
+        return { success: false, error: { issues: [], message: "name is required" } };
       return { success: true, data: { name: body["name"] } };
     },
   },

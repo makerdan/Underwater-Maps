@@ -42,10 +42,19 @@ vi.mock("@workspace/api-zod", () => ({
         ? { success: true, data: { datasetId: q["datasetId"] } }
         : { success: false },
   },
-  PostMarkersBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
+  PostMarkersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
   DeleteMarkersIdParams: { safeParse: () => ({ success: false }) },
   PatchMarkersIdParams: { safeParse: () => ({ success: false }) },
-  PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
+  PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  // Schemas from other routes mounted by app.ts — referenced via validateBody at module-load time.
+  // Stubs must have safeParse so the closure created by validateBody() doesn't throw if the
+  // middleware is ever called. Tests in this file never hit these routes.
+  PostMarkersMarkerIdCatchesBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchCatchesIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PostRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PostTrollingPresetsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchTrollingPresetsIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
 }));
 
 vi.mock("@clerk/express", () => ({

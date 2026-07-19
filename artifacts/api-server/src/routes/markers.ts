@@ -4,6 +4,7 @@ import { db, markersTable, catchCountersTable, catchEntriesTable } from "@worksp
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
 
@@ -28,14 +29,8 @@ router.get("/markers", requireAuth, asyncHandler(async (req, res): Promise<void>
   res.json(rows);
 }));
 
-router.post("/markers", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = PostMarkersBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message, issues: parsed.error.issues });
-    return;
-  }
-
-  const { datasetId, lon, lat, depth, type = "custom", label, notes, quickCatch, conditions } = parsed.data;
+router.post("/markers", requireAuth, validateBody(PostMarkersBody, "POST /api/markers"), asyncHandler(async (req, res): Promise<void> => {
+  const { datasetId, lon, lat, depth, type = "custom", label, notes, quickCatch, conditions } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   let finalLabel = label;
@@ -92,20 +87,15 @@ router.delete("/markers/mine", requireAuth, asyncHandler(async (req, res): Promi
   res.json({ deleted: deleted.length });
 }));
 
-router.patch("/markers/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.patch("/markers/:id", requireAuth, validateBody(PatchMarkersIdBody, "PATCH /api/markers/:id"), asyncHandler(async (req, res): Promise<void> => {
   const params = PatchMarkersIdParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid marker id" });
     return;
   }
-  const body = PatchMarkersIdBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: "invalid_request", details: body.error.message, issues: body.error.issues });
-    return;
-  }
 
   const { id } = params.data;
-  const updateData = body.data;
+  const updateData = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   if (Object.keys(updateData).length === 0) {

@@ -14,6 +14,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 
 const router = Router();
 
@@ -42,13 +43,9 @@ router.get("/trolling-preset-folders", requireAuth, asyncHandler(async (req, res
   res.json(rows.map(folderToJson));
 }));
 
-router.post("/trolling-preset-folders", requireAuth, asyncHandler(async (req, res) => {
-  const parsed = PostTrollingPresetFoldersBody.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-  const name = trimName(parsed.data.name);
+router.post("/trolling-preset-folders", requireAuth, validateBody(PostTrollingPresetFoldersBody, "POST /api/trolling-preset-folders"), asyncHandler(async (req, res) => {
+  const { name: rawName } = res.locals.parsedBody;
+  const name = trimName(rawName);
   if (!name) {
     res.status(400).json({ error: "invalid_name", details: "Folder name is required" });
     return;
@@ -77,13 +74,9 @@ router.post("/trolling-preset-folders", requireAuth, asyncHandler(async (req, re
   res.status(201).json(folderToJson(created));
 }));
 
-router.patch("/trolling-preset-folders/:id", requireAuth, asyncHandler(async (req, res) => {
-  const parsed = PatchTrollingPresetFoldersIdBody.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-  const name = trimName(parsed.data.name);
+router.patch("/trolling-preset-folders/:id", requireAuth, validateBody(PatchTrollingPresetFoldersIdBody, "PATCH /api/trolling-preset-folders/:id"), asyncHandler(async (req, res) => {
+  const { name: rawName } = res.locals.parsedBody;
+  const name = trimName(rawName);
   if (!name) {
     res.status(400).json({ error: "invalid_name", details: "Folder name is required" });
     return;

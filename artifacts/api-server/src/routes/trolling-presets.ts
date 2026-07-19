@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 
 const router = Router();
 
@@ -21,14 +22,9 @@ router.get("/trolling-presets", requireAuth, asyncHandler(async (req, res): Prom
   res.json(rows);
 }));
 
-router.post("/trolling-presets", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = PostTrollingPresetsBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
+router.post("/trolling-presets", requireAuth, validateBody(PostTrollingPresetsBody, "POST /api/trolling-presets"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const { name, headingDeg, speedKnots, startLat, startLon, waypoints, folderId } = parsed.data;
+  const { name, headingDeg, speedKnots, startLat, startLon, waypoints, folderId } = res.locals.parsedBody;
 
   if (folderId) {
     const [folder] = await db
@@ -63,19 +59,15 @@ router.post("/trolling-presets", requireAuth, asyncHandler(async (req, res): Pro
   res.status(201).json(created);
 }));
 
-router.patch("/trolling-presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = PatchTrollingPresetsIdBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
+router.patch("/trolling-presets/:id", requireAuth, validateBody(PatchTrollingPresetsIdBody, "PATCH /api/trolling-presets/:id"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
+  const { name: pName, sortOrder: pSortOrder, folderId: pFolderId } = res.locals.parsedBody;
   const updates: { name?: string; sortOrder?: number; folderId?: string | null } = {};
-  if (parsed.data.name !== undefined) updates.name = parsed.data.name;
-  if (parsed.data.sortOrder !== undefined) updates.sortOrder = parsed.data.sortOrder;
-  if (parsed.data.folderId !== undefined) updates.folderId = parsed.data.folderId;
+  if (pName !== undefined) updates.name = pName;
+  if (pSortOrder !== undefined) updates.sortOrder = pSortOrder;
+  if (pFolderId !== undefined) updates.folderId = pFolderId;
 
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ error: "invalid_request", details: "No fields to update" });

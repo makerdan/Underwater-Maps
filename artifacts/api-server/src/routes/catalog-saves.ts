@@ -33,6 +33,7 @@ import { CatalogSearchQuerySchema, CatalogIdParamSchema, SaveIdParamSchema } fro
 import { db, userCatalogSavesTable, customDatasetsTable, type StoredTerrainJson } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 import {
   getCatalogEntries,
   searchCatalog,
@@ -249,21 +250,12 @@ const MIN_BBOX_DEG = 1e-4;
 const MAX_BBOX_LON_DEG = 180;
 const MAX_BBOX_LAT_DEG = 170;
 
-router.post("/datasets/bbox-query", asyncHandler(async (req, res): Promise<void> => {
-  const parsed = BboxQueryBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: "invalid_param",
-      details: parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "),
-    });
-    return;
-  }
-
-  const { dataType, waterType } = parsed.data;
-  const north = Math.max(-90, Math.min(90, parsed.data.north));
-  const south = Math.max(-90, Math.min(90, parsed.data.south));
-  const east = normalizeLon(parsed.data.east);
-  const west = normalizeLon(parsed.data.west);
+router.post("/datasets/bbox-query", validateBody(BboxQueryBody, "POST /api/datasets/bbox-query"), asyncHandler(async (req, res): Promise<void> => {
+  const { dataType, waterType, north: rawNorth, south: rawSouth, east: rawEast, west: rawWest } = res.locals.parsedBody;
+  const north = Math.max(-90, Math.min(90, rawNorth));
+  const south = Math.max(-90, Math.min(90, rawSouth));
+  const east = normalizeLon(rawEast);
+  const west = normalizeLon(rawWest);
 
   if (north <= south) {
     res.status(400).json({ error: "invalid_bbox", details: "north must be greater than south" });
@@ -337,20 +329,10 @@ const KM_PER_NMI = 1.852;
 const MIN_RADIUS_KM = (MIN_BBOX_DEG / 2) * KM_PER_DEG_LAT;   // ≈ 0.0055 km (~5.5 m)
 const MAX_RADIUS_KM = (MAX_BBOX_LAT_DEG / 2) * KM_PER_DEG_LAT; // ≈ 9399 km
 
-router.post("/datasets/point-radius-query", asyncHandler(async (req, res): Promise<void> => {
-  const parsed = PointRadiusQueryBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: "invalid_param",
-      details: parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "),
-    });
-    return;
-  }
-
-  const { dataType, waterType, unit } = parsed.data;
-  const lat = parsed.data.lat;
-  const lon = normalizeLon(parsed.data.lon);
-  const radiusKm = unit === "nmi" ? parsed.data.radius * KM_PER_NMI : parsed.data.radius;
+router.post("/datasets/point-radius-query", validateBody(PointRadiusQueryBody, "POST /api/datasets/point-radius-query"), asyncHandler(async (req, res): Promise<void> => {
+  const { dataType, waterType, unit, lat, lon: rawLon, radius: rawRadius } = res.locals.parsedBody;
+  const lon = normalizeLon(rawLon);
+  const radiusKm = unit === "nmi" ? rawRadius * KM_PER_NMI : rawRadius;
 
   if (lat < -90 || lat > 90) {
     res.status(400).json({ error: "invalid_point", details: "lat must be between -90 and 90" });
@@ -1088,7 +1070,7 @@ const RenameSaveBodySchema = z.object({
   displayLabel: z.string().nullable(),
 });
 
-router.patch("/datasets/my-saves/:id/rename", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.patch("/datasets/my-saves/:id/rename", requireAuth, validateBody(RenameSaveBodySchema, "PATCH /api/datasets/my-saves/:id/rename"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const saveIdParsed = SaveIdParamSchema.safeParse(req.params["id"]);
   if (!saveIdParsed.success) {
@@ -1100,17 +1082,8 @@ router.patch("/datasets/my-saves/:id/rename", requireAuth, asyncHandler(async (r
   }
   const saveId = saveIdParsed.data;
 
-  const bodyParsed = RenameSaveBodySchema.safeParse(req.body ?? {});
-  if (!bodyParsed.success) {
-    res.status(400).json({
-      error: "invalid_request",
-      details: bodyParsed.error.issues[0]?.message ?? bodyParsed.error.message,
-    });
-    return;
-  }
-
   // Normalise: empty string → null (revert to catalog name)
-  const raw = bodyParsed.data.displayLabel;
+  const raw = res.locals.parsedBody.displayLabel;
   const trimmed = raw?.trim();
   const displayLabel = trimmed ? trimmed : null;
 

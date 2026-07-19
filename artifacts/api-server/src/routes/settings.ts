@@ -6,6 +6,7 @@ import { GetSettingsResponse, PutSettingsBody } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";
+import { sanitizeZodIssue } from "../middlewares/validateBody.js";
 
 const router = Router();
 
@@ -283,16 +284,6 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   }
   res.json(mergeForResponse(stored, validated));
 }));
-
-/**
- * Strip user-controlled `.received` values from a Zod issue object before
- * logging or returning it in a response. Keeps `.path`, `.code`, and
- * `.message` which are sufficient for debugging without echoing user input.
- */
-function sanitizeZodIssue(issue: Record<string, unknown>): Record<string, unknown> {
-  const { received: _r, ...safe } = issue;
-  return safe;
-}
 
 const MAX_TOTAL_SETTINGS_BYTES = 256 * 1024;
 

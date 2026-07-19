@@ -19,6 +19,7 @@ import { getPoeClient, PoeCircuitBreaker } from "@workspace/poe";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
+import { validateBody } from "../middlewares/validateBody.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -405,14 +406,9 @@ router.post(
   requireAuth,
   createRateLimit({ route: "query", windowMs: QUERY_USER_WINDOW_MS, max: QUERY_USER_MAX, mode: "user" }),
   createRateLimit({ route: "query", windowMs: QUERY_IP_WINDOW_MS, max: QUERY_IP_MAX, mode: "ip" }),
+  validateBody(QueryBodySchema, "POST /api/query"),
   asyncHandler(async (req, res): Promise<void> => {
-  const parsed = QueryBodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-
-  const { query, context: ctx = {} } = parsed.data;
+  const { query, context: ctx = {} } = res.locals.parsedBody;
   const datasetName = ctx.datasetName ?? "unknown dataset";
   const waterType = ctx.waterType === "freshwater" ? "freshwater" : "saltwater";
   const minDepth = ctx.minDepth ?? 0;

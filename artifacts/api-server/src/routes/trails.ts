@@ -4,6 +4,7 @@ import { db, gpsTrailsTable, gpsTrailPointsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 import { z } from "zod";
 
 const trailUploadRateLimit = createRateLimit({
@@ -78,15 +79,9 @@ router.get("/trails", requireAuth, asyncHandler(async (req, res): Promise<void> 
 // ---------------------------------------------------------------------------
 // POST /trails
 // ---------------------------------------------------------------------------
-router.post("/trails", trailUploadRateLimit, requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = PostTrailBodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-
+router.post("/trails", trailUploadRateLimit, requireAuth, validateBody(PostTrailBodySchema, "POST /api/trails"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const { datasetId, name, colour, startedAt, endedAt, points } = parsed.data;
+  const { datasetId, name, colour, startedAt, endedAt, points } = res.locals.parsedBody;
 
   const trail = await db.transaction(async (tx) => {
     const [created] = await tx

@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getObjectAclPolicy, setObjectAclPolicy } from "../lib/objectAcl";
 
@@ -141,20 +142,15 @@ router.get("/markers/:markerId/catches", requireAuth, asyncHandler(async (req, r
 }));
 
 // ─── Create a catch entry on a marker ─────────────────────────────────────────
-router.post("/markers/:markerId/catches", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.post("/markers/:markerId/catches", requireAuth, validateBody(PostMarkersMarkerIdCatchesBody, "POST /api/markers/:markerId/catches"), asyncHandler(async (req, res): Promise<void> => {
   const params = PostMarkersMarkerIdCatchesParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid marker id" });
     return;
   }
-  const body = PostMarkersMarkerIdCatchesBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: "invalid_request", details: body.error.message, issues: body.error.issues });
-    return;
-  }
 
   const { markerId } = params.data;
-  const { symbol, symbolName = "", notes, photos = [] } = body.data;
+  const { symbol, symbolName = "", notes, photos = [] } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   if (photos.length > MAX_PHOTOS) {
@@ -196,20 +192,15 @@ router.post("/markers/:markerId/catches", requireAuth, asyncHandler(async (req, 
 }));
 
 // ─── Edit a catch entry ───────────────────────────────────────────────────────
-router.patch("/catches/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.patch("/catches/:id", requireAuth, validateBody(PatchCatchesIdBody, "PATCH /api/catches/:id"), asyncHandler(async (req, res): Promise<void> => {
   const params = PatchCatchesIdParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid catch id" });
     return;
   }
-  const body = PatchCatchesIdBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: "invalid_request", details: body.error.message, issues: body.error.issues });
-    return;
-  }
 
   const { id } = params.data;
-  const updateData = body.data;
+  const updateData = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   if (Object.keys(updateData).length === 0) {

@@ -17,6 +17,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 
+const mockWarn = vi.hoisted(() => vi.fn());
+
+vi.mock("../../lib/logger.js", () => ({
+  logger: {
+    warn: mockWarn,
+    info: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn(() => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() })),
+  },
+}));
+
 type RouteRow = Record<string, unknown>;
 
 const VALID_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -143,6 +155,7 @@ const SAMPLE_WAYPOINTS = [
 beforeEach(() => {
   state.routes = [];
   currentUserId = "user-a";
+  mockWarn.mockClear();
 });
 
 // ─── GET /api/routes ─────────────────────────────────────────────────────────
@@ -223,6 +236,15 @@ describe("POST /api/routes", () => {
     });
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("emits logger.warn with route label when body fails Zod validation", async () => {
+    const res = await request(app).post("/api/routes").send({ name: "No Dataset" });
+    expect(res.status).toBe(400);
+    expect(mockWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ route: "POST /api/routes" }),
+      expect.stringContaining("POST /api/routes"),
+    );
   });
 
   it("returns 400 when name is empty", async () => {

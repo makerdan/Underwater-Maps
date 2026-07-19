@@ -2,6 +2,7 @@ import { Router, type Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 import { getGithubClient } from "../lib/github.js";
 
 const GithubOwnerRepoSchema = z.object({
@@ -144,6 +145,7 @@ router.get(
 router.put(
   "/repos/:owner/:repo/contents/*path",
   requireAuth,
+  validateBody(PutGithubContentsBody, "PUT /api/github/repos/:owner/:repo/contents/*path"),
   asyncHandler(async (req, res): Promise<void> => {
     const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
     if (!paramsParsed.success) {
@@ -156,12 +158,7 @@ router.put(
     if (!pathResult.ok) return;
     const { path } = pathResult;
 
-    const bodyParsed = PutGithubContentsBody.safeParse(req.body);
-    if (!bodyParsed.success) {
-      res.status(400).json({ error: "invalid_request", details: bodyParsed.error.issues.map((i) => i.message).join("; ") });
-      return;
-    }
-    const { message, content, sha, branch } = bodyParsed.data;
+    const { message, content, sha, branch } = res.locals.parsedBody;
 
     let octokit;
     try {
@@ -195,6 +192,7 @@ router.put(
 router.delete(
   "/repos/:owner/:repo/contents/*path",
   requireAuth,
+  validateBody(DeleteGithubContentsBody, "DELETE /api/github/repos/:owner/:repo/contents/*path"),
   asyncHandler(async (req, res): Promise<void> => {
     const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
     if (!paramsParsed.success) {
@@ -207,12 +205,7 @@ router.delete(
     if (!pathResult.ok) return;
     const { path } = pathResult;
 
-    const bodyParsed = DeleteGithubContentsBody.safeParse(req.body);
-    if (!bodyParsed.success) {
-      res.status(400).json({ error: "invalid_request", details: bodyParsed.error.issues.map((i) => i.message).join("; ") });
-      return;
-    }
-    const { message, sha, branch } = bodyParsed.data;
+    const { message, sha, branch } = res.locals.parsedBody;
 
     let octokit;
     try {
@@ -245,6 +238,7 @@ router.delete(
 router.post(
   "/repos/:owner/:repo/actions/workflows/:workflow_id/dispatches",
   requireAuth,
+  validateBody(PostGithubDispatchBody, "POST /api/github/repos/:owner/:repo/actions/workflows/:workflow_id/dispatches"),
   asyncHandler(async (req, res): Promise<void> => {
     const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
     if (!paramsParsed.success) {
@@ -255,12 +249,7 @@ router.post(
     const params = req.params as Record<string, string>;
     const workflow_id = params["workflow_id"] as string;
 
-    const bodyParsed = PostGithubDispatchBody.safeParse(req.body);
-    if (!bodyParsed.success) {
-      res.status(400).json({ error: "invalid_request", details: bodyParsed.error.issues.map((i) => i.message).join("; ") });
-      return;
-    }
-    const { ref, inputs } = bodyParsed.data;
+    const { ref, inputs } = res.locals.parsedBody;
 
     let octokit;
     try {

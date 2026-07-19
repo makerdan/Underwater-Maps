@@ -112,12 +112,16 @@ vi.mock("@workspace/api-zod", () => {
       safeParse: (b: Record<string, unknown>) => ({ success: true, data: { ...b } }),
     },
     DeleteCatchesIdParams: uuidParse("id"),
-    // Referenced by other routes mounted in app.ts:
+    // Referenced by other routes mounted in app.ts — stubs for validateBody closures at load time.
     GetMarkersQueryParams: { safeParse: () => ({ success: false }) },
-    PostMarkersBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
+    PostMarkersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     DeleteMarkersIdParams: { safeParse: () => ({ success: false }) },
     PatchMarkersIdParams: { safeParse: () => ({ success: false }) },
-    PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
+    PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PostRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PostTrollingPresetsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchTrollingPresetsIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
   };
 });
 

@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { parsePositiveIntEnv } from "../lib/env.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 import { promises as fsPromises } from "fs";
 import path from "path";
 import { createHash } from "crypto";
@@ -1351,14 +1352,8 @@ const ClassifyBodySchema = z.object({
   heightFull: z.number().optional(),
 });
 
-router.post("/classify", asyncHandler(async (req, res) => {
+router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classify"), asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
-
-  const parsed = ClassifyBodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
 
   const {
     gridBase64,
@@ -1369,7 +1364,7 @@ router.post("/classify", asyncHandler(async (req, res) => {
     depthsFull,
     widthFull,
     heightFull,
-  } = parsed.data;
+  } = res.locals.parsedBody;
 
   // Sample bundled ShoreZone + ENC substrate polygons onto the 32×32 grid so
   // covered cells can be grounded in surveyed substrate (vs. inferred from
@@ -1979,16 +1974,10 @@ const PoeQueryBodySchema = z.object({
   includeTools: z.boolean().optional().default(true),
 });
 
-router.post("/query", asyncHandler(async (req, res) => {
+router.post("/query", validateBody(PoeQueryBodySchema, "POST /api/poe/query"), asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
-  const parsedQuery = PoeQueryBodySchema.safeParse(req.body);
-  if (!parsedQuery.success) {
-    res.status(400).json({ error: "invalid_request", details: parsedQuery.error.message });
-    return;
-  }
-
-  const { userMessage, context, history, previousResponseId, includeTools } = parsedQuery.data;
+  const { userMessage, context, history, previousResponseId, includeTools } = res.locals.parsedBody;
 
   const systemPrompt = context
     ? `You are BathyScan's AI guide for underwater terrain exploration. Dataset: "${context["datasetName"] ?? "Unknown"}". Water type: ${context["waterType"] ?? "saltwater"}. Depth range: ${context["minDepth"] ?? 0}m to ${context["maxDepth"] ?? 0}m. Camera position: lon ${context["lon"] ?? 0}, lat ${context["lat"] ?? 0}, depth ${context["cameraDepth"] ?? 0}m. Zone: "${context["zoneName"] ?? "unknown"}". When the user asks to navigate, highlight zones, filter depths, change the view, or adjust settings — call the appropriate tool. Answer geological questions directly in text. Be concise and scientific.`
@@ -2145,16 +2134,10 @@ const HelpBodySchema = z.object({
     .default([]),
 });
 
-router.post("/help", asyncHandler(async (req, res) => {
+router.post("/help", validateBody(HelpBodySchema, "POST /api/poe/help"), asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
-  const parsedHelp = HelpBodySchema.safeParse(req.body);
-  if (!parsedHelp.success) {
-    res.status(400).json({ error: "invalid_request", details: parsedHelp.error.message });
-    return;
-  }
-
-  const { question, history } = parsedHelp.data;
+  const { question, history }: { question: string; history: Array<{ role: string; content: string }> } = res.locals.parsedBody;
 
   const helpContext = loadHelpContext();
   const systemPrompt = `${HELP_SYSTEM_PROMPT}\n\n=== BATHYSCAN HELP ARTICLES ===\n\n${helpContext}`;

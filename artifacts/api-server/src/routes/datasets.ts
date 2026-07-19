@@ -14,6 +14,7 @@ import { findNearestTideStation } from "./tides.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 import { signDatasetUploadUrl, getJobByObjectKey, recoverGcsJobStatus } from "../lib/bucketMonitor.js";
 import {
   GetDatasetsResponse,
@@ -2198,6 +2199,7 @@ router.post(
   requireAuth,
   uploadChunkMiddleware.single("file"),
   multerErrorHandler,
+  validateBody(ChunkUploadBodySchema, "POST /api/datasets/upload/chunk"),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const file = req.file;
     if (!file) {
@@ -2205,14 +2207,7 @@ router.post(
       return;
     }
 
-    const parsed = ChunkUploadBodySchema.safeParse(req.body);
-    if (!parsed.success) {
-      await fs.promises.unlink(file.path).catch(() => undefined);
-      const msg = parsed.error.issues[0]?.message ?? "Invalid request";
-      res.status(400).json({ error: "invalid_request", details: msg });
-      return;
-    }
-    const { uploadId, chunkIndex, totalChunks } = parsed.data;
+    const { uploadId, chunkIndex, totalChunks } = res.locals.parsedBody;
 
     if (chunkIndex >= totalChunks) {
       await fs.promises.unlink(file.path).catch(() => undefined);
@@ -2379,17 +2374,9 @@ router.get(
 router.post(
   "/datasets/upload/chunk/finalize",
   requireAuth,
+  validateBody(ChunkFinalizeBodySchema, "POST /api/datasets/upload/chunk/finalize"),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const parsed = ChunkFinalizeBodySchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: "invalid_param",
-        details: parsed.error.issues.map((i) => `${i.path.join(".") || "param"}: ${i.message}`).join("; "),
-      });
-      return;
-    }
-
-    const { uploadId, fileName, totalChunks, resolution } = parsed.data;
+    const { uploadId, fileName, totalChunks, resolution } = res.locals.parsedBody;
 
     // Verify that all chunks are present before queuing
     for (let i = 0; i < totalChunks; i++) {
@@ -2560,6 +2547,10 @@ router.post(
   }),
 );
 
+const GcsUrlBodySchema = z.object({
+  fileName: z.string().min(1).max(255),
+});
+
 // ── POST /datasets/upload/request-gcs-url ────────────────────────────────────
 // Auth-required. Generates a presigned GCS PUT URL for oversized files (>50 MB).
 // The client uploads directly to GCS — the API server's memory is never involved.
@@ -2569,20 +2560,9 @@ router.post(
   "/datasets/upload/request-gcs-url",
   requireAuth,
   datasetUploadRateLimit,
+  validateBody(GcsUrlBodySchema, "POST /api/datasets/upload/request-gcs-url"),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const BodySchema = z.object({
-      fileName: z.string().min(1).max(255),
-    });
-    const parsed = BodySchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: "invalid_param",
-        details: parsed.error.issues.map((i) => `${i.path.join(".") || "param"}: ${i.message}`).join("; "),
-      });
-      return;
-    }
-
-    const { fileName } = parsed.data;
+    const { fileName } = res.locals.parsedBody;
     const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
     if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
       res.status(415).json({

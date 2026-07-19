@@ -17,6 +17,7 @@ import sharp from "sharp";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
+import { validateBody } from "../middlewares/validateBody.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -98,15 +99,11 @@ router.get("/user/datasets", requireAuth, asyncHandler(async (req, res): Promise
 }));
 
 // ── PATCH /user/datasets/:id/move ──────────────────────────────────────────
-router.patch("/user/datasets/:id/move", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.patch("/user/datasets/:id/move", requireAuth, validateBody(PatchUserDatasetsIdMoveBody, "PATCH /api/user/datasets/:id/move"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
-  const parsed = PatchUserDatasetsIdMoveBody.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-  const folderId = parsed.data.folderId ?? null;
+  const { folderId: rawFolderId } = res.locals.parsedBody;
+  const folderId = rawFolderId ?? null;
 
   if (folderId !== null) {
     const [folder] = await db
@@ -132,15 +129,11 @@ router.patch("/user/datasets/:id/move", requireAuth, asyncHandler(async (req, re
 }));
 
 // ── PATCH /user/datasets/:id/rename ────────────────────────────────────────
-router.patch("/user/datasets/:id/rename", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.patch("/user/datasets/:id/rename", requireAuth, validateBody(PatchUserDatasetsIdRenameBody, "PATCH /api/user/datasets/:id/rename"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
-  const parsed = PatchUserDatasetsIdRenameBody.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-  const name = typeof parsed.data.name === "string" ? parsed.data.name.trim() : "";
+  const { name: rawName } = res.locals.parsedBody;
+  const name = typeof rawName === "string" ? rawName.trim() : "";
   if (!name || name.length > 200) {
     res.status(400).json({ error: "invalid_name", details: "Name must be 1–200 chars" });
     return;
@@ -330,20 +323,11 @@ router.get("/user/datasets/:id/raster-image", requireAuth, asyncHandler(async (r
 // Accepts 2–4 control points mapping pixel coordinates to WGS84 lon/lat,
 // persists them, clears the pending raster blob (to save DB space), and
 // marks the dataset as no longer requiring georeferencing.
-router.post("/user/datasets/:id/georef", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.post("/user/datasets/:id/georef", requireAuth, validateBody(GeorefBodySchema, "POST /api/user/datasets/:id/georef"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
-  const parsed = GeorefBodySchema.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({
-      error: "invalid_request",
-      details: parsed.error.issues[0]?.message ?? parsed.error.message,
-    });
-    return;
-  }
-
-  const controlPoints: GeorefControlPoint[] = parsed.data.controlPoints;
+  const controlPoints: GeorefControlPoint[] = res.locals.parsedBody.controlPoints;
 
   const [row] = await db
     .select({ id: customDatasetsTable.id, needsGeoreferencing: customDatasetsTable.needsGeoreferencing })

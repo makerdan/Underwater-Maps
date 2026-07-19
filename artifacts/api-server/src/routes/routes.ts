@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 
 const router = Router();
 
@@ -32,14 +33,8 @@ router.get("/routes", requireAuth, asyncHandler(async (req, res): Promise<void> 
   res.json(rows);
 }));
 
-router.post("/routes", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = PostRouteBodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-
-  const { datasetId, name, waypoints, totalDistanceM } = parsed.data;
+router.post("/routes", requireAuth, validateBody(PostRouteBodySchema, "POST /api/routes"), asyncHandler(async (req, res): Promise<void> => {
+  const { datasetId, name, waypoints, totalDistanceM } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const [created] = await db
@@ -58,20 +53,15 @@ router.post("/routes", requireAuth, asyncHandler(async (req, res): Promise<void>
 }));
 
 // PATCH /routes/:id
-router.patch("/routes/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.patch("/routes/:id", requireAuth, validateBody(PatchRouteBodySchema, "PATCH /api/routes/:id"), asyncHandler(async (req, res): Promise<void> => {
   const params = RouteIdParamSchema.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid route id" });
     return;
   }
-  const body = PatchRouteBodySchema.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: "invalid_request", details: body.error.message });
-    return;
-  }
 
   const { id } = params.data;
-  const { name } = body.data;
+  const { name } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const [updated] = await db

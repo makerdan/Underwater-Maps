@@ -28,6 +28,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateBody } from "../middlewares/validateBody.js";
 import { logger } from "../lib/logger.js";
 
 const FolderIdParamSchema = z.string().uuid("Folder id must be a valid UUID");
@@ -105,19 +106,15 @@ router.get("/user/folders", requireAuth, asyncHandler(async (req, res): Promise<
 }));
 
 // ── POST /user/folders ─────────────────────────────────────────────────────
-router.post("/user/folders", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.post("/user/folders", requireAuth, validateBody(PostUserFoldersBody, "POST /api/user/folders"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const parsed = PostUserFoldersBody.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-  const name = trimName(parsed.data.name);
+  const { name: rawName, parentId: rawParentId } = res.locals.parsedBody;
+  const name = trimName(rawName);
   if (!name) {
     res.status(400).json({ error: "invalid_name", details: "Folder name is required" });
     return;
   }
-  const parentId = parsed.data.parentId ?? null;
+  const parentId = rawParentId ?? null;
 
   const existing = await listUserFolders(userId);
 
@@ -142,7 +139,7 @@ router.post("/user/folders", requireAuth, asyncHandler(async (req, res): Promise
 }));
 
 // ── PATCH /user/folders/:id/rename ─────────────────────────────────────────
-router.patch("/user/folders/:id/rename", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.patch("/user/folders/:id/rename", requireAuth, validateBody(PatchUserFoldersIdRenameBody, "PATCH /api/user/folders/:id/rename"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const idParsed = FolderIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
@@ -150,12 +147,8 @@ router.patch("/user/folders/:id/rename", requireAuth, asyncHandler(async (req, r
     return;
   }
   const id = idParsed.data;
-  const parsed = PatchUserFoldersIdRenameBody.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-  const name = trimName(parsed.data.name);
+  const { name: rawName } = res.locals.parsedBody;
+  const name = trimName(rawName);
   if (!name) {
     res.status(400).json({ error: "invalid_name", details: "Folder name is required" });
     return;
@@ -185,7 +178,7 @@ router.patch("/user/folders/:id/rename", requireAuth, asyncHandler(async (req, r
 }));
 
 // ── PATCH /user/folders/:id/move ───────────────────────────────────────────
-router.patch("/user/folders/:id/move", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.patch("/user/folders/:id/move", requireAuth, validateBody(PatchUserFoldersIdMoveBody, "PATCH /api/user/folders/:id/move"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const idParsed = FolderIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
@@ -193,12 +186,8 @@ router.patch("/user/folders/:id/move", requireAuth, asyncHandler(async (req, res
     return;
   }
   const id = idParsed.data;
-  const parsed = PatchUserFoldersIdMoveBody.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-  const newParentId = parsed.data.parentId ?? null;
+  const { parentId: rawParentId } = res.locals.parsedBody;
+  const newParentId = rawParentId ?? null;
 
   const rows = await listUserFolders(userId);
   const target = rows.find((r) => r.id === id);
@@ -349,15 +338,10 @@ router.post("/user/folders/:id/duplicate", requireAuth, asyncHandler(async (req,
 }));
 
 // ── DELETE /user/folders/:id ───────────────────────────────────────────────
-router.delete("/user/folders/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.delete("/user/folders/:id", requireAuth, validateBody(DeleteUserFoldersIdBody, "DELETE /api/user/folders/:id"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
-  const parsed = DeleteUserFoldersIdBody.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: parsed.error.message });
-    return;
-  }
-  const mode = parsed.data.mode;
+  const { mode } = res.locals.parsedBody;
 
   const rows = await listUserFolders(userId);
   const target = rows.find((r) => r.id === id);
