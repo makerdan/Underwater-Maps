@@ -15,7 +15,14 @@
  */
 import React, { useCallback, useEffect, useState } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useUiStore } from "@/lib/uiStore";
+import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
+import { useAppState } from "@/lib/context";
 import { flushServerSync } from "@/hooks/useServerSettingsSync";
+
+/** Catalog ID for the built-in Lake Ray Roberts demo dataset. */
+const DEMO_DATASET_ID = "lake-ray-roberts";
+const DEMO_DATASET_NAME = "Lake Ray Roberts (TX)";
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -31,7 +38,7 @@ const STEPS: Step[] = [
   {
     title: "Find data near you",
     description:
-      "Open the Find Data panel on the left to discover bathymetric surveys near your location or search by place name. Try the demo dataset (Lake Ray Roberts, TX) to explore the viewer, then load a dataset from your area.",
+      "Search for bathymetric surveys near your location or by place name. Use the buttons below to open the search panel, or load the demo dataset to explore the viewer right away.",
     region: "left",
     icon: "◉",
   },
@@ -117,6 +124,8 @@ interface OnboardingOverlayProps {
 export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps) {
   const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding);
   const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding);
+  const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
+  const { setDatasetId } = useAppState();
 
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(true);
@@ -141,6 +150,24 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
       handleDone();
     }
   }, [step, handleDone]);
+
+  /** Step 1 primary CTA: open Find Data panel and dismiss the tour. */
+  const handleOpenFindData = useCallback(() => {
+    dismiss();
+    setFindDataPanelOpen(true);
+  }, [dismiss, setFindDataPanelOpen]);
+
+  /** Step 1 secondary CTA: load the demo dataset and dismiss the tour. */
+  const handleLoadDemo = useCallback(() => {
+    dismiss();
+    void requestDatasetSwitch({
+      datasetId: DEMO_DATASET_ID,
+      datasetName: DEMO_DATASET_NAME,
+      onConfirm: () => {
+        setDatasetId(DEMO_DATASET_ID);
+      },
+    });
+  }, [dismiss, setDatasetId]);
 
   const handleBack = useCallback(() => {
     setStep((s) => Math.max(0, s - 1));
@@ -331,6 +358,52 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
               </div>
             </div>
           </div>
+
+          {/* Step 1 action buttons — primary: open Find Data; secondary: try demo */}
+          {step === 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+              <button
+                type="button"
+                data-testid="onboarding-open-find-data-btn"
+                onClick={handleOpenFindData}
+                style={{
+                  width: "100%",
+                  background: "rgba(0,229,255,0.14)",
+                  border: "1px solid rgba(0,229,255,0.45)",
+                  borderRadius: 5,
+                  color: "#00e5ff",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  letterSpacing: "0.18em",
+                  padding: "10px 0",
+                  cursor: "pointer",
+                  fontFamily: FONT,
+                  textShadow: "0 0 6px rgba(0,229,255,0.4)",
+                }}
+              >
+                ◉ OPEN FIND DATA →
+              </button>
+              <button
+                type="button"
+                data-testid="onboarding-load-demo-btn"
+                onClick={handleLoadDemo}
+                style={{
+                  width: "100%",
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: 5,
+                  color: "#94a3b8",
+                  fontSize: 13,
+                  letterSpacing: "0.12em",
+                  padding: "8px 0",
+                  cursor: "pointer",
+                  fontFamily: FONT,
+                }}
+              >
+                Try demo: Lake Ray Roberts, TX →
+              </button>
+            </div>
+          )}
 
           {/* Step dots */}
           <div

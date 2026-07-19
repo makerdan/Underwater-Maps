@@ -198,6 +198,77 @@ test.describe("Onboarding tour overlay", () => {
     expect(body.hasSeenOnboarding).toBe(true);
   });
 
+  // ── 1c. "Open Find Data" button on Step 1 ────────────────────────────────
+
+  test("Step 1 'Open Find Data' button dismisses the overlay and opens the Find Data panel", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(90_000);
+
+    await setServerOnboardingFlag(request, false);
+    await page.addInitScript(patchOnboardingLocalStorage, false);
+    await page.goto("/");
+
+    const ok = await ensureSceneLoaded(page);
+    if (!ok) return;
+
+    const dialog = page.locator(TOUR_DIALOG_SELECTOR);
+    await expect(dialog).toBeVisible({ timeout: 20_000 });
+    await expect(dialog).toContainText("STEP 1 OF 5");
+
+    // The Step 1 primary CTA button should be visible.
+    const openFindDataBtn = dialog.getByTestId("onboarding-open-find-data-btn");
+    await expect(openFindDataBtn).toBeVisible({ timeout: 3_000 });
+
+    // Clicking it dismisses the overlay and opens Find Data panel.
+    await openFindDataBtn.dispatchEvent("click");
+    await expect(dialog).toHaveCount(0, { timeout: 5_000 });
+
+    // Find Data panel should now be open (search input is the stable landmark).
+    const searchInput = page.getByTestId("find-data-search-input");
+    await expect(searchInput).toBeVisible({ timeout: 5_000 });
+  });
+
+  // ── 1d. "Try demo" button on Step 1 ──────────────────────────────────────
+
+  test("Step 1 'Try demo' button dismisses the overlay and triggers a dataset switch", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(90_000);
+
+    await setServerOnboardingFlag(request, false);
+    await page.addInitScript(patchOnboardingLocalStorage, false);
+    // Suppress the SimulatedDataConfirmDialog (already in beforeEach, but
+    // re-seeding here for explicitness in this test).
+    await page.addInitScript(() => {
+      try {
+        sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+      } catch {}
+    });
+    await page.goto("/");
+
+    const ok = await ensureSceneLoaded(page);
+    if (!ok) return;
+
+    const dialog = page.locator(TOUR_DIALOG_SELECTOR);
+    await expect(dialog).toBeVisible({ timeout: 20_000 });
+    await expect(dialog).toContainText("STEP 1 OF 5");
+
+    // The Step 1 demo fallback button should be visible.
+    const loadDemoBtn = dialog.getByTestId("onboarding-load-demo-btn");
+    await expect(loadDemoBtn).toBeVisible({ timeout: 3_000 });
+
+    // Clicking it dismisses the overlay (Find Data panel must NOT open).
+    await loadDemoBtn.dispatchEvent("click");
+    await expect(dialog).toHaveCount(0, { timeout: 5_000 });
+
+    // The Find Data panel should NOT have opened (it's the demo path, not the search path).
+    const searchInput = page.getByTestId("find-data-search-input");
+    await expect(searchInput).toHaveCount(0, { timeout: 2_000 });
+  });
+
   // ── 2. Done on last step ─────────────────────────────────────────────────
 
   test("overlay disappears after clicking Done on the final step", async ({
