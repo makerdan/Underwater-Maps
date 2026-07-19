@@ -2258,6 +2258,46 @@ function setMemCacheEntry(key: string, data: string): void {
 const upscaleInFlight = new Map<string, Promise<string | null>>();
 registerCache(() => upscaleInFlight.clear());
 
+// ---------------------------------------------------------------------------
+// Hit / miss counters — incremented on every /upscale request.
+// Not persisted across restarts (per spec). Reset via __resetUpscaleCacheCounters
+// in tests only.
+// ---------------------------------------------------------------------------
+
+let _upscaleHits = 0;
+let _upscaleMisses = 0;
+
+/**
+ * Estimated Poe credits consumed per cache miss (one TopazLabs upscale call).
+ * Used to surface cost savings in the admin panel.
+ */
+export const UPSCALE_CREDITS_PER_CALL = 25;
+
+/** Returns a snapshot of current hit/miss counters and derived stats. */
+export function getUpscaleCacheStats(): {
+  hits: number;
+  misses: number;
+  hitRate: number;
+  estimatedCreditsSaved: number;
+} {
+  const total = _upscaleHits + _upscaleMisses;
+  return {
+    hits: _upscaleHits,
+    misses: _upscaleMisses,
+    hitRate: total === 0 ? 0 : _upscaleHits / total,
+    estimatedCreditsSaved: _upscaleHits * UPSCALE_CREDITS_PER_CALL,
+  };
+}
+
+/**
+ * TEST-ONLY — resets hit/miss counters so tests that rely on counter state
+ * start from a clean baseline. Never called in production code.
+ */
+export function __resetUpscaleCacheCounters(): void {
+  _upscaleHits = 0;
+  _upscaleMisses = 0;
+}
+
 /**
  * Derive a content-addressed cache key for an upscale request.
  *
@@ -2506,6 +2546,7 @@ router.post("/upscale", asyncHandler(async (req, res) => {
   // getMemCacheEntry enforces TTL on every read; expired entries return null.
   const memHit = getMemCacheEntry(cacheKey);
   if (memHit) {
+    _upscaleHits++;
     logger.info({ key: cacheKey.slice(0, 8), factor, bytes: memHit.length }, "[upscale-cache] HIT (memory)");
     res.json({ imageBase64: memHit });
     return;
@@ -2515,6 +2556,7 @@ router.post("/upscale", asyncHandler(async (req, res) => {
   // readUpscaleDisk also enforces TTL; expired disk entries are deleted and return null.
   const diskHit = await readUpscaleDisk(cacheKey);
   if (diskHit) {
+    _upscaleHits++;
     setMemCacheEntry(cacheKey, diskHit.imageBase64); // enforces bytes cap on write
     logger.info({ key: cacheKey.slice(0, 8), factor, bytes: diskHit.bytes }, "[upscale-cache] HIT (disk)");
     res.json({ imageBase64: diskHit.imageBase64 });
@@ -2522,6 +2564,7 @@ router.post("/upscale", asyncHandler(async (req, res) => {
   }
 
   // Cache miss — check circuit breaker before attempting a paid Poe call
+  _upscaleMisses++;
   if (poeBreaker.isOpen()) {
     res.status(503).json({ error: "circuit_open", details: "Upscale service temporarily unavailable" });
     return;

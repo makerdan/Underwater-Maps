@@ -15,7 +15,7 @@
  * out to keep the test hermetic and fast.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
 // ---------------------------------------------------------------------------
@@ -156,7 +156,12 @@ vi.mock("../lib/bucketMonitor.js", () => ({
 // ---------------------------------------------------------------------------
 
 import app from "../app.js";
-import { upscaleMemCache, upscaleCacheKey } from "../routes/poe.js";
+import {
+  upscaleMemCache,
+  upscaleCacheKey,
+  UPSCALE_CACHE_TTL_MS,
+  __resetUpscaleCacheCounters,
+} from "../routes/poe.js";
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -166,6 +171,7 @@ describe("upscale cache — server-side", () => {
   beforeEach(() => {
     upscaleMemCache.clear();
     mockCreate.mockReset();
+    __resetUpscaleCacheCounters();
   });
 
   it("returns the cached result without calling Poe when the in-memory cache is primed", async () => {
@@ -253,5 +259,77 @@ describe("upscale cache — server-side", () => {
   it("uses different cache keys for different upscale factors", () => {
     const imageBase64 = "data:image/png;base64,abc123";
     expect(upscaleCacheKey(imageBase64, 2)).not.toBe(upscaleCacheKey(imageBase64, 4));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TTL eviction hardening — fake-timer tests
+// ---------------------------------------------------------------------------
+// These tests use vi.useFakeTimers / vi.setSystemTime so that Date.now() inside
+// getMemCacheEntry and readUpscaleDisk returns a time past the TTL, verifying
+// that:
+//   a) the in-memory entry is evicted (not served stale)
+//   b) the disk entry is deleted via fsPromises.unlink (not served stale)
+//   c) Poe is called to produce a fresh result
+// ---------------------------------------------------------------------------
+
+describe("upscale cache — TTL eviction with fake timers", () => {
+  afterEach(() => {
+    // Restore real timers after each test in this suite to avoid leaking
+    // fake-timer state into other describe blocks.
+    vi.useRealTimers();
+    upscaleMemCache.clear();
+    mockCreate.mockReset();
+    mockUnlink.mockReset();
+    mockReadFile.mockReset();
+    mockReadFile.mockRejectedValue(new Error("ENOENT")); // restore default
+    __resetUpscaleCacheCounters();
+  });
+
+  it("evicts an expired in-memory entry and an expired disk entry, then calls Poe", async () => {
+    vi.useFakeTimers();
+
+    const imageBase64 = "data:image/png;base64,TTLFakeTimerTest==";
+    const factor = 2;
+    const staleData = "data:image/png;base64,staleUpscaled==";
+    const key = upscaleCacheKey(imageBase64, factor);
+
+    // Record "now" before advancing time
+    const seedTime = Date.now();
+
+    // Seed the in-memory cache at the current fake time
+    upscaleMemCache.set(key, { data: staleData, cachedAt: seedTime, bytes: staleData.length });
+
+    // Seed the disk mock so readUpscaleDisk finds an entry with the same cachedAt.
+    // This will be treated as expired once we advance the clock.
+    mockReadFile.mockResolvedValue(
+      JSON.stringify({ imageBase64: staleData, cachedAt: seedTime, bytes: staleData.length }),
+    );
+
+    // Advance system time past the TTL
+    vi.setSystemTime(seedTime + UPSCALE_CACHE_TTL_MS + 1_000);
+
+    // Poe returns a fresh result after the cache miss
+    const freshResult = "data:image/png;base64,FreshAfterTTLEviction==";
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: freshResult } }],
+      usage: { prompt_tokens: 5, completion_tokens: 2 },
+    });
+
+    const res = await request(app)
+      .post("/api/poe/upscale")
+      .send({ imageBase64, upscaleFactor: factor });
+
+    expect(res.status).toBe(200);
+    expect(res.body.imageBase64).toBe(freshResult);
+
+    // Both the memory entry and the disk entry were expired — Poe must have been called
+    expect(mockCreate).toHaveBeenCalledOnce();
+
+    // The expired disk entry must have been deleted
+    expect(mockUnlink).toHaveBeenCalled();
+
+    // The in-memory cache must no longer contain the stale entry
+    expect(upscaleMemCache.get(key)?.data).not.toBe(staleData);
   });
 });

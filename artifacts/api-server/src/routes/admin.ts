@@ -9,6 +9,7 @@ import {
 } from "../lib/bucketMonitor.js";
 import { queryRateLimitUsage } from "../middlewares/rateLimit.js";
 import { AdminRateLimitUsageQuerySchema } from "./schemas.js";
+import { getUpscaleCacheStats, UPSCALE_CREDITS_PER_CALL } from "./poe.js";
 
 const router = Router();
 
@@ -147,6 +148,44 @@ router.get(
       generatedAt: new Date().toISOString(),
       count: rows.length,
       rows,
+    });
+  }),
+);
+
+/**
+ * GET /admin/upscale-cache-stats
+ *
+ * Returns in-process hit/miss counters for the server-side upscale cache,
+ * plus a derived hit-rate and estimated Poe credits saved.
+ *
+ * Counters reset on server restart (not persisted — see task spec).
+ *
+ * Response shape:
+ *   hits                 — total cache hits (memory + disk) since last restart
+ *   misses               — total cache misses since last restart
+ *   hitRate              — hits / (hits + misses), 0 when no requests yet
+ *   estimatedCreditsSaved — hits × UPSCALE_CREDITS_PER_CALL constant
+ *   creditsPerCall       — the constant used for the estimate
+ *
+ * Access: auth-required; restricted to admin users (same rules as
+ * /admin/bucket-monitor).
+ */
+router.get(
+  "/admin/upscale-cache-stats",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+
+    if (!isAdmin(userId)) {
+      res.status(403).json({ error: "forbidden", details: "Admin access required" });
+      return;
+    }
+
+    const stats = getUpscaleCacheStats();
+    res.json({
+      ...stats,
+      creditsPerCall: UPSCALE_CREDITS_PER_CALL,
+      generatedAt: new Date().toISOString(),
     });
   }),
 );

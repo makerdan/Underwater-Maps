@@ -10,6 +10,7 @@ import { S } from "./styles";
 import { FONT } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { formatLastSynced } from "./constants";
+import { AdminPanel } from "@/components/AdminPanel";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -310,6 +311,11 @@ export function AccountSection() {
             <div style={{ marginTop: 8, fontSize: 10, color: "#f87171" }}>{accountDeleteMsg}</div>
           )}
         </div>
+      </div>
+
+      {/* Admin-only stats panel — renders a 403 notice for non-admin users */}
+      <div style={{ marginTop: 24 }}>
+        <AdminPanel />
       </div>
     </>
   );
