@@ -25,6 +25,12 @@ import { queryClient } from "@/lib/queryClient";
 
 const SUPPRESS_KEY = "bathyscan:simulatedDataWarn:suppress";
 
+/**
+ * Retry configuration — exposed as a mutable object so unit tests can set
+ * `delayMs` to 0 without fighting ESM live-binding read-only restrictions.
+ */
+export const __retryConfig = { delayMs: 1_500 };
+
 function readSuppressed(): boolean {
   try {
     return sessionStorage.getItem(SUPPRESS_KEY) === "true";
@@ -92,6 +98,36 @@ export interface RequestSwitchArgs {
 }
 
 /**
+ * Fetches the dataset preview, retrying once after `__retryDelayMs` on any
+ * transient error before giving up. This prevents false-positive "simulated
+ * data" warnings when the preview endpoint is slow or briefly unavailable.
+ *
+ * Each attempt uses `queryClient.fetchQuery` with `staleTime: 0` on retries
+ * so a cached error from the first attempt is not replayed.
+ */
+async function fetchPreviewWithRetry(datasetId: string): Promise<DatasetPreview> {
+  const MAX_ATTEMPTS = 2;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, __retryConfig.delayMs));
+    }
+    try {
+      return await queryClient.fetchQuery({
+        queryKey: getGetDatasetsIdPreviewQueryKey(datasetId),
+        queryFn: () => getDatasetsIdPreview(datasetId),
+        // First attempt honours the 30 s cache; on retry force a fresh fetch
+        // so a cached failure from attempt 0 is not immediately replayed.
+        staleTime: attempt === 0 ? 30_000 : 0,
+      });
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * Centralized entry point for switching the active dataset. Resolves the
  * upstream data source via the preview endpoint; if synthetic (or
  * verification failed), opens the confirmation dialog. Otherwise the switch
@@ -108,11 +144,7 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
 
   let preview: DatasetPreview;
   try {
-    preview = await queryClient.fetchQuery({
-      queryKey: getGetDatasetsIdPreviewQueryKey(datasetId),
-      queryFn: () => getDatasetsIdPreview(datasetId),
-      staleTime: 30_000,
-    });
+    preview = await fetchPreviewWithRetry(datasetId);
   } catch (err) {
     if (silent) {
       // For startup auto-loads, any preflight failure (including aborts) is
@@ -121,7 +153,7 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
       onConfirm();
       return;
     }
-    // Treat preflight failure as worst-case (do not silently load).
+    // All retry attempts exhausted — treat as worst-case (do not silently load).
     preview = {
       datasetId,
       name: args.datasetName ?? datasetId,

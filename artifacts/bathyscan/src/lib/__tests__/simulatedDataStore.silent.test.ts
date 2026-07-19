@@ -21,7 +21,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetDatasetsIdPreviewQueryKey: (id: string) => ["datasets", id, "preview"],
 }));
 
-import { requestDatasetSwitch, useSimulatedDataStore } from "@/lib/simulatedDataStore";
+import { requestDatasetSwitch, useSimulatedDataStore, __retryConfig } from "@/lib/simulatedDataStore";
 import type { DatasetPreview } from "@workspace/api-client-react";
 
 function makePreview(dataSource: DatasetPreview["dataSource"]): DatasetPreview {
@@ -38,6 +38,8 @@ beforeEach(() => {
   try { sessionStorage.clear(); } catch { /* ignore */ }
   useSimulatedDataStore.setState({ pending: null, suppressed: false });
   fetchQueryMock.mockReset();
+  // Zero out the retry delay so these tests don't wait 1.5 s per retry.
+  __retryConfig.delayMs = 0;
 });
 
 describe("requestDatasetSwitch — silent mode", () => {
