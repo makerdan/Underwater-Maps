@@ -76,6 +76,9 @@ vi.mock("@/hooks/use-toast", () => ({
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "@/lib/zoneOverlayStore";
+import { NAV_TABS } from "@/pages/settings/constants";
+import type { Tab } from "@/pages/settings/constants";
+const tabLabel = (id: Tab) => NAV_TABS.find((t) => t.id === id)!.label;
 
 function resetZoneStore() {
   useZoneOverlayStore.setState({
@@ -102,7 +105,7 @@ function resetZoneStore() {
 }
 
 function navigateToMapOverlays() {
-  fireEvent.click(screen.getByText("DISPLAY & OVERLAYS"));
+  fireEvent.click(screen.getByText(tabLabel("display-overlays")));
 }
 
 beforeEach(() => {

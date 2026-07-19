@@ -66,6 +66,9 @@ vi.mock("idb-keyval", () => ({
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { formatKeyCode, formatGamepadButton } from "@/lib/keyLabel";
+import { NAV_TABS } from "@/pages/settings/constants";
+import type { Tab } from "@/pages/settings/constants";
+const tabLabel = (id: Tab) => NAV_TABS.find((t) => t.id === id)!.label;
 
 beforeEach(() => {
   try { localStorage.clear(); } catch { /* ignore */ }
@@ -78,7 +81,7 @@ beforeEach(() => {
 function openShortcutsSection() {
   render(<Settings />);
   // Keyboard shortcuts now live in the NAVIGATION section (sidebar tab).
-  fireEvent.click(screen.getByText("NAVIGATION"));
+  fireEvent.click(screen.getByText(tabLabel("navigation")));
 }
 
 describe("Settings — crosshair menu key capture", () => {

@@ -77,6 +77,9 @@ vi.mock("idb-keyval", () => ({
 
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
+import { NAV_TABS } from "@/pages/settings/constants";
+import type { Tab } from "@/pages/settings/constants";
+const tabLabel = (id: Tab) => NAV_TABS.find((t) => t.id === id)!.label;
 
 beforeEach(() => {
   try { localStorage.clear(); } catch { /* ignore */ }
@@ -88,7 +91,7 @@ describe("SectionSaveButton (signed-out)", () => {
   it("clicking SAVE on a dirty section shows ✓ SAVED feedback without issuing a PUT", async () => {
     render(<Settings />);
     // Switch to the HUD tab.
-    fireEvent.click(screen.getByText("DISPLAY & OVERLAYS"));
+    fireEvent.click(screen.getByText(tabLabel("display-overlays")));
 
     const saveBtn = await screen.findByTestId("save-section-hud-btn");
     expect(saveBtn.getAttribute("data-dirty")).toBe("false");

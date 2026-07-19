@@ -62,6 +62,9 @@ vi.mock("idb-keyval", () => ({
 
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
+import { NAV_TABS } from "@/pages/settings/constants";
+import type { Tab } from "@/pages/settings/constants";
+const tabLabel = (id: Tab) => NAV_TABS.find((t) => t.id === id)!.label;
 
 beforeEach(() => {
   try { localStorage.clear(); } catch { /* ignore */ }
@@ -71,7 +74,7 @@ beforeEach(() => {
 describe("Settings → UNITS section", () => {
   it("defaults to metric and switches the persisted store when imperial is picked", () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("GENERAL"));
+    fireEvent.click(screen.getByText(tabLabel("general")));
 
     expect(useSettingsStore.getState().units).toBe("metric");
 
@@ -92,7 +95,7 @@ describe("Settings → UNITS section", () => {
 
   it("temperature-unit override flips only temperatureUnit (not depthUnit or units)", () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("GENERAL"));
+    fireEvent.click(screen.getByText(tabLabel("general")));
 
     // Default: auto. Units row is first, Depth Unit second, Temperature third.
     expect(useSettingsStore.getState().temperatureUnit).toBe("auto");

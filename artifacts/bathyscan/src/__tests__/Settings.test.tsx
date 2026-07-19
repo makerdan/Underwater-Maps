@@ -76,6 +76,9 @@ vi.mock("@/hooks/use-toast", () => ({
 // ---- Imports under test ----
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
+import { NAV_TABS } from "@/pages/settings/constants";
+import type { Tab } from "@/pages/settings/constants";
+const tabLabel = (id: Tab) => NAV_TABS.find((t) => t.id === id)!.label;
 
 const mockCachesDelete = vi.fn(() => Promise.resolve(true));
 const mockCachesKeys = vi.fn(() => Promise.resolve(["terrain-v1", "tiles-v1"]));
@@ -112,16 +115,7 @@ beforeEach(() => {
 describe("Settings page", () => {
   it("renders all section tabs in the sidebar", () => {
     render(<Settings />);
-    const expected = [
-      "GENERAL",
-      "VISUALS & PERF",
-      "NAVIGATION",
-      "DISPLAY & OVERLAYS",
-      "MAP LAYERS",
-      "DATA & STORAGE",
-      "ACCESSIBILITY",
-      "ACCOUNT & PRIVACY",
-    ];
+    const expected = NAV_TABS.map((t) => t.label);
     for (const label of expected) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
@@ -161,7 +155,7 @@ describe("Settings page", () => {
 
   it("HUD section exposes the Show UI tooltips toggle (default ON)", () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("DISPLAY & OVERLAYS"));
+    fireEvent.click(screen.getByText(tabLabel("display-overlays")));
     // Toggle lives inside the HUD AdvancedDisclosure (collapsed by default).
     const disclosure = screen.getByTestId("hud-advanced");
     fireEvent.click(within(disclosure).getByRole("button"));
@@ -182,7 +176,7 @@ describe("Settings page", () => {
 
   it("exposes mouse / touchpad / pinch zoom sensitivity sliders defaulting to 1×", () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("NAVIGATION"));
+    fireEvent.click(screen.getByText(tabLabel("navigation")));
     expect(screen.getByText("Mouse Wheel Zoom Sensitivity")).toBeInTheDocument();
     expect(screen.getByText("Touchpad Zoom Sensitivity")).toBeInTheDocument();
     expect(screen.getByText("Mobile Pinch Zoom Sensitivity")).toBeInTheDocument();
@@ -208,7 +202,7 @@ describe("Settings page", () => {
 
   it("Accessibility tab: Bright Daylight toggle is visible and toggleable", () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("ACCESSIBILITY"));
+    fireEvent.click(screen.getByText(tabLabel("accessibility")));
 
     const label = screen.getByText("Bright Daylight");
     expect(label).toBeInTheDocument();
@@ -234,7 +228,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: clear-upscale-cache-btn is rendered", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("DATA & STORAGE"));
+    fireEvent.click(screen.getByText(tabLabel("data-storage")));
     await waitFor(() =>
       expect(screen.getByTestId("clear-upscale-cache-btn")).toBeInTheDocument(),
     );
@@ -245,7 +239,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: clicking the button calls clearUpscaleCache", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("DATA & STORAGE"));
+    fireEvent.click(screen.getByText(tabLabel("data-storage")));
     const btn = await screen.findByTestId("clear-upscale-cache-btn");
     fireEvent.click(btn);
     await waitFor(() => expect(mockClearUpscaleCache).toHaveBeenCalledOnce());
@@ -253,7 +247,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: confirmation message appears after clearing", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("DATA & STORAGE"));
+    fireEvent.click(screen.getByText(tabLabel("data-storage")));
     const btn = await screen.findByTestId("clear-upscale-cache-btn");
     fireEvent.click(btn);
     await waitFor(() =>
@@ -265,7 +259,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: toast is fired with the correct title after clearing", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("DATA & STORAGE"));
+    fireEvent.click(screen.getByText(tabLabel("data-storage")));
     const btn = await screen.findByTestId("clear-upscale-cache-btn");
     fireEvent.click(btn);
     await waitFor(() =>
@@ -277,7 +271,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: clear-all-cache-btn is rendered", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("DATA & STORAGE"));
+    fireEvent.click(screen.getByText(tabLabel("data-storage")));
     await waitFor(() =>
       expect(screen.getByTestId("clear-all-cache-btn")).toBeInTheDocument(),
     );
@@ -288,7 +282,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: clicking clear-all-cache-btn calls Cache API and idb-keyval clear", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("DATA & STORAGE"));
+    fireEvent.click(screen.getByText(tabLabel("data-storage")));
     const btn = await screen.findByTestId("clear-all-cache-btn");
     fireEvent.click(btn);
     await waitFor(() => expect(mockCachesKeys).toHaveBeenCalled());
@@ -303,7 +297,7 @@ describe("Settings page", () => {
 
   it("OFFLINE CACHE section: confirmation message appears after clearing all cached data", async () => {
     render(<Settings />);
-    fireEvent.click(screen.getByText("DATA & STORAGE"));
+    fireEvent.click(screen.getByText(tabLabel("data-storage")));
     const btn = await screen.findByTestId("clear-all-cache-btn");
     fireEvent.click(btn);
     await waitFor(() =>
@@ -311,5 +305,57 @@ describe("Settings page", () => {
         screen.getByText("✓ All cached data cleared"),
       ).toBeInTheDocument(),
     );
+  });
+});
+
+/**
+ * Sentinel — fails loudly when NAV_TABS changes without updating the tests.
+ *
+ * These tests derive their expectations directly from the constants file so
+ * that any rename, addition, or removal of a tab is caught in one obvious
+ * place rather than silently breaking assertions across many files.
+ */
+describe("Settings nav sentinel — derived from NAV_TABS", () => {
+  it("NAV_TABS has no duplicate IDs or labels", () => {
+    const ids = NAV_TABS.map((t) => t.id);
+    const labels = NAV_TABS.map((t) => t.label);
+    expect(
+      new Set(ids).size,
+      `Duplicate tab IDs in NAV_TABS: ${ids.join(", ")}`,
+    ).toBe(ids.length);
+    expect(
+      new Set(labels).size,
+      `Duplicate tab labels in NAV_TABS: ${labels.join(", ")}`,
+    ).toBe(labels.length);
+  });
+
+  it("NAV_TABS has no empty IDs or labels", () => {
+    for (const { id, label } of NAV_TABS) {
+      expect(id.trim(), `Empty id for tab with label "${label}"`).not.toBe("");
+      expect(label.trim(), `Empty label for tab id="${id}"`).not.toBe("");
+    }
+  });
+
+  it("every NAV_TABS label renders in the Settings sidebar (no extra hardcoded list)", () => {
+    render(<Settings />);
+    for (const { id, label } of NAV_TABS) {
+      expect(
+        screen.getByText(label),
+        `Tab id="${id}" label="${label}" is missing from the rendered sidebar`,
+      ).toBeInTheDocument();
+    }
+  });
+
+  it("tabLabel() helper resolves every NAV_TABS id without throwing", () => {
+    for (const { id } of NAV_TABS) {
+      expect(
+        () => tabLabel(id),
+        `tabLabel("${id}") threw — id missing from NAV_TABS`,
+      ).not.toThrow();
+      expect(
+        tabLabel(id),
+        `tabLabel("${id}") returned an empty string`,
+      ).toBeTruthy();
+    }
   });
 });
