@@ -212,6 +212,8 @@ export const OverlaysToolsPanel: React.FC = () => {
 
   const overviewOpen = useUiStore((s) => s.overviewOpen);
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
+  const markersPanelOpen = useUiStore((s) => s.markersPanelOpen);
+  const setMarkersPanelOpen = useUiStore((s) => s.setMarkersPanelOpen);
   const findDataPanelOpen = useUiStore((s) => s.findDataPanelOpen);
   const setFindDataPanelOpen = useUiStore((s) => s.setFindDataPanelOpen);
   const intertidalHotspotsEnabled = useUiStore((s) => s.intertidalHotspotsEnabled);
@@ -485,6 +487,18 @@ export const OverlaysToolsPanel: React.FC = () => {
             activeBorder="rgba(0,229,255,0.6)"
             activeColor="#00e5ff"
             activeGlow="0 0 6px rgba(0,229,255,0.5)"
+          />
+
+          <ToggleButton
+            testId="hud-toggle-markers"
+            active={markersPanelOpen}
+            onClick={() => setMarkersPanelOpen(!markersPanelOpen)}
+            label="📍 MARKERS"
+            tooltip={markersPanelOpen ? "Close the Markers panel" : "Open Markers panel — browse and import GPS markers"}
+            activeBg="rgba(0,229,255,0.12)"
+            activeBorder="rgba(0,229,255,0.5)"
+            activeColor="#00e5ff"
+            activeGlow="0 0 6px rgba(0,229,255,0.4)"
           />
 
           <ToggleButton

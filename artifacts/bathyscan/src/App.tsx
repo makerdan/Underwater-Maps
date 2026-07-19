@@ -51,6 +51,7 @@ import { DepthProfilePanel } from "@/components/DepthProfilePanel";
 import { MarkerDetailCard } from "@/components/MarkerDetailCard";
 import { CatchJournalPanel } from "@/components/CatchJournalPanel";
 import { OverviewMap } from "@/components/OverviewMap";
+import { MarkersPanel } from "@/components/MarkersPanel";
 import { EfhDetailPanel } from "@/components/EfhDetailPanel";
 import { SubstrateDetailPanel } from "@/components/SubstrateDetailPanel";
 import { IntertidalHotspotCard } from "@/components/IntertidalHotspotCard";
@@ -303,6 +304,7 @@ function Main() {
   const markerFormOpen = useUiStore((s) => s.markerFormOpen);
   const markerEditOpen = useMarkerEditStore((s) => s.marker !== null);
   const overviewOpen = useUiStore((s) => s.overviewOpen);
+  const markersPanelOpen = useUiStore((s) => s.markersPanelOpen);
   const whatsHereOpen = useUiStore((s) => s.whatsHereOpen);
 
   const findDataPanelOpen = useUiStore((s) => s.findDataPanelOpen);
@@ -1674,6 +1676,9 @@ function Main() {
 
         {/* Full-screen overview map — z-40, rendered above all HUD elements */}
         {overviewOpen && <OverviewMap />}
+
+        {/* Markers panel — fixed right-side overlay */}
+        {markersPanelOpen && <MarkersPanel />}
 
         {/* EFH species detail panel — z-60, lives above both the 3D scene
             and the overview map so clicking an EFH zone in either view

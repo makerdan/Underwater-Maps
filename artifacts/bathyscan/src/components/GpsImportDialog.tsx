@@ -24,8 +24,9 @@ import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  postMarkers as postMarkersRaw,
-  postTrollingPresets as postTrollingPresetsRaw,
+  usePostMarkers,
+  usePostTrollingPresets,
+  useDeleteMarkersId,
   getGetMarkersQueryKey,
   getGetTrollingPresetsQueryKey,
   MarkerInputType,
@@ -62,7 +63,8 @@ const SPEED_MIN = 0;
 const SPEED_MAX = 10;
 
 interface Props {
-  terrain: TerrainData;
+  /** Active terrain dataset. When absent the dialog imports without bounds-filtering and no datasetId is attached to saved markers. */
+  terrain?: TerrainData;
   onClose: () => void;
 }
 
@@ -113,11 +115,14 @@ function clampNumber(n: number, lo: number, hi: number): number {
 export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const postMarkers = usePostMarkers();
+  const postTrollingPresets = usePostTrollingPresets();
+  const deleteMarkersId = useDeleteMarkersId();
 
   const settingsWaterType = useSettingsStore((s) => s.waterType);
   const defaultMarkerType = useSettingsStore((s) => s.defaultMarkerType);
   const waterType =
-    (terrain.waterType as "saltwater" | "freshwater" | undefined) ?? settingsWaterType;
+    (terrain?.waterType as "saltwater" | "freshwater" | undefined) ?? settingsWaterType;
   const markerTypes = waterType === "freshwater" ? FRESHWATER_MARKER_TYPES : SALTWATER_MARKER_TYPES;
 
   const [phase, setPhase] = useState<Phase>({ kind: "pick" });
@@ -138,6 +143,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importingRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const cancelRequestedRef = useRef(false);
+  const savedMarkerIdsRef = useRef<string[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef);
 
@@ -153,14 +160,17 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     };
   }, [isImporting]);
 
-  const bounds = useMemo<Bounds>(
-    () => ({
-      minLon: terrain.minLon,
-      minLat: terrain.minLat,
-      maxLon: terrain.maxLon,
-      maxLat: terrain.maxLat,
-    }),
-    [terrain.minLon, terrain.minLat, terrain.maxLon, terrain.maxLat],
+  const bounds = useMemo<Bounds | null>(
+    () =>
+      terrain
+        ? {
+            minLon: terrain.minLon,
+            minLat: terrain.minLat,
+            maxLon: terrain.maxLon,
+            maxLat: terrain.maxLat,
+          }
+        : null,
+    [terrain],
   );
 
   const onFileChosen = useCallback(
@@ -169,20 +179,37 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       setImportProgress(null);
       try {
         const { result, meta } = await parseGpsFile(file);
-        const part = partitionByBounds(result, bounds);
-        setPhase({
-          kind: "preview",
-          fileName: file.name,
-          parsed: part.inside,
-          original: result,
-          outsideWp: part.outsideWaypoints,
-          outsideRoutes: part.outsideRoutes,
-          outsideRoutePoints: part.outsideRoutePoints,
-          meta,
-        });
-        // Default checkboxes to whichever the file actually contains.
-        setImportWaypoints(part.inside.waypoints.length > 0);
-        setImportRoutes(part.inside.routes.length > 0);
+        if (bounds) {
+          // Dataset mode: filter points to the dataset bounding box.
+          const part = partitionByBounds(result, bounds);
+          setPhase({
+            kind: "preview",
+            fileName: file.name,
+            parsed: part.inside,
+            original: result,
+            outsideWp: part.outsideWaypoints,
+            outsideRoutes: part.outsideRoutes,
+            outsideRoutePoints: part.outsideRoutePoints,
+            meta,
+          });
+          // Default checkboxes to whichever the file actually contains.
+          setImportWaypoints(part.inside.waypoints.length > 0);
+          setImportRoutes(part.inside.routes.length > 0);
+        } else {
+          // Dataset-free mode: accept all points, no bounds filtering.
+          setPhase({
+            kind: "preview",
+            fileName: file.name,
+            parsed: result,
+            original: result,
+            outsideWp: 0,
+            outsideRoutes: 0,
+            outsideRoutePoints: 0,
+            meta,
+          });
+          setImportWaypoints(result.waypoints.length > 0);
+          setImportRoutes(result.routes.length > 0);
+        }
         // Reset heading/speed to dialog defaults on each new file.
         setHeadingDeg(DEFAULT_HEADING_DEG);
         setSpeedKnots(DEFAULT_SPEED_KNOTS);
@@ -255,16 +282,27 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     [updateParsed],
   );
 
-  const cancelImport = useCallback(() => {
-    // Immediately unlock the close button so the user isn't stuck.
+  const cancelImport = useCallback(async () => {
+    cancelRequestedRef.current = true;
     setIsCancelling(true);
-    abortControllerRef.current?.abort();
-  }, []);
+    const toDelete = [...savedMarkerIdsRef.current];
+    savedMarkerIdsRef.current = [];
+    for (const id of toDelete) {
+      try {
+        await deleteMarkersId.mutateAsync({ id });
+      } catch {
+        // best-effort cleanup; ignore individual failures
+      }
+    }
+    onClose();
+  }, [deleteMarkersId, onClose]);
 
   const doImport = useCallback(async () => {
     if (phase.kind !== "preview") return;
     if (importingRef.current) return;
     importingRef.current = true;
+    cancelRequestedRef.current = false;
+    savedMarkerIdsRef.current = [];
     setIsImporting(true);
     setIsCancelling(false);
     const { parsed } = phase;
@@ -292,6 +330,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     let markersFail = 0;
     let importCancelled = false;
     for (let wi = 0; wi < wpToImport.length; wi++) {
+      if (cancelRequestedRef.current) break;
       const w = wpToImport[wi]!;
       setImportProgress({ current: wi, total: totalItems, itemKind: "marker" });
       const label = sanitize(clamp(w.name || "Imported point", MARKER_LABEL_MAX)) || "Imported point";
@@ -299,9 +338,9 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       // Depth: prefer parsed depth; fall back to 0 (surface) when unknown.
       const depth = Number.isFinite(w.depth) ? (w.depth as number) : 0;
       try {
-        await postMarkersRaw(
-          {
-            datasetId: terrain.datasetId,
+        const created = await postMarkers.mutateAsync({
+          data: {
+            ...(terrain ? { datasetId: terrain.datasetId } : {}),
             lon: w.lon,
             lat: w.lat,
             depth,
@@ -309,8 +348,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             label,
             notes: notes && notes.length > 0 ? notes : undefined,
           },
-          { signal: controller.signal },
-        );
+        });
+        savedMarkerIdsRef.current.push(created.id);
         markersOk++;
       } catch {
         if (controller.signal.aborted) {
@@ -321,58 +360,64 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       }
     }
 
+    if (cancelRequestedRef.current) {
+      // cancelImport handles cleanup — just return.
+      return;
+    }
+
     let presetsOk = 0;
     let presetsFail = 0;
     let downsampled = 0;
     const safeHeading = clampNumber(headingDeg, HEADING_MIN, HEADING_MAX);
     const safeSpeed = clampNumber(speedKnots, SPEED_MIN, SPEED_MAX);
-    if (!importCancelled) {
-      for (let ri = 0; ri < routesToImport.length; ri++) {
-        const r = routesToImport[ri]!;
-        setImportProgress({
-          current: wpToImport.length + ri,
-          total: totalItems,
-          itemKind: "route",
-        });
-        // `routesToImport` originates from partitionByBounds which trims
-        // out-of-bounds points and drops routes with <2 surviving points; the
-        // user can also edit waypoints out in the dialog. We re-assert in-bounds
-        // here as defence in depth: no off-map coordinate may reach the API.
-        let pts = r.points.filter((p) => isInBounds(p.lon, p.lat, bounds));
-        if (pts.length < 2) {
-          presetsFail++;
-          continue;
-        }
-        if (pts.length > TROLLING_PRESET_WAYPOINTS_MAX) {
-          pts = downsample(pts, TROLLING_PRESET_WAYPOINTS_MAX);
-          downsampled++;
-        }
-        try {
-          await postTrollingPresetsRaw(
-            {
-              name: sanitize(clamp(r.name || "Imported route", TROLLING_NAME_MAX)) || "Imported route",
-              headingDeg: safeHeading,
-              speedKnots: safeSpeed,
-              waypoints: pts.map((p) => ({ lon: p.lon, lat: p.lat })),
-            },
-            { signal: controller.signal },
-          );
-          presetsOk++;
-        } catch {
-          if (controller.signal.aborted) {
-            importCancelled = true;
-            break;
-          }
-          presetsFail++;
-        }
+    for (let ri = 0; ri < routesToImport.length; ri++) {
+      if (cancelRequestedRef.current) break;
+      const r = routesToImport[ri]!;
+      setImportProgress({
+        current: wpToImport.length + ri,
+        total: totalItems,
+        itemKind: "route",
+      });
+      // When a dataset is active, re-assert in-bounds as defence in depth.
+      // When no dataset (dataset-free import), keep all route points.
+      let pts = bounds ? r.points.filter((p) => isInBounds(p.lon, p.lat, bounds)) : r.points;
+      if (pts.length < 2) {
+        presetsFail++;
+        continue;
       }
+      if (pts.length > TROLLING_PRESET_WAYPOINTS_MAX) {
+        pts = downsample(pts, TROLLING_PRESET_WAYPOINTS_MAX);
+        downsampled++;
+      }
+      try {
+        await postTrollingPresets.mutateAsync({
+          data: {
+            name: sanitize(clamp(r.name || "Imported route", TROLLING_NAME_MAX)) || "Imported route",
+            headingDeg: safeHeading,
+            speedKnots: safeSpeed,
+            waypoints: pts.map((p) => ({ lon: p.lon, lat: p.lat })),
+          },
+        });
+        presetsOk++;
+      } catch {
+        presetsFail++;
+      }
+    }
+
+    if (cancelRequestedRef.current) {
+      return;
     }
 
     // Refresh affected views.
     if (markersOk > 0) {
-      void qc.invalidateQueries({
-        queryKey: getGetMarkersQueryKey({ datasetId: terrain.datasetId }),
-      });
+      if (terrain) {
+        void qc.invalidateQueries({
+          queryKey: getGetMarkersQueryKey({ datasetId: terrain.datasetId }),
+        });
+      } else {
+        // Dataset-free: invalidate unassigned markers query.
+        void qc.invalidateQueries({ queryKey: getGetMarkersQueryKey({}) });
+      }
     }
     if (presetsOk > 0) {
       void qc.invalidateQueries({ queryKey: getGetTrollingPresetsQueryKey() });
@@ -442,7 +487,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     headingDeg,
     speedKnots,
     qc,
-    terrain.datasetId,
+    terrain,
     markerType,
     bounds,
     toast,
@@ -534,8 +579,10 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           {phase.kind === "pick" && (
             <>
               <p style={{ margin: "0 0 10px", color: "#e2e8f0", lineHeight: 1.5 }}>
-                Pick a <strong style={{ color: "#cbd5e1" }}>.gpx, .kml, .kmz, .csv, .xlsx, or .xls</strong> file. Points outside this
-                dataset's bounding box will be skipped automatically.
+                Pick a <strong style={{ color: "#cbd5e1" }}>.gpx, .kml, .kmz, .csv, .xlsx, or .xls</strong> file.{" "}
+                {bounds
+                  ? "Points outside this dataset's bounding box will be skipped automatically."
+                  : "All points will be saved as unassigned markers (no active dataset)."}
               </p>
               <input
                 ref={fileInputRef}
@@ -588,7 +635,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           {phase.kind === "preview" && (
             <PreviewPanel
               phase={phase}
-              bounds={bounds}
+              bounds={bounds ?? undefined}
               importWaypoints={importWaypoints}
               setImportWaypoints={setImportWaypoints}
               importRoutes={importRoutes}
@@ -611,7 +658,11 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
 
           {phase.kind === "importing" && (
             <div style={{ padding: "20px 0", textAlign: "center", color: "#e2e8f0" }}>
-              {importProgress && importProgress.total > 0 ? (
+              {isCancelling ? (
+                <div style={{ color: "#fbbf24", fontSize: 15.5 }}>
+                  Cancelling — cleaning up saved markers…
+                </div>
+              ) : importProgress && importProgress.total > 0 ? (
                 <>
                   <div
                     data-testid="gps-import-progress-text"
@@ -651,6 +702,18 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                       }}
                     />
                   </div>
+                  <button
+                    onClick={() => void cancelImport()}
+                    disabled={isCancelling}
+                    data-testid="gps-import-cancel-btn"
+                    style={{
+                      ...btnStyle("ghost"),
+                      marginTop: 16,
+                      opacity: isCancelling ? 0.5 : 1,
+                    }}
+                  >
+                    Cancel import
+                  </button>
                 </>
               ) : (
                 <div style={{ marginBottom: 16 }}>
@@ -683,7 +746,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
 
 interface PreviewPanelProps {
   phase: Extract<Phase, { kind: "preview" }>;
-  bounds: Bounds;
+  /** When undefined, the dialog is in dataset-free mode — no bounds filtering. */
+  bounds?: Bounds;
   importWaypoints: boolean;
   setImportWaypoints: (v: boolean) => void;
   importRoutes: boolean;
@@ -729,6 +793,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
   const insideRouteCount = parsed.routes.length;
   const totalInside = countPoints(parsed);
   const shortRoutes = parsed.routes.filter((r) => r.points.length < 2).length;
+  const hasBounds = !!bounds;
 
   const importDisabled =
     (!importWaypoints || insideWpCount === 0) &&
@@ -740,7 +805,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
         <strong style={{ color: "#cbd5e1" }}>{phase.fileName}</strong>
       </div>
 
-      <PreviewMap original={original} bounds={bounds} />
+      {bounds && <PreviewMap original={original} bounds={bounds} />}
 
       <div
         data-testid="gps-import-summary"
@@ -757,7 +822,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
         }}
       >
         <div>
-          <div style={{ color: "#cbd5e1" }}>Waypoints (in bounds)</div>
+          <div style={{ color: "#cbd5e1" }}>{hasBounds ? "Waypoints (in bounds)" : "Waypoints"}</div>
           <div style={{ color: "#cbd5e1", fontSize: 19.5 }} data-testid="gps-import-waypoint-count">
             {insideWpCount}
           </div>

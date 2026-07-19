@@ -1714,8 +1714,8 @@ export interface MarkerConditions {
 export interface Marker {
   /** UUID primary key */
   id: string;
-  /** Dataset this marker belongs to */
-  datasetId: string;
+  /** Dataset this marker belongs to; null for unassigned (dataset-free) markers */
+  datasetId: string | null;
   lon: number;
   lat: number;
   /** Depth in metres (positive = below surface) */
@@ -2694,17 +2694,26 @@ export const MarkerInputType = {
 } as const;
 
 export interface MarkerInput {
-  datasetId: string;
+  /** Dataset this marker belongs to. Omit (or set to null) for dataset-free (unassigned) markers. */
+  datasetId?: string | null;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
   lon: number;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
   lat: number;
   depth: number;
   type?: MarkerInputType;
   /**
      * @minLength 1
-     * @maxLength 60
+     * @maxLength 200
      */
   label: string;
-  /** @maxLength 280 */
+  /** @maxLength 2000 */
   notes?: string | null;
   /** When true, the server assigns the user's next sequential catch number and overrides the label with "Catch N". Used by the one-tap GPS quick-drop.
    */
@@ -2846,9 +2855,33 @@ export type PostDatasetsUploadBody = {
 
 export type GetMarkersParams = {
 /**
- * Dataset slug to filter markers by
+ * Dataset slug to filter markers by. When omitted, returns unassigned markers (datasetId IS NULL) for the authenticated user within the supplied bounds.
  */
-datasetId: string;
+datasetId?: string;
+/**
+ * South bound for bounds query (required when datasetId is absent)
+ * @minimum -90
+ * @maximum 90
+ */
+minLat?: number;
+/**
+ * West bound for bounds query (required when datasetId is absent)
+ * @minimum -180
+ * @maximum 180
+ */
+minLon?: number;
+/**
+ * North bound for bounds query (required when datasetId is absent)
+ * @minimum -90
+ * @maximum 90
+ */
+maxLat?: number;
+/**
+ * East bound for bounds query (required when datasetId is absent)
+ * @minimum -180
+ * @maximum 180
+ */
+maxLon?: number;
 };
 
 export type DeleteMarkersMine200 = {

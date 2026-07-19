@@ -1793,7 +1793,7 @@ export const useDeleteUserFoldersId = <TError = ErrorType<ApiError>,
       return useMutation(getDeleteUserFoldersIdMutationOptions(options));
     }
 
-export const getGetMarkersUrl = (params: GetMarkersParams,) => {
+export const getGetMarkersUrl = (params?: GetMarkersParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1809,9 +1809,9 @@ export const getGetMarkersUrl = (params: GetMarkersParams,) => {
 }
 
 /**
- * @summary List persisted markers for a dataset
+ * @summary List persisted markers for a dataset or within bounds
  */
-export const getMarkers = async (params: GetMarkersParams, options?: RequestInit): Promise<Marker[]> => {
+export const getMarkers = async (params?: GetMarkersParams, options?: RequestInit): Promise<Marker[]> => {
 
   return customFetch<Marker[]>(getGetMarkersUrl(params),
   {
@@ -1833,7 +1833,7 @@ export const getGetMarkersQueryKey = (params?: GetMarkersParams,) => {
     }
 
 
-export const getGetMarkersQueryOptions = <TData = Awaited<ReturnType<typeof getMarkers>>, TError = ErrorType<unknown>>(params: GetMarkersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarkers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetMarkersQueryOptions = <TData = Awaited<ReturnType<typeof getMarkers>>, TError = ErrorType<unknown>>(params?: GetMarkersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarkers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1856,11 +1856,11 @@ export type GetMarkersQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List persisted markers for a dataset
+ * @summary List persisted markers for a dataset or within bounds
  */
 
 export function useGetMarkers<TData = Awaited<ReturnType<typeof getMarkers>>, TError = ErrorType<unknown>>(
- params: GetMarkersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarkers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetMarkersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarkers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 

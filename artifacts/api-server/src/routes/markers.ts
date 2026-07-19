@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, isNull, gte, lte } from "drizzle-orm";
 import { db, markersTable, catchCountersTable, catchEntriesTable } from "@workspace/db";
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
@@ -8,16 +8,51 @@ import { validateBody, validateQuery, validateParams } from "../middlewares/vali
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
 
+const LABEL_MAX = 200;
+const NOTES_MAX = 2000;
 
 const router = Router();
 
-router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /api/markers", { details: "datasetId query parameter is required" }), asyncHandler(async (req, res): Promise<void> => {
-  const { datasetId } = res.locals.parsedQuery;
+router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /api/markers"), asyncHandler(async (req, res): Promise<void> => {
+  const { datasetId, minLat, minLon, maxLat, maxLon } = res.locals.parsedQuery;
   const userId = (req as AuthenticatedRequest).clerkUserId;
+
+  if (datasetId !== undefined && datasetId !== "") {
+    // Standard mode: return markers for the given dataset owned by this user.
+    const rows = await db
+      .select()
+      .from(markersTable)
+      .where(and(eq(markersTable.datasetId, datasetId), eq(markersTable.userId, userId)))
+      .orderBy(markersTable.createdAt);
+    res.json(rows);
+    return;
+  }
+
+  // Bounds mode: return unassigned markers (datasetId IS NULL) within the given bbox.
+  if (
+    minLat === undefined || minLon === undefined ||
+    maxLat === undefined || maxLon === undefined
+  ) {
+    res.status(400).json({
+      error: "invalid_request",
+      details: "Provide either datasetId or all four bounds params (minLat, minLon, maxLat, maxLon).",
+    });
+    return;
+  }
+
   const rows = await db
     .select()
     .from(markersTable)
-    .where(and(eq(markersTable.datasetId, datasetId), eq(markersTable.userId, userId)))
+    .where(
+      and(
+        eq(markersTable.userId, userId),
+        isNull(markersTable.datasetId),
+        gte(markersTable.lat, minLat),
+        lte(markersTable.lat, maxLat),
+        gte(markersTable.lon, minLon),
+        lte(markersTable.lon, maxLon),
+      ),
+    )
     .orderBy(markersTable.createdAt);
 
   res.json(rows);
@@ -27,7 +62,31 @@ router.post("/markers", requireAuth, validateBody(PostMarkersBody, "POST /api/ma
   const { datasetId, lon, lat, depth, type = "custom", label, notes, quickCatch, conditions } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
-  let finalLabel = label;
+  // Semantic validation — return 422 Unprocessable Entity for out-of-range values.
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+    res.status(422).json({ error: "validation_error", field: "lat", message: "lat must be a finite number between -90 and 90" });
+    return;
+  }
+  if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
+    res.status(422).json({ error: "validation_error", field: "lon", message: "lon must be a finite number between -180 and 180" });
+    return;
+  }
+  const trimmedLabel = (label ?? "").trim();
+  if (!trimmedLabel || trimmedLabel.length === 0) {
+    res.status(422).json({ error: "validation_error", field: "label", message: "label must not be empty after trimming" });
+    return;
+  }
+  if (trimmedLabel.length > LABEL_MAX) {
+    res.status(422).json({ error: "validation_error", field: "label", message: `label must be at most ${LABEL_MAX} characters` });
+    return;
+  }
+  const trimmedNotes = notes ? notes.trim() : null;
+  if (trimmedNotes && trimmedNotes.length > NOTES_MAX) {
+    res.status(422).json({ error: "validation_error", field: "notes", message: `notes must be at most ${NOTES_MAX} characters` });
+    return;
+  }
+
+  let finalLabel = trimmedLabel;
   let catchSeq: number | null = null;
 
   if (quickCatch) {
@@ -55,13 +114,13 @@ router.post("/markers", requireAuth, validateBody(PostMarkersBody, "POST /api/ma
   const [created] = await db
     .insert(markersTable)
     .values({
-      datasetId,
+      datasetId: datasetId ?? null,
       lon,
       lat,
       depth,
       type,
       label: finalLabel,
-      notes: notes ?? null,
+      notes: trimmedNotes ?? null,
       userId,
       catchSeq,
       conditions: conditionsJson,

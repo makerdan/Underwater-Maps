@@ -254,7 +254,7 @@ export const MarkerForm: React.FC = () => {
         {
           onSuccess: () => {
             void qc.invalidateQueries({
-              queryKey: getGetMarkersQueryKey({ datasetId: editMarker.datasetId }),
+              queryKey: getGetMarkersQueryKey({ datasetId: editMarker.datasetId ?? undefined }),
             });
             closeEdit();
           },
@@ -267,7 +267,7 @@ export const MarkerForm: React.FC = () => {
                 variant: "destructive",
               });
               void qc.invalidateQueries({
-                queryKey: getGetMarkersQueryKey({ datasetId: editMarker.datasetId }),
+                queryKey: getGetMarkersQueryKey({ datasetId: editMarker.datasetId ?? undefined }),
               });
               closeEdit();
             }

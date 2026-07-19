@@ -7,7 +7,8 @@ export type MarkerType = (typeof MARKER_TYPES)[number];
 
 export const markersTable = pgTable("markers", {
   id: uuid("id").primaryKey().defaultRandom(),
-  datasetId: text("dataset_id").notNull(),
+  /** Nullable: null when marker was saved without an active dataset (dataset-free import). */
+  datasetId: text("dataset_id"),
   lon: real("lon").notNull(),
   lat: real("lat").notNull(),
   depth: real("depth").notNull(),

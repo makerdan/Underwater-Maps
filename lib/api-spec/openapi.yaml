@@ -763,14 +763,46 @@ paths:
     get:
       operationId: getMarkers
       tags: [markers]
-      summary: List persisted markers for a dataset
+      summary: List persisted markers for a dataset or within bounds
       parameters:
         - in: query
           name: datasetId
-          required: true
+          required: false
           schema:
             type: string
-          description: Dataset slug to filter markers by
+          description: Dataset slug to filter markers by. When omitted, returns unassigned markers (datasetId IS NULL) for the authenticated user within the supplied bounds.
+        - in: query
+          name: minLat
+          required: false
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+          description: South bound for bounds query (required when datasetId is absent)
+        - in: query
+          name: minLon
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+          description: West bound for bounds query (required when datasetId is absent)
+        - in: query
+          name: maxLat
+          required: false
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+          description: North bound for bounds query (required when datasetId is absent)
+        - in: query
+          name: maxLon
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+          description: East bound for bounds query (required when datasetId is absent)
       responses:
         "200":
           description: Marker list
@@ -6108,7 +6140,8 @@ components:
           description: UUID primary key
         datasetId:
           type: string
-          description: Dataset this marker belongs to
+          nullable: true
+          description: Dataset this marker belongs to; null for unassigned (dataset-free) markers
         lon:
           type: number
         lat:
@@ -7467,10 +7500,16 @@ components:
       properties:
         datasetId:
           type: string
+          nullable: true
+          description: Dataset this marker belongs to. Omit (or set to null) for dataset-free (unassigned) markers.
         lon:
           type: number
+          minimum: -180
+          maximum: 180
         lat:
           type: number
+          minimum: -90
+          maximum: 90
         depth:
           type: number
         type:
@@ -7480,11 +7519,11 @@ components:
         label:
           type: string
           minLength: 1
-          maxLength: 60
+          maxLength: 200
         notes:
           type: string
           nullable: true
-          maxLength: 280
+          maxLength: 2000
         quickCatch:
           type: boolean
           default: false
@@ -7498,7 +7537,6 @@ components:
             - $ref: "#/components/schemas/MarkerConditions"
           description: Optional frozen conditions snapshot captured at drop time
       required:
-        - datasetId
         - lon
         - lat
         - depth

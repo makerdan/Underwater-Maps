@@ -713,15 +713,33 @@ export const DeleteUserFoldersIdBody = zod.object({
 
 
 /**
- * @summary List persisted markers for a dataset
+ * @summary List persisted markers for a dataset or within bounds
  */
+export const getMarkersQueryMinLatMin = -90;
+export const getMarkersQueryMinLatMax = 90;
+
+export const getMarkersQueryMinLonMin = -180;
+export const getMarkersQueryMinLonMax = 180;
+
+export const getMarkersQueryMaxLatMin = -90;
+export const getMarkersQueryMaxLatMax = 90;
+
+export const getMarkersQueryMaxLonMin = -180;
+export const getMarkersQueryMaxLonMax = 180;
+
+
+
 export const GetMarkersQueryParams = zod.object({
-  "datasetId": zod.coerce.string().describe('Dataset slug to filter markers by')
+  "datasetId": zod.coerce.string().optional().describe('Dataset slug to filter markers by. When omitted, returns unassigned markers (datasetId IS NULL) for the authenticated user within the supplied bounds.'),
+  "minLat": zod.coerce.number().min(getMarkersQueryMinLatMin).max(getMarkersQueryMinLatMax).optional().describe('South bound for bounds query (required when datasetId is absent)'),
+  "minLon": zod.coerce.number().min(getMarkersQueryMinLonMin).max(getMarkersQueryMinLonMax).optional().describe('West bound for bounds query (required when datasetId is absent)'),
+  "maxLat": zod.coerce.number().min(getMarkersQueryMaxLatMin).max(getMarkersQueryMaxLatMax).optional().describe('North bound for bounds query (required when datasetId is absent)'),
+  "maxLon": zod.coerce.number().min(getMarkersQueryMaxLonMin).max(getMarkersQueryMaxLonMax).optional().describe('East bound for bounds query (required when datasetId is absent)')
 })
 
 export const GetMarkersResponseItem = zod.object({
   "id": zod.string().describe('UUID primary key'),
-  "datasetId": zod.string().describe('Dataset this marker belongs to'),
+  "datasetId": zod.string().nullable().describe('Dataset this marker belongs to; null for unassigned (dataset-free) markers'),
   "lon": zod.number(),
   "lat": zod.number(),
   "depth": zod.number().describe('Depth in metres (positive = below surface)'),
@@ -754,17 +772,23 @@ export const GetMarkersResponse = zod.array(GetMarkersResponseItem)
 /**
  * @summary Create a new marker
  */
-export const postMarkersBodyTypeDefault = `custom`;
-export const postMarkersBodyLabelMax = 60;
+export const postMarkersBodyLonMin = -180;
+export const postMarkersBodyLonMax = 180;
 
-export const postMarkersBodyNotesMax = 280;
+export const postMarkersBodyLatMin = -90;
+export const postMarkersBodyLatMax = 90;
+
+export const postMarkersBodyTypeDefault = `custom`;
+export const postMarkersBodyLabelMax = 200;
+
+export const postMarkersBodyNotesMax = 2000;
 
 export const postMarkersBodyQuickCatchDefault = false;
 
 export const PostMarkersBody = zod.object({
-  "datasetId": zod.string(),
-  "lon": zod.number(),
-  "lat": zod.number(),
+  "datasetId": zod.string().nullish().describe('Dataset this marker belongs to. Omit (or set to null) for dataset-free (unassigned) markers.'),
+  "lon": zod.number().min(postMarkersBodyLonMin).max(postMarkersBodyLonMax),
+  "lat": zod.number().min(postMarkersBodyLatMin).max(postMarkersBodyLatMax),
   "depth": zod.number(),
   "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish', 'salmon', 'tuna', 'halibut', 'shark', 'swordfish', 'rockfish', 'cod', 'mahi_mahi', 'grouper', 'snapper', 'crab', 'lobster', 'shrimp', 'krill', 'jellyfish', 'octopus', 'squid', 'sea_urchin', 'starfish', 'sea_turtle', 'school_herring', 'school_sardine', 'school_mackerel', 'school_tuna', 'school_anchovy', 'catfish', 'crappie', 'bluegill', 'sunfish', 'carp', 'yellow_perch', 'muskie', 'largemouth_bass', 'smallmouth_bass', 'channel_catfish', 'freshwater_shrimp', 'freshwater_crab', 'snapping_turtle', 'bullfrog', 'beaver_dam', 'lily_pad', 'cattail', 'reed_bed', 'submerged_grass', 'spring', 'school_perch', 'school_bluegill', 'school_bass', 'school_crappie', 'school_carp']).default(postMarkersBodyTypeDefault),
   "label": zod.string().min(1).max(postMarkersBodyLabelMax),
@@ -820,7 +844,7 @@ export const PatchMarkersIdBody = zod.object({
 
 export const PatchMarkersIdResponse = zod.object({
   "id": zod.string().describe('UUID primary key'),
-  "datasetId": zod.string().describe('Dataset this marker belongs to'),
+  "datasetId": zod.string().nullable().describe('Dataset this marker belongs to; null for unassigned (dataset-free) markers'),
   "lon": zod.number(),
   "lat": zod.number(),
   "depth": zod.number().describe('Depth in metres (positive = below surface)'),

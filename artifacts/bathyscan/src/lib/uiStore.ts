@@ -159,6 +159,9 @@ interface UiStore {
   setWhatsHerePinned: (pinned: boolean) => void;
   markerFormOpen: boolean;
   setMarkerFormOpen: (open: boolean) => void;
+  /** Controls visibility of the dedicated Markers sidebar panel. */
+  markersPanelOpen: boolean;
+  setMarkersPanelOpen: (open: boolean) => void;
   /**
    * Optional values the next-opened MarkerForm should start with — used by
    * features like the depth-profile auto-suggest list to hand the form a
@@ -504,6 +507,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     markerFormOpen: false,
     setMarkerFormOpen: (open) =>
       set(open ? { markerFormOpen: true } : { markerFormOpen: false, markerFormPrefill: null }),
+    markersPanelOpen: false,
+    setMarkersPanelOpen: (open) => set({ markersPanelOpen: open }),
     markerFormPrefill: null,
     setMarkerFormPrefill: (p) => set({ markerFormPrefill: p }),
     selectedSubstrate: null,

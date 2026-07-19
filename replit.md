@@ -334,7 +334,7 @@ Authentication is handled by **Clerk** across all surfaces:
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/markers` | List persisted markers for a dataset |
+| GET | `/markers` | List persisted markers for a dataset or within bounds |
 | POST | `/markers` | Create a new marker |
 | DELETE | `/markers/mine` | Delete all markers created by the authenticated user |
 | PATCH | `/markers/:id` | Edit a marker's label, type, or notes |
