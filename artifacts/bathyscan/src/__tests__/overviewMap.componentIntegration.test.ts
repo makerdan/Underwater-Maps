@@ -593,6 +593,119 @@ describe("OverviewMap — null overviewGrid in visibleDatasets does not crash", 
     expect(canvas).not.toBeNull();
   });
 
+  it("canvas background (#020818) is painted even when overviewGrid is null", async () => {
+    Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
+
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: "loading-ds", source: "preset", overviewGrid: null, activeGrid: null },
+      ],
+      primaryDatasetId: "loading-ds",
+      overviewGrid: null,
+      activeGrid: null,
+    });
+
+    useUiStore.setState({
+      substrateColorMode: false,
+      selectedSubstrate: null,
+      efhOverlayEnabled: false,
+      overviewOpen: true,
+      pendingDropIn: null,
+    });
+
+    useCameraStore.setState({
+      cameraLon: -120.5,
+      cameraLat: 48.0,
+      heading: 0,
+      cameraDepth: 50,
+      cameraAltitude: 30,
+    });
+
+    // Intercept 2D context creation so we can observe fill calls.
+    const fillRectCalls: Array<[number, number, number, number]> = [];
+    const fillStyles: string[] = [];
+
+    const mockCtx = new Proxy(
+      {
+        fillRect: vi.fn((...args: [number, number, number, number]) => {
+          fillRectCalls.push(args);
+        }),
+        fillStyle: "" as string | CanvasGradient | CanvasPattern,
+        font: "",
+        textAlign: "start" as CanvasTextAlign,
+        textBaseline: "alphabetic" as CanvasTextBaseline,
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 50 })),
+        drawImage: vi.fn(),
+        save: vi.fn(),
+        restore: vi.fn(),
+        beginPath: vi.fn(),
+        closePath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fill: vi.fn(),
+        translate: vi.fn(),
+        rotate: vi.fn(),
+        scale: vi.fn(),
+        setLineDash: vi.fn(),
+        strokeStyle: "",
+        lineWidth: 1,
+        globalAlpha: 1,
+        imageSmoothingEnabled: true,
+        shadowColor: "",
+        shadowBlur: 0,
+        strokeRect: vi.fn(),
+        roundRect: vi.fn(),
+        clip: vi.fn(),
+        createImageData: vi.fn((w: number, h: number) => ({
+          data: new Uint8ClampedArray(w * h * 4),
+          width: w,
+          height: h,
+        })),
+        putImageData: vi.fn(),
+      },
+      {
+        set(target: Record<string, unknown>, prop: string, value: unknown) {
+          if (prop === "fillStyle" && typeof value === "string") {
+            fillStyles.push(value);
+          }
+          target[prop] = value;
+          return true;
+        },
+      },
+    );
+
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(mockCtx as unknown as CanvasRenderingContext2D);
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // Allow several rAF frames to fire so the loop definitely executes.
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
+
+    getContextSpy.mockRestore();
+
+    // The background fill must have been set to the dark-navy colour and
+    // fillRect must have been called — even though overviewGrid is null.
+    const bgFillIndex = fillStyles.indexOf("#020818");
+    expect(
+      bgFillIndex,
+      `Expected fillStyle to be set to "#020818" at some point. Got: ${JSON.stringify(fillStyles)}`,
+    ).toBeGreaterThanOrEqual(0);
+
+    // fillRect must be called at some point after the "#020818" fillStyle assignment.
+    expect(
+      fillRectCalls.length,
+      "Expected fillRect to be called at least once for the background",
+    ).toBeGreaterThan(0);
+  });
+
   it("renders without throwing when one dataset has a grid and a second has overviewGrid: null", async () => {
     Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
     Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
