@@ -15,33 +15,49 @@ function escapeHtml(s: string): string {
   }[c]!));
 }
 
+const MARK_OPEN = "\x00M1\x00";
+const MARK_CLOSE = "\x00M2\x00";
+
+function stripMarkPlaceholders(s: string): string {
+  return s.replaceAll(MARK_OPEN, "").replaceAll(MARK_CLOSE, "");
+}
+
 function renderInline(text: string, highlight?: string): string {
-  let out = escapeHtml(text);
+  let raw = text;
+  if (highlight && highlight.trim()) {
+    try {
+      const escaped = highlight.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(`(${escaped})`, "gi");
+      raw = raw.replace(re, `${MARK_OPEN}$1${MARK_CLOSE}`);
+    } catch {
+      // ignore bad regex
+    }
+  }
+
+  let out = escapeHtml(raw);
   out = out.replace(/`([^`]+)`/g, (_m, c) => `<code class="hm-code-inline">${c}</code>`);
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
   out = out.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
     (_m, label: string, href: string) => {
-      const articleMatch = /^#article:(.+)$/.exec(href);
+      const cleanHref = stripMarkPlaceholders(href);
+      const articleMatch = /^#article:(.+)$/.exec(cleanHref);
       if (articleMatch) {
         const articleId = escapeHtml(articleMatch[1]!);
         return `<a href="#" data-article-id="${articleId}" class="hm-link hm-article-link">${label}</a>`;
       }
-      return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="hm-link">${label}</a>`;
+      return `<a href="${escapeHtml(cleanHref)}" target="_blank" rel="noopener noreferrer" class="hm-link">${label}</a>`;
     },
   );
-  if (highlight && highlight.trim()) {
-    try {
-      const escaped = highlight.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp(`(${escaped})`, "gi");
-      out = out.replace(re, '<mark class="hm-mark">$1</mark>');
-    } catch {
-      // ignore bad regex
-    }
-  }
+
+  out = out.replaceAll(MARK_OPEN, '<mark class="hm-mark">');
+  out = out.replaceAll(MARK_CLOSE, "</mark>");
+
   return out;
 }
+
+export { renderInline as _testOnlyRenderInline };
 
 interface Block {
   type: "h1" | "h2" | "h3" | "p" | "ul" | "ol" | "code" | "callout" | "image" | "hr" | "table";
