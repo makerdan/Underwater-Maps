@@ -1907,7 +1907,7 @@ export const OverviewMap: React.FC = () => {
             </defs>
 
             {/* ── Depth poles ───────────────────────────────────────────────── */}
-            {overviewShowMarkers && markersRef.current.map((m) => {
+            {overviewShowMarkers && (markerData ?? []).map((m) => {
               if (m.type !== "depth_pole") return null;
               if (m.depth === undefined || m.depth === null) return null;
               const [cx, cy] = lonLatToCanvas(m.lon, m.lat, wg, svgTransform);
@@ -1930,7 +1930,7 @@ export const OverviewMap: React.FC = () => {
             })}
 
             {/* ── Markers ───────────────────────────────────────────────────── */}
-            {overviewShowMarkers && markersRef.current.map((m) => {
+            {overviewShowMarkers && (markerData ?? []).map((m) => {
               const [cx, cy] = lonLatToCanvas(m.lon, m.lat, wg, svgTransform);
               if (!inCanvas(cx, cy)) return null;
               const colour = (MARKER_COLOR as Record<string, string>)[m.type] ?? "#e2e8f0";
