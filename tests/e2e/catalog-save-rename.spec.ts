@@ -61,6 +61,10 @@ function makeSaveFixture(displayLabel: string | null = ORIGINAL_DISPLAY_LABEL) {
 }
 
 test.describe("SaveCard inline rename flow", () => {
+  test.beforeEach(async ({ resetPanelCollapse }) => {
+    void resetPanelCollapse;
+  });
+
   test.beforeAll(async ({ request }) => {
     const probe = await request.get(`${API_URL}/api/datasets`);
     expect(
@@ -72,12 +76,12 @@ test.describe("SaveCard inline rename flow", () => {
   test("pencil button opens inline input, Save issues PATCH, card shows custom label with catalog name as subtitle", async ({
     page,
   }) => {
-    // Suppress SimulatedDataConfirmDialog and the panel-collapse override so
-    // the My Saves section renders in a clean, known state.
+    // Suppress SimulatedDataConfirmDialog so the My Saves section renders in
+    // a clean, known state. Panel-collapse reset is handled by the shared
+    // resetPanelCollapse fixture (see beforeEach above).
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
     });
 
@@ -197,7 +201,6 @@ test.describe("SaveCard inline rename flow", () => {
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
     });
 
