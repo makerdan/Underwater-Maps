@@ -187,6 +187,8 @@ export const OverviewMap: React.FC = () => {
   const worldGridRef = useRef<import("@workspace/api-client-react").TerrainData | null>(null);
   const transformRef = useRef<OverviewTransform | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  /** Type of the marker that was most recently right-clicked on the overview canvas, or null. */
+  const rightClickedMarkerTypeRef = useRef<string | null>(null);
   const savedTrailsRef = useRef<CanvasSavedTrail[]>([]);
   const rafRef = useRef<number>(0);
   const efhFeaturesRef = useRef<EfhFeature[]>([]);
@@ -301,8 +303,9 @@ export const OverviewMap: React.FC = () => {
   const cameraLat = useCameraStore((s) => s.cameraLat);
   const cameraHeading = useCameraStore((s) => s.heading);
 
-  // Marker visibility setting (reactive for SVG render).
+  // Marker visibility settings (reactive for SVG render and context-menu close guard).
   const overviewShowMarkers = useSettingsStore((s) => s.overviewShowMarkers);
+  const visibleMarkerTypes = useSettingsStore((s) => s.visibleMarkerTypes);
 
   // Weather station selected-pin React state (drives popover)
   const [selectedWeatherStation, setSelectedWeatherStation] = useState<WeatherStation | null>(null);
@@ -580,6 +583,31 @@ export const OverviewMap: React.FC = () => {
     markersRef.current = markerData ?? [];
     dirtyRef.current = true;
   }, [markerData]);
+
+  // Close any open context menu when markers are globally hidden. The menu may
+  // have been opened on a marker that is no longer rendered, so leaving it open
+  // would leave the user with a stale action list.
+  useEffect(() => {
+    if (!overviewShowMarkers && useContextMenuStore.getState().open) {
+      useContextMenuStore.getState().hide();
+      rightClickedMarkerTypeRef.current = null;
+    }
+  }, [overviewShowMarkers]);
+
+  // Close the context menu when the marker type it was opened on is filtered
+  // out of the visible set (e.g. the user unchecks a marker type while the menu
+  // is still open).
+  useEffect(() => {
+    const type = rightClickedMarkerTypeRef.current;
+    if (
+      type !== null &&
+      !visibleMarkerTypes.includes(type as typeof visibleMarkerTypes[number]) &&
+      useContextMenuStore.getState().open
+    ) {
+      useContextMenuStore.getState().hide();
+      rightClickedMarkerTypeRef.current = null;
+    }
+  }, [visibleMarkerTypes]);
 
   // Depth-pole colours parsed once per marker-data change, not per render.
   const poleColourByMarker = useMemo(() => {
@@ -1800,6 +1828,25 @@ export const OverviewMap: React.FC = () => {
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
+
+      // Hit-test markers so we can close the context menu if the marker is
+      // filtered away while the menu is open (overviewShowMarkers toggle or
+      // visibleMarkerTypes change).
+      if (useSettingsStore.getState().overviewShowMarkers && markersRef.current.length > 0) {
+        const coordGridHit = worldGridRef.current ?? overviewGrid;
+        let hitType: string | null = null;
+        for (const m of markersRef.current) {
+          const [mcx, mcy] = lonLatToCanvas(m.lon, m.lat, coordGridHit, t);
+          const hitR = Math.max(3.5, Math.min(9, t.scale * 1.8)) + 6;
+          if ((mx - mcx) ** 2 + (my - mcy) ** 2 <= hitR * hitR) {
+            hitType = m.type;
+            break;
+          }
+        }
+        rightClickedMarkerTypeRef.current = hitType;
+      } else {
+        rightClickedMarkerTypeRef.current = null;
+      }
 
       const ctxCoordGrid = worldGridRef.current ?? overviewGrid;
       const { lon, lat } = canvasToLonLat(mx, my, ctxCoordGrid, t);
