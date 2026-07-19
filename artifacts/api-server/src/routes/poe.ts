@@ -166,10 +166,12 @@ const POE_HELP_TIMEOUT_MS = 30_000;
 // does NOT crash poe.ts import in tests or environments without OpenAI.
 // ---------------------------------------------------------------------------
 
-/** OpenAI model used for help Q&A fallback (chat completions, no vision). */
-export const OPENAI_HELP_MODEL = "gpt-5";
-/** OpenAI model used for classify vision fallback (supports image_url). */
-export const OPENAI_CLASSIFY_MODEL = "gpt-5";
+/** OpenAI model used for help Q&A fallback (chat completions, no vision).
+ * Override via OPENAI_HELP_MODEL env var; default "gpt-5". */
+export const OPENAI_HELP_MODEL = process.env["OPENAI_HELP_MODEL"] ?? "gpt-5";
+/** OpenAI model used for classify vision fallback (supports image_url).
+ * Override via OPENAI_CLASSIFY_MODEL env var; default "gpt-5". */
+export const OPENAI_CLASSIFY_MODEL = process.env["OPENAI_CLASSIFY_MODEL"] ?? "gpt-5";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type OpenAiClient = any;

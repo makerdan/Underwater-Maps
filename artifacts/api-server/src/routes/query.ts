@@ -359,7 +359,7 @@ async function runOpenAIQuery(
 
   const response = await client.chat.completions.create(
     {
-      model: "gpt-5.1",
+      model: process.env["OPENAI_QUERY_MODEL"] ?? "gpt-5.1",
       max_completion_tokens: 512,
       messages,
       tools,

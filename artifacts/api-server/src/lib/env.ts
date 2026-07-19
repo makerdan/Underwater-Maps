@@ -102,6 +102,14 @@ export function validateStartupEnv(): EnvIssue[] {
     }
   }
 
+  // OpenAI model name overrides: must be non-empty strings when set.
+  for (const name of ["OPENAI_CLASSIFY_MODEL", "OPENAI_HELP_MODEL", "OPENAI_QUERY_MODEL"]) {
+    const raw = process.env[name];
+    if (raw !== undefined && raw.trim() === "") {
+      issues.push({ name, value: raw, problem: "must be a non-empty model name string" });
+    }
+  }
+
   // Numeric cache vars: validated via parsePositiveIntEnv at their point of use
   // in poe.ts (which logs its own fallback warning); here we only record that
   // the raw value is malformed so startup logs surface it early.

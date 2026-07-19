@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateQuery } from "../middlewares/validateBody.js";
 import {
   getBucketStatus,
   LIFECYCLE_TTLS,
@@ -121,6 +122,7 @@ router.get(
 router.get(
   "/admin/rate-limit/usage",
   requireAuth,
+  validateQuery(AdminRateLimitUsageQuerySchema, "GET /api/admin/rate-limit/usage"),
   asyncHandler(async (req, res) => {
     const userId = (req as AuthenticatedRequest).clerkUserId;
 
@@ -129,17 +131,10 @@ router.get(
       return;
     }
 
-    const parsed = AdminRateLimitUsageQuerySchema.safeParse(req.query);
-    if (!parsed.success) {
-      const first = parsed.error.issues[0];
-      res.status(400).json({
-        error: "invalid_param",
-        details: first ? `${String(first.path[0] ?? "query")}: ${first.message}` : "Invalid query parameters",
-      });
-      return;
-    }
-    const windowMs = parsed.data.windowMs ?? 60_000;
-    const topN = parsed.data.limit ?? 25;
+    const { windowMs: windowMsParam, limit } = res.locals
+      .parsedQuery as { windowMs?: number; limit?: number };
+    const windowMs = windowMsParam ?? 60_000;
+    const topN = limit ?? 25;
 
     const rows = await queryRateLimitUsage(windowMs, topN);
 

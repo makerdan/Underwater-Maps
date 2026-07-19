@@ -693,6 +693,8 @@ export async function parseLasLaz(buffer: Buffer, fileName: string): Promise<Raw
       throw new Error("WASM out of memory allocating file buffer");
     }
     try {
+      // Access HEAPU8 inline (not captured in a variable) so any WASM memory
+      // growth that might occur later cannot detach this ArrayBuffer view.
       (lp as unknown as { HEAPU8: Uint8Array }).HEAPU8.set(
         new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength),
         ptr,
