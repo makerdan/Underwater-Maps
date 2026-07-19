@@ -9,11 +9,10 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import {
-  openai,
-  type ChatCompletion,
-  type ChatCompletionMessageParam,
-  type ChatCompletionFunctionTool,
+import type {
+  ChatCompletion,
+  ChatCompletionMessageParam,
+  ChatCompletionFunctionTool,
 } from "@workspace/integrations-openai-ai-server";
 import { getPoeClient, PoeCircuitBreaker } from "@workspace/poe";
 import { requireAuth } from "../middlewares/requireAuth.js";
@@ -21,6 +20,38 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { logger } from "../lib/logger.js";
+
+// ---------------------------------------------------------------------------
+// Lazy OpenAI client — mirrors the pattern in poe.ts.
+// The integration module throws at init when its env vars are absent, so we
+// must NOT import it at the top level. Cache the result after first success.
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type OpenAiClient = any;
+let _openAiClient: OpenAiClient | "unavailable" | undefined = undefined;
+
+async function getOpenAiClient(): Promise<OpenAiClient | null> {
+  if (_openAiClient === "unavailable") return null;
+  if (_openAiClient !== undefined) return _openAiClient;
+  try {
+    const mod = await import("@workspace/integrations-openai-ai-server");
+    _openAiClient = mod.openai;
+    return _openAiClient;
+  } catch {
+    _openAiClient = "unavailable";
+    return null;
+  }
+}
+
+/**
+ * TEST-ONLY — resets the cached OpenAI client so the next `getOpenAiClient`
+ * call re-runs the dynamic import. Allows tests to inject a mock after
+ * `vi.mock("@workspace/integrations-openai-ai-server", ...)`.
+ */
+export function __resetOpenAiClientCacheForTests(): void {
+  _openAiClient = undefined;
+}
 
 const router = Router();
 
@@ -323,7 +354,10 @@ async function runOpenAIQuery(
   messages: ChatCompletionMessageParam[],
   tools: ChatCompletionFunctionTool[],
 ): Promise<QueryLoopResult> {
-  const response = await openai.chat.completions.create(
+  const client = await getOpenAiClient();
+  if (!client) throw new Error("OpenAI client unavailable");
+
+  const response = await client.chat.completions.create(
     {
       model: "gpt-5.1",
       max_completion_tokens: 512,
