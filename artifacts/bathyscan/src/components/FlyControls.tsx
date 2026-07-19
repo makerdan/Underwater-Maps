@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useAppState } from "@/lib/context";
-import { computeFlyScaledSpeed, computeFlyMpu, FLY_SPEEDS_MPH } from "@/lib/boatSpeed";
+import { computeFlyScaledSpeed, computeFlyMpu, smoothMpuStep, FLY_SPEEDS_MPH } from "@/lib/boatSpeed";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { getBoundKey } from "@/lib/keyBindings";
 import { computeWheelDolly, computePinchDolly } from "@/lib/zoomMath";
@@ -16,6 +16,9 @@ export const FlyControls = () => {
   const euler = useRef(new THREE.Euler(0, 0, 0, "YXZ"));
   const lookDir = useRef(new THREE.Vector3());
   const speedIndexRef = useRef(speedIndex);
+  // Smoothed MPU: lerped toward the current dataset's mpu each frame to
+  // prevent a single oversized camera jump when crossing dataset boundaries.
+  const smoothedMpuRef = useRef<number>(0);
   useEffect(() => { speedIndexRef.current = speedIndex; }, [speedIndex]);
 
   const mouseZoomSensitivity = useSettingsStore((s) => s.mouseZoomSensitivity);
@@ -144,8 +147,15 @@ export const FlyControls = () => {
   }, [camera, gl.domElement, setSpeedIndex]);
 
   useFrame((_state, delta: number) => {
-    const flyMpu = computeFlyMpu(terrain);
-    const scaledSpeed = computeFlyScaledSpeed(speedIndex, flyMpu, delta);
+    const targetMpu = computeFlyMpu(terrain);
+    // Lerp smoothedMpu toward the current dataset's mpu to prevent a single
+    // oversized camera jump when the mpu changes abruptly at a dataset boundary.
+    if (smoothedMpuRef.current <= 0) {
+      smoothedMpuRef.current = targetMpu;
+    } else {
+      smoothedMpuRef.current = smoothMpuStep(smoothedMpuRef.current, targetMpu, delta);
+    }
+    const scaledSpeed = computeFlyScaledSpeed(speedIndex, smoothedMpuRef.current, delta);
 
     const direction = new THREE.Vector3();
     camera.getWorldDirection(direction);

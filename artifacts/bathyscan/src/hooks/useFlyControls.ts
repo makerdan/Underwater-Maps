@@ -15,7 +15,7 @@ import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ } from "@/lib/terrain"
 import { applyCameraSpawn } from "@/lib/cameraSpawn";
 import { registerResetCameraFn } from "@/lib/resetCameraRegistry";
 import { useJoystickStore } from "@/components/VirtualJoystick";
-import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, BOAT_MAX_MPH, computeFlyScaledSpeed, computeFlyMpu } from "@/lib/boatSpeed";
+import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, BOAT_MAX_MPH, computeFlyScaledSpeed, computeFlyMpu, smoothMpuStep } from "@/lib/boatSpeed";
 import { tidalToWorldVelocity } from "@/lib/boatPhysics";
 import { useDriveBoatStore } from "@/lib/driveBoatStore";
 import { useCurrentsStore } from "@/lib/currentsStore";
@@ -152,6 +152,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   // Previous camera position for per-frame distance accumulation.
   const prevCamPosRef = useRef(new THREE.Vector3());
   const prevCamPosInitRef = useRef(false);
+  // Smoothed MPU: lerped toward the current dataset's mpu each frame to
+  // prevent a single oversized camera jump when crossing dataset boundaries.
+  // Initialised to 0 as a sentinel; first frame sets it directly to target.
+  const smoothedFlyMpuRef = useRef<number>(0);
 
   // Sync speedIndex to cameraStore for HUD reads
   useEffect(() => { useCameraStore.getState().setSpeedIndex(speedIndex); }, [speedIndex]);
@@ -928,8 +932,17 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         const wups = boatMphToWorldUnitsPerSecond(actualSpeedMphRef.current, mpuForFrame);
         scaledSpeed = wups * delta;
       } else {
-        const flyMpu = computeFlyMpu(grid);
-        scaledSpeed = computeFlyScaledSpeed(speedIndexRef.current, flyMpu, delta);
+        const targetFlyMpu = computeFlyMpu(grid);
+        // Lerp smoothedFlyMpu toward the current dataset's mpu to prevent a
+        // single oversized camera jump when the mpu changes abruptly at a
+        // dataset boundary (e.g. crossing from a large ocean survey to a
+        // small lake dataset where mpu can drop by an order of magnitude).
+        if (smoothedFlyMpuRef.current <= 0) {
+          smoothedFlyMpuRef.current = targetFlyMpu;
+        } else {
+          smoothedFlyMpuRef.current = smoothMpuStep(smoothedFlyMpuRef.current, targetFlyMpu, delta);
+        }
+        scaledSpeed = computeFlyScaledSpeed(speedIndexRef.current, smoothedFlyMpuRef.current, delta);
       }
 
       camera.getWorldDirection(moveDir.current);

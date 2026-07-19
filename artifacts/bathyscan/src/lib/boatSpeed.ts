@@ -114,6 +114,31 @@ export function computeFlyMpu(grid: TerrainData | null | undefined): number {
 }
 
 /**
+ * Lerp rate for the per-frame MPU smoother (per second).
+ *
+ * Uses framerate-independent exponential decay so the convergence speed is the
+ * same at 30 fps and 120 fps.  At this rate, ~98% of the gap closes within
+ * ~1 second, giving a smooth transition when the camera crosses a dataset
+ * boundary without making the camera feel sluggish at normal speeds.
+ */
+export const FLY_MPU_LERP_RATE = 4.0;
+
+/**
+ * Advance the smoothed MPU one frame toward `targetMpu`.
+ *
+ * Uses framerate-independent exponential decay so the blend is identical at
+ * 30 fps and 120 fps.  Initialise `current` to `FLY_FALLBACK_MPU` (or the
+ * first valid target) before the first call; never pass 0.
+ *
+ * This prevents mpu step-changes at dataset boundaries from producing a single
+ * oversized camera jump before `FLY_MAX_FRAME_WU` can clamp it.
+ */
+export function smoothMpuStep(current: number, targetMpu: number, delta: number): number {
+  const t = 1 - Math.exp(-FLY_MPU_LERP_RATE * delta);
+  return current + (targetMpu - current) * t;
+}
+
+/**
  * Pure helper that converts a fly-mode speed-tier index + meters-per-world-unit
  * into a frame-scaled world-unit displacement.
  *

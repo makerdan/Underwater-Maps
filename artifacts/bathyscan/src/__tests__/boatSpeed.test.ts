@@ -8,6 +8,8 @@ import {
   computeMetersPerWorldUnit,
   computeFlyMpu,
   computeFlyScaledSpeed,
+  smoothMpuStep,
+  FLY_MPU_LERP_RATE,
   FLY_SPEEDS_MPH,
   FLY_FALLBACK_MPU,
   FLY_MAX_FRAME_WU,
@@ -293,5 +295,86 @@ describe("computeFlyScaledSpeed", () => {
     const expectedWups = (mph * MPH_TO_MS) / FLY_FALLBACK_MPU;
     const expected = Math.min(expectedWups, FLY_MAX_FRAME_WU);
     expect(result).toBeCloseTo(expected, 8);
+  });
+});
+
+// ── smoothMpuStep — MPU lerp smoother for dataset-boundary stutter fix ────────
+
+describe("smoothMpuStep", () => {
+  const DELTA_60FPS = 1 / 60;
+
+  it("moves current toward target (from small to large mpu)", () => {
+    const result = smoothMpuStep(100, 1000, DELTA_60FPS);
+    expect(result).toBeGreaterThan(100);
+    expect(result).toBeLessThan(1000);
+  });
+
+  it("moves current toward target (from large to small mpu — boundary stutter direction)", () => {
+    const result = smoothMpuStep(1000, 100, DELTA_60FPS);
+    expect(result).toBeLessThan(1000);
+    expect(result).toBeGreaterThan(100);
+  });
+
+  it("matches the exponential-decay formula exactly", () => {
+    const current = 200;
+    const target = 2000;
+    const delta = DELTA_60FPS;
+    const t = 1 - Math.exp(-FLY_MPU_LERP_RATE * delta);
+    const expected = current + (target - current) * t;
+    expect(smoothMpuStep(current, target, delta)).toBeCloseTo(expected, 12);
+  });
+
+  it("converges to within 2% of target after 1 second of 60-fps frames", () => {
+    const startMpu = 1000;
+    const targetMpu = 100;
+    let mpu = startMpu;
+    for (let i = 0; i < 60; i++) {
+      mpu = smoothMpuStep(mpu, targetMpu, DELTA_60FPS);
+    }
+    const gapFraction = Math.abs(mpu - targetMpu) / Math.abs(targetMpu - startMpu);
+    expect(gapFraction).toBeLessThan(0.02);
+  });
+
+  it("is framerate-independent: 30 fps and 60 fps produce the same mpu after 1 second", () => {
+    const startMpu = 100;
+    const targetMpu = 1000;
+    let mpu30 = startMpu;
+    for (let i = 0; i < 30; i++) mpu30 = smoothMpuStep(mpu30, targetMpu, 1 / 30);
+    let mpu60 = startMpu;
+    for (let i = 0; i < 60; i++) mpu60 = smoothMpuStep(mpu60, targetMpu, DELTA_60FPS);
+    // Should be within 0.1% — the exponential decay is exact at any rate.
+    expect(Math.abs(mpu30 - mpu60) / targetMpu).toBeLessThan(0.001);
+  });
+
+  it("a 10× mpu step-change does NOT produce the unsmoothed speed in the first frame", () => {
+    // Simulates what happens when the camera crosses a dataset boundary:
+    // mpu drops suddenly from 1000 (ocean survey) to 100 (small lake).
+    // Without smoothing, the first frame's scaled speed uses mpu=100 directly.
+    // With smoothing the first lerp frame uses a value much closer to 1000,
+    // so the per-frame displacement is far smaller.
+    const largeMpu = 1000;
+    const smallMpu = 100;
+    const speedIndex = 4; // highest tier (2000 mph)
+
+    const unsmoothedSpeed = computeFlyScaledSpeed(speedIndex, smallMpu, DELTA_60FPS);
+    const firstFrameSmoothed = smoothMpuStep(largeMpu, smallMpu, DELTA_60FPS);
+    const smoothedSpeed = computeFlyScaledSpeed(speedIndex, firstFrameSmoothed, DELTA_60FPS);
+
+    // The smoothed speed must be meaningfully smaller than the raw jump —
+    // the smoothed mpu in the first frame is still close to largeMpu, so
+    // the per-frame displacement is much smaller.
+    expect(smoothedSpeed).toBeLessThan(unsmoothedSpeed * 0.5);
+  });
+
+  it("returns target unchanged when current === target (already settled)", () => {
+    const mpu = 500;
+    expect(smoothMpuStep(mpu, mpu, DELTA_60FPS)).toBeCloseTo(mpu, 10);
+  });
+
+  it("handles degenerate delta = 0 without NaN (instantaneous step)", () => {
+    const result = smoothMpuStep(100, 1000, 0);
+    expect(isFinite(result)).toBe(true);
+    // t = 1 - exp(0) = 0 → current unchanged
+    expect(result).toBeCloseTo(100, 10);
   });
 });
