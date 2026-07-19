@@ -9,19 +9,13 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { validateBody } from "../middlewares/validateBody.js";
+import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
 
 const router = Router();
 
 // GET /routes?datasetId=
-router.get("/routes", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = GetRoutesQuerySchema.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: "datasetId query parameter is required" });
-    return;
-  }
-
-  const { datasetId } = parsed.data;
+router.get("/routes", requireAuth, validateQuery(GetRoutesQuerySchema, "GET /api/routes", { details: "datasetId query parameter is required" }), asyncHandler(async (req, res): Promise<void> => {
+  const { datasetId } = res.locals.parsedQuery;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const rows = await db
@@ -53,14 +47,8 @@ router.post("/routes", requireAuth, validateBody(PostRouteBodySchema, "POST /api
 }));
 
 // PATCH /routes/:id
-router.patch("/routes/:id", requireAuth, validateBody(PatchRouteBodySchema, "PATCH /api/routes/:id"), asyncHandler(async (req, res): Promise<void> => {
-  const params = RouteIdParamSchema.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: "invalid_request", details: "Invalid route id" });
-    return;
-  }
-
-  const { id } = params.data;
+router.patch("/routes/:id", requireAuth, validateParams(RouteIdParamSchema, "PATCH /api/routes/:id", { details: "Invalid route id" }), validateBody(PatchRouteBodySchema, "PATCH /api/routes/:id"), asyncHandler(async (req, res): Promise<void> => {
+  const { id } = res.locals.parsedParams;
   const { name } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
@@ -79,14 +67,8 @@ router.patch("/routes/:id", requireAuth, validateBody(PatchRouteBodySchema, "PAT
 }));
 
 // DELETE /routes/:id
-router.delete("/routes/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = RouteIdParamSchema.safeParse(req.params);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: "Invalid route id" });
-    return;
-  }
-
-  const { id } = parsed.data;
+router.delete("/routes/:id", requireAuth, validateParams(RouteIdParamSchema, "DELETE /api/routes/:id", { details: "Invalid route id" }), asyncHandler(async (req, res): Promise<void> => {
+  const { id } = res.locals.parsedParams;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const deleted = await db

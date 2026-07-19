@@ -12,7 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { validateBody } from "../middlewares/validateBody.js";
+import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getObjectAclPolicy, setObjectAclPolicy } from "../lib/objectAcl";
 
@@ -82,13 +82,8 @@ async function applyPhotoAcls(photos: string[], userId: string): Promise<string[
 }
 
 // ─── List all catches across the caller's markers in a dataset ───────────────
-router.get("/catches", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = GetCatchesQueryParams.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: "datasetId query parameter is required" });
-    return;
-  }
-  const { datasetId } = parsed.data;
+router.get("/catches", requireAuth, validateQuery(GetCatchesQueryParams, "GET /api/catches", { details: "datasetId query parameter is required" }), asyncHandler(async (req, res): Promise<void> => {
+  const { datasetId } = res.locals.parsedQuery;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const markerRows = await db
@@ -114,13 +109,8 @@ router.get("/catches", requireAuth, asyncHandler(async (req, res): Promise<void>
 }));
 
 // ─── List catches for one marker ──────────────────────────────────────────────
-router.get("/markers/:markerId/catches", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = GetMarkersMarkerIdCatchesParams.safeParse(req.params);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: "Invalid marker id" });
-    return;
-  }
-  const { markerId } = parsed.data;
+router.get("/markers/:markerId/catches", requireAuth, validateParams(GetMarkersMarkerIdCatchesParams, "GET /api/markers/:markerId/catches", { details: "Invalid marker id" }), asyncHandler(async (req, res): Promise<void> => {
+  const { markerId } = res.locals.parsedParams;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const [marker] = await db
@@ -142,14 +132,8 @@ router.get("/markers/:markerId/catches", requireAuth, asyncHandler(async (req, r
 }));
 
 // ─── Create a catch entry on a marker ─────────────────────────────────────────
-router.post("/markers/:markerId/catches", requireAuth, validateBody(PostMarkersMarkerIdCatchesBody, "POST /api/markers/:markerId/catches"), asyncHandler(async (req, res): Promise<void> => {
-  const params = PostMarkersMarkerIdCatchesParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: "invalid_request", details: "Invalid marker id" });
-    return;
-  }
-
-  const { markerId } = params.data;
+router.post("/markers/:markerId/catches", requireAuth, validateParams(PostMarkersMarkerIdCatchesParams, "POST /api/markers/:markerId/catches", { details: "Invalid marker id" }), validateBody(PostMarkersMarkerIdCatchesBody, "POST /api/markers/:markerId/catches"), asyncHandler(async (req, res): Promise<void> => {
+  const { markerId } = res.locals.parsedParams;
   const { symbol, symbolName = "", notes, photos = [] } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
@@ -192,14 +176,8 @@ router.post("/markers/:markerId/catches", requireAuth, validateBody(PostMarkersM
 }));
 
 // ─── Edit a catch entry ───────────────────────────────────────────────────────
-router.patch("/catches/:id", requireAuth, validateBody(PatchCatchesIdBody, "PATCH /api/catches/:id"), asyncHandler(async (req, res): Promise<void> => {
-  const params = PatchCatchesIdParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: "invalid_request", details: "Invalid catch id" });
-    return;
-  }
-
-  const { id } = params.data;
+router.patch("/catches/:id", requireAuth, validateParams(PatchCatchesIdParams, "PATCH /api/catches/:id", { details: "Invalid catch id" }), validateBody(PatchCatchesIdBody, "PATCH /api/catches/:id"), asyncHandler(async (req, res): Promise<void> => {
+  const { id } = res.locals.parsedParams;
   const updateData = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
@@ -262,13 +240,8 @@ router.patch("/catches/:id", requireAuth, validateBody(PatchCatchesIdBody, "PATC
 }));
 
 // ─── Delete a catch entry ─────────────────────────────────────────────────────
-router.delete("/catches/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = DeleteCatchesIdParams.safeParse(req.params);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: "Invalid catch id" });
-    return;
-  }
-  const { id } = parsed.data;
+router.delete("/catches/:id", requireAuth, validateParams(DeleteCatchesIdParams, "DELETE /api/catches/:id", { details: "Invalid catch id" }), asyncHandler(async (req, res): Promise<void> => {
+  const { id } = res.locals.parsedParams;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const deleted = await db

@@ -1377,6 +1377,10 @@ async function getSmoothingPreference(req: import("express").Request): Promise<b
 router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
   const queryParsed = DatasetsQuerySchema.safeParse(req.query);
   if (!queryParsed.success) {
+    logger.warn(
+      { route: "GET /api/datasets", issues: queryParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets — Zod query validation failed",
+    );
     res.status(400).json({
       error: "invalid_param",
       details: queryParsed.error.issues[0]?.message ?? "Invalid query parameter",
@@ -1433,6 +1437,10 @@ const PresetIdParamSchema = z
 router.delete("/datasets/presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const idParsed = PresetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
+    logger.warn(
+      { route: "DELETE /api/datasets/presets/:id", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "DELETE /api/datasets/presets/:id — Zod params validation failed",
+    );
     res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid preset id" });
     return;
   }
@@ -1467,6 +1475,10 @@ const CUSTOM_DATASET_UUID_RE =
 router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
+    logger.warn(
+      { route: "GET /api/datasets/:id/terrain", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets/:id/terrain — Zod params validation failed",
+    );
     res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
     return;
   }
@@ -1512,6 +1524,10 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
 router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
+    logger.warn(
+      { route: "GET /api/datasets/:id/preview", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets/:id/preview — Zod params validation failed",
+    );
     res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
     return;
   }
@@ -1545,6 +1561,10 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
 router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
+    logger.warn(
+      { route: "GET /api/datasets/:id/overview", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets/:id/overview — Zod params validation failed",
+    );
     res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
     return;
   }
@@ -1596,6 +1616,10 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
   // Validate ?h= and ?w= via Zod — rejects array injection and unknown values.
   const parsedQuery = ZonesQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
+    logger.warn(
+      { route: "GET /api/datasets/:id/zones", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets/:id/zones — Zod query validation failed",
+    );
     const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_param", details });
     return;
@@ -1703,6 +1727,10 @@ router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
   // and non-finite values before any manual parseFloat.
   const parsedQuery = TerrainLandQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
+    logger.warn(
+      { route: "GET /api/terrain/land", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/land — Zod query validation failed",
+    );
     const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_param", details });
     return;
@@ -1752,6 +1780,10 @@ router.get("/terrain/satellite-tile", asyncHandler(async (req, res): Promise<voi
   // and non-finite values before any manual parseFloat.
   const parsedQuery = TerrainSatelliteQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
+    logger.warn(
+      { route: "GET /api/terrain/satellite-tile", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/satellite-tile — Zod query validation failed",
+    );
     const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_param", details });
     return;
@@ -1810,6 +1842,10 @@ router.get("/terrain/terrain-tile", asyncHandler(async (req, res): Promise<void>
   // Reuse TerrainSatelliteQuerySchema — bbox/size params are identical.
   const parsedQuery = TerrainSatelliteQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
+    logger.warn(
+      { route: "GET /api/terrain/terrain-tile", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/terrain-tile — Zod query validation failed",
+    );
     const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_param", details });
     return;
@@ -1863,6 +1899,10 @@ router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res):
   // ?north[]=45&north[]=50 would previously resolve to parseFloat("45,50")=45).
   const parsedQuery = TerrainDownloadInfoQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
+    logger.warn(
+      { route: "GET /api/terrain/download/info", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/download/info — Zod query validation failed",
+    );
     const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_bbox", details });
     return;
@@ -1901,6 +1941,10 @@ const TerrainDownloadQuerySchema = z.object({
 router.get("/terrain/download", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const parsed = TerrainDownloadQuerySchema.safeParse(req.query);
   if (!parsed.success) {
+    logger.warn(
+      { route: "GET /api/terrain/download", issues: parsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/download — Zod query validation failed",
+    );
     const details = parsed.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_bbox", details });
     return;

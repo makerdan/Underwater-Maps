@@ -4,21 +4,15 @@ import { db, markersTable, catchCountersTable, catchEntriesTable } from "@worksp
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { validateBody } from "../middlewares/validateBody.js";
+import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
 
 
 const router = Router();
 
-router.get("/markers", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = GetMarkersQueryParams.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: "datasetId query parameter is required" });
-    return;
-  }
-
-  const { datasetId } = parsed.data;
+router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /api/markers", { details: "datasetId query parameter is required" }), asyncHandler(async (req, res): Promise<void> => {
+  const { datasetId } = res.locals.parsedQuery;
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const rows = await db
     .select()
@@ -87,14 +81,8 @@ router.delete("/markers/mine", requireAuth, asyncHandler(async (req, res): Promi
   res.json({ deleted: deleted.length });
 }));
 
-router.patch("/markers/:id", requireAuth, validateBody(PatchMarkersIdBody, "PATCH /api/markers/:id"), asyncHandler(async (req, res): Promise<void> => {
-  const params = PatchMarkersIdParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: "invalid_request", details: "Invalid marker id" });
-    return;
-  }
-
-  const { id } = params.data;
+router.patch("/markers/:id", requireAuth, validateParams(PatchMarkersIdParams, "PATCH /api/markers/:id", { details: "Invalid marker id" }), validateBody(PatchMarkersIdBody, "PATCH /api/markers/:id"), asyncHandler(async (req, res): Promise<void> => {
+  const { id } = res.locals.parsedParams;
   const updateData = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
@@ -117,14 +105,8 @@ router.patch("/markers/:id", requireAuth, validateBody(PatchMarkersIdBody, "PATC
   res.json(updated);
 }));
 
-router.delete("/markers/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const parsed = DeleteMarkersIdParams.safeParse(req.params);
-  if (!parsed.success) {
-    res.status(400).json({ error: "invalid_request", details: "Invalid marker id" });
-    return;
-  }
-
-  const { id } = parsed.data;
+router.delete("/markers/:id", requireAuth, validateParams(DeleteMarkersIdParams, "DELETE /api/markers/:id", { details: "Invalid marker id" }), asyncHandler(async (req, res): Promise<void> => {
+  const { id } = res.locals.parsedParams;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   // Collect all photo object paths from catch entries before the cascade delete

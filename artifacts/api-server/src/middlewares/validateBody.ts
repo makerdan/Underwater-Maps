@@ -56,3 +56,93 @@ export function validateBody<T extends z.ZodTypeAny>(
     next();
   };
 }
+
+/**
+ * Express middleware factory that validates `req.query` against a Zod schema.
+ *
+ * On failure: emits a `logger.warn` with sanitized issue paths/codes (no raw
+ * user input echoed), then returns a structured `400` response. The `details`
+ * option lets callers supply the same human-readable message that previously
+ * appeared in the inline safeParse block, keeping the response shape identical
+ * to what clients already expect.
+ *
+ * On success: attaches the parsed (coerced) value to `res.locals.parsedQuery`
+ * and calls `next()`.
+ *
+ * @param schema     - Zod schema to validate `req.query` against.
+ * @param routeLabel - Human-readable label used in log messages,
+ *                     e.g. "GET /api/markers".
+ * @param options    - Optional overrides. `details` replaces the default
+ *                     generated details string in the 400 response body,
+ *                     preserving the original API contract for each route.
+ */
+export function validateQuery<T extends z.ZodTypeAny>(
+  schema: T,
+  routeLabel: string,
+  options?: { details?: string },
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const parsed = schema.safeParse(req.query);
+    if (!parsed.success) {
+      const logIssues = parsed.error.issues.map((i) => ({ path: i.path, code: i.code }));
+      logger.warn(
+        { route: routeLabel, issues: logIssues },
+        `${routeLabel} — Zod query validation failed`,
+      );
+      const details =
+        options?.details ??
+        parsed.error.issues
+          .map((i) => `${(i.path ?? []).join(".") || "(root)"}: ${i.code}`)
+          .join("; ");
+      res.status(400).json({ error: "invalid_request", details });
+      return;
+    }
+    res.locals.parsedQuery = parsed.data as z.infer<T>;
+    next();
+  };
+}
+
+/**
+ * Express middleware factory that validates `req.params` against a Zod schema.
+ *
+ * On failure: emits a `logger.warn` with sanitized issue paths/codes (no raw
+ * user input echoed), then returns a structured `400` response. The `details`
+ * option lets callers supply the same human-readable message that previously
+ * appeared in the inline safeParse block, keeping the response shape identical
+ * to what clients already expect.
+ *
+ * On success: attaches the parsed (coerced) value to `res.locals.parsedParams`
+ * and calls `next()`.
+ *
+ * @param schema     - Zod schema to validate `req.params` against.
+ * @param routeLabel - Human-readable label used in log messages,
+ *                     e.g. "DELETE /api/markers/:id".
+ * @param options    - Optional overrides. `details` replaces the default
+ *                     generated details string in the 400 response body,
+ *                     preserving the original API contract for each route.
+ */
+export function validateParams<T extends z.ZodTypeAny>(
+  schema: T,
+  routeLabel: string,
+  options?: { details?: string },
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const parsed = schema.safeParse(req.params);
+    if (!parsed.success) {
+      const logIssues = parsed.error.issues.map((i) => ({ path: i.path, code: i.code }));
+      logger.warn(
+        { route: routeLabel, issues: logIssues },
+        `${routeLabel} — Zod params validation failed`,
+      );
+      const details =
+        options?.details ??
+        parsed.error.issues
+          .map((i) => `${(i.path ?? []).join(".") || "(root)"}: ${i.code}`)
+          .join("; ");
+      res.status(400).json({ error: "invalid_request", details });
+      return;
+    }
+    res.locals.parsedParams = parsed.data as z.infer<T>;
+    next();
+  };
+}
