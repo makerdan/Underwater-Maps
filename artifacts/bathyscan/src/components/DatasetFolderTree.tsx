@@ -144,6 +144,9 @@ export const DatasetFolderTree: React.FC<Props> = ({
       { timer: ReturnType<typeof setTimeout>; commit: () => void }
     >(),
   );
+  // Guard against a rapid double-signal: if handleBulkDelete is already
+  // running (undo window open), a second invocation is a no-op.
+  const bulkDeleteInFlightRef = useRef(false);
   const { toast } = useToast();
 
   // Build the tree from the full folder/dataset lists first so we can
@@ -308,6 +311,10 @@ export const DatasetFolderTree: React.FC<Props> = ({
   // single timer so "Undo" cancels the entire batch at once.
   const handleBulkDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
+    // Prevent a rapid double-signal from queuing a second mutation batch while
+    // the first one's undo window is still open.
+    if (bulkDeleteInFlightRef.current) return;
+    bulkDeleteInFlightRef.current = true;
 
     // Snapshot the selection before we clear state.
     const snapshotIds = new Set(selectedIds);
@@ -378,6 +385,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
 
     const commit = () => {
       if (aborted) return;
+      bulkDeleteInFlightRef.current = false;
       pendingDeletesRef.current.delete(undoKey);
 
       for (const fid of topLevelFolderIds) {
@@ -442,6 +450,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
 
     const undo = () => {
       aborted = true;
+      bulkDeleteInFlightRef.current = false;
       const entry = pendingDeletesRef.current.get(undoKey);
       if (!entry) return;
       clearTimeout(entry.timer);
