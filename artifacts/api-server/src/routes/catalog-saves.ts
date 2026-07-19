@@ -62,15 +62,17 @@ const router = Router();
 void seedDatasetCatalog();
 
 // ---------------------------------------------------------------------------
-// Startup sweeper: recover saves that are permanently stuck in "processing"
+// Periodic sweeper: recover saves that are permanently stuck in "processing"
 // ---------------------------------------------------------------------------
-// Any save row that has been in "processing" for longer than 10 minutes has
-// certainly lost its background job (e.g. the process was killed mid-flight).
-// Mark those rows "failed" so users can see a clear error state and retry
-// rather than waiting forever. Called once at module load (server startup)
-// and not on a recurring schedule — the fire-and-forget materializeSave
-// function always transitions to "ready" or "failed" on its own, so rows
-// only get permanently stuck across process restarts.
+// Any save row that has been in "processing" or "queued" for longer than
+// STUCK_THRESHOLD_MS (10 minutes) has certainly lost its background job
+// (e.g. the process was killed mid-flight, or a transient error prevented
+// the fire-and-forget kickoff from running). Mark those rows "failed" so
+// users see a clear error state and can retry immediately.
+//
+// recoverStuckSaves() is the one-shot check. startStuckSavesSweeper() wraps
+// it in a setInterval so stuck rows surface within one interval (default
+// 10 min) even when the server runs for days without a restart.
 export async function recoverStuckSaves(): Promise<void> {
   const STUCK_THRESHOLD_MS = 10 * 60 * 1000;
   try {
@@ -80,7 +82,7 @@ export async function recoverStuckSaves(): Promise<void> {
       .set({
         status: "failed",
         errorMessage:
-          "Materialization timed out (the server was likely restarted while this save was processing). Please retry.",
+          "Materialization timed out (the background job did not complete in time). Please retry.",
       })
       .where(
         and(
@@ -104,7 +106,7 @@ export async function recoverStuckSaves(): Promise<void> {
       .set({
         status: "failed",
         errorMessage:
-          "This save never started processing (the server was likely restarted before materialization began). Please retry.",
+          "This save never started processing (the background job was never kicked off). Please retry.",
       })
       .where(
         and(
@@ -123,7 +125,22 @@ export async function recoverStuckSaves(): Promise<void> {
     logger.warn({ err }, `[catalog-saves] recoverStuckSaves failed: ${(err as Error).message}`);
   }
 }
-void recoverStuckSaves();
+
+/**
+ * Start the recurring stuck-save sweeper. Calls recoverStuckSaves() once
+ * immediately and then on every intervalMs (default 10 minutes). Returns
+ * the interval handle so callers can clearInterval in tests.
+ */
+export function startStuckSavesSweeper(
+  intervalMs = 10 * 60 * 1000,
+): ReturnType<typeof setInterval> {
+  void recoverStuckSaves();
+  return setInterval(() => {
+    void recoverStuckSaves();
+  }, intervalMs);
+}
+
+startStuckSavesSweeper();
 
 // ---------------------------------------------------------------------------
 // Helpers

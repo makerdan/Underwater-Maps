@@ -563,7 +563,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
-import { recoverStuckSaves } from "../catalog-saves.js";
+import { recoverStuckSaves, startStuckSavesSweeper } from "../catalog-saves.js";
 
 const E2E_USER = "user_catalog_saves_integration";
 const CATALOG_ID = H.CATALOG_ENTRY.id;
@@ -933,6 +933,49 @@ describe("catalog save → materialize → fetch round trip", () => {
     const staleProcessing = byId("00000000-0000-0000-0000-00000000a003");
     expect(staleProcessing["status"]).toBe("failed");
     expect(staleProcessing["errorMessage"]).toMatch(/timed out/);
+  });
+
+  it("startStuckSavesSweeper fires recoverStuckSaves on the recurring interval", async () => {
+    vi.useFakeTimers();
+    const INTERVAL_MS = 10 * 60 * 1000;
+
+    // Start the sweeper. The immediate recoverStuckSaves() fires synchronously
+    // as a void-launched promise; advance by 0ms to flush that microtask queue.
+    const handle = startStuckSavesSweeper(INTERVAL_MS);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Add a stale row AFTER the immediate sweep ran so it is only caught by
+    // the next periodic tick. requestedAt is 1h ago, well past the 10-min
+    // threshold, so the next sweep should mark it failed.
+    const staleDate = new Date(Date.now() - 60 * 60 * 1000);
+    H.dbState.saves.push({
+      id: "00000000-0000-0000-0000-00000000b001",
+      userId: E2E_USER,
+      catalogId: "stale-processing-interval",
+      status: "processing",
+      requestedAt: staleDate,
+      readyAt: null,
+      cacheKey: null,
+      errorMessage: null,
+      folderId: null,
+      datasetId: null,
+    });
+
+    // Confirm the row is still "processing" before the interval fires.
+    expect(
+      H.dbState.saves.find((r) => r["id"] === "00000000-0000-0000-0000-00000000b001")!["status"],
+    ).toBe("processing");
+
+    // Advance by exactly one interval to trigger one periodic sweep and let
+    // the async recoverStuckSaves() promise settle within that tick.
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS);
+
+    const row = H.dbState.saves.find((r) => r["id"] === "00000000-0000-0000-0000-00000000b001")!;
+    expect(row["status"]).toBe("failed");
+    expect(row["errorMessage"]).toMatch(/timed out/);
+
+    clearInterval(handle);
+    vi.useRealTimers();
   });
 
   it("returns 404 for an unknown catalog id", async () => {
