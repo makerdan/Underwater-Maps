@@ -495,7 +495,12 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                 type="file"
                 accept=".gpx,.kml,.kmz,.csv,application/gpx+xml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,text/csv"
                 onChange={handleFileInput}
-                style={{ color: "#cbd5e1" }}
+                style={{
+                  color: "#cbd5e1",
+                  border: "1px solid #22d3ee",
+                  borderRadius: "6px",
+                  padding: "4px 8px",
+                }}
               />
               <div style={{ marginTop: 12, fontSize: 15, color: "#cbd5e1", lineHeight: 1.5 }}>
                 Limit: up to 5,000 points per file. Trolling routes longer than 50 waypoints are downsampled.
