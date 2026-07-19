@@ -85,7 +85,7 @@ export function usePaletteSuggestion(): void {
     const profile = computeDepthProfile(activeGrid.depths.filter((d): d is number => d !== null));
     if (!profile) return;
 
-    const suggestion = suggestColormap(profile);
+    const suggestion = suggestColormap(profile, activeGrid.waterType ?? undefined);
     const { colormapUserSet, setColormapTheme } = useSettingsStore.getState();
     const { setBandBoundaries } = usePaletteStore.getState();
 

@@ -300,3 +300,72 @@ describe("usePaletteSuggestionStore dismiss behavior", () => {
     expect(s.isDismissed("ds-1")).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// suggestColormap — waterType: "freshwater" overrides depth-based heuristics
+// ---------------------------------------------------------------------------
+
+describe("suggestColormap — freshwater waterType override", () => {
+  it("moderate-depth freshwater profile (0–60 ft) gets freshwater theme, not thermal", () => {
+    const profile = computeDepthProfile(depthArray(0, 60));
+    expect(profile).not.toBeNull();
+    const { theme } = suggestColormap(profile!, "freshwater");
+    expect(theme).toBe("freshwater");
+  });
+
+  it("deeper freshwater profile (0–47 ft, Ray Roberts range) gets freshwater theme", () => {
+    const profile = computeDepthProfile(depthArray(0, 47));
+    expect(profile).not.toBeNull();
+    const { theme } = suggestColormap(profile!, "freshwater");
+    expect(theme).toBe("freshwater");
+  });
+
+  it("wide freshwater profile (0–200 ft) gets freshwater theme, not ocean or grayscale", () => {
+    const profile = computeDepthProfile(depthArray(0, 200));
+    expect(profile).not.toBeNull();
+    const { theme } = suggestColormap(profile!, "freshwater");
+    expect(theme).toBe("freshwater");
+  });
+
+  it("same moderate-depth profile WITHOUT waterType gets thermal (depth branch fires)", () => {
+    const profile = computeDepthProfile(depthArray(0, 60));
+    expect(profile).not.toBeNull();
+    const { theme } = suggestColormap(profile!);
+    expect(theme).toBe("thermal");
+  });
+
+  it("saltwater waterType does NOT force freshwater theme", () => {
+    const profile = computeDepthProfile(depthArray(0, 60));
+    expect(profile).not.toBeNull();
+    const { theme } = suggestColormap(profile!, "saltwater");
+    expect(theme).not.toBe("freshwater");
+  });
+
+  it("freshwater bandBoundaries are still valid (11 values, strictly ascending integers)", () => {
+    const profile = computeDepthProfile(depthArray(0, 47))!;
+    const { bandBoundaries: bb } = suggestColormap(profile, "freshwater");
+    expect(bb).toHaveLength(11);
+    expect(bb[0]).toBe(0);
+    expect(bb[10]).toBe(2000);
+    for (const v of bb) {
+      expect(Number.isInteger(v)).toBe(true);
+    }
+    for (let i = 1; i < bb.length; i++) {
+      expect(bb[i]).toBeGreaterThan(bb[i - 1]!);
+    }
+    expect(sanitizeBandBoundaries(bb)).not.toBeNull();
+  });
+
+  it("auto-apply with waterType freshwater sets colormapTheme to freshwater in settingsStore", () => {
+    expect(useSettingsStore.getState().colormapUserSet).toBe(false);
+
+    const profile = computeDepthProfile(depthArray(0, 47))!;
+    const suggestion = suggestColormap(profile, "freshwater");
+    const { setColormapTheme } = useSettingsStore.getState();
+    const { setBandBoundaries } = usePaletteStore.getState();
+    setColormapTheme(suggestion.theme);
+    setBandBoundaries(suggestion.bandBoundaries);
+
+    expect(useSettingsStore.getState().colormapTheme).toBe("freshwater");
+  });
+});

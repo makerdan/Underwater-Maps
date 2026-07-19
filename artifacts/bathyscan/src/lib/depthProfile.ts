@@ -77,6 +77,7 @@ export interface ColormapSuggestion {
  * Select the most appropriate depth colormap for a given depth profile.
  *
  * Heuristics (applied in priority order):
+ *   0. Explicitly freshwater grid (waterType === "freshwater") → freshwater
  *   1. Very shallow (max < 30 ft)                      → freshwater  (gentle teal ramp)
  *   2. Narrow range (max - min < 100 ft)               → thermal     (high local contrast)
  *   3. Wide ocean (p90 > 200 ft)                       → ocean       (familiar nautical blue)
@@ -88,12 +89,19 @@ export interface ColormapSuggestion {
  * The first boundary is always 0 and the last is always OCEAN_MAX_FT (2000)
  * to satisfy the paletteStore schema constraint.
  */
-export function suggestColormap(profile: DepthProfile): ColormapSuggestion {
+export function suggestColormap(
+  profile: DepthProfile,
+  waterType?: "saltwater" | "freshwater",
+): ColormapSuggestion {
   const { min, max, p90 } = profile;
   const range = max - min;
 
   let theme: ColormapTheme;
-  if (max < 30) {
+  if (waterType === "freshwater") {
+    // Explicitly tagged freshwater body — use the freshwater palette regardless
+    // of depth so lakes like Ray Roberts (≈47 ft) aren't misclassified.
+    theme = "freshwater";
+  } else if (max < 30) {
     // Very shallow lake, harbour, or river mouth — freshwater palette reads better.
     theme = "freshwater";
   } else if (range < 100) {
