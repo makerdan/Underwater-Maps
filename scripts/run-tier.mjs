@@ -3,9 +3,9 @@
  * run-tier.mjs — tiered validation runner.
  *
  * Usage:
- *   node scripts/run-tier.mjs fast       # typecheck + lint (~5 min)
- *   node scripts/run-tier.mjs standard   # typecheck + lint + unit + doc/catalog checks (~20 min)
- *   node scripts/run-tier.mjs full       # all 10 steps, identical to test-all-steps.mjs (~45 min)
+ *   node scripts/run-tier.mjs fast       # typecheck + lint + check:lock-skill-sync (~5 min)
+ *   node scripts/run-tier.mjs standard   # typecheck + lint + check:lock-skill-sync + unit + doc/catalog checks (~20 min)
+ *   node scripts/run-tier.mjs full       # all 11 steps, identical to test-all-steps.mjs (~45 min)
  *
  * Per-step named resource locking is handled internally; the outer caller
  * does NOT need to wrap this in validation-lock.mjs. Only steps that actually
@@ -124,6 +124,8 @@ const ALL_STEPS = [
   { name: "typecheck", resource: "codegen", cmd: runTypecheckStep },
   // no resource: lint is read-only and does not conflict with anything
   { name: "lint", resource: null, cmd: "pnpm run lint" },
+  // no resource: grep-based drift check, sub-second
+  { name: "check:lock-skill-sync", resource: null, cmd: "pnpm run check:lock-skill-sync" },
   // unit-cpu resource: prevents CPU saturation / budget breach
   { name: "test:unit", resource: "unit-cpu", cmd: "pnpm run test:unit" },
   // all check:* steps are lightweight; no resource needed
@@ -137,8 +139,8 @@ const ALL_STEPS = [
 ];
 
 const TIER_STEPS = {
-  fast:     ALL_STEPS.slice(0, 2),
-  standard: ALL_STEPS.slice(0, 5),
+  fast:     ALL_STEPS.slice(0, 3),
+  standard: ALL_STEPS.slice(0, 6),
   full:     ALL_STEPS,
 };
 

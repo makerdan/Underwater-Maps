@@ -14,21 +14,22 @@ BathyScan has three registered validation commands. Pick the **lowest** tier tha
 
 | Command | Script | Steps | Typical duration |
 |---|---|---|---|
-| `test-fast` | `node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast` | typecheck, lint | ~5 min |
-| `test-standard` | `node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard` | typecheck, lint, test:unit, check:docs-stale, check:catalog-coverage | ~20 min |
-| `test-heavy` | `node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs aggregate -- node scripts/run-tier.mjs full` | all 10 steps (adds check:e2e-user-ids, check:e2e-cjs-globals, check:fixture-freshness, check:ports, check:audit) | ~45 min |
+| `test-fast` | `node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast` | typecheck, lint, check:lock-skill-sync | ~5 min |
+| `test-standard` | `node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard` | typecheck, lint, check:lock-skill-sync, test:unit, check:docs-stale, check:catalog-coverage | ~20 min |
+| `test-heavy` | `node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs aggregate -- node scripts/run-tier.mjs full` | all 11 steps (adds check:e2e-user-ids, check:e2e-cjs-globals, check:fixture-freshness, check:ports, check:audit) | ~45 min |
 
-All 10 steps in order:
+All 11 steps in order:
 1. `typecheck` — codegen freshness check + tsc across all packages
 2. `lint` — ESLint
-3. `test:unit` — Vitest unit suites (api-server, bathyscan, api-zod)
-4. `check:docs-stale` — API route docs in README/replit.md match openapi.yaml
-5. `check:catalog-coverage` — every catalog entry has a test
-6. `check:e2e-user-ids` — no hardcoded user-ID literals in e2e specs
-7. `check:e2e-cjs-globals` — no CJS globals in e2e files
-8. `check:fixture-freshness` — test fixture snapshots are up to date
-9. `check:ports` — no port collisions between services
-10. `check:audit` — npm dependency vulnerability audit
+3. `check:lock-skill-sync` — verifies key flag names/env-vars documented in Port-Authority skill still appear in scripts/validation-lock.mjs
+4. `test:unit` — Vitest unit suites (api-server, bathyscan, api-zod)
+5. `check:docs-stale` — API route docs in README/replit.md match openapi.yaml
+6. `check:catalog-coverage` — every catalog entry has a test
+7. `check:e2e-user-ids` — no hardcoded user-ID literals in e2e specs
+8. `check:e2e-cjs-globals` — no CJS globals in e2e files
+9. `check:fixture-freshness` — test fixture snapshots are up to date
+10. `check:ports` — no port collisions between services
+11. `check:audit` — npm dependency vulnerability audit
 
 ## Decision Table
 
