@@ -38,9 +38,9 @@ describe("PostMarkersBody", () => {
     expect(PostMarkersBody.safeParse(valid).success).toBe(true);
   });
 
-  it("rejects when datasetId is missing", () => {
+  it("accepts when datasetId is missing (nullish — dataset-free marker)", () => {
     const { datasetId: _omit, ...rest } = valid;
-    expect(PostMarkersBody.safeParse(rest).success).toBe(false);
+    expect(PostMarkersBody.safeParse(rest).success).toBe(true);
   });
 
   it("rejects when lon is a string (wrong type)", () => {
@@ -138,10 +138,10 @@ describe("GetMarkersQueryParams", () => {
     if (r.success) expect(typeof r.data.datasetId).toBe("string");
   });
 
-  it("returns undefined for absent datasetId (optional field)", () => {
+  it("returns undefined datasetId when field is absent (optional field skips coercion)", () => {
     const r = GetMarkersQueryParams.safeParse({});
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.datasetId).toBe(undefined);
+    if (r.success) expect(r.data.datasetId).toBeUndefined();
   });
 });
 

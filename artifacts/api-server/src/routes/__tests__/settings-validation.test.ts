@@ -299,3 +299,27 @@ describe("PUT /api/settings — unknown-key (extras) policy", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("PUT /api/settings — showLandmass boolean field", () => {
+  function put(body: Record<string, unknown>) {
+    return request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-landmass")
+      .send(body);
+  }
+
+  it("accepts { showLandmass: true }", async () => {
+    const res = await put({ showLandmass: true });
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts { showLandmass: false }", async () => {
+    const res = await put({ showLandmass: false });
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects showLandmass as a non-boolean string", async () => {
+    const res = await put({ showLandmass: "yes" });
+    expect(res.status).toBe(400);
+  });
+});

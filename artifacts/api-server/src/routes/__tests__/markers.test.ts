@@ -108,8 +108,6 @@ vi.mock("@workspace/api-zod", () => {
     PutSettingsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
   };
 });
-  };
-});
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(

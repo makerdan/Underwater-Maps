@@ -282,6 +282,23 @@ describe("settingsStore", () => {
     expect(useSettingsStore.getState().defaultMapLoad).toBeNull();
   });
 
+  it("showLandmass defaults to true in DEFAULT_SETTINGS", () => {
+    expect(DEFAULT_SETTINGS.showLandmass).toBe(true);
+    expect(useSettingsStore.getState().showLandmass).toBe(true);
+  });
+
+  it("setShowLandmass toggles showLandmass and round-trips through resetSection('visuals')", () => {
+    const s = useSettingsStore.getState();
+    expect(s.showLandmass).toBe(true);
+    s.setShowLandmass(false);
+    expect(useSettingsStore.getState().showLandmass).toBe(false);
+    s.setShowLandmass(true);
+    expect(useSettingsStore.getState().showLandmass).toBe(true);
+    s.setShowLandmass(false);
+    s.resetSection("visuals");
+    expect(useSettingsStore.getState().showLandmass).toBe(DEFAULT_SETTINGS.showLandmass);
+  });
+
   describe("clearForSignOut", () => {
     it("resets all settings to DEFAULT_SETTINGS including datasetHomePositions", () => {
       const s = useSettingsStore.getState();

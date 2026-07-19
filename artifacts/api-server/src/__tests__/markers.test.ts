@@ -90,11 +90,11 @@ describe("GET /api/markers — auth required", () => {
     expect(Array.isArray(res.body)).toBe(true);
   });
 
-  it("returns 200 when authenticated but no datasetId (zod.coerce.string() coerces undefined)", async () => {
+  it("returns 400 when authenticated but no datasetId and no bounds params", async () => {
     const res = await request(app)
       .get("/api/markers")
       .set(AUTHED_HEADER);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
   });
 });
 

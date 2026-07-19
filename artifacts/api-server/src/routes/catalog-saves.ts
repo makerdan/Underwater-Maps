@@ -37,7 +37,6 @@ import { validateBody } from "../middlewares/validateBody.js";
 import {
   getCatalogEntries,
   searchCatalog,
-  seedDatasetCatalog,
   type CatalogSeedEntry,
 } from "../lib/catalogSeeder.js";
 import {
