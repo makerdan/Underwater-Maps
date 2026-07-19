@@ -45,6 +45,7 @@ import { LoadingDial } from "@/components/LoadingDial";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 import {
   buildLibraryTree,
+  buildMoveOptions,
   descendantFolderIds,
   isDescendantOf,
   suggestUniqueName,
@@ -75,12 +76,16 @@ interface Props {
   onSelectionChange?: (ids: Set<string>) => void;
   /** Increment to trigger bulk-delete of currently selected user-library items. */
   bulkDeleteSignal?: number;
-  /** Set to open the Move-to dialog for a specific user dataset. */
-  externalMoveSignal?: { id: string; name: string; folderId: string | null; seq: number } | null;
+  /** Set to open the Move-to dialog for a specific user dataset or folder. */
+  externalMoveSignal?: { id: string; name: string; folderId: string | null; kind?: "dataset" | "folder"; seq: number } | null;
+  /** Set to open the Move-to dialog for a batch of dataset ids. */
+  bulkMoveSignal?: { datasetIds: string[]; seq: number } | null;
   /** Set to begin inline rename for a specific user dataset. */
   externalRenameSignal?: { id: string; name: string; seq: number } | null;
   /** Called when the user clicks the GEOREFERENCE badge on a dataset that needs georeferencing. */
   onGeoreference?: (ds: UserDatasetMeta) => void;
+  /** Optional action bar node — rendered above the first selected row when present. */
+  actionBar?: React.ReactNode;
 }
 
 type DragKind = "folder" | "dataset";
@@ -109,8 +114,10 @@ export const DatasetFolderTree: React.FC<Props> = ({
   onSelectionChange,
   bulkDeleteSignal,
   externalMoveSignal,
+  bulkMoveSignal,
   externalRenameSignal,
   onGeoreference,
+  actionBar,
 }) => {
   const qc = useQueryClient();
   const expanded = useSettingsStore((s) => s.datasetFolderExpanded);
@@ -232,9 +239,12 @@ export const DatasetFolderTree: React.FC<Props> = ({
         id: string;
         name: string;
         currentParentId: string | null;
+        /** Set for bulk dataset moves — contains the full list of dataset ids. */
+        bulkIds?: string[];
       }
     | null
   >(null);
+  const [bulkMovePending, setBulkMovePending] = useState(false);
 
   // ─── Multi-select state ───────────────────────────────────────────────────
   // selectedIds contains both folder IDs and dataset IDs. Clicking a folder
@@ -334,12 +344,13 @@ export const DatasetFolderTree: React.FC<Props> = ({
     );
 
     // All dataset IDs that will be gone after commit (for onDatasetsRemoved).
-    const allRemovedDatasetIds: string[] = [
-      ...snapshotDatasetIds,
-      ...datasets
-        .filter((ds) => ds.folderId && coveredByFolder.has(ds.id))
-        .map((ds) => ds.id),
-    ];
+    // Use standaloneDatasetIds + folder-subtree datasets to avoid duplicates:
+    // snapshotDatasetIds already contains folder-subtree datasets (added by
+    // toggleFolderSelection), so combining it with coveredByFolder produces
+    // duplicate ids. We use standaloneDatasetIds (which excludes covered ones)
+    // instead. The folder subtree ids are collected after folderSubtrees is
+    // built; we compute them lazily inside the commit closure.
+    const standaloneOnlyIds = [...standaloneDatasetIds];
 
     // Snapshot folder subtree info now for use inside the commit closure —
     // the fullTree ref may have changed by the time the timer fires.
@@ -403,7 +414,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         );
       }
 
-      for (const dsId of standaloneDatasetIds) {
+      for (const dsId of standaloneOnlyIds) {
         deleteDataset.mutate(
           { id: dsId },
           {
@@ -427,10 +438,6 @@ export const DatasetFolderTree: React.FC<Props> = ({
             },
           },
         );
-      }
-
-      if (allRemovedDatasetIds.length > 0) {
-        onDatasetsRemoved?.(allRemovedDatasetIds);
       }
     };
 
@@ -483,7 +490,6 @@ export const DatasetFolderTree: React.FC<Props> = ({
   }, [
     selectedIds,
     fullTree.byId,
-    datasets,
     collectFolderSubtreeIds,
     setPendingDeleteDatasetIds,
     setPendingDeleteFolderIds,
@@ -516,12 +522,28 @@ export const DatasetFolderTree: React.FC<Props> = ({
     if (!externalMoveSignal || externalMoveSignal.seq === prevMoveSeq.current) return;
     prevMoveSeq.current = externalMoveSignal.seq;
     setMoveTarget({
-      kind: "dataset",
+      kind: externalMoveSignal.kind ?? "dataset",
       id: externalMoveSignal.id,
       name: externalMoveSignal.name,
       currentParentId: externalMoveSignal.folderId,
     });
   }, [externalMoveSignal]);
+
+  // Parent provides a bulk dataset move signal.
+  const prevBulkMoveSeq = useRef(0);
+  useEffect(() => {
+    if (!bulkMoveSignal || bulkMoveSignal.seq === prevBulkMoveSeq.current) return;
+    if (bulkMoveSignal.datasetIds.length === 0) return;
+    prevBulkMoveSeq.current = bulkMoveSignal.seq;
+    const count = bulkMoveSignal.datasetIds.length;
+    setMoveTarget({
+      kind: "dataset",
+      id: "__bulk__",
+      name: `${count} dataset${count === 1 ? "" : "s"}`,
+      currentParentId: null,
+      bulkIds: bulkMoveSignal.datasetIds,
+    });
+  }, [bulkMoveSignal]);
 
   // Parent provides a rename target to begin inline rename.
   const prevRenameSeq = useRef(0);
@@ -556,6 +578,30 @@ export const DatasetFolderTree: React.FC<Props> = ({
   const handleMoveConfirm = useCallback(
     (targetFolderId: string | null) => {
       if (!moveTarget) return;
+
+      // ── Bulk dataset move ─────────────────────────────────────────────────
+      if (moveTarget.bulkIds && moveTarget.bulkIds.length > 0) {
+        setBulkMovePending(true);
+        Promise.all(
+          moveTarget.bulkIds.map((id) =>
+            moveDataset.mutateAsync({ id, data: { folderId: targetFolderId } }),
+          ),
+        )
+          .then(() => {
+            if (targetFolderId) setExpand(targetFolderId, true);
+            invalidateAll();
+          })
+          .catch((err) =>
+            setError(err instanceof Error ? err.message : "Move failed"),
+          )
+          .finally(() => {
+            setBulkMovePending(false);
+            setMoveTarget(null);
+          });
+        return;
+      }
+
+      // ── Single item move ──────────────────────────────────────────────────
       // Keep the Move-to dialog mounted while the mutation is in flight so
       // the Move button can show its spinner; close it on settle (success
       // or error) instead of synchronously after dispatch.
@@ -735,7 +781,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
       // so the user explicitly opts into deleting the children they saw.
       const folderId = confirmDelete.id;
       const name = confirmDelete.name;
-      const mode = confirmDelete.recursive ? "contents" : "contents";
+      const mode = confirmDelete.recursive ? "contents" : "promote";
       setConfirmDelete(null);
 
       // Collect every dataset id that lives in the doomed subtree *before*
@@ -1065,8 +1111,13 @@ export const DatasetFolderTree: React.FC<Props> = ({
     else rowRefs.current.delete(key);
   }, []);
 
+  // Tracks whether the action bar has been inserted above a selected row
+  // in the current render pass. Reset at the start of each render.
+  const actionBarInserted = useRef(false);
+
   // Reset the builder at the start of each render and commit at the end.
   rowOrderBuilder.current = [];
+  actionBarInserted.current = false;
   const trackRow = (kind: "folder" | "dataset", id: string) => {
     rowOrderBuilder.current.push({ kind, id });
   };
@@ -1155,7 +1206,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
     />
   );
 
-  const renderFolderRow = (node: FolderNode) => {
+  const renderFolderRow = (node: FolderNode): React.ReactNode => {
     const isExpanded = expanded[node.folder.id] ?? false;
     const isRenaming = renaming?.kind === "folder" && renaming.id === node.folder.id;
     const isDraggingThis = dragging?.kind === "folder" && dragging.id === node.folder.id;
@@ -1166,7 +1217,14 @@ export const DatasetFolderTree: React.FC<Props> = ({
       deletingFolderIds.has(node.folder.id) ||
       movingFolderIds.has(node.folder.id);
     trackRow("folder", node.folder.id);
-    return (
+    const isSelected = selectedIds.has(node.folder.id);
+    const showActionBarHere =
+      actionBar != null &&
+      selectionMode &&
+      isSelected &&
+      !actionBarInserted.current;
+    if (showActionBarHere) actionBarInserted.current = true;
+    const folderRowEl = (
       <FolderRow
         key={node.folder.id}
         node={node}
@@ -1190,14 +1248,18 @@ export const DatasetFolderTree: React.FC<Props> = ({
         deleting={deleting}
         registerRow={registerRow}
         selectionMode={selectionMode}
-        isSelected={selectedIds.has(node.folder.id)}
+        isSelected={isSelected}
         onToggleSelect={() => toggleFolderSelection(node.folder.id)}
         panelWidth={panelWidth}
       />
     );
+    if (showActionBarHere) {
+      return <React.Fragment key={node.folder.id}>{actionBar}{folderRowEl}</React.Fragment>;
+    }
+    return folderRowEl;
   };
 
-  const renderDatasetRow = (ds: UserDatasetMeta, depth: number) => {
+  const renderDatasetRow = (ds: UserDatasetMeta, depth: number): React.ReactNode => {
     const active = ds.id === activeUserDatasetId;
     const loading = ds.id === loadingId;
     // Drive the "deleting" UX directly from the mutation state so the row
@@ -1210,7 +1272,14 @@ export const DatasetFolderTree: React.FC<Props> = ({
       movingDatasetIds.has(ds.id);
     const isRenaming = renaming?.kind === "dataset" && renaming.id === ds.id;
     trackRow("dataset", ds.id);
-    return (
+    const isSelected = selectedIds.has(ds.id);
+    const showActionBarHere =
+      actionBar != null &&
+      selectionMode &&
+      isSelected &&
+      !actionBarInserted.current;
+    if (showActionBarHere) actionBarInserted.current = true;
+    const datasetRowEl = (
       <DatasetRow
         key={ds.id}
         ds={ds}
@@ -1231,10 +1300,14 @@ export const DatasetFolderTree: React.FC<Props> = ({
         isDragging={dragging?.kind === "dataset" && dragging.id === ds.id}
         registerRow={registerRow}
         selectionMode={selectionMode}
-        isSelected={selectedIds.has(ds.id)}
+        isSelected={isSelected}
         panelWidth={panelWidth}
       />
     );
+    if (showActionBarHere) {
+      return <React.Fragment key={ds.id}>{actionBar}{datasetRowEl}</React.Fragment>;
+    }
+    return datasetRowEl;
   };
 
   const renderFolder = (node: FolderNode): React.ReactNode => {
@@ -1356,11 +1429,13 @@ export const DatasetFolderTree: React.FC<Props> = ({
             tree={tree}
             target={moveTarget}
             isPending={
-              (moveTarget.kind === "folder"
-                ? moveFolder.isPending &&
-                  moveFolder.variables?.id === moveTarget.id
-                : moveDataset.isPending &&
-                  moveDataset.variables?.id === moveTarget.id) || false
+              moveTarget.bulkIds
+                ? bulkMovePending
+                : (moveTarget.kind === "folder"
+                    ? moveFolder.isPending &&
+                      moveFolder.variables?.id === moveTarget.id
+                    : moveDataset.isPending &&
+                      moveDataset.variables?.id === moveTarget.id) || false
             }
             onCancel={() => setMoveTarget(null)}
             onConfirm={handleMoveConfirm}
@@ -1837,56 +1912,6 @@ const RootDropZone: React.FC<{ enabled: boolean }> = ({ enabled }) => {
   );
 };
 
-interface MoveOption {
-  /** null = library root */
-  id: string | null;
-  label: string;
-  depth: number;
-  disabled: boolean;
-  disabledReason?: string;
-}
-
-function buildMoveOptions(
-  tree: LibraryTree,
-  target: { kind: "folder" | "dataset"; id: string; currentParentId: string | null },
-): MoveOption[] {
-  const blocked =
-    target.kind === "folder"
-      ? descendantFolderIds(tree.byId, target.id)
-      : new Set<string>();
-  const opts: MoveOption[] = [];
-  opts.push({
-    id: null,
-    label: "Library root",
-    depth: 0,
-    disabled: target.currentParentId === null,
-    disabledReason:
-      target.currentParentId === null ? "Already here" : undefined,
-  });
-  const walk = (nodes: FolderNode[], depth: number) => {
-    for (const n of nodes) {
-      const isSelf = target.kind === "folder" && n.folder.id === target.id;
-      const isDescendant = blocked.has(n.folder.id);
-      const isCurrent = n.folder.id === target.currentParentId;
-      const disabled = isSelf || isDescendant || isCurrent;
-      let reason: string | undefined;
-      if (isCurrent) reason = "Already here";
-      else if (isSelf) reason = "Cannot move into itself";
-      else if (isDescendant) reason = "Cannot move into a subfolder";
-      opts.push({
-        id: n.folder.id,
-        label: n.folder.name,
-        depth: depth + 1,
-        disabled,
-        disabledReason: reason,
-      });
-      walk(n.children, depth + 1);
-    }
-  };
-  walk(tree.roots, 0);
-  return opts;
-}
-
 const MoveToDialog: React.FC<{
   tree: LibraryTree;
   target: {
@@ -1905,6 +1930,16 @@ const MoveToDialog: React.FC<{
     firstEnabledIdx >= 0 ? firstEnabledIdx : 0,
   );
   const listRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useFocusTrap(panelRef);
+
+  // Reset selection to first enabled option whenever the option list changes
+  // (e.g. background tree refresh while the dialog is open).
+  useEffect(() => {
+    const firstEnabled = options.findIndex((o) => !o.disabled);
+    setSelectedIdx(firstEnabled >= 0 ? firstEnabled : 0);
+  }, [options]);
 
   useEffect(() => {
     // Focus the listbox so arrow keys work immediately.
@@ -1961,6 +1996,7 @@ const MoveToDialog: React.FC<{
       aria-busy={isPending || undefined}
     >
       <div
+        ref={panelRef}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "rgba(0,10,20,0.95)",

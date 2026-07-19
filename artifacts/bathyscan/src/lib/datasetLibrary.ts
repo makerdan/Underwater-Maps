@@ -127,6 +127,62 @@ export function descendantFolderIds(
   return out;
 }
 
+// ─── Move-to dialog helpers ────────────────────────────────────────────────
+
+export interface MoveOption {
+  /** null = library root */
+  id: string | null;
+  label: string;
+  depth: number;
+  disabled: boolean;
+  disabledReason?: string;
+}
+
+/**
+ * Build the flat option list for the Move-to dialog. Folders that cannot be
+ * a legal move target (self, descendants, current parent) are disabled.
+ */
+export function buildMoveOptions(
+  tree: LibraryTree,
+  target: { kind: "folder" | "dataset"; id: string; currentParentId: string | null },
+): MoveOption[] {
+  const blocked =
+    target.kind === "folder"
+      ? descendantFolderIds(tree.byId, target.id)
+      : new Set<string>();
+  const opts: MoveOption[] = [];
+  opts.push({
+    id: null,
+    label: "Library root",
+    depth: 0,
+    disabled: target.currentParentId === null,
+    disabledReason:
+      target.currentParentId === null ? "Already here" : undefined,
+  });
+  const walk = (nodes: FolderNode[], depth: number) => {
+    for (const n of nodes) {
+      const isSelf = target.kind === "folder" && n.folder.id === target.id;
+      const isDescendant = blocked.has(n.folder.id);
+      const isCurrent = n.folder.id === target.currentParentId;
+      const disabled = isSelf || isDescendant || isCurrent;
+      let reason: string | undefined;
+      if (isCurrent) reason = "Already here";
+      else if (isSelf) reason = "Cannot move into itself";
+      else if (isDescendant) reason = "Cannot move into a subfolder";
+      opts.push({
+        id: n.folder.id,
+        label: n.folder.name,
+        depth: depth + 1,
+        disabled,
+        disabledReason: reason,
+      });
+      walk(n.children, depth + 1);
+    }
+  };
+  walk(tree.roots, 0);
+  return opts;
+}
+
 /** Suggest a non-colliding name in a parent: "New folder", "New folder 2", ... */
 export function suggestUniqueName(
   siblings: { name: string }[],

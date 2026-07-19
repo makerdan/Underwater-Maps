@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { subscribeToReconnect, markServerUnreachable, queryClient } from "@/lib/queryClient";
 import { useDropzone } from "react-dropzone";
 import type { FileRejection } from "react-dropzone";
@@ -12,10 +12,12 @@ import {
   useGetUserDatasets,
   useGetUserDatasetsIdTerrain,
   useGetUserDatasetsIdOverview,
+  useGetUserFolders,
   useGetMarkers,
   getGetDatasetsIdTerrainQueryKey,
   getGetDatasetsIdOverviewQueryKey,
   getGetUserDatasetsQueryKey,
+  getGetUserFoldersQueryKey,
   getGetUserDatasetsIdTerrainQueryKey,
   getGetUserDatasetsIdOverviewQueryKey,
   getGetMarkersQueryKey,
@@ -790,7 +792,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [librarySelectedIds, setLibrarySelectedIds] = useState<Set<string>>(() => new Set());
   const [libraryBulkDeleteSignal, setLibraryBulkDeleteSignal] = useState(0);
   const [libraryMoveSignal, setLibraryMoveSignal] = useState<{
-    id: string; name: string; folderId: string | null; seq: number;
+    id: string; name: string; folderId: string | null; kind?: "dataset" | "folder"; seq: number;
+  } | null>(null);
+  const [libraryBulkMoveSignal, setLibraryBulkMoveSignal] = useState<{
+    datasetIds: string[]; seq: number;
   } | null>(null);
   const [libraryRenameSignal, setLibraryRenameSignal] = useState<{
     id: string; name: string; seq: number;
@@ -908,6 +913,24 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const { data: userDatasets, isLoading: userDatasetsLoading } = useGetUserDatasets({
     query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserDatasetsQueryKey() },
   });
+  const { data: userFolders } = useGetUserFolders({
+    query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserFoldersQueryKey() },
+  });
+  /** Set of folder ids in the user library — used by action-bar move logic. */
+  const userFolderIdSet = useMemo(
+    () => new Set((userFolders ?? []).map((f) => f.id)),
+    [userFolders],
+  );
+  /**
+   * "Move To Folder" is enabled when:
+   *  • exactly 1 item selected (folder or dataset), OR
+   *  • 2+ items all of which are datasets (no folders mixed in).
+   */
+  const canMoveToFolder = useMemo(() => {
+    if (librarySelectedIds.size === 0) return false;
+    if (librarySelectedIds.size === 1) return true;
+    return [...librarySelectedIds].every((id) => !userFolderIdSet.has(id));
+  }, [librarySelectedIds, userFolderIdSet]);
 
   // ─── Eviction toast: fires when terrainStore silently evicts a dataset ─────
   useEffect(() => {
@@ -2554,13 +2577,41 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   }, [toast]);
 
   const handleActionMoveToFolder = useCallback(() => {
-    if (librarySelectedIds.size !== 1) return;
-    const [id] = [...librarySelectedIds];
-    if (!id) return;
-    const ds = (userDatasets ?? []).find((d) => d.id === id);
-    if (!ds) return;
-    setLibraryMoveSignal({ id: ds.id, name: ds.name, folderId: ds.folderId ?? null, seq: Date.now() });
-  }, [librarySelectedIds, userDatasets]);
+    if (librarySelectedIds.size === 0) return;
+    const ids = [...librarySelectedIds];
+
+    if (librarySelectedIds.size === 1) {
+      const id = ids[0]!;
+      if (userFolderIdSet.has(id)) {
+        // Single folder selected
+        const folder = (userFolders ?? []).find((f) => f.id === id);
+        if (!folder) return;
+        setLibraryMoveSignal({
+          id: folder.id,
+          name: folder.name,
+          folderId: folder.parentId ?? null,
+          kind: "folder",
+          seq: Date.now(),
+        });
+      } else {
+        // Single dataset selected
+        const ds = (userDatasets ?? []).find((d) => d.id === id);
+        if (!ds) return;
+        setLibraryMoveSignal({
+          id: ds.id,
+          name: ds.name,
+          folderId: ds.folderId ?? null,
+          kind: "dataset",
+          seq: Date.now(),
+        });
+      }
+    } else {
+      // Multi-dataset bulk move (only reachable when all ids are datasets)
+      const datasetIds = ids.filter((id) => !userFolderIdSet.has(id));
+      if (datasetIds.length === 0) return;
+      setLibraryBulkMoveSignal({ datasetIds, seq: Date.now() });
+    }
+  }, [librarySelectedIds, userDatasets, userFolders, userFolderIdSet]);
 
   const handleActionPaste = useCallback(() => {
     toast({ title: "Coming soon", description: "Paste is not yet available." });
@@ -2773,8 +2824,55 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         onSelectionChange={setLibrarySelectedIds}
                         bulkDeleteSignal={libraryBulkDeleteSignal}
                         externalMoveSignal={libraryMoveSignal}
+                        bulkMoveSignal={libraryBulkMoveSignal}
                         externalRenameSignal={libraryRenameSignal}
                         onGeoreference={setGeorefDataset}
+                        actionBar={librarySelectedIds.size > 0 ? (
+                          <div
+                            data-testid="library-action-bar"
+                            style={{
+                              margin: "0 8px 0",
+                              padding: "6px 8px",
+                              background: "rgba(0,229,255,0.06)",
+                              border: "1px solid rgba(0,229,255,0.2)",
+                              borderRadius: 4,
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: 4,
+                              position: "sticky",
+                              top: 0,
+                              zIndex: 10,
+                            }}
+                          >
+                            <span style={{
+                              fontSize: 13.5, color: "#7dd3fc", width: "100%",
+                              letterSpacing: "0.08em", marginBottom: 2,
+                            }}>
+                              {presetSelectedIds.size + librarySelectedIds.size} selected
+                            </span>
+                            <button data-testid="btn-action-load-together" onClick={() => { void handleLoadTogether(); }} style={ACTION_BTN_STYLE}>Load Together</button>
+                            <button
+                              data-testid="btn-action-delete"
+                              onClick={handleActionDelete}
+                              disabled={librarySelectedIds.size === 0 && presetSelectedIds.size === 0}
+                              style={{ ...ACTION_BTN_STYLE, opacity: (librarySelectedIds.size === 0 && presetSelectedIds.size === 0) ? 0.35 : 1, color: "#fca5a5", borderColor: "rgba(239,68,68,0.4)" }}
+                            >Delete</button>
+                            <button data-testid="btn-action-copy" onClick={handleActionCopy} style={ACTION_BTN_STYLE}>Copy</button>
+                            <button
+                              data-testid="btn-action-move-to-folder"
+                              onClick={handleActionMoveToFolder}
+                              disabled={!canMoveToFolder}
+                              style={{ ...ACTION_BTN_STYLE, opacity: !canMoveToFolder ? 0.35 : 1 }}
+                            >Move To Folder</button>
+                            <button data-testid="btn-action-paste" onClick={handleActionPaste} style={ACTION_BTN_STYLE}>Paste</button>
+                            <button
+                              data-testid="btn-action-rename"
+                              onClick={handleActionRename}
+                              disabled={librarySelectedIds.size !== 1 || presetSelectedIds.size > 0}
+                              style={{ ...ACTION_BTN_STYLE, opacity: (librarySelectedIds.size !== 1 || presetSelectedIds.size > 0) ? 0.35 : 1 }}
+                            >Rename</button>
+                          </div>
+                        ) : null}
                       />
                     </ErrorBoundary>
                   </>
@@ -2940,7 +3038,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 </div>
                 {/* ── end Example Datasets folder ── */}
 
-                {(presetSelectedIds.size + librarySelectedIds.size > 0) && (
+                {/* Action bar when ONLY preset items are selected (no library selection) —
+                    rendered here. When library items are selected, the action bar is
+                    passed into DatasetFolderTree as actionBar prop and floats above the
+                    first selected row. */}
+                {presetSelectedIds.size > 0 && librarySelectedIds.size === 0 && (
                   <div
                     data-testid="library-action-bar"
                     style={{
@@ -2958,28 +3060,28 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       fontSize: 13.5, color: "#7dd3fc", width: "100%",
                       letterSpacing: "0.08em", marginBottom: 2,
                     }}>
-                      {presetSelectedIds.size + librarySelectedIds.size} selected
+                      {presetSelectedIds.size} selected
                     </span>
                     <button data-testid="btn-action-load-together" onClick={() => { void handleLoadTogether(); }} style={ACTION_BTN_STYLE}>Load Together</button>
                     <button
                       data-testid="btn-action-delete"
                       onClick={handleActionDelete}
-                      disabled={librarySelectedIds.size === 0 && presetSelectedIds.size === 0}
-                      style={{ ...ACTION_BTN_STYLE, opacity: (librarySelectedIds.size === 0 && presetSelectedIds.size === 0) ? 0.35 : 1, color: "#fca5a5", borderColor: "rgba(239,68,68,0.4)" }}
+                      disabled={presetSelectedIds.size === 0}
+                      style={{ ...ACTION_BTN_STYLE, opacity: presetSelectedIds.size === 0 ? 0.35 : 1, color: "#fca5a5", borderColor: "rgba(239,68,68,0.4)" }}
                     >Delete</button>
                     <button data-testid="btn-action-copy" onClick={handleActionCopy} style={ACTION_BTN_STYLE}>Copy</button>
                     <button
                       data-testid="btn-action-move-to-folder"
                       onClick={handleActionMoveToFolder}
-                      disabled={librarySelectedIds.size !== 1}
-                      style={{ ...ACTION_BTN_STYLE, opacity: librarySelectedIds.size !== 1 ? 0.35 : 1 }}
+                      disabled={true}
+                      style={{ ...ACTION_BTN_STYLE, opacity: 0.35 }}
                     >Move To Folder</button>
                     <button data-testid="btn-action-paste" onClick={handleActionPaste} style={ACTION_BTN_STYLE}>Paste</button>
                     <button
                       data-testid="btn-action-rename"
                       onClick={handleActionRename}
-                      disabled={librarySelectedIds.size !== 1 || presetSelectedIds.size > 0}
-                      style={{ ...ACTION_BTN_STYLE, opacity: (librarySelectedIds.size !== 1 || presetSelectedIds.size > 0) ? 0.35 : 1 }}
+                      disabled={true}
+                      style={{ ...ACTION_BTN_STYLE, opacity: 0.35 }}
                     >Rename</button>
                   </div>
                 )}
