@@ -397,18 +397,44 @@ describe("applyColormapToVertexColors — band-boundary live repaint", () => {
     // depths: real value at index 0, survey gap (null) at index 1
     const depths: (number | null)[] = [500, null];
     const colors = new Float32Array(6);
-    // Pre-fill index 1 with the no-data steel-blue (as buildTerrainGeometry does)
-    colors[3] = 0.35;
-    colors[4] = 0.45;
-    colors[5] = 0.55;
+    // Pre-fill index 1 with the no-data light-gray (as buildTerrainGeometry does)
+    colors[3] = NO_DATA_COLOR.r;
+    colors[4] = NO_DATA_COLOR.g;
+    colors[5] = NO_DATA_COLOR.b;
     applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean"));
     // Index 0 should have been written by the colormap.
     const anyNonZero = colors[0] !== 0 || colors[1] !== 0 || colors[2] !== 0;
     expect(anyNonZero).toBe(true);
-    // Index 1 (null cell) must retain its no-data steel-blue exactly.
-    expect(colors[3]).toBeCloseTo(0.35, 5);
-    expect(colors[4]).toBeCloseTo(0.45, 5);
-    expect(colors[5]).toBeCloseTo(0.55, 5);
+    // Index 1 (null cell) must retain the no-data light-gray exactly.
+    expect(colors[3]).toBeCloseTo(NO_DATA_COLOR.r, 5);
+    expect(colors[4]).toBeCloseTo(NO_DATA_COLOR.g, 5);
+    expect(colors[5]).toBeCloseTo(NO_DATA_COLOR.b, 5);
+  });
+
+  it("applyColormapToVertexColors: null cells in a mixed grid are exactly NO_DATA_COLOR after pre-fill", () => {
+    // Simulate the full pipeline: buildTerrainGeometry pre-fills null cells with
+    // NO_DATA_COLOR, then applyColormapToVertexColors must leave them untouched.
+    const depths: (number | null)[] = [0, null, 500, null, 1000];
+    const colors = new Float32Array(depths.length * 3);
+    // Pre-fill all null-cell slots with NO_DATA_COLOR (as buildTerrainGeometry does)
+    for (let i = 0; i < depths.length; i++) {
+      if (depths[i] === null) {
+        colors[i * 3]     = NO_DATA_COLOR.r;
+        colors[i * 3 + 1] = NO_DATA_COLOR.g;
+        colors[i * 3 + 2] = NO_DATA_COLOR.b;
+      }
+    }
+    applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean"));
+    // Null cells (indices 1 and 3) must retain NO_DATA_COLOR exactly.
+    expect(colors[3]).toBeCloseTo(NO_DATA_COLOR.r, 5);
+    expect(colors[4]).toBeCloseTo(NO_DATA_COLOR.g, 5);
+    expect(colors[5]).toBeCloseTo(NO_DATA_COLOR.b, 5);
+    expect(colors[9]).toBeCloseTo(NO_DATA_COLOR.r, 5);
+    expect(colors[10]).toBeCloseTo(NO_DATA_COLOR.g, 5);
+    expect(colors[11]).toBeCloseTo(NO_DATA_COLOR.b, 5);
+    // Non-null cells (indices 0, 2, 4) must have been written by the colormap (non-zero).
+    const idx0HasColor = colors[0] !== 0 || colors[1] !== 0 || colors[2] !== 0;
+    expect(idx0HasColor).toBe(true);
   });
 });
 
@@ -540,6 +566,12 @@ describe("applyColormapToVertexColors — non-finite depth resilience", () => {
   });
 });
 
+describe("NO_DATA_COLOR constant", () => {
+  it("is light gray { r: 0.75, g: 0.75, b: 0.75 } — cartographically conventional land colour", () => {
+    expect(NO_DATA_COLOR).toEqual({ r: 0.75, g: 0.75, b: 0.75 });
+  });
+});
+
 describe("buildTerrainGeometry — null depth (survey-gap) cells", () => {
   it("null depth vertex is placed at Y=0 (water surface)", () => {
     const N = 2;
@@ -551,7 +583,7 @@ describe("buildTerrainGeometry — null depth (survey-gap) cells", () => {
     expect(positions[1]).toBe(0);
   });
 
-  it("null depth vertex receives the steel-blue no-data colour", () => {
+  it("null depth vertex receives the light-gray no-data colour", () => {
     const N = 2;
     const grid = makeGrid(N, { depths: [null, 500, 500, 1000] as unknown as number[], minDepth: 0, maxDepth: 1000 });
     const geo = buildTerrainGeometry(grid);

@@ -21,8 +21,8 @@ export const MAX_DEPTH_WORLD = 50;
  *   immediately after mount, so baking colours here would be wasted work.
  * - Recomputes vertex normals for correct lighting.
  */
-/** Steel-blue colour for no-data (null depth) tiles — visually distinct from the depth colormap. */
-export const NO_DATA_COLOR = { r: 0.35, g: 0.45, b: 0.55 } as const;
+/** Light-gray colour for no-data (null depth) tiles — cartographically conventional land/gap colour. */
+export const NO_DATA_COLOR = { r: 0.75, g: 0.75, b: 0.75 } as const;
 
 export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
   const { resolution: N, depths, minDepth, maxDepth } = grid;
