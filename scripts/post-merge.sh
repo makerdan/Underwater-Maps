@@ -20,6 +20,10 @@ pnpm run typecheck && pnpm run lint
 # Guardrail: catch hardcoded user-ID string literals in e2e specs before they ship.
 # Any string matching the "*-user*" pattern outside tests/e2e/fixtures.ts is flagged.
 bash scripts/check-e2e-user-ids.sh
+# Guardrail: catch bare localStorage.removeItem("bathyscan:panel-collapse") calls in
+# e2e specs. This pattern races with server-side hydration; the resetPanelCollapse
+# fixture (tests/e2e/fixtures.ts) must be used instead.
+bash scripts/check-e2e-panel-collapse.sh
 # Unit tests are intentionally not run here — the full recursive test suite
 # consumes enough memory to get OOM-killed mid-run. Tests are covered by the
 # validation system (test-unit workflow) and pre-existing failures are tracked

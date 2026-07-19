@@ -25,6 +25,7 @@
     "check:lock-skill-sync": "node scripts/check-lock-skill-sync.mjs",
     "check:ports": "node scripts/check-hardcoded-ports.mjs",
     "check:e2e-user-ids": "bash scripts/check-e2e-user-ids.sh",
+    "check:e2e-panel-collapse": "bash scripts/check-e2e-panel-collapse.sh",
     "check:e2e-cjs-globals": "bash scripts/check-e2e-cjs-globals.sh",
     "check:fixture-freshness": "bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh",
     "check:schema-stale": "node scripts/check-schema-drift.mjs",
