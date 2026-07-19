@@ -78,7 +78,39 @@ import { resolve as resolvePath } from "node:path";
 const fileStarts = new Map<string, number>();
 const fileSlowest = new Map<string, Array<{ name: string; durationMs: number }>>();
 
-export const test = base.extend<{ resetSettings: void; fileBudgetGuard: void; suppressOnboarding: void }>({
+/**
+ * All known panel IDs from panelCollapseStore, set to false (expanded).
+ * Kept in sync with PanelId in artifacts/bathyscan/src/lib/panelCollapseStore.ts.
+ * When a new panel ID is added to that union, add it here too.
+ */
+const ALL_PANELS_EXPANDED: Record<string, boolean> = {
+  datasets: false,
+  zoneOverlay: false,
+  habitat: false,
+  cameraCoords: false,
+  keyboardShortcuts: false,
+  tide: false,
+  overlaysTools: false,
+  mapData: false,
+  conditions: false,
+  driftRoute: false,
+  forecast: false,
+  tripWindows: false,
+  seafloorClassification: false,
+  markersAccordion: false,
+  uploadTerrainAccordion: false,
+  routes: false,
+  myLibrary: false,
+  zoneLegendChip: false,
+  overlaysToolsAdvanced: false,
+  tidePanelAdvanced: false,
+  tidePanelTimeScrub: false,
+  currentsPanelAdvanced: false,
+  habitatAdvanced: false,
+  seafloorAdvanced: false,
+};
+
+export const test = base.extend<{ resetSettings: void; fileBudgetGuard: void; suppressOnboarding: void; resetPanelCollapse: void }>({
   // The full-screen OnboardingOverlay (zIndex 9000) renders from the
   // localStorage-persisted client store BEFORE the server settings hydrate,
   // so the server-side hasSeenOnboarding reset above is not enough — the
@@ -176,6 +208,39 @@ export const test = base.extend<{ resetSettings: void; fileBudgetGuard: void; su
       await use();
     },
     { auto: true },
+  ],
+  /**
+   * Non-auto fixture that writes `bathyscan:panel-collapse` with every known
+   * panel ID set to false (expanded) before the first navigation of a test.
+   *
+   * A sessionStorage guard prevents the initScript from re-running on
+   * subsequent navigations (e.g. page.reload() inside persistence tests),
+   * which would overwrite state that the test itself is asserting on.
+   *
+   * Usage: declare `resetPanelCollapse` in any test or beforeEach that needs
+   * collapsed panels reset to expanded:
+   *
+   *   test.beforeEach(async ({ resetPanelCollapse }) => { void resetPanelCollapse; });
+   *
+   * This fixture is intentionally non-auto so that specs which test the default
+   * collapsed state of panels (e.g. advanced-toggles.spec.ts) are not affected.
+   */
+  resetPanelCollapse: [
+    async ({ page }, use) => {
+      await page.addInitScript((allExpanded: Record<string, boolean>) => {
+        const GUARD = "bathyscan:e2e-panel-collapse-reset";
+        if (sessionStorage.getItem(GUARD)) return;
+        sessionStorage.setItem(GUARD, "1");
+        try {
+          localStorage.setItem(
+            "bathyscan:panel-collapse",
+            JSON.stringify({ state: { collapsed: allExpanded }, version: 1 }),
+          );
+        } catch {}
+      }, ALL_PANELS_EXPANDED);
+      await use();
+    },
+    { auto: false },
   ],
 });
 

@@ -24,6 +24,15 @@ import { test, expect, type Page, API_URL, E2E_USER_ID } from "./fixtures";
  *   - __bathyTest is used for depth-profile setup (same as depth-profile.spec.ts).
  */
 
+// Reset all panels to expanded before every test in this file so that
+// collapsed-panel state persisted from a prior run cannot silently block
+// controls (e.g. tidal-overlay-toggle inside OverlaysToolsPanel body).
+// The fixture uses a sessionStorage guard and only fires on the first
+// navigation of each test, so page.reload() inside a test is unaffected.
+test.beforeEach(async ({ resetPanelCollapse }) => {
+  void resetPanelCollapse;
+});
+
 // ── Shared selectors ──────────────────────────────────────────────────────────
 const SCRUB_BAR          = "[data-testid='timeline-scrub-bar']";
 const TIDE_TOGGLE        = "[data-testid='overlay-toggle-tide']";
@@ -63,21 +72,6 @@ async function patchTideOverlay(page: Page, active: boolean): Promise<void> {
     },
     { active },
   );
-  // Ensure the OverlaysToolsPanel is expanded on load so tidal-overlay-toggle
-  // is visible.  panelCollapseStore persists under "bathyscan:panel-collapse";
-  // a prior run may have left overlaysTools collapsed.
-  await page.addInitScript(() => {
-    try {
-      const raw = localStorage.getItem("bathyscan:panel-collapse");
-      const stored = raw
-        ? (JSON.parse(raw) as { state?: { collapsed?: Record<string, boolean> } })
-        : { state: { collapsed: {} } };
-      if (!stored.state) stored.state = { collapsed: {} };
-      if (!stored.state.collapsed) stored.state.collapsed = {};
-      stored.state.collapsed["overlaysTools"] = false;
-      localStorage.setItem("bathyscan:panel-collapse", JSON.stringify(stored));
-    } catch {}
-  });
   // tideOverlayActive is server-persisted; without this PUT the server
   // settings hydrate resets the localStorage seed back to false post-load.
   await page.request.put(`${API_URL}/api/settings`, {

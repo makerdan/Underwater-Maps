@@ -298,7 +298,12 @@ async function openPlanTab(page: Page): Promise<void> {
 }
 
 test.describe("LocationBadge on data panels", () => {
-  test.beforeEach(async ({ page, request }) => {
+  // Reset all panels to expanded before each test so that collapsed state
+  // persisted from a prior run cannot silently block controls inside panel
+  // bodies. The shared fixture uses a sessionStorage guard and only fires on
+  // the first navigation of each test (not on reload).
+  test.beforeEach(async ({ resetPanelCollapse, page, request }) => {
+    void resetPanelCollapse;
     // Suppress the SimulatedDataConfirmDialog so it doesn't block interactions.
     await page.addInitScript(() => {
       try {
@@ -326,26 +331,6 @@ test.describe("LocationBadge on data panels", () => {
   test.describe("ForecastStrip", () => {
     test("shows badge in ready state once surface-conditions data arrives", async ({ page }) => {
       test.setTimeout(90_000);
-      // Ensure the Forecast sidebar section is expanded before the page
-      // bootstraps. The panelCollapseStore persists to localStorage; a previous
-      // test in the same browser context may have collapsed it.
-      await page.addInitScript(() => {
-        try {
-          const raw = window.localStorage.getItem("bathyscan:panel-collapse");
-          if (raw) {
-            const stored = JSON.parse(raw) as {
-              state?: { collapsed?: Record<string, boolean> };
-            };
-            if (stored?.state?.collapsed) {
-              stored.state.collapsed["forecast"] = false;
-              window.localStorage.setItem(
-                "bathyscan:panel-collapse",
-                JSON.stringify(stored),
-              );
-            }
-          }
-        } catch {}
-      });
       await mockReadySurfaceConditions(page);
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
@@ -378,26 +363,6 @@ test.describe("LocationBadge on data panels", () => {
 
     test("shows badge in loading state while surface-conditions fetch is in-flight", async ({ page }) => {
       test.setTimeout(90_000);
-      // Ensure the Forecast sidebar section is expanded before the page
-      // bootstraps. The panelCollapseStore persists to localStorage; a previous
-      // test in the same browser context may have collapsed it.
-      await page.addInitScript(() => {
-        try {
-          const raw = window.localStorage.getItem("bathyscan:panel-collapse");
-          if (raw) {
-            const stored = JSON.parse(raw) as {
-              state?: { collapsed?: Record<string, boolean> };
-            };
-            if (stored?.state?.collapsed) {
-              stored.state.collapsed["forecast"] = false;
-              window.localStorage.setItem(
-                "bathyscan:panel-collapse",
-                JSON.stringify(stored),
-              );
-            }
-          }
-        } catch {}
-      });
       await mockStallingSurfaceConditions(page);
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
@@ -521,25 +486,6 @@ test.describe("LocationBadge on data panels", () => {
   // triggers a new fetch → TidePanel stays mounted with loading=true.
   // ─────────────────────────────────────────────────────────────────────────
   test.describe("TidePanel (embedded)", () => {
-    test.beforeEach(async ({ page }) => {
-      // Seed the OverlaysToolsPanel as expanded so tidal-overlay-toggle is
-      // visible when the page loads.  panelCollapseStore persists under
-      // "bathyscan:panel-collapse"; a previous test run may have left
-      // overlaysTools=true (collapsed).
-      await page.addInitScript(() => {
-        try {
-          const raw = window.localStorage.getItem("bathyscan:panel-collapse");
-          const stored = raw
-            ? (JSON.parse(raw) as { state?: { collapsed?: Record<string, boolean> } })
-            : { state: { collapsed: {} } };
-          if (!stored.state) stored.state = { collapsed: {} };
-          if (!stored.state.collapsed) stored.state.collapsed = {};
-          stored.state.collapsed["overlaysTools"] = false;
-          window.localStorage.setItem("bathyscan:panel-collapse", JSON.stringify(stored));
-        } catch {}
-      });
-    });
-
     test("shows badge in ready state once tidal overlay is active and data arrives", async ({ page }) => {
       test.setTimeout(90_000);
       await mockReadySurfaceConditions(page);
