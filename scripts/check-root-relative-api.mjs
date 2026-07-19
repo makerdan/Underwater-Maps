@@ -64,6 +64,10 @@ function relToRepo(file) {
 // The quote may be ", ', or ` (template literal).
 const ROOT_RELATIVE_API_RE = /\b(?:authorizedFetch|fetch)\(\s*["'`]\/api\//;
 
+// Lines whose first non-whitespace token is a line-comment (//) or the start
+// of a block-comment (/*) are skipped — commented-out code is not a violation.
+const COMMENT_LINE_RE = /^\s*(?:\/\/|\/\*)/;
+
 const violations = [];
 
 for (const file of walk(SCAN_ROOT)) {
@@ -72,6 +76,7 @@ for (const file of walk(SCAN_ROOT)) {
 
   const lines = fs.readFileSync(file, "utf8").split("\n");
   lines.forEach((line, idx) => {
+    if (COMMENT_LINE_RE.test(line)) return;
     if (ROOT_RELATIVE_API_RE.test(line)) {
       violations.push({ file: rel, line: idx + 1, text: line.trim() });
     }
