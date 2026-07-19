@@ -115,11 +115,11 @@ test.describe("LAZ file-upload flow", () => {
     ).toBe(true);
   });
 
-  test.beforeEach(async ({ page, request }) => {
+  test.beforeEach(async ({ page, request, resetPanelCollapse }) => {
+    void resetPanelCollapse;
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
       // Suppress the full-screen OnboardingOverlay (zIndex 9000), which
       // otherwise intercepts clicks on MY UPLOADS rows. Same pattern as

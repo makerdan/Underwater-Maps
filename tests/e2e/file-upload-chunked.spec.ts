@@ -127,11 +127,11 @@ test.describe("Chunked upload flow (> 10 MB)", () => {
     ).toBe(true);
   });
 
-  test.beforeEach(async ({ page, request }) => {
+  test.beforeEach(async ({ page, request, resetPanelCollapse }) => {
+    void resetPanelCollapse;
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
     });
     await cleanupAllUploads(request);

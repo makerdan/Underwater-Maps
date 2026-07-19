@@ -221,17 +221,14 @@ test.describe("upload auto-save end-to-end", () => {
     ).toBe(true);
   });
 
-  test.beforeEach(async ({ page, request }) => {
+  test.beforeEach(async ({ page, request, resetPanelCollapse }) => {
+    void resetPanelCollapse;
     // Suppress SimulatedDataConfirmDialog before any navigation so it cannot
     // block the MY UPLOADS panel or dataset row clicks.
-    // Also clear the panel-collapse localStorage key so the "My Library"
-    // panel always starts expanded regardless of what a prior test run may
-    // have persisted for the bypass user.
     await page.addInitScript(patchOnboardingSeen());
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
     });
     await cleanupAllUploads(request);

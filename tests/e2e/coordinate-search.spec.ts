@@ -67,13 +67,16 @@ test.describe("Coordinate search — Find Data → Overview Map flow", () => {
     ).toBe(true);
   });
 
+  test.beforeEach(async ({ resetPanelCollapse }) => {
+    void resetPanelCollapse;
+  });
+
   test("submitting coordinates opens the Overview Map and shows point-radius results", async ({
     page,
   }) => {
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
     });
 

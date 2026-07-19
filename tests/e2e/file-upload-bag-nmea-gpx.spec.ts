@@ -171,11 +171,11 @@ test.describe("BAG file-upload flow", () => {
     ).toBe(true);
   });
 
-  test.beforeEach(async ({ page, request }) => {
+  test.beforeEach(async ({ page, request, resetPanelCollapse }) => {
+    void resetPanelCollapse;
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
     });
     await cleanupAllUploads(request);
@@ -359,11 +359,11 @@ test.describe("NMEA file-upload flow", () => {
     ).toBe(true);
   });
 
-  test.beforeEach(async ({ page, request }) => {
+  test.beforeEach(async ({ page, request, resetPanelCollapse }) => {
+    void resetPanelCollapse;
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
     });
     await cleanupAllUploads(request);
@@ -474,11 +474,11 @@ test.describe("GPX file-upload flow", () => {
     ).toBe(true);
   });
 
-  test.beforeEach(async ({ page, request }) => {
+  test.beforeEach(async ({ page, request, resetPanelCollapse }) => {
+    void resetPanelCollapse;
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
     });
     await cleanupAllUploads(request);

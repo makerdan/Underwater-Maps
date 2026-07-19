@@ -55,6 +55,10 @@ test.describe("Find Data — My Uploads browse and reload smoke test", () => {
     ).toBe(true);
   });
 
+  test.beforeEach(async ({ resetPanelCollapse }) => {
+    void resetPanelCollapse;
+  });
+
   test("Tolstoi dataset card appears in My Uploads and clicking Load transitions the viewer", async ({
     page,
   }) => {
@@ -64,7 +68,6 @@ test.describe("Find Data — My Uploads browse and reload smoke test", () => {
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
     });
 

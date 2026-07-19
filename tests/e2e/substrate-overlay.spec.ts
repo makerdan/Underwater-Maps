@@ -143,11 +143,11 @@ test.describe("Substrate overlay — custom UUID datasets", () => {
     ).toBe(true);
   });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, resetPanelCollapse }) => {
+    void resetPanelCollapse;
     await page.addInitScript(() => {
       try {
         sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
-        localStorage.removeItem("bathyscan:panel-collapse");
       } catch {}
     });
   });
