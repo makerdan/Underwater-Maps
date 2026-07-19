@@ -76,8 +76,8 @@ export const WaterTempVolumeLayer: React.FC<WaterTempVolumeLayerProps> = ({
   const centerY = (surfY + seafloorY) / 2;
 
   const geometry = useMemo(() => {
-    return new THREE.BoxGeometry(WORLD_SIZE * 1.1, height, WORLD_SIZE * 1.1);
-  }, [height]);
+    return new THREE.BoxGeometry(WORLD_SIZE * 1.1, 1, WORLD_SIZE * 1.1);
+  }, []);
 
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -132,6 +132,7 @@ export const WaterTempVolumeLayer: React.FC<WaterTempVolumeLayerProps> = ({
       geometry={geometry}
       material={material}
       position={[0, centerY, 0]}
+      scale={[1, height, 1]}
       renderOrder={1}
       data-testid="water-temp-volume-layer"
     />
