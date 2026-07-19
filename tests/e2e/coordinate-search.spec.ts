@@ -135,6 +135,16 @@ test.describe("Coordinate search — Find Data → Overview Map flow", () => {
     // The selected-area panel appears with the mocked catalog result.
     const bboxPanel = page.getByTestId("overview-bbox-panel");
     await expect(bboxPanel).toBeVisible({ timeout: 10_000 });
+
+    // Wait for the async point-radius mutation to settle before asserting
+    // content.  React/Zustand batching can occasionally run the OverviewMap
+    // useEffect a second time with a stale null pendingCoordSearch, skipping
+    // the mutateAsync call and leaving the empty-state text in place.
+    // Waiting here gives the effect another chance to fire and receive results.
+    await expect(bboxPanel).not.toContainText('Click "Request bathymetry"', {
+      timeout: 15_000,
+    });
+
     await expect(bboxPanel).toContainText("Clarence Strait Multibeam", {
       timeout: 10_000,
     });
