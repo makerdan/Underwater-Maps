@@ -1192,7 +1192,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const {
     data: mySaves = [],
     refetch: refetchSaves,
-    isFetching: isSaveFetching,
     isPending: isSavePending,
   } = useGetDatasetsMySaves({
     query: {
@@ -1905,7 +1904,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   </button>
                 </div>
               )}
-              {!isSaveFetching && visibleSaves.length === 0 && (
+              {!isSavePending && visibleSaves.length === 0 && (
                 <div
                   style={{
                     fontSize: 13.5,
