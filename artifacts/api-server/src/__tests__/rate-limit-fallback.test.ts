@@ -38,6 +38,7 @@ import {
 
 function buildApp(max: number) {
   const app = express();
+  app.set("trust proxy", 1);
   const limiter = createRateLimit({
     route: "test-fallback",
     windowMs: 60_000,

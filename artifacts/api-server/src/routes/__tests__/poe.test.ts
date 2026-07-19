@@ -58,7 +58,7 @@ vi.mock("@clerk/shared/keys", () => ({
 import app from "../../app.js";
 import { globalPoeCache } from "@workspace/poe";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
-import { __resetPoeBreaker, __isPoeBreakersOpen, __clearUpscaleCaches } from "../poe.js";
+import { __resetPoeBreaker, __isPoeBreakersOpen, __clearUpscaleCaches, __clearZoneAndDatasetCaches } from "../poe.js";
 
 const GRID_BASE64 = Buffer.from("fake-grid-bytes-for-testing").toString(
   "base64",
@@ -89,6 +89,10 @@ beforeEach(async () => {
   // cached in one test (e.g. the success test) cannot be served as a cache
   // hit in a later test (e.g. the 503 / 502 tests), masking the real path.
   await __clearUpscaleCaches();
+  // Clear gridHash-keyed secondary zone cache (in-memory + disk) so prior-run
+  // entries cannot produce false "fromCache: true" hits for tests that supply
+  // a gridHash field.
+  await __clearZoneAndDatasetCaches();
   fakeCreate.mockReset();
   fakeCreate.mockResolvedValue(buildOkResponse());
 });

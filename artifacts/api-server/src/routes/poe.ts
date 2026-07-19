@@ -109,13 +109,37 @@ export async function __clearUpscaleCaches(): Promise<void> {
     const files = await fsPromises.readdir(UPSCALE_CACHE_DIR);
     await Promise.all(
       files
-        .filter((f) => UPSCALE_CACHE_KEY_RE.test(f))
+        .filter((f) => f.endsWith(".json") && isValidUpscaleCacheKey(f.slice(0, -5)))
         .map((f) =>
           fsPromises.unlink(path.join(UPSCALE_CACHE_DIR, f)).catch(() => {}),
         ),
     );
   } catch {
     // Directory may not exist yet on a fresh environment — that is fine.
+  }
+}
+
+/**
+ * TEST-ONLY — clears the in-memory dataset-zones secondary cache AND all
+ * zone-cache disk files so gridHash-keyed results from one test cannot bleed
+ * into later tests as false cache hits.
+ *
+ * Must be called alongside `globalPoeCache.clear()` in `beforeEach` when the
+ * test sends requests with a `gridHash` field.
+ */
+export async function __clearZoneAndDatasetCaches(): Promise<void> {
+  datasetZonesCache.clear();
+  try {
+    const files = await fsPromises.readdir(ZONE_CACHE_DIR);
+    await Promise.all(
+      files
+        .filter((f) => f.endsWith(".json") && isValidZoneCacheKey(f.slice(0, -5)))
+        .map((f) =>
+          fsPromises.unlink(path.join(ZONE_CACHE_DIR, f)).catch(() => {}),
+        ),
+    );
+  } catch {
+    // Zone cache directory may not exist yet — that is fine.
   }
 }
 

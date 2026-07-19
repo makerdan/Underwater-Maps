@@ -95,7 +95,7 @@ vi.mock("../lib/substrateGrid.js", () => ({
 
 import app from "../../app.js";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
-import { __resetPoeBreaker, __resetOpenAiClientCacheForTests } from "../poe.js";
+import { __resetPoeBreaker, __resetOpenAiClientCacheForTests, __clearZoneAndDatasetCaches } from "../poe.js";
 import { globalPoeCache } from "@workspace/poe";
 import { db } from "@workspace/db";
 
@@ -138,13 +138,16 @@ function buildOaiClassifyRle(label = "basalt_rock") {
 const DEPTHS_32 = Array(1024).fill(10);
 const GRID_BASE64 = "data:image/png;base64,dGVzdA==";
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
   __resetRateLimitMemory();
   __resetPoeBreaker();
   __resetOpenAiClientCacheForTests();
   globalPoeCache.clear();
+  // Clear gridHash-keyed secondary cache (in-memory + disk) so prior-run
+  // entries cannot surface as false "fromCache: true" hits.
+  await __clearZoneAndDatasetCaches();
   fakePoeChat.mockReset();
   fakeOaiChat.mockReset();
   // Default: Poe classify (responses.create) succeeds with 1024 sandy_shelf zones.
