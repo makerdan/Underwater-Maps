@@ -137,6 +137,51 @@ describe("suggestColormap — theme selection", () => {
 });
 
 // ---------------------------------------------------------------------------
+// suggestColormap — reason field
+// ---------------------------------------------------------------------------
+
+describe("suggestColormap — reason field", () => {
+  it("explicit freshwater waterType → reason: freshwater", () => {
+    const profile = computeDepthProfile(depthArray(0, 60))!;
+    expect(suggestColormap(profile, "freshwater").reason).toBe("freshwater");
+  });
+
+  it("very shallow heuristic (max < 30 ft) → reason: freshwater", () => {
+    const profile = computeDepthProfile(depthArray(0, 20))!;
+    expect(suggestColormap(profile).reason).toBe("freshwater");
+  });
+
+  it("narrow range (thermal) → reason: depth", () => {
+    const profile = computeDepthProfile(depthArray(70, 120))!;
+    expect(suggestColormap(profile).reason).toBe("depth");
+  });
+
+  it("deep ocean (ocean) → reason: depth", () => {
+    const profile = computeDepthProfile(depthArray(0, 600))!;
+    expect(suggestColormap(profile).reason).toBe("depth");
+  });
+
+  it("wide scientific (viridis) → reason: depth", () => {
+    const shallow = depthArray(0, 100, 90);
+    const deep = depthArray(100, 700, 10);
+    const profile = computeDepthProfile([...shallow, ...deep])!;
+    expect(suggestColormap(profile).reason).toBe("depth");
+  });
+
+  it("moderate (grayscale) → reason: depth", () => {
+    const shallow = depthArray(50, 200, 90);
+    const fringe = depthArray(200, 250, 10);
+    const profile = computeDepthProfile([...shallow, ...fringe])!;
+    expect(suggestColormap(profile).reason).toBe("depth");
+  });
+
+  it("saltwater waterType on shallow data → reason: freshwater (heuristic fires)", () => {
+    const profile = computeDepthProfile(depthArray(0, 20))!;
+    expect(suggestColormap(profile, "saltwater").reason).toBe("freshwater");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // buildBandBoundaries — schema validity and edge cases
 // ---------------------------------------------------------------------------
 

@@ -71,6 +71,16 @@ const OCEAN_MAX_FT = 2000;
 export interface ColormapSuggestion {
   theme: ColormapTheme;
   bandBoundaries: number[];
+  /**
+   * Why this suggestion was triggered.
+   *
+   * - `"freshwater"` — dataset is explicitly tagged as freshwater, or the
+   *   shallow-lake heuristic fired (max depth < 30 ft).  The banner should
+   *   phrase this as a freshwater-body recommendation.
+   * - `"depth"` — suggestion is based solely on the depth-range statistics
+   *   (narrow/wide range, ocean depth, etc.).
+   */
+  reason: "freshwater" | "depth";
 }
 
 /**
@@ -97,30 +107,37 @@ export function suggestColormap(
   const range = max - min;
 
   let theme: ColormapTheme;
+  let reason: ColormapSuggestion["reason"];
   if (waterType === "freshwater") {
     // Explicitly tagged freshwater body — use the freshwater palette regardless
     // of depth so lakes like Ray Roberts (≈47 ft) aren't misclassified.
     theme = "freshwater";
+    reason = "freshwater";
   } else if (max < 30) {
     // Very shallow lake, harbour, or river mouth — freshwater palette reads better.
     theme = "freshwater";
+    reason = "freshwater";
   } else if (range < 100) {
     // Narrow depth range: maximise local contrast with the thermal ramp.
     theme = "thermal";
+    reason = "depth";
   } else if (p90 > 200) {
     // Deep ocean dataset — the canonical blue ocean palette is most recognisable.
     theme = "ocean";
+    reason = "depth";
   } else if (range > 500) {
     // Very wide range with diverse depth spread → perceptually-uniform viridis.
     theme = "viridis";
+    reason = "depth";
   } else {
     // Mixed / moderate (100–500 ft total range, p90 ≤ 200 ft): doesn't fit a
     // single theme cleanly — grayscale offers neutral, printable contrast.
     theme = "grayscale";
+    reason = "depth";
   }
 
   const bandBoundaries = buildBandBoundaries(min, max);
-  return { theme, bandBoundaries };
+  return { theme, bandBoundaries, reason };
 }
 
 /**

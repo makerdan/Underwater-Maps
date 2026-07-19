@@ -693,7 +693,7 @@ export interface BathyTestApi {
    * scenario can be set up without navigating to the settings page.
    */
   setPaletteSuggestion: (
-    suggestion: { theme: string; bandBoundaries: number[] },
+    suggestion: { theme: string; bandBoundaries: number[]; reason?: "freshwater" | "depth" },
     datasetId: string,
   ) => void;
   clearPaletteSuggestion: () => void;
@@ -964,7 +964,11 @@ export function installTestHelpers(): void {
     setBandColor: (index, hex) => usePaletteStore.getState().setBandColor(index, hex),
     setPaletteSuggestion: (suggestion, datasetId) =>
       usePaletteSuggestionStore.getState().setSuggestion(
-        { theme: suggestion.theme as import("./settingsStore").ColormapTheme, bandBoundaries: suggestion.bandBoundaries },
+        {
+          theme: suggestion.theme as import("./settingsStore").ColormapTheme,
+          bandBoundaries: suggestion.bandBoundaries,
+          reason: suggestion.reason ?? "depth",
+        },
         datasetId,
       ),
     clearPaletteSuggestion: () => usePaletteSuggestionStore.getState().clear(),

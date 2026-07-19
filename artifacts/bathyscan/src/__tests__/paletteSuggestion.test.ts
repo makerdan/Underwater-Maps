@@ -257,7 +257,7 @@ describe("usePaletteSuggestionStore dismiss behavior", () => {
 
     const { suggestion } = usePaletteSuggestionStore.getState();
     usePaletteSuggestionStore.getState().setSuggestion(
-      { theme: "thermal", bandBoundaries: suggestion!.bandBoundaries },
+      { theme: "thermal", bandBoundaries: suggestion!.bandBoundaries, reason: "depth" },
       "ds-1",
     );
 
@@ -290,7 +290,7 @@ describe("usePaletteSuggestionStore dismiss behavior", () => {
       i === 0 ? 0 : i === 10 ? 2000 : i * 100,
     );
     usePaletteSuggestionStore.getState().setSuggestion(
-      { theme: "ocean", bandBoundaries: bb },
+      { theme: "ocean", bandBoundaries: bb, reason: "depth" },
       "ds-2",
     );
 
@@ -298,6 +298,48 @@ describe("usePaletteSuggestionStore dismiss behavior", () => {
     expect(s.suggestionDatasetId).toBe("ds-2");
     expect(s.isDismissed("ds-2")).toBe(false);
     expect(s.isDismissed("ds-1")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// suggestion.reason — banner copy distinguishes freshwater from depth
+// ---------------------------------------------------------------------------
+
+describe("suggestion reason field — colormapUserSet === true", () => {
+  beforeEach(() => {
+    useSettingsStore.getState().setColormapThemeByUser("ocean");
+    expect(useSettingsStore.getState().colormapUserSet).toBe(true);
+  });
+
+  it("freshwater waterType suggestion carries reason: freshwater", () => {
+    const profile = computeDepthProfile(depthArray(0, 47))!;
+    const suggestion = suggestColormap(profile, "freshwater");
+    usePaletteSuggestionStore.getState().setSuggestion(suggestion, "lake-ray-roberts");
+    expect(usePaletteSuggestionStore.getState().suggestion!.reason).toBe("freshwater");
+  });
+
+  it("depth-based suggestion carries reason: depth", () => {
+    const profile = computeDepthProfile(depthArray(0, 600))!;
+    const suggestion = suggestColormap(profile);
+    usePaletteSuggestionStore.getState().setSuggestion(suggestion, "ocean-dataset");
+    expect(usePaletteSuggestionStore.getState().suggestion!.reason).toBe("depth");
+  });
+
+  it("runSuggestionLogic with freshwater waterType stores reason: freshwater", () => {
+    const profile = computeDepthProfile(depthArray(0, 47))!;
+    const suggestion = suggestColormap(profile, "freshwater");
+    usePaletteSuggestionStore.getState().setSuggestion(suggestion, "ds-fw");
+    const s = usePaletteSuggestionStore.getState();
+    expect(s.suggestion!.theme).toBe("freshwater");
+    expect(s.suggestion!.reason).toBe("freshwater");
+    expect(s.suggestionDatasetId).toBe("ds-fw");
+  });
+
+  it("shallow heuristic (max < 30 ft, no waterType) also produces reason: freshwater", () => {
+    const profile = computeDepthProfile(depthArray(0, 20))!;
+    const suggestion = suggestColormap(profile);
+    usePaletteSuggestionStore.getState().setSuggestion(suggestion, "ds-shallow");
+    expect(usePaletteSuggestionStore.getState().suggestion!.reason).toBe("freshwater");
   });
 });
 

@@ -104,7 +104,9 @@ export function PaletteSuggestionBanner() {
               {THEME_LABELS[suggestion.theme]}
             </div>
             <div style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 2, letterSpacing: "0.05em" }}>
-              Best match for loaded dataset depth range
+              {suggestion.reason === "freshwater"
+                ? "Freshwater body detected — optimised for lake & river data"
+                : "Best match for loaded dataset depth range"}
             </div>
           </div>
         </div>
