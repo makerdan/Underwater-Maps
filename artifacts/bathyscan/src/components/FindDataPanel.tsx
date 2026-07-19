@@ -1193,6 +1193,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     data: mySaves = [],
     refetch: refetchSaves,
     isFetching: isSaveFetching,
+    isPending: isSavePending,
   } = useGetDatasetsMySaves({
     query: {
       queryKey: getGetDatasetsMySavesQueryKey(),
@@ -1339,7 +1340,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   );
 
   // My Uploads — raw list of user-uploaded datasets
-  const { data: userDatasets = [], isFetching: isUploadFetching } = useGetUserDatasets({
+  const { data: userDatasets = [], isPending: isUploadPending } = useGetUserDatasets({
     query: {
       queryKey: getGetUserDatasetsQueryKey(),
       enabled: !!isSignedIn,
@@ -1774,7 +1775,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               Sign in to see saved datasets.
             </div>
           )}
-          {isSignedIn && isSaveFetching && (
+          {isSignedIn && isSavePending && (
             <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
           )}
 
@@ -1826,10 +1827,10 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   </button>
                 </div>
               )}
-              {isUploadFetching && (
+              {isUploadPending && (
                 <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
               )}
-              {!isUploadFetching && uploadOnlyDatasets.length === 0 && (
+              {!isUploadPending && uploadOnlyDatasets.length === 0 && (
                 <div
                   style={{
                     fontSize: 13.5,
