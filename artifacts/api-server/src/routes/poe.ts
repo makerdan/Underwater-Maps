@@ -449,10 +449,12 @@ export function zoneCacheKey(
 
 // ---------------------------------------------------------------------------
 // Disk persistence — survives process restarts
-// Files stored at /tmp/zone-cache/<sha256>.json (hex filename, always safe)
+// Files stored at <ZONE_CACHE_DIR>/<sha256>.json (hex filename, always safe).
+// The directory is read from POE_ZONE_CACHE_DIR so that test runs can each
+// use an isolated subdirectory and never see disk entries from prior runs.
 // ---------------------------------------------------------------------------
 
-const ZONE_CACHE_DIR = "/tmp/zone-cache";
+const ZONE_CACHE_DIR = process.env["POE_ZONE_CACHE_DIR"] ?? "/tmp/zone-cache";
 
 /**
  * Maximum age (ms) of a zone-cache entry before it is evicted. Entries whose
@@ -2274,7 +2276,10 @@ router.post("/help", validateBody(HelpBodySchema, "POST /api/poe/help"), asyncHa
 // startup hydration + sweep, registerCache integration).
 // ---------------------------------------------------------------------------
 
-const UPSCALE_CACHE_DIR = "/tmp/upscale-cache";
+// POE_UPSCALE_CACHE_DIR lets test runs use an isolated directory so entries
+// from one run cannot appear as cache hits in the next.
+const UPSCALE_CACHE_DIR =
+  process.env["POE_UPSCALE_CACHE_DIR"] ?? "/tmp/upscale-cache";
 
 /**
  * Maximum age (ms) of an upscale-cache entry before TTL eviction.

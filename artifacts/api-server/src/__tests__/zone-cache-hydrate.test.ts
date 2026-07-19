@@ -156,7 +156,11 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const ZONE_CACHE_DIR = "/tmp/zone-cache";
+// Read from the same env var that poe.ts uses so mocked-fs call assertions
+// match the actual paths poe.ts passes to mkdir/readdir/unlink.  setup.ts sets
+// this to a pid-unique dir before any test file loads.
+const ZONE_CACHE_DIR =
+  process.env["POE_ZONE_CACHE_DIR"] ?? "/tmp/zone-cache";
 
 /** A valid 64-char sha256 hex string to use as a cache filename. */
 const VALID_KEY = createHash("sha256").update("test-key").digest("hex");

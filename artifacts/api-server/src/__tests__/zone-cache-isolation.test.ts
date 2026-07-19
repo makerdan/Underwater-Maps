@@ -122,9 +122,14 @@ const FAKE_ZONES_B = {
 
 // ---------------------------------------------------------------------------
 // Disk-cache temp dir management
+//
+// Read the same env var that poe.ts reads for ZONE_CACHE_DIR.  setup.ts sets
+// this to a pid-unique path before any test file loads, so this test file and
+// poe.ts always agree on the directory even when the path changes between runs.
 // ---------------------------------------------------------------------------
 
-const TEST_ZONE_CACHE_DIR = "/tmp/zone-cache";
+const TEST_ZONE_CACHE_DIR =
+  process.env["POE_ZONE_CACHE_DIR"] ?? "/tmp/zone-cache";
 
 async function writeDiskEntry(
   userId: string,

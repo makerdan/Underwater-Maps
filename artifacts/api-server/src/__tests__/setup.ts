@@ -1,6 +1,39 @@
 import { afterAll, beforeEach, vi } from "vitest";
+import os from "os";
+import path from "path";
 import { clearAllCaches } from "../lib/cacheRegistry.js";
 import { installFileBudgetGuard } from "../../../../tests/timeout-guard/vitest-guard.mjs";
+
+// ---------------------------------------------------------------------------
+// Per-run disk-cache isolation for Poe zone + upscale caches
+//
+// poe.ts stores classification and upscale results in /tmp subdirectories that
+// survive between process invocations.  Without isolation, a file written by
+// test run N is still present when test run N+1 starts, turning expected cache
+// misses into spurious hits and making tests flaky across runs.
+//
+// Setting POE_ZONE_CACHE_DIR / POE_UPSCALE_CACHE_DIR to process-pid-scoped
+// directories before poe.ts is first loaded ensures every `vitest` invocation
+// gets its own namespace.  poe.ts reads these env vars at module-load time
+// (module-level const), so the values must be in place before any test file
+// imports the poe router.  setupFiles run before test-file imports in all
+// vitest pool modes, so top-level assignment here is the right place.
+//
+// Within-run test-to-test contamination (test A writes a cache entry → test B
+// gets a hit) is still handled by `__clearUpscaleCaches()` /
+// `__clearZoneAndDatasetCaches()` calls in the beforeEach of poe.test.ts and
+// poe-fallback.test.ts — those call sites remain necessary for that narrower
+// scope and do not need to know the actual directory path.
+// ---------------------------------------------------------------------------
+const _runId = `test-${process.pid}`;
+process.env["POE_ZONE_CACHE_DIR"] = path.join(
+  os.tmpdir(),
+  `zone-cache-${_runId}`,
+);
+process.env["POE_UPSCALE_CACHE_DIR"] = path.join(
+  os.tmpdir(),
+  `upscale-cache-${_runId}`,
+);
 
 // Layer 3: per-file wall-clock budget guard. Uses the validation budget when
 // running under the validation config (name is set there), else the unit one.
