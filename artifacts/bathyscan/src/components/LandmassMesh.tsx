@@ -13,12 +13,14 @@ interface LandmassMeshProps {
 const FLAT_LANDMASS_COLOR = "#9ca3a3";
 
 // Elevation-based colour ramp stops (in metres above sea level).
-// Below SAND_TOP we blend from wet sand to dry sand; above SNOW_LINE we are pure snow.
+// These are calibrated for island-scale terrain (2000 m peaks).  For shorter
+// terrain the thresholds are scaled proportionally via the `maxTopoM` arg so
+// the full sand → grass → rock → snow ramp is always visible.
 const SHORE_BAND_M = 1.5;      // wet-sand strip right at the waterline
 const SAND_TOP_M = 12;         // dry beach upper edge
 const GRASS_TOP_M = 250;       // lowland vegetation
 const ROCK_TOP_M = 900;        // exposed rock / alpine
-const SNOW_LINE_M = 1600;      // permanent snow
+const SNOW_LINE_M = 1600;      // permanent snow (reference scale)
 
 const C_WET_SAND = new THREE.Color("#c2b48a");
 const C_DRY_SAND = new THREE.Color("#e6d6a8");
@@ -29,25 +31,48 @@ const C_SNOW = new THREE.Color("#f4f4f0");
 
 const _tmp = new THREE.Color();
 
-function elevationColor(elev: number, out: THREE.Color): THREE.Color {
-  if (elev <= SHORE_BAND_M) {
-    const t = THREE.MathUtils.clamp(elev / SHORE_BAND_M, 0, 1);
+/**
+ * Returns an elevation-based biome colour into `out`.
+ *
+ * `maxTopoM` is the tallest elevation present in the current terrain (metres).
+ * When it is less than SNOW_LINE_M (the reference scale for ocean islands) the
+ * band thresholds are scaled proportionally so the full sand → grass → rock →
+ * snow gradient is used regardless of how modest the surrounding hills are.
+ * Island-scale presets (maxTopoM >= SNOW_LINE_M) get factor = 1, preserving
+ * the original behaviour exactly.
+ */
+function elevationColor(elev: number, out: THREE.Color, maxTopoM = SNOW_LINE_M): THREE.Color {
+  // Proportional scale factor: ≤1 for short terrain, 1 for tall terrain.
+  const factor = Math.min(1, maxTopoM / SNOW_LINE_M);
+
+  const shoreBand = SHORE_BAND_M * factor;
+  const sandTop   = SAND_TOP_M   * factor;
+  const grassTop  = GRASS_TOP_M  * factor;
+  const rockTop   = ROCK_TOP_M   * factor;
+  const snowLine  = SNOW_LINE_M  * factor; // equals maxTopoM when factor < 1
+
+  if (elev <= shoreBand) {
+    const t = THREE.MathUtils.clamp(shoreBand > 0 ? elev / shoreBand : 1, 0, 1);
     return out.copy(C_WET_SAND).lerp(C_DRY_SAND, t);
   }
-  if (elev <= SAND_TOP_M) {
-    const t = (elev - SHORE_BAND_M) / (SAND_TOP_M - SHORE_BAND_M);
+  if (elev <= sandTop) {
+    const span = sandTop - shoreBand;
+    const t = span > 0 ? (elev - shoreBand) / span : 1;
     return out.copy(C_DRY_SAND).lerp(C_GRASS, t);
   }
-  if (elev <= GRASS_TOP_M) {
-    const t = (elev - SAND_TOP_M) / (GRASS_TOP_M - SAND_TOP_M);
+  if (elev <= grassTop) {
+    const span = grassTop - sandTop;
+    const t = span > 0 ? (elev - sandTop) / span : 1;
     return out.copy(C_GRASS).lerp(C_FOREST, t);
   }
-  if (elev <= ROCK_TOP_M) {
-    const t = (elev - GRASS_TOP_M) / (ROCK_TOP_M - GRASS_TOP_M);
+  if (elev <= rockTop) {
+    const span = rockTop - grassTop;
+    const t = span > 0 ? (elev - grassTop) / span : 1;
     return out.copy(C_FOREST).lerp(C_ROCK, t);
   }
-  if (elev <= SNOW_LINE_M) {
-    const t = (elev - ROCK_TOP_M) / (SNOW_LINE_M - ROCK_TOP_M);
+  if (elev <= snowLine) {
+    const span = snowLine - rockTop;
+    const t = span > 0 ? (elev - rockTop) / span : 1;
     return out.copy(C_ROCK).lerp(C_SNOW, t);
   }
   return out.copy(C_SNOW);
@@ -100,7 +125,7 @@ export function buildLandmassGeometry(
       colors[i * 4 + 1] = flatColor.g;
       colors[i * 4 + 2] = flatColor.b;
     } else {
-      elevationColor(elev, _tmp);
+      elevationColor(elev, _tmp, maxTopoM);
       colors[i * 4 + 0] = _tmp.r;
       colors[i * 4 + 1] = _tmp.g;
       colors[i * 4 + 2] = _tmp.b;

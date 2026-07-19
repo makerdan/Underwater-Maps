@@ -213,6 +213,48 @@ describe("LandmassMesh / buildLandmassGeometry", () => {
       expect(y50).toBeGreaterThan(0);
       expect(y100).toBeGreaterThan(y50);
     });
+
+    it("colour ramp uses normalised thresholds: 100 m peak shows snow, 50 m shows rock tones", () => {
+      /**
+       * With maxTopoM = 100 the factor = 100/1600 = 0.0625 so:
+       *   rockTop  = 900 × 0.0625 = 56.25 m
+       *   snowLine = 1600 × 0.0625 = 100 m  (= maxTopoM)
+       *
+       * elev 100 → exactly at snowLine → pure C_SNOW (#f4f4f0, very bright).
+       * elev  50 → between grassTop (15.6 m) and rockTop (56.25 m) → rock/forest blend.
+       *
+       * Without normalisation both 50 m and 100 m would land in the GRASS_TOP band
+       * (SAND_TOP=12 … GRASS_TOP=250) and show nearly identical green tones — no
+       * visible gradient.  The fixed code must produce a significant luminance gap.
+       */
+      const { grid, topography } = makeShallowLakeTallTerrain();
+      const geo = buildLandmassGeometry(grid, topography, "realistic");
+      const color = geo.attributes["color"] as THREE.BufferAttribute;
+      const arr = color.array as Float32Array;
+
+      // Index 0 → elev 100 m (peak), index 1 → elev 50 m.
+      const r100 = arr[0 * 4 + 0]!;
+      const g100 = arr[0 * 4 + 1]!;
+      const b100 = arr[0 * 4 + 2]!;
+      const r50  = arr[1 * 4 + 0]!;
+      const g50  = arr[1 * 4 + 1]!;
+      const b50  = arr[1 * 4 + 2]!;
+
+      const lum100 = r100 + g100 + b100;
+      const lum50  = r50  + g50  + b50;
+
+      // Peak should be bright (snow-like).  C_SNOW = #f4f4f0 → sum ≈ 2.85.
+      expect(lum100).toBeGreaterThan(2.0);
+
+      // 50 m (rock-ish) must be clearly darker than the peak.
+      // Without normalisation both would be similar green; with it the gap is >1.0.
+      expect(lum100 - lum50).toBeGreaterThan(1.0);
+
+      // 50 m is in the rock/forest band, not the green band: green channel should
+      // not dominate over red (grassy green has g >> r; rock tones have r ≈ g > b).
+      // We just assert it's not purely green (g not more than 20 % above r).
+      expect(g50).toBeLessThan(r50 * 1.2);
+    });
   });
 
   describe("all land below depthRange", () => {
