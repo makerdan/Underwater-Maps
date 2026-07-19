@@ -105,6 +105,8 @@ export const DepthProfilePanel: React.FC = () => {
     (terrain as { dataSource?: string; synthetic?: boolean } | null)?.synthetic === true;
   const svgRef = React.useRef<SVGSVGElement | null>(null);
   const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const mountedRef = React.useRef(true);
+  const saveAbortRef = React.useRef<AbortController | null>(null);
 
   // ── Drag state ────────────────────────────────────────────────────────
   // null = default bottom-center (absolute positioning); set = fixed position.
@@ -179,6 +181,14 @@ export const DepthProfilePanel: React.FC = () => {
   const postMarkers = usePostMarkers();
   const [bulkPending, setBulkPending] = React.useState(false);
 
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      saveAbortRef.current?.abort();
+    };
+  }, []);
+
   // ── Save as route ─────────────────────────────────────────────────────
   const [showSaveInput, setShowSaveInput] = React.useState(false);
   const [guestSignInPrompt, setGuestSignInPrompt] = React.useState(false);
@@ -213,6 +223,8 @@ export const DepthProfilePanel: React.FC = () => {
     if (!trimmed || !datasetId || !profile || !profile.waypoints || profile.waypoints.length < 2) return;
     setSaveLoading(true);
     setSaveError(null);
+    const ac = new AbortController();
+    saveAbortRef.current = ac;
     try {
       const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
       const res = await authorizedFetch(`${base}/api/routes`, {
@@ -224,18 +236,22 @@ export const DepthProfilePanel: React.FC = () => {
           waypoints: profile.waypoints,
           totalDistanceM: profile.totalDistanceM,
         }),
+        signal: ac.signal,
       });
+      if (!mountedRef.current) return;
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-        setSaveError((body.details as string | undefined) ?? `Error ${res.status}`);
+        if (mountedRef.current) setSaveError((body.details as string | undefined) ?? `Error ${res.status}`);
         return;
       }
       void qc.invalidateQueries({ queryKey: routesQueryKey(datasetId) });
-      setShowSaveInput(false);
-    } catch {
+      if (mountedRef.current) setShowSaveInput(false);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      if (err instanceof Error && err.name === "AbortError") return;
       setSaveError("Network error — please try again.");
     } finally {
-      setSaveLoading(false);
+      if (mountedRef.current) setSaveLoading(false);
     }
   };
 
@@ -354,7 +370,7 @@ export const DepthProfilePanel: React.FC = () => {
     } catch {
       // Surface failures via mutation state.
     } finally {
-      setBulkPending(false);
+      if (mountedRef.current) setBulkPending(false);
     }
   };
 
