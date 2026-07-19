@@ -58,7 +58,7 @@ vi.mock("@clerk/shared/keys", () => ({
 import app from "../../app.js";
 import { globalPoeCache } from "@workspace/poe";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
-import { __resetPoeBreaker, __isPoeBreakersOpen } from "../poe.js";
+import { __resetPoeBreaker, __isPoeBreakersOpen, __clearUpscaleCaches } from "../poe.js";
 
 const GRID_BASE64 = Buffer.from("fake-grid-bytes-for-testing").toString(
   "base64",
@@ -74,7 +74,7 @@ function buildOkResponse() {
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   // Turn on the env-gated e2e bypass so requests carrying `x-e2e-user-id`
   // authenticate as that user without contacting Clerk. The bypass is
   // hard-gated on this env var and is never honored in production.
@@ -85,6 +85,10 @@ beforeEach(() => {
   __resetRateLimitMemory();
   globalPoeCache.clear();
   __resetPoeBreaker();
+  // Clear upscale in-memory + disk caches so a successful upscale result
+  // cached in one test (e.g. the success test) cannot be served as a cache
+  // hit in a later test (e.g. the 503 / 502 tests), masking the real path.
+  await __clearUpscaleCaches();
   fakeCreate.mockReset();
   fakeCreate.mockResolvedValue(buildOkResponse());
 });

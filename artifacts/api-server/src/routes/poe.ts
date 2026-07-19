@@ -94,6 +94,31 @@ export function __resetPoeBreaker(): void {
   poeBreaker.recordSuccess();
 }
 
+/**
+ * TEST-ONLY — clears all upscale caches (in-memory, in-flight, and disk) so
+ * a cached result from one test (e.g. the success test) cannot bleed into
+ * later tests (e.g. the 503/502 tests) as a false cache hit.
+ *
+ * Must be called in `beforeEach` alongside `globalPoeCache.clear()` and
+ * `__resetPoeBreaker()`.  Never imported or called in production code.
+ */
+export async function __clearUpscaleCaches(): Promise<void> {
+  upscaleMemCache.clear();
+  upscaleInFlight.clear();
+  try {
+    const files = await fsPromises.readdir(UPSCALE_CACHE_DIR);
+    await Promise.all(
+      files
+        .filter((f) => UPSCALE_CACHE_KEY_RE.test(f))
+        .map((f) =>
+          fsPromises.unlink(path.join(UPSCALE_CACHE_DIR, f)).catch(() => {}),
+        ),
+    );
+  } catch {
+    // Directory may not exist yet on a fresh environment — that is fine.
+  }
+}
+
 /** Per-route upstream timeouts (ms) — sized to the expected upstream work. */
 const POE_MODELS_TIMEOUT_MS = 10_000;
 const POE_CLASSIFY_TIMEOUT_MS = 45_000;
