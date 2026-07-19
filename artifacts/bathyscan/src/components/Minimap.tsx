@@ -9,6 +9,7 @@ import { usePaletteStore } from "@/lib/paletteStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ColormapTheme } from "@/lib/settingsStore";
 import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
+import type { DepthsArray } from "@workspace/api-client-react";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
@@ -18,7 +19,7 @@ const H = 180;
 
 function drawHeatmap(
   ctx: CanvasRenderingContext2D,
-  depths: (number | null)[],
+  depths: DepthsArray,
   width: number,
   height: number,
   minDepth: number,

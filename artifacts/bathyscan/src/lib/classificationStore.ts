@@ -25,7 +25,7 @@ import { poeClassify } from "@workspace/api-client-react";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import type { ToastActionElement } from "@/components/ui/toast";
-import type { TerrainData, PoeClassifyRequest } from "@workspace/api-client-react";
+import type { TerrainData, PoeClassifyRequest, DepthsArray } from "@workspace/api-client-react";
 import { gridToBase64Png } from "./gridToImage";
 import type { ClassifyResultSource } from "@workspace/api-client-react";
 import { parseAndUpsampleZones, zoneMapToStorage, zoneMapFromStorage } from "./zoneMap";
@@ -141,7 +141,7 @@ export function downsampleDepths32(grid: TerrainData): number[] {
  * (gridHash, waterType) key effectively unique even before the server's
  * own sha256 namespacing layer.
  */
-export async function hashGrid(depths: (number | null)[]): Promise<string> {
+export async function hashGrid(depths: DepthsArray): Promise<string> {
   const buf = new ArrayBuffer(depths.length * 4);
   const view = new DataView(buf);
   for (let i = 0; i < depths.length; i++) {
