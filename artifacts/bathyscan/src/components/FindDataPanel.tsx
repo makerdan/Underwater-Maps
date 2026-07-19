@@ -29,6 +29,8 @@ import {
   usePatchDatasetsMySavesIdRename,
   usePatchDatasetsMySavesIdMove,
   usePostUserFolders,
+  usePatchUserFoldersIdRename,
+  useDeleteUserFoldersId,
   useGetNceiSearch,
   usePostNceiSave,
   getGetNceiSearchQueryKey,
@@ -43,6 +45,7 @@ import {
   type UserDatasetMeta,
   type NceiPortalResult,
 } from "@workspace/api-client-react";
+import { useContextMenuStore } from "@/lib/contextMenuStore";
 import {
   DndContext,
   PointerSensor,
@@ -1107,7 +1110,25 @@ const SaveFolderSection: React.FC<{
   onToggle: () => void;
   renderSave: (save: UserCatalogSave) => React.ReactNode;
   renderSubFolder: (child: import("@/lib/datasetLibrary").SaveFolderNode) => React.ReactNode;
-}> = ({ node, isExpanded, onToggle, renderSave, renderSubFolder }) => {
+  onShowMenu?: (e: React.MouseEvent, node: import("@/lib/datasetLibrary").SaveFolderNode) => void;
+  isRenaming?: boolean;
+  renameValue?: string;
+  onRenameChange?: (v: string) => void;
+  onRenameCommit?: () => void;
+  onRenameCancel?: () => void;
+}> = ({
+  node,
+  isExpanded,
+  onToggle,
+  renderSave,
+  renderSubFolder,
+  onShowMenu,
+  isRenaming = false,
+  renameValue = "",
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel,
+}) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `folder-${node.folder.id}`,
     data: { kind: "folder", folderId: node.folder.id },
@@ -1116,6 +1137,11 @@ const SaveFolderSection: React.FC<{
   const childCount = node.children.length;
   const totalCount = saveCount + childCount;
   const indent = node.depth * 14;
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (isRenaming) renameInputRef.current?.select();
+  }, [isRenaming]);
 
   return (
     <div style={{ marginLeft: indent }}>
@@ -1133,28 +1159,76 @@ const SaveFolderSection: React.FC<{
           transition: "background 0.12s, border 0.12s",
           userSelect: "none",
         }}
-        onClick={onToggle}
+        onClick={isRenaming ? undefined : onToggle}
+        onContextMenu={onShowMenu ? (e) => onShowMenu(e, node) : undefined}
         role="button"
         aria-expanded={isExpanded}
         aria-label={`Folder: ${node.folder.name}`}
       >
         <span style={{ fontSize: 13, color: "#94a3b8" }}>{isExpanded ? "▾" : "▸"}</span>
         <span style={{ fontSize: 14 }}>📁</span>
-        <span
-          style={{
-            flex: 1,
-            fontSize: 13.5,
-            fontWeight: 600,
-            color: "#cbd5e1",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {node.folder.name}
-        </span>
-        {totalCount > 0 && (
+        {isRenaming ? (
+          <input
+            ref={renameInputRef}
+            value={renameValue}
+            onChange={(e) => onRenameChange?.(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); onRenameCommit?.(); }
+              else if (e.key === "Escape") { e.preventDefault(); onRenameCancel?.(); }
+            }}
+            onBlur={onRenameCancel}
+            onClick={(e) => e.stopPropagation()}
+            data-testid={`save-folder-rename-input-${node.folder.id}`}
+            style={{
+              flex: 1,
+              fontSize: 13.5,
+              fontWeight: 600,
+              color: "#e2e8f0",
+              background: "rgba(0,229,255,0.07)",
+              border: "1px solid rgba(0,229,255,0.4)",
+              borderRadius: 3,
+              padding: "1px 5px",
+              outline: "none",
+              fontFamily: "inherit",
+              minWidth: 0,
+            }}
+          />
+        ) : (
+          <span
+            style={{
+              flex: 1,
+              fontSize: 13.5,
+              fontWeight: 600,
+              color: "#cbd5e1",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {node.folder.name}
+          </span>
+        )}
+        {!isRenaming && totalCount > 0 && (
           <span style={{ fontSize: 11, color: "#64748b" }}>{totalCount}</span>
+        )}
+        {onShowMenu && !isRenaming && (
+          <button
+            data-testid={`save-folder-menu-${node.folder.id}`}
+            onClick={(e) => { e.stopPropagation(); onShowMenu(e, node); }}
+            title="Folder options"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#64748b",
+              cursor: "pointer",
+              fontSize: 14,
+              padding: "0 2px",
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            ⋮
+          </button>
         )}
       </div>
       {isExpanded && (
@@ -1686,6 +1760,73 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const renameSaveMutation = usePatchDatasetsMySavesIdRename();
   const moveSaveMutation = usePatchDatasetsMySavesIdMove();
   const postFolderMutation = usePostUserFolders();
+  const renameFolderMutation = usePatchUserFoldersIdRename();
+  const deleteFolderMutation = useDeleteUserFoldersId();
+
+  const [renamingSaveFolder, setRenamingSaveFolder] = useState<{ id: string; value: string } | null>(null);
+  const [confirmDeleteSaveFolder, setConfirmDeleteSaveFolder] = useState<{
+    id: string;
+    name: string;
+    hasSaves: boolean;
+  } | null>(null);
+  const [saveFolderDeleteError, setSaveFolderDeleteError] = useState<string | null>(null);
+
+  const handleSaveFolderMenu = useCallback(
+    (e: React.MouseEvent, node: import("@/lib/datasetLibrary").SaveFolderNode) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const hasSaves = node.saves.length > 0 || node.children.length > 0;
+      useContextMenuStore.getState().show(e.clientX, e.clientY, [
+        {
+          label: "Rename",
+          icon: "✎",
+          onClick: () => setRenamingSaveFolder({ id: node.folder.id, value: node.folder.name }),
+        },
+        { label: "", separator: true, onClick: () => {} },
+        {
+          label: "Delete folder…",
+          icon: "✕",
+          onClick: () => {
+            setSaveFolderDeleteError(null);
+            setConfirmDeleteSaveFolder({ id: node.folder.id, name: node.folder.name, hasSaves });
+          },
+        },
+      ]);
+    },
+    [],
+  );
+
+  const handleSaveFolderRenameCommit = useCallback(async () => {
+    if (!renamingSaveFolder) return;
+    const { id, value } = renamingSaveFolder;
+    const trimmed = value.trim();
+    if (!trimmed) { setRenamingSaveFolder(null); return; }
+    setRenamingSaveFolder(null);
+    try {
+      await renameFolderMutation.mutateAsync({ id, data: { name: trimmed } });
+      await qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() });
+    } catch (err) {
+      toast({
+        title: "Rename failed",
+        description: err instanceof Error ? err.message : "Could not rename folder. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [renamingSaveFolder, renameFolderMutation, qc, toast]);
+
+  const handleSaveFolderDelete = useCallback(async () => {
+    if (!confirmDeleteSaveFolder) return;
+    const { id } = confirmDeleteSaveFolder;
+    setSaveFolderDeleteError(null);
+    try {
+      await deleteFolderMutation.mutateAsync({ id, data: { mode: "promote" } });
+      setConfirmDeleteSaveFolder(null);
+      await qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() });
+      await qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() });
+    } catch (err) {
+      setSaveFolderDeleteError(err instanceof Error ? err.message : "Could not delete folder. Please try again.");
+    }
+  }, [confirmDeleteSaveFolder, deleteFolderMutation, qc]);
 
   const saveFolderExpanded = useSettingsStore((s) => s.saveFolderExpanded);
   const handleToggleSaveFolder = useCallback((folderId: string) => {
@@ -2250,6 +2391,12 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 onToggle={() => handleToggleSaveFolder(node.folder.id)}
                 renderSave={renderSave}
                 renderSubFolder={renderFolderNode}
+                onShowMenu={handleSaveFolderMenu}
+                isRenaming={renamingSaveFolder?.id === node.folder.id}
+                renameValue={renamingSaveFolder?.id === node.folder.id ? renamingSaveFolder.value : ""}
+                onRenameChange={(v) => setRenamingSaveFolder((prev) => prev ? { ...prev, value: v } : null)}
+                onRenameCommit={() => void handleSaveFolderRenameCommit()}
+                onRenameCancel={() => setRenamingSaveFolder(null)}
               />
             );
 
@@ -2393,6 +2540,98 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 setMoveSaveTarget(null);
               }}
             />
+          )}
+
+          {/* Confirm delete save folder dialog */}
+          {confirmDeleteSaveFolder && (
+            <div
+              role="dialog"
+              aria-label="Confirm delete save folder"
+              data-testid="confirm-delete-save-folder"
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,4,10,0.75)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 200,
+              }}
+              onClick={() => setConfirmDeleteSaveFolder(null)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: "rgba(0,12,24,0.98)",
+                  border: "1px solid rgba(0,229,255,0.25)",
+                  borderRadius: 6,
+                  padding: "16px 18px",
+                  maxWidth: 340,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  color: "#cbd5e1",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 16.5,
+                    color: "#e2e8f0",
+                    fontWeight: 700,
+                    marginBottom: 8,
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  Delete &ldquo;{confirmDeleteSaveFolder.name}&rdquo;?
+                </div>
+                <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.5, marginBottom: 14 }}>
+                  {confirmDeleteSaveFolder.hasSaves
+                    ? "Saves inside this folder will be moved to the root level. The folder itself will be removed."
+                    : "This empty folder will be removed."}
+                </div>
+                {saveFolderDeleteError && (
+                  <div style={{ fontSize: 13, color: "#fca5a5", marginBottom: 10 }}>
+                    {saveFolderDeleteError}
+                  </div>
+                )}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button
+                    onClick={() => setConfirmDeleteSaveFolder(null)}
+                    data-testid="confirm-delete-save-folder-cancel"
+                    style={{
+                      fontSize: 13.5,
+                      padding: "5px 12px",
+                      background: "transparent",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      borderRadius: 3,
+                      color: "#e2e8f0",
+                      cursor: "pointer",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void handleSaveFolderDelete()}
+                    data-testid="confirm-delete-save-folder-confirm"
+                    disabled={deleteFolderMutation.isPending}
+                    style={{
+                      fontSize: 13.5,
+                      padding: "5px 12px",
+                      background: "rgba(248,113,113,0.12)",
+                      border: "1px solid rgba(248,113,113,0.5)",
+                      borderRadius: 3,
+                      color: "#fca5a5",
+                      cursor: deleteFolderMutation.isPending ? "not-allowed" : "pointer",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      opacity: deleteFolderMutation.isPending ? 0.5 : 1,
+                    }}
+                  >
+                    {deleteFolderMutation.isPending ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}
