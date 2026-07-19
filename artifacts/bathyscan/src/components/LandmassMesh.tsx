@@ -71,6 +71,18 @@ export function buildLandmassGeometry(
 ): THREE.BufferGeometry {
   const N = grid.resolution;
   const depthRange = (grid.maxDepth - grid.minDepth) || 1;
+
+  // Find the tallest topography cell so we can scale it to MAX_DEPTH_WORLD.
+  // When terrain rises higher than the underwater depth range (e.g. 50–100 m
+  // hills around a 28 m deep lake) using depthRange alone causes elev/depthRange
+  // > 1, pushing vertices above MAX_DEPTH_WORLD and producing visible spikes.
+  let maxTopoM = 0;
+  for (let i = 0; i < topography.length; i++) {
+    const v = topography[i] ?? 0;
+    if (v > maxTopoM) maxTopoM = v;
+  }
+  const scale = Math.max(depthRange, maxTopoM) || 1;
+
   const geo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, N - 1, N - 1);
   geo.rotateX(-Math.PI / 2);
 
@@ -81,7 +93,7 @@ export function buildLandmassGeometry(
 
   for (let i = 0; i < N * N; i++) {
     const elev = topography[i] ?? 0;
-    arr[i * 3 + 1] = (elev / depthRange) * MAX_DEPTH_WORLD;
+    arr[i * 3 + 1] = Math.max(0, Math.min(1, elev / scale)) * MAX_DEPTH_WORLD;
 
     if (style === "flat") {
       colors[i * 4 + 0] = flatColor.r;

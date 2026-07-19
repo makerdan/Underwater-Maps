@@ -75,11 +75,10 @@ describe("LandmassMesh / buildLandmassGeometry", () => {
     expect(normal).toBeDefined();
     expect(normal.count).toBe(expectedVerts);
 
-    // Highest topography vertex should sit above sea level by the same vertical
-    // scale used by the bathymetry mesh.
-    const depthRange = grid.maxDepth - grid.minDepth || 1;
-    const peakElev = Math.max(...topography);
-    const expectedPeakY = (peakElev / depthRange) * MAX_DEPTH_WORLD;
+    // Highest topography vertex should sit at exactly MAX_DEPTH_WORLD.
+    // In the island preset the peak elevation (1700 m) far exceeds the depth
+    // range (~75 m), so the topography-aware scale kicks in and the tallest
+    // vertex is normalised to 1.0 × MAX_DEPTH_WORLD.
     let maxY = -Infinity;
     let minY = Infinity;
     for (let i = 0; i < pos.count; i++) {
@@ -87,7 +86,7 @@ describe("LandmassMesh / buildLandmassGeometry", () => {
       if (y > maxY) maxY = y;
       if (y < minY) minY = y;
     }
-    expect(maxY).toBeCloseTo(expectedPeakY, 3);
+    expect(maxY).toBeCloseTo(MAX_DEPTH_WORLD, 3);
     expect(minY).toBe(0); // water cells stay at y = 0
 
     // Alpha channel: water cells (elev <= 0) are fully transparent; high-
@@ -129,6 +128,147 @@ describe("LandmassMesh / buildLandmassGeometry", () => {
     const lowLum =
       arr[lowLandIdx * 4 + 0]! + arr[lowLandIdx * 4 + 1]! + arr[lowLandIdx * 4 + 2]!;
     expect(peakLum).toBeGreaterThan(lowLum);
+  });
+
+  describe("topography taller than depthRange", () => {
+    /**
+     * Shallow lake (maxDepth=5 → depthRange=5) with a tall hill (100 m).
+     * Before the fix: 100/5 = 20× → vertex at 20 × MAX_DEPTH_WORLD = 1000 world units.
+     * After the fix: scale = max(5, 100) = 100 → vertex at exactly MAX_DEPTH_WORLD.
+     */
+    function makeShallowLakeTallTerrain() {
+      // 3×3 grid: centre cell is tall land, corners are water, one mid-edge at 50 m.
+      const N = 3;
+      const topography = [
+        100, 50,  0,
+          0,  0,  0,
+          0,  0,  0,
+      ];
+      const depths = [
+        0, 0, 0,
+        0, 5, 5,
+        0, 5, 5,
+      ];
+      const grid: TerrainData = {
+        datasetId: "shallow-lake-test",
+        name: "Shallow Lake (test)",
+        waterType: "freshwater",
+        resolution: N,
+        width: N,
+        height: N,
+        depths,
+        minDepth: 0,
+        maxDepth: 5,
+        minLon: -97,
+        maxLon: -96,
+        minLat: 33,
+        maxLat: 34,
+        centerLon: -96.5,
+        centerLat: 33.5,
+        topography,
+        hasTopography: true,
+      };
+      return { grid, topography };
+    }
+
+    it("no vertex exceeds MAX_DEPTH_WORLD", () => {
+      const { grid, topography } = makeShallowLakeTallTerrain();
+      const geo = buildLandmassGeometry(grid, topography, "realistic");
+      const pos = geo.attributes["position"] as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) {
+        expect(pos.getY(i)).toBeLessThanOrEqual(MAX_DEPTH_WORLD + 0.001);
+      }
+    });
+
+    it("tallest vertex is at MAX_DEPTH_WORLD", () => {
+      const { grid, topography } = makeShallowLakeTallTerrain();
+      const geo = buildLandmassGeometry(grid, topography, "realistic");
+      const pos = geo.attributes["position"] as THREE.BufferAttribute;
+      let maxY = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        if (y > maxY) maxY = y;
+      }
+      expect(maxY).toBeCloseTo(MAX_DEPTH_WORLD);
+    });
+
+    it("water cells (elevation 0) remain at Y = 0", () => {
+      const { grid, topography } = makeShallowLakeTallTerrain();
+      const geo = buildLandmassGeometry(grid, topography, "realistic");
+      const pos = geo.attributes["position"] as THREE.BufferAttribute;
+      for (let i = 0; i < topography.length; i++) {
+        if ((topography[i] ?? 0) === 0) {
+          expect(pos.getY(i)).toBe(0);
+        }
+      }
+    });
+
+    it("relative ordering preserved: elev 50 < elev 100 in Y", () => {
+      const { grid, topography } = makeShallowLakeTallTerrain();
+      const geo = buildLandmassGeometry(grid, topography, "realistic");
+      const pos = geo.attributes["position"] as THREE.BufferAttribute;
+      // Index 0 → elev 100, Index 1 → elev 50
+      const y100 = pos.getY(0);
+      const y50  = pos.getY(1);
+      expect(y50).toBeGreaterThan(0);
+      expect(y100).toBeGreaterThan(y50);
+    });
+  });
+
+  describe("all land below depthRange", () => {
+    /**
+     * When all topography elevations are within the depth range, depthRange wins
+     * Math.max and the existing behaviour is preserved: peak lands at
+     * (peakElev / depthRange) × MAX_DEPTH_WORLD.
+     */
+    function makeLowTerrain() {
+      const N = 3;
+      const peakElev = 10;
+      const topography = [
+        peakElev, 5, 0,
+               0, 0, 0,
+               0, 0, 0,
+      ];
+      const depths = [
+        0, 0,  0,
+        0, 50, 50,
+        0, 50, 50,
+      ];
+      const grid: TerrainData = {
+        datasetId: "low-terrain-test",
+        name: "Low Terrain (test)",
+        waterType: "freshwater",
+        resolution: N,
+        width: N,
+        height: N,
+        depths,
+        minDepth: 0,
+        maxDepth: 50,
+        minLon: -97,
+        maxLon: -96,
+        minLat: 33,
+        maxLat: 34,
+        centerLon: -96.5,
+        centerLat: 33.5,
+        topography,
+        hasTopography: true,
+      };
+      return { grid, topography, peakElev };
+    }
+
+    it("peak vertex lands at (peakElev / depthRange) × MAX_DEPTH_WORLD", () => {
+      const { grid, topography, peakElev } = makeLowTerrain();
+      const depthRange = grid.maxDepth - grid.minDepth || 1;
+      const expectedPeakY = (peakElev / depthRange) * MAX_DEPTH_WORLD;
+      const geo = buildLandmassGeometry(grid, topography, "realistic");
+      const pos = geo.attributes["position"] as THREE.BufferAttribute;
+      let maxY = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        if (y > maxY) maxY = y;
+      }
+      expect(maxY).toBeCloseTo(expectedPeakY, 3);
+    });
   });
 
   it("uses a uniform flat colour when style = 'flat'", () => {
