@@ -497,6 +497,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   ]);
 
   const body = (
+    <>
+    <style>{`@keyframes gps-spin { to { transform: rotate(360deg); } }`}</style>
     <div
       data-testid="gps-import-dialog"
       role="dialog"
@@ -655,6 +657,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               removeRoute={removeRoute}
               onCancel={onClose}
               onConfirm={() => void doImport()}
+              isImporting={isImporting}
             />
           )}
 
@@ -737,6 +740,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         </div>
       </div>
     </div>
+    </>
   );
 
   return createPortal(body, document.body);
@@ -767,6 +771,7 @@ interface PreviewPanelProps {
   removeRoute: (idx: number) => void;
   onCancel: () => void;
   onConfirm: () => void;
+  isImporting: boolean;
 }
 
 const PreviewPanel: React.FC<PreviewPanelProps> = ({
@@ -789,6 +794,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
   removeRoute,
   onCancel,
   onConfirm,
+  isImporting,
 }) => {
   const { parsed, original } = phase;
   const insideWpCount = parsed.waypoints.length;
@@ -1033,10 +1039,34 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
         <button
           onClick={onConfirm}
           data-testid="gps-import-confirm"
-          disabled={importDisabled}
-          style={btnStyle("primary")}
+          disabled={importDisabled || isImporting}
+          aria-disabled={importDisabled || isImporting}
+          style={{
+            ...btnStyle("primary"),
+            ...(isImporting ? { opacity: 0.6, cursor: "not-allowed" } : {}),
+          }}
         >
-          Import
+          {isImporting ? (
+            <>
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "inline-block",
+                  width: 12,
+                  height: 12,
+                  border: "2px solid rgba(255,255,255,0.3)",
+                  borderTopColor: "#fff",
+                  borderRadius: "50%",
+                  marginRight: 6,
+                  animation: "gps-spin 0.7s linear infinite",
+                  verticalAlign: "middle",
+                }}
+              />
+              Importing…
+            </>
+          ) : (
+            "Import"
+          )}
         </button>
       </div>
     </>
