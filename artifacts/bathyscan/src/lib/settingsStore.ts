@@ -875,7 +875,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   smoothTerrainSpikes: true,
   showWaterSurface: true,
   showWaterTempLayer: false,
-  showLandmass: false,
+  showLandmass: true,
   landmassStyle: "realistic",
   satelliteImagery: true,
 

@@ -237,6 +237,8 @@ export const OverlaysToolsPanel: React.FC = () => {
 
   const showWaterTempLayer = useSettingsStore((s) => s.showWaterTempLayer);
   const setShowWaterTempLayer = useSettingsStore((s) => s.setShowWaterTempLayer);
+  const showLandmass = useSettingsStore((s) => s.showLandmass);
+  const setShowLandmass = useSettingsStore((s) => s.setShowLandmass);
   const waterType = useSettingsStore((s) => s.waterType);
   const thermalCursorDepthM = useUiStore((s) => s.thermalCursorDepthM);
 
@@ -1197,6 +1199,38 @@ export const OverlaysToolsPanel: React.FC = () => {
                 )}
               </div>
             )}
+          </AdvancedSection>
+
+          {/* Terrain Advanced section — landmass toggle */}
+          <AdvancedSection panelId="overlaysTerrainAdvanced">
+            <div
+              style={{
+                paddingTop: 2,
+                paddingBottom: 4,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 13.5,
+                  letterSpacing: "0.12em",
+                  color: "#64748b",
+                  textTransform: "uppercase",
+                }}
+              >
+                Terrain
+              </span>
+            </div>
+            <ToggleButton
+              testId="overlay-toggle-landmass"
+              active={showLandmass}
+              onClick={() => setShowLandmass(!showLandmass)}
+              label="🏔 SHOW LANDMASS"
+              tooltip={showLandmass ? "Hide above-water landmass in 3D" : "Raises shoreline terrain above the waterline in 3D."}
+              activeBg="rgba(120,113,108,0.18)"
+              activeBorder="rgba(168,162,158,0.55)"
+              activeColor="#d6d3d1"
+              activeGlow="0 0 6px rgba(168,162,158,0.4)"
+            />
           </AdvancedSection>
         </div>
       )}
