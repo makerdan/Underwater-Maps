@@ -27,8 +27,7 @@ export type PanelId =
   | "tidePanelTimeScrub"
   | "currentsPanelAdvanced"
   | "habitatAdvanced"
-  | "seafloorAdvanced"
-  | "overlaysTerrainAdvanced";
+  | "seafloorAdvanced";
 
 interface PanelCollapseStore {
   collapsed: Record<PanelId, boolean>;
@@ -63,7 +62,6 @@ export const DEFAULTS: Record<PanelId, boolean> = {
   currentsPanelAdvanced: true,
   habitatAdvanced: true,
   seafloorAdvanced: true,
-  overlaysTerrainAdvanced: true,
 };
 
 export const PANEL_IDS = Object.keys(DEFAULTS) as PanelId[];
