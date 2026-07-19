@@ -28,11 +28,11 @@ export interface DepthProfile {
  * Returns null when the array has fewer than 4 valid (finite, non-negative)
  * values — not enough data to compute meaningful percentiles.
  */
-export function computeDepthProfile(depths: Float32Array | number[]): DepthProfile | null {
+export function computeDepthProfile(depths: Float32Array | (number | null)[]): DepthProfile | null {
   const valid: number[] = [];
   for (let i = 0; i < depths.length; i++) {
-    const v = depths[i]!;
-    if (Number.isFinite(v) && v >= 0) valid.push(v);
+    const v = depths[i];
+    if (v != null && Number.isFinite(v) && v >= 0) valid.push(v);
   }
   if (valid.length < 4) return null;
 

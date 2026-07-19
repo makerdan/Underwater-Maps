@@ -8,7 +8,7 @@ import { getColormap, colormapCssGradient } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ColormapTheme } from "@/lib/settingsStore";
-import { WORLD_SIZE } from "@/lib/terrain";
+import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
@@ -18,7 +18,7 @@ const H = 180;
 
 function drawHeatmap(
   ctx: CanvasRenderingContext2D,
-  depths: number[],
+  depths: (number | null)[],
   width: number,
   height: number,
   minDepth: number,
@@ -35,18 +35,27 @@ function drawHeatmap(
       // Flip y so that py=0 (top) maps to high-latitude rows (North-up).
       const gy = (height - 1) - Math.min(height - 1, Math.floor((py / H) * height));
       const idx = gy * width + gx;
-      const depth = depths[idx] ?? minDepth;
-      const t = (depth - minDepth) / depthRange;
-      // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
-      // display-space sRGB bytes for 2D canvas, matching the legend overlay
-      // and the colormapCanvas helper in colormap.ts.
-      const lin = toColor(t);
-      const c = lin.clone().convertLinearToSRGB();
+      const rawDepth = depths[idx];
       const i = (py * W + px) * 4;
-      imageData.data[i] = Math.max(0, Math.min(255, Math.round(c.r * 255)));
-      imageData.data[i + 1] = Math.max(0, Math.min(255, Math.round(c.g * 255)));
-      imageData.data[i + 2] = Math.max(0, Math.min(255, Math.round(c.b * 255)));
-      imageData.data[i + 3] = 255;
+      if (rawDepth == null) {
+        // No-data cell: use the same steel-blue as the 3D scene so the
+        // minimap coverage gaps are visually consistent.
+        imageData.data[i]     = Math.round(NO_DATA_COLOR.r * 255);
+        imageData.data[i + 1] = Math.round(NO_DATA_COLOR.g * 255);
+        imageData.data[i + 2] = Math.round(NO_DATA_COLOR.b * 255);
+        imageData.data[i + 3] = 255;
+      } else {
+        const t = (rawDepth - minDepth) / depthRange;
+        // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
+        // display-space sRGB bytes for 2D canvas, matching the legend overlay
+        // and the colormapCanvas helper in colormap.ts.
+        const lin = toColor(t);
+        const c = lin.clone().convertLinearToSRGB();
+        imageData.data[i]     = Math.max(0, Math.min(255, Math.round(c.r * 255)));
+        imageData.data[i + 1] = Math.max(0, Math.min(255, Math.round(c.g * 255)));
+        imageData.data[i + 2] = Math.max(0, Math.min(255, Math.round(c.b * 255)));
+        imageData.data[i + 3] = 255;
+      }
     }
   }
 

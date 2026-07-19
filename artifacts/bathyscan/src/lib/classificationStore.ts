@@ -141,7 +141,7 @@ export function downsampleDepths32(grid: TerrainData): number[] {
  * (gridHash, waterType) key effectively unique even before the server's
  * own sha256 namespacing layer.
  */
-export async function hashGrid(depths: number[]): Promise<string> {
+export async function hashGrid(depths: (number | null)[]): Promise<string> {
   const buf = new ArrayBuffer(depths.length * 4);
   const view = new DataView(buf);
   for (let i = 0; i < depths.length; i++) {
