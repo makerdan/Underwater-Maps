@@ -39,6 +39,7 @@ import {
   type Bounds,
   type ParseResult,
   type ParsedRoute,
+  type RawColumnMeta,
 } from "@/lib/gpsImport";
 import {
   SALTWATER_MARKER_TYPES,
@@ -78,6 +79,8 @@ type Phase =
       outsideWp: number;
       outsideRoutes: number;
       outsideRoutePoints: number;
+      /** Column metadata from the parser; consumed by the column-mapping UI. */
+      meta: RawColumnMeta;
     }
   | { kind: "importing" }
   | { kind: "error"; message: string };
@@ -165,7 +168,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       setPhase({ kind: "parsing", fileName: file.name });
       setImportProgress(null);
       try {
-        const result = await parseGpsFile(file);
+        const { result, meta } = await parseGpsFile(file);
         const part = partitionByBounds(result, bounds);
         setPhase({
           kind: "preview",
@@ -175,6 +178,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           outsideWp: part.outsideWaypoints,
           outsideRoutes: part.outsideRoutes,
           outsideRoutePoints: part.outsideRoutePoints,
+          meta,
         });
         // Default checkboxes to whichever the file actually contains.
         setImportWaypoints(part.inside.waypoints.length > 0);
@@ -530,14 +534,14 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           {phase.kind === "pick" && (
             <>
               <p style={{ margin: "0 0 10px", color: "#e2e8f0", lineHeight: 1.5 }}>
-                Pick a <strong style={{ color: "#cbd5e1" }}>.gpx, .kml, .kmz, or .csv</strong> file. Points outside this
+                Pick a <strong style={{ color: "#cbd5e1" }}>.gpx, .kml, .kmz, .csv, .xlsx, or .xls</strong> file. Points outside this
                 dataset's bounding box will be skipped automatically.
               </p>
               <input
                 ref={fileInputRef}
                 data-testid="gps-import-file-input"
                 type="file"
-                accept=".gpx,.kml,.kmz,.csv,application/gpx+xml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,text/csv"
+                accept=".gpx,.kml,.kmz,.csv,.xlsx,.xls,application/gpx+xml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 onChange={handleFileInput}
                 style={{
                   color: "#cbd5e1",

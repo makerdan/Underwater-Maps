@@ -2,15 +2,18 @@
  * gpsImport.ts — parsers for GPS waypoint / route / track files.
  *
  * Supports GPX (waypoints + routes + tracks), KML / KMZ (Placemark Point and
- * LineString), and CSV (header-detected lat/lon plus optional name, depth,
- * type, notes). All formats are normalised into a common shape so the rest of
- * the import flow can treat them uniformly.
+ * LineString), CSV (header-detected lat/lon plus optional name, depth, type,
+ * notes), and Excel .xlsx / .xls (same header detection as CSV). All formats
+ * are normalised into a common shape so the rest of the import flow can treat
+ * them uniformly.
  *
  * Pure utility module — no React, no DOM mutations, no network. Parsers
- * accept already-decoded strings (XML/CSV text) or, for KMZ, an ArrayBuffer.
+ * accept already-decoded strings (XML/CSV text) or, for KMZ / Excel, an
+ * ArrayBuffer / File.
  * `parseGpsFile(file)` is the convenience entry point used by the UI.
  */
 import { unzipSync, strFromU8 } from "fflate";
+import { read as xlsxRead, utils as xlsxUtils } from "xlsx";
 
 /** Maximum number of points (waypoints + route/track points) per import. */
 export const MAX_IMPORT_POINTS = 5000;
@@ -34,10 +37,28 @@ export interface ParsedRoute {
 }
 
 export interface ParseResult {
-  /** Standalone waypoints (GPX <wpt>, KML Point Placemark, CSV row). */
+  /** Standalone waypoints (GPX <wpt>, KML Point Placemark, CSV / Excel row). */
   waypoints: ParsedPoint[];
   /** Multi-point sequences (GPX <rte>/<trk>, KML LineString Placemark). */
   routes: ParsedRoute[];
+}
+
+/**
+ * Column metadata emitted alongside ParseResult.
+ *
+ * Consumed by the column-mapping UI step that follows. Callers that do not
+ * need column-level information can ignore this value.
+ */
+export interface RawColumnMeta {
+  /**
+   * One entry per column detected in the file (or empty for self-describing
+   * formats such as GPX / KML / KMZ). `mappedAlias` is the canonical field
+   * name it was matched to ("lat", "lon", "name", "depth", "elevation",
+   * "type", "notes") or `null` when the column had no recognised alias.
+   */
+  columns: { header: string; mappedAlias: string | null }[];
+  /** Up to the first 5 data rows, keyed by the original header string. */
+  sampleRows: Record<string, string>[];
 }
 
 export interface Bounds {
@@ -53,23 +74,34 @@ export interface Bounds {
 
 /**
  * Detect the file's format from its extension and dispatch to the appropriate
- * parser. Throws a descriptive Error on unsupported extension, malformed
- * content, or zero parseable points.
+ * parser. Returns a `ParseResult` together with `RawColumnMeta` for the
+ * column-mapping UI.
+ *
+ * Throws a descriptive Error on unsupported extension, malformed content, or
+ * zero parseable points.
  */
-export async function parseGpsFile(file: File): Promise<ParseResult> {
+export async function parseGpsFile(
+  file: File,
+): Promise<{ result: ParseResult; meta: RawColumnMeta }> {
   const name = file.name.toLowerCase();
   let result: ParseResult;
+  let meta: RawColumnMeta;
   if (name.endsWith(".gpx")) {
     result = parseGpx(await file.text());
+    meta = EMPTY_META;
   } else if (name.endsWith(".kml")) {
     result = parseKml(await file.text());
+    meta = EMPTY_META;
   } else if (name.endsWith(".kmz")) {
     result = await parseKmz(await file.arrayBuffer());
+    meta = EMPTY_META;
   } else if (name.endsWith(".csv")) {
-    result = parseCsv(await file.text());
+    ({ result, meta } = parseCsv(await file.text()));
+  } else if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+    ({ result, meta } = await parseExcel(file));
   } else {
     throw new Error(
-      "Unsupported file type. Use .gpx, .kml, .kmz, or .csv.",
+      "Unsupported file type. Use .gpx, .kml, .kmz, .csv, .xlsx, or .xls.",
     );
   }
 
@@ -82,7 +114,7 @@ export async function parseGpsFile(file: File): Promise<ParseResult> {
       `Too many points (${total.toLocaleString()}). The per-import limit is ${MAX_IMPORT_POINTS.toLocaleString()}.`,
     );
   }
-  return result;
+  return { result, meta };
 }
 
 /** Count waypoints + all route/track points across the result. */
@@ -259,7 +291,7 @@ export async function parseKmz(data: ArrayBuffer): Promise<ParseResult> {
 }
 
 // ---------------------------------------------------------------------------
-// CSV
+// Column alias tables (shared by CSV and Excel)
 // ---------------------------------------------------------------------------
 
 const LAT_KEYS = ["lat", "latitude", "y"];
@@ -270,19 +302,57 @@ const ELEV_KEYS = ["elevation", "ele", "altitude", "alt"];
 const TYPE_KEYS = ["type", "symbol", "sym", "category"];
 const NOTES_KEYS = ["notes", "note", "description", "desc", "comment"];
 
+/** Maps a canonical field name to its recognised header aliases. */
+const ALIAS_GROUPS: Record<string, readonly string[]> = {
+  lat: LAT_KEYS,
+  lon: LON_KEYS,
+  name: NAME_KEYS,
+  depth: DEPTH_KEYS,
+  elevation: ELEV_KEYS,
+  type: TYPE_KEYS,
+  notes: NOTES_KEYS,
+};
+
+/**
+ * Resolve each header string to a canonical alias name, or `null` when the
+ * header has no recognised alias. Returns one entry per input header,
+ * preserving order.
+ */
+function resolveAliases(
+  headers: string[],
+): { header: string; mappedAlias: string | null }[] {
+  return headers.map((h) => {
+    const low = h.trim().toLowerCase();
+    for (const [alias, keys] of Object.entries(ALIAS_GROUPS)) {
+      if ((keys as string[]).includes(low)) {
+        return { header: h, mappedAlias: alias };
+      }
+    }
+    return { header: h, mappedAlias: null };
+  });
+}
+
+/** Sentinel empty meta used for self-describing formats (GPX, KML, KMZ). */
+const EMPTY_META: RawColumnMeta = { columns: [], sampleRows: [] };
+
+// ---------------------------------------------------------------------------
+// CSV
+// ---------------------------------------------------------------------------
+
 /**
  * Parse a CSV with a header row. Detects lat/lon columns by common header
  * aliases (case-insensitive). Optional name, depth/elevation, type, and notes
  * columns are picked up when present.
  */
-export function parseCsv(text: string): ParseResult {
+export function parseCsv(text: string): { result: ParseResult; meta: RawColumnMeta } {
   // Strip a UTF-8 BOM if present so the first header field matches cleanly.
   const stripped = text.replace(/^\uFEFF/, "");
   const rows = splitCsv(stripped);
   if (rows.length < 2) {
-    return { waypoints: [], routes: [] };
+    return { result: { waypoints: [], routes: [] }, meta: EMPTY_META };
   }
-  const header = rows[0]!.map((h) => h.trim().toLowerCase());
+  const rawHeaders = rows[0]!.map((h) => h.trim());
+  const header = rawHeaders.map((h) => h.toLowerCase());
   const latIdx = findHeader(header, LAT_KEYS);
   const lonIdx = findHeader(header, LON_KEYS);
   if (latIdx < 0 || lonIdx < 0) {
@@ -296,11 +366,21 @@ export function parseCsv(text: string): ParseResult {
   const typeIdx = findHeader(header, TYPE_KEYS);
   const notesIdx = findHeader(header, NOTES_KEYS);
 
+  const sampleRows: Record<string, string>[] = [];
   const waypoints: ParsedPoint[] = [];
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]!;
     // Skip wholly empty rows (trailing newlines, etc.).
     if (row.every((c) => c.trim() === "")) continue;
+    // Collect up to 5 sample rows (before coordinate validation so we
+    // capture what the user actually sent, not just valid rows).
+    if (sampleRows.length < 5) {
+      const entry: Record<string, string> = {};
+      for (let j = 0; j < rawHeaders.length; j++) {
+        entry[rawHeaders[j]!] = row[j] ?? "";
+      }
+      sampleRows.push(entry);
+    }
     const lat = parseFloat(row[latIdx] ?? "");
     const lon = parseFloat(row[lonIdx] ?? "");
     if (!isFiniteCoord(lat, lon)) continue;
@@ -323,7 +403,10 @@ export function parseCsv(text: string): ParseResult {
       source: "waypoint",
     });
   }
-  return { waypoints, routes: [] };
+
+  const result: ParseResult = { waypoints, routes: [] };
+  const meta: RawColumnMeta = { columns: resolveAliases(rawHeaders), sampleRows };
+  return { result, meta };
 }
 
 function findHeader(header: string[], keys: readonly string[]): number {
@@ -380,6 +463,117 @@ function splitCsv(text: string): string[][] {
     rows.push(row);
   }
   return rows;
+}
+
+// ---------------------------------------------------------------------------
+// Excel (.xlsx / .xls)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse an Excel file (.xlsx or .xls). Reads the first non-empty worksheet,
+ * detects lat/lon and optional columns by the same alias table used for CSV,
+ * and returns waypoints in the same shape as `parseCsv`.
+ */
+export async function parseExcel(
+  file: File,
+): Promise<{ result: ParseResult; meta: RawColumnMeta }> {
+  const data = await file.arrayBuffer();
+  let workbook: ReturnType<typeof xlsxRead>;
+  try {
+    workbook = xlsxRead(data, { type: "array" });
+  } catch (err) {
+    throw new Error(
+      `Couldn't open Excel file: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  if (!workbook.SheetNames.length) {
+    throw new Error("Excel file contains no worksheets.");
+  }
+
+  // Find first non-empty sheet (has a !ref range).
+  let sheet: ReturnType<typeof xlsxRead>["Sheets"][string] | undefined;
+  for (const sName of workbook.SheetNames) {
+    const ws = workbook.Sheets[sName];
+    if (ws && ws["!ref"]) {
+      sheet = ws;
+      break;
+    }
+  }
+
+  if (!sheet) {
+    throw new Error("Excel file contains no worksheet with data.");
+  }
+
+  // Convert to array-of-arrays; raw:false gives formatted string values for
+  // every cell type, which is consistent with how we handle CSV.
+  const rows = xlsxUtils.sheet_to_json<string[]>(sheet, {
+    header: 1,
+    defval: "",
+    raw: false,
+  });
+
+  if (rows.length < 2) {
+    throw new Error("Excel worksheet has no data rows (only a header or nothing).");
+  }
+
+  const rawHeaders = (rows[0] as string[]).map((h) => String(h ?? "").trim());
+  const header = rawHeaders.map((h) => h.toLowerCase());
+
+  const latIdx = findHeader(header, LAT_KEYS);
+  const lonIdx = findHeader(header, LON_KEYS);
+  if (latIdx < 0 || lonIdx < 0) {
+    throw new Error(
+      "Excel file is missing a latitude or longitude column (expected headers like 'lat'/'lon').",
+    );
+  }
+
+  const nameIdx = findHeader(header, NAME_KEYS);
+  const depthIdx = findHeader(header, DEPTH_KEYS);
+  const elevIdx = findHeader(header, ELEV_KEYS);
+  const typeIdx = findHeader(header, TYPE_KEYS);
+  const notesIdx = findHeader(header, NOTES_KEYS);
+
+  const sampleRows: Record<string, string>[] = [];
+  const waypoints: ParsedPoint[] = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i] as string[];
+    // Skip wholly empty rows.
+    if (row.every((c) => String(c ?? "").trim() === "")) continue;
+    // Capture up to 5 sample rows for the column-mapping UI.
+    if (sampleRows.length < 5) {
+      const entry: Record<string, string> = {};
+      for (let j = 0; j < rawHeaders.length; j++) {
+        entry[rawHeaders[j]!] = String(row[j] ?? "");
+      }
+      sampleRows.push(entry);
+    }
+    const lat = parseFloat(String(row[latIdx] ?? ""));
+    const lon = parseFloat(String(row[lonIdx] ?? ""));
+    if (!isFiniteCoord(lat, lon)) continue;
+    let depth: number | undefined;
+    if (depthIdx >= 0) {
+      const d = parseFloat(String(row[depthIdx] ?? ""));
+      if (Number.isFinite(d)) depth = d;
+    } else if (elevIdx >= 0) {
+      const e = parseFloat(String(row[elevIdx] ?? ""));
+      if (Number.isFinite(e)) depth = -e;
+    }
+    waypoints.push({
+      lat,
+      lon,
+      name: nameIdx >= 0 ? String(row[nameIdx] ?? "").trim() || undefined : undefined,
+      notes: notesIdx >= 0 ? String(row[notesIdx] ?? "").trim() || undefined : undefined,
+      type: typeIdx >= 0 ? String(row[typeIdx] ?? "").trim() || undefined : undefined,
+      depth,
+      source: "waypoint",
+    });
+  }
+
+  const result: ParseResult = { waypoints, routes: [] };
+  const meta: RawColumnMeta = { columns: resolveAliases(rawHeaders), sampleRows };
+  return { result, meta };
 }
 
 // ---------------------------------------------------------------------------

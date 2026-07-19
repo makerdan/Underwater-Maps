@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { zipSync, strToU8 } from "fflate";
+import { utils as xlsxUtils, write as xlsxWrite } from "xlsx";
 import {
   parseGpx,
   parseKml,
   parseKmz,
   parseCsv,
+  parseExcel,
   parseGpsFile,
   partitionByBounds,
   countPoints,
@@ -73,6 +75,38 @@ not_a_number,142.6,Bad,,,
 ,,,,,
 11.50,142.65,"Quoted, name",100,custom,"has, comma"`;
 
+// ---------------------------------------------------------------------------
+// Helpers for building in-memory Excel workbooks
+// ---------------------------------------------------------------------------
+
+function makeXlsxFile(
+  rows: (string | number | null)[][],
+  sheetName = "Sheet1",
+): File {
+  const ws = xlsxUtils.aoa_to_sheet(rows);
+  const wb = xlsxUtils.book_new();
+  xlsxUtils.book_append_sheet(wb, ws, sheetName);
+  const buf = xlsxWrite(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  return new File([buf], "test.xlsx", {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+}
+
+function makeXlsFile(
+  rows: (string | number | null)[][],
+  sheetName = "Sheet1",
+): File {
+  const ws = xlsxUtils.aoa_to_sheet(rows);
+  const wb = xlsxUtils.book_new();
+  xlsxUtils.book_append_sheet(wb, ws, sheetName);
+  const buf = xlsxWrite(wb, { type: "array", bookType: "xls" }) as ArrayBuffer;
+  return new File([buf], "test.xls", { type: "application/vnd.ms-excel" });
+}
+
+// ---------------------------------------------------------------------------
+// GPX
+// ---------------------------------------------------------------------------
+
 describe("parseGpx", () => {
   it("extracts waypoints with name, depth (flipped from elevation), and notes", () => {
     const r = parseGpx(SAMPLE_GPX);
@@ -110,6 +144,10 @@ describe("parseGpx", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// KML
+// ---------------------------------------------------------------------------
+
 describe("parseKml", () => {
   it("extracts Point placemarks as waypoints with KML altitude flipped to depth", () => {
     const r = parseKml(SAMPLE_KML);
@@ -131,6 +169,10 @@ describe("parseKml", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// KMZ
+// ---------------------------------------------------------------------------
+
 describe("parseKmz", () => {
   it("unzips and parses the bundled .kml file", async () => {
     const zipped = zipSync({ "doc.kml": strToU8(SAMPLE_KML) });
@@ -145,9 +187,13 @@ describe("parseKmz", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// CSV
+// ---------------------------------------------------------------------------
+
 describe("parseCsv", () => {
   it("parses header-detected lat/lon plus optional columns", () => {
-    const r = parseCsv(SAMPLE_CSV);
+    const { result: r } = parseCsv(SAMPLE_CSV);
     expect(r.waypoints).toHaveLength(3); // bad numeric row + empty row are skipped
     const first = r.waypoints[0]!;
     expect(first.lat).toBe(11.35);
@@ -159,7 +205,7 @@ describe("parseCsv", () => {
   });
 
   it("handles quoted fields containing commas", () => {
-    const r = parseCsv(SAMPLE_CSV);
+    const { result: r } = parseCsv(SAMPLE_CSV);
     const quoted = r.waypoints.find((w) => w.lat === 11.5)!;
     expect(quoted.name).toBe("Quoted, name");
     expect(quoted.notes).toBe("has, comma");
@@ -171,16 +217,208 @@ describe("parseCsv", () => {
 
   it("flips elevation to depth when no depth column is present", () => {
     const csv = "lat,lon,elevation\n11.35,142.5,-1234";
-    const r = parseCsv(csv);
+    const { result: r } = parseCsv(csv);
     expect(r.waypoints[0]!.depth).toBe(1234);
+  });
+
+  it("emits RawColumnMeta with resolved aliases", () => {
+    const { meta } = parseCsv("lat,lon,name,depth,custom_col\n11.35,142.5,Test,10,extra");
+    expect(meta.columns).toHaveLength(5);
+    expect(meta.columns[0]).toEqual({ header: "lat", mappedAlias: "lat" });
+    expect(meta.columns[1]).toEqual({ header: "lon", mappedAlias: "lon" });
+    expect(meta.columns[2]).toEqual({ header: "name", mappedAlias: "name" });
+    expect(meta.columns[3]).toEqual({ header: "depth", mappedAlias: "depth" });
+    expect(meta.columns[4]).toEqual({ header: "custom_col", mappedAlias: null });
+  });
+
+  it("includes up to 5 sample rows in meta", () => {
+    const rows = ["lat,lon"];
+    for (let i = 0; i < 8; i++) rows.push(`${11 + i * 0.1},142.5`);
+    const { meta } = parseCsv(rows.join("\n"));
+    expect(meta.sampleRows).toHaveLength(5);
+    expect(meta.sampleRows[0]).toEqual({ lat: "11", lon: "142.5" });
   });
 });
 
+// ---------------------------------------------------------------------------
+// Excel
+// ---------------------------------------------------------------------------
+
+describe("parseExcel", () => {
+  it("parses standard column names and returns correct waypoints", async () => {
+    const file = makeXlsxFile([
+      ["lat", "lon", "name", "depth"],
+      [11.35, 142.5, "Challenger", 10500],
+      [11.4, 142.55, "Sibling", null],
+    ]);
+    const { result } = await parseExcel(file);
+    expect(result.waypoints).toHaveLength(2);
+    const wp = result.waypoints[0]!;
+    expect(wp.lat).toBe(11.35);
+    expect(wp.lon).toBe(142.5);
+    expect(wp.name).toBe("Challenger");
+    expect(wp.depth).toBe(10500);
+    expect(wp.source).toBe("waypoint");
+    expect(result.routes).toHaveLength(0);
+  });
+
+  it("auto-maps aliased column names (latitude/longitude)", async () => {
+    const file = makeXlsxFile([
+      ["latitude", "longitude", "label"],
+      [11.35, 142.5, "WP1"],
+    ]);
+    const { result } = await parseExcel(file);
+    expect(result.waypoints).toHaveLength(1);
+    expect(result.waypoints[0]!.lat).toBe(11.35);
+    expect(result.waypoints[0]!.lon).toBe(142.5);
+    expect(result.waypoints[0]!.name).toBe("WP1");
+  });
+
+  it("auto-maps 'y'/'x' aliases for lat/lon", async () => {
+    const file = makeXlsxFile([
+      ["y", "x"],
+      [11.35, 142.5],
+    ]);
+    const { result } = await parseExcel(file);
+    expect(result.waypoints).toHaveLength(1);
+    expect(result.waypoints[0]!.lat).toBe(11.35);
+    expect(result.waypoints[0]!.lon).toBe(142.5);
+  });
+
+  it("throws ParseError when lat column is missing", async () => {
+    const file = makeXlsxFile([
+      ["longitude", "name"],
+      [142.5, "Test"],
+    ]);
+    await expect(parseExcel(file)).rejects.toThrow(/lat/i);
+  });
+
+  it("throws ParseError when lon column is missing", async () => {
+    const file = makeXlsxFile([
+      ["lat", "name"],
+      [11.35, "Test"],
+    ]);
+    await expect(parseExcel(file)).rejects.toThrow(/lon/i);
+  });
+
+  it("skips rows with out-of-range or non-numeric coordinates", async () => {
+    const file = makeXlsxFile([
+      ["lat", "lon", "name"],
+      [11.35, 142.5, "Good"],
+      ["not_a_number", 142.6, "Bad lat"],
+      [200, 142.5, "Out of range lat"],
+      [11.35, 200, "Out of range lon"],
+      [11.4, 142.55, "Also good"],
+    ]);
+    const { result } = await parseExcel(file);
+    expect(result.waypoints).toHaveLength(2);
+    expect(result.waypoints.map((w) => w.name)).toEqual(["Good", "Also good"]);
+  });
+
+  it("uses the first non-empty sheet in a multi-sheet workbook", async () => {
+    const ws1 = xlsxUtils.aoa_to_sheet([["lat", "lon"], [11.35, 142.5]]);
+    const ws2 = xlsxUtils.aoa_to_sheet([["lat", "lon"], [11.4, 142.55]]);
+    const wb = xlsxUtils.book_new();
+    xlsxUtils.book_append_sheet(wb, ws1, "First");
+    xlsxUtils.book_append_sheet(wb, ws2, "Second");
+    const buf = xlsxWrite(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    const file = new File([buf], "multi.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const { result } = await parseExcel(file);
+    expect(result.waypoints).toHaveLength(1);
+    expect(result.waypoints[0]!.lat).toBe(11.35);
+  });
+
+  it("throws ParseError for empty workbook / worksheet with no data", async () => {
+    const ws = xlsxUtils.aoa_to_sheet([]);
+    const wb = xlsxUtils.book_new();
+    xlsxUtils.book_append_sheet(wb, ws, "Empty");
+    const buf = xlsxWrite(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    const file = new File([buf], "empty.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    await expect(parseExcel(file)).rejects.toThrow(/no data|no worksheet/i);
+  });
+
+  it("emits RawColumnMeta with correct alias mapping", async () => {
+    const file = makeXlsxFile([
+      ["lat", "lon", "notes", "custom_col"],
+      [11.35, 142.5, "A note", "extra"],
+    ]);
+    const { meta } = await parseExcel(file);
+    expect(meta.columns).toHaveLength(4);
+    expect(meta.columns[0]).toEqual({ header: "lat", mappedAlias: "lat" });
+    expect(meta.columns[1]).toEqual({ header: "lon", mappedAlias: "lon" });
+    expect(meta.columns[2]).toEqual({ header: "notes", mappedAlias: "notes" });
+    expect(meta.columns[3]).toEqual({ header: "custom_col", mappedAlias: null });
+  });
+
+  it("includes up to 5 sample rows in meta", async () => {
+    const dataRows: (string | number)[][] = [];
+    for (let i = 0; i < 8; i++) dataRows.push([11 + i * 0.1, 142.5]);
+    const file = makeXlsxFile([["lat", "lon"], ...dataRows]);
+    const { meta } = await parseExcel(file);
+    expect(meta.sampleRows).toHaveLength(5);
+  });
+
+  it("handles .xls format (legacy Excel)", async () => {
+    const file = makeXlsFile([
+      ["lat", "lon", "name"],
+      [11.35, 142.5, "XLS point"],
+    ]);
+    const { result } = await parseExcel(file);
+    expect(result.waypoints).toHaveLength(1);
+    expect(result.waypoints[0]!.name).toBe("XLS point");
+  });
+
+  it("flips elevation to depth when no depth column is present", async () => {
+    const file = makeXlsxFile([
+      ["lat", "lon", "elevation"],
+      [11.35, 142.5, -1234],
+    ]);
+    const { result } = await parseExcel(file);
+    expect(result.waypoints[0]!.depth).toBe(1234);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseGpsFile
+// ---------------------------------------------------------------------------
+
 describe("parseGpsFile", () => {
-  it("dispatches by file extension", async () => {
+  it("dispatches by file extension and returns result + meta", async () => {
     const file = new File([SAMPLE_GPX], "trip.gpx", { type: "application/gpx+xml" });
-    const r = await parseGpsFile(file);
-    expect(r.waypoints.length).toBe(2);
+    const { result, meta } = await parseGpsFile(file);
+    expect(result.waypoints.length).toBe(2);
+    expect(meta.columns).toHaveLength(0);
+    expect(meta.sampleRows).toHaveLength(0);
+  });
+
+  it("returns meta with columns for CSV files", async () => {
+    const file = new File([SAMPLE_CSV], "points.csv", { type: "text/csv" });
+    const { meta } = await parseGpsFile(file);
+    expect(meta.columns.length).toBeGreaterThan(0);
+    expect(meta.columns[0]).toEqual({ header: "lat", mappedAlias: "lat" });
+  });
+
+  it("dispatches .xlsx files to parseExcel", async () => {
+    const xlsxFile = makeXlsxFile([
+      ["lat", "lon", "name"],
+      [11.35, 142.5, "Test"],
+    ]);
+    const { result, meta } = await parseGpsFile(xlsxFile);
+    expect(result.waypoints).toHaveLength(1);
+    expect(meta.columns[0]).toEqual({ header: "lat", mappedAlias: "lat" });
+  });
+
+  it("dispatches .xls files to parseExcel", async () => {
+    const xlsFile = makeXlsFile([
+      ["lat", "lon"],
+      [11.35, 142.5],
+    ]);
+    const { result } = await parseGpsFile(xlsFile);
+    expect(result.waypoints).toHaveLength(1);
   });
 
   it("rejects unsupported extensions", async () => {
@@ -203,6 +441,10 @@ describe("parseGpsFile", () => {
     await expect(parseGpsFile(file)).rejects.toThrow(/Too many/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// partitionByBounds
+// ---------------------------------------------------------------------------
 
 describe("partitionByBounds", () => {
   const bounds = { minLon: 142.45, minLat: 11.30, maxLon: 142.6, maxLat: 11.45 };
@@ -281,6 +523,10 @@ describe("partitionByBounds", () => {
     expect(isInBounds(142.44, 11.30, bounds)).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// countPoints
+// ---------------------------------------------------------------------------
 
 describe("countPoints", () => {
   it("sums waypoints and all route/track points", () => {

@@ -79,7 +79,10 @@ function setupParseMock() {
     waypoints: [{ lon: -121.5, lat: 37.5, name: "WP1", depth: 10 }],
     routes: [],
   };
-  (parseGpsFile as ReturnType<typeof vi.fn>).mockResolvedValue(parsedResult);
+  (parseGpsFile as ReturnType<typeof vi.fn>).mockResolvedValue({
+    result: parsedResult,
+    meta: { columns: [], sampleRows: [] },
+  });
   (partitionByBounds as ReturnType<typeof vi.fn>).mockReturnValue({
     inside: parsedResult,
     outsideWaypoints: 0,
