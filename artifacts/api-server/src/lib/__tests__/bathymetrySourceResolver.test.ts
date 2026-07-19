@@ -27,14 +27,18 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("BATHYMETRY_SOURCES registry", () => {
-  it("declares the five expected sources", () => {
+  it("declares the expected sources", () => {
     expect(Object.keys(BATHYMETRY_SOURCES).sort()).toEqual(
       [
         "bundled-survey",
         "gebco",
+        "mn-dnr-bathy",
         "ncei-bag-mosaic",
         "ncei-crm-s-alaska",
         "ncei-dem-global-mosaic",
+        "noaa-great-lakes-dem",
+        "nysdec-bathy",
+        "usgs-3dep",
       ].sort(),
     );
   });
@@ -295,5 +299,89 @@ describe("ncei-crm-s-alaska source", () => {
         `${aoi}: last ranked source must be gebco`,
       ).toBe("gebco");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NYSDEC bathymetry source (Task #2737)
+// ---------------------------------------------------------------------------
+
+describe("nysdec-bathy source", () => {
+  it("is registered in BATHYMETRY_SOURCES with expected shape", () => {
+    const src = BATHYMETRY_SOURCES["nysdec-bathy"];
+    expect(src).toBeDefined();
+    expect(src.id).toBe("nysdec-bathy");
+    expect(src.scope).toBe("state");
+    expect(src.dataSource).toBe("nysdec");
+    expect(src.creditUrl).toMatch(/^https?:\/\//);
+    expect(typeof src.fetch).toBe("function");
+  });
+
+  it("is the top-ranked source for fw-lake-george-ny", () => {
+    expect(DATASET_SOURCE_PRIORITY["fw-lake-george-ny"]?.[0]).toBe("nysdec-bathy");
+  });
+
+  it("is the top-ranked source for fw-seneca-lake-ny", () => {
+    expect(DATASET_SOURCE_PRIORITY["fw-seneca-lake-ny"]?.[0]).toBe("nysdec-bathy");
+  });
+
+  it("is the top-ranked source for fw-cayuga-lake-ny", () => {
+    expect(DATASET_SOURCE_PRIORITY["fw-cayuga-lake-ny"]?.[0]).toBe("nysdec-bathy");
+  });
+
+  it("fw-lake-george-ny falls back to usgs-3dep then gebco", () => {
+    const priority = DATASET_SOURCE_PRIORITY["fw-lake-george-ny"] ?? [];
+    expect(priority).toContain("usgs-3dep");
+    expect(priority).toContain("gebco");
+    const nysdecIdx = priority.indexOf("nysdec-bathy");
+    const depIdx = priority.indexOf("usgs-3dep");
+    const gebcoIdx = priority.indexOf("gebco");
+    expect(nysdecIdx).toBeLessThan(depIdx);
+    expect(depIdx).toBeLessThan(gebcoIdx);
+  });
+
+  it("does NOT appear in the thorne-bay (saltwater) priority list", () => {
+    const priority = DATASET_SOURCE_PRIORITY["thorne-bay"] ?? [];
+    expect(priority).not.toContain("nysdec-bathy");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MN DNR bathymetry source (Task #2737)
+// ---------------------------------------------------------------------------
+
+describe("mn-dnr-bathy source", () => {
+  it("is registered in BATHYMETRY_SOURCES with expected shape", () => {
+    const src = BATHYMETRY_SOURCES["mn-dnr-bathy"];
+    expect(src).toBeDefined();
+    expect(src.id).toBe("mn-dnr-bathy");
+    expect(src.scope).toBe("state");
+    expect(src.dataSource).toBe("mn-dnr");
+    expect(src.creditUrl).toMatch(/^https?:\/\//);
+    expect(typeof src.fetch).toBe("function");
+  });
+
+  it("is the top-ranked source for fw-lake-minnetonka-mn", () => {
+    expect(DATASET_SOURCE_PRIORITY["fw-lake-minnetonka-mn"]?.[0]).toBe("mn-dnr-bathy");
+  });
+
+  it("is the top-ranked source for fw-mille-lacs-lake-mn", () => {
+    expect(DATASET_SOURCE_PRIORITY["fw-mille-lacs-lake-mn"]?.[0]).toBe("mn-dnr-bathy");
+  });
+
+  it("fw-lake-minnetonka-mn falls back to usgs-3dep then gebco", () => {
+    const priority = DATASET_SOURCE_PRIORITY["fw-lake-minnetonka-mn"] ?? [];
+    expect(priority).toContain("usgs-3dep");
+    expect(priority).toContain("gebco");
+    const dnrIdx = priority.indexOf("mn-dnr-bathy");
+    const depIdx = priority.indexOf("usgs-3dep");
+    const gebcoIdx = priority.indexOf("gebco");
+    expect(dnrIdx).toBeLessThan(depIdx);
+    expect(depIdx).toBeLessThan(gebcoIdx);
+  });
+
+  it("does NOT appear in the fw-lake-george-ny (NY lake) priority list", () => {
+    const priority = DATASET_SOURCE_PRIORITY["fw-lake-george-ny"] ?? [];
+    expect(priority).not.toContain("mn-dnr-bathy");
   });
 });

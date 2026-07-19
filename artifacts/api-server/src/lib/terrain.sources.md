@@ -19,9 +19,21 @@ export const BATHYMETRY_SOURCES = {
   "bundled-survey":          { scope: "local",    fetch(meta, N) { … } },
   "ncei-bag-mosaic":         { scope: "regional", fetch(meta, N) { … } },
   "ncei-dem-global-mosaic":  { scope: "regional", fetch(meta, N) { … } },
+  "ncei-crm-s-alaska":       { scope: "regional", fetch(meta, N) { … } },
+  "noaa-great-lakes-dem":    { scope: "regional", fetch(meta, N) { … } },
+  "nysdec-bathy":            { scope: "state",    fetch(meta, N) { … } },
+  "mn-dnr-bathy":            { scope: "state",    fetch(meta, N) { … } },
+  "usgs-3dep":               { scope: "national", fetch(meta, N) { … } },
   "gebco":                   { scope: "global",   fetch(meta, N) { … } },
 };
 ```
+
+State-level sources (`nysdec-bathy`, `mn-dnr-bathy`) query ArcGIS REST
+FeatureServer layers that expose depth contour lines, then
+inverse-distance-weight interpolate the contour samples onto an N×N grid.
+They fast-fail (throw) for bboxes outside CONUS or when the upstream
+service returns zero features, allowing the resolver to fall through to
+`usgs-3dep` then `gebco`.
 
 Each entry declares `{ id, label, scope, dataSource, creditUrl, fetch }`.
 The `fetch(meta, N)` contract is the same one the legacy `fetchNceiGrid` /

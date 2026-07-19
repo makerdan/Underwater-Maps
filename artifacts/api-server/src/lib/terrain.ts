@@ -23,7 +23,9 @@ export type TerrainDataSource =
   | "twdb"
   | "usace"
   | "usgs-3dep"
-  | "noaa-great-lakes";
+  | "noaa-great-lakes"
+  | "nysdec"
+  | "mn-dnr";
 
 export interface TerrainGrid {
   datasetId: string;
@@ -119,8 +121,13 @@ export interface TerrainGrid {
  *   9 — Task #2631: smoothSpikes applied in LRR build script so the
  *       shoreline 0 → deep transitions no longer produce vertical dark spike
  *       geometry. Previously cached LRR bundles must be invalidated.
+ *  10 — Task #2737: NYSDEC and MN DNR ArcGIS REST bathymetry sources added
+ *       (`nysdec-bathy`, `mn-dnr-bathy`). Lake George, Seneca, Cayuga,
+ *       Lake Minnetonka, and Mille Lacs now try state-agency contour
+ *       sources before 3DEP; previously cached 3DEP grids for those AOIs
+ *       must be rebuilt against the new priority chain.
  */
-export const TERRAIN_CACHE_VERSION = 9;
+export const TERRAIN_CACHE_VERSION = 10;
 
 export interface DatasetMeta {
   id: string;
@@ -388,6 +395,285 @@ function matchGreatLakeCoverage(bbox: {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// ArcGIS REST Feature Service — state bathymetry (NYSDEC + MN DNR)
+// ---------------------------------------------------------------------------
+
+/**
+ * ArcGIS REST FeatureServer endpoint for NYSDEC lake bathymetric contour lines.
+ * Published by NYSDEC at:
+ *   https://data.gis.ny.gov/datasets/nysdec-lake-bathymetry
+ * Underlying REST service for querying contour features directly:
+ */
+const NYSDEC_BATHY_FEATURE_SERVICE =
+  "https://services6.arcgis.com/v1XbFnus3vB7bnKv/arcgis/rest/services/DEC_Lake_Bathymetry/FeatureServer/0";
+
+/**
+ * ArcGIS REST FeatureServer endpoint for MN DNR lake bathymetric contour lines.
+ * Published by MN DNR via the LakeFinder portal:
+ *   https://www.dnr.state.mn.us/lakefind/index.html
+ */
+const MN_DNR_BATHY_FEATURE_SERVICE =
+  "https://webgis.dnr.state.mn.us/arcgis/rest/services/eng/Lakes_Bathy/FeatureServer/0";
+
+/**
+ * Candidate depth-attribute field names across ArcGIS bathymetry schemas.
+ * The query requests all of them via outFields; we use the first non-null value.
+ * Convention: *_FT fields are feet (divided by 0.3048 to get metres); *_M fields
+ * are already metres.
+ */
+const ARCGIS_DEPTH_FIELDS = [
+  "DEPTH_M",
+  "DEPTH_FT",
+  "DEPTH",
+  "CONTOUR_M",
+  "CONTOUR_FT",
+  "CONTOUR",
+  "ELEV_M",
+  "ELEV_FT",
+];
+
+/**
+ * Extract a numeric depth value (metres) from an ArcGIS feature's attributes.
+ * Tries each candidate field in priority order; converts feet → metres when the
+ * winning field name ends in `_FT`.
+ */
+function extractArcGisDepthM(attrs: Record<string, unknown>): number | null {
+  for (const field of ARCGIS_DEPTH_FIELDS) {
+    const raw = attrs[field];
+    if (raw === null || raw === undefined || raw === "") continue;
+    const v = Number(raw);
+    if (!isFinite(v)) continue;
+    const depthM = field.endsWith("_FT") ? v * 0.3048 : v;
+    return Math.abs(depthM);
+  }
+  return null;
+}
+
+/**
+ * Sample evenly-spaced (lon, lat) points along an ArcGIS polyline path
+ * (array of [lon, lat] coordinate pairs). Returns at most `maxPts` points.
+ */
+function samplePolyline(
+  path: [number, number][],
+  maxPts: number,
+): [number, number][] {
+  if (path.length === 0) return [];
+  if (path.length === 1) return [[path[0]![0], path[0]![1]]];
+  const pts: [number, number][] = [];
+  const step = Math.max(1, Math.floor(path.length / maxPts));
+  for (let i = 0; i < path.length; i += step) {
+    pts.push([path[i]![0], path[i]![1]]);
+  }
+  return pts;
+}
+
+/**
+ * Inverse-distance-weighted (IDW) interpolation from a set of scattered
+ * (lon, lat, depth) samples onto a regular N×N grid covering [minLon, maxLon] ×
+ * [minLat, maxLat].
+ *
+ * Power p=2 (standard IDW). Only the nearest `k` samples contribute to each
+ * cell (performance guard for large datasets). Returns flat row-major array
+ * of depth values (NaN for cells with no nearby samples).
+ */
+function idwInterpolateGrid(
+  samples: { lon: number; lat: number; depth: number }[],
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+  N: number,
+  k = 12,
+  power = 2,
+): number[] {
+  const { minLon, minLat, maxLon, maxLat } = bbox;
+  const lonRange = maxLon - minLon;
+  const latRange = maxLat - minLat;
+  const grid: number[] = new Array(N * N).fill(NaN);
+
+  if (samples.length === 0) return grid;
+
+  for (let row = 0; row < N; row++) {
+    const lat = minLat + ((N - 1 - row) / (N - 1)) * latRange;
+    for (let col = 0; col < N; col++) {
+      const lon = minLon + (col / (N - 1)) * lonRange;
+      const dists = samples.map((s, i) => {
+        const dx = (s.lon - lon) * Math.cos((lat * Math.PI) / 180);
+        const dy = s.lat - lat;
+        return { d2: dx * dx + dy * dy, i };
+      });
+      dists.sort((a, b) => a.d2 - b.d2);
+      const nearest = dists.slice(0, k);
+
+      if (nearest[0]!.d2 === 0) {
+        grid[row * N + col] = samples[nearest[0]!.i]!.depth;
+        continue;
+      }
+
+      let wSum = 0;
+      let vSum = 0;
+      for (const { d2, i } of nearest) {
+        const w = 1 / Math.pow(d2, power / 2);
+        wSum += w;
+        vSum += w * samples[i]!.depth;
+      }
+      grid[row * N + col] = wSum > 0 ? vSum / wSum : NaN;
+    }
+  }
+  return grid;
+}
+
+/**
+ * Generic ArcGIS REST FeatureServer bathymetry fetcher.
+ *
+ * Queries the given FeatureServer layer for polyline contour features
+ * intersecting `bbox`, samples points along each contour, and IDW-interpolates
+ * onto an N×N grid. Falls through (throws) when:
+ *  - The service returns an error or zero features.
+ *  - No recognisable depth field is present in the schema.
+ *  - The resulting depth range is < 1 m (empty tile / no survey coverage).
+ *
+ * Depth unit detection: field names ending in `_FT` are converted from feet;
+ * all others are assumed to be metres already.
+ *
+ * @param serviceUrl  ArcGIS FeatureServer layer URL (no trailing slash)
+ * @param sourceLabel Human-readable name for log messages
+ * @param bbox        Query envelope in WGS-84
+ * @param N           Output grid side length (N×N cells)
+ * @param timeoutMs   Per-request timeout (default 30 s)
+ */
+async function fetchArcGisRestBathy(
+  serviceUrl: string,
+  sourceLabel: string,
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+  N: number,
+  timeoutMs = 30_000,
+): Promise<{ depths: number[]; minDepth: number; maxDepth: number; topography: number[]; hasTopography: boolean }> {
+  const { minLon, minLat, maxLon, maxLat } = bbox;
+
+  const params = new URLSearchParams({
+    where: "1=1",
+    geometry: `${minLon},${minLat},${maxLon},${maxLat}`,
+    geometryType: "esriGeometryEnvelope",
+    spatialRel: "esriSpatialRelIntersects",
+    outFields: ARCGIS_DEPTH_FIELDS.join(","),
+    returnGeometry: "true",
+    f: "json",
+  });
+  const url = `${serviceUrl}/query?${params.toString()}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let body: string;
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) {
+      throw new Error(`${sourceLabel} ArcGIS REST returned HTTP ${resp.status}`);
+    }
+    body = await resp.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  let parsed: {
+    error?: { message?: string };
+    features?: {
+      attributes: Record<string, unknown>;
+      geometry?: {
+        paths?: [number, number][][];
+        rings?: [number, number][][];
+      };
+    }[];
+  };
+  try {
+    parsed = JSON.parse(body) as typeof parsed;
+  } catch {
+    throw new Error(`${sourceLabel} ArcGIS REST returned non-JSON response`);
+  }
+
+  if (parsed.error) {
+    throw new Error(
+      `${sourceLabel} ArcGIS REST error: ${parsed.error.message ?? JSON.stringify(parsed.error)}`,
+    );
+  }
+
+  const features = parsed.features ?? [];
+  if (features.length === 0) {
+    throw new Error(
+      `${sourceLabel} ArcGIS REST returned 0 features for bbox — no survey coverage`,
+    );
+  }
+
+  // Build sample points from contour lines (paths) or polygon rings.
+  const MAX_PTS_PER_FEATURE = 32;
+  const samples: { lon: number; lat: number; depth: number }[] = [];
+
+  for (const feat of features) {
+    const depth = extractArcGisDepthM(feat.attributes);
+    if (depth === null || depth < 0 || !isFinite(depth)) continue;
+
+    const paths: [number, number][][] = [
+      ...(feat.geometry?.paths ?? []),
+      ...(feat.geometry?.rings ?? []),
+    ];
+
+    for (const path of paths) {
+      for (const [lon, lat] of samplePolyline(path, MAX_PTS_PER_FEATURE)) {
+        if (
+          lon >= minLon && lon <= maxLon &&
+          lat >= minLat && lat <= maxLat
+        ) {
+          samples.push({ lon, lat, depth });
+        }
+      }
+    }
+  }
+
+  if (samples.length === 0) {
+    throw new Error(
+      `${sourceLabel} ArcGIS REST: features returned but no valid depth samples extracted`,
+    );
+  }
+
+  logger.info(
+    { sourceLabel, sampleCount: samples.length, featureCount: features.length },
+    `[terrain] ${sourceLabel}: interpolating ${samples.length} samples from ${features.length} contour features`,
+  );
+
+  const depthsRaw = idwInterpolateGrid(samples, bbox, N);
+  const depths: number[] = new Array(N * N).fill(NaN);
+  let minDepth = Infinity;
+  let maxDepth = -Infinity;
+
+  for (let i = 0; i < depthsRaw.length; i++) {
+    const v = depthsRaw[i]!;
+    if (!isFinite(v) || v < 0) continue;
+    depths[i] = v;
+    if (v < minDepth) minDepth = v;
+    if (v > maxDepth) maxDepth = v;
+  }
+
+  if (!isFinite(minDepth)) minDepth = 0;
+  if (!isFinite(maxDepth)) maxDepth = 0;
+
+  if (maxDepth - minDepth < 1) {
+    throw new Error(
+      `${sourceLabel} ArcGIS REST: near-flat depth grid (range ${(maxDepth - minDepth).toFixed(2)} m) — likely no survey coverage`,
+    );
+  }
+
+  logger.info(
+    { sourceLabel, minDepth, maxDepth },
+    `[terrain] ${sourceLabel}: resolved grid (depth range ${minDepth.toFixed(1)}–${maxDepth.toFixed(1)} m)`,
+  );
+
+  return {
+    depths,
+    minDepth,
+    maxDepth,
+    topography: new Array(N * N).fill(0),
+    hasTopography: false,
+  };
+}
+
 /**
  * Concrete bathymetry-source registry. Each entry conforms to the
  * `BathymetrySource` contract above. The resolver looks up entries by id
@@ -500,6 +786,54 @@ export const BATHYMETRY_SOURCES = {
       return { ...r };
     },
   },
+  /** NYSDEC lake bathymetry — ArcGIS REST Feature Service exposing
+   *  depth contour lines for surveyed New York state freshwater lakes
+   *  (Lake George, Finger Lakes, etc.).  10–30 m resolution.
+   *  Throws immediately for bboxes outside CONUS or when the service
+   *  returns no features (so the resolver falls through to 3DEP). */
+  "nysdec-bathy": {
+    id: "nysdec-bathy",
+    label: "NYSDEC Lake Bathymetry",
+    scope: "state" as BathymetrySourceScope,
+    dataSource: "nysdec" as TerrainDataSource,
+    creditUrl: "https://data.gis.ny.gov/datasets/nysdec-lake-bathymetry",
+    async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
+      if (!isWithinConus(meta.bbox)) {
+        throw new Error("NYSDEC Bathy: bbox outside continental US — skipping");
+      }
+      const r = await fetchArcGisRestBathy(
+        NYSDEC_BATHY_FEATURE_SERVICE,
+        "NYSDEC Lake Bathymetry",
+        meta.bbox,
+        N,
+      );
+      return { ...r };
+    },
+  },
+  /** MN DNR lake bathymetry — ArcGIS REST Feature Service exposing
+   *  depth contour lines for Minnesota freshwater lakes (Lake Minnetonka,
+   *  Mille Lacs Lake, etc.) via the DNR LakeFinder portal.  10–30 m
+   *  resolution.  Throws immediately for non-MN bboxes or when the
+   *  service returns no features (falls through to 3DEP). */
+  "mn-dnr-bathy": {
+    id: "mn-dnr-bathy",
+    label: "MN DNR Lake Bathymetry",
+    scope: "state" as BathymetrySourceScope,
+    dataSource: "mn-dnr" as TerrainDataSource,
+    creditUrl: "https://www.dnr.state.mn.us/lakefind/index.html",
+    async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
+      if (!isWithinConus(meta.bbox)) {
+        throw new Error("MN DNR Bathy: bbox outside continental US — skipping");
+      }
+      const r = await fetchArcGisRestBathy(
+        MN_DNR_BATHY_FEATURE_SERVICE,
+        "MN DNR Lake Bathymetry",
+        meta.bbox,
+        N,
+      );
+      return { ...r };
+    },
+  },
   /** GEBCO 2024 global grid (~400 m). Last-resort upstream before
    *  synthetic — covers everywhere on the ocean but is too coarse for
    *  most inshore fishing-grade detail. */
@@ -576,12 +910,13 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   "fw-lake-erie": ["noaa-great-lakes-dem", "gebco"],
   "fw-lake-ontario": ["noaa-great-lakes-dem", "gebco"],
   // ---------------------------------------------------------------------------
-  // Northeast freshwater lakes — USGS 3DEP first, GEBCO fallback.
+  // Northeast freshwater lakes — NYSDEC ArcGIS REST first for NY lakes with
+  // documented surveys, USGS 3DEP fallback, GEBCO last.
   // ---------------------------------------------------------------------------
-  "fw-lake-george-ny": ["usgs-3dep", "gebco"],
+  "fw-lake-george-ny": ["nysdec-bathy", "usgs-3dep", "gebco"],
   "fw-lake-champlain": ["usgs-3dep", "gebco"],
-  "fw-seneca-lake-ny": ["usgs-3dep", "gebco"],
-  "fw-cayuga-lake-ny": ["usgs-3dep", "gebco"],
+  "fw-seneca-lake-ny": ["nysdec-bathy", "usgs-3dep", "gebco"],
+  "fw-cayuga-lake-ny": ["nysdec-bathy", "usgs-3dep", "gebco"],
   "fw-oneida-lake-ny": ["usgs-3dep", "gebco"],
   "fw-lake-placid-ny": ["usgs-3dep", "gebco"],
   "fw-saranac-lake-ny": ["usgs-3dep", "gebco"],
@@ -591,10 +926,11 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   "fw-quabbin-reservoir-ma": ["usgs-3dep", "gebco"],
   "fw-lake-memphremagog-vt": ["usgs-3dep", "gebco"],
   // ---------------------------------------------------------------------------
-  // Midwest freshwater lakes — MN DNR / WI / MI entries use 3DEP fallback.
+  // Midwest freshwater lakes — MN DNR ArcGIS REST first for MN lakes with
+  // documented surveys, USGS 3DEP fallback, GEBCO last.
   // ---------------------------------------------------------------------------
-  "fw-lake-minnetonka-mn": ["usgs-3dep", "gebco"],
-  "fw-mille-lacs-lake-mn": ["usgs-3dep", "gebco"],
+  "fw-lake-minnetonka-mn": ["mn-dnr-bathy", "usgs-3dep", "gebco"],
+  "fw-mille-lacs-lake-mn": ["mn-dnr-bathy", "usgs-3dep", "gebco"],
   "fw-leech-lake-mn": ["usgs-3dep", "gebco"],
   "fw-red-lake-mn": ["usgs-3dep", "gebco"],
   "fw-lake-of-the-woods": ["usgs-3dep", "gebco"],
