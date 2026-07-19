@@ -19,6 +19,8 @@ import { buildBathyscanDownloadFilename } from "@/lib/gpsExport";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 type Resolution = 64 | 256 | 512;
 
 interface DownloadBbox {
@@ -105,7 +107,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
         east: String(bbox.east),
         west: String(bbox.west),
       });
-      const resp = await authorizedFetch(`/api/terrain/download/info?${params.toString()}`);
+      const resp = await authorizedFetch(`${API_BASE}/api/terrain/download/info?${params.toString()}`);
       if (!resp.ok) {
         const body = (await resp.json().catch(() => ({}))) as { details?: string };
         throw new Error(body.details ?? `HTTP ${resp.status}`);
@@ -134,7 +136,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
         west: String(bbox.west),
         resolution: String(resolution),
       });
-      const resp = await authorizedFetch(`/api/terrain/download?${params.toString()}`);
+      const resp = await authorizedFetch(`${API_BASE}/api/terrain/download?${params.toString()}`);
       if (!resp.ok) {
         const body = (await resp.json().catch(() => ({}))) as { details?: string };
         throw new Error(body.details ?? `HTTP ${resp.status}`);

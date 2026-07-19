@@ -32,6 +32,8 @@ import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 /** Search radius around the out-of-bounds GPS position, in km. */
 export const HANDOFF_SEARCH_RADIUS_KM = 25;
 
@@ -126,7 +128,7 @@ export async function findCatalogSurveyForPosition(
   lat: number,
 ): Promise<CatalogSuggestion | null> {
   try {
-    const res = await fetch("/api/datasets/point-radius-query", {
+    const res = await fetch(`${API_BASE}/api/datasets/point-radius-query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -177,7 +179,7 @@ export async function startCatalogDownloadHandoff(
 
   try {
     const saveRes = await authorizedFetch(
-      `/api/datasets/catalog/${encodeURIComponent(catalogId)}/save`,
+      `${API_BASE}/api/datasets/catalog/${encodeURIComponent(catalogId)}/save`,
       { method: "POST", headers: { "Content-Type": "application/json" } },
     );
 
@@ -233,7 +235,7 @@ export async function startCatalogDownloadHandoff(
 
         try {
           const statusRes = await authorizedFetch(
-            `/api/datasets/my-saves/${encodeURIComponent(saveId)}/status`,
+            `${API_BASE}/api/datasets/my-saves/${encodeURIComponent(saveId)}/status`,
           );
           if (statusRes.ok) {
             const status = await statusRes.json() as {

@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { useLandTerrainStore } from "@/lib/landTerrainStore";
 import type { LandGrid } from "@/lib/landTerrainStore";
 
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 interface Bbox {
   minLon: number;
   maxLon: number;
@@ -65,7 +67,7 @@ export function useLandTerrain(bbox: Bbox | null, gridSize = 128): void {
     setLoading(true);
 
     const bboxParam = `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
-    const url = `/api/terrain/land?bbox=${encodeURIComponent(bboxParam)}&size=${gridSize}`;
+    const url = `${API_BASE}/api/terrain/land?bbox=${encodeURIComponent(bboxParam)}&size=${gridSize}`;
 
     let cancelled = false;
 

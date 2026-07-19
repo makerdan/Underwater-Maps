@@ -71,6 +71,8 @@ import {
 } from "@workspace/api-client-react";
 import type { TerrainData } from "@workspace/api-client-react";
 
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 // Auto-retry backoff schedule for transient save-to-account failures.
 // Module-scope so reading it inside the upload callback doesn't require
 // a hook deps entry.
@@ -1335,7 +1337,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     const poll = async () => {
       if (!active) return;
       try {
-        const resp = await authorizedFetch(`/api/datasets/upload/jobs/${chunkedJobId}`);
+        const resp = await authorizedFetch(`${API_BASE}/api/datasets/upload/jobs/${chunkedJobId}`);
         backoffMs = 2_000; // reset back-off on any successful network response
         if (!resp.ok) {
           scheduleNext();
@@ -1570,7 +1572,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
       let resp: Response;
       try {
-        resp = await authorizedFetch("/api/datasets/upload/chunk", {
+        resp = await authorizedFetch(`${API_BASE}/api/datasets/upload/chunk`, {
           method: "POST",
           body: fd,
         });
@@ -1605,7 +1607,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // Returns true on success; sets error state and returns false otherwise.
   const doFinalizeChunks = useCallback(async (file: File, uploadId: string): Promise<boolean> => {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    const finalResp = await authorizedFetch("/api/datasets/upload/chunk/finalize", {
+    const finalResp = await authorizedFetch(`${API_BASE}/api/datasets/upload/chunk/finalize`, {
       method: "POST",
       body: JSON.stringify({ uploadId, fileName: file.name, totalChunks, resolution: 256 }),
       headers: { "Content-Type": "application/json" },
@@ -1670,7 +1672,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       let currentAuthHeader = authHeader;
       let lastResp: Response | null = null;
       for (let attempt = 0; attempt < 3; attempt++) {
-        const resp = await fetch("/api/datasets/upload/request-gcs-url", {
+        const resp = await fetch(`${API_BASE}/api/datasets/upload/request-gcs-url`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...currentAuthHeader },
           body: JSON.stringify({ fileName: file.name }),
@@ -1743,7 +1745,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     // objectKey so we resolve exactly the right dataset, even if another
     // upload finishes concurrently.
     const pollIntervalId = setInterval(() => {
-      void fetch(`/api/datasets/upload/gcs-job-status?objectKey=${encodeURIComponent(objectKey)}`, {
+      void fetch(`${API_BASE}/api/datasets/upload/gcs-job-status?objectKey=${encodeURIComponent(objectKey)}`, {
         headers: authHeader,
       })
         .then((r) => {
@@ -1942,7 +1944,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
       try {
         const resp = await authorizedFetch(
-          `/api/datasets/upload/jobs/${encodeURIComponent(chunkedJobId)}`,
+          `${API_BASE}/api/datasets/upload/jobs/${encodeURIComponent(chunkedJobId)}`,
         );
         backoffMs = 1_500; // reset back-off on any successful network response
 
@@ -2080,7 +2082,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     let resumeFrom = 0;
     try {
       const statusResp = await authorizedFetch(
-        `/api/datasets/upload/chunk/status/${encodeURIComponent(saved.uploadId)}`,
+        `${API_BASE}/api/datasets/upload/chunk/status/${encodeURIComponent(saved.uploadId)}`,
       );
       if (statusResp.ok) {
         const { receivedChunks } = await statusResp.json() as { receivedChunks: number[] };
@@ -2186,7 +2188,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     // ── Server health probe ────────────────────────────────────────────────────
     let serverReachable = false;
     try {
-      const probe = await fetch("/api/healthz", {
+      const probe = await fetch(`${API_BASE}/api/healthz`, {
         signal: AbortSignal.timeout(5_000),
       });
       serverReachable = probe.ok;
@@ -2246,7 +2248,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       // the health poll confirmed the server is back, but we do a direct
       // /api/healthz check to be sure before re-entering the upload loop.
       try {
-        const healthProbe = await fetch("/api/healthz", {
+        const healthProbe = await fetch(`${API_BASE}/api/healthz`, {
           signal: AbortSignal.timeout(5_000),
         });
         if (!healthProbe.ok) {
@@ -2264,7 +2266,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       let resumeFrom = chunkedFailedAtRef.current ?? 0;
       try {
         const statusResp = await authorizedFetch(
-          `/api/datasets/upload/chunk/status/${encodeURIComponent(uploadId)}`,
+          `${API_BASE}/api/datasets/upload/chunk/status/${encodeURIComponent(uploadId)}`,
         );
         if (statusResp.ok) {
           const { receivedChunks } = await statusResp.json() as { receivedChunks: number[] };
@@ -2509,7 +2511,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     const ids = [...presetSelectedIds];
     for (const id of ids) {
       try {
-        await authorizedFetch(`/api/datasets/presets/${encodeURIComponent(id)}`, {
+        await authorizedFetch(`${API_BASE}/api/datasets/presets/${encodeURIComponent(id)}`, {
           method: "DELETE",
         });
       } catch {
