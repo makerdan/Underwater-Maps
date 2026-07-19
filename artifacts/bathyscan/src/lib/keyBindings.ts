@@ -123,3 +123,27 @@ export function getBoundKey(
 ): string {
   return bindings?.[action] ?? DEFAULT_KEY_BINDINGS[action];
 }
+
+/**
+ * Fixed arrow-key aliases for the four movement actions.
+ * ArrowUp = forward, ArrowDown = backward, ArrowLeft = strafe-left,
+ * ArrowRight = strafe-right. These are NOT user-remappable; they are
+ * always active in addition to the user's configured WASD bindings.
+ */
+export const ARROW_KEY_ALIASES: Record<string, ShortcutActionId> = {
+  ArrowUp: "moveForward",
+  ArrowDown: "moveBackward",
+  ArrowLeft: "strafeLeft",
+  ArrowRight: "strafeRight",
+};
+
+/**
+ * Arrow-key symbol to display as a fixed secondary hint next to the
+ * four movement actions in the Settings keyboard-shortcut panel.
+ */
+export const MOVEMENT_ARROW_SYMBOLS: Partial<Record<ShortcutActionId, string>> = {
+  moveForward: "↑",
+  moveBackward: "↓",
+  strafeLeft: "←",
+  strafeRight: "→",
+};

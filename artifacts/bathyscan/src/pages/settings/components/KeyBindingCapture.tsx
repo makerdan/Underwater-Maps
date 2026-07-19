@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useSettingsStore, DEFAULT_CROSSHAIR_MENU_GAMEPAD_BUTTON } from "@/lib/settingsStore";
 import {
   SHORTCUT_ACTIONS,
+  MOVEMENT_ARROW_SYMBOLS,
   type ShortcutActionId,
 } from "@/lib/keyBindings";
 import { formatKeyCode, formatGamepadButton } from "@/lib/keyLabel";
@@ -21,6 +22,7 @@ export function KeyBindingCapture({
   const [capturing, setCapturing] = useState(false);
   const isDefault = code === def.defaultCode;
   const conflict = conflictWith.length > 0;
+  const arrowSymbol = MOVEMENT_ARROW_SYMBOLS[action];
 
   useEffect(() => {
     if (!capturing) return;
@@ -59,6 +61,20 @@ export function KeyBindingCapture({
         )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {arrowSymbol && (
+          <span
+            data-testid={`shortcut-${action.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}-arrow-alias`}
+            title={`Arrow key alias: ${arrowSymbol}`}
+            style={{
+              fontSize: 11,
+              color: "#64748b",
+              letterSpacing: "0.04em",
+              userSelect: "none",
+            }}
+          >
+            also: {arrowSymbol}
+          </span>
+        )}
         <button
           type="button"
           data-testid={`shortcut-${action.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}-key`}

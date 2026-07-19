@@ -25,7 +25,7 @@ import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { useCatchJournalStore } from "@/lib/catchJournalStore";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { getBoundKey } from "@/lib/keyBindings";
+import { getBoundKey, ARROW_KEY_ALIASES } from "@/lib/keyBindings";
 import {
   buildTerrainMenuItems,
   openCrosshairContextMenu,
@@ -293,6 +293,13 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         }
       }
 
+      // Arrow-key aliases: ArrowUp/Down/Left/Right are fixed aliases for the
+      // four movement actions. Always consume them (preventDefault) so the
+      // browser doesn't also scroll any underlying scroll containers.
+      if (e.code in ARROW_KEY_ALIASES) {
+        e.preventDefault();
+      }
+
       // Pause GPS follow mode on any movement key so the user isn't trapped.
       const movementCodes = [
         getBoundKey(bindings, "moveForward"),
@@ -303,6 +310,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         getBoundKey(bindings, "descend"),
         "ShiftRight",
         "KeyW", "KeyA", "KeyS", "KeyD",
+        "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
       ];
       if (movementCodes.includes(e.code)) pauseFollowMode();
 
@@ -883,6 +891,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           getBoundKey(b, "moveForward"), getBoundKey(b, "moveBackward"),
           getBoundKey(b, "strafeLeft"), getBoundKey(b, "strafeRight"),
           getBoundKey(b, "ascend"), getBoundKey(b, "descend"), "ShiftRight",
+          "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
         ].some((code) => keys.current[code]);
         if (held) camState.pauseFollowForInteraction();
       }
@@ -995,10 +1004,11 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         const right = getBoundKey(bindings, "strafeRight");
         const up = getBoundKey(bindings, "ascend");
         const down = getBoundKey(bindings, "descend");
-        if (keys.current[fwd]) camera.position.addScaledVector(moveDir.current, scaledSpeed * reverseScale);
-        if (keys.current[back]) camera.position.addScaledVector(moveDir.current, -scaledSpeed * reverseScale);
-        if (keys.current[left]) camera.position.addScaledVector(rightDir.current, -scaledSpeed);
-        if (keys.current[right]) camera.position.addScaledVector(rightDir.current, scaledSpeed);
+        // Arrow keys are fixed aliases — always active alongside WASD.
+        if (keys.current[fwd] || keys.current["ArrowUp"]) camera.position.addScaledVector(moveDir.current, scaledSpeed * reverseScale);
+        if (keys.current[back] || keys.current["ArrowDown"]) camera.position.addScaledVector(moveDir.current, -scaledSpeed * reverseScale);
+        if (keys.current[left] || keys.current["ArrowLeft"]) camera.position.addScaledVector(rightDir.current, -scaledSpeed);
+        if (keys.current[right] || keys.current["ArrowRight"]) camera.position.addScaledVector(rightDir.current, scaledSpeed);
         if (keys.current[up]) camera.position.y += scaledSpeed;
         // ShiftRight stays as a permanent secondary "descend" so the user
         // doesn't lose a sensible default when they rebind ShiftLeft.

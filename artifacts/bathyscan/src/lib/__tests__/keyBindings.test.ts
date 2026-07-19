@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   DEFAULT_KEY_BINDINGS,
   SHORTCUT_ACTIONS,
+  ARROW_KEY_ALIASES,
+  MOVEMENT_ARROW_SYMBOLS,
   findBindingConflicts,
   getBoundKey,
   resolveKeyBindings,
@@ -48,6 +50,53 @@ describe("keyBindings", () => {
     const byCode = findBindingConflicts(DEFAULT_KEY_BINDINGS);
     for (const [, ids] of byCode) {
       expect(ids.length).toBe(1);
+    }
+  });
+});
+
+describe("arrow key aliases", () => {
+  it("ARROW_KEY_ALIASES maps each arrow code to the correct movement action", () => {
+    expect(ARROW_KEY_ALIASES["ArrowUp"]).toBe("moveForward");
+    expect(ARROW_KEY_ALIASES["ArrowDown"]).toBe("moveBackward");
+    expect(ARROW_KEY_ALIASES["ArrowLeft"]).toBe("strafeLeft");
+    expect(ARROW_KEY_ALIASES["ArrowRight"]).toBe("strafeRight");
+  });
+
+  it("ARROW_KEY_ALIASES contains exactly the four directional codes", () => {
+    const codes = Object.keys(ARROW_KEY_ALIASES);
+    expect(codes).toHaveLength(4);
+    expect(codes).toContain("ArrowUp");
+    expect(codes).toContain("ArrowDown");
+    expect(codes).toContain("ArrowLeft");
+    expect(codes).toContain("ArrowRight");
+  });
+
+  it("MOVEMENT_ARROW_SYMBOLS provides the correct Unicode arrow for each movement action", () => {
+    expect(MOVEMENT_ARROW_SYMBOLS["moveForward"]).toBe("↑");
+    expect(MOVEMENT_ARROW_SYMBOLS["moveBackward"]).toBe("↓");
+    expect(MOVEMENT_ARROW_SYMBOLS["strafeLeft"]).toBe("←");
+    expect(MOVEMENT_ARROW_SYMBOLS["strafeRight"]).toBe("→");
+  });
+
+  it("MOVEMENT_ARROW_SYMBOLS does not cover non-movement actions", () => {
+    expect(MOVEMENT_ARROW_SYMBOLS["ascend"]).toBeUndefined();
+    expect(MOVEMENT_ARROW_SYMBOLS["descend"]).toBeUndefined();
+    expect(MOVEMENT_ARROW_SYMBOLS["speedUp"]).toBeUndefined();
+    expect(MOVEMENT_ARROW_SYMBOLS["dropGpsPin"]).toBeUndefined();
+    expect(MOVEMENT_ARROW_SYMBOLS["openSettings"]).toBeUndefined();
+  });
+
+  it("arrow codes are not present in DEFAULT_KEY_BINDINGS (aliases are fixed, not remappable)", () => {
+    const defaultCodes = Object.values(DEFAULT_KEY_BINDINGS);
+    for (const arrowCode of Object.keys(ARROW_KEY_ALIASES)) {
+      expect(defaultCodes).not.toContain(arrowCode);
+    }
+  });
+
+  it("each arrow alias maps to an action whose default WASD binding is distinct from the arrow code", () => {
+    for (const [arrowCode, actionId] of Object.entries(ARROW_KEY_ALIASES)) {
+      const defaultCode = DEFAULT_KEY_BINDINGS[actionId];
+      expect(arrowCode).not.toBe(defaultCode);
     }
   });
 });
