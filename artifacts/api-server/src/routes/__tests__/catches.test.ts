@@ -9,6 +9,7 @@
  *  - 201 create happy path (with ACLs applied via mocked ObjectStorageService)
  *  - 404 on PATCH/DELETE of a non-existent catch entry
  *  - 204 delete happy path
+ *  - photo deletion on entry delete and on PATCH photo removal
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
@@ -16,23 +17,36 @@ import request from "supertest";
 const state = {
   markerRows: [] as Array<{ id: string }>,
   catchRows: [] as Array<Record<string, unknown>>,
+  /** Rows to return when SELECT before-update is run (for photo diff). */
+  beforeRow: null as { photos: string[] } | null,
   updatedRows: [] as Array<Record<string, unknown>>,
-  deletedRows: [] as Array<{ id: string }>,
+  deletedRows: [] as Array<{ id: string; photos: string[] }>,
 };
 
 vi.mock("@workspace/db", () => {
   const markersTable = { __tableName: "markers" as const, id: "id", datasetId: "datasetId", userId: "userId" };
   const catchEntriesTable = {
     __tableName: "catch_entries" as const,
-    id: "id", markerId: "markerId", userId: "userId", createdAt: "createdAt",
+    id: "id", markerId: "markerId", userId: "userId", createdAt: "createdAt", photos: "photos",
   };
 
+  // The PATCH handler does a SELECT before UPDATE (to diff photos).
+  // The GET handlers append .orderBy() to the chain.
+  // We distinguish them: a bare .where() result (no .orderBy called) uses
+  // `state.beforeRow` when set; an .orderBy() call uses `state.catchRows`.
+  // Markers selects always use state.markerRows.
   const select = () => ({
     from: (table: { __tableName: string }) => ({
       where: () => {
-        const rows = table.__tableName === "markers" ? state.markerRows : state.catchRows;
-        return Object.assign(Promise.resolve(rows), {
-          orderBy: () => Promise.resolve(rows),
+        if (table.__tableName === "markers") {
+          return Object.assign(Promise.resolve(state.markerRows), {
+            orderBy: () => Promise.resolve(state.markerRows),
+          });
+        }
+        // catch_entries: bare where() (before-select in PATCH) vs orderBy (GET)
+        const beforeResult = state.beforeRow !== null ? [state.beforeRow] : [];
+        return Object.assign(Promise.resolve(beforeResult), {
+          orderBy: () => Promise.resolve(state.catchRows),
         });
       },
     }),
@@ -119,6 +133,8 @@ const aclState = {
 
 const MockObjectNotFoundError = vi.hoisted(() => class MockObjectNotFoundError extends Error {});
 
+const deletedObjectPaths: string[] = [];
+
 vi.mock("../../lib/objectStorage", () => ({
   ObjectNotFoundError: MockObjectNotFoundError,
   ObjectStorageService: class {
@@ -133,6 +149,9 @@ vi.mock("../../lib/objectStorage", () => ({
       return url.startsWith("/objects/")
         ? url
         : `/objects/uploads/${url.split("/").pop()}`;
+    }
+    async deleteObjectEntity(path: string) {
+      deletedObjectPaths.push(path);
     }
   },
 }));
@@ -178,8 +197,10 @@ beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   state.markerRows = [];
   state.catchRows = [];
+  state.beforeRow = null;
   state.updatedRows = [];
   state.deletedRows = [];
+  deletedObjectPaths.length = 0;
   aclCalls.length = 0;
   aclState.existingPolicies.clear();
   aclState.missingObjects.clear();
@@ -377,6 +398,33 @@ describe("PATCH /api/catches/:id", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ notes: "updated" });
   });
+
+  it("deletes removed photo objects when photos list is replaced", async () => {
+    state.beforeRow = { photos: ["/objects/uploads/old1", "/objects/uploads/old2"] };
+    state.updatedRows = [{ id: VALID_UUID, symbol: "🐟", photos: ["/objects/uploads/new1"] }];
+    const res = await request(app)
+      .patch(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-user-id", "user-c")
+      .send({ photos: ["/objects/uploads/new1"] });
+    expect(res.status).toBe(200);
+    // Allow fire-and-forget to settle.
+    await new Promise((r) => setImmediate(r));
+    expect(deletedObjectPaths).toContain("/objects/uploads/old1");
+    expect(deletedObjectPaths).toContain("/objects/uploads/old2");
+    expect(deletedObjectPaths).not.toContain("/objects/uploads/new1");
+  });
+
+  it("does not delete photos when the photos field is not in the patch body", async () => {
+    state.beforeRow = { photos: ["/objects/uploads/keep"] };
+    state.updatedRows = [{ id: VALID_UUID, symbol: "🐟" }];
+    const res = await request(app)
+      .patch(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-user-id", "user-c")
+      .send({ notes: "note only" });
+    expect(res.status).toBe(200);
+    await new Promise((r) => setImmediate(r));
+    expect(deletedObjectPaths).toHaveLength(0);
+  });
 });
 
 describe("DELETE /api/catches/:id", () => {
@@ -388,11 +436,23 @@ describe("DELETE /api/catches/:id", () => {
   });
 
   it("returns 204 on successful delete", async () => {
-    state.deletedRows = [{ id: VALID_UUID }];
+    state.deletedRows = [{ id: VALID_UUID, photos: [] }];
     const res = await request(app)
       .delete(`/api/catches/${VALID_UUID}`)
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(204);
+  });
+
+  it("deletes photo objects from storage when the entry has photos", async () => {
+    state.deletedRows = [{ id: VALID_UUID, photos: ["/objects/uploads/p1", "/objects/uploads/p2"] }];
+    const res = await request(app)
+      .delete(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-user-id", "user-c");
+    expect(res.status).toBe(204);
+    // Allow Promise.allSettled fire-and-forget to resolve before asserting.
+    await new Promise((r) => setImmediate(r));
+    expect(deletedObjectPaths).toContain("/objects/uploads/p1");
+    expect(deletedObjectPaths).toContain("/objects/uploads/p2");
   });
 });
 

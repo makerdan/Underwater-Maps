@@ -227,6 +227,61 @@ export class ObjectStorageService {
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
   }
+
+  /**
+   * Delete a private object by its normalized `/objects/...` path.
+   *
+   * Best-effort: if the object does not exist the call is a no-op. Other
+   * errors are re-thrown so callers can decide whether to swallow them.
+   */
+  async deleteObjectEntity(objectPath: string): Promise<void> {
+    let objectFile: File;
+    try {
+      objectFile = await this.getObjectEntityFile(objectPath);
+    } catch (err) {
+      if (err instanceof ObjectNotFoundError) return; // already gone — ok
+      throw err;
+    }
+    await objectFile.delete();
+  }
+
+  /**
+   * List all object paths under the private `uploads/` prefix.
+   *
+   * Returns normalized `/objects/uploads/<id>` strings so callers can
+   * compare directly against values stored in `catch_entries.photos`.
+   *
+   * Accepts an optional `olderThanMs` cutoff: only objects whose GCS
+   * `timeCreated` is older than `Date.now() - olderThanMs` are returned.
+   * Defaults to 0 (return all objects).
+   */
+  async listUploadObjectPaths(olderThanMs = 0): Promise<string[]> {
+    let privateDir = this.getPrivateObjectDir();
+    if (!privateDir.endsWith("/")) privateDir = `${privateDir}/`;
+    const { bucketName, objectName: prefix } = parseObjectPath(`${privateDir}uploads/`);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const [files] = await bucket.getFiles({ prefix });
+    const cutoff = olderThanMs > 0 ? Date.now() - olderThanMs : 0;
+    const paths: string[] = [];
+    for (const file of files) {
+      if (cutoff > 0) {
+        const meta = file.metadata as { timeCreated?: string };
+        const created = meta.timeCreated ? new Date(meta.timeCreated).getTime() : 0;
+        if (created > cutoff) continue; // too recent — skip
+      }
+      // file.name is the full object name inside the bucket, e.g.
+      // "private/uploads/<uuid>".  Strip the privateDir prefix to get the
+      // entity id, then re-wrap as "/objects/<entityId>".
+      const privateDirNoLeadingSlash = privateDir.startsWith("/")
+        ? privateDir.slice(1)
+        : privateDir;
+      if (!file.name.startsWith(privateDirNoLeadingSlash)) continue;
+      const entityId = file.name.slice(privateDirNoLeadingSlash.length);
+      if (!entityId) continue;
+      paths.push(`/objects/${entityId}`);
+    }
+    return paths;
+  }
 }
 
 function parseObjectPath(path: string): {

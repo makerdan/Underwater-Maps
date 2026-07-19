@@ -4,6 +4,7 @@ import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 import { startBucketMonitor } from "./lib/bucketMonitor.js";
 import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
 import { startUploadCleanupJob } from "./lib/uploadCleanupJob.js";
+import { startOrphanedPhotosCleanupJob } from "./lib/orphanedPhotosCleanupJob.js";
 import { recoverStaleUploadJobs, cleanupStaleChunks, loadCalibrationFromDb } from "./routes/datasets.js";
 import type * as http from "http";
 
@@ -54,6 +55,7 @@ const SIGTERM_DRAIN_MS = 10_000;
 
 let activeServer: http.Server | null = null;
 let stopUploadCleanupJob: (() => void) | null = null;
+let stopOrphanedPhotosCleanupJob: (() => void) | null = null;
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown on SIGTERM
@@ -66,6 +68,7 @@ process.on("SIGTERM", () => {
   if (!server) {
     logger.warn("SIGTERM received but no active server — exiting immediately");
     stopUploadCleanupJob?.();
+    stopOrphanedPhotosCleanupJob?.();
     process.exit(0);
     return;
   }
@@ -75,10 +78,11 @@ process.on("SIGTERM", () => {
     "SIGTERM received — draining in-flight requests",
   );
 
-  // Stop the periodic cleanup job so its interval cannot fire after shutdown
-  // begins.  Must happen before server.close() to avoid a race where the
-  // interval fires after the DB connection pool starts tearing down.
+  // Stop the periodic cleanup jobs so their intervals cannot fire after
+  // shutdown begins.  Must happen before server.close() to avoid a race
+  // where an interval fires after the DB connection pool starts tearing down.
   stopUploadCleanupJob?.();
+  stopOrphanedPhotosCleanupJob?.();
 
   // Stop accepting new connections. Close idle keep-alive sockets immediately
   // so the drain window doesn't stall waiting for them to time out naturally.
@@ -197,6 +201,16 @@ function startServer(port: number): void {
       stopUploadCleanupJob = startUploadCleanupJob();
     } catch (err) {
       logger.error({ err }, "[startup] startUploadCleanupJob failed");
+    }
+
+    // Start the background orphaned-photos cleanup job — lists all objects
+    // under the private uploads/ prefix older than ORPHANED_PHOTO_AGE_MS
+    // (default 24 h) and deletes any not referenced by a catch entry.
+    // Runs immediately and repeats every PHOTO_CLEANUP_INTERVAL_MS (default 6 h).
+    try {
+      stopOrphanedPhotosCleanupJob = startOrphanedPhotosCleanupJob();
+    } catch (err) {
+      logger.error({ err }, "[startup] startOrphanedPhotosCleanupJob failed");
     }
   });
 }

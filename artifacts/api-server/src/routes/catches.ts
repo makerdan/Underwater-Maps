@@ -238,6 +238,13 @@ router.patch("/catches/:id", requireAuth, asyncHandler(async (req, res): Promise
     }
   }
 
+  // Fetch the current entry before updating so we can diff photos and delete
+  // any that were removed from the list.
+  const [before] = await db
+    .select({ photos: catchEntriesTable.photos })
+    .from(catchEntriesTable)
+    .where(and(eq(catchEntriesTable.id, id), eq(catchEntriesTable.userId, userId)));
+
   const [updated] = await db
     .update(catchEntriesTable)
     .set({ ...updateData, updatedAt: new Date() })
@@ -247,6 +254,17 @@ router.patch("/catches/:id", requireAuth, asyncHandler(async (req, res): Promise
   if (!updated) {
     res.status(404).json({ error: "not_found", details: `Catch entry '${id}' not found` });
     return;
+  }
+
+  // Best-effort: delete photo objects that were removed from this entry.
+  // Errors are swallowed — the orphaned-photos sweep is the safety net.
+  if (before && updateData.photos !== undefined) {
+    const newSet = new Set(updateData.photos);
+    const removed = (before.photos ?? []).filter((p) => !newSet.has(p));
+    if (removed.length > 0) {
+      const service = new ObjectStorageService();
+      void Promise.allSettled(removed.map((p) => service.deleteObjectEntity(p)));
+    }
   }
 
   res.json(updated);
@@ -265,11 +283,20 @@ router.delete("/catches/:id", requireAuth, asyncHandler(async (req, res): Promis
   const deleted = await db
     .delete(catchEntriesTable)
     .where(and(eq(catchEntriesTable.id, id), eq(catchEntriesTable.userId, userId)))
-    .returning({ id: catchEntriesTable.id });
+    .returning({ id: catchEntriesTable.id, photos: catchEntriesTable.photos });
 
   if (!deleted.length) {
     res.status(404).json({ error: "not_found", details: `Catch entry '${id}' not found` });
     return;
+  }
+
+  // Best-effort: delete the photo objects from storage now that the entry is
+  // gone.  Errors are swallowed so a storage hiccup never fails the HTTP
+  // response — the orphaned-photos sweep will catch anything left behind.
+  const photos = deleted[0]?.photos ?? [];
+  if (photos.length > 0) {
+    const service = new ObjectStorageService();
+    void Promise.allSettled(photos.map((p) => service.deleteObjectEntity(p)));
   }
 
   res.status(204).send();
