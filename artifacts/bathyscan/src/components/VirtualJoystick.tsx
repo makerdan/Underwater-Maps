@@ -140,6 +140,9 @@ export const VirtualJoystick: React.FC<{ forceVisible?: boolean; showInOrbit?: b
         t.curY = touch.clientY;
         updateNub(touch.identifier);
       }
+      if (touches.current.size > 0) {
+        e.preventDefault();
+      }
       updateStore();
     };
 
@@ -157,13 +160,13 @@ export const VirtualJoystick: React.FC<{ forceVisible?: boolean; showInOrbit?: b
     };
 
     window.addEventListener("touchstart", onStart, { passive: true });
-    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: false });
     window.addEventListener("touchend", onEnd, { passive: true });
     window.addEventListener("touchcancel", onEnd, { passive: true });
 
     return () => {
       window.removeEventListener("touchstart", onStart);
-      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchmove", onMove, { passive: false } as EventListenerOptions);
       window.removeEventListener("touchend", onEnd);
       window.removeEventListener("touchcancel", onEnd);
     };
