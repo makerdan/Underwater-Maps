@@ -3,7 +3,8 @@
  *
  * Supports GPX (waypoints + routes + tracks), KML / KMZ (Placemark Point and
  * LineString), CSV (header-detected lat/lon plus optional name, depth, type,
- * notes), and Excel .xlsx / .xls (same header detection as CSV). All formats
+ * notes), and Excel .xlsx (same header detection as CSV; .xls is rejected with
+ * a user-facing error). All formats
  * are normalised into a common shape so the rest of the import flow can treat
  * them uniformly.
  *
@@ -13,7 +14,7 @@
  * `parseGpsFile(file)` is the convenience entry point used by the UI.
  */
 import { unzipSync, strFromU8 } from "fflate";
-import { read as xlsxRead, utils as xlsxUtils } from "xlsx";
+import ExcelJS from "exceljs";
 
 /** Maximum number of points (waypoints + route/track points) per import. */
 export const MAX_IMPORT_POINTS = 5000;
@@ -122,11 +123,15 @@ export async function parseGpsFile(
     meta = EMPTY_META;
   } else if (name.endsWith(".csv")) {
     ({ result, meta } = parseCsv(await file.text()));
-  } else if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+  } else if (name.endsWith(".xls")) {
+    throw new Error(
+      "Legacy .xls format is not supported — please save as .xlsx and try again.",
+    );
+  } else if (name.endsWith(".xlsx")) {
     ({ result, meta } = await parseExcel(file));
   } else {
     throw new Error(
-      "Unsupported file type. Use .gpx, .kml, .kmz, .csv, .xlsx, or .xls.",
+      "Unsupported file type. Use .gpx, .kml, .kmz, .csv, or .xlsx.",
     );
   }
 
@@ -564,13 +569,43 @@ function splitCsv(text: string): string[][] {
 }
 
 // ---------------------------------------------------------------------------
-// Excel (.xlsx / .xls)
+// Excel (.xlsx)
 // ---------------------------------------------------------------------------
 
 /**
- * Parse an Excel file (.xlsx or .xls). Reads the first non-empty worksheet,
- * detects lat/lon and optional columns by the same alias table used for CSV,
- * and returns waypoints in the same shape as `parseCsv`.
+ * Convert an ExcelJS cell value to a plain string, matching the "raw:false"
+ * (formatted-string) behaviour of the former SheetJS implementation.
+ */
+function excelCellToString(cell: ExcelJS.Cell): string {
+  const v = cell.value;
+  if (v === null || v === undefined) return "";
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === "string") return v;
+  if (typeof v === "object") {
+    if ("richText" in v) {
+      return (v as ExcelJS.CellRichTextValue).richText.map((r) => r.text).join("");
+    }
+    if ("result" in v) {
+      const r = (v as ExcelJS.CellFormulaValue).result;
+      return r === null || r === undefined ? "" : String(r);
+    }
+    if ("error" in v) return "";
+    if ("sharedFormula" in v) {
+      const r = (v as ExcelJS.CellSharedFormulaValue).result;
+      return r === null || r === undefined ? "" : String(r);
+    }
+  }
+  return String(v);
+}
+
+/**
+ * Parse an Excel file (.xlsx). Reads the first non-empty worksheet, detects
+ * lat/lon and optional columns by the same alias table used for CSV, and
+ * returns waypoints in the same shape as `parseCsv`.
+ *
+ * Throws an explicit error for legacy .xls files (ExcelJS does not support
+ * the binary BIFF format).
  *
  * Does NOT throw when lat/lon columns are missing — returns empty waypoints
  * so the caller (GpsImportDialog) can show the column-mapping step instead.
@@ -578,47 +613,50 @@ function splitCsv(text: string): string[][] {
 export async function parseExcel(
   file: File,
 ): Promise<{ result: ParseResult; meta: RawColumnMeta }> {
+  if (file.name.toLowerCase().endsWith(".xls")) {
+    throw new Error(
+      "Legacy .xls format is not supported — please save as .xlsx and try again.",
+    );
+  }
+
   const data = await file.arrayBuffer();
-  let workbook: ReturnType<typeof xlsxRead>;
+  const workbook = new ExcelJS.Workbook();
   try {
-    workbook = xlsxRead(data, { type: "array" });
+    await workbook.xlsx.load(data);
   } catch (err) {
     throw new Error(
       `Couldn't open Excel file: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
-  if (!workbook.SheetNames.length) {
+  if (!workbook.worksheets.length) {
     throw new Error("Excel file contains no worksheets.");
   }
 
-  // Find first non-empty sheet (has a !ref range).
-  let sheet: ReturnType<typeof xlsxRead>["Sheets"][string] | undefined;
-  for (const sName of workbook.SheetNames) {
-    const ws = workbook.Sheets[sName];
-    if (ws && ws["!ref"]) {
-      sheet = ws;
-      break;
-    }
-  }
+  // Find first non-empty sheet.
+  const worksheet = workbook.worksheets.find((ws) => ws.actualRowCount > 0);
 
-  if (!sheet) {
+  if (!worksheet) {
     throw new Error("Excel file contains no worksheet with data.");
   }
 
-  // Convert to array-of-arrays; raw:false gives formatted string values for
-  // every cell type, which is consistent with how we handle CSV.
-  const rows = xlsxUtils.sheet_to_json<string[]>(sheet, {
-    header: 1,
-    defval: "",
-    raw: false,
+  const colCount = worksheet.actualColumnCount;
+
+  // Convert to an array-of-string-arrays, one entry per non-empty row.
+  const rows: string[][] = [];
+  worksheet.eachRow((row) => {
+    const cells: string[] = [];
+    for (let c = 1; c <= colCount; c++) {
+      cells.push(excelCellToString(row.getCell(c)));
+    }
+    rows.push(cells);
   });
 
   if (rows.length < 2) {
     throw new Error("Excel worksheet has no data rows (only a header or nothing).");
   }
 
-  const rawHeaders = (rows[0] as string[]).map((h) => String(h ?? "").trim());
+  const rawHeaders = (rows[0] ?? []).map((h) => String(h ?? "").trim());
   const header = rawHeaders.map((h) => h.toLowerCase());
 
   const latIdx = findHeader(header, LAT_KEYS);

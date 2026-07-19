@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { zipSync, strToU8 } from "fflate";
-import { utils as xlsxUtils, write as xlsxWrite } from "xlsx";
+import ExcelJS from "exceljs";
 import {
   parseGpx,
   parseKml,
@@ -81,28 +81,26 @@ not_a_number,142.6,Bad,,,
 // Helpers for building in-memory Excel workbooks
 // ---------------------------------------------------------------------------
 
-function makeXlsxFile(
+async function makeXlsxFile(
   rows: (string | number | null)[][],
   sheetName = "Sheet1",
-): File {
-  const ws = xlsxUtils.aoa_to_sheet(rows);
-  const wb = xlsxUtils.book_new();
-  xlsxUtils.book_append_sheet(wb, ws, sheetName);
-  const buf = xlsxWrite(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+): Promise<File> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(sheetName);
+  for (const row of rows) {
+    sheet.addRow(row.map((v) => (v === null ? undefined : v)));
+  }
+  const buf = await workbook.xlsx.writeBuffer();
   return new File([buf], "test.xlsx", {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 }
 
-function makeXlsFile(
-  rows: (string | number | null)[][],
-  sheetName = "Sheet1",
-): File {
-  const ws = xlsxUtils.aoa_to_sheet(rows);
-  const wb = xlsxUtils.book_new();
-  xlsxUtils.book_append_sheet(wb, ws, sheetName);
-  const buf = xlsxWrite(wb, { type: "array", bookType: "xls" }) as ArrayBuffer;
-  return new File([buf], "test.xls", { type: "application/vnd.ms-excel" });
+/** Returns a dummy .xls File — content is irrelevant since we reject before parsing. */
+function makeXlsFile(): File {
+  return new File([new Uint8Array([0xd0, 0xcf, 0x11, 0xe0])], "test.xls", {
+    type: "application/vnd.ms-excel",
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +250,7 @@ describe("parseCsv", () => {
 
 describe("parseExcel", () => {
   it("parses standard column names and returns correct waypoints", async () => {
-    const file = makeXlsxFile([
+    const file = await makeXlsxFile([
       ["lat", "lon", "name", "depth"],
       [11.35, 142.5, "Challenger", 10500],
       [11.4, 142.55, "Sibling", null],
@@ -269,7 +267,7 @@ describe("parseExcel", () => {
   });
 
   it("auto-maps aliased column names (latitude/longitude)", async () => {
-    const file = makeXlsxFile([
+    const file = await makeXlsxFile([
       ["latitude", "longitude", "label"],
       [11.35, 142.5, "WP1"],
     ]);
@@ -281,7 +279,7 @@ describe("parseExcel", () => {
   });
 
   it("auto-maps 'y'/'x' aliases for lat/lon", async () => {
-    const file = makeXlsxFile([
+    const file = await makeXlsxFile([
       ["y", "x"],
       [11.35, 142.5],
     ]);
@@ -292,7 +290,7 @@ describe("parseExcel", () => {
   });
 
   it("returns empty waypoints (not throws) when lat column is missing", async () => {
-    const file = makeXlsxFile([
+    const file = await makeXlsxFile([
       ["longitude", "name"],
       [142.5, "Test"],
     ]);
@@ -304,7 +302,7 @@ describe("parseExcel", () => {
   });
 
   it("returns empty waypoints (not throws) when lon column is missing", async () => {
-    const file = makeXlsxFile([
+    const file = await makeXlsxFile([
       ["lat", "name"],
       [11.35, "Test"],
     ]);
@@ -315,7 +313,7 @@ describe("parseExcel", () => {
   });
 
   it("skips rows with out-of-range or non-numeric coordinates", async () => {
-    const file = makeXlsxFile([
+    const file = await makeXlsxFile([
       ["lat", "lon", "name"],
       [11.35, 142.5, "Good"],
       ["not_a_number", 142.6, "Bad lat"],
@@ -329,12 +327,14 @@ describe("parseExcel", () => {
   });
 
   it("uses the first non-empty sheet in a multi-sheet workbook", async () => {
-    const ws1 = xlsxUtils.aoa_to_sheet([["lat", "lon"], [11.35, 142.5]]);
-    const ws2 = xlsxUtils.aoa_to_sheet([["lat", "lon"], [11.4, 142.55]]);
-    const wb = xlsxUtils.book_new();
-    xlsxUtils.book_append_sheet(wb, ws1, "First");
-    xlsxUtils.book_append_sheet(wb, ws2, "Second");
-    const buf = xlsxWrite(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    const workbook = new ExcelJS.Workbook();
+    const ws1 = workbook.addWorksheet("First");
+    ws1.addRow(["lat", "lon"]);
+    ws1.addRow([11.35, 142.5]);
+    const ws2 = workbook.addWorksheet("Second");
+    ws2.addRow(["lat", "lon"]);
+    ws2.addRow([11.4, 142.55]);
+    const buf = await workbook.xlsx.writeBuffer();
     const file = new File([buf], "multi.xlsx", {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
@@ -343,11 +343,10 @@ describe("parseExcel", () => {
     expect(result.waypoints[0]!.lat).toBe(11.35);
   });
 
-  it("throws ParseError for empty workbook / worksheet with no data", async () => {
-    const ws = xlsxUtils.aoa_to_sheet([]);
-    const wb = xlsxUtils.book_new();
-    xlsxUtils.book_append_sheet(wb, ws, "Empty");
-    const buf = xlsxWrite(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  it("throws for empty workbook / worksheet with no data", async () => {
+    const workbook = new ExcelJS.Workbook();
+    workbook.addWorksheet("Empty");
+    const buf = await workbook.xlsx.writeBuffer();
     const file = new File([buf], "empty.xlsx", {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
@@ -355,7 +354,7 @@ describe("parseExcel", () => {
   });
 
   it("emits RawColumnMeta with correct alias mapping", async () => {
-    const file = makeXlsxFile([
+    const file = await makeXlsxFile([
       ["lat", "lon", "notes", "custom_col"],
       [11.35, 142.5, "A note", "extra"],
     ]);
@@ -370,28 +369,49 @@ describe("parseExcel", () => {
   it("includes up to 5 sample rows in meta", async () => {
     const dataRows: (string | number)[][] = [];
     for (let i = 0; i < 8; i++) dataRows.push([11 + i * 0.1, 142.5]);
-    const file = makeXlsxFile([["lat", "lon"], ...dataRows]);
+    const file = await makeXlsxFile([["lat", "lon"], ...dataRows]);
     const { meta } = await parseExcel(file);
     expect(meta.sampleRows).toHaveLength(5);
   });
 
-  it("handles .xls format (legacy Excel)", async () => {
-    const file = makeXlsFile([
-      ["lat", "lon", "name"],
-      [11.35, 142.5, "XLS point"],
-    ]);
-    const { result } = await parseExcel(file);
-    expect(result.waypoints).toHaveLength(1);
-    expect(result.waypoints[0]!.name).toBe("XLS point");
+  it("rejects .xls with clear user-facing error message", async () => {
+    const file = makeXlsFile();
+    await expect(parseExcel(file)).rejects.toThrow(
+      "Legacy .xls format is not supported — please save as .xlsx and try again.",
+    );
   });
 
   it("flips elevation to depth when no depth column is present", async () => {
-    const file = makeXlsxFile([
+    const file = await makeXlsxFile([
       ["lat", "lon", "elevation"],
       [11.35, 142.5, -1234],
     ]);
     const { result } = await parseExcel(file);
     expect(result.waypoints[0]!.depth).toBe(1234);
+  });
+
+  it("prototype-pollution probe — __proto__ column header does not mutate Object.prototype", async () => {
+    const sentinel = (Object.prototype as Record<string, unknown>)["injected"];
+    const file = await makeXlsxFile([
+      ["lat", "lon", "__proto__"],
+      [11.35, 142.5, "polluted"],
+    ]);
+    await parseExcel(file);
+    expect((Object.prototype as Record<string, unknown>)["injected"]).toBe(sentinel);
+    expect((Object.prototype as Record<string, unknown>)["injected"]).toBeUndefined();
+  });
+
+  it("ReDoS guard — oversized cell string parses in finite time", async () => {
+    const bigString = "a".repeat(100_000);
+    const file = await makeXlsxFile([
+      ["lat", "lon", "notes"],
+      [11.35, 142.5, bigString],
+    ]);
+    const start = Date.now();
+    const { result } = await parseExcel(file);
+    expect(Date.now() - start).toBeLessThan(5000);
+    expect(result.waypoints).toHaveLength(1);
+    expect(result.waypoints[0]!.notes).toBe(bigString);
   });
 });
 
@@ -416,7 +436,7 @@ describe("parseGpsFile", () => {
   });
 
   it("dispatches .xlsx files to parseExcel", async () => {
-    const xlsxFile = makeXlsxFile([
+    const xlsxFile = await makeXlsxFile([
       ["lat", "lon", "name"],
       [11.35, 142.5, "Test"],
     ]);
@@ -425,13 +445,11 @@ describe("parseGpsFile", () => {
     expect(meta.columns[0]).toEqual({ header: "lat", mappedAlias: "lat" });
   });
 
-  it("dispatches .xls files to parseExcel", async () => {
-    const xlsFile = makeXlsFile([
-      ["lat", "lon"],
-      [11.35, 142.5],
-    ]);
-    const { result } = await parseGpsFile(xlsFile);
-    expect(result.waypoints).toHaveLength(1);
+  it("rejects .xls files with clear user-facing error message", async () => {
+    const xlsFile = makeXlsFile();
+    await expect(parseGpsFile(xlsFile)).rejects.toThrow(
+      "Legacy .xls format is not supported — please save as .xlsx and try again.",
+    );
   });
 
   it("rejects unsupported extensions", async () => {
