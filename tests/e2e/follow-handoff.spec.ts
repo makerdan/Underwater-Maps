@@ -219,6 +219,154 @@ test("walking out of bounds offers 'Load & follow' when a nearby dataset exists"
   await terrainRequest;
 });
 
+const CATALOG_SURVEY_ID = "ncei-handoff-test-survey";
+const CATALOG_SURVEY_TITLE = "Handoff Catalog Survey";
+const CATALOG_SAVE_ID = "save-handoff-abc123";
+const CATALOG_DATASET_ID = "custom-handoff-ds-xyz";
+
+/** Intercept POST /api/datasets/point-radius-query */
+function isPointRadiusRequest(url: string): boolean {
+  const { pathname } = new URL(url);
+  return pathname.endsWith("/api/datasets/point-radius-query");
+}
+
+/** Intercept POST /api/datasets/catalog/:id/save */
+function isCatalogSaveRequest(url: string, catalogId: string): boolean {
+  const { pathname } = new URL(url);
+  return pathname.endsWith(`/api/datasets/catalog/${catalogId}/save`);
+}
+
+/** Intercept GET /api/datasets/my-saves/:id/status */
+function isSaveStatusRequest(url: string, saveId: string): boolean {
+  const { pathname } = new URL(url);
+  return pathname.endsWith(`/api/datasets/my-saves/${saveId}/status`);
+}
+
+test("walking out of bounds offers 'Download & follow' when a catalog survey covers the position", async ({ page, context }) => {
+  // Block the preset dataset list entirely (empty) so the app's preset search
+  // finds nothing. The point-radius catalog search runs as the fallback and
+  // returns our synthetic survey.
+  await page.route(
+    (url) => isDatasetListRequest(url.toString()),
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "[]",
+      });
+    },
+  );
+
+  // Catalog point-radius search always returns our synthetic survey.
+  await page.route(
+    (url) => isPointRadiusRequest(url.toString()),
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          center: { lat: OUT_LAT, lon: OUT_LON },
+          radiusKm: 25,
+          bbox: { north: OUT_LAT + 0.5, south: OUT_LAT - 0.5, east: OUT_LON + 0.5, west: OUT_LON - 0.5 },
+          datasets: [
+            {
+              id: CATALOG_SURVEY_ID,
+              name: CATALOG_SURVEY_TITLE,
+              sourceAgency: "NOAA",
+              dataType: "bathymetry",
+              resolutionMMin: 4,
+              resolutionMMax: 8,
+              coverageBbox: { minLon: OUT_LON - 0.5, minLat: OUT_LAT - 0.5, maxLon: OUT_LON + 0.5, maxLat: OUT_LAT + 0.5 },
+              endpointUrl: null,
+              accessNotes: null,
+              description: "Synthetic e2e catalog handoff survey",
+              keywords: null,
+              lastUpdated: null,
+              waterType: "saltwater",
+              createdAt: new Date().toISOString(),
+              relevanceScore: 0.95,
+            },
+          ],
+        }),
+      });
+    },
+  );
+
+  // Catalog save endpoint: returns a "processing" row immediately so we
+  // can verify the save request fired (the polling / ready path requires a
+  // real materialization pipeline and is covered by unit tests).
+  await page.route(
+    (url) => isCatalogSaveRequest(url.toString(), CATALOG_SURVEY_ID),
+    async (route) => {
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: CATALOG_SAVE_ID,
+          status: "processing",
+          datasetId: null,
+          catalogId: CATALOG_SURVEY_ID,
+        }),
+      });
+    },
+  );
+
+  // Status polling endpoint: return "ready" so the handoff completes and we
+  // can observe the terrain fetch for the materialized custom dataset id.
+  await page.route(
+    (url) => isSaveStatusRequest(url.toString(), CATALOG_SAVE_ID),
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: CATALOG_SAVE_ID,
+          status: "ready",
+          datasetId: CATALOG_DATASET_ID,
+          catalogId: CATALOG_SURVEY_ID,
+        }),
+      });
+    },
+  );
+
+  injectSettings(page, BASE);
+  await engageFollow(page);
+
+  // Walk out of the dataset's bounds.
+  await context.setGeolocation({ latitude: OUT_LAT, longitude: OUT_LON, accuracy: 8 });
+
+  // "Download & follow" toast appears (catalog fallback path).
+  const downloadButton = page.locator('[data-testid="follow-handoff-download"]');
+  await expect(downloadButton).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Survey available nearby").first()).toBeVisible();
+  await expect(
+    page
+      .getByText(CATALOG_SURVEY_TITLE, { exact: false })
+      .locator("visible=true")
+      .first(),
+  ).toBeVisible();
+
+  // Clicking triggers the catalog save request and then the polling loop.
+  // Register the terrain-request waiter BEFORE clicking so it can catch the
+  // request the polling loop ultimately fires when status becomes "ready".
+  const terrainRequest = page.waitForRequest(
+    (req) => req.url().includes(`/api/datasets/${CATALOG_DATASET_ID}/terrain`),
+    { timeout: 25_000 },
+  );
+  const saveRequest = page.waitForRequest(
+    (req) =>
+      req.method() === "POST" &&
+      req.url().includes(`/api/datasets/catalog/${CATALOG_SURVEY_ID}/save`),
+    { timeout: 10_000 },
+  );
+  await downloadButton.click();
+  // Save request fires immediately on click.
+  await saveRequest;
+  // After the polling loop resolves "ready", App.tsx loads the materialized
+  // custom-dataset — verified via the terrain fetch for CATALOG_DATASET_ID.
+  await terrainRequest;
+});
+
 test("walking out of bounds falls back to the pause toast when nothing is nearby", async ({ page, context }) => {
   // Serve an empty list while follow is engaged (prevents the default
   // dataset auto-load from replacing the seeded terrain), then only
