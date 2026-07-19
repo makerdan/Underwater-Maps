@@ -538,7 +538,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(res.status).toBe(400);
-    expect(res.body).toHaveProperty("error", "invalid_body");
+    expect(res.body).toHaveProperty("error", "invalid_request");
   });
 
   it("returns 400 when coverageBbox is missing a required coordinate", async () => {
@@ -552,7 +552,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
         },
       });
     expect(res.status).toBe(400);
-    expect(res.body).toHaveProperty("error", "invalid_body");
+    expect(res.body).toHaveProperty("error", "invalid_request");
   });
 
   // --- WCS bbox guard -------------------------------------------------------

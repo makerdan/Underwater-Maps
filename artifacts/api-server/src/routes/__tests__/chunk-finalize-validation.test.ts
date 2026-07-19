@@ -85,7 +85,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
       .send({ fileName: "scan.laz", totalChunks: 3 });
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "invalid_param" });
+    expect(res.body).toMatchObject({ error: "invalid_request" });
   });
 
   it("returns 400 when uploadId is injected as an array", async () => {
@@ -99,7 +99,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
       });
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "invalid_param" });
+    expect(res.body).toMatchObject({ error: "invalid_request" });
   });
 
   it("returns 400 when totalChunks is 0 (below minimum)", async () => {
@@ -109,7 +109,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
       .send({ uploadId: VALID_UPLOAD_ID, fileName: "scan.laz", totalChunks: 0 });
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "invalid_param" });
+    expect(res.body).toMatchObject({ error: "invalid_request" });
   });
 
   it("returns 400 when totalChunks is 4097 (above maximum)", async () => {
@@ -119,7 +119,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
       .send({ uploadId: VALID_UPLOAD_ID, fileName: "scan.laz", totalChunks: 4097 });
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "invalid_param" });
+    expect(res.body).toMatchObject({ error: "invalid_request" });
   });
 
   it("returns 400 when resolution is below minimum (31)", async () => {
@@ -134,7 +134,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
       });
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "invalid_param" });
+    expect(res.body).toMatchObject({ error: "invalid_request" });
   });
 
   it("returns 400 when resolution is above maximum (513)", async () => {
@@ -149,7 +149,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
       });
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "invalid_param" });
+    expect(res.body).toMatchObject({ error: "invalid_request" });
   });
 
   it("returns 400 when resolution is a non-integer (1.5)", async () => {
@@ -164,7 +164,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
       });
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "invalid_param" });
+    expect(res.body).toMatchObject({ error: "invalid_request" });
   });
 
   it("passes schema validation and reaches business logic (session not found) for a valid body", async () => {
@@ -178,6 +178,6 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
       });
 
     expect(res.status).not.toBe(400);
-    expect(res.body).not.toMatchObject({ error: "invalid_param" });
+    expect(res.body).not.toMatchObject({ error: "invalid_request" });
   });
 });

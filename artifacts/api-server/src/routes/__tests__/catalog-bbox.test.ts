@@ -76,7 +76,7 @@ describe("POST /api/datasets/bbox-query", () => {
   it("400 when bbox fields are missing or non-numeric", async () => {
     const res = await request(app).post("/api/datasets/bbox-query").send({ north: 1, south: 0 });
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.error).toBe("invalid_request");
   });
 
   it("400 when north <= south", async () => {
@@ -131,6 +131,6 @@ describe("POST /api/datasets/bbox-query", () => {
       .post("/api/datasets/bbox-query")
       .send({ ...BASE, dataType: "weather" });
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.error).toBe("invalid_request");
   });
 });

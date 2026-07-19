@@ -144,7 +144,7 @@ describe("POST /api/datasets/point-radius-query", () => {
   it("400 when fields are missing or non-numeric", async () => {
     const res = await request(app).post("/api/datasets/point-radius-query").send({ lat: 55.7 });
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.error).toBe("invalid_request");
   });
 
   it("400 when lat/lon/radius are non-finite", async () => {
@@ -152,7 +152,7 @@ describe("POST /api/datasets/point-radius-query", () => {
       .post("/api/datasets/point-radius-query")
       .send({ lat: "NaN", lon: -132, radius: 10 });
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.error).toBe("invalid_request");
   });
 
   it("400 when lat is out of range", async () => {
@@ -231,7 +231,7 @@ describe("POST /api/datasets/point-radius-query", () => {
       .post("/api/datasets/point-radius-query")
       .send({ ...BASE, dataType: "weather" });
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.error).toBe("invalid_request");
   });
 
   it("400 when unit is invalid", async () => {
@@ -239,6 +239,6 @@ describe("POST /api/datasets/point-radius-query", () => {
       .post("/api/datasets/point-radius-query")
       .send({ ...BASE, unit: "miles" });
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.error).toBe("invalid_request");
   });
 });
