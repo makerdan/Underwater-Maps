@@ -88,7 +88,7 @@ export async function signDatasetUploadUrl(
 
 export interface BucketJob {
   objectKey: string;
-  status: "processing" | "done" | "failed";
+  status: "queued" | "processing" | "done" | "failed";
   startedAt: number;
   finishedAt?: number;
   error?: string;
@@ -231,14 +231,15 @@ export async function processObject(bucketName: string, objectKey: string): Prom
 
   const job: BucketJob = {
     objectKey,
-    status: "processing",
+    status: "queued",
     startedAt: Date.now(),
     userId,
   };
   activeJobs.set(objectKey, job);
 
-  // The job is registered above (so scan() dedupes re-queued keys) but the
-  // heavy pipeline waits for a concurrency slot before doing any work.
+  // The job is registered above with status "queued" (so scan() dedupes
+  // re-queued keys) but the heavy pipeline waits for a concurrency slot.
+  // Once a slot is acquired, the status flips to "processing".
   await withProcessSlot(() => runProcessPipeline(bucketName, objectKey, job));
 }
 
@@ -247,6 +248,9 @@ async function runProcessPipeline(
   objectKey: string,
   job: BucketJob,
 ): Promise<void> {
+  // A concurrency slot has been acquired — flip status from queued → processing.
+  job.status = "processing";
+
   const parts = objectKey.split("/");
   const userId = parts[1] ?? "unknown";
   const fileName = parts[parts.length - 1] ?? "file";
@@ -540,7 +544,7 @@ export async function getBucketStatus(): Promise<BucketStatusSummary> {
 
   const processingKeys = new Set(
     [...activeJobs.values()]
-      .filter((j) => j.status === "processing")
+      .filter((j) => j.status === "processing" || j.status === "queued")
       .map((j) => j.objectKey),
   );
 

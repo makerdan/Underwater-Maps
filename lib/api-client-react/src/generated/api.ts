@@ -6333,7 +6333,7 @@ export const getGetGcsJobStatusUrl = (params: GetGcsJobStatusParams,) => {
 }
 
 /**
- * Returns the status of a GCS background-processing job by objectKey. The objectKey must belong to the authenticated user.
+ * Returns the status of a GCS background-processing job by objectKey. The objectKey must belong to the authenticated user. The "queued" status means a concurrency slot has not yet been acquired; "processing" means the pipeline is actively running.
  * @summary Check processing status for a GCS-backed upload job
  */
 export const getGcsJobStatus = async (params: GetGcsJobStatusParams, options?: RequestInit): Promise<GetGcsJobStatus200> => {

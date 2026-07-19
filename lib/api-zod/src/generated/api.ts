@@ -3655,7 +3655,7 @@ export const RequestGcsUploadUrlResponse = zod.object({
 
 
 /**
- * Returns the status of a GCS background-processing job by objectKey. The objectKey must belong to the authenticated user.
+ * Returns the status of a GCS background-processing job by objectKey. The objectKey must belong to the authenticated user. The "queued" status means a concurrency slot has not yet been acquired; "processing" means the pipeline is actively running.
  * @summary Check processing status for a GCS-backed upload job
  */
 export const GetGcsJobStatusQueryParams = zod.object({
@@ -3663,7 +3663,7 @@ export const GetGcsJobStatusQueryParams = zod.object({
 })
 
 export const GetGcsJobStatusResponse = zod.object({
-  "status": zod.enum(['pending', 'processing', 'done', 'error']).optional(),
+  "status": zod.enum(['pending', 'queued', 'processing', 'done', 'error']).optional(),
   "datasetId": zod.string().optional(),
   "error": zod.string().optional()
 })

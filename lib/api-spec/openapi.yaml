@@ -2870,7 +2870,7 @@ paths:
       operationId: getGcsJobStatus
       tags: [datasets]
       summary: Check processing status for a GCS-backed upload job
-      description: Returns the status of a GCS background-processing job by objectKey. The objectKey must belong to the authenticated user.
+      description: Returns the status of a GCS background-processing job by objectKey. The objectKey must belong to the authenticated user. The "queued" status means a concurrency slot has not yet been acquired; "processing" means the pipeline is actively running.
       parameters:
         - in: query
           name: objectKey
@@ -2888,7 +2888,7 @@ paths:
                 properties:
                   status:
                     type: string
-                    enum: [pending, processing, done, error]
+                    enum: [pending, queued, processing, done, error]
                   datasetId:
                     type: string
                   error:

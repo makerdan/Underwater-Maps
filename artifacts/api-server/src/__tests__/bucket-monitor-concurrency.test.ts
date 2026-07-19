@@ -169,6 +169,16 @@ describe("processObject — concurrency cap", () => {
     expect(gcsMocks.mockCreateReadStream).toHaveBeenCalledTimes(PROCESS_CONCURRENCY_CAP);
     expect(current).toBe(PROCESS_CONCURRENCY_CAP);
 
+    // Jobs that acquired a slot are "processing"; jobs still waiting are "queued".
+    const activeKeys = keys.slice(0, PROCESS_CONCURRENCY_CAP);
+    const waitingKeys = keys.slice(PROCESS_CONCURRENCY_CAP);
+    for (const key of activeKeys) {
+      expect(getJobByObjectKey(key)?.status).toBe("processing");
+    }
+    for (const key of waitingKeys) {
+      expect(getJobByObjectKey(key)?.status).toBe("queued");
+    }
+
     // Release gates one at a time until every pipeline has been let through.
     let released = 0;
     while (released < N) {

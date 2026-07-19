@@ -826,6 +826,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [gcsPhase, setGcsPhase] = useState<GcsPhase>("idle");
   const [gcsUploadProgress, setGcsUploadProgress] = useState(0);
   const [gcsError, setGcsError] = useState<string | null>(null);
+  // Server-reported sub-status while gcsPhase === "processing".
+  // "queued"  → waiting for a concurrency slot on the server ("Waiting in line…")
+  // "processing" → pipeline is actively running ("Processing in background…")
+  // null → unknown / just switched to processing phase
+  const [gcsServerStatus, setGcsServerStatus] = useState<"queued" | "processing" | null>(null);
 
   // ─── Interrupted upload session (survives page reload via sessionStorage) ──
   // On mount we check for a saved session from a previous upload that was
@@ -1720,6 +1725,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     // Step 3: switch to background-processing state
     setGcsPhase("processing");
     setGcsUploadProgress(100);
+    setGcsServerStatus(null);
 
     // Step 4: poll the job-status endpoint every 10 s using the specific
     // objectKey so we resolve exactly the right dataset, even if another
@@ -1736,6 +1742,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           return r.json() as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[]; soundingCount?: number; substrateCount?: number; parseWarnings?: string[] }>;
         })
         .then((job) => {
+          // Track server-reported queued/processing sub-status for UI display.
+          if (job.status === "queued" || job.status === "processing") {
+            setGcsServerStatus(job.status);
+          }
+
           if (job.status === "done" && job.datasetId) {
             clearInterval(pollIntervalId);
             gcsPollIntervalRef.current = null;
@@ -1743,6 +1754,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(job.datasetId) });
             setGcsPhase("idle");
             setGcsError(null);
+            setGcsServerStatus(null);
 
             const completedDatasetId = job.datasetId;
             const displayName = file.name.replace(/\.[^.]+$/, "");
@@ -1784,6 +1796,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             const failMsg = job.error ?? "Processing failed. Please try uploading again.";
             setGcsPhase("error");
             setGcsError(failMsg);
+            setGcsServerStatus(null);
             toast({
               title: "Upload processing failed",
               description: failMsg,
@@ -1807,6 +1820,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       gcsWatchdogTimeoutRef.current = null;
       setGcsPhase((prev) => {
         if (prev === "processing") {
+          setGcsServerStatus(null);
           toast({
             title: "Still processing",
             description:
@@ -3378,10 +3392,14 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       ) : gcsPhase === "processing" ? (
                         <div>
                           <div className="animate-pulse" style={{ ...CYAN, fontSize: 15, marginBottom: 2 }}>
-                            ◌ Processing in background...
+                            {gcsServerStatus === "queued"
+                              ? "⏳ Waiting in line…"
+                              : "◌ Processing in background..."}
                           </div>
                           <div style={{ fontSize: 15, color: "#94a3b8" }}>
-                            We&apos;ll notify you when it&apos;s ready
+                            {gcsServerStatus === "queued"
+                              ? "A few other uploads are ahead — you're next"
+                              : "We\u2019ll notify you when it\u2019s ready"}
                           </div>
                         </div>
                       ) : gcsPhase === "processing_timeout" ? (

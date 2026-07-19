@@ -3264,6 +3264,7 @@ export type GetGcsJobStatus200Status = typeof GetGcsJobStatus200Status[keyof typ
 
 export const GetGcsJobStatus200Status = {
   pending: 'pending',
+  queued: 'queued',
   processing: 'processing',
   done: 'done',
   error: 'error',
