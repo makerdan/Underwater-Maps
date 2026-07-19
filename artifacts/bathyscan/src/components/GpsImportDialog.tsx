@@ -492,6 +492,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     bounds,
     toast,
     onClose,
+    postMarkers,
+    postTrollingPresets,
   ]);
 
   const body = (
