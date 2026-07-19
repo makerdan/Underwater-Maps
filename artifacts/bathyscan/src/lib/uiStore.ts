@@ -11,13 +11,27 @@
  *   settingsStore, NOT here. See settingsStore.ts for the full guide.
  *
  *   Fields in this store that mirror a settingsStore key:
- *   - Read their initial value from `useSettingsStore.getState()` so they are
- *     correct immediately on first render (localStorage is already hydrated).
- *   - Write back via `useSettingsStore.setState({ field: value })` in every
- *     setter so the change flows through the debounced server-sync pipeline
- *     with no extra networking code.
- *   - Are re-applied from settingsStore by `useServerSettingsSync` after a
+ *   - Read their initial value from DEFAULT_SETTINGS so they are correct on
+ *     first render (applySettingsToUiStore corrects them once localStorage
+ *     has hydrated).
+ *   - Are AUTOMATICALLY written back to settingsStore by the auto-mirror
+ *     subscription defined below — NO useSettingsStore.setState() call is
+ *     needed inside a setter. Just call set().
+ *   - Are re-applied from settingsStore by useServerSettingsSync after a
  *     server GET hydration so cross-device changes propagate automatically.
+ *
+ *   ┌─────────────────────────────────────────────────────────────────────┐
+ *   │  ADDING A NEW MIRRORED (PERSISTED) FIELD:                           │
+ *   │  1. Add to SettingsState + DEFAULT_SETTINGS + SECTION_KEYS          │
+ *   │     in settingsStore.ts.                                             │
+ *   │  2. Add the field + setter to the UiStore interface below.           │
+ *   │  3. Initialise the field in the create() factory from DEFAULT_SETTINGS│
+ *   │  4. Add an entry to MIRRORED_UI_KEYS and computeSettingsPatch        │
+ *   │     (the two functions just below applySettingsToUiStore).           │
+ *   │  5. Add the field to applySettingsToUiStore.                         │
+ *   │  Your setter ONLY needs set({…}) — the subscription handles          │
+ *   │  useSettingsStore.setState() automatically.                          │
+ *   └─────────────────────────────────────────────────────────────────────┘
  *
  * INTENTIONALLY TRANSIENT STATE → here (memory-only, resets on reload)
  *   State that should intentionally reset each session:
@@ -35,7 +49,7 @@
 import { create } from "zustand";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import type { EfhSpeciesProperties } from "@workspace/api-client-react";
-import { useSettingsStore, DEFAULT_SETTINGS, type SidebarMode } from "./settingsStore";
+import { useSettingsStore, DEFAULT_SETTINGS, type SidebarMode, type SettingsState } from "./settingsStore";
 import { onSidebarModeChange } from "./liveMode";
 
 export const CURRENT_DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-bottom"];
@@ -351,37 +365,121 @@ function validDepthLayers(raw: unknown): DepthLayer[] {
   return valid.length ? valid : ["mid"];
 }
 
+// ── Auto-mirror: uiStore → settingsStore ─────────────────────────────────────
+//
+// When any "mirrored" field changes in uiStore, the subscription below
+// automatically pushes the new value(s) to settingsStore so the debounced
+// PUT /api/settings fires — no useSettingsStore.setState() call is needed
+// inside individual setters.
+//
+// _suppressMirror is set to true during applySettingsToUiStore (the
+// settingsStore→uiStore direction) to prevent an infinite write-back loop.
+
+let _suppressMirror = false;
+
+/**
+ * The uiStore field names that must be kept in sync with settingsStore.
+ * This is the authoritative list for both directions:
+ *   • uiStore→settingsStore: the subscription below reads this list.
+ *   • settingsStore→uiStore: applySettingsToUiStore below reads from the
+ *     same fields.
+ *
+ * Add a new key here whenever you add a field that should persist across
+ * sessions (see the guide at the top of this file).
+ */
+export const MIRRORED_UI_KEYS = [
+  "zoneOverlayEnabled",
+  "zonePaintMode",
+  "zonePaintSlot",
+  "zonePaintBrushRadius",
+  "substrateColorMode",
+  "hiddenSubstrateClasses",
+  "intertidalHotspotsEnabled",
+  "intertidalScoreMode",
+  "efhOverlayEnabled",
+  "hiddenEfhSpecies",
+  "hyd93ActiveFeatureCodes",
+  "hyd93FeaturesEnabled",
+  "weatherStationsActive",
+  "rawsOverlayActive",
+  "windOverlayActive",
+  "tideOverlayActive",
+  "currentOverlayActive",
+  "currentDepthLayers",
+  "sidePaneCollapsed",
+  "sidebarMode",
+] as const satisfies ReadonlyArray<keyof UiStore>;
+
+/**
+ * Convert the mirrored subset of the current uiStore state into a
+ * settingsStore patch.  Set fields are serialised to plain arrays because
+ * settingsStore persists JSON-safe values.
+ *
+ * Keep this function in sync with MIRRORED_UI_KEYS and applySettingsToUiStore.
+ */
+function computeSettingsPatch(state: UiStore): Partial<SettingsState> {
+  return {
+    zoneOverlayEnabled: state.zoneOverlayEnabled,
+    zonePaintMode: state.zonePaintMode,
+    zonePaintSlot: state.zonePaintSlot,
+    zonePaintBrushRadius: state.zonePaintBrushRadius,
+    substrateColorMode: state.substrateColorMode,
+    hiddenSubstrateClasses: [...state.hiddenSubstrateClasses],
+    intertidalHotspotsEnabled: state.intertidalHotspotsEnabled,
+    intertidalScoreMode: state.intertidalScoreMode,
+    efhOverlayEnabled: state.efhOverlayEnabled,
+    hiddenEfhSpecies: [...state.hiddenEfhSpecies],
+    hyd93ActiveFeatureCodes: [...state.hyd93ActiveFeatureCodes],
+    hyd93FeaturesEnabled: state.hyd93FeaturesEnabled,
+    weatherStationsActive: state.weatherStationsActive,
+    rawsOverlayActive: state.rawsOverlayActive,
+    windOverlayActive: state.windOverlayActive,
+    tideOverlayActive: state.tideOverlayActive,
+    currentOverlayActive: state.currentOverlayActive,
+    currentDepthLayers: state.currentDepthLayers,
+    sidePaneCollapsed: state.sidePaneCollapsed,
+    sidebarMode: state.sidebarMode,
+  };
+}
+
 // ── Helper: apply persisted settingsStore values to uiStore ──────────────────
 // Called once after settingsStore finishes rehydrating from localStorage so
 // the initial render sees the correct persisted overlay/toggle state rather
 // than the DEFAULT_SETTINGS fallbacks used during store construction.
+// _suppressMirror prevents the subscription from writing back to settingsStore
+// during this settingsStore→uiStore hydration pass.
 function applySettingsToUiStore(s: typeof DEFAULT_SETTINGS) {
-  const prevSidebarMode = useUiStore.getState().sidebarMode;
-  useUiStore.setState({
-    zoneOverlayEnabled: s.zoneOverlayEnabled,
-    zonePaintMode: s.zonePaintMode,
-    zonePaintSlot: (s.zonePaintSlot as 0 | 1 | 2 | 3) ?? 0,
-    zonePaintBrushRadius: s.zonePaintBrushRadius,
-    substrateColorMode: s.substrateColorMode,
-    hiddenSubstrateClasses: new Set<string>(s.hiddenSubstrateClasses ?? []),
-    intertidalHotspotsEnabled: s.intertidalHotspotsEnabled,
-    intertidalScoreMode: s.intertidalScoreMode ?? 'tidepool',
-    efhOverlayEnabled: s.efhOverlayEnabled,
-    hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
-    hyd93ActiveFeatureCodes: new Set<number>(s.hyd93ActiveFeatureCodes ?? [89, 103, 146, 530, 988]),
-    hyd93FeaturesEnabled: s.hyd93FeaturesEnabled,
-    weatherStationsActive: s.weatherStationsActive,
-    rawsOverlayActive: s.rawsOverlayActive,
-    windOverlayActive: s.windOverlayActive,
-    tideOverlayActive: s.tideOverlayActive,
-    currentOverlayActive: s.currentOverlayActive,
-    currentDepthLayers: validDepthLayers(s.currentDepthLayers),
-    sidePaneCollapsed: s.sidePaneCollapsed,
-    sidebarMode: s.sidebarMode ?? 'explore',
-  });
-  // Resume Live-mode orchestration (GPS watch, follow, trail recording) when
-  // a persisted 'live' sidebar mode is restored on page load.
-  onSidebarModeChange(prevSidebarMode, s.sidebarMode ?? 'explore');
+  _suppressMirror = true;
+  try {
+    const prevSidebarMode = useUiStore.getState().sidebarMode;
+    useUiStore.setState({
+      zoneOverlayEnabled: s.zoneOverlayEnabled,
+      zonePaintMode: s.zonePaintMode,
+      zonePaintSlot: (s.zonePaintSlot as 0 | 1 | 2 | 3) ?? 0,
+      zonePaintBrushRadius: s.zonePaintBrushRadius,
+      substrateColorMode: s.substrateColorMode,
+      hiddenSubstrateClasses: new Set<string>(s.hiddenSubstrateClasses ?? []),
+      intertidalHotspotsEnabled: s.intertidalHotspotsEnabled,
+      intertidalScoreMode: s.intertidalScoreMode ?? 'tidepool',
+      efhOverlayEnabled: s.efhOverlayEnabled,
+      hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
+      hyd93ActiveFeatureCodes: new Set<number>(s.hyd93ActiveFeatureCodes ?? [89, 103, 146, 530, 988]),
+      hyd93FeaturesEnabled: s.hyd93FeaturesEnabled,
+      weatherStationsActive: s.weatherStationsActive,
+      rawsOverlayActive: s.rawsOverlayActive,
+      windOverlayActive: s.windOverlayActive,
+      tideOverlayActive: s.tideOverlayActive,
+      currentOverlayActive: s.currentOverlayActive,
+      currentDepthLayers: validDepthLayers(s.currentDepthLayers),
+      sidePaneCollapsed: s.sidePaneCollapsed,
+      sidebarMode: s.sidebarMode ?? 'explore',
+    });
+    // Resume Live-mode orchestration (GPS watch, follow, trail recording) when
+    // a persisted 'live' sidebar mode is restored on page load.
+    onSidebarModeChange(prevSidebarMode, s.sidebarMode ?? 'explore');
+  } finally {
+    _suppressMirror = false;
+  }
 }
 
 export const useUiStore = create<UiStore>((set, get) => {
@@ -437,39 +535,35 @@ export const useUiStore = create<UiStore>((set, get) => {
     // ── Persistent overlay toggles (synced via settingsStore → server) ─────
     // Initial values come from DEFAULT_SETTINGS; corrected post-rehydration
     // via the onFinishHydration subscriber registered below this store.
-    // Every setter writes back to settingsStore so the debounced PUT fires.
+    //
+    // Setters only call set() — the auto-mirror subscription (wired up after
+    // the store is created) handles the useSettingsStore.setState() write so
+    // it can never be forgotten in future additions.
 
     zoneOverlayEnabled: s.zoneOverlayEnabled,
     setZoneOverlayEnabled: (enabled) => {
       set(enabled ? { zoneOverlayEnabled: true } : { zoneOverlayEnabled: false, zonePaintMode: false });
-      useSettingsStore.setState(
-        enabled ? { zoneOverlayEnabled: true } : { zoneOverlayEnabled: false, zonePaintMode: false },
-      );
     },
 
     zonePaintMode: s.zonePaintMode,
     setZonePaintMode: (enabled) => {
       set({ zonePaintMode: enabled });
-      useSettingsStore.setState({ zonePaintMode: enabled });
     },
 
     zonePaintSlot: (s.zonePaintSlot as 0 | 1 | 2 | 3) ?? 0,
     setZonePaintSlot: (slot) => {
       set({ zonePaintSlot: slot });
-      useSettingsStore.setState({ zonePaintSlot: slot });
     },
 
     zonePaintBrushRadius: s.zonePaintBrushRadius,
     setZonePaintBrushRadius: (radius) => {
       const clamped = Math.max(1, Math.min(20, Math.round(radius)));
       set({ zonePaintBrushRadius: clamped });
-      useSettingsStore.setState({ zonePaintBrushRadius: clamped });
     },
 
     substrateColorMode: s.substrateColorMode,
     setSubstrateColorMode: (enabled) => {
       set(enabled ? { substrateColorMode: true } : { substrateColorMode: false, selectedSubstrate: null });
-      useSettingsStore.setState({ substrateColorMode: enabled });
     },
 
     hiddenSubstrateClasses: new Set<string>(s.hiddenSubstrateClasses ?? []),
@@ -484,13 +578,9 @@ export const useUiStore = create<UiStore>((set, get) => {
       set(clearSel
         ? { hiddenSubstrateClasses: next, selectedSubstrate: null }
         : { hiddenSubstrateClasses: next });
-      // Cross-store sync happens AFTER the local commit so the settings-store
-      // update can never interleave with (or observe) a mid-transition uiStore.
-      useSettingsStore.setState({ hiddenSubstrateClasses: [...next] });
     },
     clearHiddenSubstrateClasses: () => {
       set({ hiddenSubstrateClasses: new Set<string>() });
-      useSettingsStore.setState({ hiddenSubstrateClasses: [] });
     },
 
     intertidalHotspotsEnabled: s.intertidalHotspotsEnabled,
@@ -498,13 +588,11 @@ export const useUiStore = create<UiStore>((set, get) => {
       set(enabled
         ? { intertidalHotspotsEnabled: true }
         : { intertidalHotspotsEnabled: false, selectedHotspot: null });
-      useSettingsStore.setState({ intertidalHotspotsEnabled: enabled });
     },
 
     intertidalScoreMode: s.intertidalScoreMode ?? 'tidepool',
     setIntertidalScoreMode: (mode) => {
       set({ intertidalScoreMode: mode, selectedHotspot: null });
-      useSettingsStore.setState({ intertidalScoreMode: mode });
     },
 
     efhOverlayEnabled: s.efhOverlayEnabled,
@@ -512,8 +600,6 @@ export const useUiStore = create<UiStore>((set, get) => {
       set(enabled
         ? { efhOverlayEnabled: true }
         : { efhOverlayEnabled: false, selectedEfh: null, hiddenEfhSpecies: new Set<string>() });
-      useSettingsStore.setState({ efhOverlayEnabled: enabled });
-      if (!enabled) useSettingsStore.setState({ hiddenEfhSpecies: [] });
     },
 
     // hyd93FeaturesEnabled is persisted via settingsStore so the overlay stays on
@@ -521,7 +607,6 @@ export const useUiStore = create<UiStore>((set, get) => {
     hyd93FeaturesEnabled: s.hyd93FeaturesEnabled,
     setHyd93FeaturesEnabled: (enabled) => {
       set({ hyd93FeaturesEnabled: enabled });
-      useSettingsStore.setState({ hyd93FeaturesEnabled: enabled });
     },
 
     // hyd93ActiveFeatureCodes is persisted via settingsStore so power users'
@@ -535,7 +620,6 @@ export const useUiStore = create<UiStore>((set, get) => {
         next.add(code);
       }
       set({ hyd93ActiveFeatureCodes: next });
-      useSettingsStore.setState({ hyd93ActiveFeatureCodes: [...next] });
     },
 
     hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
@@ -549,48 +633,40 @@ export const useUiStore = create<UiStore>((set, get) => {
       set(clearSel
         ? { hiddenEfhSpecies: next, selectedEfh: null }
         : { hiddenEfhSpecies: next });
-      useSettingsStore.setState({ hiddenEfhSpecies: [...next] });
     },
     clearHiddenEfhSpecies: () => {
       set({ hiddenEfhSpecies: new Set<string>() });
-      useSettingsStore.setState({ hiddenEfhSpecies: [] });
     },
 
     weatherStationsActive: s.weatherStationsActive,
     setWeatherStationsActive: (b) => {
       set({ weatherStationsActive: b });
-      useSettingsStore.setState({ weatherStationsActive: b });
     },
 
     rawsOverlayActive: s.rawsOverlayActive,
     setRawsOverlayActive: (b) => {
       set({ rawsOverlayActive: b });
-      useSettingsStore.setState({ rawsOverlayActive: b });
     },
 
     windOverlayActive: s.windOverlayActive,
     setWindOverlayActive: (b) => {
       set({ windOverlayActive: b });
-      useSettingsStore.setState({ windOverlayActive: b });
     },
 
     tideOverlayActive: s.tideOverlayActive,
     setTideOverlayActive: (b) => {
       set({ tideOverlayActive: b });
-      useSettingsStore.setState({ tideOverlayActive: b });
     },
 
     currentOverlayActive: s.currentOverlayActive,
     setCurrentOverlayActive: (b) => {
       set({ currentOverlayActive: b });
-      useSettingsStore.setState({ currentOverlayActive: b });
     },
 
     currentDepthLayers: validDepthLayers(s.currentDepthLayers),
     setCurrentDepthLayers: (layers) => {
       const ordered = CURRENT_DEPTH_LAYERS.filter((l) => layers.includes(l));
       set({ currentDepthLayers: ordered });
-      useSettingsStore.setState({ currentDepthLayers: ordered });
     },
     toggleCurrentDepthLayer: (layer) => {
       const state = get();
@@ -601,13 +677,11 @@ export const useUiStore = create<UiStore>((set, get) => {
       if (next.length === 0) next = [layer];
       const ordered = CURRENT_DEPTH_LAYERS.filter((l) => next.includes(l));
       set({ currentDepthLayers: ordered });
-      useSettingsStore.setState({ currentDepthLayers: ordered });
     },
 
     sidePaneCollapsed: s.sidePaneCollapsed,
     setSidePaneCollapsed: (collapsed) => {
       set({ sidePaneCollapsed: collapsed });
-      useSettingsStore.setState({ sidePaneCollapsed: collapsed });
     },
 
     // ── Device-local state (stays in raw localStorage, never synced) ────────
@@ -626,12 +700,30 @@ export const useUiStore = create<UiStore>((set, get) => {
     setSidebarMode: (mode) => {
       const prev = get().sidebarMode;
       set({ sidebarMode: mode });
-      useSettingsStore.setState({ sidebarMode: mode });
       // Live-mode orchestration: start/stop GPS follow + trail recording on
-      // transitions into/out of 'live'. Runs after both stores are committed.
+      // transitions into/out of 'live'. Runs after the local commit.
       onSidebarModeChange(prev, mode);
     },
   };
+});
+
+// ── Auto-mirror subscription ──────────────────────────────────────────────────
+// Fires on every uiStore change. If any MIRRORED_UI_KEYS field changed and
+// we are not in the middle of an applySettingsToUiStore pass, push the full
+// mirrored-field patch to settingsStore so the debounced PUT fires.
+//
+// This is the mechanism that makes forgetting a useSettingsStore.setState()
+// call in a setter structurally impossible: any setter that calls set({…}) on
+// a mirrored field will automatically propagate here.
+useUiStore.subscribe((state, prevState) => {
+  if (_suppressMirror) return;
+  const changed = MIRRORED_UI_KEYS.some(
+    (k) =>
+      (state as unknown as Record<string, unknown>)[k] !==
+      (prevState as unknown as Record<string, unknown>)[k],
+  );
+  if (!changed) return;
+  useSettingsStore.setState(computeSettingsPatch(state));
 });
 
 /**
