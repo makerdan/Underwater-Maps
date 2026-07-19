@@ -28,8 +28,6 @@ import {
   hasAuthTokenGetter,
   getDatasetsIdPreview,
   getGetDatasetsIdPreviewQueryKey,
-  useGetUserFolders,
-  getGetUserFoldersQueryKey,
 } from "@workspace/api-client-react";
 import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
