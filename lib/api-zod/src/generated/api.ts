@@ -786,7 +786,7 @@ export const postMarkersBodyNotesMax = 2000;
 export const postMarkersBodyQuickCatchDefault = false;
 
 export const PostMarkersBody = zod.object({
-  "datasetId": zod.string().nullish().describe('Dataset this marker belongs to. Omit (or set to null) for dataset-free (unassigned) markers.'),
+  "datasetId": zod.string().nullable().describe('Dataset this marker belongs to. Pass null for dataset-free (unassigned) markers.'),
   "lon": zod.number().min(postMarkersBodyLonMin).max(postMarkersBodyLonMax),
   "lat": zod.number().min(postMarkersBodyLatMin).max(postMarkersBodyLatMax),
   "depth": zod.number(),

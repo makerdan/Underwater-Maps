@@ -7501,7 +7501,7 @@ components:
         datasetId:
           type: string
           nullable: true
-          description: Dataset this marker belongs to. Omit (or set to null) for dataset-free (unassigned) markers.
+          description: Dataset this marker belongs to. Pass null for dataset-free (unassigned) markers.
         lon:
           type: number
           minimum: -180
@@ -7537,6 +7537,7 @@ components:
             - $ref: "#/components/schemas/MarkerConditions"
           description: Optional frozen conditions snapshot captured at drop time
       required:
+        - datasetId
         - lon
         - lat
         - depth

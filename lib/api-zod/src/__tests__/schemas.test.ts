@@ -138,10 +138,10 @@ describe("GetMarkersQueryParams", () => {
     if (r.success) expect(typeof r.data.datasetId).toBe("string");
   });
 
-  it("coerces undefined datasetId to the string 'undefined' (coerce.string behaviour)", () => {
+  it("returns undefined for absent datasetId (optional field)", () => {
     const r = GetMarkersQueryParams.safeParse({});
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.datasetId).toBe("undefined");
+    if (r.success) expect(r.data.datasetId).toBe(undefined);
   });
 });
 

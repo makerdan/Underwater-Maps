@@ -405,7 +405,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       try {
         const created = await postMarkers.mutateAsync({
           data: {
-            ...(terrain ? { datasetId: terrain.datasetId } : {}),
+            datasetId: terrain ? terrain.datasetId : null,
             lon: w.lon,
             lat: w.lat,
             depth,

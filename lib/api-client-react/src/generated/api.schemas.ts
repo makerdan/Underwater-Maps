@@ -2694,8 +2694,8 @@ export const MarkerInputType = {
 } as const;
 
 export interface MarkerInput {
-  /** Dataset this marker belongs to. Omit (or set to null) for dataset-free (unassigned) markers. */
-  datasetId?: string | null;
+  /** Dataset this marker belongs to. Pass null for dataset-free (unassigned) markers. */
+  datasetId: string | null;
   /**
      * @minimum -180
      * @maximum 180
