@@ -1535,6 +1535,43 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
   try {
     const preview = await previewDataset(id);
     if (!preview) {
+      // Custom (UUID-format) dataset — apply the same auth + ownership guard
+      // used by the /terrain and /overview routes, then build the preview from
+      // the row's stored terrainJson so the client sees the real dataSource.
+      if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
+        const callerId = getAuth(req)?.userId ?? null;
+        if (!callerId) {
+          res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+          return;
+        }
+        const [row] = await db
+          .select({
+            name: customDatasetsTable.name,
+            terrainJson: customDatasetsTable.terrainJson,
+          })
+          .from(customDatasetsTable)
+          .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
+        if (!row) {
+          res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+          return;
+        }
+        const tj = row.terrainJson as StoredTerrainJson;
+        // StoredTerrainJson.dataSource may include source labels not present in
+        // the DatasetPreview enum (twdb, usace, usgs-3dep). User-uploaded sonar
+        // is always real measured data, so map anything unrecognised to "ncei".
+        const rawSource = tj.dataSource;
+        const dataSource: "ncei" | "gebco" | "synthetic" =
+          rawSource === "gebco" ? "gebco"
+          : rawSource === "synthetic" ? "synthetic"
+          : "ncei";
+        res.json({
+          datasetId: id,
+          name: row.name,
+          bbox: { minLon: tj.minLon, minLat: tj.minLat, maxLon: tj.maxLon, maxLat: tj.maxLat },
+          dataSource,
+        });
+        return;
+      }
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
