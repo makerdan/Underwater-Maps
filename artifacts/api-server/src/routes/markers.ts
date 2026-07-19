@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { and, eq, sql } from "drizzle-orm";
-import { db, markersTable, catchCountersTable } from "@workspace/db";
+import { db, markersTable, catchCountersTable, catchEntriesTable } from "@workspace/db";
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { ObjectStorageService } from "../lib/objectStorage.js";
+import { logger } from "../lib/logger.js";
 
 
 const router = Router();
@@ -135,6 +137,16 @@ router.delete("/markers/:id", requireAuth, asyncHandler(async (req, res): Promis
   const { id } = parsed.data;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
+  // Collect all photo object paths from catch entries before the cascade delete
+  // removes them. This lets us fire best-effort GCS cleanup immediately rather
+  // than waiting up to 24 h for the orphaned-photos sweep.
+  const entries = await db
+    .select({ photos: catchEntriesTable.photos })
+    .from(catchEntriesTable)
+    .where(eq(catchEntriesTable.markerId, id));
+
+  const photoPaths = entries.flatMap((e) => e.photos ?? []);
+
   const deleted = await db
     .delete(markersTable)
     .where(and(eq(markersTable.id, id), eq(markersTable.userId, userId)))
@@ -143,6 +155,18 @@ router.delete("/markers/:id", requireAuth, asyncHandler(async (req, res): Promis
   if (!deleted.length) {
     res.status(404).json({ error: "not_found", details: `Marker '${id}' not found` });
     return;
+  }
+
+  // Best-effort: delete associated photo objects now that the DB rows are gone.
+  if (photoPaths.length > 0) {
+    const service = new ObjectStorageService();
+    void Promise.allSettled(
+      photoPaths.map((p) =>
+        service.deleteObjectEntity(p).catch((err: unknown) => {
+          logger.warn({ err, path: p }, "[markers] Failed to delete catch-entry photo on marker delete");
+        }),
+      ),
+    );
   }
 
   res.status(204).send();

@@ -18,7 +18,10 @@ const markersMocks = vi.hoisted(() => {
     createdAt: new Date().toISOString(),
   };
   const orderByMock = vi.fn().mockResolvedValue([row]);
-  const selectWhereMock = vi.fn().mockReturnValue({ orderBy: orderByMock });
+  // The DELETE handler awaits .where() directly (no .orderBy()), so the where
+  // result must be a Promise.  Attach .orderBy so the GET handler still works.
+  const selectWhereResult = Object.assign(Promise.resolve([]), { orderBy: orderByMock });
+  const selectWhereMock = vi.fn().mockReturnValue(selectWhereResult);
   const fromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
   const insertReturningMock = vi.fn().mockResolvedValue([row]);
   const valuesMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
