@@ -132,6 +132,24 @@ async function ensureExploreMode(page: Page): Promise<void> {
         .__bathyTest?.seedTerrain?.(),
     )
     .catch(() => {});
+  // Wait for terrain to actually finish loading before returning — the Explore
+  // tab renders MY UPLOADS only once terrain is present.  Without this gate the
+  // btn-user-dataset-* row lookup races against the terrain-load and loses
+  // intermittently (the whole class of flakiness this function was added to fix).
+  await page
+    .waitForFunction(
+      () =>
+        Boolean(
+          (
+            window as unknown as {
+              __bathyTest?: { getTerrainSummary?: () => unknown };
+            }
+          ).__bathyTest?.getTerrainSummary?.(),
+        ),
+      undefined,
+      { timeout: 8_000 },
+    )
+    .catch(() => {});
 }
 
 /**
