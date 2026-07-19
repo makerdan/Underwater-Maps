@@ -1762,3 +1762,105 @@ export function renderSyntheticHatch(
 
   ctx.restore();
 }
+
+// ---------------------------------------------------------------------------
+// Intertidal band depth fill
+// ---------------------------------------------------------------------------
+
+const FT_TO_M = 0.3048;
+
+/**
+ * Render the intertidal depth band on the 2D overview canvas, mirroring the
+ * teal/amber tints drawn by the 3D terrain shader.
+ *
+ * Depth convention (same as the 3D shader and buildHeatmapBitmap):
+ *   positive depth → below MLLW (open water)
+ *   zero           → MLLW (sea surface / datum reference)
+ *   negative depth → above MLLW (intertidal / supratidal terrain)
+ *
+ *  Teal  (rgb 46,200,158) — cells where -mhwM ≤ depth ≤ 0  (lower intertidal)
+ *  Amber (rgb 224,165,51) — cells where -mhhwM ≤ depth < -mhwM (upper intertidal)
+ *
+ * Positioning uses lonLatToCanvas with `worldGrid` so the overlay is placed
+ * correctly in both single-dataset and multi-dataset (bbox-aware) modes.
+ * The grid's depth rows are sampled with a Y-flip (matching buildHeatmapBitmap)
+ * so the filled mask aligns north-up with the base heatmap.
+ *
+ * @param grid      — primary dataset overview grid (depth values + bbox).
+ * @param worldGrid — coordinate frame for lon/lat → canvas projection.
+ *                    In single-dataset mode this equals `grid`.
+ * @param mhwFt     — effective MHW datum in feet above MLLW, or null.
+ * @param mhhwFt    — effective MHHW datum in feet above MLLW, or null.
+ */
+export function renderIntertidalBand(
+  ctx: CanvasRenderingContext2D,
+  grid: TerrainData,
+  worldGrid: TerrainData,
+  t: OverviewTransform,
+  mhwFt: number | null,
+  mhhwFt: number | null,
+): void {
+  if (mhwFt === null) return; // need at least MHW to define the lower band
+
+  const mhwM = mhwFt * FT_TO_M;
+  // Upper band only when MHHW is distinct from MHW
+  const mhhwM =
+    mhhwFt !== null && mhhwFt !== mhwFt ? mhhwFt * FT_TO_M : null;
+
+  const { width: W, height: H, depths } = grid;
+  if (W < 2 || H < 2) return;
+
+  // Derive canvas placement via bbox corners, matching renderHeatmapAtBbox so
+  // the overlay sits correctly in multi-dataset (worldGrid != grid) mode.
+  const [x0, y0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
+  const [x1, y1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
+  const canvasW = x1 - x0;
+  const canvasH = y1 - y0;
+  if (canvasW <= 0 || canvasH <= 0) return;
+
+  // Use a 128×128 offscreen raster — sufficient detail at overview-map scale
+  // without expensive allocations for large grids.
+  const DS = 128;
+  const offscreen = document.createElement("canvas");
+  offscreen.width = DS;
+  offscreen.height = DS;
+  const octx = offscreen.getContext("2d")!;
+  const imageData = octx.createImageData(DS, DS);
+  const px = imageData.data;
+
+  for (let row = 0; row < DS; row++) {
+    for (let col = 0; col < DS; col++) {
+      // Map DS pixel → source grid cell.
+      // Flip Y (H-1-srcRow) so row 0 = northernmost data, matching
+      // buildHeatmapBitmap's North-up convention.
+      const srcRowFlipped = Math.min(H - 1, Math.round((row / DS) * H));
+      const srcRow = H - 1 - srcRowFlipped;
+      const srcCol = Math.min(W - 1, Math.round((col / DS) * W));
+      const depth = depths[srcRow * W + srcCol] ?? null;
+      if (depth === null) continue; // no-data gap — leave transparent
+      const i = (row * DS + col) * 4;
+
+      if (depth <= 0 && depth >= -mhwM) {
+        // Lower intertidal: MLLW (depth=0) down to –MHW (matches shader inLower)
+        px[i]     = 46;
+        px[i + 1] = 200;
+        px[i + 2] = 158;
+        px[i + 3] = 130; // ~51% opacity, matches 3D shader mix factor 0.32
+      } else if (mhhwM !== null && depth < -mhwM && depth >= -mhhwM) {
+        // Upper intertidal: –MHW to –MHHW (matches shader inUpper)
+        px[i]     = 224;
+        px[i + 1] = 165;
+        px[i + 2] = 51;
+        px[i + 3] = 130;
+      }
+      // otherwise fully transparent (default 0,0,0,0)
+    }
+  }
+
+  octx.putImageData(imageData, 0, 0);
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(offscreen, x0, y0, canvasW, canvasH);
+  ctx.restore();
+}

@@ -44,6 +44,7 @@ import {
   renderHeatmapAtBbox,
   renderSyntheticHatch,
   renderContourLines,
+  renderIntertidalBand,
   renderGridLines,
   renderScaleBar,
   renderColormapLegend,
@@ -106,6 +107,8 @@ import {
 import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
 import { approxBboxForRadius } from "@/lib/coordinateParser";
 import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
+import { useIntertidal } from "@/lib/useIntertidal";
+import { IntertidalBandLegend } from "@/components/IntertidalBandLegend";
 
 interface TooltipState {
   visible: boolean;
@@ -212,6 +215,18 @@ export const OverviewMap: React.FC = () => {
   const rawsSelectedIdRef = useRef<string | null>(null);
   const rawsCanvasPositionsRef = useRef<Array<{ datasetId: string; cx: number; cy: number }>>([]);
   const rawsDataRef = useRef<Map<string, RawsStationItem>>(new Map());
+
+  // Intertidal tidal datum refs — updated by useEffect below; read in rAF loop
+  // without React re-render to avoid re-registering the draw effect on every
+  // datum change.
+  const intertidalMhwFtRef = useRef<number | null>(null);
+  const intertidalMhhwFtRef = useRef<number | null>(null);
+  const { mhwFt: intertidalMhwFt, mhhwFt: intertidalMhhwFt } = useIntertidal();
+  useEffect(() => {
+    intertidalMhwFtRef.current = intertidalMhwFt;
+    intertidalMhhwFtRef.current = intertidalMhhwFt;
+    dirtyRef.current = true;
+  }, [intertidalMhwFt, intertidalMhhwFt]);
 
   // Intertidal hotspot pin refs (read in rAF loop without React re-render)
   const intertidalPinsRef = useRef<IntertidalHotspotPin[]>([]);
@@ -1248,7 +1263,24 @@ export const OverviewMap: React.FC = () => {
         }
       }
 
-      // Contour lines — drawn over the heatmap, under the geographic grid and markers.
+      // Intertidal band fill — teal/amber depth zones that mirror the 3D terrain
+      // shader.  Drawn BEFORE contour lines so contour lines and their labels
+      // remain fully legible on top of the semi-transparent fill.
+      // `worldGrid` is passed so the overlay is positioned correctly in both
+      // single-dataset (worldGrid === grid) and multi-dataset bbox-aware modes.
+      if (intertidalMhwFtRef.current !== null) {
+        renderIntertidalBand(
+          ctx,
+          grid,
+          worldGrid,
+          t,
+          intertidalMhwFtRef.current,
+          intertidalMhhwFtRef.current,
+        );
+      }
+
+      // Contour lines — drawn over the heatmap and intertidal fill, under the
+      // geographic grid and markers, so depth labels stay crisp.
       const { overviewShowGrid, units, colormapTheme: activeTheme } = useSettingsStore.getState();
       if (contoursEnabledRef.current && contourSegmentsRef.current.length > 0) {
         // renderContourLines uses grid.width/height/minDepth/maxDepth and its own
@@ -2742,6 +2774,23 @@ export const OverviewMap: React.FC = () => {
       >
         <HabitatLegend embedded />
       </div>
+
+      {/* Intertidal band legend — embedded at bottom-right, mirrors the
+          floating legend shown in the 3D view. Shown whenever MHW is resolved
+          (same condition as the renderIntertidalBand rAF guard). */}
+      {intertidalMhwFt !== null && (
+        <div
+          style={{
+            position: "absolute",
+            right: 12,
+            bottom: 12,
+            zIndex: 41,
+            pointerEvents: "none",
+          }}
+        >
+          <IntertidalBandLegend embedded />
+        </div>
+      )}
 
       {/* Depth tooltip */}
       {tooltip.visible && (
