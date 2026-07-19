@@ -431,10 +431,6 @@ test.describe("LocationBadge on data panels", () => {
               }
             }
           } catch {}
-          // Remove any legacy individual keys from older sessions.
-          localStorage.removeItem("bathyscan:windOverlayActive");
-          localStorage.removeItem("bathyscan:tideOverlayActive");
-          localStorage.removeItem("bathyscan:currentOverlayActive");
         }
       });
     });

@@ -70,13 +70,20 @@ test.describe("Zone colour server-sync round-trip", () => {
       });
 
       // ── Device A: mutate saltwater slot 0 and await server sync ─────────
-      // Clear any local zone-colour storage so the store starts from defaults
-      // (the server reset above is the authoritative baseline).
+      // Reset zone-colour localStorage to defaults so the store starts clean.
+      // setItem is used instead of removeItem to avoid a race with the Zustand
+      // store init: removing the key leaves the slot state undefined until the
+      // next persist cycle, which may race with the server sync that follows.
       await page.addInitScript(() => {
         try {
-          localStorage.removeItem("bathyscan:zoneOverlaySlots:saltwater");
-          localStorage.removeItem("bathyscan:zoneOverlaySlots:freshwater");
-          localStorage.removeItem("bathyscan:zoneOverlaySlots");
+          const defaultSlots = JSON.stringify([
+            { color: "#f5d58a", visible: true },
+            { color: "#c49a6c", visible: true },
+            { color: "#8ab4d0", visible: true },
+            { color: "#b06060", visible: true },
+          ]);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:saltwater", defaultSlots);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:freshwater", defaultSlots);
         } catch {}
       });
 
@@ -231,9 +238,14 @@ test.describe("Zone colour server-sync round-trip", () => {
       // ── Device A: mutate freshwater slot 1 and await server sync ─────────
       await page.addInitScript(() => {
         try {
-          localStorage.removeItem("bathyscan:zoneOverlaySlots:saltwater");
-          localStorage.removeItem("bathyscan:zoneOverlaySlots:freshwater");
-          localStorage.removeItem("bathyscan:zoneOverlaySlots");
+          const defaultSlots = JSON.stringify([
+            { color: "#f5d58a", visible: true },
+            { color: "#c49a6c", visible: true },
+            { color: "#8ab4d0", visible: true },
+            { color: "#b06060", visible: true },
+          ]);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:saltwater", defaultSlots);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:freshwater", defaultSlots);
         } catch {}
       });
 

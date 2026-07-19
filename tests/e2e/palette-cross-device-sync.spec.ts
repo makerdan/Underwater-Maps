@@ -35,13 +35,17 @@ test.describe("Depth palette cross-device sync", () => {
     });
 
     // ── Device A: change the deep hex and let auto-sync PUT it ──────────
-    // Clear any stale palette localStorage from a prior run so the
-    // nativeInputValueSetter below actually changes the value (if
-    // localStorage already holds #ff00aa from a previous run, React sees
-    // no change and never marks the field dirty).
+    // Reset palette localStorage to known defaults before navigation so
+    // React's onChange fires when the test sets its target colour.
+    // Using setItem (not removeItem) avoids a race with Zustand rehydration:
+    // removing the key leaves state undefined; the persist middleware may
+    // rehydrate from the server before the test reads the input value.
     await page.addInitScript(() => {
       try {
-        localStorage.removeItem("bathyscan:palette");
+        localStorage.setItem(
+          "bathyscan:palette",
+          JSON.stringify({ state: { shallow: "#00e5ff", deep: "#283593" }, version: 1 }),
+        );
       } catch {}
     });
     await page.goto("/settings");
@@ -131,12 +135,17 @@ test.describe("Depth palette cross-device sync", () => {
       },
     });
 
-    // Clear local palette/settings state so the page hydrates entirely from
-    // the server row set above, not from a stale localStorage snapshot.
+    // Reset palette localStorage to known defaults so the page starts from a
+    // clean state. setItem is used instead of removeItem to avoid a race with
+    // Zustand rehydration (removing the key leaves state undefined until the
+    // next persist cycle). The resetSettings fixture already reset the server
+    // row above; server hydration propagates that state when the page mounts.
     await page.addInitScript(() => {
       try {
-        localStorage.removeItem("bathyscan:palette");
-        localStorage.removeItem("bathyscan:settings");
+        localStorage.setItem(
+          "bathyscan:palette",
+          JSON.stringify({ state: { shallow: "#00e5ff", deep: "#283593" }, version: 1 }),
+        );
       } catch {}
     });
 
@@ -284,12 +293,17 @@ test.describe("Depth palette cross-device sync", () => {
       },
     });
 
-    // Clear local palette/settings state so the page hydrates entirely from
-    // the server row above, not from a stale localStorage snapshot.
+    // Reset palette localStorage to known defaults so the page starts from a
+    // clean state. setItem is used instead of removeItem to avoid a race with
+    // Zustand rehydration (removing the key leaves state undefined until the
+    // next persist cycle). The resetSettings fixture already reset the server
+    // row above; server hydration propagates that state when the page mounts.
     await page.addInitScript(() => {
       try {
-        localStorage.removeItem("bathyscan:palette");
-        localStorage.removeItem("bathyscan:settings");
+        localStorage.setItem(
+          "bathyscan:palette",
+          JSON.stringify({ state: { shallow: "#00e5ff", deep: "#283593" }, version: 1 }),
+        );
       } catch {}
     });
 

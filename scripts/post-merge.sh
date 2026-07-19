@@ -24,6 +24,12 @@ bash scripts/check-e2e-user-ids.sh
 # e2e specs. This pattern races with server-side hydration; the resetPanelCollapse
 # fixture (tests/e2e/fixtures.ts) must be used instead.
 bash scripts/check-e2e-panel-collapse.sh
+# Guardrail: catch localStorage.removeItem calls targeting other server-synced keys
+# (bathyscan:settings, bathyscan:palette, bathyscan:sidebarMode,
+# bathyscan:zoneOverlaySlots and its sub-keys).  Removing these keys races with
+# Zustand rehydration; the spec must use setItem with an explicit known-good value
+# instead.  See the script header for the correct pattern per key.
+bash scripts/check-e2e-localstorage-removeitem.sh
 # Unit tests are intentionally not run here — the full recursive test suite
 # consumes enough memory to get OOM-killed mid-run. Tests are covered by the
 # validation system (test-unit workflow) and pre-existing failures are tracked

@@ -99,10 +99,6 @@ test.describe("Wind / Tide / Current overlays", () => {
             }
           }
         } catch {}
-        // Also remove any legacy individual keys left from older sessions.
-        localStorage.removeItem("bathyscan:windOverlayActive");
-        localStorage.removeItem("bathyscan:tideOverlayActive");
-        localStorage.removeItem("bathyscan:currentOverlayActive");
       }
     });
   });
