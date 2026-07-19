@@ -83,7 +83,8 @@ vi.mock("@workspace/db", () => {
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 
-vi.mock("@workspace/api-zod", () => {
+vi.mock("@workspace/api-zod", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/api-zod")>();
   const uuidParse = (key: string) => ({
     safeParse: (p: Record<string, unknown>) => {
       const v = p[key];
@@ -92,7 +93,7 @@ vi.mock("@workspace/api-zod", () => {
         : { success: false, error: { issues: [] } };
     },
   });
-  return {
+  const overrides = {
     GetCatchesQueryParams: {
       safeParse: (q: Record<string, unknown>) =>
         q["datasetId"]
@@ -113,10 +114,10 @@ vi.mock("@workspace/api-zod", () => {
     },
     DeleteCatchesIdParams: uuidParse("id"),
     // Referenced by other routes mounted in app.ts — stubs for validateBody closures at load time.
-    GetMarkersQueryParams: { safeParse: () => ({ success: false }) },
+    GetMarkersQueryParams: { safeParse: () => ({ success: false, error: { issues: [] } }) },
     PostMarkersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    DeleteMarkersIdParams: { safeParse: () => ({ success: false }) },
-    PatchMarkersIdParams: { safeParse: () => ({ success: false }) },
+    DeleteMarkersIdParams: { safeParse: () => ({ success: false, error: { issues: [] } }) },
+    PatchMarkersIdParams: { safeParse: () => ({ success: false, error: { issues: [] } }) },
     PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PostRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
@@ -146,6 +147,7 @@ vi.mock("@workspace/api-zod", () => {
     GetDatasetsIdOverviewResponse: { parse: (x: unknown) => x },
     PostDatasetsUploadResponse: { parse: (x: unknown) => x },
   };
+  return { ...actual, ...overrides };
 });
 
 const aclCalls: Array<{ path: string; owner: string }> = [];

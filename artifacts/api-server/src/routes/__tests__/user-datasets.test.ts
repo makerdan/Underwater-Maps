@@ -121,7 +121,10 @@ vi.mock("@workspace/db", () => ({
   markersTable: {},
 }));
 
-vi.mock("@workspace/api-zod", () => ({
+vi.mock("@workspace/api-zod", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/api-zod")>();
+  return {
+  ...actual,
   GetUserDatasetsResponse: { parse: (x: unknown) => x },
   GetUserDatasetsIdTerrainResponse: { parse: (x: unknown) => x },
   GetUserDatasetsIdOverviewResponse: { parse: (x: unknown) => x },
@@ -160,30 +163,8 @@ vi.mock("@workspace/api-zod", () => ({
   PatchMarkersIdBody: {
     safeParse: () => ({ success: false, error: { message: "noop" } }),
   },
-  GetCatchesQueryParams: { safeParse: () => ({ success: false }) },
-  GetMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
-  PostMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
-  PostMarkersMarkerIdCatchesBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  PatchCatchesIdParams: { safeParse: () => ({ success: false }) },
-  PatchCatchesIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  DeleteCatchesIdParams: { safeParse: () => ({ success: false }) },
-  PostRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  GetRoutesQuerySchema: { safeParse: () => ({ success: false }) },
-  RouteIdParamSchema: { safeParse: () => ({ success: false }) },
-  PostTrollingPresetsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  PatchTrollingPresetsIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  DeleteTrollingPresetsIdParams: { safeParse: () => ({ success: false }) },
-  PostTrollingPresetFoldersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  PatchTrollingPresetFoldersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  GetUserFoldersResponse: { parse: (x: unknown) => x },
-  PostUserFoldersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  PatchUserFoldersIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  PatchUserFoldersIdRenameResponse: { parse: (x: unknown) => x },
-  PatchUserFoldersIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  PatchUserFoldersIdMoveResponse: { parse: (x: unknown) => x },
-  DeleteUserFoldersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-}));
+  };
+});
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(

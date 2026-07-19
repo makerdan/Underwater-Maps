@@ -54,7 +54,8 @@ vi.mock("@workspace/db", () => {
   };
 });
 
-vi.mock("@workspace/api-zod", () => {
+vi.mock("@workspace/api-zod", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/api-zod")>();
   const uuidParse = (key: string) => ({
     safeParse: (p: Record<string, unknown>) => {
       const v = p[key];
@@ -64,11 +65,11 @@ vi.mock("@workspace/api-zod", () => {
     },
   });
 
-  return {
-    GetMarkersQueryParams: { safeParse: () => ({ success: false }) },
-    PostMarkersBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
+  const overrides = {
+    GetMarkersQueryParams: { safeParse: () => ({ success: false, error: { issues: [] } }) },
+    PostMarkersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PatchMarkersIdParams: uuidParse("id"),
-    PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
+    PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     DeleteMarkersIdParams: uuidParse("id"),
     GetCatchesQueryParams: { safeParse: () => ({ success: false }) },
     GetMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
@@ -105,6 +106,7 @@ vi.mock("@workspace/api-zod", () => {
     GetDatasetsIdOverviewResponse: { parse: (x: unknown) => x },
     PostDatasetsUploadResponse: { parse: (x: unknown) => x },
   };
+  return { ...actual, ...overrides };
 });
 
 const deletedObjectPaths: string[] = [];

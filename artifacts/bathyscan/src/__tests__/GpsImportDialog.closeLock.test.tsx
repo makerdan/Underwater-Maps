@@ -30,6 +30,8 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetMarkersQueryKey: (...a: unknown[]) => ["markers", ...a],
   getGetTrollingPresetsQueryKey: () => ["trollingPresets"],
   MarkerInputType: { custom: "custom" },
+  postMarkers: mutateAsyncMarkers,
+  postTrollingPresets: mutateAsyncPresets,
 }));
 
 vi.mock("@tanstack/react-query", () => ({

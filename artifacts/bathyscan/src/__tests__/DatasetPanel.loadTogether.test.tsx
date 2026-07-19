@@ -269,13 +269,20 @@ vi.mock("@/components/ProvenancePanel", () => ({
 vi.mock("@/components/DatasetFolderTree", () => ({
   DatasetFolderTree: ({
     onSelectionChange,
+    actionBar,
   }: {
     onSelectionChange: (ids: Set<string>) => void;
+    actionBar?: React.ReactNode;
   }) =>
-    React.createElement("button", {
-      "data-testid": "mock-select-library",
-      onClick: () => onSelectionChange(new Set(["lib-ds-1"])),
-    }, "select library"),
+    React.createElement(
+      React.Fragment,
+      null,
+      React.createElement("button", {
+        "data-testid": "mock-select-library",
+        onClick: () => onSelectionChange(new Set(["lib-ds-1"])),
+      }, "select library"),
+      actionBar ?? null,
+    ),
 }));
 
 vi.mock("@/components/ErrorBoundary", () => ({

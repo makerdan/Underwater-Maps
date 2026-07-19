@@ -45,14 +45,14 @@ export default defineConfig({
         // that old module registries (and their WASM heaps) are swept promptly
         // instead of accumulating across the 140+ file singleFork run.
         //
-        // --max-old-space-size is set to 6144 MB to give the 140-file
+        // --max-old-space-size is set to 8192 MB to give the 140-file
         // singleFork suite enough headroom so that the heaviest files
-        // (efhData, catalog-save-delete, parseHyd93A93) don't push RSS
-        // over the OS limit before the per-file gc() calls can reclaim
-        // their large GeoJSON/app fixtures.  Keeping an explicit ceiling
-        // means a future regression causes a clear V8 OOM error rather
+        // (efhData, catalog-save-delete, parseHyd93A93, chunk-finalize-validation)
+        // don't push RSS over the OS limit before the per-file gc() calls
+        // can reclaim their large GeoJSON/app fixtures.  Keeping an explicit
+        // ceiling means a future regression causes a clear V8 OOM error rather
         // than a silent OS-level kill.
-        execArgv: ["--max-old-space-size=6144", "--expose-gc"],
+        execArgv: ["--max-old-space-size=8192", "--expose-gc"],
       },
     },
     // portFailFast runs first so the esbuild build (if triggered) and the

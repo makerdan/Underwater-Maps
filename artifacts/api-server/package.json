@@ -13,7 +13,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "typecheck:tests": "tsc -p tsconfig.test.json",
     "test": "vitest run",
-    "test:unit": "NODE_OPTIONS=--max-old-space-size=6144 node ../../scripts/run-with-timeout.mjs apiServerUnit --label \"api-server test:unit\" -- vitest run",
+    "test:unit": "NODE_OPTIONS=--max-old-space-size=8192 node ../../scripts/run-with-timeout.mjs apiServerUnit --label \"api-server test:unit\" -- vitest run",
     "test:validation": "VITEST_VALIDATION=1 node ../../scripts/run-with-timeout.mjs apiServerValidation --label \"api-server test:validation\" -- vitest run --config vitest.config.validation.ts",
     "fixtures:regen": "node src/__tests__/fixtures/generate.mjs && echo '' && echo 'Fixtures regenerated. Stage and commit the updated files:' && echo '  git add artifacts/api-server/src/__tests__/fixtures/' && echo \"  git commit -m 'chore: regenerate fixtures'\" && echo '' && echo 'To verify freshness (from repo root):' && echo '  bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh'"
   },

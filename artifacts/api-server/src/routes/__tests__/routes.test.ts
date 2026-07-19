@@ -154,6 +154,10 @@ vi.mock("@clerk/shared/keys", () => ({
   publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
 }));
 
+vi.mock("pino-http", () => ({
+  default: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+}));
+
 import app from "../../app.js";
 
 const SAMPLE_WAYPOINTS = [
