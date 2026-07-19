@@ -70,6 +70,20 @@ vi.mock("@workspace/api-zod", () => {
     PatchMarkersIdParams: uuidParse("id"),
     PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
     DeleteMarkersIdParams: uuidParse("id"),
+    // Schemas from other routes mounted by app.ts — stubs needed at module-load time.
+    PostMarkersMarkerIdCatchesBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchCatchesIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PostRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PostTrollingPresetsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchTrollingPresetsIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchUserDatasetsIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchUserDatasetsIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    GetCatchesQueryParams: { safeParse: () => ({ success: false }) },
+    GetMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
+    PostMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
+    PatchCatchesIdParams: { safeParse: () => ({ success: false }) },
+    DeleteCatchesIdParams: { safeParse: () => ({ success: false }) },
   };
 });
 

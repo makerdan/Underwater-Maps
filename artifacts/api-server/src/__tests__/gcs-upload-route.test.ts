@@ -93,7 +93,7 @@ describe("POST /api/datasets/upload/request-gcs-url", () => {
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body).toHaveProperty("error", "invalid_param");
+    expect(res.body).toHaveProperty("error", "invalid_request");
   });
 
   it("returns 400 when fileName is an empty string", async () => {
@@ -103,7 +103,7 @@ describe("POST /api/datasets/upload/request-gcs-url", () => {
       .send({ fileName: "" });
 
     expect(res.status).toBe(400);
-    expect(res.body).toHaveProperty("error", "invalid_param");
+    expect(res.body).toHaveProperty("error", "invalid_request");
   });
 
   it("returns 415 for an unsupported file extension", async () => {
@@ -311,7 +311,7 @@ describe("GET /api/datasets/upload/gcs-job-status — GCS fallback", () => {
       .set(GCS_STATUS_AUTHED);
 
     expect(res.status).toBe(400);
-    expect(res.body).toHaveProperty("error", "invalid_param");
+    expect(res.body).toHaveProperty("error", "invalid_request");
   });
 
   it("returns 403 when objectKey belongs to a different user", async () => {

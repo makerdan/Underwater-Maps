@@ -55,6 +55,14 @@ vi.mock("@workspace/api-zod", () => ({
   PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
   PostTrollingPresetsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
   PatchTrollingPresetsIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  // Schemas added by user-datasets and catches routes — stubs needed because app.ts mounts all routes.
+  PatchUserDatasetsIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchUserDatasetsIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  GetCatchesQueryParams: { safeParse: () => ({ success: false }) },
+  GetMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
+  PostMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
+  PatchCatchesIdParams: { safeParse: () => ({ success: false }) },
+  DeleteCatchesIdParams: { safeParse: () => ({ success: false }) },
 }));
 
 vi.mock("@clerk/express", () => ({

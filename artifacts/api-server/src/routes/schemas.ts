@@ -448,3 +448,50 @@ export const CatalogIdParamSchema = z
 export const SaveIdParamSchema = z
   .string({ invalid_type_error: "save id must be a string" })
   .uuid("save id must be a valid UUID");
+
+/**
+ * Validates the :uploadId path param for GET /datasets/upload/chunk/status/:uploadId.
+ * Rejects array injection (z.string()) and enforces the same charset/length
+ * constraints as ChunkUploadBodySchema and ChunkFinalizeBodySchema so a malformed
+ * uploadId is caught at the route boundary with a logged 400 instead of silently
+ * producing an empty session lookup.
+ */
+export const UploadIdParamSchema = z.object({
+  uploadId: z
+    .string({ invalid_type_error: "uploadId must be a string" })
+    .regex(
+      /^[a-zA-Z0-9_-]{8,64}$/,
+      "uploadId must be 8–64 alphanumeric characters, hyphens, or underscores",
+    ),
+});
+
+export type UploadIdParam = z.infer<typeof UploadIdParamSchema>;
+
+/**
+ * Validates the :jobId path param for GET /datasets/upload/jobs/:jobId.
+ * The upload_jobs table uses gen_random_uuid() as its primary key so the
+ * param must be a valid UUID; anything else is caught here before it reaches
+ * the DB query.
+ */
+export const JobIdParamSchema = z.object({
+  jobId: z
+    .string({ invalid_type_error: "jobId must be a string" })
+    .uuid("jobId must be a valid UUID"),
+});
+
+export type JobIdParam = z.infer<typeof JobIdParamSchema>;
+
+/**
+ * Validates query parameters for GET /datasets/upload/gcs-job-status.
+ * z.string() up-front rejects array injection (?objectKey[]=a&objectKey[]=b);
+ * min(1) ensures the key is non-empty; max(512) caps the value at a sane
+ * length before it reaches the ownership-check and GCS look-up paths.
+ */
+export const GcsJobStatusQuerySchema = z.object({
+  objectKey: z
+    .string({ invalid_type_error: "objectKey must be a string" })
+    .min(1, "objectKey is required")
+    .max(512, "objectKey must not exceed 512 characters"),
+});
+
+export type GcsJobStatusQuery = z.infer<typeof GcsJobStatusQuerySchema>;

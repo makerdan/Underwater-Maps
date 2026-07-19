@@ -160,6 +160,14 @@ vi.mock("@workspace/api-zod", () => ({
   PatchMarkersIdBody: {
     safeParse: () => ({ success: false, error: { message: "noop" } }),
   },
+  // Schemas from catches route mounted by app.ts — stubs needed at module-load time.
+  GetCatchesQueryParams: { safeParse: () => ({ success: false }) },
+  GetMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
+  PostMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
+  PostMarkersMarkerIdCatchesBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
+  PatchCatchesIdParams: { safeParse: () => ({ success: false }) },
+  PatchCatchesIdBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
+  DeleteCatchesIdParams: { safeParse: () => ({ success: false }) },
 }));
 
 vi.mock("@clerk/express", () => ({

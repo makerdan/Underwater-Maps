@@ -14,7 +14,7 @@ import { findNearestTideStation } from "./tides.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { validateBody } from "../middlewares/validateBody.js";
+import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
 import { signDatasetUploadUrl, getJobByObjectKey, recoverGcsJobStatus } from "../lib/bucketMonitor.js";
 import {
   GetDatasetsResponse,
@@ -40,7 +40,13 @@ import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 import { fetchSatelliteTile } from "../lib/satelliteTile.js";
 import { fetchTerrainTile } from "../lib/terrainTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
-import { ChunkUploadBodySchema, ChunkFinalizeBodySchema } from "./schemas.js";
+import {
+  ChunkUploadBodySchema,
+  ChunkFinalizeBodySchema,
+  UploadIdParamSchema,
+  JobIdParamSchema,
+  GcsJobStatusQuerySchema,
+} from "./schemas.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { logger } from "../lib/logger.js";
@@ -2385,8 +2391,9 @@ router.post(
 router.get(
   "/datasets/upload/chunk/status/:uploadId",
   requireAuth,
+  validateParams(UploadIdParamSchema, "GET /api/datasets/upload/chunk/status/:uploadId"),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { uploadId } = req.params as { uploadId: string };
+    const { uploadId } = res.locals.parsedParams as { uploadId: string };
     const userId = (req as AuthenticatedRequest).clerkUserId;
 
     // Fast path: in-memory session (current process lifetime).
@@ -2680,16 +2687,11 @@ router.post(
 router.get(
   "/datasets/upload/gcs-job-status",
   requireAuth,
+  validateQuery(GcsJobStatusQuerySchema, "GET /api/datasets/upload/gcs-job-status", {
+    details: "objectKey is required",
+  }),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const objectKey = String(req.query["objectKey"] ?? "");
-    if (!objectKey) {
-      logger.warn(
-        { route: "GET /api/datasets/upload/gcs-job-status" },
-        "GET /api/datasets/upload/gcs-job-status — missing required query param: objectKey",
-      );
-      res.status(400).json({ error: "invalid_param", details: "objectKey is required" });
-      return;
-    }
+    const { objectKey } = res.locals.parsedQuery as { objectKey: string };
 
     // Verify the objectKey belongs to this user (second path segment)
     const userId = (req as AuthenticatedRequest).clerkUserId;
@@ -2738,8 +2740,9 @@ router.get(
 router.get(
   "/datasets/upload/jobs/:jobId",
   requireAuth,
+  validateParams(JobIdParamSchema, "GET /api/datasets/upload/jobs/:jobId"),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const jobId = String(req.params["jobId"] ?? "");
+    const { jobId } = res.locals.parsedParams as { jobId: string };
     const userId = (req as AuthenticatedRequest).clerkUserId;
 
     // Fast path: in-memory map (current process)
