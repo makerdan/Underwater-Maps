@@ -84,38 +84,41 @@ export const WaterTempVolumeLayer: React.FC<WaterTempVolumeLayerProps> = ({
       vertexShader,
       fragmentShader,
       uniforms: {
-        uTempTex:   { value: dataTexture },
-        uOpacity:   { value: opacity },
-        uSurfY:     { value: surfY },
-        uSeafloorY: { value: seafloorY },
+        uTempTex:   { value: null as THREE.DataTexture | null },
+        uOpacity:   { value: 0.15 },
+        uSurfY:     { value: 0 },
+        uSeafloorY: { value: 0 },
       },
       transparent: true,
       depthWrite: false,
       side: THREE.BackSide,
     });
-  }, [dataTexture, opacity, surfY, seafloorY]);
+  }, []);
 
   useEffect(() => {
-    if (material.uniforms["uTempTex"]) {
-      material.uniforms["uTempTex"]!.value = dataTexture;
-    }
+    material.uniforms["uTempTex"]!.value = dataTexture;
   }, [dataTexture, material]);
 
   useEffect(() => {
-    if (material.uniforms["uSurfY"]) {
-      material.uniforms["uSurfY"]!.value = surfY;
-    }
-    if (material.uniforms["uSeafloorY"]) {
-      material.uniforms["uSeafloorY"]!.value = seafloorY;
-    }
+    material.uniforms["uOpacity"]!.value = opacity;
+  }, [opacity, material]);
+
+  useEffect(() => {
+    material.uniforms["uSurfY"]!.value = surfY;
+    material.uniforms["uSeafloorY"]!.value = seafloorY;
   }, [surfY, seafloorY, material]);
 
   useEffect(() => {
     return () => {
       geometry.dispose();
+    };
+  }, [geometry]);
+
+  useEffect(() => {
+    return () => {
       material.dispose();
     };
-  }, [geometry, material]);
+  }, [material]);
 
   useFrame(({ camera }) => {
     if (meshRef.current) {
