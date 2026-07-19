@@ -494,6 +494,7 @@ export const DepthProfilePanel: React.FC = () => {
         onPointerDown={handleDragPointerDown}
         onPointerMove={handleDragPointerMove}
         onPointerUp={handleDragPointerUp}
+        onPointerCancel={handleDragPointerUp}
         style={{
           display: "flex",
           alignItems: "center",

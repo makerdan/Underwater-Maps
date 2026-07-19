@@ -1865,9 +1865,20 @@ export const OverviewMap: React.FC = () => {
       useContextMenuStore.getState().show(e.clientX, e.clientY, items);
     };
 
+    // Clears any in-progress drag state when the pointer stream is cancelled by
+    // a system gesture (two-finger pinch, OS-level dialog, stylus palm-rejection,
+    // etc.) without firing a mouseup. Without this handler, dragRectRef stays
+    // populated and the selection overlay remains visible indefinitely.
+    const handlePointerCancel = () => {
+      dragRectRef.current = null;
+      isDraggingRef.current = false;
+      dirtyRef.current = true;
+    };
+
     canvas.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointercancel", handlePointerCancel);
     canvas.addEventListener("mouseleave", handleMouseLeave);
     canvas.addEventListener("wheel", handleWheel, { passive: false });
     canvas.addEventListener("click", handleClick);
@@ -1877,6 +1888,7 @@ export const OverviewMap: React.FC = () => {
       canvas.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("pointercancel", handlePointerCancel);
       canvas.removeEventListener("mouseleave", handleMouseLeave);
       canvas.removeEventListener("wheel", handleWheel);
       canvas.removeEventListener("click", handleClick);

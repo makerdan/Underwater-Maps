@@ -12,7 +12,7 @@
  */
 import React from "react";
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useDepthProfileStore, type DepthProfileResult } from "@/lib/depthProfileStore";
 import { useTidalStore } from "@/lib/tidalStore";
@@ -409,5 +409,72 @@ describe("TimelineScrubBar — scrub input interaction", () => {
     useTimelineStore.setState({ isPlaying: true });
     render(<TimelineScrubBar />);
     expect(screen.getByTestId("timeline-play-pause").textContent).toBe("⏸");
+  });
+});
+
+describe("TimelineScrubBar — pointercancel / touchcancel stops playback", () => {
+  beforeEach(() => {
+    resetAllOverlays();
+    resetTimeline();
+  });
+
+  it("pointercancel on the scrubber input stops playback when isPlaying is true", async () => {
+    useUiStore.setState({ tideOverlayActive: true });
+    useTimelineStore.setState({ isPlaying: true });
+
+    const { getByTestId } = render(<TimelineScrubBar />);
+    const input = getByTestId("timeline-scrubber");
+
+    act(() => {
+      fireEvent(input, new Event("pointercancel", { bubbles: true }));
+    });
+
+    expect(useTimelineStore.getState().isPlaying).toBe(false);
+  });
+
+  it("pointercancel on the scrubber input is a no-op when already paused", () => {
+    useUiStore.setState({ tideOverlayActive: true });
+    useTimelineStore.setState({ isPlaying: false });
+
+    const { getByTestId } = render(<TimelineScrubBar />);
+    const input = getByTestId("timeline-scrubber");
+
+    act(() => {
+      fireEvent(input, new Event("pointercancel", { bubbles: true }));
+    });
+
+    expect(useTimelineStore.getState().isPlaying).toBe(false);
+  });
+
+  it("touchcancel on the scrubber input stops playback when isPlaying is true", () => {
+    useUiStore.setState({ tideOverlayActive: true });
+    useTimelineStore.setState({ isPlaying: true });
+
+    const { getByTestId } = render(<TimelineScrubBar />);
+    const input = getByTestId("timeline-scrubber");
+
+    act(() => {
+      fireEvent(input, new Event("touchcancel", { bubbles: true }));
+    });
+
+    expect(useTimelineStore.getState().isPlaying).toBe(false);
+  });
+
+  it("pointercancel does not advance currentTime after cancellation", () => {
+    vi.useFakeTimers();
+    useUiStore.setState({ tideOverlayActive: true });
+    useTimelineStore.setState({ isPlaying: true });
+
+    const { getByTestId } = render(<TimelineScrubBar />);
+    const input = getByTestId("timeline-scrubber");
+    const timeBefore = useTimelineStore.getState().currentTime.getTime();
+
+    act(() => {
+      fireEvent(input, new Event("pointercancel", { bubbles: true }));
+    });
+
+    vi.advanceTimersByTime(500);
+    expect(useTimelineStore.getState().currentTime.getTime()).toBe(timeBefore);
+    vi.useRealTimers();
   });
 });

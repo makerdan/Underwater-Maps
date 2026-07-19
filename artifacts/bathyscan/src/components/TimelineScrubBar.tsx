@@ -300,6 +300,8 @@ export const TimelineScrubBar: React.FC = () => {
           step={1}
           value={Math.round(rangeValue * 10_000)}
           onChange={handleScrub}
+          onPointerCancel={() => { if (isPlaying) setPlaying(false); }}
+          onTouchCancel={() => { if (isPlaying) setPlaying(false); }}
           style={{ ...rangeStyle, width: "100%" }}
           aria-label="Timeline position"
           aria-valuetext={formatTime(currentTime)}
