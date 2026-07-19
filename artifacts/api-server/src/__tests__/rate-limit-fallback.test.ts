@@ -38,6 +38,9 @@ import {
 
 function buildApp(max: number) {
   const app = express();
+  // Trust the first proxy hop so req.ip reflects X-Forwarded-For in tests.
+  // Without this, supertest requests always show 127.0.0.1, making IP-keyed
+  // tests indistinguishable even when callers supply different XFF headers.
   app.set("trust proxy", 1);
   const limiter = createRateLimit({
     route: "test-fallback",

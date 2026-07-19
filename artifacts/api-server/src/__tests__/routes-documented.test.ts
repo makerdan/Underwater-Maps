@@ -60,6 +60,9 @@ const UNDOCUMENTED_ALLOWLIST = new Set([
   // Internal admin endpoint: returns per-key rate-limit usage counters.
   // Not part of the public API surface; only callable by admin user IDs.
   "GET /admin/rate-limit/usage",
+  // Internal admin endpoint: returns in-process upscale cache hit/miss stats.
+  // Not part of the public API surface; only callable by admin user IDs.
+  "GET /admin/upscale-cache-stats",
   // Internal upload-session endpoint: returns which chunk indices are on disk
   // for a given uploadId.  Used by the frontend auto-resume logic after a
   // server reconnect; not part of the public OpenAPI surface.

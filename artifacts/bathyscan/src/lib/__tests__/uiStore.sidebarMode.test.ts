@@ -121,7 +121,7 @@ describe("uiStore — sidebarMode persistence round-trip", () => {
   });
 
   it("setSidebarMode('explore') writes through to settingsStore", () => {
-    useSettingsStore.setState({ sidebarMode: "analyze" });
+    useUiStore.getState().setSidebarMode("analyze");
     useUiStore.getState().setSidebarMode("explore");
     expect(useSettingsStore.getState().sidebarMode).toBe("explore");
   });
