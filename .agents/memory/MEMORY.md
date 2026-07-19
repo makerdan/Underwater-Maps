@@ -61,3 +61,5 @@
 - [Validation tiers](validation-tiers.md) — three registered commands (test-fast/standard/heavy); pick by task type using the decision table in .agents/skills/validation-tiers/SKILL.md.
 - [Disk cache filter must strip extension before regex](disk-cache-filter-extension.md) — readdir returns `<hash>.json`; filtering with a bare-hash regex silently matches nothing. Strip `.json` first or use a `.json`-aware pattern.
 - [Circuit breaker forceOpen for tests](circuit-breaker-force-open.md) — use `forceOpen()` on PoeCircuitBreaker (or `__forceOpenPoeBreaker()` test helper) instead of firing 5 failing requests to trip the breaker; saves ~15 s per run.
+- [bucketMonitor singleFork concurrency leak](bucketmonitor-concurrency-leak.md) — activeProcessCount leaks across test files in singleFork pool; export __resetProcessConcurrencyForTests and call it in beforeEach of any test relying on cap starting at 0.
+- [Zustand no-op set skips subscription](zustand-noop-set-skips-subscription.md) — calling set({field: sameValue}) fires no subscription; mirrored setters must call the target store's setState directly for write-through to be reliable when the value doesn't change.

@@ -34,11 +34,14 @@ const { mockQueryRateLimitUsage } = vi.hoisted(() => ({
   mockQueryRateLimitUsage: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../../middlewares/rateLimit.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../middlewares/rateLimit.js")>()),
-  queryRateLimitUsage: mockQueryRateLimitUsage,
-  stampBaselineRateLimitHeaders: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
-}));
+vi.mock("../../middlewares/rateLimit.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../middlewares/rateLimit.js")>();
+  return {
+    ...actual,
+    queryRateLimitUsage: mockQueryRateLimitUsage,
+    stampBaselineRateLimitHeaders: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+  };
+});
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),

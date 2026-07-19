@@ -92,6 +92,7 @@ import {
   processObject,
   getJobByObjectKey,
   PROCESS_CONCURRENCY_CAP,
+  __resetProcessConcurrencyForTests,
 } from "../lib/bucketMonitor.js";
 import { parseXyzCsv } from "../lib/terrain.js";
 
@@ -121,6 +122,9 @@ beforeEach(() => {
   process.env["DEFAULT_OBJECT_STORAGE_BUCKET_ID"] = TEST_BUCKET;
   vi.mocked(parseXyzCsv).mockReturnValue(MOCK_POINTS);
   gcsMocks.mockCreateReadStream.mockReset();
+  // Reset module-level concurrency state — api-server runs singleFork so
+  // activeProcessCount leaks from other test files that call processObject.
+  __resetProcessConcurrencyForTests();
 });
 
 afterEach(() => {

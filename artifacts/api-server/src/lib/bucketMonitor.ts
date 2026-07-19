@@ -131,6 +131,17 @@ export const PROCESS_CONCURRENCY_CAP = 3;
 let activeProcessCount = 0;
 const processWaitQueue: Array<() => void> = [];
 
+/**
+ * Reset concurrency state for tests only.
+ * The api-server suite runs singleFork (all files in one process), so
+ * activeProcessCount leaks between test files that call processObject.
+ * Call this in beforeEach of any test that relies on the cap starting at 0.
+ */
+export function __resetProcessConcurrencyForTests(): void {
+  activeProcessCount = 0;
+  processWaitQueue.length = 0;
+}
+
 async function withProcessSlot<T>(fn: () => Promise<T>): Promise<T> {
   while (activeProcessCount >= PROCESS_CONCURRENCY_CAP) {
     await new Promise<void>((resolve) => processWaitQueue.push(resolve));

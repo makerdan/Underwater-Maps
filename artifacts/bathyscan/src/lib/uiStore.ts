@@ -700,6 +700,13 @@ export const useUiStore = create<UiStore>((set, get) => {
     setSidebarMode: (mode) => {
       const prev = get().sidebarMode;
       set({ sidebarMode: mode });
+      // Explicit write-through to settingsStore so the mirror always fires
+      // even when mode didn't change (Zustand skips subscription callbacks
+      // when the new value equals the old value, so the auto-mirror
+      // subscription below would silently skip a no-op set).
+      if (!_suppressMirror) {
+        useSettingsStore.setState({ sidebarMode: mode });
+      }
       // Live-mode orchestration: start/stop GPS follow + trail recording on
       // transitions into/out of 'live'. Runs after the local commit.
       onSidebarModeChange(prev, mode);

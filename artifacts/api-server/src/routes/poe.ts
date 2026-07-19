@@ -95,6 +95,12 @@ export function __resetPoeBreaker(): void {
   poeBreaker.recordSuccess();
 }
 
+// Tracks the one-shot startup hydration promise so __clearUpscaleCaches can
+// drain it before wiping memory, preventing the race where hydration writes
+// entries after the clear (declared here so __clearUpscaleCaches can reference
+// it; assigned at the call site below where hydrateUpscaleCacheFromDisk lives).
+let _upscaleHydrationDone: Promise<void> | null = null;
+
 /**
  * TEST-ONLY — clears all upscale caches (in-memory, in-flight, and disk) so
  * a cached result from one test (e.g. the success test) cannot bleed into
@@ -104,6 +110,10 @@ export function __resetPoeBreaker(): void {
  * `__resetPoeBreaker()`.  Never imported or called in production code.
  */
 export async function __clearUpscaleCaches(): Promise<void> {
+  // Drain any in-flight startup hydration first so it cannot repopulate
+  // upscaleMemCache after we clear it (race: hydration reads disk list
+  // before our unlink, then writes entries into memory after our .clear()).
+  if (_upscaleHydrationDone) await _upscaleHydrationDone;
   upscaleMemCache.clear();
   upscaleInFlight.clear();
   try {
@@ -2604,8 +2614,14 @@ export async function hydrateUpscaleCacheFromDisk(): Promise<void> {
 
 export { UPSCALE_CACHE_TTL_MS, UPSCALE_CACHE_MAX_BYTES, UPSCALE_CACHE_DIR, upscaleMemCache, upscaleInFlight };
 
-// Kick off hydration immediately (non-blocking, mirrors zone-cache pattern)
-void hydrateUpscaleCacheFromDisk();
+// Kick off hydration immediately (non-blocking, mirrors zone-cache pattern).
+// The promise is assigned to _upscaleHydrationDone (declared near the top of
+// the file) so __clearUpscaleCaches can drain it before clearing, preventing
+// the race where hydration completes after the clear in tests.
+_upscaleHydrationDone = hydrateUpscaleCacheFromDisk().then(
+  () => { _upscaleHydrationDone = null; },
+  () => { _upscaleHydrationDone = null; },
+);
 
 // ---------------------------------------------------------------------------
 

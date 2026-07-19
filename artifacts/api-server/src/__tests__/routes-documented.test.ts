@@ -67,6 +67,9 @@ const UNDOCUMENTED_ALLOWLIST = new Set([
   // for a given uploadId.  Used by the frontend auto-resume logic after a
   // server reconnect; not part of the public OpenAPI surface.
   "GET /datasets/upload/chunk/status/{uploadId}",
+  // Internal admin endpoint: returns per-route upscale credit-savings stats.
+  // Not part of the public API surface; only callable by admin user IDs.
+  "GET /admin/upscale-cache-stats",
 ]);
 
 // ---------------------------------------------------------------------------
