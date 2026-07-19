@@ -973,7 +973,8 @@ export const OverviewMap: React.FC = () => {
     // Build/rebuild bitmaps for every secondary (non-first) visible dataset.
     for (const v of withGrid) {
       if (v.datasetId === primaryId) continue; // primary handled by the effect above
-      const og = v.overviewGrid!;
+      const og = v.overviewGrid;
+      if (!og) continue;
       secondaryBitmapsRef.current.set(v.datasetId, buildHeatmapBitmap(og, colormapTheme));
     }
 
@@ -981,7 +982,8 @@ export const OverviewMap: React.FC = () => {
     if (withGrid.length > 1) {
       let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
       for (const v of withGrid) {
-        const og = v.overviewGrid!;
+        const og = v.overviewGrid;
+        if (!og) continue;
         minLon = Math.min(minLon, og.minLon);
         maxLon = Math.max(maxLon, og.maxLon);
         minLat = Math.min(minLat, og.minLat);
