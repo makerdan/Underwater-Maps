@@ -24,8 +24,8 @@ import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  usePostMarkers,
-  usePostTrollingPresets,
+  postMarkers as postMarkersRaw,
+  postTrollingPresets as postTrollingPresetsRaw,
   getGetMarkersQueryKey,
   getGetTrollingPresetsQueryKey,
   MarkerInputType,
@@ -110,8 +110,6 @@ function clampNumber(n: number, lo: number, hi: number): number {
 export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const postMarkers = usePostMarkers();
-  const postTrollingPresets = usePostTrollingPresets();
 
   const settingsWaterType = useSettingsStore((s) => s.waterType);
   const defaultMarkerType = useSettingsStore((s) => s.defaultMarkerType);
@@ -128,6 +126,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const [headingDeg, setHeadingDeg] = useState<number>(DEFAULT_HEADING_DEG);
   const [speedKnots, setSpeedKnots] = useState<number>(DEFAULT_SPEED_KNOTS);
   const [isImporting, setIsImporting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [importProgress, setImportProgress] = useState<{
     current: number;
     total: number;
@@ -135,6 +134,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef);
 
@@ -251,11 +251,18 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     [updateParsed],
   );
 
+  const cancelImport = useCallback(() => {
+    // Immediately unlock the close button so the user isn't stuck.
+    setIsCancelling(true);
+    abortControllerRef.current?.abort();
+  }, []);
+
   const doImport = useCallback(async () => {
     if (phase.kind !== "preview") return;
     if (importingRef.current) return;
     importingRef.current = true;
     setIsImporting(true);
+    setIsCancelling(false);
     const { parsed } = phase;
 
     // Routes that have been edited down to <2 points can't be imported as
@@ -274,8 +281,12 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     setImportProgress({ current: 0, total: totalItems, itemKind: "marker" });
     setPhase({ kind: "importing" });
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     let markersOk = 0;
     let markersFail = 0;
+    let importCancelled = false;
     for (let wi = 0; wi < wpToImport.length; wi++) {
       const w = wpToImport[wi]!;
       setImportProgress({ current: wi, total: totalItems, itemKind: "marker" });
@@ -284,8 +295,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       // Depth: prefer parsed depth; fall back to 0 (surface) when unknown.
       const depth = Number.isFinite(w.depth) ? (w.depth as number) : 0;
       try {
-        await postMarkers.mutateAsync({
-          data: {
+        await postMarkersRaw(
+          {
             datasetId: terrain.datasetId,
             lon: w.lon,
             lat: w.lat,
@@ -294,9 +305,14 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             label,
             notes: notes && notes.length > 0 ? notes : undefined,
           },
-        });
+          { signal: controller.signal },
+        );
         markersOk++;
       } catch {
+        if (controller.signal.aborted) {
+          importCancelled = true;
+          break;
+        }
         markersFail++;
       }
     }
@@ -306,38 +322,45 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     let downsampled = 0;
     const safeHeading = clampNumber(headingDeg, HEADING_MIN, HEADING_MAX);
     const safeSpeed = clampNumber(speedKnots, SPEED_MIN, SPEED_MAX);
-    for (let ri = 0; ri < routesToImport.length; ri++) {
-      const r = routesToImport[ri]!;
-      setImportProgress({
-        current: wpToImport.length + ri,
-        total: totalItems,
-        itemKind: "route",
-      });
-      // `routesToImport` originates from partitionByBounds which trims
-      // out-of-bounds points and drops routes with <2 surviving points; the
-      // user can also edit waypoints out in the dialog. We re-assert in-bounds
-      // here as defence in depth: no off-map coordinate may reach the API.
-      let pts = r.points.filter((p) => isInBounds(p.lon, p.lat, bounds));
-      if (pts.length < 2) {
-        presetsFail++;
-        continue;
-      }
-      if (pts.length > TROLLING_PRESET_WAYPOINTS_MAX) {
-        pts = downsample(pts, TROLLING_PRESET_WAYPOINTS_MAX);
-        downsampled++;
-      }
-      try {
-        await postTrollingPresets.mutateAsync({
-          data: {
-            name: sanitize(clamp(r.name || "Imported route", TROLLING_NAME_MAX)) || "Imported route",
-            headingDeg: safeHeading,
-            speedKnots: safeSpeed,
-            waypoints: pts.map((p) => ({ lon: p.lon, lat: p.lat })),
-          },
+    if (!importCancelled) {
+      for (let ri = 0; ri < routesToImport.length; ri++) {
+        const r = routesToImport[ri]!;
+        setImportProgress({
+          current: wpToImport.length + ri,
+          total: totalItems,
+          itemKind: "route",
         });
-        presetsOk++;
-      } catch {
-        presetsFail++;
+        // `routesToImport` originates from partitionByBounds which trims
+        // out-of-bounds points and drops routes with <2 surviving points; the
+        // user can also edit waypoints out in the dialog. We re-assert in-bounds
+        // here as defence in depth: no off-map coordinate may reach the API.
+        let pts = r.points.filter((p) => isInBounds(p.lon, p.lat, bounds));
+        if (pts.length < 2) {
+          presetsFail++;
+          continue;
+        }
+        if (pts.length > TROLLING_PRESET_WAYPOINTS_MAX) {
+          pts = downsample(pts, TROLLING_PRESET_WAYPOINTS_MAX);
+          downsampled++;
+        }
+        try {
+          await postTrollingPresetsRaw(
+            {
+              name: sanitize(clamp(r.name || "Imported route", TROLLING_NAME_MAX)) || "Imported route",
+              headingDeg: safeHeading,
+              speedKnots: safeSpeed,
+              waypoints: pts.map((p) => ({ lon: p.lon, lat: p.lat })),
+            },
+            { signal: controller.signal },
+          );
+          presetsOk++;
+        } catch {
+          if (controller.signal.aborted) {
+            importCancelled = true;
+            break;
+          }
+          presetsFail++;
+        }
       }
     }
 
@@ -349,6 +372,27 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     }
     if (presetsOk > 0) {
       void qc.invalidateQueries({ queryKey: getGetTrollingPresetsQueryKey() });
+    }
+
+    importingRef.current = false;
+    abortControllerRef.current = null;
+    setIsImporting(false);
+    setIsCancelling(false);
+    setImportProgress(null);
+
+    if (importCancelled) {
+      const parts: string[] = [];
+      if (markersOk) parts.push(`${markersOk} marker${markersOk === 1 ? "" : "s"}`);
+      if (presetsOk) parts.push(`${presetsOk} trolling preset${presetsOk === 1 ? "" : "s"}`);
+      toast({
+        title: "Import cancelled",
+        description:
+          parts.length > 0
+            ? `${parts.join(" and ")} saved before cancellation.`
+            : "No items were saved.",
+      });
+      setPhase({ kind: "pick" });
+      return;
     }
 
     const parts: string[] = [];
@@ -393,8 +437,6 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     importRoutes,
     headingDeg,
     speedKnots,
-    postMarkers,
-    postTrollingPresets,
     qc,
     terrain.datasetId,
     markerType,
@@ -423,7 +465,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         fontSize: 16.5,
       }}
       onClick={(e) => {
-        if (isImporting) return;
+        if (isImporting && !isCancelling) return;
         if (e.target === e.currentTarget) onClose();
       }}
     >
@@ -457,25 +499,27 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               data-testid="gps-import-in-progress-label"
               style={{ fontSize: 13.5, color: "#94a3b8", letterSpacing: "0.08em" }}
             >
-              {importProgress && importProgress.total > 0
-                ? `Importing ${importProgress.itemKind} ${importProgress.current + 1} of ${importProgress.total}…`
-                : "Importing — please wait…"}
+              {isCancelling
+                ? "Cancelling…"
+                : importProgress && importProgress.total > 0
+                  ? `Importing ${importProgress.itemKind} ${importProgress.current + 1} of ${importProgress.total}…`
+                  : "Importing — please wait…"}
             </span>
           )}
           <button
-            onClick={isImporting ? undefined : onClose}
-            disabled={isImporting}
+            onClick={isImporting && !isCancelling ? undefined : onClose}
+            disabled={isImporting && !isCancelling}
             aria-label="Close"
-            aria-disabled={isImporting}
-            title={isImporting ? "Import in progress — please wait" : undefined}
+            aria-disabled={isImporting && !isCancelling}
+            title={isImporting && !isCancelling ? "Import in progress — please wait" : undefined}
             data-testid="gps-import-close-btn"
             style={{
               background: "none",
               border: "none",
-              color: isImporting ? "#334155" : "#94a3b8",
+              color: isImporting && !isCancelling ? "#334155" : "#94a3b8",
               fontSize: 24,
-              cursor: isImporting ? "not-allowed" : "pointer",
-              opacity: isImporting ? 0.35 : 1,
+              cursor: isImporting && !isCancelling ? "not-allowed" : "pointer",
+              opacity: isImporting && !isCancelling ? 0.35 : 1,
             }}
           >
             ×
@@ -569,10 +613,14 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                     data-testid="gps-import-progress-text"
                     style={{ marginBottom: 12, fontSize: 15.5 }}
                   >
-                    Importing {importProgress.itemKind}{" "}
-                    <strong style={{ color: "#00e5ff" }}>{importProgress.current + 1}</strong>{" "}
-                    of{" "}
-                    <strong style={{ color: "#00e5ff" }}>{importProgress.total}</strong>…
+                    {isCancelling ? "Stopping after current request…" : (
+                      <>
+                        Importing {importProgress.itemKind}{" "}
+                        <strong style={{ color: "#00e5ff" }}>{importProgress.current + 1}</strong>{" "}
+                        of{" "}
+                        <strong style={{ color: "#00e5ff" }}>{importProgress.total}</strong>…
+                      </>
+                    )}
                   </div>
                   <div
                     role="progressbar"
@@ -586,6 +634,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                       background: "rgba(0,229,255,0.12)",
                       borderRadius: 3,
                       overflow: "hidden",
+                      marginBottom: 16,
                     }}
                   >
                     <div
@@ -600,7 +649,19 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                   </div>
                 </>
               ) : (
-                "Importing…"
+                <div style={{ marginBottom: 16 }}>
+                  {isCancelling ? "Stopping after current request…" : "Importing…"}
+                </div>
+              )}
+              {!isCancelling && (
+                <button
+                  type="button"
+                  data-testid="gps-import-cancel-btn"
+                  onClick={cancelImport}
+                  style={btnStyle("ghost")}
+                >
+                  Cancel import
+                </button>
               )}
             </div>
           )}
