@@ -127,6 +127,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const [importRoutes, setImportRoutes] = useState(true);
   const [headingDeg, setHeadingDeg] = useState<number>(DEFAULT_HEADING_DEG);
   const [speedKnots, setSpeedKnots] = useState<number>(DEFAULT_SPEED_KNOTS);
+  const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importingRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -236,6 +237,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     if (phase.kind !== "preview") return;
     if (importingRef.current) return;
     importingRef.current = true;
+    setIsImporting(true);
     const { parsed } = phase;
 
     // Routes that have been edited down to <2 points can't be imported as
@@ -393,6 +395,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         fontSize: 16.5,
       }}
       onClick={(e) => {
+        if (isImporting) return;
         if (e.target === e.currentTarget) onClose();
       }}
     >
@@ -421,10 +424,29 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           <span style={{ color: "#00e5ff", letterSpacing: "0.18em", fontWeight: 700, fontSize: 16.5 }}>
             ▼ IMPORT GPS
           </span>
+          {isImporting && (
+            <span
+              data-testid="gps-import-in-progress-label"
+              style={{ fontSize: 13.5, color: "#94a3b8", letterSpacing: "0.08em" }}
+            >
+              Importing — please wait…
+            </span>
+          )}
           <button
-            onClick={onClose}
+            onClick={isImporting ? undefined : onClose}
+            disabled={isImporting}
             aria-label="Close"
-            style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 24, cursor: "pointer" }}
+            aria-disabled={isImporting}
+            title={isImporting ? "Import in progress — please wait" : undefined}
+            data-testid="gps-import-close-btn"
+            style={{
+              background: "none",
+              border: "none",
+              color: isImporting ? "#334155" : "#94a3b8",
+              fontSize: 24,
+              cursor: isImporting ? "not-allowed" : "pointer",
+              opacity: isImporting ? 0.35 : 1,
+            }}
           >
             ×
           </button>
