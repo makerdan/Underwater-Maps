@@ -65,3 +65,9 @@ id = "lMrqDGd-JkGO5qJGnqnA7"
 uri = "file://.agents/skills/Port-Authority-Heavy/SKILL.md"
 type = "text"
 title = "Port-Authority-Heavy/SKILL.md"
+
+[[outputs]]
+id = "-VoSsGRoF6SIEVHcKKGlk"
+uri = "file://port-authority-skills.zip"
+type = "unspecified"
+title = "Port Authority Skills (both)"
