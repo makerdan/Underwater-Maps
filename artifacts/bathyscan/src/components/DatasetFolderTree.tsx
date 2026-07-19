@@ -1946,6 +1946,14 @@ const MoveToDialog: React.FC<{
     listRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    // Reset selection to the first valid destination whenever the option list
+    // changes identity (e.g. a background poll refreshes the folder tree while
+    // the dialog is open), preventing a stale index pointer.
+    const first = options.findIndex((o) => !o.disabled);
+    setSelectedIdx(first >= 0 ? first : 0);
+  }, [options]);
+
   const moveSelection = (dir: 1 | -1) => {
     if (options.length === 0) return;
     let i = selectedIdx;
