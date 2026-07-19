@@ -23,6 +23,7 @@
     "check:catalog-coverage": "node scripts/scaffold-catalog-tests.mjs --check",
     "check:routes-documented": "pnpm --filter @workspace/api-server exec vitest run src/__tests__/routes-documented.test.ts",
     "check:lock-skill-sync": "node scripts/check-lock-skill-sync.mjs",
+    "check:root-relative-api": "node scripts/check-root-relative-api.mjs",
     "check:ports": "node scripts/check-hardcoded-ports.mjs",
     "check:e2e-user-ids": "bash scripts/check-e2e-user-ids.sh",
     "check:e2e-panel-collapse": "bash scripts/check-e2e-panel-collapse.sh",
