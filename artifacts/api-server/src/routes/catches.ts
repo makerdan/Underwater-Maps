@@ -15,6 +15,7 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getObjectAclPolicy, setObjectAclPolicy } from "../lib/objectAcl";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -226,13 +227,19 @@ router.patch("/catches/:id", requireAuth, validateParams(PatchCatchesIdParams, "
   }
 
   // Best-effort: delete photo objects that were removed from this entry.
-  // Errors are swallowed — the orphaned-photos sweep is the safety net.
+  // Errors are logged as warnings — the orphaned-photos sweep is the safety net.
   if (before && updateData.photos !== undefined) {
     const newSet = new Set(updateData.photos);
     const removed = (before.photos ?? []).filter((p) => !newSet.has(p));
     if (removed.length > 0) {
       const service = new ObjectStorageService();
-      void Promise.allSettled(removed.map((p) => service.deleteObjectEntity(p)));
+      void Promise.allSettled(
+        removed.map((p) =>
+          service.deleteObjectEntity(p).catch((err: unknown) => {
+            logger.warn({ err, path: p }, "[catches] Failed to delete catch-entry photo on catch update");
+          }),
+        ),
+      );
     }
   }
 
@@ -255,12 +262,18 @@ router.delete("/catches/:id", requireAuth, validateParams(DeleteCatchesIdParams,
   }
 
   // Best-effort: delete the photo objects from storage now that the entry is
-  // gone.  Errors are swallowed so a storage hiccup never fails the HTTP
-  // response — the orphaned-photos sweep will catch anything left behind.
+  // gone.  Errors are logged as warnings so a storage hiccup never fails the
+  // HTTP response — the orphaned-photos sweep will catch anything left behind.
   const photos = deleted[0]?.photos ?? [];
   if (photos.length > 0) {
     const service = new ObjectStorageService();
-    void Promise.allSettled(photos.map((p) => service.deleteObjectEntity(p)));
+    void Promise.allSettled(
+      photos.map((p) =>
+        service.deleteObjectEntity(p).catch((err: unknown) => {
+          logger.warn({ err, path: p }, "[catches] Failed to delete catch-entry photo on catch delete");
+        }),
+      ),
+    );
   }
 
   res.status(204).send();
