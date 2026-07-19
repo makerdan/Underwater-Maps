@@ -40,11 +40,11 @@ vi.mock("@workspace/api-zod", () => ({
     safeParse: (q: Record<string, unknown>) =>
       q["datasetId"]
         ? { success: true, data: { datasetId: q["datasetId"] } }
-        : { success: false },
+        : { success: false, error: { issues: [] } },
   },
   PostMarkersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  DeleteMarkersIdParams: { safeParse: () => ({ success: false }) },
-  PatchMarkersIdParams: { safeParse: () => ({ success: false }) },
+  DeleteMarkersIdParams: { safeParse: () => ({ success: false, error: { issues: [] } }) },
+  PatchMarkersIdParams: { safeParse: () => ({ success: false, error: { issues: [] } }) },
   PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
   // Schemas from other routes mounted by app.ts — referenced via validateBody at module-load time.
   // Stubs must have safeParse so the closure created by validateBody() doesn't throw if the
@@ -55,14 +55,34 @@ vi.mock("@workspace/api-zod", () => ({
   PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
   PostTrollingPresetsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
   PatchTrollingPresetsIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  // Schemas added by user-datasets and catches routes — stubs needed because app.ts mounts all routes.
-  PatchUserDatasetsIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-  PatchUserDatasetsIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  DeleteTrollingPresetsIdParams: { safeParse: () => ({ success: false }) },
+  PostTrollingPresetFoldersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchTrollingPresetFoldersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
   GetCatchesQueryParams: { safeParse: () => ({ success: false }) },
   GetMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
   PostMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
   PatchCatchesIdParams: { safeParse: () => ({ success: false }) },
   DeleteCatchesIdParams: { safeParse: () => ({ success: false }) },
+  GetUserDatasetsResponse: { parse: (x: unknown) => x },
+  GetUserDatasetsIdTerrainResponse: { parse: (x: unknown) => x },
+  GetUserDatasetsIdOverviewResponse: { parse: (x: unknown) => x },
+  PatchUserDatasetsIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchUserDatasetsIdMoveResponse: { parse: (x: unknown) => x },
+  PatchUserDatasetsIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchUserDatasetsIdRenameResponse: { parse: (x: unknown) => x },
+  GetUserFoldersResponse: { parse: (x: unknown) => x },
+  PostUserFoldersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchUserFoldersIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchUserFoldersIdRenameResponse: { parse: (x: unknown) => x },
+  PatchUserFoldersIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  PatchUserFoldersIdMoveResponse: { parse: (x: unknown) => x },
+  DeleteUserFoldersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+  GetRoutesQuerySchema: { safeParse: () => ({ success: false }) },
+  RouteIdParamSchema: { safeParse: () => ({ success: false }) },
+  GetDatasetsResponse: { parse: (x: unknown) => x },
+  GetDatasetsIdTerrainResponse: { parse: (x: unknown) => x },
+  GetDatasetsIdOverviewResponse: { parse: (x: unknown) => x },
+  PostDatasetsUploadResponse: { parse: (x: unknown) => x },
 }));
 
 vi.mock("@clerk/express", () => ({

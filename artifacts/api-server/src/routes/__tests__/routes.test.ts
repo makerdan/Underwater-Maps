@@ -19,6 +19,10 @@ import request from "supertest";
 
 const mockWarn = vi.hoisted(() => vi.fn());
 
+vi.mock("pino-http", () => ({
+  default: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+}));
+
 vi.mock("../../lib/logger.js", () => ({
   logger: {
     warn: mockWarn,

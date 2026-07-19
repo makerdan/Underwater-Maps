@@ -60,7 +60,7 @@ vi.mock("@workspace/api-zod", () => {
       const v = p[key];
       return typeof v === "string" && /^[0-9a-f-]{36}$/.test(v)
         ? { success: true, data: { [key]: v } }
-        : { success: false };
+        : { success: false, error: { issues: [] } };
     },
   });
 
@@ -70,20 +70,40 @@ vi.mock("@workspace/api-zod", () => {
     PatchMarkersIdParams: uuidParse("id"),
     PatchMarkersIdBody: { safeParse: () => ({ success: false, error: { message: "noop" } }) },
     DeleteMarkersIdParams: uuidParse("id"),
-    // Schemas from other routes mounted by app.ts — stubs needed at module-load time.
-    PostMarkersMarkerIdCatchesBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    PatchCatchesIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    PostRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    PostTrollingPresetsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    PatchTrollingPresetsIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    PatchUserDatasetsIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
-    PatchUserDatasetsIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     GetCatchesQueryParams: { safeParse: () => ({ success: false }) },
     GetMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
     PostMarkersMarkerIdCatchesParams: { safeParse: () => ({ success: false }) },
+    PostMarkersMarkerIdCatchesBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PatchCatchesIdParams: { safeParse: () => ({ success: false }) },
+    PatchCatchesIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     DeleteCatchesIdParams: { safeParse: () => ({ success: false }) },
+    GetUserDatasetsResponse: { parse: (x: unknown) => x },
+    GetUserDatasetsIdTerrainResponse: { parse: (x: unknown) => x },
+    GetUserDatasetsIdOverviewResponse: { parse: (x: unknown) => x },
+    PatchUserDatasetsIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchUserDatasetsIdMoveResponse: { parse: (x: unknown) => x },
+    PatchUserDatasetsIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchUserDatasetsIdRenameResponse: { parse: (x: unknown) => x },
+    PostRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchRouteBodySchema: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    GetRoutesQuerySchema: { safeParse: () => ({ success: false }) },
+    RouteIdParamSchema: { safeParse: () => ({ success: false }) },
+    PostTrollingPresetsBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchTrollingPresetsIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    DeleteTrollingPresetsIdParams: { safeParse: () => ({ success: false }) },
+    PostTrollingPresetFoldersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchTrollingPresetFoldersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    GetUserFoldersResponse: { parse: (x: unknown) => x },
+    PostUserFoldersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchUserFoldersIdRenameBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchUserFoldersIdRenameResponse: { parse: (x: unknown) => x },
+    PatchUserFoldersIdMoveBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    PatchUserFoldersIdMoveResponse: { parse: (x: unknown) => x },
+    DeleteUserFoldersIdBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
+    GetDatasetsResponse: { parse: (x: unknown) => x },
+    GetDatasetsIdTerrainResponse: { parse: (x: unknown) => x },
+    GetDatasetsIdOverviewResponse: { parse: (x: unknown) => x },
+    PostDatasetsUploadResponse: { parse: (x: unknown) => x },
   };
 });
 
