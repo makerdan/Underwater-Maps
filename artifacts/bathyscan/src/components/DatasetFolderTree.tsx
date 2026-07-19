@@ -168,29 +168,10 @@ export const DatasetFolderTree: React.FC<Props> = ({
     return s;
   }, [fullTree.byId, pendingDeleteFolderIds]);
 
-  const tree = useMemo(() => {
-    if (
-      pendingDeleteDatasetIds.size === 0 &&
-      hiddenFolderIds.size === 0
-    ) {
-      return fullTree;
-    }
-    const visibleFolders = (folders ?? []).filter(
-      (f) => !hiddenFolderIds.has(f.id),
-    );
-    const visibleDatasets = datasets.filter(
-      (d) =>
-        !pendingDeleteDatasetIds.has(d.id) &&
-        !(d.folderId && hiddenFolderIds.has(d.folderId)),
-    );
-    return buildLibraryTree(visibleFolders, visibleDatasets);
-  }, [
-    fullTree,
-    folders,
-    datasets,
-    hiddenFolderIds,
-    pendingDeleteDatasetIds,
-  ]);
+  // Pending-delete rows stay visible (with a strikethrough style) so users
+  // can see the undo window is active. We no longer filter them out of the
+  // tree; instead we pass a `pendingDelete` flag to the row components.
+  const tree = fullTree;
 
   // ─── Mutations ───────────────────────────────────────────────────────────
   const postFolder = usePostUserFolders();
@@ -1227,7 +1208,10 @@ export const DatasetFolderTree: React.FC<Props> = ({
     const deleting =
       deletingFolderIds.has(node.folder.id) ||
       movingFolderIds.has(node.folder.id);
-    trackRow("folder", node.folder.id);
+    // Show a strikethrough / dimmed style while inside the undo window.
+    const pendingDelete = hiddenFolderIds.has(node.folder.id);
+    // Skip keyboard-nav registration for pending-delete rows (tabIndex -1).
+    if (!pendingDelete) trackRow("folder", node.folder.id);
     const isSelected = selectedIds.has(node.folder.id);
     const showActionBarHere =
       actionBar != null &&
@@ -1257,6 +1241,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         renameInput={isRenaming ? renderRenameInput(node.folder.name) : null}
         isDraggingThis={isDraggingThis}
         deleting={deleting}
+        pendingDelete={pendingDelete}
         registerRow={registerRow}
         selectionMode={selectionMode}
         isSelected={isSelected}
@@ -1281,8 +1266,13 @@ export const DatasetFolderTree: React.FC<Props> = ({
       (deleteDataset.isPending && deleteDataset.variables?.id === ds.id) ||
       deletingDatasetIds.has(ds.id) ||
       movingDatasetIds.has(ds.id);
+    // Show a strikethrough / dimmed style while inside the undo window.
+    const pendingDelete =
+      pendingDeleteDatasetIds.has(ds.id) ||
+      (!!ds.folderId && hiddenFolderIds.has(ds.folderId));
     const isRenaming = renaming?.kind === "dataset" && renaming.id === ds.id;
-    trackRow("dataset", ds.id);
+    // Skip keyboard-nav registration for pending-delete rows (tabIndex -1).
+    if (!pendingDelete) trackRow("dataset", ds.id);
     const isSelected = selectedIds.has(ds.id);
     const showActionBarHere =
       actionBar != null &&
@@ -1298,6 +1288,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         active={active}
         loading={loading}
         deleting={deleting}
+        pendingDelete={pendingDelete}
         onClick={selectionMode ? () => toggleDatasetSelection(ds.id) : () => onSelectDataset(ds)}
         onToggleSelect={() => toggleDatasetSelection(ds.id)}
         onContextMenu={selectionMode ? undefined : (e) => showDatasetMenu(e, ds)}
@@ -1498,6 +1489,8 @@ interface FolderRowProps {
   isRenaming: boolean;
   isDraggingThis: boolean;
   deleting: boolean;
+  /** True while the row is inside the 5-second undo window after a delete. */
+  pendingDelete?: boolean;
   renameInput: React.ReactNode;
   onToggle: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
@@ -1516,6 +1509,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
   isRenaming,
   isDraggingThis,
   deleting,
+  pendingDelete = false,
   renameInput,
   onToggle,
   onContextMenu,
@@ -1559,7 +1553,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
     registerRow("folder", node.folder.id, n);
   };
 
-  const handleClick = deleting
+  const handleClick = (deleting || pendingDelete)
     ? undefined
     : selectionMode
       ? onToggleSelect
@@ -1573,19 +1567,20 @@ const FolderRow: React.FC<FolderRowProps> = ({
       data-id={node.folder.id}
       data-testid={`folder-row-${node.folder.id}`}
       data-deleting={deleting ? "true" : undefined}
+      data-pending-delete={pendingDelete ? "true" : undefined}
       aria-busy={deleting || undefined}
       {...attributes}
       {...(selectionMode ? {} : listeners)}
-      tabIndex={deleting ? -1 : 0}
-      onContextMenu={deleting ? undefined : onContextMenu}
-      onDoubleClick={deleting ? undefined : onDoubleClick}
+      tabIndex={(deleting || pendingDelete) ? -1 : 0}
+      onContextMenu={(deleting || pendingDelete) ? undefined : onContextMenu}
+      onDoubleClick={(deleting || pendingDelete) ? undefined : onDoubleClick}
       onClick={handleClick}
       style={{
         display: "flex",
         alignItems: "center",
         gap: 6,
         padding: `4px ${ROW_PADDING_X}px 4px ${ROW_PADDING_X + indent}px`,
-        cursor: deleting ? "wait" : "pointer",
+        cursor: pendingDelete ? "default" : deleting ? "wait" : "pointer",
         fontSize: 16.5,
         color: "#cbd5e1",
         background: isSelected
@@ -1594,8 +1589,8 @@ const FolderRow: React.FC<FolderRowProps> = ({
             ? "rgba(0,229,255,0.12)"
             : "transparent",
         outline: "none",
-        opacity: deleting || isDraggingThis ? 0.4 : 1,
-        pointerEvents: deleting ? "none" : undefined,
+        opacity: pendingDelete ? 0.35 : deleting || isDraggingThis ? 0.4 : 1,
+        pointerEvents: (deleting || pendingDelete) ? "none" : undefined,
         userSelect: "none",
       }}
     >
@@ -1635,12 +1630,13 @@ const FolderRow: React.FC<FolderRowProps> = ({
             whiteSpace: "normal",
             overflowWrap: "anywhere",
             wordBreak: "break-word",
+            textDecoration: pendingDelete ? "line-through" : "none",
           }}
         >
           {node.folder.name}
         </span>
       )}
-      {!isRenaming && !deleting && !selectionMode && (
+      {!isRenaming && !deleting && !pendingDelete && !selectionMode && (
         <RowDeleteButton
           testId={`btn-delete-folder-${node.folder.id}`}
           ariaLabel={`Delete folder ${node.folder.name}`}
@@ -1657,6 +1653,8 @@ interface DatasetRowProps {
   active: boolean;
   loading: boolean;
   deleting: boolean;
+  /** True while the row is inside the 5-second undo window after a delete. */
+  pendingDelete?: boolean;
   isRenaming: boolean;
   isDragging: boolean;
   renameInput: React.ReactNode;
@@ -1678,6 +1676,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
   active,
   loading,
   deleting,
+  pendingDelete = false,
   isRenaming,
   isDragging,
   renameInput,
@@ -1730,14 +1729,15 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
       data-id={ds.id}
       data-testid={`btn-user-dataset-${ds.id}`}
       data-deleting={deleting ? "true" : undefined}
+      data-pending-delete={pendingDelete ? "true" : undefined}
       aria-busy={deleting || undefined}
       {...attributes}
       {...(selectionMode ? {} : listeners)}
-      tabIndex={deleting ? -1 : 0}
+      tabIndex={(deleting || pendingDelete) ? -1 : 0}
       role="button"
-      onClick={deleting ? undefined : onClick}
-      onContextMenu={deleting ? undefined : onContextMenu}
-      onDoubleClick={deleting ? undefined : onDoubleClick}
+      onClick={(deleting || pendingDelete) ? undefined : onClick}
+      onContextMenu={(deleting || pendingDelete) ? undefined : onContextMenu}
+      onDoubleClick={(deleting || pendingDelete) ? undefined : onDoubleClick}
       style={{
         display: "block",
         padding: `4px ${ROW_PADDING_X}px 4px ${ROW_PADDING_X + indent + 16}px`,
@@ -1751,9 +1751,9 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
           : active
             ? "2px solid rgba(0,229,255,0.6)"
             : "2px solid transparent",
-        cursor: deleting ? "wait" : "pointer",
-        opacity: deleting || isDragging ? 0.4 : 1,
-        pointerEvents: deleting ? "none" : undefined,
+        cursor: pendingDelete ? "default" : deleting ? "wait" : "pointer",
+        opacity: pendingDelete ? 0.35 : deleting || isDragging ? 0.4 : 1,
+        pointerEvents: (deleting || pendingDelete) ? "none" : undefined,
         outline: "none",
         userSelect: "none",
       }}
@@ -1794,6 +1794,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
               whiteSpace: "normal",
               overflowWrap: "anywhere",
               wordBreak: "break-word",
+              textDecoration: pendingDelete ? "line-through" : "none",
             }}
           >
             {ds.name}
@@ -1802,7 +1803,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
         {loading && !selectionMode && (
           <LoadingDial datasetId={ds.id} label={ds.name} />
         )}
-        {!isRenaming && !deleting && !selectionMode && (
+        {!isRenaming && !deleting && !pendingDelete && !selectionMode && (
           <RowDeleteButton
             testId={`btn-delete-dataset-${ds.id}`}
             ariaLabel={`Delete dataset ${ds.name}`}

@@ -202,7 +202,9 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         return;
       }
 
-      const part = partitionByBounds(result, bounds);
+      const part = bounds
+        ? partitionByBounds(result, bounds)
+        : { inside: result, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
       setPhase({
         kind: "preview",
         fileName,
@@ -246,7 +248,9 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       if (phase.kind !== "mapping") return;
       const { fileName, meta } = phase;
       const result = applyColumnAssignment(meta, assignment);
-      const part = partitionByBounds(result, bounds);
+      const part = bounds
+        ? partitionByBounds(result, bounds)
+        : { inside: result, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
       setPhase({
         kind: "preview",
         fileName,
