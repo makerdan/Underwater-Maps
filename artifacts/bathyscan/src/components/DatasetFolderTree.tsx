@@ -343,14 +343,12 @@ export const DatasetFolderTree: React.FC<Props> = ({
       (id) => !coveredByFolder.has(id),
     );
 
-    // All dataset IDs that will be gone after commit (for onDatasetsRemoved).
-    // Use standaloneDatasetIds + folder-subtree datasets to avoid duplicates:
+    // standaloneOnlyIds: datasets not covered by any selected folder.
     // snapshotDatasetIds already contains folder-subtree datasets (added by
-    // toggleFolderSelection), so combining it with coveredByFolder produces
-    // duplicate ids. We use standaloneDatasetIds (which excludes covered ones)
-    // instead. The folder subtree ids are collected after folderSubtrees is
-    // built; we compute them lazily inside the commit closure.
+    // toggleFolderSelection), so we must exclude covered ones here to avoid
+    // issuing duplicate mutations and duplicate onDatasetsRemoved callbacks.
     const standaloneOnlyIds = [...standaloneDatasetIds];
+
 
     // Snapshot folder subtree info now for use inside the commit closure —
     // the fullTree ref may have changed by the time the timer fires.
@@ -439,6 +437,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
           },
         );
       }
+
     };
 
     const undo = () => {
