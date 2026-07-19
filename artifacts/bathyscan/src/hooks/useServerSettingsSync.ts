@@ -218,6 +218,16 @@ export function hasPendingOrInFlightSettingsSync(): boolean {
   return _pendingDebounce || _flushInFlight > 0;
 }
 
+/**
+ * True once the initial GET /api/settings response has been applied (or
+ * errored out).  Used by `waitForSettingsReady` in testHelpers so e2e tests
+ * can confirm server hydration completed before making assertions that depend
+ * on the server-side `sidebarMode` value.
+ */
+export function isServerSettled(): boolean {
+  return _serverSettled;
+}
+
 // ─── Singleton guard ──────────────────────────────────────────────────────────
 // These module-level mutable variables are shared across all invocations of the
 // hook. Mounting the hook more than once (e.g. during hot-reload, Strict Mode

@@ -96,6 +96,9 @@ async function waitForSidebarTabs(page: Parameters<typeof test.beforeEach>[0]["p
   await expect(
     page.locator('[data-testid="sidebar-mode-tabs"]'),
   ).toBeVisible({ timeout: 12_000 });
+  // Wait for the initial GET /api/settings to settle so that server hydration
+  // cannot arrive after a tab click and silently revert the mode.
+  await page.evaluate(() => window.__bathyTest!.waitForSettingsReady());
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────

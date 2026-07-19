@@ -58,7 +58,7 @@ import { useShallowSuggestionStore } from "../hooks/useShallowSuggestion";
 import { worldXZToLonLat } from "./terrain";
 import { callRegisteredResetCamera } from "./resetCameraRegistry";
 import { applyCameraSpawn } from "./cameraSpawn";
-import { hasPendingOrInFlightSettingsSync } from "../hooks/useServerSettingsSync";
+import { hasPendingOrInFlightSettingsSync, isServerSettled } from "../hooks/useServerSettingsSync";
 import { processFlyWheel } from "./flyWheel";
 import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "./zoneOverlayStore";
 import { openCrosshairContextMenu } from "./terrainContextMenu";
@@ -341,6 +341,16 @@ export interface BathyTestApi {
    * (which would mean the debounce never fired or the PUT failed silently).
    */
   waitForServerSettingsSync: () => Promise<void>;
+  /**
+   * Resolves once the initial GET /api/settings response has been applied
+   * (i.e. `_serverSettled = true` in useServerSettingsSync).  Call this
+   * after `waitForSidebarTabs` in reload tests to ensure the server hydration
+   * has completed before clicking tabs — otherwise the GET can arrive after
+   * the click and overwrite the local mode via `hydrateFromServer`.
+   *
+   * Rejects with a descriptive error after 10 s if the server never settles.
+   */
+  waitForSettingsReady: () => Promise<void>;
   /**
    * Render a production-shaped marker context menu whose "Delete marker"
    * onClick fires the REAL `deleteMarkersId` request and the REAL
@@ -1012,6 +1022,33 @@ export function installTestHelpers(): void {
                 "waitForServerSettingsSync: timed out after 5 s — " +
                   "lastSyncedAt did not change. " +
                   "The debounce may not have fired or the PUT /api/settings failed.",
+              ),
+            );
+            return;
+          }
+          setTimeout(poll, 50);
+        };
+        setTimeout(poll, 50);
+      });
+    },
+    waitForSettingsReady: () => {
+      return new Promise<void>((resolve, reject) => {
+        if (isServerSettled()) {
+          resolve();
+          return;
+        }
+        const deadline = Date.now() + 10_000;
+        const poll = () => {
+          if (isServerSettled()) {
+            resolve();
+            return;
+          }
+          if (Date.now() >= deadline) {
+            reject(
+              new Error(
+                "waitForSettingsReady: timed out after 10 s — " +
+                  "_serverSettled never became true. " +
+                  "The GET /api/settings may have failed or not fired.",
               ),
             );
             return;

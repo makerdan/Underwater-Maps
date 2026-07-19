@@ -259,41 +259,35 @@ describe("readDiskCache — fresh cache hit", () => {
   });
 });
 
-describe("readDiskCache — expired cache eviction (EFH_CACHE_MAX_AGE_MS override)", () => {
-  it("returns null when the cache is older than MAX_CACHE_AGE_MS", async () => {
-    vi.stubEnv("EFH_CACHE_MAX_AGE_MS", "1000");
-    vi.resetModules();
-    const { readDiskCache: readFresh, EFH_CACHE_VERSION: VERSION } = await import(
-      "../efhFetcher.js"
-    );
+describe("readDiskCache — expired cache eviction (TTL boundary)", () => {
+  // These tests exercise the TTL logic against the default 7-day threshold
+  // without touching vi.resetModules() (which would globally invalidate the
+  // module registry and cause cross-file flakes in the singleFork vitest run).
+  // Writing timestamps that are definitively older / younger than 7 days is
+  // simpler and more robust than overriding the env var.
 
-    const TWO_SECONDS_AGO = new Date(Date.now() - 2_000).toISOString();
+  it("returns null when the cache is older than MAX_CACHE_AGE_MS", async () => {
+    const EIGHT_DAYS_AGO = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
     await writeCacheFile({
-      version: VERSION,
-      fetchedAt: TWO_SECONDS_AGO,
+      version: EFH_CACHE_VERSION,
+      fetchedAt: EIGHT_DAYS_AGO,
       features: [MINIMAL_FEATURE],
     });
 
-    const result = await readFresh();
+    const result = await readDiskCache();
 
     expect(result).toBeNull();
   });
 
   it("returns features when the cache is younger than MAX_CACHE_AGE_MS", async () => {
-    vi.stubEnv("EFH_CACHE_MAX_AGE_MS", "60000");
-    vi.resetModules();
-    const { readDiskCache: readFresh, EFH_CACHE_VERSION: VERSION } = await import(
-      "../efhFetcher.js"
-    );
-
     const TEN_SECONDS_AGO = new Date(Date.now() - 10_000).toISOString();
     await writeCacheFile({
-      version: VERSION,
+      version: EFH_CACHE_VERSION,
       fetchedAt: TEN_SECONDS_AGO,
       features: [MINIMAL_FEATURE],
     });
 
-    const result = await readFresh();
+    const result = await readDiskCache();
 
     expect(result).not.toBeNull();
     expect(result).toHaveLength(1);

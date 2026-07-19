@@ -61,6 +61,9 @@ async function waitForSidebarTabs(page: Parameters<typeof test.beforeEach>[0]["p
   await expect(
     page.locator('[data-testid="sidebar-mode-tabs"]'),
   ).toBeVisible({ timeout: 12_000 });
+  // Wait for the initial GET /api/settings to settle so that server hydration
+  // cannot arrive after a tab click and silently revert the mode.
+  await page.evaluate(() => window.__bathyTest!.waitForSettingsReady());
 }
 
 test.beforeEach(async ({ page, context }) => {
@@ -204,6 +207,11 @@ test("page reload restores Live mode", async ({ page }) => {
   await liveTab.click();
   await expect(liveTab).toHaveAttribute("aria-pressed", "true", { timeout: 5_000 });
 
+  // Ensure the debounced PUT for sidebarMode='live' has landed on the server
+  // before reloading.  Without this the 300 ms debounce may not have fired,
+  // the server still holds the resetSettings value ('explore'), and the
+  // subsequent GET after reload reverts the mode.
+  await page.evaluate(() => window.__bathyTest!.waitForServerSettingsSync());
   await page.reload();
   await waitForSidebarTabs(page);
   await expect(liveTab).toHaveAttribute("aria-pressed", "true", { timeout: 8_000 });
