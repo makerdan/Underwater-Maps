@@ -235,7 +235,23 @@ async function ensurePlanTab(page: Page): Promise<void> {
 
 /** Enable the tidal overlay toggle if not already on. */
 async function ensureTidalOverlayOn(page: Page): Promise<void> {
+  // The tidal-overlay-toggle lives inside the OverlaysToolsPanel body, which is
+  // conditionally rendered when the Radix Collapsible is open.  If a prior test
+  // left the panel collapsed the toggle is CSS-hidden even though the locator
+  // resolves.  Expand the panel first when the toggle is not yet visible.
   const btn = page.locator("[data-testid='tidal-overlay-toggle']").first();
+  const isVisible = await btn.isVisible().catch(() => false);
+  if (!isVisible) {
+    // Look for the OverlaysToolsPanel header trigger (Radix Collapsible button
+    // with aria-expanded="false") and click it to open the panel body.
+    const panelTrigger = page
+      .locator("[data-testid='overlays-tools-panel']")
+      .locator("button[aria-expanded='false']")
+      .first();
+    if (await panelTrigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await panelTrigger.dispatchEvent("click");
+    }
+  }
   await expect(btn).toBeVisible({ timeout: 10_000 });
   await page
     .waitForFunction(
@@ -505,6 +521,25 @@ test.describe("LocationBadge on data panels", () => {
   // triggers a new fetch → TidePanel stays mounted with loading=true.
   // ─────────────────────────────────────────────────────────────────────────
   test.describe("TidePanel (embedded)", () => {
+    test.beforeEach(async ({ page }) => {
+      // Seed the OverlaysToolsPanel as expanded so tidal-overlay-toggle is
+      // visible when the page loads.  panelCollapseStore persists under
+      // "bathyscan:panel-collapse"; a previous test run may have left
+      // overlaysTools=true (collapsed).
+      await page.addInitScript(() => {
+        try {
+          const raw = window.localStorage.getItem("bathyscan:panel-collapse");
+          const stored = raw
+            ? (JSON.parse(raw) as { state?: { collapsed?: Record<string, boolean> } })
+            : { state: { collapsed: {} } };
+          if (!stored.state) stored.state = { collapsed: {} };
+          if (!stored.state.collapsed) stored.state.collapsed = {};
+          stored.state.collapsed["overlaysTools"] = false;
+          window.localStorage.setItem("bathyscan:panel-collapse", JSON.stringify(stored));
+        } catch {}
+      });
+    });
+
     test("shows badge in ready state once tidal overlay is active and data arrives", async ({ page }) => {
       test.setTimeout(90_000);
       await mockReadySurfaceConditions(page);

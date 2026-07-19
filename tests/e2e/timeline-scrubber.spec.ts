@@ -63,6 +63,21 @@ async function patchTideOverlay(page: Page, active: boolean): Promise<void> {
     },
     { active },
   );
+  // Ensure the OverlaysToolsPanel is expanded on load so tidal-overlay-toggle
+  // is visible.  panelCollapseStore persists under "bathyscan:panel-collapse";
+  // a prior run may have left overlaysTools collapsed.
+  await page.addInitScript(() => {
+    try {
+      const raw = localStorage.getItem("bathyscan:panel-collapse");
+      const stored = raw
+        ? (JSON.parse(raw) as { state?: { collapsed?: Record<string, boolean> } })
+        : { state: { collapsed: {} } };
+      if (!stored.state) stored.state = { collapsed: {} };
+      if (!stored.state.collapsed) stored.state.collapsed = {};
+      stored.state.collapsed["overlaysTools"] = false;
+      localStorage.setItem("bathyscan:panel-collapse", JSON.stringify(stored));
+    } catch {}
+  });
   // tideOverlayActive is server-persisted; without this PUT the server
   // settings hydrate resets the localStorage seed back to false post-load.
   await page.request.put(`${API_URL}/api/settings`, {
@@ -260,6 +275,18 @@ test.describe("Timeline scrubber — TidePanel cursor sync", () => {
     // ensure the tidal overlay (separate from the tide HUD overlay) is on.
     await page.getByRole("button", { name: "Plan", exact: true }).dispatchEvent("click");
     const tidalToggle = page.locator("[data-testid='tidal-overlay-toggle']").first();
+    // The tidal-overlay-toggle lives inside the OverlaysToolsPanel Radix
+    // Collapsible.  If the panel is collapsed the toggle is CSS-hidden even
+    // though the locator resolves.  Expand it first when not yet visible.
+    if (!(await tidalToggle.isVisible().catch(() => false))) {
+      const panelTrigger = page
+        .locator("[data-testid='overlays-tools-panel']")
+        .locator("button[aria-expanded='false']")
+        .first();
+      if (await panelTrigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await panelTrigger.dispatchEvent("click");
+      }
+    }
     await expect(tidalToggle).toBeVisible({ timeout: 10_000 });
     if ((await tidalToggle.getAttribute("aria-pressed")) !== "true") {
       await tidalToggle.dispatchEvent("click");
