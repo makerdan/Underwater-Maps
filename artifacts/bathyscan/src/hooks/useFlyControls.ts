@@ -1022,14 +1022,14 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         if (keys.current[back] || keys.current["ArrowDown"]) camera.position.addScaledVector(moveDir.current, -scaledSpeed * reverseScale);
         if (keys.current[left] || keys.current["ArrowLeft"]) camera.position.addScaledVector(rightDir.current, -scaledSpeed);
         if (keys.current[right] || keys.current["ArrowRight"]) camera.position.addScaledVector(rightDir.current, scaledSpeed);
-        if (keys.current[up]) camera.position.y += scaledSpeed;
+        if (keys.current[up]) camera.position.y += scaledSpeed * 3;
         // ShiftRight stays as a permanent secondary "descend" so the user
         // doesn't lose a sensible default when they rebind ShiftLeft.
         if (
           keys.current[down] ||
           (down !== "ShiftRight" && keys.current["ShiftRight"])
         ) {
-          camera.position.y -= scaledSpeed;
+          camera.position.y -= scaledSpeed * 3;
         }
 
         // Virtual joystick (touch devices)
