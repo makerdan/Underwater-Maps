@@ -539,7 +539,10 @@ export const DatasetFolderTree: React.FC<Props> = ({
       kind: "dataset",
       id: "__bulk__",
       name: `${count} dataset${count === 1 ? "" : "s"}`,
-      currentParentId: null,
+      // Use a sentinel that never matches any real folder id or null so that
+      // buildMoveOptions does not disable any destination (including root) as
+      // "Already here" — the selected datasets may be spread across many folders.
+      currentParentId: "__bulk__",
       bulkIds: bulkMoveSignal.datasetIds,
     });
   }, [bulkMoveSignal]);
@@ -1427,6 +1430,11 @@ export const DatasetFolderTree: React.FC<Props> = ({
           <MoveToDialog
             tree={tree}
             target={moveTarget}
+            label={
+              moveTarget.bulkIds
+                ? `Move ${moveTarget.bulkIds.length} dataset${moveTarget.bulkIds.length === 1 ? "" : "s"} to…`
+                : undefined
+            }
             isPending={
               moveTarget.bulkIds
                 ? bulkMovePending
@@ -1919,10 +1927,14 @@ const MoveToDialog: React.FC<{
     name: string;
     currentParentId: string | null;
   };
+  /** Optional override for the dialog heading. When omitted the heading reads
+   *  `Move "${target.name}" to…`. Supply this for bulk moves so the heading
+   *  reads `Move N datasets to…` (without wrapping quotes). */
+  label?: string;
   isPending?: boolean;
   onCancel: () => void;
   onConfirm: (targetFolderId: string | null) => void;
-}> = ({ tree, target, isPending = false, onCancel, onConfirm }) => {
+}> = ({ tree, target, label, isPending = false, onCancel, onConfirm }) => {
   const options = useMemo(() => buildMoveOptions(tree, target), [tree, target]);
   const firstEnabledIdx = options.findIndex((o) => !o.disabled);
   const [selectedIdx, setSelectedIdx] = useState<number>(
@@ -1989,7 +2001,7 @@ const MoveToDialog: React.FC<{
       data-testid="move-to-dialog"
       role="dialog"
       aria-modal="true"
-      aria-label={`Move ${target.name}`}
+      aria-label={label ?? `Move ${target.name}`}
       style={{
         position: "fixed",
         inset: 0,
@@ -2018,7 +2030,7 @@ const MoveToDialog: React.FC<{
         }}
       >
         <div style={{ fontWeight: 700, marginBottom: 4, color: "#00e5ff" }}>
-          Move "{target.name}" to…
+          {label ?? `Move "${target.name}" to…`}
         </div>
         <div style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 10 }}>
           Choose a destination folder
