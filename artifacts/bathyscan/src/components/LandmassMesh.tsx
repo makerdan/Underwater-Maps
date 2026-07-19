@@ -165,13 +165,25 @@ export const LandmassMesh: React.FC<LandmassMeshProps> = ({ grid, depthBias = fa
       side: THREE.FrontSide,
       flatShading: false,
       transparent: true,
+      // Pull LandmassMesh slightly toward the camera so it always renders on
+      // top of TerrainMesh land cells that sit at the same Y=0 plane after
+      // the depth-clamp.  Negative factor/units = closer to viewer.
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
     });
   }, []);
 
   useEffect(() => {
-    material.polygonOffset = depthBias;
-    material.polygonOffsetFactor = depthBias ? 1 : 0;
-    material.polygonOffsetUnits = depthBias ? 1 : 0;
+    // Always keep polygonOffset=true (set in useMemo) to avoid z-fighting with
+    // the TerrainMesh land cells at Y=0.  When depthBias is additionally true
+    // (secondary dataset rendered on top of a primary), push the mesh further
+    // away from the viewer (+1/+1 on top of the base −1/−1 gives 0/0 net, which
+    // is intentional — secondary landmass defers to primary terrain).
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = depthBias ? 1 : -1;
+    material.polygonOffsetUnits = depthBias ? 1 : -1;
+    material.needsUpdate = true;
   }, [depthBias, material]);
 
   useEffect(() => {

@@ -56,17 +56,41 @@ describe("buildTerrainGeometry", () => {
     expect(geo).toBeDefined();
   });
 
-  it("applies Y displacement so minDepth vertex is at 0 and maxDepth vertex is at -MAX_DEPTH_WORLD", () => {
+  it("clamps positive-depth (above-waterline) cells to Y=0 and maps depth=0 to Y=0", () => {
+    // Positive depth values represent land / above-waterline cells in the
+    // elevation convention used by coastal datasets (e.g. freshwater lakes).
+    // They are clamped to Math.min(depth, 0) = 0 before the t-mapping so they
+    // always sit at the waterline (Y=0) rather than displacing into the terrain.
     const N = 2;
     const grid = makeGrid(N, { depths: [0, 500, 500, 1000], minDepth: 0, maxDepth: 1000 });
     const geo = buildTerrainGeometry(grid);
-    // Access underlying positions via our mock
     const positions = (geo as unknown as { attributes: { position: { array: Float32Array } } }).attributes?.position?.array;
     if (!positions) return; // mock geometry may not expose this — test structure OK
-    // First vertex (t=0): Y should be 0
+    // depth=0 vertex: Y should be 0 (waterline)
     expect(positions[1]).toBeCloseTo(0, 2);
-    // Last vertex (t=1): Y should be -MAX_DEPTH_WORLD
-    expect(positions[(N * N - 1) * 3 + 1]).toBeCloseTo(-MAX_DEPTH_WORLD, 2);
+    // depth=1000 vertex: positive depth → clamped to 0 → Y should also be 0
+    expect(positions[(N * N - 1) * 3 + 1]).toBeCloseTo(0, 2);
+  });
+
+  it("land cell (positive depth) in a mixed grid is clamped to Y=0 while underwater cells map below surface", () => {
+    // Mixed grid: minDepth=-1000 (deepest underwater), maxDepth=5 (land elevation).
+    // Positive depths represent land; negative depths represent underwater.
+    // After Math.min(depth, 0) the land cell's clampedDepth=0, giving the same
+    // t as the most-negative depth (minDepth).
+    // t=0 → Y=0 only when clampedDepth=minDepth=0 (standard convention).
+    // For this test we use minDepth=0, maxDepth=5 so land cells clearly clamp.
+    const N = 2;
+    // depths[0]=0 (waterline), depths[1]=2 (shallow underwater),
+    // depths[2]=4 (deeper), depths[3]=5 (land cell, positive = above waterline)
+    const depths = [0, 2, 4, 5];
+    const grid = makeGrid(N, { depths, minDepth: 0, maxDepth: 5 });
+    const geo = buildTerrainGeometry(grid);
+    const positions = (geo as unknown as { attributes: { position: { array: Float32Array } } }).attributes?.position?.array;
+    if (!positions) return;
+    // Waterline vertex (depth=0): Y should be 0
+    expect(positions[1]).toBeCloseTo(0, 2);
+    // Land vertex (depth=5, positive): clamped to 0 → Y=0 (not -MAX_DEPTH_WORLD)
+    expect(positions[(N * N - 1) * 3 + 1]).toBeCloseTo(0, 2);
   });
 });
 

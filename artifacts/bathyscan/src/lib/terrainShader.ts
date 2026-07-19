@@ -278,6 +278,20 @@ const fragmentShader = /* glsl */ `
       }
     }
 
+    // ── Land-cell gray override ─────────────────────────────────────────────
+    // Above-water cells are clamped to Y=0 in the geometry builder so their
+    // reconstructed depthM equals uGridMinDepth (which is ≤ 0 for any grid
+    // that contains land cells).  Force those fragments to a flat light-gray
+    // unconditionally — this overrides all substrate / biome / zone / highlight
+    // blending applied above so land never inherits seafloor coloring.
+    {
+      float t_land = clamp(-vWorldPos.y / 50.0, 0.0, 1.0);
+      float depthM_land = uGridMinDepth + t_land * (uGridMaxDepth - uGridMinDepth);
+      if (depthM_land <= 0.0) {
+        finalColor = vec3(0.82, 0.82, 0.82);
+      }
+    }
+
     gl_FragColor = vec4(finalColor, uOpacity);
   }
 `;
