@@ -32,6 +32,17 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+// ── Env-guard — prevent recursive or production execution ────────────────────
+// If this script is invoked while already running (e.g. via a script that is
+// itself called from a port-sweep), the second invocation is a no-op. This
+// also stops accidental execution in production deployments where the env var
+// can be set to "1" to lock out all sweeps.
+if (process.env.KILL_PORT_HOLDERS_RUNNING === "1") {
+  console.log("kill-port-holders: already running in an ancestor process — skipping to avoid recursion.");
+  process.exit(0);
+}
+process.env.KILL_PORT_HOLDERS_RUNNING = "1";
+
 // ── Port resolution ─────────────────────────────────────────────────────────
 
 function resolveE2ePorts() {
