@@ -261,7 +261,10 @@ test.describe("RAWS weather popup", () => {
     await enableRawsOverlay(page);
 
     // Poll until the rAF loop has painted at least one station pin and the
-    // canvas-position getter returns a non-empty array containing our station.
+    // canvas-position getter returns a non-empty array containing our station
+    // with finite (non-NaN) canvas coordinates.  Without the isFinite guard the
+    // initial projection frame can return NaN cx/cy before the terrain bounds
+    // are available, causing elementFromPoint to throw "non-finite value".
     const pinPos = await page.waitForFunction(
       (datasetId) => {
         const positions = (
@@ -275,7 +278,10 @@ test.describe("RAWS weather popup", () => {
             };
           }
         ).__bathyTest.getRawsCanvasPositions();
-        return positions.find((p) => p.datasetId === datasetId) ?? null;
+        const pin = positions.find((p) => p.datasetId === datasetId);
+        if (!pin) return null;
+        if (!Number.isFinite(pin.cx) || !Number.isFinite(pin.cy)) return null;
+        return pin;
       },
       RAWS_DATASET_ID,
       { timeout: 8_000 },
@@ -283,6 +289,13 @@ test.describe("RAWS weather popup", () => {
 
     const pinVal = await pinPos.jsonValue();
     void pinPos; // position confirmed painted — click goes to the SVG pin below
+
+    // Sanity-check before calling elementFromPoint so the test fails with a
+    // clear message rather than a cryptic "non-finite value" browser error.
+    expect(
+      Number.isFinite(pinVal.cx) && Number.isFinite(pinVal.cy),
+      `Pin canvas coordinates must be finite numbers (got cx=${pinVal.cx}, cy=${pinVal.cy})`,
+    ).toBe(true);
 
     // Dispatch a real click at the pin's viewport coordinates. RAWS pins are
     // SVG <g> elements rendered in the overlay ABOVE the canvas with their own

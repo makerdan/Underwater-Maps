@@ -41,8 +41,10 @@ function conditionColor(label: string): string {
   return "#f87171";
 }
 
-function formatUtcHour(isoTime: string): string {
+function formatUtcHour(isoTime: string | undefined): string {
+  if (!isoTime) return "--:--";
   const d = new Date(isoTime);
+  if (isNaN(d.getTime())) return "--:--";
   const h = d.getUTCHours().toString().padStart(2, "0");
   const m = d.getUTCMinutes().toString().padStart(2, "0");
   return `${h}:${m}`;

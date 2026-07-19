@@ -265,26 +265,18 @@ test.describe("Timeline scrubber — TidePanel cursor sync", () => {
     }
     expect(seeded, "seedTerrain must succeed so tidal data can load").toBe(true);
 
-    // Open the Plan tab (TidePanel lives there; display:none in Explore) and
-    // ensure the tidal overlay (separate from the tide HUD overlay) is on.
+    // Enable the tidal overlay via the test bridge BEFORE switching to the Plan
+    // tab.  The tidal-overlay-toggle lives inside the OverlaysToolsPanel body
+    // (Explore tab sidebar); once the Plan tab is active that panel is
+    // display:none and Playwright's toBeVisible() times out deterministically.
+    await page.evaluate(() => {
+      const bt = (window as unknown as { __bathyTest?: { setTidalOverlay?: (v: boolean) => void } }).__bathyTest;
+      bt?.setTidalOverlay?.(true);
+    });
+    await page.waitForTimeout(200);
+
+    // Open the Plan tab (TidePanel lives there; display:none in Explore).
     await page.getByRole("button", { name: "Plan", exact: true }).dispatchEvent("click");
-    const tidalToggle = page.locator("[data-testid='tidal-overlay-toggle']").first();
-    // The tidal-overlay-toggle lives inside the OverlaysToolsPanel Radix
-    // Collapsible.  If the panel is collapsed the toggle is CSS-hidden even
-    // though the locator resolves.  Expand it first when not yet visible.
-    if (!(await tidalToggle.isVisible().catch(() => false))) {
-      const panelTrigger = page
-        .locator("[data-testid='overlays-tools-panel']")
-        .locator("button[aria-expanded='false']")
-        .first();
-      if (await panelTrigger.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await panelTrigger.dispatchEvent("click");
-      }
-    }
-    await expect(tidalToggle).toBeVisible({ timeout: 10_000 });
-    if ((await tidalToggle.getAttribute("aria-pressed")) !== "true") {
-      await tidalToggle.dispatchEvent("click");
-    }
     await expect(page.locator("[data-testid='tide-panel']")).toBeVisible({ timeout: 20_000 });
 
     const input = page.locator(SCRUBBER_INPUT);

@@ -39,8 +39,11 @@ async function appIsSignedIn(page: Page): Promise<boolean> {
 
 /** Mock surface-conditions to return a clean ready response immediately. */
 async function mockReadySurfaceConditions(page: Page): Promise<void> {
+  const now = Date.now();
   const hours = Array.from({ length: 48 }, (_, h) => ({
     hour: h,
+    relHour: h,
+    isoTime: new Date(now + h * 3_600_000).toISOString(),
     windSpeedKnots: 7,
     windDegrees: 200,
     tidalSpeedKnots: 0.8,
@@ -233,17 +236,37 @@ async function ensurePlanTab(page: Page): Promise<void> {
   }
 }
 
-/** Enable the tidal overlay toggle if not already on. */
+/** Enable the tidal overlay toggle if not already on.
+ *
+ * The tidal-overlay-toggle lives inside the OverlaysToolsPanel body (Explore
+ * tab sidebar).  When the Plan tab is active the Explore panel is display:none,
+ * so DOM interaction fails with a visibility error.  Prefer the test-bridge
+ * setter (setTidalOverlay) which bypasses the visibility requirement; fall back
+ * to DOM click only when the toggle is already visible.
+ */
 async function ensureTidalOverlayOn(page: Page): Promise<void> {
-  // The tidal-overlay-toggle lives inside the OverlaysToolsPanel body, which is
-  // conditionally rendered when the Radix Collapsible is open.  If a prior test
-  // left the panel collapsed the toggle is CSS-hidden even though the locator
-  // resolves.  Expand the panel first when the toggle is not yet visible.
+  // Primary path: use the test bridge to set tidal overlay directly.
+  const bridgeSet = await page
+    .evaluate(() => {
+      const bt = (window as unknown as { __bathyTest?: { setTidalOverlay?: (v: boolean) => void } }).__bathyTest;
+      if (bt?.setTidalOverlay) {
+        bt.setTidalOverlay(true);
+        return true;
+      }
+      return false;
+    })
+    .catch(() => false);
+
+  if (bridgeSet) {
+    // Wait briefly for the React state update to propagate.
+    await page.waitForTimeout(300).catch(() => {});
+    return;
+  }
+
+  // Fallback: DOM click (only works when the Explore tab is still active).
   const btn = page.locator("[data-testid='tidal-overlay-toggle']").first();
   const isVisible = await btn.isVisible().catch(() => false);
   if (!isVisible) {
-    // Look for the OverlaysToolsPanel header trigger (Radix Collapsible button
-    // with aria-expanded="false") and click it to open the panel body.
     const panelTrigger = page
       .locator("[data-testid='overlays-tools-panel']")
       .locator("button[aria-expanded='false']")
@@ -253,16 +276,6 @@ async function ensureTidalOverlayOn(page: Page): Promise<void> {
     }
   }
   await expect(btn).toBeVisible({ timeout: 10_000 });
-  await page
-    .waitForFunction(
-      () =>
-        document
-          .querySelector("[data-testid='tidal-overlay-toggle']")
-          ?.getAttribute("aria-pressed") === "true",
-      undefined,
-      { timeout: 5_000 },
-    )
-    .catch(() => {});
   const pressed = await btn.getAttribute("aria-pressed").catch(() => null);
   if (pressed !== "true") {
     await btn.dispatchEvent("click");
