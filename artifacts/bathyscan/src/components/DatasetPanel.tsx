@@ -832,6 +832,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // null → unknown / just switched to processing phase
   const [gcsServerStatus, setGcsServerStatus] = useState<"queued" | "processing" | null>(null);
 
+  // Server-reported sub-status while chunkedPhase === "processing".
+  // Mirrors gcsServerStatus: "queued" → waiting for a concurrency slot;
+  // "processing" → slot acquired and pipeline running; null → not yet known.
+  const [chunkedServerStatus, setChunkedServerStatus] = useState<"queued" | "processing" | null>(null);
+
   // ─── Interrupted upload session (survives page reload via sessionStorage) ──
   // On mount we check for a saved session from a previous upload that was
   // interrupted by a page reload (e.g. from a server restart during dev).
@@ -1923,6 +1928,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
     setChunkedJobProgress(0);
     setChunkedJobEta(null);
+    setChunkedServerStatus(null);
 
     let stopped = false;
     let backoffMs = 1_500;
@@ -1954,6 +1960,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           setChunkedJobProgress(job.progress);
         }
         setChunkedJobEta(typeof job.eta === "number" ? job.eta : null);
+
+        // Track server-reported queued/processing sub-status for UI display.
+        if (job.status === "queued" || job.status === "processing") {
+          setChunkedServerStatus(job.status);
+        }
 
         if (job.status === "done" && job.datasetId) {
           stopped = true;
@@ -3434,13 +3445,23 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       ) : chunkedPhase === "processing" ? (
                         <div>
                           <div className="animate-pulse" style={{ ...CYAN, fontSize: 15, marginBottom: 2 }}>
-                            ◌ Processing on server...
+                            {chunkedServerStatus === "queued"
+                              ? "⏳ Waiting in line…"
+                              : "◌ Processing on server..."}
                           </div>
-                          <div style={{ fontSize: 15, color: "#cbd5e1" }}>{Math.round(chunkedJobProgress)}%</div>
-                          {formatEta(chunkedJobEta) && (
-                            <div style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 2 }}>
-                              {formatEta(chunkedJobEta)}
+                          {chunkedServerStatus === "queued" ? (
+                            <div style={{ fontSize: 15, color: "#94a3b8" }}>
+                              A few other uploads are ahead — you&apos;re next
                             </div>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 15, color: "#cbd5e1" }}>{Math.round(chunkedJobProgress)}%</div>
+                              {formatEta(chunkedJobEta) && (
+                                <div style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 2 }}>
+                                  {formatEta(chunkedJobEta)}
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       ) : gcsPhase === "uploading" ? (

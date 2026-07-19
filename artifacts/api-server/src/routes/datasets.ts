@@ -117,6 +117,29 @@ interface UploadSession {
 const uploadSessions = new Map<string, UploadSession>();
 registerCache(() => uploadSessions.clear());
 
+// ─── Chunked-upload processing concurrency gate ────────────────────────────────
+// Mirrors the GCS path's withProcessSlot so that large-file (chunked) uploads
+// also wait in an orderly queue when multiple jobs are finalized simultaneously.
+// Jobs sit in "queued" status until a slot is free, then flip to "processing" —
+// the same sub-state distinction the GCS path already exposes to the UI.
+const CHUNK_PROCESS_CONCURRENCY_CAP = 3;
+let chunkActiveProcessCount = 0;
+const chunkProcessWaitQueue: Array<() => void> = [];
+
+async function withChunkProcessSlot<T>(fn: () => Promise<T>): Promise<T> {
+  while (chunkActiveProcessCount >= CHUNK_PROCESS_CONCURRENCY_CAP) {
+    await new Promise<void>((resolve) => chunkProcessWaitQueue.push(resolve));
+  }
+  chunkActiveProcessCount++;
+  try {
+    return await fn();
+  } finally {
+    chunkActiveProcessCount--;
+    const next = chunkProcessWaitQueue.shift();
+    if (next) next();
+  }
+}
+
 interface JobState {
   status: "queued" | "processing" | "done" | "error";
   progress: number;
@@ -983,6 +1006,11 @@ async function processUploadJob(
   const decompressedPath = `${assembledPath}-decompressed`;
   const tarExtractedDir = path.join(CHUNK_BASE_DIR, `${uploadId}-tarcontents`);
 
+  // The job is already registered as "queued" by the finalize route.  Wait
+  // here for a concurrency slot before starting the heavy pipeline — this
+  // keeps the job visible to pollers as "queued" (rather than jumping straight
+  // to "processing") when multiple large-file uploads arrive simultaneously.
+  await withChunkProcessSlot(async () => {
   try {
     job.status = "processing";
     // Capture wall-clock start time and file extension for the calibration table.
@@ -1222,6 +1250,7 @@ async function processUploadJob(
       .unlink(path.join(CHUNK_BASE_DIR, `${jobId}-meta.json`))
       .catch(() => undefined);
   }
+  }); // end withChunkProcessSlot
 }
 
 const DECOMPRESS_MAX_BYTES = 200 * 1024 * 1024;
