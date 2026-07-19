@@ -2,11 +2,31 @@
 /**
  * Root-relative /api/ fetch guard.
  *
- * Scans `artifacts/bathyscan/src` for any `fetch(` or `authorizedFetch(` calls
- * that use a root-relative `/api/` path (e.g. fetch("/api/settings")).
+ * Scans `artifacts/bathyscan/src` for any registered fetch-wrapper calls that
+ * use a root-relative `/api/` path (e.g. fetch("/api/settings")).
  * These calls break when the app is served from a sub-path because they escape
  * the artifact's base-path prefix.  All API calls must use `${API_BASE}api/…`
  * instead.
+ *
+ * ─── Adding a new fetch wrapper ───────────────────────────────────────────────
+ * When you introduce a new helper that accepts a URL as its first argument and
+ * issues requests to the BathyScan API (e.g. `myApiFetch(url, opts)`), add its
+ * name to the FETCH_WRAPPERS array below.  The guard will then automatically
+ * flag any call-site that passes a root-relative `/api/` URL to that helper.
+ *
+ * Do NOT add wrappers that call external third-party URLs (ERDDAP, NOAA, GCS,
+ * etc.) — those legitimately use absolute URLs and are out of scope.
+ *
+ * Example:
+ *   // Before: only fetch + authorizedFetch checked
+ *   // After adding "myApiFetch":
+ *   const FETCH_WRAPPERS = [
+ *     "fetch",
+ *     "authorizedFetch",
+ *     "fetchJsonWithProgress",
+ *     "myApiFetch",          // <-- add here
+ *   ];
+ * ──────────────────────────────────────────────────────────────────────────────
  *
  * Exclusions:
  *   - Test files: any file under a `__tests__` directory, or files whose name
@@ -29,6 +49,33 @@ const SCAN_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 const SKIP_DIRS = new Set([
   "node_modules", ".git", "dist", "build", "coverage", "__mocks__",
 ]);
+
+/**
+ * Central registry of fetch wrappers that accept a URL as their first
+ * argument and route requests to the BathyScan API.
+ *
+ * Rules:
+ *  - Each entry is the bare function name (no parentheses).
+ *  - Order does not matter.
+ *  - Do NOT include wrappers that call external/third-party URLs.
+ *  - See the "Adding a new fetch wrapper" section in the file header above
+ *    for step-by-step instructions.
+ */
+const FETCH_WRAPPERS = [
+  "fetch",                 // native browser fetch
+  "authorizedFetch",       // artifacts/bathyscan/src/lib/authorizedFetch.ts
+  "fetchJsonWithProgress", // artifacts/bathyscan/src/lib/fetchWithProgress.ts
+];
+
+// Build a single regex from the registry.
+// Matches: <wrapperName>( immediately followed by a quote + "/api/"
+// The quote may be ", ', or ` (template literal).
+const wrapperPattern = FETCH_WRAPPERS.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+const ROOT_RELATIVE_API_RE = new RegExp(`\\b(?:${wrapperPattern})\\(\\s*["'\`]\\/api\\/`);
+
+// Lines whose first non-whitespace token is a line-comment (//) or the start
+// of a block-comment (/*) are skipped — commented-out code is not a violation.
+const COMMENT_LINE_RE = /^\s*(?:\/\/|\/\*)/;
 
 function isTestFile(relPath) {
   const parts = relPath.split("/");
@@ -60,14 +107,6 @@ function relToRepo(file) {
   return path.relative(repoRoot, file).split(path.sep).join("/");
 }
 
-// Match fetch( or authorizedFetch( immediately followed by a quote+"/api/"
-// The quote may be ", ', or ` (template literal).
-const ROOT_RELATIVE_API_RE = /\b(?:authorizedFetch|fetch)\(\s*["'`]\/api\//;
-
-// Lines whose first non-whitespace token is a line-comment (//) or the start
-// of a block-comment (/*) are skipped — commented-out code is not a violation.
-const COMMENT_LINE_RE = /^\s*(?:\/\/|\/\*)/;
-
 const violations = [];
 
 for (const file of walk(SCAN_ROOT)) {
@@ -94,9 +133,13 @@ if (violations.length > 0) {
   console.error(
     `\n${violations.length} violation(s). Use \`\${API_BASE}api/…\` instead of ` +
       `"/api/…" so calls work when the app is served from a sub-path.\n` +
-      `See artifacts/bathyscan/src/lib/apiBase.ts for the API_BASE export.`,
+      `See artifacts/bathyscan/src/lib/authorizedFetch.ts and fetchWithProgress.ts.\n` +
+      `To register a new fetch wrapper, add its name to FETCH_WRAPPERS in this script.`,
   );
   process.exit(1);
 }
 
-console.log("root-relative-api-guard: OK — no root-relative /api/ fetch calls found.");
+console.log(
+  `root-relative-api-guard: OK — no root-relative /api/ fetch calls found.` +
+  ` (checked ${FETCH_WRAPPERS.length} wrapper(s): ${FETCH_WRAPPERS.join(", ")})`,
+);
