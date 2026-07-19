@@ -30,6 +30,23 @@ export const ContextMenu: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
+  // Dismiss the menu when the window loses focus or the tab is hidden. This
+  // prevents a stale open menu on return from an alt-tab or OS dialog.
+  // Runs unconditionally so the listeners are always present and we don't
+  // need an additional effect just for the unmount cleanup path.
+  useLayoutEffect(() => {
+    const onBlur = () => hide();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") hide();
+    };
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [hide]);
+
   // useLayoutEffect (not useEffect) so the listeners are registered
   // synchronously after the DOM mutation and before the browser paints.
   // This eliminates the race where a Playwright keypress fires between
@@ -73,9 +90,12 @@ export const ContextMenu: React.FC = () => {
     };
     window.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
+    // Cleanup on unmount (component removed while menu is open) resets the
+    // store so a future remount does not immediately show a stale menu.
     return () => {
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
+      hide();
     };
   }, [open, hide]);
 
