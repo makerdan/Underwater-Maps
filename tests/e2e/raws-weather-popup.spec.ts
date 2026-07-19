@@ -281,6 +281,7 @@ test.describe("RAWS weather popup", () => {
       { timeout: 8_000 },
     );
 
+    const pinVal = await pinPos.jsonValue();
     void pinPos; // position confirmed painted — click goes to the SVG pin below
 
     // Dispatch a real click at the pin's viewport coordinates. RAWS pins are
@@ -308,7 +309,7 @@ test.describe("RAWS weather popup", () => {
           }),
         );
       },
-      { cx: pinPos.cx, cy: pinPos.cy, testid: "overview-map-canvas" },
+      { cx: pinVal.cx, cy: pinVal.cy, testid: "overview-map-canvas" },
     );
 
     const popover = page.locator(POPOVER_TESTID);
