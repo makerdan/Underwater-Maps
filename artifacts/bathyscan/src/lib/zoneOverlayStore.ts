@@ -44,10 +44,9 @@ export interface ZoneSlot {
   visible: boolean;
 }
 
-const DEFAULT_SLOTS: readonly ZoneSlot[] = ZONE_DEFAULT_COLORS.map((color) => ({
-  color,
-  visible: true,
-}));
+export const DEFAULT_SLOTS: readonly ZoneSlot[] = ZONE_DEFAULT_COLORS.map(
+  (color) => ({ color, visible: true }),
+);
 
 // ---------------------------------------------------------------------------
 // localStorage helpers

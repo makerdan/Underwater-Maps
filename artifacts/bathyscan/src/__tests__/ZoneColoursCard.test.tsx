@@ -75,27 +75,27 @@ vi.mock("@/hooks/use-toast", () => ({
 
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
-import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "@/lib/zoneOverlayStore";
+import { useZoneOverlayStore, DEFAULT_SLOTS, ZONE_DEFAULT_COLORS } from "@/lib/zoneOverlayStore";
 import { NAV_TABS } from "@/pages/settings/constants";
 import type { Tab } from "@/pages/settings/constants";
 const tabLabel = (id: Tab) => NAV_TABS.find((t) => t.id === id)!.label;
 
 function resetZoneStore() {
   useZoneOverlayStore.setState({
-    saltwater: ZONE_DEFAULT_COLORS.map((color) => ({ color, visible: true })) as [
+    saltwater: DEFAULT_SLOTS as [
       { color: string; visible: boolean },
       { color: string; visible: boolean },
       { color: string; visible: boolean },
       { color: string; visible: boolean },
     ],
-    freshwater: ZONE_DEFAULT_COLORS.map((color) => ({ color, visible: true })) as [
+    freshwater: DEFAULT_SLOTS as [
       { color: string; visible: boolean },
       { color: string; visible: boolean },
       { color: string; visible: boolean },
       { color: string; visible: boolean },
     ],
     activeWaterType: "saltwater",
-    slots: ZONE_DEFAULT_COLORS.map((color) => ({ color, visible: true })) as [
+    slots: DEFAULT_SLOTS as [
       { color: string; visible: boolean },
       { color: string; visible: boolean },
       { color: string; visible: boolean },
