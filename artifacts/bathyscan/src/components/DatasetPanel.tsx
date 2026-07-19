@@ -1685,12 +1685,15 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         lastResp = resp;
         break;
       }
-      if (!lastResp!.ok) {
+      if (!lastResp) {
+        throw new Error("Upload request did not complete — please retry.");
+      }
+      if (!lastResp.ok) {
         // Cast via unknown — advisory shape for json() which returns any.
-        const err = await lastResp!.json().catch(() => ({})) as unknown as { details?: string; error?: string };
+        const err = await lastResp.json().catch(() => ({})) as unknown as { details?: string; error?: string };
         throw new Error(err.details ?? err.error ?? "Failed to get upload URL");
       }
-      const rawData = await lastResp!.json().catch(() => ({})) as unknown as { uploadUrl?: unknown; objectKey?: unknown };
+      const rawData = await lastResp.json().catch(() => ({})) as unknown as { uploadUrl?: unknown; objectKey?: unknown };
       if (typeof rawData?.uploadUrl !== "string" || !rawData.uploadUrl ||
           typeof rawData?.objectKey !== "string" || !rawData.objectKey) {
         throw new Error("Server returned an invalid upload URL response — please retry.");
