@@ -5,12 +5,14 @@
  *  - GPS status (acquiring / active / error) and horizontal accuracy.
  *  - Seafloor depth directly below the current GPS position (when in bounds
  *    of the loaded dataset).
- *  - Trail recording indicator with point count and sampling interval.
+ *  - Trail recording card with Start/Stop button, point count, and sampling
+ *    interval selector. Trail recording is user-initiated — it does NOT start
+ *    automatically when entering Live mode.
  *  - Two big touch-friendly action buttons: Follow Me (camera follow toggle)
  *    and Dive to GPS (drop the first-person camera at the GPS location).
  *
- * All orchestration (starting GPS / recording on entering Live mode) lives in
- * lib/liveMode.ts — this component is a pure view over the stores.
+ * GPS watch and Follow Me orchestration lives in lib/liveMode.ts. This
+ * component drives trail recording directly via useTrailStore.
  */
 import React from "react";
 import { useAppState } from "@/lib/context";
@@ -69,6 +71,8 @@ export const LivePanel: React.FC = () => {
 
   const recording = useTrailStore((s) => s.recording);
   const pointCount = useTrailStore((s) => s.currentPoints.length);
+  const startRecording = useTrailStore((s) => s.startRecording);
+  const stopRecording = useTrailStore((s) => s.stopRecording);
 
   const gpsFollowMode = useCameraStore((s) => s.gpsFollowMode);
   const setGpsFollowMode = useCameraStore((s) => s.setGpsFollowMode);
@@ -286,6 +290,36 @@ export const LivePanel: React.FC = () => {
             {pointCount} pts
           </span>
         </div>
+        {/* Start / Stop button */}
+        <button
+          type="button"
+          data-testid="live-trail-toggle"
+          onClick={() => {
+            if (recording) {
+              stopRecording();
+            } else {
+              startRecording(gpsRecordingInterval);
+            }
+          }}
+          style={{
+            width: "100%",
+            padding: "11px 12px",
+            borderRadius: 5,
+            border: `1px solid ${recording ? "rgba(239,68,68,0.5)" : "rgba(52,211,153,0.45)"}`,
+            background: recording ? "rgba(239,68,68,0.12)" : "rgba(52,211,153,0.10)",
+            color: recording ? "#ef4444" : "#34d399",
+            fontFamily: MONO,
+            fontSize: 15,
+            fontWeight: 700,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+            textShadow: recording ? "0 0 6px rgba(239,68,68,0.45)" : "0 0 6px rgba(52,211,153,0.4)",
+            transition: "background 0.15s, color 0.15s, border-color 0.15s",
+          }}
+        >
+          {recording ? "■ Stop Recording" : "● Start GPS Trail"}
+        </button>
         {/* Sampling interval control */}
         <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12.5, color: "#64748b", letterSpacing: "0.1em" }}>

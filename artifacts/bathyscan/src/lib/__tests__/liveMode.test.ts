@@ -2,12 +2,12 @@
  * Unit tests for lib/liveMode.ts — Live sidebar-mode orchestration.
  *
  * Covers:
- * - Entering Live starts the GPS watch and trail recording.
+ * - Entering Live starts the GPS watch but does NOT auto-start trail recording.
  * - Follow Me is enabled only after the first GPS fix arrives.
  * - Follow Me is enabled immediately when GPS is already active.
  * - GPS errors surface a toast and never enable follow.
- * - Exiting Live disables follow, stops recording, and preserves trail points.
- * - A recording session started BEFORE Live mode is not stopped on exit.
+ * - Exiting Live disables follow but does NOT touch an in-progress trail.
+ * - Leaving and re-entering Live has no effect on user-controlled recording.
  * - onSidebarModeChange only orchestrates on live transitions.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -77,10 +77,10 @@ describe("liveMode — entering", () => {
     expect(isLiveModeActive()).toBe(true);
   });
 
-  it("starts trail recording with the configured interval", () => {
+  it("does NOT auto-start trail recording", () => {
     useSettingsStore.setState({ gpsRecordingInterval: 5000 });
     enterLiveMode();
-    expect(useTrailStore.getState().recording).toBe(true);
+    expect(useTrailStore.getState().recording).toBe(false);
   });
 
   it("does NOT enable follow mode before the first GPS fix", () => {
@@ -109,15 +109,6 @@ describe("liveMode — entering", () => {
     enterLiveMode();
     enterLiveMode();
     expect(watchPosition).toHaveBeenCalledTimes(1);
-  });
-
-  it("records incoming GPS fixes as trail points", () => {
-    enterLiveMode();
-    fireFix();
-    // startRecording samples immediately but position was null then;
-    // subsequent interval ticks pick it up. Add manually via the store's
-    // addPoint path to verify point preservation semantics below instead.
-    expect(useTrailStore.getState().recording).toBe(true);
   });
 });
 
@@ -153,49 +144,45 @@ describe("liveMode — exiting", () => {
     expect(isLiveModeActive()).toBe(false);
   });
 
-  it("stops the recording session Live started", () => {
-    enterLiveMode();
+  it("does NOT stop a user-started recording session on exit", () => {
+    useTrailStore.getState().startRecording(1000);
     expect(useTrailStore.getState().recording).toBe(true);
+    enterLiveMode();
     exitLiveMode();
-    expect(useTrailStore.getState().recording).toBe(false);
+    expect(useTrailStore.getState().recording).toBe(true);
   });
 
-  it("preserves recorded trail points after exit", () => {
-    enterLiveMode();
+  it("preserves recorded trail points after live-mode exit", () => {
+    useTrailStore.getState().startRecording(1000);
     fireFix();
-    // Simulate a sampled point (interval tick).
-    useTrailStore.getState().addPoint(useGpsStore.getState().position!);
-    expect(useTrailStore.getState().currentPoints.length).toBeGreaterThan(0);
-    const count = useTrailStore.getState().currentPoints.length;
-    exitLiveMode();
-    expect(useTrailStore.getState().currentPoints.length).toBe(count);
-  });
-
-  it("re-entering Live resumes the paused trail without losing points", () => {
-    enterLiveMode();
-    fireFix();
-    useTrailStore.getState().addPoint(useGpsStore.getState().position!);
+    useTrailStore.getState().addPoint(useGpsStore.getState().position ?? {
+      longitude: 142, latitude: 11, accuracy: 5, timestamp: Date.now(),
+    });
     const count = useTrailStore.getState().currentPoints.length;
     expect(count).toBeGreaterThan(0);
 
+    enterLiveMode();
     exitLiveMode();
-    expect(useTrailStore.getState().recording).toBe(false);
+    expect(useTrailStore.getState().currentPoints.length).toBe(count);
+  });
+
+  it("user-started recording survives leaving and re-entering Live", () => {
+    useTrailStore.getState().startRecording(1000);
+    fireFix();
+    useTrailStore.getState().addPoint(useGpsStore.getState().position ?? {
+      longitude: 142, latitude: 11, accuracy: 5, timestamp: Date.now(),
+    });
+    const count = useTrailStore.getState().currentPoints.length;
+    expect(count).toBeGreaterThan(0);
+
+    enterLiveMode();
+    exitLiveMode();
+    expect(useTrailStore.getState().recording).toBe(true);
     expect(useTrailStore.getState().currentPoints.length).toBe(count);
 
-    // Re-enter: session resumes — recording again, prior points intact.
     enterLiveMode();
     expect(useTrailStore.getState().recording).toBe(true);
     expect(useTrailStore.getState().currentPoints.length).toBeGreaterThanOrEqual(count);
-    // Sequence continues from the preserved points.
-    const points = useTrailStore.getState().currentPoints;
-    expect(points[0]!.seq).toBe(0);
-  });
-
-  it("does NOT stop a recording session that predates Live mode", () => {
-    useTrailStore.getState().startRecording(1000);
-    enterLiveMode();
-    exitLiveMode();
-    expect(useTrailStore.getState().recording).toBe(true);
   });
 
   it("keeps the GPS watch running after exit", () => {
@@ -225,6 +212,8 @@ describe("trailStore — setSamplingInterval", () => {
     try {
       enterLiveMode();
       fireFix();
+      // User explicitly starts recording (no auto-start any more).
+      useTrailStore.getState().startRecording(1000);
       const before = useTrailStore.getState().currentPoints.length;
 
       // Switch to a 5 s interval and advance the clock: samples arrive at

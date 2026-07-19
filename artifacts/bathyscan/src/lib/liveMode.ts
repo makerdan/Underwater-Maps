@@ -4,27 +4,24 @@
  * Entering Live mode (sidebarMode === 'live') is a one-tap "I'm on the water"
  * action that:
  *   1. Starts the GPS watch (requests permission if needed).
- *   2. Starts trail recording at the user's configured sampling interval
- *      (unless a recording session is already running).
- *   3. Enables Follow Me (camera gpsFollowMode) — deferred until the first
+ *   2. Enables Follow Me (camera gpsFollowMode) — deferred until the first
  *      GPS fix arrives, because the follow camera auto-disables itself when
  *      GPS is not active.
  *
+ * Trail recording is NOT started automatically. The user taps "Start GPS Trail"
+ * inside the Live panel to begin recording.
+ *
  * Leaving Live mode:
  *   - Disables Follow Me.
- *   - Stops trail recording. Recorded points are preserved in
- *     trailStore.currentPoints (stopRecording never clears them) so the user
- *     can still save the trail afterwards.
  *   - Keeps the GPS watch running so the position marker / HUD stay live.
+ *   - Does NOT stop any in-progress trail recording (user-controlled).
  *
  * Wiring: uiStore.setSidebarMode calls onSidebarModeChange on every explicit
  * transition, and applySettingsToUiStore calls it on hydration so a persisted
  * 'live' mode resumes GPS + follow after a page reload.
  */
 import { useGpsStore } from "./gpsStore";
-import { useTrailStore } from "./trailStore";
 import { useCameraStore } from "./cameraStore";
-import { useSettingsStore } from "./settingsStore";
 import { toast } from "@/hooks/use-toast";
 import type { SidebarMode } from "./settingsStore";
 
@@ -34,19 +31,11 @@ let unsubGps: (() => void) | null = null;
 /** True while Live mode is the active sidebar mode (orchestration engaged). */
 let liveActive = false;
 
-/**
- * True when Live mode started the current trail recording session itself.
- * If the user was already recording before entering Live, leaving Live does
- * not stop their pre-existing session.
- */
-let trailStartedByLive = false;
-
 /** Exported for tests — reset module-level state between test cases. */
 export function __resetLiveModeForTests(): void {
   unsubGps?.();
   unsubGps = null;
   liveActive = false;
-  trailStartedByLive = false;
 }
 
 export function isLiveModeActive(): boolean {
@@ -74,19 +63,6 @@ export function enterLiveMode(): void {
   const immediateError = useGpsStore.getState().error;
   if (immediateError) notifyGpsError(immediateError);
 
-  // Start trail recording unless a session is already running. If points
-  // from a previous (paused) session exist, resume that session rather than
-  // starting fresh — leaving Live pauses the trail, it never resets it.
-  const trail = useTrailStore.getState();
-  if (!trail.recording) {
-    const interval = useSettingsStore.getState().gpsRecordingInterval;
-    if (trail.currentPoints.length > 0) trail.resumeRecording(interval);
-    else trail.startRecording(interval);
-    trailStartedByLive = true;
-  } else {
-    trailStartedByLive = false;
-  }
-
   // Follow Me: enable immediately if GPS already has a fix; otherwise wait
   // for the first fix (the follow camera disables itself while !gpsActive).
   if (useGpsStore.getState().active) {
@@ -113,13 +89,6 @@ export function exitLiveMode(): void {
   unsubGps = null;
 
   useCameraStore.getState().setGpsFollowMode(false);
-
-  // Stop the recording session Live started. Points stay in currentPoints so
-  // nothing recorded is lost; the user can still save via the trail recorder.
-  if (trailStartedByLive && useTrailStore.getState().recording) {
-    useTrailStore.getState().stopRecording();
-  }
-  trailStartedByLive = false;
 }
 
 /**

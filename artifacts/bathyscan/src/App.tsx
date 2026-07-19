@@ -66,7 +66,7 @@ import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useHighlightStore } from "@/lib/highlightStore";
-import { useGpsStore } from "@/lib/gpsStore";
+import { useTrailStore } from "@/lib/trailStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { toValidDepthLayer } from "@/lib/depthLayerGuard";
@@ -309,7 +309,7 @@ function Main() {
   const openFindDataCount = useUiStore((s) => s.openFindDataCount);
   const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
   const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
-  const gpsActive = useGpsStore((s) => s.active);
+  const trailRecording = useTrailStore((s) => s.recording);
   const defaultMapLoad = useSettingsStore((st) => st.defaultMapLoad);
   const { isSignedIn, isLoaded } = useUser();
   // Always-mounted sync: debounce-flush lastSession to server when signed in,
@@ -1776,7 +1776,7 @@ function Main() {
         )}
 
         {/* GPS Trail Recorder — bottom-right above minimap */}
-        {gpsActive && (
+        {trailRecording && (
           <div className="absolute z-20" style={{ bottom: 60, right: 16 }}>
             <TrailRecorder />
           </div>
