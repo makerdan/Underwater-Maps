@@ -107,6 +107,7 @@ import type {
   MoveDatasetFolderBody,
   NceiPortalResult,
   NceiPortalSaveBody,
+  PatchDatasetsMySavesIdMoveBody,
   PatchDatasetsMySavesIdRenameBody,
   PatchRouteBody,
   PoeClassifyRequest,
@@ -5108,6 +5109,82 @@ export const usePatchDatasetsMySavesIdRename = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getPatchDatasetsMySavesIdRenameMutationOptions(options));
+    }
+
+export const getPatchDatasetsMySavesIdMoveUrl = (id: string,) => {
+
+
+
+
+  return `/api/datasets/my-saves/${id}/move`
+}
+
+/**
+ * Sets the `folderId` on the save row to place it in a folder, or clears
+it (pass `null`) to move the save back to the root level. The target
+folder must belong to the authenticated user.
+
+ * @summary Move a catalog save into a folder or back to root
+ */
+export const patchDatasetsMySavesIdMove = async (id: string,
+    patchDatasetsMySavesIdMoveBody: PatchDatasetsMySavesIdMoveBody, options?: RequestInit): Promise<UserCatalogSave> => {
+
+  return customFetch<UserCatalogSave>(getPatchDatasetsMySavesIdMoveUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      patchDatasetsMySavesIdMoveBody,)
+  }
+);}
+
+
+
+
+export const getPatchDatasetsMySavesIdMoveMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchDatasetsMySavesIdMove>>, TError,{id: string;data: BodyType<PatchDatasetsMySavesIdMoveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchDatasetsMySavesIdMove>>, TError,{id: string;data: BodyType<PatchDatasetsMySavesIdMoveBody>}, TContext> => {
+
+const mutationKey = ['patchDatasetsMySavesIdMove'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchDatasetsMySavesIdMove>>, {id: string;data: BodyType<PatchDatasetsMySavesIdMoveBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchDatasetsMySavesIdMove(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchDatasetsMySavesIdMoveMutationResult = NonNullable<Awaited<ReturnType<typeof patchDatasetsMySavesIdMove>>>
+    export type PatchDatasetsMySavesIdMoveMutationBody = BodyType<PatchDatasetsMySavesIdMoveBody>
+    export type PatchDatasetsMySavesIdMoveMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Move a catalog save into a folder or back to root
+ */
+export const usePatchDatasetsMySavesIdMove = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchDatasetsMySavesIdMove>>, TError,{id: string;data: BodyType<PatchDatasetsMySavesIdMoveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchDatasetsMySavesIdMove>>,
+        TError,
+        {id: string;data: BodyType<PatchDatasetsMySavesIdMoveBody>},
+        TContext
+      > => {
+      return useMutation(getPatchDatasetsMySavesIdMoveMutationOptions(options));
     }
 
 export const getPostDatasetsMySavesIdRetryUrl = (id: string,) => {

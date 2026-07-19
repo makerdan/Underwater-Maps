@@ -2274,6 +2274,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /datasets/my-saves/{id}/move:
+    patch:
+      operationId: patchDatasetsMySavesIdMove
+      tags: [datasets]
+      summary: Move a catalog save into a folder or back to root
+      description: |
+        Sets the `folderId` on the save row to place it in a folder, or clears
+        it (pass `null`) to move the save back to the root level. The target
+        folder must belong to the authenticated user.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Save record UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchDatasetsMySavesIdMoveBody"
+      responses:
+        "200":
+          description: Updated save row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserCatalogSave"
+        "400":
+          description: Invalid request body or folder not owned by user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Save record or folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /datasets/my-saves/{id}/retry:
     post:
       operationId: postDatasetsMySavesIdRetry
@@ -5514,6 +5564,12 @@ components:
             type: boolean
           default: {}
           description: Expand/collapse state for dataset library folders, keyed by folder id.
+        saveFolderExpanded:
+          type: object
+          additionalProperties:
+            type: boolean
+          default: {}
+          description: Expand/collapse state for My Saves folder sections, keyed by folder id.
         bookmarks:
           type: object
           description: Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions.
@@ -6727,6 +6783,10 @@ components:
           type: string
           nullable: true
           description: User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.
+        folderId:
+          type: string
+          nullable: true
+          description: UUID of the dataset_folders row this save belongs to, or null if the save is at the root level.
         datasetId:
           type: string
           nullable: true
@@ -6752,6 +6812,17 @@ components:
           nullable: true
       required:
         - displayLabel
+
+    PatchDatasetsMySavesIdMoveBody:
+      type: object
+      description: Body for moving a catalog save into a folder (or back to root)
+      properties:
+        folderId:
+          type: string
+          nullable: true
+          description: UUID of the target dataset_folders row, or null to move the save to the root level.
+      required:
+        - folderId
 
     GpsTrailInput:
       type: object

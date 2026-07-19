@@ -30,7 +30,7 @@ import { eq, and, lt, desc, asc } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { CatalogSearchQuerySchema, CatalogIdParamSchema, SaveIdParamSchema } from "./schemas.js";
-import { db, userCatalogSavesTable, customDatasetsTable, type StoredTerrainJson } from "@workspace/db";
+import { db, userCatalogSavesTable, customDatasetsTable, datasetFoldersTable, type StoredTerrainJson } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
@@ -482,6 +482,14 @@ export async function materializeSave(
   userId: string,
   entry: CatalogSeedEntry,
 ): Promise<void> {
+  // Read the save's folderId so the materialized dataset lands in the same
+  // folder as the catalog save that triggered it.
+  const [saveRow] = await db
+    .select({ folderId: userCatalogSavesTable.folderId })
+    .from(userCatalogSavesTable)
+    .where(eq(userCatalogSavesTable.id, saveId));
+  const saveFolderId = saveRow?.folderId ?? null;
+
   try {
     try {
       const materialized = await buildCatalogGrids(entry);
@@ -502,6 +510,7 @@ export async function materializeSave(
         .insert(customDatasetsTable)
         .values({
           userId,
+          folderId: saveFolderId,
           name: entry.name,
           minDepth: terrain.minDepth,
           maxDepth: terrain.maxDepth,
@@ -1054,6 +1063,7 @@ export function formatSaveRow(
     cacheKey: row.cacheKey ?? null,
     errorMessage: row.errorMessage ?? null,
     displayLabel: row.displayLabel ?? null,
+    folderId: row.folderId ?? null,
     datasetId: row.datasetId ?? null,
     catalog: entry ? toCatalogResponse(entry, entryCreatedAtIso(entry)) : null,
   };
@@ -1095,6 +1105,58 @@ router.patch("/datasets/my-saves/:id/rename", requireAuth, validateBody(RenameSa
   const [updated] = await db
     .update(userCatalogSavesTable)
     .set({ displayLabel })
+    .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "not_found", details: `Save record '${saveId}' not found` });
+    return;
+  }
+
+  const entries = await getCatalogEntries();
+  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
+  res.json(formatSaveRow(updated, entry));
+}));
+
+// ---------------------------------------------------------------------------
+// PATCH /datasets/my-saves/:id/move  (auth-gated)
+//
+// Moves a catalog save into a folder (or back to root). The target folder
+// must exist and belong to the same user. Pass null folderId to move to root.
+// ---------------------------------------------------------------------------
+
+const MoveSaveBodySchema = z.object({
+  folderId: z.string().uuid().nullable(),
+});
+
+router.patch("/datasets/my-saves/:id/move", requireAuth, validateBody(MoveSaveBodySchema, "PATCH /api/datasets/my-saves/:id/move"), asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const saveIdParsed = SaveIdParamSchema.safeParse(req.params["id"]);
+  if (!saveIdParsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: saveIdParsed.error.issues[0]?.message ?? "Invalid save id",
+    });
+    return;
+  }
+  const saveId = saveIdParsed.data;
+  const { folderId } = res.locals.parsedBody as { folderId: string | null };
+
+  // If a folderId is provided, verify it belongs to the same user
+  if (folderId !== null) {
+    const [folder] = await db
+      .select({ id: datasetFoldersTable.id })
+      .from(datasetFoldersTable)
+      .where(and(eq(datasetFoldersTable.id, folderId), eq(datasetFoldersTable.userId, userId)));
+    if (!folder) {
+      res.status(404).json({ error: "not_found", details: `Folder '${folderId}' not found` });
+      return;
+    }
+  }
+
+  const [updated] = await db
+    .update(userCatalogSavesTable)
+    .set({ folderId })
     .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
     .returning();
 

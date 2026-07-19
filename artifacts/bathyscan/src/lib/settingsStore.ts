@@ -60,7 +60,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 27;
+export const SETTINGS_SCHEMA_VERSION = 28;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -430,6 +430,9 @@ export interface SettingsState {
 
   /** Expand/collapse state for dataset library folders, keyed by folder id. */
   datasetFolderExpanded: Record<string, boolean>;
+
+  /** Expand/collapse state for My Saves folder sections, keyed by folder id. */
+  saveFolderExpanded: Record<string, boolean>;
 
   // ── Environment ───────────────────────────────────────────────────────
   waterType: WaterType;
@@ -977,6 +980,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   datasetHomePositions: {},
   datasetFolderExpanded: {},
+  saveFolderExpanded: {},
   bookmarks: {},
 
   waterType: "saltwater",
@@ -1672,6 +1676,12 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).boatNoGoWaveM === undefined) {
             migratedBoatThresholds.boatNoGoWaveM = DEFAULT_SETTINGS.boatNoGoWaveM;
           }
+          // v27 → v28: inject saveFolderExpanded default for My Saves folder
+          // organisation (new feature — existing users start with all roots visible).
+          const migratedSaveFolderExpanded: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).saveFolderExpanded === undefined) {
+            migratedSaveFolderExpanded.saveFolderExpanded = DEFAULT_SETTINGS.saveFolderExpanded;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1688,6 +1698,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedCoordSearch,
             ...migratedFollowResume,
             ...migratedBoatThresholds,
+            ...migratedSaveFolderExpanded,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

@@ -179,6 +179,7 @@ export const DEFAULT_SETTINGS = {
   hasSeenOnboarding: false,
   hasSeenToolbarRelocationHint: false,
   datasetFolderExpanded: {} as Record<string, boolean>,
+  saveFolderExpanded: {} as Record<string, boolean>,
   bookmarks: {} as Record<string, unknown[]>,
   keyBindings: {} as Record<string, string>,
   crosshairMenuGamepadButton: 3 as number | null,

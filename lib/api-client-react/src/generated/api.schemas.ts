@@ -674,6 +674,11 @@ export type UserSettingsDefaultMapLoad = {
  */
 export type UserSettingsDatasetFolderExpanded = {[key: string]: boolean};
 
+/**
+ * Expand/collapse state for My Saves folder sections, keyed by folder id.
+ */
+export type UserSettingsSaveFolderExpanded = {[key: string]: boolean};
+
 export type UserSettingsBookmarksItem = {
   /** Unique bookmark id (UUID). */
   id: string;
@@ -1122,6 +1127,8 @@ export interface UserSettings {
   hasSeenToolbarRelocationHint?: boolean;
   /** Expand/collapse state for dataset library folders, keyed by folder id. */
   datasetFolderExpanded?: UserSettingsDatasetFolderExpanded;
+  /** Expand/collapse state for My Saves folder sections, keyed by folder id. */
+  saveFolderExpanded?: UserSettingsSaveFolderExpanded;
   /** Per-dataset camera bookmarks keyed by dataset id. Each value is an ordered array of named camera positions. */
   bookmarks?: UserSettingsBookmarks;
   /** Remapped keyboard shortcuts keyed by action id (e.g. "moveForward"). Values are KeyboardEvent.code strings (e.g. "KeyW"). Missing keys fall back to their default binding. */
@@ -2117,6 +2124,8 @@ export interface UserCatalogSave {
   errorMessage?: string | null;
   /** User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name. */
   displayLabel?: string | null;
+  /** UUID of the dataset_folders row this save belongs to, or null if the save is at the root level. */
+  folderId?: string | null;
   /** UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`). */
   datasetId?: string | null;
   /** Embedded catalog metadata (present when returned from list/status endpoints) */
@@ -2129,6 +2138,14 @@ export interface UserCatalogSave {
 export interface PatchDatasetsMySavesIdRenameBody {
   /** New display label (1–200 chars). Pass null or empty string to clear the override and revert to the catalog name. */
   displayLabel: string | null;
+}
+
+/**
+ * Body for moving a catalog save into a folder (or back to root)
+ */
+export interface PatchDatasetsMySavesIdMoveBody {
+  /** UUID of the target dataset_folders row, or null to move the save to the root level. */
+  folderId: string | null;
 }
 
 export interface GpsTrailInput {

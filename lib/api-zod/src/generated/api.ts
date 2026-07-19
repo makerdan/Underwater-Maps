@@ -1331,6 +1331,7 @@ export const getSettingsResponseLlmDisclosureAcknowledgedDefault = false;
 export const getSettingsResponseHasSeenOnboardingDefault = false;
 export const getSettingsResponseHasSeenToolbarRelocationHintDefault = false;
 export const getSettingsResponseDatasetFolderExpandedDefault = {  };
+export const getSettingsResponseSaveFolderExpandedDefault = {  };
 export const getSettingsResponseCrosshairMenuGamepadButtonDefault = 3;
 export const getSettingsResponseCrosshairMenuGamepadButtonMin = 0;
 export const getSettingsResponseCrosshairMenuGamepadButtonMax = 31;
@@ -1513,6 +1514,7 @@ export const GetSettingsResponse = zod.object({
   "hasSeenOnboarding": zod.boolean().default(getSettingsResponseHasSeenOnboardingDefault).describe('Set to true once the user completes or skips the first-time guided tour. Synced cross-device.'),
   "hasSeenToolbarRelocationHint": zod.boolean().default(getSettingsResponseHasSeenToolbarRelocationHintDefault).describe('Set to true once the user dismisses the one-time hint explaining that the Drive Boat, Tidal 3D, and Drift toggles moved into the left sidebar. Synced cross-device.'),
   "datasetFolderExpanded": zod.record(zod.string(), zod.boolean()).default(getSettingsResponseDatasetFolderExpandedDefault).describe('Expand\/collapse state for dataset library folders, keyed by folder id.'),
+  "saveFolderExpanded": zod.record(zod.string(), zod.boolean()).default(getSettingsResponseSaveFolderExpandedDefault).describe('Expand\/collapse state for My Saves folder sections, keyed by folder id.'),
   "bookmarks": zod.record(zod.string(), zod.array(zod.object({
   "id": zod.string().describe('Unique bookmark id (UUID).'),
   "name": zod.string().describe('User-assigned bookmark label.'),
@@ -1784,6 +1786,7 @@ export const putSettingsBodyLlmDisclosureAcknowledgedDefault = false;
 export const putSettingsBodyHasSeenOnboardingDefault = false;
 export const putSettingsBodyHasSeenToolbarRelocationHintDefault = false;
 export const putSettingsBodyDatasetFolderExpandedDefault = {  };
+export const putSettingsBodySaveFolderExpandedDefault = {  };
 export const putSettingsBodyCrosshairMenuGamepadButtonDefault = 3;
 export const putSettingsBodyCrosshairMenuGamepadButtonMin = 0;
 export const putSettingsBodyCrosshairMenuGamepadButtonMax = 31;
@@ -1966,6 +1969,7 @@ export const PutSettingsBody = zod.object({
   "hasSeenOnboarding": zod.boolean().default(putSettingsBodyHasSeenOnboardingDefault).describe('Set to true once the user completes or skips the first-time guided tour. Synced cross-device.'),
   "hasSeenToolbarRelocationHint": zod.boolean().default(putSettingsBodyHasSeenToolbarRelocationHintDefault).describe('Set to true once the user dismisses the one-time hint explaining that the Drive Boat, Tidal 3D, and Drift toggles moved into the left sidebar. Synced cross-device.'),
   "datasetFolderExpanded": zod.record(zod.string(), zod.boolean()).default(putSettingsBodyDatasetFolderExpandedDefault).describe('Expand\/collapse state for dataset library folders, keyed by folder id.'),
+  "saveFolderExpanded": zod.record(zod.string(), zod.boolean()).default(putSettingsBodySaveFolderExpandedDefault).describe('Expand\/collapse state for My Saves folder sections, keyed by folder id.'),
   "bookmarks": zod.record(zod.string(), zod.array(zod.object({
   "id": zod.string().describe('Unique bookmark id (UUID).'),
   "name": zod.string().describe('User-assigned bookmark label.'),
@@ -2232,6 +2236,7 @@ export const putSettingsResponseLlmDisclosureAcknowledgedDefault = false;
 export const putSettingsResponseHasSeenOnboardingDefault = false;
 export const putSettingsResponseHasSeenToolbarRelocationHintDefault = false;
 export const putSettingsResponseDatasetFolderExpandedDefault = {  };
+export const putSettingsResponseSaveFolderExpandedDefault = {  };
 export const putSettingsResponseCrosshairMenuGamepadButtonDefault = 3;
 export const putSettingsResponseCrosshairMenuGamepadButtonMin = 0;
 export const putSettingsResponseCrosshairMenuGamepadButtonMax = 31;
@@ -2414,6 +2419,7 @@ export const PutSettingsResponse = zod.object({
   "hasSeenOnboarding": zod.boolean().default(putSettingsResponseHasSeenOnboardingDefault).describe('Set to true once the user completes or skips the first-time guided tour. Synced cross-device.'),
   "hasSeenToolbarRelocationHint": zod.boolean().default(putSettingsResponseHasSeenToolbarRelocationHintDefault).describe('Set to true once the user dismisses the one-time hint explaining that the Drive Boat, Tidal 3D, and Drift toggles moved into the left sidebar. Synced cross-device.'),
   "datasetFolderExpanded": zod.record(zod.string(), zod.boolean()).default(putSettingsResponseDatasetFolderExpandedDefault).describe('Expand\/collapse state for dataset library folders, keyed by folder id.'),
+  "saveFolderExpanded": zod.record(zod.string(), zod.boolean()).default(putSettingsResponseSaveFolderExpandedDefault).describe('Expand\/collapse state for My Saves folder sections, keyed by folder id.'),
   "bookmarks": zod.record(zod.string(), zod.array(zod.object({
   "id": zod.string().describe('Unique bookmark id (UUID).'),
   "name": zod.string().describe('User-assigned bookmark label.'),
@@ -3123,6 +3129,7 @@ export const PostNceiSaveResponse = zod.object({
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
   "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
+  "folderId": zod.string().nullish().describe('UUID of the dataset_folders row this save belongs to, or null if the save is at the root level.'),
   "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),
@@ -3170,6 +3177,7 @@ export const GetDatasetsMySavesResponseItem = zod.object({
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
   "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
+  "folderId": zod.string().nullish().describe('UUID of the dataset_folders row this save belongs to, or null if the save is at the root level.'),
   "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),
@@ -3225,6 +3233,7 @@ export const GetDatasetsMySavesIdStatusResponse = zod.object({
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
   "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
+  "folderId": zod.string().nullish().describe('UUID of the dataset_folders row this save belongs to, or null if the save is at the root level.'),
   "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),
@@ -3275,6 +3284,57 @@ export const PatchDatasetsMySavesIdRenameResponse = zod.object({
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
   "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
+  "folderId": zod.string().nullish().describe('UUID of the dataset_folders row this save belongs to, or null if the save is at the root level.'),
+  "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
+  "catalog": zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A user\'s saved reference to a catalog dataset')
+
+
+/**
+ * Sets the `folderId` on the save row to place it in a folder, or clears
+it (pass `null`) to move the save back to the root level. The target
+folder must belong to the authenticated user.
+
+ * @summary Move a catalog save into a folder or back to root
+ */
+export const PatchDatasetsMySavesIdMoveParams = zod.object({
+  "id": zod.coerce.string().describe('Save record UUID')
+})
+
+export const PatchDatasetsMySavesIdMoveBody = zod.object({
+  "folderId": zod.string().nullable().describe('UUID of the target dataset_folders row, or null to move the save to the root level.')
+}).describe('Body for moving a catalog save into a folder (or back to root)')
+
+export const PatchDatasetsMySavesIdMoveResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "catalogId": zod.string().describe('References the dataset_catalog.id'),
+  "status": zod.enum(['queued', 'processing', 'ready', 'failed']),
+  "requestedAt": zod.coerce.date(),
+  "readyAt": zod.coerce.date().nullish(),
+  "cacheKey": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
+  "folderId": zod.string().nullish().describe('UUID of the dataset_folders row this save belongs to, or null if the save is at the root level.'),
   "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),
@@ -3321,6 +3381,7 @@ export const PostDatasetsMySavesIdRetryResponse = zod.object({
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
   "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
+  "folderId": zod.string().nullish().describe('UUID of the dataset_folders row this save belongs to, or null if the save is at the root level.'),
   "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),

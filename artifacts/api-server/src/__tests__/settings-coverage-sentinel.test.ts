@@ -205,6 +205,7 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   "llmDisclosureAcknowledged",
   "hasSeenOnboarding",
   "datasetFolderExpanded",
+  "saveFolderExpanded",
   "bookmarks",
   "keyBindings",
   "crosshairMenuGamepadButton",

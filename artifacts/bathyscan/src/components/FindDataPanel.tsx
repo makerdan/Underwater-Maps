@@ -20,24 +20,40 @@ import {
   useGetDatasetsCatalogSearch,
   useGetDatasetsMySaves,
   useGetUserDatasets,
+  useGetUserFolders,
   usePostDatasetsCatalogIdSave,
   usePostDatasetsMySavesIdRetry,
   useDeleteDatasetsMySavesId,
   useDeleteUserDatasetsId,
   usePatchUserDatasetsIdRename,
   usePatchDatasetsMySavesIdRename,
+  usePatchDatasetsMySavesIdMove,
+  usePostUserFolders,
   useGetNceiSearch,
   usePostNceiSave,
   getGetNceiSearchQueryKey,
   getGetDatasetsCatalogSearchQueryKey,
   getGetDatasetsMySavesQueryKey,
   getGetUserDatasetsQueryKey,
+  getGetUserFoldersQueryKey,
   type GetDatasetsCatalogSearchDataType,
   type DatasetCatalogSearchResult,
+  type DatasetFolder,
   type UserCatalogSave,
   type UserDatasetMeta,
   type NceiPortalResult,
 } from "@workspace/api-client-react";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { useAppState } from "@/lib/context";
 import { useAuth } from "@/lib/clerkCompat";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -48,6 +64,7 @@ import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { buildSaveTree, type SaveFolderNode, saveFolderNodeHasSaves } from "@/lib/datasetLibrary";
 
 // Undo window for "soft" dataset deletes (ms). The row is hidden from the
 // list immediately and the actual DELETE request is deferred until the
@@ -851,6 +868,311 @@ const SaveCard: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
+// Save folder components — folder grouping for My Saves / Catalog Saves tab
+// ---------------------------------------------------------------------------
+
+/** Simple dialog that lets the user pick a folder (or root) for a save. */
+const SaveMoveDialog: React.FC<{
+  save: UserCatalogSave;
+  folders: DatasetFolder[];
+  isPending?: boolean;
+  onCancel: () => void;
+  onConfirm: (folderId: string | null) => void;
+}> = ({ save, folders, isPending = false, onCancel, onConfirm }) => {
+  const displayName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
+
+  // Build flat options list (all folders + root option)
+  const options = useMemo(() => {
+    const sorted = [...folders].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    );
+    return [{ id: null, name: "📂 Root level" }, ...sorted.map((f) => ({ id: f.id as string | null, name: `📁 ${f.name}` }))];
+  }, [folders]);
+
+  const currentIdx = options.findIndex((o) => o.id === (save.folderId ?? null));
+  const [selectedIdx, setSelectedIdx] = useState(Math.max(currentIdx, 0));
+
+  const selected = options[selectedIdx];
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIdx((i) => Math.min(i + 1, options.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (selected && !isPending) onConfirm(selected.id);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      if (!isPending) onCancel();
+    }
+  };
+
+  const listRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { listRef.current?.focus(); }, []);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Move "${displayName}"`}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10000,
+      }}
+      onClick={isPending ? undefined : onCancel}
+      aria-busy={isPending || undefined}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "rgba(0,10,20,0.95)",
+          border: "1px solid rgba(0,229,255,0.35)",
+          borderRadius: 6,
+          padding: 18,
+          width: 340,
+          maxWidth: "90vw",
+          color: "#cbd5e1",
+          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+          fontSize: 14,
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, letterSpacing: "0.05em" }}>
+          Move &quot;{displayName}&quot;
+        </div>
+        <div
+          ref={listRef}
+          role="listbox"
+          tabIndex={0}
+          onKeyDown={onKeyDown}
+          style={{
+            maxHeight: 240,
+            overflowY: "auto",
+            outline: "none",
+            border: "1px solid rgba(0,229,255,0.15)",
+            borderRadius: 4,
+          }}
+        >
+          {options.map((opt, idx) => (
+            <div
+              key={String(opt.id)}
+              role="option"
+              aria-selected={idx === selectedIdx}
+              onClick={() => { setSelectedIdx(idx); }}
+              onDoubleClick={() => { if (!isPending) onConfirm(opt.id); }}
+              style={{
+                padding: "7px 12px",
+                cursor: "pointer",
+                background: idx === selectedIdx ? "rgba(0,229,255,0.12)" : "transparent",
+                color: idx === selectedIdx ? "#00e5ff" : "#cbd5e1",
+                fontSize: 13.5,
+                opacity: isPending ? 0.6 : 1,
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
+              }}
+            >
+              {opt.name}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
+          <button
+            onClick={onCancel}
+            disabled={isPending}
+            style={{
+              fontSize: 12,
+              padding: "4px 14px",
+              background: "transparent",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 3,
+              color: "#94a3b8",
+              cursor: isPending ? "not-allowed" : "pointer",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => selected && onConfirm(selected.id)}
+            disabled={isPending || !selected}
+            style={{
+              fontSize: 12,
+              padding: "4px 14px",
+              background: "rgba(0,229,255,0.1)",
+              border: "1px solid rgba(0,229,255,0.3)",
+              borderRadius: 3,
+              color: "#00e5ff",
+              cursor: isPending ? "wait" : "pointer",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            {isPending ? "Moving…" : "Move"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/** Wraps a SaveCard with drag behaviour. */
+const DraggableSaveCard: React.FC<{
+  save: UserCatalogSave;
+  onLoadUserDataset: (id: string) => void;
+  onRetry: (id: string) => void;
+  retrying: boolean;
+  onDelete: (save: UserCatalogSave) => void;
+  deleting: boolean;
+  onRename: (id: string, label: string | null) => Promise<void>;
+  onMoveTo: (save: UserCatalogSave) => void;
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `save-${save.id}`,
+    data: { kind: "save", saveId: save.id },
+  });
+
+  const displayName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ opacity: isDragging ? 0.4 : 1, position: "relative" }}
+    >
+      {/* Invisible drag handle area — Grab via right-edge grip icon */}
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label={`Drag ${displayName} to a folder`}
+        title="Drag to a folder"
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 88,
+          background: "transparent",
+          border: "none",
+          color: "#475569",
+          cursor: "grab",
+          fontSize: 13,
+          padding: "2px 4px",
+          zIndex: 1,
+          lineHeight: 1,
+        }}
+      >
+        ⠿
+      </button>
+      <button
+        aria-label={`Move "${displayName}" to folder`}
+        title="Move to folder"
+        onClick={() => onMoveTo(save)}
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 63,
+          background: "transparent",
+          border: "none",
+          color: "#475569",
+          cursor: "pointer",
+          fontSize: 12,
+          padding: "2px 4px",
+          zIndex: 1,
+          lineHeight: 1,
+        }}
+      >
+        📁
+      </button>
+      <SaveCard
+        save={save}
+        onLoadUserDataset={onLoadUserDataset}
+        onRetry={onRetry}
+        retrying={retrying}
+        onDelete={onDelete}
+        deleting={deleting}
+        onRename={onRename}
+      />
+    </div>
+  );
+};
+
+/** Collapsible folder section that acts as a drop target for save cards. */
+const SaveFolderSection: React.FC<{
+  node: import("@/lib/datasetLibrary").SaveFolderNode;
+  isExpanded: boolean;
+  onToggle: () => void;
+  renderSave: (save: UserCatalogSave) => React.ReactNode;
+  renderSubFolder: (child: import("@/lib/datasetLibrary").SaveFolderNode) => React.ReactNode;
+}> = ({ node, isExpanded, onToggle, renderSave, renderSubFolder }) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `folder-${node.folder.id}`,
+    data: { kind: "folder", folderId: node.folder.id },
+  });
+  const saveCount = node.saves.length;
+  const childCount = node.children.length;
+  const totalCount = saveCount + childCount;
+  const indent = node.depth * 14;
+
+  return (
+    <div style={{ marginLeft: indent }}>
+      <div
+        ref={setNodeRef}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "5px 8px",
+          borderRadius: 4,
+          cursor: "pointer",
+          background: isOver ? "rgba(0,229,255,0.08)" : "transparent",
+          border: isOver ? "1px dashed rgba(0,229,255,0.4)" : "1px solid transparent",
+          transition: "background 0.12s, border 0.12s",
+          userSelect: "none",
+        }}
+        onClick={onToggle}
+        role="button"
+        aria-expanded={isExpanded}
+        aria-label={`Folder: ${node.folder.name}`}
+      >
+        <span style={{ fontSize: 13, color: "#94a3b8" }}>{isExpanded ? "▾" : "▸"}</span>
+        <span style={{ fontSize: 14 }}>📁</span>
+        <span
+          style={{
+            flex: 1,
+            fontSize: 13.5,
+            fontWeight: 600,
+            color: "#cbd5e1",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {node.folder.name}
+        </span>
+        {totalCount > 0 && (
+          <span style={{ fontSize: 11, color: "#64748b" }}>{totalCount}</span>
+        )}
+      </div>
+      {isExpanded && (
+        <div style={{ marginLeft: 14 }}>
+          {node.children.map((child) => renderSubFolder(child))}
+          {node.saves.map((s) => renderSave(s))}
+          {node.children.length === 0 && node.saves.length === 0 && (
+            <div style={{ fontSize: 12, color: "#475569", padding: "4px 8px" }}>
+              No saves in this folder
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Upload card (My Uploads section)
 // ---------------------------------------------------------------------------
 
@@ -1362,6 +1684,32 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const deleteUploadMutation = useDeleteUserDatasetsId();
   const renameUploadMutation = usePatchUserDatasetsIdRename();
   const renameSaveMutation = usePatchDatasetsMySavesIdRename();
+  const moveSaveMutation = usePatchDatasetsMySavesIdMove();
+  const postFolderMutation = usePostUserFolders();
+
+  const saveFolderExpanded = useSettingsStore((s) => s.saveFolderExpanded);
+  const handleToggleSaveFolder = useCallback((folderId: string) => {
+    useSettingsStore.setState((prev) => ({
+      saveFolderExpanded: { ...prev.saveFolderExpanded, [folderId]: !(prev.saveFolderExpanded[folderId] ?? false) },
+    }));
+  }, []);
+
+  const { data: userFolders = [] } = useGetUserFolders({
+    query: { enabled: !!isSignedIn, queryKey: getGetUserFoldersQueryKey() },
+  });
+
+  // Move-to-folder dialog state
+  const [moveSaveTarget, setMoveSaveTarget] = useState<UserCatalogSave | null>(null);
+
+  const handleMoveSave = useCallback(async (saveId: string, folderId: string | null) => {
+    await moveSaveMutation.mutateAsync({ id: saveId, data: { folderId } });
+    await qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() });
+  }, [moveSaveMutation, qc]);
+
+  // DnD for catalog saves
+  const [activeDragSave, setActiveDragSave] = useState<{ saveId: string; saveName: string } | null>(null);
+  const saveDndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
 
   const handleRenameSave = useCallback(
     async (saveId: string, displayLabel: string | null) => {
@@ -1549,6 +1897,28 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       if (t !== 0) return t;
       return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
+
+  const handleSaveDragStart = useCallback((event: DragStartEvent) => {
+    const data = event.active.data.current as { kind: string; saveId: string } | undefined;
+    if (data?.kind === "save") {
+      const save = visibleSaves.find((s) => s.id === data.saveId);
+      if (save) {
+        const name = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
+        setActiveDragSave({ saveId: data.saveId, saveName: name });
+      }
+    }
+  }, [visibleSaves]);
+
+  const handleSaveDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveDragSave(null);
+    const over = event.over;
+    if (!over) return;
+    const saveData = event.active.data.current as { kind: string; saveId: string } | undefined;
+    if (saveData?.kind !== "save") return;
+    const dropData = over.data.current as { kind: string; folderId?: string } | undefined;
+    const targetFolderId = dropData?.kind === "folder" ? (dropData.folderId ?? null) : null;
+    void handleMoveSave(saveData.saveId, targetFolderId);
+  }, [handleMoveSave]);
 
   const handleSave = useCallback(
     async (id: string) => {
@@ -1855,80 +2225,175 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
           )}
 
           {/* ── Catalog Saves section ── */}
-          {isSignedIn && (
-            <>
-              <div
-                style={{
-                  fontSize: 11,
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                  color: "#64748b",
-                  marginBottom: 8,
-                  marginTop: 16,
-                  paddingTop: 12,
-                  borderTop: "1px solid rgba(0,229,255,0.08)",
-                }}
+          {isSignedIn && (() => {
+            const saveTree = buildSaveTree(userFolders, visibleSaves);
+
+            const renderSave = (save: UserCatalogSave) => (
+              <DraggableSaveCard
+                key={save.id}
+                save={save}
+                onLoadUserDataset={handleLoadUserDataset}
+                onRetry={handleRetry}
+                retrying={retryingIds.has(save.id)}
+                onDelete={handleRequestDelete}
+                deleting={deletingIds.has(save.id)}
+                onRename={handleRenameSave}
+                onMoveTo={(s) => setMoveSaveTarget(s)}
+              />
+            );
+
+            const renderFolderNode = (node: SaveFolderNode): React.ReactNode => (
+              <SaveFolderSection
+                key={node.folder.id}
+                node={node}
+                isExpanded={saveFolderExpanded[node.folder.id] ?? false}
+                onToggle={() => handleToggleSaveFolder(node.folder.id)}
+                renderSave={renderSave}
+                renderSubFolder={renderFolderNode}
+              />
+            );
+
+            // Only show folders that have at least one save in their subtree
+            const visibleFolderRoots = saveTree.roots.filter(saveFolderNodeHasSaves);
+
+            return (
+              <DndContext
+                sensors={saveDndSensors}
+                onDragStart={handleSaveDragStart}
+                onDragEnd={handleSaveDragEnd}
               >
-                Catalog Saves
-              </div>
-              {deleteError && (
-                <div
-                  data-testid="save-delete-error"
-                  style={{
-                    marginBottom: 8,
-                    padding: "6px 8px",
-                    border: "1px solid rgba(248,113,113,0.4)",
-                    background: "rgba(248,113,113,0.08)",
-                    borderRadius: 4,
-                    fontSize: 13.5,
-                    color: "#fca5a5",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <span>⚠ {deleteError}</span>
-                  <button
-                    onClick={() => setDeleteError(null)}
-                    aria-label="Dismiss error"
+                <div>
+                  {/* Header row with section title and New Folder button */}
+                  <div
                     style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "#cbd5e1",
-                      cursor: "pointer",
-                      fontSize: 15,
+                      fontSize: 11,
+                      letterSpacing: "0.15em",
+                      textTransform: "uppercase",
+                      color: "#64748b",
+                      marginBottom: 8,
+                      marginTop: 16,
+                      paddingTop: 12,
+                      borderTop: "1px solid rgba(0,229,255,0.08)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
                     }}
                   >
-                    ×
-                  </button>
+                    <span>Catalog Saves</span>
+                    <button
+                      onClick={async () => {
+                        const name = `New folder ${userFolders.length + 1}`;
+                        await postFolderMutation.mutateAsync({ data: { name } });
+                        await qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() });
+                      }}
+                      disabled={postFolderMutation.isPending}
+                      title="New folder for saves"
+                      style={{
+                        background: "transparent",
+                        border: "1px solid rgba(0,229,255,0.3)",
+                        color: "#00e5ff",
+                        fontSize: 12,
+                        padding: "1px 6px",
+                        borderRadius: 2,
+                        cursor: postFolderMutation.isPending ? "not-allowed" : "pointer",
+                        opacity: postFolderMutation.isPending ? 0.5 : 1,
+                        letterSpacing: "0.08em",
+                      }}
+                    >
+                      + folder
+                    </button>
+                  </div>
+
+                  {deleteError && (
+                    <div
+                      data-testid="save-delete-error"
+                      style={{
+                        marginBottom: 8,
+                        padding: "6px 8px",
+                        border: "1px solid rgba(248,113,113,0.4)",
+                        background: "rgba(248,113,113,0.08)",
+                        borderRadius: 4,
+                        fontSize: 13.5,
+                        color: "#fca5a5",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <span>⚠ {deleteError}</span>
+                      <button
+                        onClick={() => setDeleteError(null)}
+                        aria-label="Dismiss error"
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "#cbd5e1",
+                          cursor: "pointer",
+                          fontSize: 15,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+
+                  {!isSaveFetching && visibleSaves.length === 0 && (
+                    <div
+                      style={{
+                        fontSize: 13.5,
+                        color: "#94a3b8",
+                        textAlign: "center",
+                        padding: "12px 0 16px",
+                      }}
+                    >
+                      No catalog saves yet — search and save some above
+                    </div>
+                  )}
+
+                  {/* Root-level saves (no folder) */}
+                  {saveTree.rootSaves.map(renderSave)}
+
+                  {/* Folder sections */}
+                  {visibleFolderRoots.map(renderFolderNode)}
                 </div>
-              )}
-              {!isSavePending && visibleSaves.length === 0 && (
-                <div
-                  style={{
-                    fontSize: 13.5,
-                    color: "#94a3b8",
-                    textAlign: "center",
-                    padding: "12px 0 16px",
-                  }}
-                >
-                  No catalog saves yet — search and save some above
-                </div>
-              )}
-              {visibleSaves.map((save) => (
-                <SaveCard
-                  key={save.id}
-                  save={save}
-                  onLoadUserDataset={handleLoadUserDataset}
-                  onRetry={handleRetry}
-                  retrying={retryingIds.has(save.id)}
-                  onDelete={handleRequestDelete}
-                  deleting={deletingIds.has(save.id)}
-                  onRename={handleRenameSave}
-                />
-              ))}
-            </>
+
+                {/* Drag overlay */}
+                <DragOverlay dropAnimation={null}>
+                  {activeDragSave && (
+                    <div
+                      style={{
+                        background: "rgba(0,10,20,0.9)",
+                        border: "1px solid rgba(0,229,255,0.4)",
+                        borderRadius: 4,
+                        padding: "6px 12px",
+                        color: "#e2e8f0",
+                        fontSize: 13.5,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        pointerEvents: "none",
+                      }}
+                    >
+                      📦 {activeDragSave.saveName}
+                    </div>
+                  )}
+                </DragOverlay>
+              </DndContext>
+            );
+          })()}
+
+          {/* Move-to-folder dialog */}
+          {moveSaveTarget && (
+            <SaveMoveDialog
+              save={moveSaveTarget}
+              folders={userFolders}
+              isPending={moveSaveMutation.isPending}
+              onCancel={() => setMoveSaveTarget(null)}
+              onConfirm={async (folderId) => {
+                await handleMoveSave(moveSaveTarget.id, folderId);
+                setMoveSaveTarget(null);
+              }}
+            />
+          )
           )}
         </div>
       )}

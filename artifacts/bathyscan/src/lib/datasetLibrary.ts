@@ -2,7 +2,7 @@
  * datasetLibrary — pure helpers for building and validating the user's
  * dataset folder tree. Kept side-effect-free for easy unit testing.
  */
-import type { DatasetFolder, UserDatasetMeta } from "@workspace/api-client-react";
+import type { DatasetFolder, UserCatalogSave, UserDatasetMeta } from "@workspace/api-client-react";
 
 export interface FolderNode {
   folder: DatasetFolder;
@@ -181,6 +181,79 @@ export function buildMoveOptions(
   };
   walk(tree.roots, 0);
   return opts;
+}
+
+// ---------------------------------------------------------------------------
+// Save tree — same concept as LibraryTree but for UserCatalogSave rows
+// ---------------------------------------------------------------------------
+
+export interface SaveFolderNode {
+  folder: DatasetFolder;
+  children: SaveFolderNode[];
+  saves: UserCatalogSave[];
+  depth: number;
+}
+
+export interface SaveTree {
+  roots: SaveFolderNode[];
+  rootSaves: UserCatalogSave[];
+  byId: Map<string, SaveFolderNode>;
+}
+
+/** Build a folder tree from flat lists of folders + catalog saves. */
+export function buildSaveTree(
+  folders: DatasetFolder[],
+  saves: UserCatalogSave[],
+): SaveTree {
+  const byId = new Map<string, SaveFolderNode>();
+  for (const f of folders) {
+    byId.set(f.id, { folder: f, children: [], saves: [], depth: 0 });
+  }
+
+  const roots: SaveFolderNode[] = [];
+  for (const f of folders) {
+    const node = byId.get(f.id)!;
+    if (f.parentId && byId.has(f.parentId)) {
+      byId.get(f.parentId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  const rootSaves: UserCatalogSave[] = [];
+  for (const s of saves) {
+    const fid = s.folderId ?? null;
+    if (fid && byId.has(fid)) {
+      byId.get(fid)!.saves.push(s);
+    } else {
+      rootSaves.push(s);
+    }
+  }
+
+  const safeName = (v: unknown): string => {
+    if (typeof v === "string") return v;
+    return v == null ? "" : String(v);
+  };
+  const sortNodes = (arr: SaveFolderNode[]) =>
+    arr.sort((a, b) =>
+      safeName(a.folder.name).localeCompare(safeName(b.folder.name), undefined, { sensitivity: "base" }),
+    );
+  sortNodes(roots);
+  const stack: { node: SaveFolderNode; depth: number }[] = roots.map((n) => ({ node: n, depth: 0 }));
+  while (stack.length) {
+    const { node, depth } = stack.pop()!;
+    node.depth = depth;
+    sortNodes(node.children);
+    for (const c of node.children) stack.push({ node: c, depth: depth + 1 });
+  }
+
+  return { roots, rootSaves, byId };
+}
+
+/** Returns true if a folder node (or any of its descendants) contains at least one save. */
+export function saveFolderNodeHasSaves(node: SaveFolderNode): boolean {
+  if (node.saves.length > 0) return true;
+  return node.children.some(saveFolderNodeHasSaves);
 }
 
 /** Suggest a non-colliding name in a parent: "New folder", "New folder 2", ... */

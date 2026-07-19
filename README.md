@@ -305,6 +305,7 @@ All routes are served under the `/api` prefix by the Express 5 server.
 | DELETE | `/datasets/my-saves/:id` | Delete a saved catalog dataset |
 | GET | `/datasets/my-saves/:id/status` | Poll the status of a user's save job |
 | PATCH | `/datasets/my-saves/:id/rename` | Set a user-defined display label for a catalog save |
+| PATCH | `/datasets/my-saves/:id/move` | Move a catalog save into a folder or back to root |
 | POST | `/datasets/my-saves/:id/retry` | Retry materialization of a failed save |
 
 ### Habitat & Substrate
