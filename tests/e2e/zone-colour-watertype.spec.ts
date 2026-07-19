@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "./fixtures";
+import { test, expect, type Page, DEFAULT_ZONE_SLOTS_JSON } from "./fixtures";
 
 /**
  * Zone-colour water-type isolation — end-to-end smoke test.
@@ -253,18 +253,12 @@ test.describe("Zone colour water-type isolation", () => {
       // a prior failed run that may have left a custom colour behind.
       // setItem with explicit defaults is used instead of removeItem to avoid
       // a race with Zustand store init (missing key → undefined state).
-      await page.evaluate(() => {
+      await page.evaluate((slotsJson: string) => {
         try {
-          const defaultSlots = JSON.stringify([
-            { color: "#f5d58a", visible: true },
-            { color: "#c49a6c", visible: true },
-            { color: "#8ab4d0", visible: true },
-            { color: "#b06060", visible: true },
-          ]);
-          localStorage.setItem("bathyscan:zoneOverlaySlots:saltwater", defaultSlots);
-          localStorage.setItem("bathyscan:zoneOverlaySlots:freshwater", defaultSlots);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:saltwater", slotsJson);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:freshwater", slotsJson);
         } catch {}
-      });
+      }, DEFAULT_ZONE_SLOTS_JSON);
       // Re-seed after clearing so the store picks up defaults from localStorage.
       await seedTerrain(page, "saltwater");
       await setWaterType(page, "saltwater");
@@ -439,18 +433,12 @@ test.describe("Zone colour water-type isolation", () => {
       // Restore zone slots to defaults rather than removing the keys (removing
       // leaves state undefined and races with Zustand rehydration in any
       // immediately following test in the same worker).
-      await page.evaluate(() => {
+      await page.evaluate((slotsJson: string) => {
         try {
-          const defaultSlots = JSON.stringify([
-            { color: "#f5d58a", visible: true },
-            { color: "#c49a6c", visible: true },
-            { color: "#8ab4d0", visible: true },
-            { color: "#b06060", visible: true },
-          ]);
-          localStorage.setItem("bathyscan:zoneOverlaySlots:saltwater", defaultSlots);
-          localStorage.setItem("bathyscan:zoneOverlaySlots:freshwater", defaultSlots);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:saltwater", slotsJson);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:freshwater", slotsJson);
         } catch {}
-      });
+      }, DEFAULT_ZONE_SLOTS_JSON);
     },
   );
 });

@@ -1,4 +1,4 @@
-import { test, expect, API_URL, E2E_USER_ID } from "./fixtures";
+import { test, expect, API_URL, E2E_USER_ID, DEFAULT_ZONE_SLOTS, DEFAULT_ZONE_SLOTS_JSON } from "./fixtures";
 
 /**
  * Zone colour server-sync round-trip — end-to-end coverage.
@@ -40,16 +40,6 @@ import { test, expect, API_URL, E2E_USER_ID } from "./fixtures";
 const SALTWATER_CUSTOM = "#c0ffee";
 const FRESHWATER_CUSTOM = "#ab4def";
 
-/** Build a default zoneOverlaySlots payload for pre-flight server reset. */
-function defaultZoneSlots(): { color: string; visible: boolean }[] {
-  return [
-    { color: "#f5d58a", visible: true },
-    { color: "#c49a6c", visible: true },
-    { color: "#8ab4d0", visible: true },
-    { color: "#b06060", visible: true },
-  ];
-}
-
 test.describe("Zone colour server-sync round-trip", () => {
   test(
     "saltwater slot colour persists to server and rehydrates after page reload",
@@ -63,8 +53,8 @@ test.describe("Zone colour server-sync round-trip", () => {
         headers: { "x-e2e-user-id": E2E_USER_ID },
         data: {
           zoneOverlaySlots: {
-            saltwater: defaultZoneSlots(),
-            freshwater: defaultZoneSlots(),
+            saltwater: DEFAULT_ZONE_SLOTS,
+            freshwater: DEFAULT_ZONE_SLOTS,
           },
         },
       });
@@ -74,18 +64,12 @@ test.describe("Zone colour server-sync round-trip", () => {
       // setItem is used instead of removeItem to avoid a race with the Zustand
       // store init: removing the key leaves the slot state undefined until the
       // next persist cycle, which may race with the server sync that follows.
-      await page.addInitScript(() => {
+      await page.addInitScript((slotsJson: string) => {
         try {
-          const defaultSlots = JSON.stringify([
-            { color: "#f5d58a", visible: true },
-            { color: "#c49a6c", visible: true },
-            { color: "#8ab4d0", visible: true },
-            { color: "#b06060", visible: true },
-          ]);
-          localStorage.setItem("bathyscan:zoneOverlaySlots:saltwater", defaultSlots);
-          localStorage.setItem("bathyscan:zoneOverlaySlots:freshwater", defaultSlots);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:saltwater", slotsJson);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:freshwater", slotsJson);
         } catch {}
-      });
+      }, DEFAULT_ZONE_SLOTS_JSON);
 
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");
@@ -229,25 +213,19 @@ test.describe("Zone colour server-sync round-trip", () => {
         headers: { "x-e2e-user-id": E2E_USER_ID },
         data: {
           zoneOverlaySlots: {
-            saltwater: defaultZoneSlots(),
-            freshwater: defaultZoneSlots(),
+            saltwater: DEFAULT_ZONE_SLOTS,
+            freshwater: DEFAULT_ZONE_SLOTS,
           },
         },
       });
 
       // ── Device A: mutate freshwater slot 1 and await server sync ─────────
-      await page.addInitScript(() => {
+      await page.addInitScript((slotsJson: string) => {
         try {
-          const defaultSlots = JSON.stringify([
-            { color: "#f5d58a", visible: true },
-            { color: "#c49a6c", visible: true },
-            { color: "#8ab4d0", visible: true },
-            { color: "#b06060", visible: true },
-          ]);
-          localStorage.setItem("bathyscan:zoneOverlaySlots:saltwater", defaultSlots);
-          localStorage.setItem("bathyscan:zoneOverlaySlots:freshwater", defaultSlots);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:saltwater", slotsJson);
+          localStorage.setItem("bathyscan:zoneOverlaySlots:freshwater", slotsJson);
         } catch {}
-      });
+      }, DEFAULT_ZONE_SLOTS_JSON);
 
       await page.goto("/");
       await page.waitForLoadState("domcontentloaded");

@@ -1,5 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 import { E2E_API_URL, E2E_RUN_SUFFIX } from "./ports";
+import { ZONE_DEFAULT_COLORS } from "../../artifacts/bathyscan/src/lib/zoneDefaultColors";
 import type { Page, Locator, APIRequestContext, APIResponse } from "@playwright/test";
 
 /**
@@ -36,6 +37,21 @@ import type { Page, Locator, APIRequestContext, APIResponse } from "@playwright/
  */
 
 export const API_URL = process.env["E2E_API_BASE_URL"] ?? E2E_API_URL;
+
+/**
+ * Default zone-slot array derived from the store's ZONE_DEFAULT_COLORS constant.
+ * Use this instead of inline literals so tests stay in sync when defaults change.
+ */
+export const DEFAULT_ZONE_SLOTS: readonly { color: string; visible: boolean }[] =
+  ZONE_DEFAULT_COLORS.map((color) => ({ color, visible: true as const }));
+
+/**
+ * Pre-serialised JSON string of DEFAULT_ZONE_SLOTS.
+ * Pass as the `arg` parameter to addInitScript / page.evaluate so Playwright
+ * can transfer the value into the browser context (closures lose outer-scope
+ * captures silently — always use the second-arg pattern).
+ */
+export const DEFAULT_ZONE_SLOTS_JSON: string = JSON.stringify(DEFAULT_ZONE_SLOTS);
 
 export function apiUrl(path: string): string {
   return `${API_URL}${path}`;
