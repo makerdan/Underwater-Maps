@@ -15,6 +15,7 @@ import {
   canvasToLonLat,
   renderViewCone,
   renderEfhOverlay,
+  renderIntertidalBand,
 } from "../lib/overviewRenderer";
 import { usePaletteStore } from "../lib/paletteStore";
 
@@ -1062,5 +1063,75 @@ describe("buildContourLines — known grid crossings", () => {
       expect(seg.y1).toBeGreaterThanOrEqual(0);
       expect(seg.y1).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderIntertidalBand — deep-water cells and null-MHW early exit
+// ---------------------------------------------------------------------------
+
+describe("renderIntertidalBand — deep-water cells and null-MHW early exit", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * A grid whose every cell is 50 m below datum (positive depth = open water).
+   * The teal lower-band condition is `depth <= 0 && depth >= -mhwM`.
+   * A depth of +50 fails the first predicate regardless of mhwM, so no pixel
+   * should receive a non-zero alpha even when mhwFt is a realistic 2 ft value.
+   */
+  it("does not colour any pixel when the grid contains only a 50 m-deep cell and mhwFt=2", () => {
+    const deepGrid = makeGrid({
+      width: 2,
+      height: 2,
+      depths: [50, 50, 50, 50],
+      minDepth: 50,
+      maxDepth: 50,
+    });
+
+    const { capturedImageDatas, createElementSpy } = setupCanvasMock();
+    const mainCtx = {
+      ...makeCtx(),
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    const t = makeTransform({ pxPerDeg: 100 });
+
+    renderIntertidalBand(mainCtx, deepGrid, deepGrid, t, /* mhwFt */ 2, /* mhhwFt */ null);
+    createElementSpy.mockRestore();
+
+    // Exactly one putImageData call for the 128×128 offscreen raster.
+    expect(capturedImageDatas.length).toBe(1);
+    const px = capturedImageDatas[0]!;
+
+    // Every alpha channel byte (indices 3, 7, 11, …) must remain 0 —
+    // no intertidal colour was painted over genuinely deep open-water cells.
+    let anyColored = false;
+    for (let i = 3; i < px.length; i += 4) {
+      if ((px[i] ?? 0) > 0) {
+        anyColored = true;
+        break;
+      }
+    }
+    expect(anyColored).toBe(false);
+  });
+
+  /**
+   * When mhwFt is null the function must return early before touching the
+   * canvas at all — neither the offscreen raster nor a drawImage call should
+   * be issued, regardless of what mhhwFt is set to.
+   */
+  it("returns without drawing anything when mhwFt is null even if mhhwFt is set", () => {
+    const grid = makeGrid();
+    const drawImageMock = vi.fn();
+    const mainCtx = {
+      ...makeCtx(),
+      drawImage: drawImageMock,
+    } as unknown as CanvasRenderingContext2D;
+    const t = makeTransform({ pxPerDeg: 100 });
+
+    renderIntertidalBand(mainCtx, grid, grid, t, /* mhwFt */ null, /* mhhwFt */ 6);
+
+    expect(drawImageMock).not.toHaveBeenCalled();
   });
 });
