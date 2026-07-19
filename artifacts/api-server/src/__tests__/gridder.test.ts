@@ -144,3 +144,102 @@ describe("gridPoints — smoothing option (Task #66)", () => {
     expect(def.depths).toEqual(smoothed.depths);
   });
 });
+
+describe("gridPoints — depth=0 shoreline spike suppression (uploaded survey path)", () => {
+  /**
+   * Simulates a near-shoreline uploaded BAG/CSV survey with a sharp
+   * waterline boundary: the left half of a 32×32 grid is at depth=0
+   * (shoreline) and the right half is at 25 m (open water).  One input
+   * point per grid cell (resolution=32 with a 32×32 input) ensures every
+   * cell is occupied — no IDW fill can blur the boundary before smoothSpikes
+   * runs, mirroring the exact geometry that caused the LRR spike artefact.
+   *
+   * The boundary column (col 15) sits directly adjacent to the 25 m column
+   * (col 16).  The atan2 slope test fires at ≈88° (well above the 70° limit)
+   * and the smoother blends col 15 from 0 m toward the 25 m neighbour.
+   */
+  const GRID_N = 32; // matches gridPoints resolution so every cell is occupied
+
+  function makeShorelineSurvey(): { lon: number; lat: number; depth: number }[] {
+    const pts: { lon: number; lat: number; depth: number }[] = [];
+    for (let r = 0; r < GRID_N; r++) {
+      for (let c = 0; c < GRID_N; c++) {
+        pts.push({
+          lon: -90.0 + c * 0.001,
+          lat: 30.0 + r * 0.001,
+          depth: c < GRID_N / 2 ? 0 : 25,
+        });
+      }
+    }
+    return pts;
+  }
+
+  it("smooths depth=0 shoreline cells adjacent to deep water — upload pipeline default (smoothing ON)", () => {
+    const pts = makeShorelineSurvey();
+    const N = GRID_N;
+
+    const smoothed = gridPoints(pts, N, "shore-smooth", "Shoreline Survey", {
+      smoothing: true,
+    });
+    const raw = gridPoints(pts, N, "shore-raw", "Shoreline Survey", {
+      smoothing: false,
+    });
+
+    // Raw grid: boundary col (N/2 − 1 = 15) is exactly 0 m; col 16 is 25 m.
+    const BOUNDARY_COL = N / 2 - 1;
+    expect(raw.depths[0 * N + BOUNDARY_COL]).toBe(0);
+    expect(raw.maxDepth - raw.minDepth).toBeGreaterThan(20);
+
+    // After smoothing, the boundary col must be blended above 0 — the
+    // depth=0 cell gets averaged with its 25 m right-neighbour.
+    expect(smoothed.depths[0 * N + BOUNDARY_COL]!).toBeGreaterThan(0);
+
+    // The depths arrays must differ — proves the smoother actually ran.
+    expect(smoothed.depths).not.toEqual(raw.depths);
+
+    // Every cell must be valid: finite depth or NaN (survey gap).  The
+    // smoother must never introduce Infinity or non-numeric values.
+    for (const d of smoothed.depths) {
+      expect(Number.isFinite(d) || Number.isNaN(d)).toBe(true);
+    }
+  });
+
+  it("default gridPoints call (no option) applies shoreline smoothing — mirrors upload worker behaviour", () => {
+    const pts = makeShorelineSurvey();
+    const N = GRID_N;
+
+    // The parse worker calls gridPoints(points, resolution, id, name, { smoothing })
+    // where smoothing defaults to the user's stored preference (true by default).
+    // Calling gridPoints without options must produce the same result as
+    // explicit smoothing:true — confirming the upload pipeline is protected.
+    const defaultGrid = gridPoints(pts, N, "shore-default", "Shoreline Survey");
+    const explicitSmooth = gridPoints(
+      pts,
+      N,
+      "shore-explicit",
+      "Shoreline Survey",
+      { smoothing: true },
+    );
+
+    expect(defaultGrid.depths).toEqual(explicitSmooth.depths);
+    // The boundary col must be smoothed above 0 in the default (on) path.
+    const BOUNDARY_COL = N / 2 - 1;
+    expect(defaultGrid.depths[0 * N + BOUNDARY_COL]!).toBeGreaterThan(0);
+  });
+
+  it("preserves depth=0 as a valid data value when smoothing is off (raw bathymetry mode)", () => {
+    // When the user disables "Smooth terrain spikes" the raw depth=0 shoreline
+    // cells must still be present and must not be coerced to NaN.
+    const pts = makeShorelineSurvey();
+    const raw = gridPoints(pts, GRID_N, "shore-raw-only", "Shoreline Survey", {
+      smoothing: false,
+    });
+
+    // Left half (col 0..15) stays at 0 m — shoreline cells are valid data.
+    expect(raw.minDepth).toBeLessThanOrEqual(1);
+    // All cells must be finite or NaN — no Infinity from unsmoothed transitions.
+    for (const d of raw.depths) {
+      expect(Number.isFinite(d) || Number.isNaN(d)).toBe(true);
+    }
+  });
+});
