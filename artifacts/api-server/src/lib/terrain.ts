@@ -115,8 +115,11 @@ export interface TerrainGrid {
  *   8 — Task #2379: Unfilled/nodata cells now use NaN sentinel (serialised as
  *       JSON null) instead of 0 so the client can render flat no-data tiles
  *       instead of surface spikes. Previously cached grids must be rebuilt.
+ *   9 — Task #2631: smoothSpikes applied in LRR build script so the
+ *       shoreline 0 → deep transitions no longer produce vertical dark spike
+ *       geometry. Previously cached LRR bundles must be invalidated.
  */
-export const TERRAIN_CACHE_VERSION = 8;
+export const TERRAIN_CACHE_VERSION = 9;
 
 export interface DatasetMeta {
   id: string;

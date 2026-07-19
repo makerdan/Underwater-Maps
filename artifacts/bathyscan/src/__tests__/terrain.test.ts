@@ -12,6 +12,7 @@ vi.mock("../lib/zoneMap", () => ({
 
 import {
   buildTerrainGeometry,
+  buildTerrainSkirtGeometry,
   computeZoneWeights,
   blendZoneWeights,
   worldXZToLonLat,
@@ -19,6 +20,7 @@ import {
   worldYToMetres,
   applyColormapToVertexColors,
   getTerrainSurfaceY,
+  NO_DATA_COLOR,
   WORLD_SIZE,
   MAX_DEPTH_WORLD,
 } from "../lib/terrain";
@@ -410,7 +412,133 @@ describe("applyColormapToVertexColors — band-boundary live repaint", () => {
   });
 });
 
-import { NO_DATA_COLOR } from "../lib/terrain";
+// ---------------------------------------------------------------------------
+// Negative-zero vertex Y — minDepth = 0 grids must never produce -0.0
+// ---------------------------------------------------------------------------
+
+describe("buildTerrainGeometry — no IEEE-754 −0 in position buffer (minDepth=0)", () => {
+  it("no vertex Y is −0 for a grid where minDepth=0 and depths include 0", () => {
+    const N = 4;
+    // Mix: some vertices at minDepth (depth=0, t=0 → would produce −0)
+    const depths = Array.from({ length: N * N }, (_, i) => i * 10) as number[]; // 0,10,20,...
+    const grid = makeGrid(N, { depths, minDepth: 0, maxDepth: (N * N - 1) * 10 });
+    const geo = buildTerrainGeometry(grid);
+    const positions = (geo as unknown as { attributes: { position: { array: Float32Array } } })
+      .attributes?.position?.array;
+    if (!positions) return;
+    for (let i = 0; i < N * N; i++) {
+      const y = positions[i * 3 + 1]!;
+      expect(Object.is(y, -0)).toBe(false);
+    }
+  });
+
+  it("vertex at depth=minDepth has Y===0 (positive zero, not −0)", () => {
+    const N = 2;
+    const grid = makeGrid(N, { depths: [0, 500, 500, 1000], minDepth: 0, maxDepth: 1000 });
+    const geo = buildTerrainGeometry(grid);
+    const positions = (geo as unknown as { attributes: { position: { array: Float32Array } } })
+      .attributes?.position?.array;
+    if (!positions) return;
+    expect(positions[1]).toBe(0);
+    expect(Object.is(positions[1], -0)).toBe(false);
+  });
+});
+
+describe("buildTerrainSkirtGeometry — no IEEE-754 −0 in wall top-edge vertices", () => {
+  it("no top-edge Y is −0 for a grid where minDepth=0 and some depths are 0", () => {
+    const N = 4;
+    const depths = Array.from({ length: N * N }, (_, i) => i % 2 === 0 ? 0 : 100) as number[];
+    const grid = makeGrid(N, { depths, minDepth: 0, maxDepth: 100 });
+    const geo = buildTerrainSkirtGeometry(grid);
+    const positions = (geo as unknown as { attributes?: { position?: { array?: Float32Array } } })
+      .attributes?.position?.array;
+    if (!positions) return;
+    for (let i = 0; i < positions.length / 3; i++) {
+      const y = positions[i * 3 + 1]!;
+      expect(Object.is(y, -0)).toBe(false);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Non-finite depth resilience
+// ---------------------------------------------------------------------------
+
+describe("buildTerrainGeometry — non-finite depths (NaN, Infinity, -Infinity)", () => {
+  it("does not throw when depths array contains NaN", () => {
+    const N = 3;
+    const depths = [0, NaN, 50, NaN, 100, NaN, 50, NaN, 0] as unknown as number[];
+    const grid = makeGrid(N, { depths, minDepth: 0, maxDepth: 100 });
+    expect(() => buildTerrainGeometry(grid)).not.toThrow();
+  });
+
+  it("does not throw when depths array contains Infinity", () => {
+    const N = 3;
+    const depths = [0, Infinity, 50, 100, -Infinity, 50, 0, 100, 50] as unknown as number[];
+    const grid = makeGrid(N, { depths, minDepth: 0, maxDepth: 100 });
+    expect(() => buildTerrainGeometry(grid)).not.toThrow();
+  });
+
+  it("produces no NaN or Infinity in the position buffer when depths has non-finite values", () => {
+    const N = 3;
+    const depths = [0, NaN, 50, Infinity, 100, -Infinity, 50, NaN, 0] as unknown as number[];
+    const grid = makeGrid(N, { depths, minDepth: 0, maxDepth: 100 });
+    const geo = buildTerrainGeometry(grid);
+    const positions = (geo as unknown as { attributes: { position: { array: Float32Array } } })
+      .attributes?.position?.array;
+    if (!positions) return;
+    for (let i = 0; i < positions.length; i++) {
+      expect(Number.isFinite(positions[i]!)).toBe(true);
+    }
+  });
+
+  it("NaN/Infinity depth cells are treated as survey gaps (Y=0, no-data colour)", () => {
+    const N = 2;
+    const depths = [NaN, 500, 500, 1000] as unknown as number[];
+    const grid = makeGrid(N, { depths, minDepth: 0, maxDepth: 1000 });
+    const geo = buildTerrainGeometry(grid);
+    const positions = (geo as unknown as { attributes: { position: { array: Float32Array } } })
+      .attributes?.position?.array;
+    const colorAttr = (geo as unknown as { attributes: { color: { array: Float32Array } } })
+      .attributes?.color?.array;
+    if (!positions || !colorAttr) return;
+    expect(positions[1]).toBe(0);
+    expect(colorAttr[0]).toBeCloseTo(NO_DATA_COLOR.r, 5);
+    expect(colorAttr[1]).toBeCloseTo(NO_DATA_COLOR.g, 5);
+    expect(colorAttr[2]).toBeCloseTo(NO_DATA_COLOR.b, 5);
+  });
+});
+
+describe("applyColormapToVertexColors — non-finite depth resilience", () => {
+  it("does not throw and preserves pre-filled colour for NaN depth cell", () => {
+    const depths: (number | null)[] = [NaN as unknown as number, 500];
+    const colors = new Float32Array(6);
+    colors[0] = 0.35; colors[1] = 0.45; colors[2] = 0.55;
+    expect(() =>
+      applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean")),
+    ).not.toThrow();
+    expect(colors[0]).toBeCloseTo(0.35, 5);
+    expect(colors[1]).toBeCloseTo(0.45, 5);
+    expect(colors[2]).toBeCloseTo(0.55, 5);
+  });
+
+  it("does not throw for Infinity or -Infinity depth values", () => {
+    const depths: (number | null)[] = [Infinity as unknown as number, -Infinity as unknown as number, 100];
+    const colors = new Float32Array(9);
+    expect(() =>
+      applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean")),
+    ).not.toThrow();
+  });
+
+  it("all result colour values are finite after a mix of valid and non-finite depths", () => {
+    const depths: (number | null)[] = [0, NaN as unknown as number, 500, Infinity as unknown as number, 1000, -Infinity as unknown as number];
+    const colors = new Float32Array(depths.length * 3);
+    applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean"));
+    for (let i = 0; i < colors.length; i++) {
+      expect(Number.isFinite(colors[i]!)).toBe(true);
+    }
+  });
+});
 
 describe("buildTerrainGeometry — null depth (survey-gap) cells", () => {
   it("null depth vertex is placed at Y=0 (water surface)", () => {

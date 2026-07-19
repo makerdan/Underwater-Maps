@@ -143,6 +143,44 @@ describe("formatTemperature", () => {
   });
 });
 
+describe("formatDepth — negative-zero normalisation", () => {
+  it("formatDepth(0, imperial) returns '0 ft' not '-0 ft'", () => {
+    const result = formatDepth(0, { units: "imperial", localize: false });
+    expect(result.startsWith("0")).toBe(true);
+    expect(result).not.toMatch(/^-0/);
+  });
+
+  it("formatDepth(-0, imperial) returns '0 ft' not '-0 ft'", () => {
+    const result = formatDepth(-0, { units: "imperial", localize: false });
+    expect(result.startsWith("0")).toBe(true);
+    expect(result).not.toMatch(/^-0/);
+  });
+
+  it("formatDepth(0, metric) returns '0 m' not '-0 m'", () => {
+    const result = formatDepth(0, { units: "metric", localize: false });
+    expect(result.startsWith("0")).toBe(true);
+    expect(result).not.toMatch(/^-0/);
+  });
+
+  it("formatDepth(-0, metric) returns '0 m' not '-0 m'", () => {
+    const result = formatDepth(-0, { units: "metric", localize: false });
+    expect(result.startsWith("0")).toBe(true);
+    expect(result).not.toMatch(/^-0/);
+  });
+
+  it("formatDepth(null) still returns '—'", () => {
+    expect(formatDepth(null)).toBe("—");
+  });
+
+  it("formatDepth(undefined) still returns '—'", () => {
+    expect(formatDepth(undefined)).toBe("—");
+  });
+
+  it("formatDepth(NaN) still returns '—'", () => {
+    expect(formatDepth(Number.NaN)).toBe("—");
+  });
+});
+
 describe("suffix helpers", () => {
   it("depthSuffix and distanceLargeSuffix follow the units preference", () => {
     expect(depthSuffix("metric")).toBe("m");

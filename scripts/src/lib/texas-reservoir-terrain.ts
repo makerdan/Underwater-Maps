@@ -131,6 +131,15 @@ export interface ReservoirSpec {
    *  invalidates the recorded hash and trips the drift-check unit test
    *  in api-server. Omit to skip embedding (legacy callers). */
   builderSrcPaths?: string[];
+  /**
+   * When true, run a smoothSpikes pass on the bathymetry depths array
+   * before writing the bundle to JSON. This blends cells whose depth
+   * gradient exceeds a near-vertical angle threshold, eliminating the
+   * dark vertical spike geometry that appears at shoreline transitions
+   * (depth=0 cells adjacent to deep cells). The interior survey data
+   * is largely unchanged; only abrupt 0→deep cliff edges are softened.
+   */
+  smoothBathymetry?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -553,6 +562,89 @@ async function tryTnrisTopography(): Promise<AttemptResult> {
 }
 
 // ---------------------------------------------------------------------------
+// Spike smoothing — 70° angle threshold
+// (Mirrors the same algorithm in artifacts/api-server/src/lib/terrain.ts so
+// the demoTerrain.gen.json bundle can be pre-smoothed at build time.  Any
+// change to the algorithm here should be reflected there and vice-versa.)
+// ---------------------------------------------------------------------------
+
+const SPIKE_ANGLE_THRESHOLD = 70 * (Math.PI / 180);
+const MAX_SMOOTH_ITERATIONS = 20;
+
+/**
+ * Smooth terrain spikes in-place by iteratively blending any cell whose
+ * slope angle to a 4-connected neighbour exceeds 70°.
+ *
+ * Angles are computed in normalised space so the threshold is
+ * resolution-independent:
+ *   - horizontal step  = 1 / (N − 1)  (fraction of full grid width)
+ *   - vertical step    = |heightDiff| / depthRange  (fraction of full range)
+ *
+ * Marked cells are replaced with the average of their valid neighbours.
+ * The process repeats until no new cells are marked (capped at
+ * MAX_SMOOTH_ITERATIONS for safety).  NaN cells (survey gaps) are skipped
+ * and never contribute slope information to their neighbours.
+ */
+function smoothSpikesInPlace(depths: number[], N: number, depthRange: number): void {
+  if (N < 3 || depthRange <= 0) return;
+
+  const cellSpacing = 1 / (N - 1);
+  const invRange    = 1 / depthRange;
+
+  for (let iter = 0; iter < MAX_SMOOTH_ITERATIONS; iter++) {
+    const toSmooth = new Uint8Array(N * N);
+    let anyMarked = false;
+
+    for (let row = 0; row < N; row++) {
+      for (let col = 0; col < N; col++) {
+        const idx   = row * N + col;
+        const depth = depths[idx]!;
+        if (Number.isNaN(depth)) continue;
+
+        const up    = row > 0       ? (row - 1) * N + col : -1;
+        const down  = row < N - 1   ? (row + 1) * N + col : -1;
+        const left  = col > 0       ? row * N + (col - 1) : -1;
+        const right = col < N - 1   ? row * N + (col + 1) : -1;
+
+        for (const nIdx of [up, down, left, right]) {
+          if (nIdx < 0) continue;
+          const nDepth = depths[nIdx]!;
+          if (Number.isNaN(nDepth)) continue;
+          const normDiff = Math.abs(depth - nDepth) * invRange;
+          if (Math.atan2(normDiff, cellSpacing) > SPIKE_ANGLE_THRESHOLD) {
+            toSmooth[idx] = 1;
+            anyMarked = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!anyMarked) break;
+
+    for (let row = 0; row < N; row++) {
+      for (let col = 0; col < N; col++) {
+        const idx = row * N + col;
+        if (!toSmooth[idx]) continue;
+
+        let sum   = 0;
+        let count = 0;
+        const tryNbr = (nIdx: number): void => {
+          const v = depths[nIdx]!;
+          if (!Number.isNaN(v)) { sum += v; count++; }
+        };
+        if (row > 0)     tryNbr((row - 1) * N + col);
+        if (row < N - 1) tryNbr((row + 1) * N + col);
+        if (col > 0)     tryNbr(row * N + (col - 1));
+        if (col < N - 1) tryNbr(row * N + (col + 1));
+
+        if (count > 0) depths[idx] = sum / count;
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // NHD waterbody polygon (used to mask bathymetry vs topography)
 // ---------------------------------------------------------------------------
 
@@ -772,6 +864,24 @@ export async function buildReservoirTerrainBundle(
   if (!isFinite(maxDepth)) maxDepth = 0;
   if (!isFinite(minTopo)) minTopo = 0;
   if (!isFinite(maxTopo)) maxTopo = 0;
+
+  if (spec.smoothBathymetry) {
+    const depthRange = maxDepth - minDepth;
+    console.log(`  Applying smoothSpikes pass (depthRange=${depthRange.toFixed(2)} m)…`);
+    smoothSpikesInPlace(depths, N, depthRange);
+    // Recompute minDepth/maxDepth after smoothing (values may shift slightly).
+    minDepth = Infinity; maxDepth = -Infinity;
+    for (let i = 0; i < N * N; i++) {
+      const d = depths[i]!;
+      if (isFinite(d)) {
+        if (d < minDepth) minDepth = d;
+        if (d > maxDepth) maxDepth = d;
+      }
+    }
+    if (!isFinite(minDepth)) minDepth = 0;
+    if (!isFinite(maxDepth)) maxDepth = 0;
+    console.log(`  After smoothing: depth range ${minDepth.toFixed(2)}–${maxDepth.toFixed(2)} m`);
+  }
 
   console.log(
     `  Bathymetry: ${surveyedDepthCells} cells from surveyed raster (${surveyed?.source ?? "none"}), ` +

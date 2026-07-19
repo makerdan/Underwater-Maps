@@ -37,10 +37,10 @@ export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
   for (let i = 0; i < depths.length; i++) {
     const depth = depths[i];
 
-    // Null (or undefined) depth → survey gap: render as flat tile at the
-    // water surface (t = 0) using a distinct muted steel-blue colour that
-    // the colormap pass will NOT overwrite (see applyColormapToVertexColors).
-    if (depth === null || depth === undefined) {
+    // Null, undefined, or non-finite depth → survey gap: render as flat tile
+    // at the water surface (t = 0) using a distinct muted steel-blue colour
+    // that the colormap pass will NOT overwrite (see applyColormapToVertexColors).
+    if (depth === null || depth === undefined || !Number.isFinite(depth)) {
       positions[i * 3 + 1] = 0;
       colors[i * 3]     = NO_DATA_COLOR.r;
       colors[i * 3 + 1] = NO_DATA_COLOR.g;
@@ -51,8 +51,10 @@ export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
     const t = (depth - minDepth) / depthRange;
     const clampedT = Math.max(0, Math.min(1, t));
 
-    // After rotateX(-PI/2), index 1 of each vertex triplet is world Y (up/down)
-    positions[i * 3 + 1] = -clampedT * MAX_DEPTH_WORLD;
+    // After rotateX(-PI/2), index 1 of each vertex triplet is world Y (up/down).
+    // Guard against IEEE-754 −0: when clampedT is exactly 0 the product
+    // −0 × MAX_DEPTH_WORLD yields −0.0, which stringifies as "−0" in the HUD.
+    positions[i * 3 + 1] = clampedT === 0 ? 0 : -clampedT * MAX_DEPTH_WORLD;
 
     // Neutral mid-grey placeholder — overwritten by the TerrainMesh colour effect.
     colors[i * 3]     = 0.5;
@@ -95,11 +97,13 @@ export function buildTerrainSkirtGeometry(grid: TerrainData): THREE.BufferGeomet
   const half = WORLD_SIZE / 2;
   const step = WORLD_SIZE / Math.max(1, N - 1);
 
-  // Null depth = survey gap → render at water surface (t = 0, y = 0).
+  // Null, undefined, or non-finite depth = survey gap → render at surface (y = 0).
+  // Guard against IEEE-754 −0: when t is exactly 0 the product −0 × MAX_DEPTH_WORLD
+  // yields −0.0, which stringifies as "−0" in the HUD.
   const topY = (depth: number | null | undefined): number => {
-    if (depth === null || depth === undefined) return 0;
+    if (depth === null || depth === undefined || !Number.isFinite(depth)) return 0;
     const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
-    return -t * MAX_DEPTH_WORLD;
+    return t === 0 ? 0 : -t * MAX_DEPTH_WORLD;
   };
 
   const positions: number[] = [];
@@ -575,9 +579,11 @@ export function applyColormapToVertexColors(
   const depthRange = (maxDepth - minDepth) || 1;
   for (let i = 0; i < depths.length; i++) {
     const depth = (depths as (number | null)[])[i];
-    // Null depth = survey gap — preserve the no-data colour already set by
-    // buildTerrainGeometry; do not overwrite it with the depth colormap.
-    if (depth === null || depth === undefined) continue;
+    // Null, undefined, or non-finite depth = survey gap — preserve the no-data
+    // colour already set by buildTerrainGeometry; do not overwrite it with the
+    // depth colormap. The non-finite check is belt-and-suspenders for any future
+    // data path that skips the server-side NaN → JSON null serialisation.
+    if (depth === null || depth === undefined || !Number.isFinite(depth)) continue;
     const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
     const c = toColor(t);
     colors[i * 3]     = c.r;

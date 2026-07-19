@@ -81,6 +81,9 @@ const SPEC: ReservoirSpec = {
     fileURLToPath(import.meta.url),
     resolve(__dirname, "lib/texas-reservoir-terrain.ts"),
   ],
+  // Apply spike-smoothing so abrupt 0→deep shoreline transitions do not
+  // produce near-vertical dark geometry in the rendered terrain.
+  smoothBathymetry: true,
 };
 
 export const RAY_ROBERTS_TERRAIN_OUT_PATH = OUT_PATH;

@@ -52,10 +52,14 @@ export function formatDepth(
   if (units !== "metric") {
     const ft = metres * M_TO_FT;
     const rounded = decimals > 0 ? Number(ft.toFixed(decimals)) : Math.round(ft);
-    return `${localize ? rounded.toLocaleString() : rounded} ft`;
+    // Normalise IEEE-754 −0 so the HUD never shows "−0 ft".
+    const normalized = Object.is(rounded, -0) ? 0 : rounded;
+    return `${localize ? normalized.toLocaleString() : normalized} ft`;
   }
   const rounded = decimals > 0 ? Number(metres.toFixed(decimals)) : Math.round(metres);
-  return `${localize ? rounded.toLocaleString() : rounded} m`;
+  // Normalise IEEE-754 −0 so the HUD never shows "−0 m".
+  const normalized = Object.is(rounded, -0) ? 0 : rounded;
+  return `${localize ? normalized.toLocaleString() : normalized} m`;
 }
 
 /**

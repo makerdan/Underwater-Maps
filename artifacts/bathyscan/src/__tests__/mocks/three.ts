@@ -108,7 +108,19 @@ export class MeshStandardMaterial extends _Stub {}
 export class MeshBasicMaterial extends _Stub {}
 export class LineBasicMaterial extends _Stub {}
 export class PointsMaterial extends _Stub {}
-export class BufferGeometry extends _Stub {}
+export class BufferGeometry {
+  attributes: Record<string, { array: Float32Array }> = {};
+  index: { array: Uint16Array | Uint32Array } | null = null;
+  setAttribute(name: string, attr: { array: Float32Array }) { this.attributes[name] = attr; return this; }
+  setIndex(idx: { array: Uint16Array | Uint32Array } | number[]) {
+    this.index = Array.isArray(idx) ? { array: new Uint32Array(idx) } : idx;
+  }
+  setDrawRange() {}
+  computeVertexNormals() {}
+  normalizeNormals() {}
+  rotateX() { return this; }
+  dispose() {}
+}
 export class PerspectiveCamera extends _Stub {
   fov = 60;
   near = 0.1;
@@ -128,6 +140,15 @@ export class BufferAttribute {
   itemSize: number;
   constructor(arr: Float32Array, itemSize: number) {
     this.array = arr;
+    this.itemSize = itemSize;
+  }
+}
+
+export class Float32BufferAttribute {
+  array: Float32Array;
+  itemSize: number;
+  constructor(arr: Float32Array | number[], itemSize: number) {
+    this.array = arr instanceof Float32Array ? arr : new Float32Array(arr);
     this.itemSize = itemSize;
   }
 }

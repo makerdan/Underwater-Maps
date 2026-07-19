@@ -204,6 +204,36 @@ describe("three stub — BufferAttribute", () => {
   });
 });
 
+describe("three stub — Float32BufferAttribute", () => {
+  it("is a constructor", () => {
+    expect(typeof ThreeStub.Float32BufferAttribute).toBe("function");
+  });
+
+  it("stores array and itemSize from Float32Array", () => {
+    const arr = new Float32Array([1, 2, 3]);
+    const attr = new ThreeStub.Float32BufferAttribute(arr, 3);
+    expect(attr.array).toBe(arr);
+    expect(attr.itemSize).toBe(3);
+  });
+
+  it("converts plain number[] to Float32Array", () => {
+    const attr = new ThreeStub.Float32BufferAttribute([1, 2, 3, 4, 5, 6], 3);
+    expect(attr.array).toBeInstanceOf(Float32Array);
+    expect(attr.array.length).toBe(6);
+  });
+});
+
+describe("three stub — BufferGeometry setAttribute", () => {
+  it("setAttribute stores into .attributes", () => {
+    const geo = new ThreeStub.BufferGeometry();
+    const arr = new Float32Array([0, 1, 2]);
+    const attr = new ThreeStub.Float32BufferAttribute(arr, 3);
+    geo.setAttribute("position", attr);
+    expect(geo.attributes["position"]).toBe(attr);
+    expect(geo.attributes["position"].array).toBe(arr);
+  });
+});
+
 describe("three stub — PlaneGeometry", () => {
   it("is a constructor", () => {
     expect(typeof ThreeStub.PlaneGeometry).toBe("function");
