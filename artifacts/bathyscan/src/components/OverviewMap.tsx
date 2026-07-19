@@ -999,8 +999,10 @@ export const OverviewMap: React.FC = () => {
     // grid otherwise (mirrors what initTransform does on first primary load).
     const canvas = canvasRef.current;
     if (canvas && withGrid.length > 0) {
-      const refGrid = worldGridRef.current ?? withGrid[0]!.overviewGrid!;
-      transformRef.current = computeInitialTransform(refGrid, canvas.width, canvas.height);
+      const refGrid = worldGridRef.current ?? withGrid.find((d) => d.overviewGrid != null)?.overviewGrid;
+      if (refGrid) {
+        transformRef.current = computeInitialTransform(refGrid, canvas.width, canvas.height);
+      }
     }
 
     dirtyRef.current = true;

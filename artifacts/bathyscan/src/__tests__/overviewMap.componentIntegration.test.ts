@@ -531,3 +531,108 @@ describe("OverviewMap — renderEfhLegend called/suppressed by LOD gate and over
     spy.mockRestore();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 4. Null overviewGrid guard — no crash when a visible dataset has no grid yet
+//
+// OverviewMap.tsx useEffect (line ~987):
+//   const withGrid = visibleDatasets.filter(v => !!v.overviewGrid);
+//   ...
+//   const refGrid = worldGridRef.current ?? withGrid.find(d => d.overviewGrid != null)?.overviewGrid;
+//   if (refGrid) { transformRef.current = computeInitialTransform(refGrid, ...); }
+//
+// Before the guard, withGrid[0]!.overviewGrid! would throw if a dataset
+// appeared in visibleDatasets before its grid loaded.  This describe block
+// verifies the guard holds: mounting with overviewGrid: null on the primary
+// entry must not crash and must leave the canvas in a drawable state.
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — null overviewGrid in visibleDatasets does not crash", () => {
+  beforeEach(() => {
+    mockConfig.efhData = undefined;
+  });
+
+  it("renders without throwing when the primary visibleDataset has overviewGrid: null", async () => {
+    Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
+
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: "loading-ds", source: "preset", overviewGrid: null, activeGrid: null },
+      ],
+      primaryDatasetId: "loading-ds",
+      overviewGrid: null,
+      activeGrid: null,
+    });
+
+    useUiStore.setState({
+      substrateColorMode: false,
+      selectedSubstrate: null,
+      efhOverlayEnabled: false,
+      overviewOpen: true,
+      pendingDropIn: null,
+    });
+
+    useCameraStore.setState({
+      cameraLon: -120.5,
+      cameraLat: 48.0,
+      heading: 0,
+      cameraDepth: 50,
+      cameraAltitude: 30,
+    });
+
+    // Should not throw during mount or the first rAF frame.
+    await expect(
+      act(async () => {
+        renderWithProviders(withQuery(React.createElement(OverviewMap)));
+      }),
+    ).resolves.not.toThrow();
+
+    // The canvas must be present even though no transform was computed yet.
+    const canvas = document.querySelector('canvas[data-testid="overview-map-canvas"]');
+    expect(canvas).not.toBeNull();
+  });
+
+  it("renders without throwing when one dataset has a grid and a second has overviewGrid: null", async () => {
+    Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
+
+    const grid = makeOverviewGrid();
+
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null },
+        { datasetId: "loading-ds", source: "preset", overviewGrid: null, activeGrid: null },
+      ],
+      primaryDatasetId: grid.datasetId,
+      overviewGrid: grid,
+      activeGrid: null,
+    });
+
+    useUiStore.setState({
+      substrateColorMode: false,
+      selectedSubstrate: null,
+      efhOverlayEnabled: false,
+      overviewOpen: true,
+      pendingDropIn: null,
+    });
+
+    useCameraStore.setState({
+      cameraLon: -120.5,
+      cameraLat: 48.0,
+      heading: 0,
+      cameraDepth: 50,
+      cameraAltitude: 30,
+    });
+
+    await expect(
+      act(async () => {
+        renderWithProviders(withQuery(React.createElement(OverviewMap)));
+      }),
+    ).resolves.not.toThrow();
+
+    // The camera-arrow confirms a full rAF draw completed — the primary grid
+    // was available so the transform and bitmap should have been computed.
+    await waitForCameraArrow();
+  });
+});
