@@ -131,7 +131,7 @@ describe("useUndoableMarkerDelete", () => {
     const { result } = renderHook(() => useUndoableMarkerDelete());
 
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
 
     expect(cacheGet().map((m) => m.id)).toEqual(["m2"]);
@@ -142,7 +142,7 @@ describe("useUndoableMarkerDelete", () => {
     const { result } = renderHook(() => useUndoableMarkerDelete());
 
     act(() => {
-      result.current({ id: "m2", label: "Point B" }, "ds-1");
+      result.current.requestDelete({ id: "m2", label: "Point B" }, "ds-1");
     });
 
     expect(toastFn).toHaveBeenCalledOnce();
@@ -156,7 +156,7 @@ describe("useUndoableMarkerDelete", () => {
     const { result } = renderHook(() => useUndoableMarkerDelete());
 
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
 
     expect(cacheGet().map((m) => m.id)).toEqual(["m2"]);
@@ -173,7 +173,7 @@ describe("useUndoableMarkerDelete", () => {
     const { result } = renderHook(() => useUndoableMarkerDelete());
 
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
 
     expect(deleteMutate).not.toHaveBeenCalled();
@@ -190,7 +190,7 @@ describe("useUndoableMarkerDelete", () => {
     const { result } = renderHook(() => useUndoableMarkerDelete());
 
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
 
     act(() => {
@@ -211,7 +211,7 @@ describe("useUndoableMarkerDelete", () => {
     const { result, unmount } = renderHook(() => useUndoableMarkerDelete());
 
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
 
     expect(deleteMutate).not.toHaveBeenCalled();
@@ -228,7 +228,7 @@ describe("useUndoableMarkerDelete", () => {
     const { result } = renderHook(() => useUndoableMarkerDelete());
 
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
 
     act(() => {
@@ -247,12 +247,12 @@ describe("useUndoableMarkerDelete", () => {
     const { result } = renderHook(() => useUndoableMarkerDelete());
 
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
 
     // Second call for the same marker while the first is still in its undo window.
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
 
     // Advance past both possible timers.
@@ -269,7 +269,7 @@ describe("useUndoableMarkerDelete", () => {
     const { result } = renderHook(() => useUndoableMarkerDelete());
 
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
 
     // Advance past the undo window so the first mutation fires.
@@ -282,7 +282,7 @@ describe("useUndoableMarkerDelete", () => {
     // The mutation is now in-flight (onSuccess/onError have not been called).
     // A second requestDelete for the same marker should be a no-op.
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
 
     act(() => {
@@ -298,7 +298,7 @@ describe("useUndoableMarkerDelete", () => {
 
     // First delete — goes through undo window and network.
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
     act(() => {
       vi.advanceTimersByTime(UNDO_WINDOW_MS);
@@ -316,7 +316,7 @@ describe("useUndoableMarkerDelete", () => {
 
     // Second delete for the same marker should now be accepted.
     act(() => {
-      result.current({ id: "m1", label: "Point A" }, "ds-1");
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
     });
     act(() => {
       vi.advanceTimersByTime(UNDO_WINDOW_MS);

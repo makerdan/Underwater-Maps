@@ -2410,7 +2410,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     { datasetId: markerDatasetId },
     { query: { enabled: !!markerDatasetId, queryKey: getGetMarkersQueryKey({ datasetId: markerDatasetId }) } },
   );
-  const requestMarkerDelete = useUndoableMarkerDelete();
+  const { requestDelete: requestMarkerDelete } = useUndoableMarkerDelete();
 
   const handleDeleteMarker = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();

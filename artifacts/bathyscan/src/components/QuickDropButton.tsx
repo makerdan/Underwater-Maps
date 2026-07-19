@@ -49,7 +49,7 @@ export const QuickDropButton: React.FC = () => {
   const qc = useQueryClient();
   const { toast } = useToast();
   const postMarkers = usePostMarkers();
-  const requestDelete = useUndoableMarkerDelete();
+  const { requestDelete } = useUndoableMarkerDelete();
 
   const [busy, setBusy] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

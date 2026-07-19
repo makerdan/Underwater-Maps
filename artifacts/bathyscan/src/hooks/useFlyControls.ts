@@ -93,9 +93,11 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   const driveBoatReverse = () => useDriftStore.getState().driveBoatReverse;
 
   const queryClient = useQueryClient();
-  const requestMarkerDelete = useUndoableMarkerDelete();
+  const { requestDelete: requestMarkerDelete, isDeletePending: isMarkerDeletePending } = useUndoableMarkerDelete();
   const requestMarkerDeleteRef = useRef(requestMarkerDelete);
+  const isMarkerDeletePendingRef = useRef(isMarkerDeletePending);
   useEffect(() => { requestMarkerDeleteRef.current = requestMarkerDelete; }, [requestMarkerDelete]);
+  useEffect(() => { isMarkerDeletePendingRef.current = isMarkerDeletePending; }, [isMarkerDeletePending]);
 
   // Settings: sensitivity and invert-Y for mouse look
   const mouseSensitivity = useSettingsStore((s) => s.mouseSensitivity);
@@ -644,6 +646,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         {
           label: "Delete marker",
           icon: "🗑️",
+          pending: isMarkerDeletePendingRef.current(
+            marker.id,
+            terrainRef.current?.datasetId ?? "",
+          ),
           onClick: () => {
             // Capture datasetId at action time so a mid-flight dataset switch
             // doesn't cause us to invalidate the wrong query key.

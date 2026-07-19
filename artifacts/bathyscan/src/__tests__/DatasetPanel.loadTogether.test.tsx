@@ -245,7 +245,7 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 vi.mock("@/hooks/useUndoableMarkerDelete", () => ({
-  useUndoableMarkerDelete: () => vi.fn(),
+  useUndoableMarkerDelete: () => ({ requestDelete: vi.fn(), isDeletePending: vi.fn().mockReturnValue(false) }),
 }));
 
 vi.mock("@/lib/fetchWithProgress", () => ({

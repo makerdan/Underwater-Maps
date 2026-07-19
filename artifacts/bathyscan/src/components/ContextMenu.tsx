@@ -183,19 +183,21 @@ export const ContextMenu: React.FC = () => {
             />
           );
         }
+        const isBlocked = item.disabled || item.pending;
         return (
           <li
             key={i}
             role="menuitem"
-            tabIndex={item.disabled ? -1 : 0}
-            aria-disabled={item.disabled || undefined}
+            tabIndex={isBlocked ? -1 : 0}
+            aria-disabled={isBlocked || undefined}
+            aria-busy={item.pending || undefined}
             onClick={() => {
-              if (item.disabled) return;
+              if (isBlocked) return;
               item.onClick();
               hide();
             }}
             onKeyDown={(e) => {
-              if (item.disabled) return;
+              if (isBlocked) return;
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 item.onClick();
@@ -203,14 +205,14 @@ export const ContextMenu: React.FC = () => {
               }
             }}
             onMouseEnter={(e) => {
-              if (item.disabled) return;
+              if (isBlocked) return;
               e.currentTarget.style.background = "rgba(0,229,255,0.08)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = "transparent";
             }}
             onFocus={(e) => {
-              if (item.disabled) return;
+              if (isBlocked) return;
               e.currentTarget.style.background = "rgba(0,229,255,0.08)";
             }}
             onBlur={(e) => {
@@ -218,8 +220,8 @@ export const ContextMenu: React.FC = () => {
             }}
             style={{
               padding: "6px 10px",
-              cursor: item.disabled ? "not-allowed" : "pointer",
-              opacity: item.disabled ? 0.4 : 1,
+              cursor: isBlocked ? "not-allowed" : "pointer",
+              opacity: isBlocked ? 0.45 : 1,
               borderRadius: 2,
               display: "flex",
               alignItems: "center",
@@ -228,9 +230,24 @@ export const ContextMenu: React.FC = () => {
               userSelect: "none",
             }}
           >
-            {item.icon && (
-              <span style={{ width: 16, textAlign: "center" }}>{item.icon}</span>
-            )}
+            <span style={{ width: 16, textAlign: "center", flexShrink: 0 }}>
+              {item.pending ? (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: "inline-block",
+                    width: 12,
+                    height: 12,
+                    border: "2px solid rgba(0,229,255,0.3)",
+                    borderTopColor: "rgba(0,229,255,0.85)",
+                    borderRadius: "50%",
+                    animation: "context-menu-spin 0.7s linear infinite",
+                  }}
+                />
+              ) : item.icon ? (
+                item.icon
+              ) : null}
+            </span>
             <span>{item.label}</span>
           </li>
         );

@@ -194,7 +194,7 @@ vi.mock("@/lib/activeLoadStore", () => ({
 }));
 
 vi.mock("@/hooks/useUndoableMarkerDelete", () => ({
-  useUndoableMarkerDelete: () => vi.fn(),
+  useUndoableMarkerDelete: () => ({ requestDelete: vi.fn(), isDeletePending: vi.fn().mockReturnValue(false) }),
 }));
 
 // markerEditStore uses the real Zustand store so we can inspect calls.

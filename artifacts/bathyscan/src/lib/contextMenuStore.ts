@@ -6,6 +6,8 @@ export interface ContextMenuItem {
   onClick: () => void;
   separator?: boolean;
   disabled?: boolean;
+  /** Item is processing (e.g. delete pending/in-flight). Renders dimmed with a spinner; click is suppressed. */
+  pending?: boolean;
 }
 
 interface ContextMenuStore {

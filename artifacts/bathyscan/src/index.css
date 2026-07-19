@@ -395,3 +395,7 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
     display: none;
   }
 }
+
+@keyframes context-menu-spin {
+  to { transform: rotate(360deg); }
+}

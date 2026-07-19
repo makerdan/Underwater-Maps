@@ -215,5 +215,13 @@ export function useUndoableMarkerDelete() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
-  return requestDelete;
+  const isDeletePending = useCallback(
+    (markerId: string, datasetId: string): boolean => {
+      const undoKey = `${datasetId}:${markerId}`;
+      return pendingRef.current.has(undoKey) || mutatingRef.current.has(markerId);
+    },
+    [],
+  );
+
+  return { requestDelete, isDeletePending };
 }
