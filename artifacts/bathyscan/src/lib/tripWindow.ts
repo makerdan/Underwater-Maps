@@ -47,12 +47,31 @@ export const GO_WAVE_M = 0.8;
 export const NOGO_WIND_KN = 22;
 export const NOGO_WAVE_M = 1.5;
 
+/** User-tunable thresholds for the Trip Window classifier. */
+export interface TripThresholds {
+  goWindKn: number;
+  goWaveM: number;
+  noGoWindKn: number;
+  noGoWaveM: number;
+}
+
+/** Default thresholds that match today's fixed constants. */
+export const DEFAULT_TRIP_THRESHOLDS: TripThresholds = {
+  goWindKn: GO_WIND_KN,
+  goWaveM: GO_WAVE_M,
+  noGoWindKn: NOGO_WIND_KN,
+  noGoWaveM: NOGO_WAVE_M,
+};
+
 /** Classify a single forecast hour as go / marginal / no-go. */
-export function classifyHour(h: TripForecastHour): TripVerdict {
-  if (h.windSpeedKnots >= NOGO_WIND_KN || h.waveHeightM >= NOGO_WAVE_M) {
+export function classifyHour(
+  h: TripForecastHour,
+  thresholds: TripThresholds = DEFAULT_TRIP_THRESHOLDS,
+): TripVerdict {
+  if (h.windSpeedKnots >= thresholds.noGoWindKn || h.waveHeightM >= thresholds.noGoWaveM) {
     return "no-go";
   }
-  if (h.windSpeedKnots < GO_WIND_KN && h.waveHeightM < GO_WAVE_M) {
+  if (h.windSpeedKnots < thresholds.goWindKn && h.waveHeightM < thresholds.goWaveM) {
     return "go";
   }
   return "marginal";
@@ -66,7 +85,10 @@ export function classifyHour(h: TripForecastHour): TripVerdict {
  * be genuinely contiguous to count toward a trip duration. Hours with
  * non-finite wind/wave values are skipped (and break the stretch).
  */
-export function computeTripWindows(hours: TripForecastHour[]): TripWindow[] {
+export function computeTripWindows(
+  hours: TripForecastHour[],
+  thresholds: TripThresholds = DEFAULT_TRIP_THRESHOLDS,
+): TripWindow[] {
   const out: TripWindow[] = [];
   let cur: TripWindow | null = null;
   let prevRelHour: number | null = null;
@@ -82,7 +104,7 @@ export function computeTripWindows(hours: TripForecastHour[]): TripWindow[] {
       continue;
     }
 
-    const verdict = classifyHour(h);
+    const verdict = classifyHour(h, thresholds);
     const contiguous = prevRelHour !== null && h.relHour === prevRelHour + 1;
 
     if (cur && contiguous && cur.verdict === verdict) {

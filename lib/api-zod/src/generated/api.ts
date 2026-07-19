@@ -1266,6 +1266,20 @@ export const getSettingsResponseTripMinDurationHDefault = 0;
 export const getSettingsResponseTripMinDurationHMin = 0;
 export const getSettingsResponseTripMinDurationHMax = 12;
 
+export const getSettingsResponseBoatGoWindKnDefault = 12;
+export const getSettingsResponseBoatGoWindKnMax = 50;
+
+export const getSettingsResponseBoatGoWaveMDefault = 0.8;
+export const getSettingsResponseBoatGoWaveMMin = 0.1;
+export const getSettingsResponseBoatGoWaveMMax = 5;
+
+export const getSettingsResponseBoatNoGoWindKnDefault = 22;
+export const getSettingsResponseBoatNoGoWindKnMax = 70;
+
+export const getSettingsResponseBoatNoGoWaveMDefault = 1.5;
+export const getSettingsResponseBoatNoGoWaveMMin = 0.1;
+export const getSettingsResponseBoatNoGoWaveMMax = 8;
+
 export const getSettingsResponseDefaultTidalDepthLayerDefault = `surface`;
 export const getSettingsResponseCurrentArrowDensityDefault = `normal`;
 export const getSettingsResponseWindOverlayStyleDefault = `arrows`;
@@ -1452,6 +1466,10 @@ export const GetSettingsResponse = zod.object({
   "markerClusterThreshold": zod.number().min(getSettingsResponseMarkerClusterThresholdMin).max(getSettingsResponseMarkerClusterThresholdMax).default(getSettingsResponseMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(getSettingsResponseAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
   "tripMinDurationH": zod.number().min(getSettingsResponseTripMinDurationHMin).max(getSettingsResponseTripMinDurationHMax).int().default(getSettingsResponseTripMinDurationHDefault).describe('Minimum trip length in hours for the Trip Window finder. Windows shorter than this are dimmed. 0 = show all windows.'),
+  "boatGoWindKn": zod.number().min(1).max(getSettingsResponseBoatGoWindKnMax).default(getSettingsResponseBoatGoWindKnDefault).describe('Wind speed (knots) below which an hour counts as \"go\" in the Trip Window finder. Raise for a larger vessel, lower for a kayak.'),
+  "boatGoWaveM": zod.number().min(getSettingsResponseBoatGoWaveMMin).max(getSettingsResponseBoatGoWaveMMax).default(getSettingsResponseBoatGoWaveMDefault).describe('Wave height (metres) below which an hour counts as \"go\" in the Trip Window finder.'),
+  "boatNoGoWindKn": zod.number().min(1).max(getSettingsResponseBoatNoGoWindKnMax).default(getSettingsResponseBoatNoGoWindKnDefault).describe('Wind speed (knots) at or above which an hour becomes \"no-go\" in the Trip Window finder.'),
+  "boatNoGoWaveM": zod.number().min(getSettingsResponseBoatNoGoWaveMMin).max(getSettingsResponseBoatNoGoWaveMMax).default(getSettingsResponseBoatNoGoWaveMDefault).describe('Wave height (metres) at or above which an hour becomes \"no-go\" in the Trip Window finder.'),
   "defaultTidalDepthLayer": zod.enum(['surface', 'mid', 'near-bottom']).default(getSettingsResponseDefaultTidalDepthLayerDefault).describe('Depth layer pre-selected in the tidal overlay controls.'),
   "currentArrowDensity": zod.enum(['sparse', 'normal', 'dense']).default(getSettingsResponseCurrentArrowDensityDefault).describe('Global density of current direction arrows shown across all depth layers.'),
   "layerArrowDensity": zod.object({
@@ -1701,6 +1719,20 @@ export const putSettingsBodyTripMinDurationHDefault = 0;
 export const putSettingsBodyTripMinDurationHMin = 0;
 export const putSettingsBodyTripMinDurationHMax = 12;
 
+export const putSettingsBodyBoatGoWindKnDefault = 12;
+export const putSettingsBodyBoatGoWindKnMax = 50;
+
+export const putSettingsBodyBoatGoWaveMDefault = 0.8;
+export const putSettingsBodyBoatGoWaveMMin = 0.1;
+export const putSettingsBodyBoatGoWaveMMax = 5;
+
+export const putSettingsBodyBoatNoGoWindKnDefault = 22;
+export const putSettingsBodyBoatNoGoWindKnMax = 70;
+
+export const putSettingsBodyBoatNoGoWaveMDefault = 1.5;
+export const putSettingsBodyBoatNoGoWaveMMin = 0.1;
+export const putSettingsBodyBoatNoGoWaveMMax = 8;
+
 export const putSettingsBodyDefaultTidalDepthLayerDefault = `surface`;
 export const putSettingsBodyCurrentArrowDensityDefault = `normal`;
 export const putSettingsBodyWindOverlayStyleDefault = `arrows`;
@@ -1887,6 +1919,10 @@ export const PutSettingsBody = zod.object({
   "markerClusterThreshold": zod.number().min(putSettingsBodyMarkerClusterThresholdMin).max(putSettingsBodyMarkerClusterThresholdMax).default(putSettingsBodyMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(putSettingsBodyAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
   "tripMinDurationH": zod.number().min(putSettingsBodyTripMinDurationHMin).max(putSettingsBodyTripMinDurationHMax).int().default(putSettingsBodyTripMinDurationHDefault).describe('Minimum trip length in hours for the Trip Window finder. Windows shorter than this are dimmed. 0 = show all windows.'),
+  "boatGoWindKn": zod.number().min(1).max(putSettingsBodyBoatGoWindKnMax).default(putSettingsBodyBoatGoWindKnDefault).describe('Wind speed (knots) below which an hour counts as \"go\" in the Trip Window finder. Raise for a larger vessel, lower for a kayak.'),
+  "boatGoWaveM": zod.number().min(putSettingsBodyBoatGoWaveMMin).max(putSettingsBodyBoatGoWaveMMax).default(putSettingsBodyBoatGoWaveMDefault).describe('Wave height (metres) below which an hour counts as \"go\" in the Trip Window finder.'),
+  "boatNoGoWindKn": zod.number().min(1).max(putSettingsBodyBoatNoGoWindKnMax).default(putSettingsBodyBoatNoGoWindKnDefault).describe('Wind speed (knots) at or above which an hour becomes \"no-go\" in the Trip Window finder.'),
+  "boatNoGoWaveM": zod.number().min(putSettingsBodyBoatNoGoWaveMMin).max(putSettingsBodyBoatNoGoWaveMMax).default(putSettingsBodyBoatNoGoWaveMDefault).describe('Wave height (metres) at or above which an hour becomes \"no-go\" in the Trip Window finder.'),
   "defaultTidalDepthLayer": zod.enum(['surface', 'mid', 'near-bottom']).default(putSettingsBodyDefaultTidalDepthLayerDefault).describe('Depth layer pre-selected in the tidal overlay controls.'),
   "currentArrowDensity": zod.enum(['sparse', 'normal', 'dense']).default(putSettingsBodyCurrentArrowDensityDefault).describe('Global density of current direction arrows shown across all depth layers.'),
   "layerArrowDensity": zod.object({
@@ -2131,6 +2167,20 @@ export const putSettingsResponseTripMinDurationHDefault = 0;
 export const putSettingsResponseTripMinDurationHMin = 0;
 export const putSettingsResponseTripMinDurationHMax = 12;
 
+export const putSettingsResponseBoatGoWindKnDefault = 12;
+export const putSettingsResponseBoatGoWindKnMax = 50;
+
+export const putSettingsResponseBoatGoWaveMDefault = 0.8;
+export const putSettingsResponseBoatGoWaveMMin = 0.1;
+export const putSettingsResponseBoatGoWaveMMax = 5;
+
+export const putSettingsResponseBoatNoGoWindKnDefault = 22;
+export const putSettingsResponseBoatNoGoWindKnMax = 70;
+
+export const putSettingsResponseBoatNoGoWaveMDefault = 1.5;
+export const putSettingsResponseBoatNoGoWaveMMin = 0.1;
+export const putSettingsResponseBoatNoGoWaveMMax = 8;
+
 export const putSettingsResponseDefaultTidalDepthLayerDefault = `surface`;
 export const putSettingsResponseCurrentArrowDensityDefault = `normal`;
 export const putSettingsResponseWindOverlayStyleDefault = `arrows`;
@@ -2317,6 +2367,10 @@ export const PutSettingsResponse = zod.object({
   "markerClusterThreshold": zod.number().min(putSettingsResponseMarkerClusterThresholdMin).max(putSettingsResponseMarkerClusterThresholdMax).default(putSettingsResponseMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(putSettingsResponseAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
   "tripMinDurationH": zod.number().min(putSettingsResponseTripMinDurationHMin).max(putSettingsResponseTripMinDurationHMax).int().default(putSettingsResponseTripMinDurationHDefault).describe('Minimum trip length in hours for the Trip Window finder. Windows shorter than this are dimmed. 0 = show all windows.'),
+  "boatGoWindKn": zod.number().min(1).max(putSettingsResponseBoatGoWindKnMax).default(putSettingsResponseBoatGoWindKnDefault).describe('Wind speed (knots) below which an hour counts as \"go\" in the Trip Window finder. Raise for a larger vessel, lower for a kayak.'),
+  "boatGoWaveM": zod.number().min(putSettingsResponseBoatGoWaveMMin).max(putSettingsResponseBoatGoWaveMMax).default(putSettingsResponseBoatGoWaveMDefault).describe('Wave height (metres) below which an hour counts as \"go\" in the Trip Window finder.'),
+  "boatNoGoWindKn": zod.number().min(1).max(putSettingsResponseBoatNoGoWindKnMax).default(putSettingsResponseBoatNoGoWindKnDefault).describe('Wind speed (knots) at or above which an hour becomes \"no-go\" in the Trip Window finder.'),
+  "boatNoGoWaveM": zod.number().min(putSettingsResponseBoatNoGoWaveMMin).max(putSettingsResponseBoatNoGoWaveMMax).default(putSettingsResponseBoatNoGoWaveMDefault).describe('Wave height (metres) at or above which an hour becomes \"no-go\" in the Trip Window finder.'),
   "defaultTidalDepthLayer": zod.enum(['surface', 'mid', 'near-bottom']).default(putSettingsResponseDefaultTidalDepthLayerDefault).describe('Depth layer pre-selected in the tidal overlay controls.'),
   "currentArrowDensity": zod.enum(['sparse', 'normal', 'dense']).default(putSettingsResponseCurrentArrowDensityDefault).describe('Global density of current direction arrows shown across all depth layers.'),
   "layerArrowDensity": zod.object({

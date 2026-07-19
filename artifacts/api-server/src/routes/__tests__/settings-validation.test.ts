@@ -134,6 +134,50 @@ describe("PUT /api/settings — HTTP validation", () => {
     expect(fractional.status).toBe(400);
   });
 
+  it("accepts valid boat threshold values and rejects out-of-range / non-number values", async () => {
+    const okGo = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-boat")
+      .send({ boatGoWindKn: 10, boatGoWaveM: 0.5, boatNoGoWindKn: 16, boatNoGoWaveM: 1.0 });
+    expect(okGo.status).toBe(200);
+
+    const okLarge = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-boat")
+      .send({ boatGoWindKn: 18, boatGoWaveM: 1.2, boatNoGoWindKn: 30, boatNoGoWaveM: 2.5 });
+    expect(okLarge.status).toBe(200);
+
+    const windTooHigh = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-boat")
+      .send({ boatGoWindKn: 51 });
+    expect(windTooHigh.status).toBe(400);
+
+    const waveTooLow = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-boat")
+      .send({ boatGoWaveM: 0.0 });
+    expect(waveTooLow.status).toBe(400);
+
+    const noGoWindTooHigh = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-boat")
+      .send({ boatNoGoWindKn: 71 });
+    expect(noGoWindTooHigh.status).toBe(400);
+
+    const noGoWaveTooHigh = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-boat")
+      .send({ boatNoGoWaveM: 9.0 });
+    expect(noGoWaveTooHigh.status).toBe(400);
+
+    const wrongType = await request(app)
+      .put("/api/settings")
+      .set("x-e2e-user-id", "user-settings-boat")
+      .send({ boatGoWindKn: "calm" });
+    expect(wrongType.status).toBe(400);
+  });
+
   it("accepts a valid followResumeDelaySec and rejects out-of-range values", async () => {
     const ok = await request(app)
       .put("/api/settings")

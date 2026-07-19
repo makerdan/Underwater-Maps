@@ -1000,6 +1000,30 @@ export interface UserSettings {
      * @maximum 12
      */
   tripMinDurationH?: number;
+  /**
+     * Wind speed (knots) below which an hour counts as "go" in the Trip Window finder. Raise for a larger vessel, lower for a kayak.
+     * @minimum 1
+     * @maximum 50
+     */
+  boatGoWindKn?: number;
+  /**
+     * Wave height (metres) below which an hour counts as "go" in the Trip Window finder.
+     * @minimum 0.1
+     * @maximum 5
+     */
+  boatGoWaveM?: number;
+  /**
+     * Wind speed (knots) at or above which an hour becomes "no-go" in the Trip Window finder.
+     * @minimum 1
+     * @maximum 70
+     */
+  boatNoGoWindKn?: number;
+  /**
+     * Wave height (metres) at or above which an hour becomes "no-go" in the Trip Window finder.
+     * @minimum 0.1
+     * @maximum 8
+     */
+  boatNoGoWaveM?: number;
   /** Depth layer pre-selected in the tidal overlay controls. */
   defaultTidalDepthLayer?: UserSettingsDefaultTidalDepthLayer;
   /** Global density of current direction arrows shown across all depth layers. */

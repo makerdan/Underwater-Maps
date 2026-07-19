@@ -60,7 +60,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 26;
+export const SETTINGS_SCHEMA_VERSION = 27;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -299,6 +299,14 @@ export interface SettingsState {
    * outings. 0 = no minimum (show every window normally).
    */
   tripMinDurationH: number;
+  /** Wind speed (knots) below which an hour counts as "go". Matches the boatGoWindKn server setting. */
+  boatGoWindKn: number;
+  /** Wave height (metres) below which an hour counts as "go". Matches the boatGoWaveM server setting. */
+  boatGoWaveM: number;
+  /** Wind speed (knots) at or above which an hour becomes "no-go". */
+  boatNoGoWindKn: number;
+  /** Wave height (metres) at or above which an hour becomes "no-go". */
+  boatNoGoWaveM: number;
   defaultTidalDepthLayer: TidalDepthLayer;
   currentArrowDensity: CurrentArrowDensity;
   /**
@@ -618,6 +626,10 @@ interface SettingsActions {
   // Tidal
   setAutoLoadTidal: (v: boolean) => void;
   setTripMinDurationH: (v: number) => void;
+  setBoatGoWindKn: (v: number) => void;
+  setBoatGoWaveM: (v: number) => void;
+  setBoatNoGoWindKn: (v: number) => void;
+  setBoatNoGoWaveM: (v: number) => void;
   setDefaultTidalDepthLayer: (v: TidalDepthLayer) => void;
   setCurrentArrowDensity: (v: CurrentArrowDensity) => void;
   setLayerArrowDensity: (layer: TidalDepthLayer, density: CurrentArrowDensity) => void;
@@ -904,6 +916,10 @@ export const DEFAULT_SETTINGS: SettingsState = {
   // Tidal
   autoLoadTidal: false,
   tripMinDurationH: 0,
+  boatGoWindKn: 12,
+  boatGoWaveM: 0.8,
+  boatNoGoWindKn: 22,
+  boatNoGoWaveM: 1.5,
   defaultTidalDepthLayer: "surface",
   currentArrowDensity: "normal",
   layerArrowDensity: { surface: "normal", mid: "normal", "near-bottom": "normal" },
@@ -1029,7 +1045,8 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "visibleMarkerTypes", "privateMarkers", "markerClusterThreshold",
   ],
   tidal: [
-    "autoLoadTidal", "tripMinDurationH", "defaultTidalDepthLayer", "currentArrowDensity",
+    "autoLoadTidal", "tripMinDurationH", "boatGoWindKn", "boatGoWaveM", "boatNoGoWindKn", "boatNoGoWaveM",
+    "defaultTidalDepthLayer", "currentArrowDensity",
     "layerArrowDensity", "windOverlayStyle", "tideOverlayStyle", "currentOverlayStyle",
     "weatherStationsActive", "rawsOverlayActive", "windOverlayActive",
     "tideOverlayActive", "currentOverlayActive", "currentDepthLayers",
@@ -1198,6 +1215,10 @@ export const useSettingsStore = create<SettingsStore>()(
         // Tidal
         setAutoLoadTidal: setter("autoLoadTidal"),
         setTripMinDurationH: setter("tripMinDurationH"),
+        setBoatGoWindKn: setter("boatGoWindKn"),
+        setBoatGoWaveM: setter("boatGoWaveM"),
+        setBoatNoGoWindKn: setter("boatNoGoWindKn"),
+        setBoatNoGoWaveM: setter("boatNoGoWaveM"),
         setDefaultTidalDepthLayer: setter("defaultTidalDepthLayer"),
         setCurrentArrowDensity: setter("currentArrowDensity"),
         setLayerArrowDensity: (layer, density) =>
@@ -1635,6 +1656,22 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).followResumeDelaySec === undefined) {
             migratedFollowResume.followResumeDelaySec = DEFAULT_SETTINGS.followResumeDelaySec;
           }
+          // v26 → v27: inject per-boat condition threshold defaults so existing
+          // users get the same fixed thresholds they had before (12 kn / 0.8 m
+          // for "go", 22 kn / 1.5 m for "no-go").
+          const migratedBoatThresholds: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).boatGoWindKn === undefined) {
+            migratedBoatThresholds.boatGoWindKn = DEFAULT_SETTINGS.boatGoWindKn;
+          }
+          if ((rest as Record<string, unknown>).boatGoWaveM === undefined) {
+            migratedBoatThresholds.boatGoWaveM = DEFAULT_SETTINGS.boatGoWaveM;
+          }
+          if ((rest as Record<string, unknown>).boatNoGoWindKn === undefined) {
+            migratedBoatThresholds.boatNoGoWindKn = DEFAULT_SETTINGS.boatNoGoWindKn;
+          }
+          if ((rest as Record<string, unknown>).boatNoGoWaveM === undefined) {
+            migratedBoatThresholds.boatNoGoWaveM = DEFAULT_SETTINGS.boatNoGoWaveM;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1650,6 +1687,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedTripWindow,
             ...migratedCoordSearch,
             ...migratedFollowResume,
+            ...migratedBoatThresholds,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

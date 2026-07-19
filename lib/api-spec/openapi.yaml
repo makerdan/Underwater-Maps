@@ -5307,6 +5307,30 @@ components:
           maximum: 12
           default: 0
           description: Minimum trip length in hours for the Trip Window finder. Windows shorter than this are dimmed. 0 = show all windows.
+        boatGoWindKn:
+          type: number
+          minimum: 1
+          maximum: 50
+          default: 12
+          description: Wind speed (knots) below which an hour counts as "go" in the Trip Window finder. Raise for a larger vessel, lower for a kayak.
+        boatGoWaveM:
+          type: number
+          minimum: 0.1
+          maximum: 5.0
+          default: 0.8
+          description: Wave height (metres) below which an hour counts as "go" in the Trip Window finder.
+        boatNoGoWindKn:
+          type: number
+          minimum: 1
+          maximum: 70
+          default: 22
+          description: Wind speed (knots) at or above which an hour becomes "no-go" in the Trip Window finder.
+        boatNoGoWaveM:
+          type: number
+          minimum: 0.1
+          maximum: 8.0
+          default: 1.5
+          description: Wave height (metres) at or above which an hour becomes "no-go" in the Trip Window finder.
         defaultTidalDepthLayer:
           type: string
           enum: [surface, mid, near-bottom]

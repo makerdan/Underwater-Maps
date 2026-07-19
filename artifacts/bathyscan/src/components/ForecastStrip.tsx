@@ -12,21 +12,15 @@ import React, { useEffect, useRef } from "react";
 import { useSurfaceConditions, type ForecastHour } from "@/hooks/useSurfaceConditions";
 import { useDriftStore } from "@/lib/driftStore";
 import { useAppState } from "@/lib/context";
+import { useSettingsStore } from "@/lib/settingsStore";
 import { LocationBadge } from "@/components/LocationBadge";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const GOOD_WIND_KN = 12;
-const GOOD_WAVE_M = 0.8;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function isGoodFishing(h: ForecastHour): boolean {
-  return h.windSpeedKnots < GOOD_WIND_KN && h.waveHeightM < GOOD_WAVE_M;
+function isGoodFishing(h: ForecastHour, goWindKn: number, goWaveM: number): boolean {
+  return h.windSpeedKnots < goWindKn && h.waveHeightM < goWaveM;
 }
 
 function conditionLabel(avgWind: number, maxWave: number): string {
@@ -146,6 +140,8 @@ export const ForecastStrip: React.FC = () => {
   const { terrain } = useAppState();
   const setDriftHour = useDriftStore((s) => s.setDriftHour);
   const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
+  const boatGoWindKn = useSettingsStore((s) => s.boatGoWindKn);
+  const boatGoWaveM = useSettingsStore((s) => s.boatGoWaveM);
   const nowRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
 
@@ -281,7 +277,7 @@ export const ForecastStrip: React.FC = () => {
             flexShrink: 0,
           }}
         />
-        Good fishing (&lt;{GOOD_WIND_KN} kn, &lt;{GOOD_WAVE_M}m)
+        Good conditions (&lt;{boatGoWindKn} kn, &lt;{boatGoWaveM.toFixed(1)}m)
       </div>
 
       {/* Horizontally scrollable hour strip */}
@@ -306,7 +302,7 @@ export const ForecastStrip: React.FC = () => {
           {forecast48h.map((slot, i) => {
             const isNow = i === 0;
             const isTomorrow = slot.relHour >= 24;
-            const fishing = isGoodFishing(slot);
+            const fishing = isGoodFishing(slot, boatGoWindKn, boatGoWaveM);
             return (
               <div
                 key={i}
@@ -315,7 +311,7 @@ export const ForecastStrip: React.FC = () => {
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleSlotClick(slot.relHour); }}
-                aria-label={`${isNow ? "Now" : formatUtcHour(slot.isoTime)} UTC — wind ${slot.windSpeedKnots.toFixed(0)} kn, wave ${slot.waveHeightM.toFixed(1)} m${fishing ? ", good fishing" : ""}`}
+                aria-label={`${isNow ? "Now" : formatUtcHour(slot.isoTime)} UTC — wind ${slot.windSpeedKnots.toFixed(0)} kn, wave ${slot.waveHeightM.toFixed(1)} m${fishing ? ", good conditions" : ""}`}
                 style={{
                   width: 46,
                   flexShrink: 0,
