@@ -19,7 +19,7 @@
  *   • TROLLING_PRESET_WAYPOINTS_MAX (50) per preset — longer routes are
  *     downsampled with a clear notice.
  */
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useQueryClient } from "@tanstack/react-query";
@@ -137,6 +137,18 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const importingRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef);
+
+  useEffect(() => {
+    if (!isImporting) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isImporting]);
 
   const bounds = useMemo<Bounds>(
     () => ({
