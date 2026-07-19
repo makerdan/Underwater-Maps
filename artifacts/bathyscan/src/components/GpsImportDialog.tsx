@@ -659,7 +659,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           {phase.kind === "pick" && (
             <>
               <p style={{ margin: "0 0 10px", color: "#e2e8f0", lineHeight: 1.5 }}>
-                Pick a <strong style={{ color: "#cbd5e1" }}>.gpx, .kml, .kmz, .csv, .xlsx, or .xls</strong> file.{" "}
+                Pick a <strong style={{ color: "#cbd5e1" }}>.gpx, .kml, .kmz, .csv, or .xlsx</strong> file <span style={{ color: "#94a3b8", fontWeight: 400 }}>(legacy .xls not supported)</span>.{" "}
                 {bounds
                   ? "Points outside this dataset's bounding box will be skipped automatically."
                   : "All points will be saved as unassigned markers (no active dataset)."}
@@ -668,7 +668,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                 ref={fileInputRef}
                 data-testid="gps-import-file-input"
                 type="file"
-                accept=".gpx,.kml,.kmz,.csv,.xlsx,.xls,application/gpx+xml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                accept=".gpx,.kml,.kmz,.csv,.xlsx,application/gpx+xml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={handleFileInput}
                 style={{
                   color: "#cbd5e1",
