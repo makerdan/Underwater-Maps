@@ -72,6 +72,12 @@ const fragmentShader = /* glsl */ `
   uniform vec3  uSunDir;
   uniform vec3  uLampPos;
 
+  // Intertidal band overlay
+  // Both values are elevations in metres *above* MLLW (positive).
+  // 0.0 means "not set / disabled".
+  uniform float uIntertidalMhwM;   // MHW elevation in metres above MLLW
+  uniform float uIntertidalMhhwM;  // MHHW elevation in metres above MLLW
+
   // Zone overlay
   uniform float uZoneOverlay;
   uniform vec3  uZoneTint0;
@@ -238,6 +244,40 @@ const fragmentShader = /* glsl */ `
       }
     }
 
+    // ── Intertidal band overlay ─────────────────────────────────────────────
+    // Reconstruct the true depth of this fragment (metres, positive = below
+    // MLLW) from its world-Y coordinate and the grid's depth range.
+    // Terrain vertices above MLLW have a negative reconstructed depth.
+    //
+    // Two sub-bands, each with a distinct pastel tint:
+    //   Lower intertidal (MLLW → MHW)  — teal  (regularly submerged)
+    //   Upper intertidal (MHW → MHHW)  — amber (occasionally submerged)
+    //
+    // When only MHW is set (uIntertidalMhhwM == 0) the full zone from MLLW
+    // to MHW receives the teal tint.  When neither datum is set the block
+    // is a no-op and costs a single branch test.
+    if (uIntertidalMhwM > 0.0) {
+      // Depth in metres relative to MLLW.  Negative values are above MLLW.
+      float depthM = uGridMinDepth
+                   + (-vWorldPos.y / 50.0) * (uGridMaxDepth - uGridMinDepth);
+
+      // Lower intertidal: MLLW (depthM = 0) down to –MHW metres elevation
+      bool inLower = (depthM <= 0.0 && depthM >= -uIntertidalMhwM);
+
+      // Upper intertidal: MHW to MHHW (only when MHHW datum is provided)
+      bool inUpper = (uIntertidalMhhwM > uIntertidalMhwM)
+                   && (depthM < -uIntertidalMhwM)
+                   && (depthM >= -uIntertidalMhhwM);
+
+      if (inLower) {
+        // Teal — lower intertidal (regularly submerged at low tide)
+        finalColor = mix(finalColor, vec3(0.18, 0.78, 0.62) * lighting, 0.32);
+      } else if (inUpper) {
+        // Amber — upper intertidal (exposed most of the time)
+        finalColor = mix(finalColor, vec3(0.88, 0.65, 0.20) * lighting, 0.32);
+      }
+    }
+
     gl_FragColor = vec4(finalColor, uOpacity);
   }
 `;
@@ -329,6 +369,11 @@ export function createTerrainShaderMaterial(
       // it only when the loaded grid reports a synthetic data source.
       uSynthetic: { value: 0 },
       uTime:      { value: 0 },
+      // Intertidal band overlay — 0.0 = disabled (no datums resolved yet).
+      // Values are elevations in metres above MLLW; set by TerrainMesh from
+      // useIntertidal() whenever the effective MHW/MHHW datums change.
+      uIntertidalMhwM:  { value: 0 },
+      uIntertidalMhhwM: { value: 0 },
     },
     transparent: true,
     side: THREE.DoubleSide,

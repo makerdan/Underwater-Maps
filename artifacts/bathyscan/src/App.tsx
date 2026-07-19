@@ -58,6 +58,7 @@ import { SeafloorClassificationPanel } from "@/components/SeafloorClassification
 import { FindDataPanel } from "@/components/FindDataPanel";
 import { HabitatPanel } from "@/components/HabitatPanel";
 import { HabitatLegend } from "@/components/HabitatLegend";
+import { IntertidalBandLegend } from "@/components/IntertidalBandLegend";
 import { QueryPanel } from "@/components/QueryPanel";
 import { TrailRecorder } from "@/components/TrailRecorder";
 import { VirtualJoystick } from "@/components/VirtualJoystick";
@@ -1203,6 +1204,10 @@ function Main() {
             (top-left HUD) is collapsed or hidden. Renders nothing unless a
             species is active. */}
         <HabitatLegend />
+
+        {/* Floating intertidal band key — shows MHW/MHHW elevation boundaries
+            in the user's active units. Renders nothing until datums resolve. */}
+        <IntertidalBandLegend />
 
         {/* Help launch button — upper-left of main interactive area */}
         <HelpButton />

@@ -13,6 +13,7 @@ import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { useSettingsStore, deriveEffectiveColormapTheme } from "@/lib/settingsStore";
+import { useIntertidal } from "@/lib/useIntertidal";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { getColormap } from "@/lib/colormap";
 import { useWebglContextStore } from "@/lib/webglContextStore";
@@ -249,6 +250,18 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     const terrainExaggeration = useSettingsStore((s) => s.terrainExaggeration);
     const habitatOverlayIntensity = useSettingsStore((s) => s.habitatOverlayIntensity);
     const habitatOverlayColor = useSettingsStore((s) => s.habitatOverlayColor);
+
+    // Intertidal datums — update shader uniforms whenever the effective MHW /
+    // MHHW values change (user override or station datum resolved / cleared).
+    // Values are in feet above MLLW; convert to metres for the shader.
+    const { mhwFt, mhhwFt } = useIntertidal();
+    useEffect(() => {
+      const FT_TO_M = 0.3048;
+      material.uniforms["uIntertidalMhwM"]!.value =
+        mhwFt !== null && mhwFt > 0 ? mhwFt * FT_TO_M : 0;
+      material.uniforms["uIntertidalMhhwM"]!.value =
+        mhhwFt !== null && mhhwFt > 0 ? mhhwFt * FT_TO_M : 0;
+    }, [mhwFt, mhhwFt, material]);
 
     // Sync grid depth range into shader when grid changes.
     useEffect(() => {
