@@ -25,6 +25,7 @@ import {
   useDeleteDatasetsMySavesId,
   useDeleteUserDatasetsId,
   usePatchUserDatasetsIdRename,
+  usePatchDatasetsMySavesIdRename,
   useGetNceiSearch,
   usePostNceiSave,
   getGetNceiSearchQueryKey,
@@ -586,24 +587,107 @@ const SaveCard: React.FC<{
   retrying: boolean;
   onDelete: (save: UserCatalogSave) => void;
   deleting: boolean;
-}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting }) => {
+  onRename: (saveId: string, displayLabel: string | null) => Promise<void>;
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename }) => {
   const statusColor = STATUS_COLORS[save.status] ?? "#e2e8f0";
   const icon = save.catalog ? (DATA_TYPE_ICONS[save.catalog.dataType] ?? "📦") : "📦";
+
+  const displayName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
+
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+
+  const startEdit = useCallback(() => {
+    setEditValue(displayName);
+    setRenameError(null);
+    setEditing(true);
+  }, [displayName]);
+
+  const cancelEdit = useCallback(() => {
+    setEditing(false);
+    setRenameError(null);
+  }, []);
+
+  const commitEdit = useCallback(async () => {
+    const trimmed = editValue.trim();
+    if (!trimmed) {
+      setRenameError("Name cannot be empty");
+      return;
+    }
+    if (trimmed === displayName) {
+      setEditing(false);
+      setRenameError(null);
+      return;
+    }
+    setRenaming(true);
+    try {
+      await onRename(save.id, trimmed);
+      setEditing(false);
+      setRenameError(null);
+    } catch (err) {
+      setRenameError(
+        err instanceof Error && err.message ? err.message : "Could not rename save",
+      );
+    } finally {
+      setRenaming(false);
+    }
+  }, [editValue, save.id, displayName, onRename]);
 
   return (
     <div
       style={{ ...CARD, borderLeft: `2px solid ${statusColor}40`, opacity: deleting ? 0.5 : 1 }}
       data-testid={`save-card-${save.id}`}
-      aria-busy={deleting || undefined}
+      aria-busy={deleting || renaming || undefined}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 18 }}>{icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, color: "#e2e8f0", fontWeight: 600, marginBottom: 1 }}>
-            {save.catalog?.name ?? save.catalogId}
-          </div>
+          {editing ? (
+            <input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void commitEdit();
+                if (e.key === "Escape") cancelEdit();
+              }}
+              disabled={renaming}
+              autoFocus
+              aria-label={`Rename catalog save ${displayName}`}
+              data-testid={`input-rename-save-${save.id}`}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                fontSize: 14,
+                fontFamily: "inherit",
+                color: "#e2e8f0",
+                background: "rgba(0,229,255,0.06)",
+                border: "1px solid rgba(0,229,255,0.35)",
+                borderRadius: 3,
+                padding: "2px 6px",
+                marginBottom: 1,
+              }}
+            />
+          ) : (
+            <div
+              title={displayName}
+              data-testid={`text-save-name-${save.id}`}
+              style={{
+                fontSize: 15,
+                color: "#e2e8f0",
+                fontWeight: 600,
+                marginBottom: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {displayName}
+            </div>
+          )}
           <div style={{ fontSize: 12, color: "#94a3b8" }}>
-            {save.catalog?.sourceAgency ?? "—"}
+            {save.displayLabel ? (save.catalog?.name ?? save.catalogId) : (save.catalog?.sourceAgency ?? "—")}
           </div>
         </div>
         <span
@@ -616,11 +700,34 @@ const SaveCard: React.FC<{
         >
           {save.status}
         </span>
+        {!editing && (
+          <ViewscreenTooltip label="Rename this saved dataset" side="left">
+            <button
+              type="button"
+              data-testid={`btn-rename-save-${save.id}`}
+              aria-label={`Rename catalog save ${displayName}`}
+              disabled={deleting}
+              onClick={startEdit}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#cbd5e1",
+                cursor: deleting ? "wait" : "pointer",
+                fontSize: 14,
+                lineHeight: 1,
+                padding: "0 2px",
+                flexShrink: 0,
+              }}
+            >
+              ✎
+            </button>
+          </ViewscreenTooltip>
+        )}
         <ViewscreenTooltip label="Delete this saved dataset" side="left">
           <button
             type="button"
             data-testid={`btn-delete-save-${save.id}`}
-            aria-label={`Delete saved dataset ${save.catalog?.name ?? save.catalogId}`}
+            aria-label={`Delete saved dataset ${displayName}`}
             disabled={deleting}
             onClick={() => onDelete(save)}
             style={{
@@ -638,6 +745,56 @@ const SaveCard: React.FC<{
           </button>
         </ViewscreenTooltip>
       </div>
+      {editing && (
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <button
+            type="button"
+            onClick={() => void commitEdit()}
+            disabled={renaming}
+            data-testid={`btn-rename-save-commit-${save.id}`}
+            style={{
+              fontSize: 11,
+              padding: "2px 10px",
+              background: "rgba(0,229,255,0.1)",
+              border: "1px solid rgba(0,229,255,0.3)",
+              borderRadius: 3,
+              color: "#00e5ff",
+              cursor: renaming ? "wait" : "pointer",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            {renaming ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={cancelEdit}
+            disabled={renaming}
+            data-testid={`btn-rename-save-cancel-${save.id}`}
+            style={{
+              fontSize: 11,
+              padding: "2px 10px",
+              background: "transparent",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 3,
+              color: "#e2e8f0",
+              cursor: renaming ? "wait" : "pointer",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {renameError && (
+        <div
+          data-testid={`rename-save-error-${save.id}`}
+          style={{ marginTop: 6, fontSize: 12, color: "#fca5a5" }}
+        >
+          ⚠ {renameError}
+        </div>
+      )}
       {save.status === "ready" && save.datasetId && (
         <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
           <button
@@ -1204,6 +1361,15 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
 
   const deleteUploadMutation = useDeleteUserDatasetsId();
   const renameUploadMutation = usePatchUserDatasetsIdRename();
+  const renameSaveMutation = usePatchDatasetsMySavesIdRename();
+
+  const handleRenameSave = useCallback(
+    async (saveId: string, displayLabel: string | null) => {
+      await renameSaveMutation.mutateAsync({ id: saveId, data: { displayLabel } });
+      await qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() });
+    },
+    [renameSaveMutation, qc],
+  );
 
   const handleRenameUpload = useCallback(
     async (id: string, name: string) => {
@@ -1759,6 +1925,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   retrying={retryingIds.has(save.id)}
                   onDelete={handleRequestDelete}
                   deleting={deletingIds.has(save.id)}
+                  onRename={handleRenameSave}
                 />
               ))}
             </>

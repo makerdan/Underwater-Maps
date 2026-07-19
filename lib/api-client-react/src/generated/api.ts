@@ -107,6 +107,7 @@ import type {
   MoveDatasetFolderBody,
   NceiPortalResult,
   NceiPortalSaveBody,
+  PatchDatasetsMySavesIdRenameBody,
   PatchRouteBody,
   PoeClassifyRequest,
   PoeError,
@@ -5031,6 +5032,83 @@ export function useGetDatasetsMySavesIdStatus<TData = Awaited<ReturnType<typeof 
 
 
 
+
+export const getPatchDatasetsMySavesIdRenameUrl = (id: string,) => {
+
+
+
+
+  return `/api/datasets/my-saves/${id}/rename`
+}
+
+/**
+ * Updates the `displayLabel` field on the save row. This overrides the
+catalog's own name in the My Saves list without changing the underlying
+catalog entry. Pass `null` or an empty string to clear the override and
+revert to the catalog name.
+
+ * @summary Set a user-defined display label for a catalog save
+ */
+export const patchDatasetsMySavesIdRename = async (id: string,
+    patchDatasetsMySavesIdRenameBody: PatchDatasetsMySavesIdRenameBody, options?: RequestInit): Promise<UserCatalogSave> => {
+
+  return customFetch<UserCatalogSave>(getPatchDatasetsMySavesIdRenameUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      patchDatasetsMySavesIdRenameBody,)
+  }
+);}
+
+
+
+
+export const getPatchDatasetsMySavesIdRenameMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchDatasetsMySavesIdRename>>, TError,{id: string;data: BodyType<PatchDatasetsMySavesIdRenameBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchDatasetsMySavesIdRename>>, TError,{id: string;data: BodyType<PatchDatasetsMySavesIdRenameBody>}, TContext> => {
+
+const mutationKey = ['patchDatasetsMySavesIdRename'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchDatasetsMySavesIdRename>>, {id: string;data: BodyType<PatchDatasetsMySavesIdRenameBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchDatasetsMySavesIdRename(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchDatasetsMySavesIdRenameMutationResult = NonNullable<Awaited<ReturnType<typeof patchDatasetsMySavesIdRename>>>
+    export type PatchDatasetsMySavesIdRenameMutationBody = BodyType<PatchDatasetsMySavesIdRenameBody>
+    export type PatchDatasetsMySavesIdRenameMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Set a user-defined display label for a catalog save
+ */
+export const usePatchDatasetsMySavesIdRename = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchDatasetsMySavesIdRename>>, TError,{id: string;data: BodyType<PatchDatasetsMySavesIdRenameBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchDatasetsMySavesIdRename>>,
+        TError,
+        {id: string;data: BodyType<PatchDatasetsMySavesIdRenameBody>},
+        TContext
+      > => {
+      return useMutation(getPatchDatasetsMySavesIdRenameMutationOptions(options));
+    }
 
 export const getPostDatasetsMySavesIdRetryUrl = (id: string,) => {
 

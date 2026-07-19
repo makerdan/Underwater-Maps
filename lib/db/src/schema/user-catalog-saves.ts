@@ -11,6 +11,9 @@ export const userCatalogSavesTable = pgTable("user_catalog_saves", {
   readyAt: timestamp("ready_at"),
   cacheKey: text("cache_key"),
   errorMessage: text("error_message"),
+  // User-defined display label for this save. Overrides the catalog's own
+  // `name` in the My Saves list. Null means "use the catalog name".
+  displayLabel: text("display_label"),
   folderId: uuid("folder_id").references(() => datasetFoldersTable.id, { onDelete: "set null" }),
   // When the save is materialized into the user's per-account dataset store,
   // this links back to the resulting custom_datasets row. Lets the client load

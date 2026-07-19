@@ -1071,9 +1071,68 @@ export function formatSaveRow(
     readyAt: row.readyAt?.toISOString() ?? null,
     cacheKey: row.cacheKey ?? null,
     errorMessage: row.errorMessage ?? null,
+    displayLabel: row.displayLabel ?? null,
     datasetId: row.datasetId ?? null,
     catalog: entry ? toCatalogResponse(entry, entryCreatedAtIso(entry)) : null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// PATCH /datasets/my-saves/:id/rename  (auth-gated)
+//
+// Sets or clears a user-defined display label on the save row. A null or
+// empty value clears the override so the UI falls back to the catalog name.
+// ---------------------------------------------------------------------------
+
+const RenameSaveBodySchema = z.object({
+  displayLabel: z.string().nullable(),
+});
+
+router.patch("/datasets/my-saves/:id/rename", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const saveIdParsed = SaveIdParamSchema.safeParse(req.params["id"]);
+  if (!saveIdParsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: saveIdParsed.error.issues[0]?.message ?? "Invalid save id",
+    });
+    return;
+  }
+  const saveId = saveIdParsed.data;
+
+  const bodyParsed = RenameSaveBodySchema.safeParse(req.body ?? {});
+  if (!bodyParsed.success) {
+    res.status(400).json({
+      error: "invalid_request",
+      details: bodyParsed.error.issues[0]?.message ?? bodyParsed.error.message,
+    });
+    return;
+  }
+
+  // Normalise: empty string → null (revert to catalog name)
+  const raw = bodyParsed.data.displayLabel;
+  const trimmed = raw?.trim();
+  const displayLabel = trimmed ? trimmed : null;
+
+  if (displayLabel !== null && displayLabel.length > 200) {
+    res.status(400).json({ error: "invalid_name", details: "Display label must be 1–200 chars" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(userCatalogSavesTable)
+    .set({ displayLabel })
+    .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "not_found", details: `Save record '${saveId}' not found` });
+    return;
+  }
+
+  const entries = await getCatalogEntries();
+  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
+  res.json(formatSaveRow(updated, entry));
+}));
 
 export default router;

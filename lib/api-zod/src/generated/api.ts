@@ -3068,6 +3068,7 @@ export const PostNceiSaveResponse = zod.object({
   "readyAt": zod.coerce.date().nullish(),
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
+  "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
   "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),
@@ -3114,6 +3115,7 @@ export const GetDatasetsMySavesResponseItem = zod.object({
   "readyAt": zod.coerce.date().nullish(),
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
+  "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
   "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),
@@ -3168,6 +3170,57 @@ export const GetDatasetsMySavesIdStatusResponse = zod.object({
   "readyAt": zod.coerce.date().nullish(),
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
+  "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
+  "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
+  "catalog": zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A user\'s saved reference to a catalog dataset')
+
+
+/**
+ * Updates the `displayLabel` field on the save row. This overrides the
+catalog's own name in the My Saves list without changing the underlying
+catalog entry. Pass `null` or an empty string to clear the override and
+revert to the catalog name.
+
+ * @summary Set a user-defined display label for a catalog save
+ */
+export const PatchDatasetsMySavesIdRenameParams = zod.object({
+  "id": zod.coerce.string().describe('Save record UUID')
+})
+
+export const PatchDatasetsMySavesIdRenameBody = zod.object({
+  "displayLabel": zod.string().nullable().describe('New display label (1–200 chars). Pass null or empty string to clear the override and revert to the catalog name.')
+}).describe('Body for renaming a catalog save\'s display label')
+
+export const PatchDatasetsMySavesIdRenameResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "catalogId": zod.string().describe('References the dataset_catalog.id'),
+  "status": zod.enum(['queued', 'processing', 'ready', 'failed']),
+  "requestedAt": zod.coerce.date(),
+  "readyAt": zod.coerce.date().nullish(),
+  "cacheKey": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
   "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),
@@ -3213,6 +3266,7 @@ export const PostDatasetsMySavesIdRetryResponse = zod.object({
   "readyAt": zod.coerce.date().nullish(),
   "cacheKey": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
+  "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
   "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
   "catalog": zod.object({
   "id": zod.string().describe('Stable slug identifier'),

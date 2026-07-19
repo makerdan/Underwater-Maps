@@ -2091,10 +2091,20 @@ export interface UserCatalogSave {
   readyAt?: string | null;
   cacheKey?: string | null;
   errorMessage?: string | null;
+  /** User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name. */
+  displayLabel?: string | null;
   /** UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`). */
   datasetId?: string | null;
   /** Embedded catalog metadata (present when returned from list/status endpoints) */
   catalog?: DatasetCatalogEntry | null;
+}
+
+/**
+ * Body for renaming a catalog save's display label
+ */
+export interface PatchDatasetsMySavesIdRenameBody {
+  /** New display label (1–200 chars). Pass null or empty string to clear the override and revert to the catalog name. */
+  displayLabel: string | null;
 }
 
 export interface GpsTrailInput {
