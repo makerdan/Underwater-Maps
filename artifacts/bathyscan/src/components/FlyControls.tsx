@@ -1,13 +1,14 @@
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { useAppState, SPEEDS } from "@/lib/context";
+import { useAppState } from "@/lib/context";
+import { computeFlyScaledSpeed, computeFlyMpu, FLY_SPEEDS_MPH } from "@/lib/boatSpeed";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { getBoundKey } from "@/lib/keyBindings";
 import { computeWheelDolly, computePinchDolly } from "@/lib/zoomMath";
 
 export const FlyControls = () => {
-  const { speedIndex, setSpeedIndex, setCameraPos } = useAppState();
+  const { speedIndex, setSpeedIndex, setCameraPos, terrain } = useAppState();
   const { camera, gl } = useThree();
 
   const keys = useRef<Record<string, boolean>>({});
@@ -36,7 +37,7 @@ export const FlyControls = () => {
       const bindings = keyBindingsRef.current;
       if (e.code === getBoundKey(bindings, "speedUp") || e.code === "NumpadAdd") {
         e.preventDefault();
-        setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
+        setSpeedIndex(Math.min(FLY_SPEEDS_MPH.length - 1, speedIndexRef.current + 1));
         return;
       }
       if (e.code === getBoundKey(bindings, "speedDown") || e.code === "NumpadSubtract") {
@@ -72,7 +73,7 @@ export const FlyControls = () => {
     const onWheel = (e: WheelEvent) => {
       if (e.shiftKey) {
         if (e.deltaY > 0) {
-          setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
+          setSpeedIndex(Math.min(FLY_SPEEDS_MPH.length - 1, speedIndexRef.current + 1));
         } else {
           setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
         }
@@ -143,8 +144,8 @@ export const FlyControls = () => {
   }, [camera, gl.domElement, setSpeedIndex]);
 
   useFrame((_state, delta: number) => {
-    const speed = SPEEDS[speedIndex] ?? 0.15;
-    const scaledSpeed = speed * delta * 60;
+    const flyMpu = computeFlyMpu(terrain);
+    const scaledSpeed = computeFlyScaledSpeed(speedIndex, flyMpu, delta);
 
     const direction = new THREE.Vector3();
     camera.getWorldDirection(direction);

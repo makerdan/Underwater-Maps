@@ -1,8 +1,8 @@
 import React, { createContext, useCallback, useContext, useState, ReactNode } from "react";
 import type { TerrainData } from "@workspace/api-client-react";
-import { BOAT_DEFAULT_MPH, BOAT_MIN_MPH, BOAT_MAX_MPH } from "./boatSpeed";
+import { BOAT_DEFAULT_MPH, BOAT_MIN_MPH, BOAT_MAX_MPH, FLY_SPEEDS_MPH } from "./boatSpeed";
 
-export const SPEEDS = [0.05, 0.15, 0.5, 1.5, 5.0] as const;
+export { FLY_SPEEDS_MPH };
 
 interface AppState {
   datasetId: string | null;
@@ -61,7 +61,7 @@ function readLocalNumber(key: string, fallback: number): number {
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [terrain, setTerrain] = useState<TerrainData | null>(null);
-  const [speedIndex, setSpeedIndex] = useState<number>(1);
+  const [speedIndex, setSpeedIndex] = useState<number>(2);
   const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
 
   const [tidalOverlay, setTidalOverlayRaw] = useState<boolean>(false);

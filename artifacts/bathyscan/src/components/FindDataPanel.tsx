@@ -2338,7 +2338,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                     </div>
                   )}
 
-                  {!isSaveFetching && visibleSaves.length === 0 && (
+                  {!isSavePending && visibleSaves.length === 0 && (
                     <div
                       style={{
                         fontSize: 13.5,
@@ -2393,7 +2393,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 setMoveSaveTarget(null);
               }}
             />
-          )
           )}
         </div>
       )}

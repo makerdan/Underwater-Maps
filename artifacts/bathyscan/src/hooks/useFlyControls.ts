@@ -7,7 +7,7 @@ import {
   getGetMarkersQueryKey,
 } from "@workspace/api-client-react";
 import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
-import { useAppState, SPEEDS } from "@/lib/context";
+import { useAppState, FLY_SPEEDS_MPH } from "@/lib/context";
 import { useDriftStore } from "@/lib/driftStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -15,7 +15,7 @@ import { worldXZToLonLat, worldYToMetres, lonLatToWorldXZ } from "@/lib/terrain"
 import { applyCameraSpawn } from "@/lib/cameraSpawn";
 import { registerResetCameraFn } from "@/lib/resetCameraRegistry";
 import { useJoystickStore } from "@/components/VirtualJoystick";
-import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, BOAT_MAX_MPH } from "@/lib/boatSpeed";
+import { computeMetersPerWorldUnit, boatMphToWorldUnitsPerSecond, BOAT_MIN_MPH, BOAT_MAX_MPH, computeFlyScaledSpeed, computeFlyMpu } from "@/lib/boatSpeed";
 import { tidalToWorldVelocity } from "@/lib/boatPhysics";
 import { useDriveBoatStore } from "@/lib/driveBoatStore";
 import { useCurrentsStore } from "@/lib/currentsStore";
@@ -283,7 +283,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       if (!realisticModeRef.current) {
         if (e.code === getBoundKey(bindings, "speedUp") || e.code === "NumpadAdd") {
           e.preventDefault();
-          setSpeedIndex(Math.min(SPEEDS.length - 1, speedIndexRef.current + 1));
+          setSpeedIndex(Math.min(FLY_SPEEDS_MPH.length - 1, speedIndexRef.current + 1));
           return;
         }
         if (e.code === getBoundKey(bindings, "speedDown") || e.code === "NumpadSubtract") {
@@ -928,8 +928,8 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         const wups = boatMphToWorldUnitsPerSecond(actualSpeedMphRef.current, mpuForFrame);
         scaledSpeed = wups * delta;
       } else {
-        const speed = SPEEDS[speedIndexRef.current] ?? 0.15;
-        scaledSpeed = speed * delta * 60;
+        const flyMpu = computeFlyMpu(grid);
+        scaledSpeed = computeFlyScaledSpeed(speedIndexRef.current, flyMpu, delta);
       }
 
       camera.getWorldDirection(moveDir.current);

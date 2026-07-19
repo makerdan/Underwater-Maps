@@ -54,7 +54,7 @@ vi.mock("@workspace/api-client-react", () =>
 );
 
 vi.mock("@/lib/context", () => ({
-  SPEEDS: [0.05, 0.15, 0.5, 1.5, 5.0],
+  FLY_SPEEDS_MPH: [30, 100, 250, 700, 2000],
   useAppState: () => ({
     realisticMode: false,
     boatSpeedMph: 5,

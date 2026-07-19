@@ -11,7 +11,7 @@
  */
 import * as THREE from "three";
 import { computeWheelDolly } from "./zoomMath";
-import { SPEEDS } from "./context";
+import { FLY_SPEEDS_MPH } from "./context";
 
 export interface FlyWheelConfig {
   mouseZoomSensitivity: number;
@@ -40,7 +40,7 @@ export function processFlyWheel(
       return { dollyApplied: 0, newSpeedIndex: null };
     }
     if (event.deltaY > 0) {
-      const next = Math.min(SPEEDS.length - 1, currentSpeedIndex + 1);
+      const next = Math.min(FLY_SPEEDS_MPH.length - 1, currentSpeedIndex + 1);
       return {
         dollyApplied: 0,
         newSpeedIndex: next === currentSpeedIndex ? null : next,

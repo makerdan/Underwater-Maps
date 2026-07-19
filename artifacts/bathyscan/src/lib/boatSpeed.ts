@@ -74,3 +74,60 @@ export function mphToKnots(mph: number): number {
 }
 
 export const BOAT_TICK_SPEEDS = [3, 10, 20, 30, 40, 55] as const;
+
+/**
+ * Real-world fly-camera speed tiers in mph (one per speed-index slot).
+ * Defined here alongside the unit-conversion helpers so `computeFlyScaledSpeed`
+ * can use it without any circular import.  `context.tsx` re-exports this name
+ * so existing callers that import from `@/lib/context` continue to work.
+ */
+export const FLY_SPEEDS_MPH = [30, 100, 250, 700, 2000] as const;
+
+/**
+ * Fallback meters-per-world-unit used when no dataset is loaded or the
+ * computed mpu is degenerate (≤ 0, NaN, Infinity).
+ * 200 m/wu ≈ a mid-sized lake filling the 100-wu world.
+ */
+export const FLY_FALLBACK_MPU = 200;
+
+/**
+ * Hard per-frame world-unit cap for fly mode.  Ensures that a tiny dataset
+ * (very small mpu) cannot teleport the camera across the world in one frame.
+ */
+export const FLY_MAX_FRAME_WU = 20;
+
+/**
+ * Fly-mode MPU derivation helper.
+ *
+ * Unlike `computeMetersPerWorldUnit`, which returns `1` as a sentinel for a
+ * zero-extent (point) terrain, this helper returns `FLY_FALLBACK_MPU` for any
+ * grid that is null, undefined, or degenerate.  Real survey datasets are always
+ * at least several hundred metres wide (mpu >> 1), so `mpu ≤ 1` unambiguously
+ * indicates the `computeMetersPerWorldUnit` sentinel, not a genuine physical
+ * scale.  Using `FLY_FALLBACK_MPU` instead prevents unintended ultra-fast
+ * camera movement when no valid dataset is loaded.
+ */
+export function computeFlyMpu(grid: TerrainData | null | undefined): number {
+  if (!grid) return FLY_FALLBACK_MPU;
+  const mpu = computeMetersPerWorldUnit(grid);
+  return mpu > 1 ? mpu : FLY_FALLBACK_MPU;
+}
+
+/**
+ * Pure helper that converts a fly-mode speed-tier index + meters-per-world-unit
+ * into a frame-scaled world-unit displacement.
+ *
+ * Guards:
+ *  - speedIndex is clamped to [0, FLY_SPEEDS_MPH.length - 1] so out-of-range
+ *    values never throw or produce undefined.
+ *  - mpu ≤ 0 or non-finite falls back to FLY_FALLBACK_MPU.
+ *  - result is capped at FLY_MAX_FRAME_WU so a tiny-dataset mpu can never
+ *    teleport the camera.
+ */
+export function computeFlyScaledSpeed(speedIndex: number, mpu: number, delta: number): number {
+  const clampedIndex = Math.max(0, Math.min(FLY_SPEEDS_MPH.length - 1, Math.trunc(speedIndex)));
+  const mph = FLY_SPEEDS_MPH[clampedIndex] ?? FLY_SPEEDS_MPH[0]!;
+  const safeMpu = mpu > 0 && isFinite(mpu) ? mpu : FLY_FALLBACK_MPU;
+  const wups = boatMphToWorldUnitsPerSecond(mph, safeMpu);
+  return Math.min(wups * delta, FLY_MAX_FRAME_WU);
+}
