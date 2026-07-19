@@ -128,6 +128,11 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const [headingDeg, setHeadingDeg] = useState<number>(DEFAULT_HEADING_DEG);
   const [speedKnots, setSpeedKnots] = useState<number>(DEFAULT_SPEED_KNOTS);
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    current: number;
+    total: number;
+    itemKind: "marker" | "route";
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importingRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -146,6 +151,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const onFileChosen = useCallback(
     async (file: File) => {
       setPhase({ kind: "parsing", fileName: file.name });
+      setImportProgress(null);
       try {
         const result = await parseGpsFile(file);
         const part = partitionByBounds(result, bounds);
@@ -252,11 +258,15 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     const wpToImport = importWaypoints ? parsed.waypoints : [];
     const routesToImport: ParsedRoute[] = importableRoutes;
 
+    const totalItems = wpToImport.length + routesToImport.length;
+    setImportProgress({ current: 0, total: totalItems, itemKind: "marker" });
     setPhase({ kind: "importing" });
 
     let markersOk = 0;
     let markersFail = 0;
-    for (const w of wpToImport) {
+    for (let wi = 0; wi < wpToImport.length; wi++) {
+      const w = wpToImport[wi]!;
+      setImportProgress({ current: wi, total: totalItems, itemKind: "marker" });
       const label = sanitize(clamp(w.name || "Imported point", MARKER_LABEL_MAX)) || "Imported point";
       const notes = w.notes ? sanitize(clamp(w.notes, MARKER_NOTES_MAX)) : undefined;
       // Depth: prefer parsed depth; fall back to 0 (surface) when unknown.
@@ -284,7 +294,13 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     let downsampled = 0;
     const safeHeading = clampNumber(headingDeg, HEADING_MIN, HEADING_MAX);
     const safeSpeed = clampNumber(speedKnots, SPEED_MIN, SPEED_MAX);
-    for (const r of routesToImport) {
+    for (let ri = 0; ri < routesToImport.length; ri++) {
+      const r = routesToImport[ri]!;
+      setImportProgress({
+        current: wpToImport.length + ri,
+        total: totalItems,
+        itemKind: "route",
+      });
       // `routesToImport` originates from partitionByBounds which trims
       // out-of-bounds points and drops routes with <2 surviving points; the
       // user can also edit waypoints out in the dialog. We re-assert in-bounds
@@ -429,7 +445,9 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               data-testid="gps-import-in-progress-label"
               style={{ fontSize: 13.5, color: "#94a3b8", letterSpacing: "0.08em" }}
             >
-              Importing — please wait…
+              {importProgress && importProgress.total > 0
+                ? `Importing ${importProgress.itemKind} ${importProgress.current + 1} of ${importProgress.total}…`
+                : "Importing — please wait…"}
             </span>
           )}
           <button
@@ -528,7 +546,45 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
 
           {phase.kind === "importing" && (
             <div style={{ padding: "20px 0", textAlign: "center", color: "#e2e8f0" }}>
-              Importing…
+              {importProgress && importProgress.total > 0 ? (
+                <>
+                  <div
+                    data-testid="gps-import-progress-text"
+                    style={{ marginBottom: 12, fontSize: 15.5 }}
+                  >
+                    Importing {importProgress.itemKind}{" "}
+                    <strong style={{ color: "#00e5ff" }}>{importProgress.current + 1}</strong>{" "}
+                    of{" "}
+                    <strong style={{ color: "#00e5ff" }}>{importProgress.total}</strong>…
+                  </div>
+                  <div
+                    role="progressbar"
+                    aria-valuenow={importProgress.current + 1}
+                    aria-valuemin={1}
+                    aria-valuemax={importProgress.total}
+                    aria-label={`Importing ${importProgress.itemKind} ${importProgress.current + 1} of ${importProgress.total}`}
+                    data-testid="gps-import-progress-bar"
+                    style={{
+                      height: 6,
+                      background: "rgba(0,229,255,0.12)",
+                      borderRadius: 3,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${Math.round(((importProgress.current + 1) / importProgress.total) * 100)}%`,
+                        background: "#00e5ff",
+                        borderRadius: 3,
+                        transition: "width 0.15s ease",
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                "Importing…"
+              )}
             </div>
           )}
         </div>
