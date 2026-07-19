@@ -98,7 +98,7 @@ vi.mock("../lib/uploadParsers.js", () => ({
 
 // ── Import the module under test after all mocks are in place ─────────────────
 
-import { processObject, getJobByObjectKey } from "../lib/bucketMonitor.js";
+import { processObject, getJobByObjectKey, __resetProcessConcurrencyForTests } from "../lib/bucketMonitor.js";
 import { parseXyzCsv } from "../lib/terrain.js";
 import { parseUploadedFile } from "../lib/uploadParsers.js";
 import { gzipSync } from "zlib";
@@ -123,6 +123,10 @@ function makeCsvStream(pointCount = 12): Readable {
 
 beforeEach(() => {
   process.env["DEFAULT_OBJECT_STORAGE_BUCKET_ID"] = TEST_BUCKET;
+
+  // Reset module-level concurrency state — api-server runs singleFork so
+  // activeProcessCount leaks between test files that call processObject.
+  __resetProcessConcurrencyForTests();
 
   // Default: createReadStream returns a valid CSV stream
   gcsMocks.mockCreateReadStream.mockReturnValue(makeCsvStream());
