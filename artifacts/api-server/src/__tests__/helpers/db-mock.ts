@@ -189,6 +189,7 @@ const poeUsageLogTableStub = {
   completionTokens: "completionTokens",
   totalTokens: "totalTokens",
   estimatedPoints: "estimatedPoints",
+  provider: "provider",
   createdAt: "createdAt",
 };
 

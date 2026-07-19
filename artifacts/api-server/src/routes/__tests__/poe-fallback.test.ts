@@ -11,7 +11,7 @@
  *   - Cache: a second identical classify after an OpenAI-served result hits the cache
  *     and returns source: "ai" (not "heuristic")
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
 // ---------------------------------------------------------------------------
@@ -21,14 +21,17 @@ import request from "supertest";
 
 const {
   fakePoeChat,
+  fakePoeResponses,
   fakeOaiChat,
 } = vi.hoisted(() => ({
   fakePoeChat: vi.fn(),
+  /** Controls client.responses.create — used by the classify route (Poe vision path). */
+  fakePoeResponses: vi.fn(),
   fakeOaiChat: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
-// @workspace/poe — controlled per-test via fakePoeChat
+// @workspace/poe — controlled per-test via fakePoeChat (help) / fakePoeResponses (classify)
 // ---------------------------------------------------------------------------
 vi.mock("@workspace/poe", async () => {
   const actual = await vi.importActual<typeof import("@workspace/poe")>("@workspace/poe");
@@ -36,13 +39,7 @@ vi.mock("@workspace/poe", async () => {
     ...actual,
     getPoeClient: vi.fn(() => ({
       chat: { completions: { create: fakePoeChat } },
-      responses: {
-        create: vi.fn().mockResolvedValue({
-          id: "resp_test",
-          output_text: JSON.stringify({ zones: Array(1024).fill("sandy_shelf") }),
-          usage: { input_tokens: 10, output_tokens: 10 },
-        }),
-      },
+      responses: { create: fakePoeResponses },
     })),
   };
 });
@@ -100,6 +97,7 @@ import app from "../../app.js";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 import { __resetPoeBreaker, __resetOpenAiClientCacheForTests } from "../poe.js";
 import { globalPoeCache } from "@workspace/poe";
+import { db } from "@workspace/db";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -149,6 +147,13 @@ beforeEach(() => {
   globalPoeCache.clear();
   fakePoeChat.mockReset();
   fakeOaiChat.mockReset();
+  // Default: Poe classify (responses.create) succeeds with 1024 sandy_shelf zones.
+  // Override per-test when you need Poe to fail.
+  fakePoeResponses.mockResolvedValue({
+    id: "resp_test",
+    output_text: JSON.stringify({ zones: Array(1024).fill("sandy_shelf") }),
+    usage: { input_tokens: 10, output_tokens: 10 },
+  });
 });
 
 // ===========================================================================
@@ -238,7 +243,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
   });
 
   it("falls back to OpenAI vision when Poe fails, returns source: 'ai'", async () => {
-    fakePoeChat.mockRejectedValue(new Error("Poe service error"));
+    fakePoeResponses.mockRejectedValue(new Error("Poe service error"));
     fakeOaiChat.mockResolvedValue(buildOaiClassifyRle("basalt_rock"));
 
     const res = await request(app)
@@ -254,7 +259,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
   });
 
   it("returns source: 'heuristic' when both Poe and OpenAI fail", async () => {
-    fakePoeChat.mockRejectedValue(new Error("Poe down"));
+    fakePoeResponses.mockRejectedValue(new Error("Poe down"));
     fakeOaiChat.mockRejectedValue(new Error("OpenAI also down"));
 
     const res = await request(app)
@@ -269,7 +274,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
   });
 
   it("returns 200 (uniform fill) when both fail and depths32 is absent", async () => {
-    fakePoeChat.mockRejectedValue(new Error("Poe down"));
+    fakePoeResponses.mockRejectedValue(new Error("Poe down"));
     fakeOaiChat.mockRejectedValue(new Error("OpenAI down"));
 
     const res = await request(app)
@@ -282,7 +287,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
   });
 
   it("caches OpenAI result as 'ai': second identical call returns fromCache true", async () => {
-    fakePoeChat.mockRejectedValue(new Error("Poe down"));
+    fakePoeResponses.mockRejectedValue(new Error("Poe down"));
     fakeOaiChat.mockResolvedValueOnce(buildOaiClassifyRle("coarse_sediment"));
 
     const userId = "user-cls-cache-test";
@@ -325,7 +330,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
   });
 
   it("freshwater fallback labels are valid freshwater zones", async () => {
-    fakePoeChat.mockRejectedValue(new Error("Poe down"));
+    fakePoeResponses.mockRejectedValue(new Error("Poe down"));
     fakeOaiChat.mockResolvedValueOnce({
       id: "chatcmpl_fw",
       choices: [{ message: { content: JSON.stringify({ zones: [["aquatic_vegetation", 1024]] }) } }],
@@ -342,5 +347,125 @@ describe("POST /api/poe/classify — provider fallback", () => {
     const zones: string[] = res.body.zones;
     expect(zones.length).toBe(1024);
     expect(zones.every((z) => typeof z === "string" && z.length > 0)).toBe(true);
+  });
+});
+
+// ===========================================================================
+// Quota / rate-limit error detection
+// ===========================================================================
+
+describe("OpenAI quota/429 detection", () => {
+  it("classify: OpenAI 429 status error still falls back to heuristic (not 500)", async () => {
+    fakePoeResponses.mockRejectedValue(new Error("Poe down"));
+    const quotaErr = Object.assign(new Error("OpenAI quota exceeded"), { status: 429 });
+    fakeOaiChat.mockRejectedValue(quotaErr);
+
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-cls-quota-429")
+      .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe("heuristic");
+    expect(Array.isArray(res.body.zones)).toBe(true);
+  });
+
+  it("classify: OpenAI insufficient_quota code still falls back to heuristic", async () => {
+    fakePoeResponses.mockRejectedValue(new Error("Poe down"));
+    const quotaErr = Object.assign(new Error("insufficient_quota"), { code: "insufficient_quota" });
+    fakeOaiChat.mockRejectedValue(quotaErr);
+
+    const res = await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-cls-quota-code")
+      .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe("heuristic");
+  });
+
+  it("help: OpenAI 429 status error propagates cleanly (not 502)", async () => {
+    fakePoeChat.mockRejectedValueOnce(new Error("Poe down"));
+    const quotaErr = Object.assign(new Error("OpenAI rate limit reached"), { status: 429 });
+    fakeOaiChat.mockRejectedValueOnce(quotaErr);
+
+    const res = await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", "user-help-quota-429")
+      .send({ question: "What is the zone overlay?" });
+
+    // When both AI providers fail, handlePoeError returns a 4xx/5xx error.
+    // Critical assertion: must NOT be a raw 502 (which would indicate an
+    // unhandled upstream quota response leaking through to the client).
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).not.toBe(502);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+// ===========================================================================
+// Billing log provider tagging
+// ===========================================================================
+
+describe("logUsage provider tagging", () => {
+  afterEach(() => {
+    vi.mocked(db.insert).mockReturnValue({ values: vi.fn().mockResolvedValue([]) } as unknown as ReturnType<typeof db.insert>);
+  });
+
+  it("classify: logUsage carries provider 'openai' when OpenAI fallback succeeds", async () => {
+    fakePoeResponses.mockRejectedValue(new Error("Poe down"));
+    fakeOaiChat.mockResolvedValueOnce(buildOaiClassifyRle("sandy_shelf"));
+
+    const valuesSpy = vi.fn().mockResolvedValue([]);
+    vi.mocked(db.insert).mockReturnValue({ values: valuesSpy } as unknown as ReturnType<typeof db.insert>);
+
+    await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-cls-provider-tag")
+      .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
+
+    const logCall = valuesSpy.mock.calls.find(
+      ([arg]: [Record<string, unknown>]) => arg?.endpoint === "classify",
+    );
+    expect(logCall).toBeDefined();
+    expect(logCall?.[0]).toMatchObject({ provider: "openai" });
+  });
+
+  it("help: logUsage carries provider 'openai' when OpenAI fallback succeeds", async () => {
+    fakePoeChat.mockRejectedValueOnce(new Error("Poe down"));
+    fakeOaiChat.mockResolvedValueOnce(buildOaiOkChat("OpenAI fallback answer."));
+
+    const valuesSpy = vi.fn().mockResolvedValue([]);
+    vi.mocked(db.insert).mockReturnValue({ values: valuesSpy } as unknown as ReturnType<typeof db.insert>);
+
+    await request(app)
+      .post("/api/poe/help")
+      .set("x-e2e-user-id", "user-help-provider-tag")
+      .send({ question: "How do I use the zone overlay?" });
+
+    const logCall = valuesSpy.mock.calls.find(
+      ([arg]: [Record<string, unknown>]) => arg?.endpoint === "help",
+    );
+    expect(logCall).toBeDefined();
+    expect(logCall?.[0]).toMatchObject({ provider: "openai" });
+  });
+
+  it("classify: Poe success does NOT carry a provider field (keeps existing rows clean)", async () => {
+    const valuesSpy = vi.fn().mockResolvedValue([]);
+    vi.mocked(db.insert).mockReturnValue({ values: valuesSpy } as unknown as ReturnType<typeof db.insert>);
+
+    await request(app)
+      .post("/api/poe/classify")
+      .set("x-e2e-user-id", "user-cls-poe-provider-absent")
+      .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
+
+    const logCall = valuesSpy.mock.calls.find(
+      ([arg]: [Record<string, unknown>]) => arg?.endpoint === "classify",
+    );
+    if (logCall) {
+      // Poe success: provider should be absent (not set to "poe" or any other value)
+      expect(logCall[0]).not.toHaveProperty("provider");
+    }
+    // If no logCall is found, Poe succeeded without logging — also valid
   });
 });

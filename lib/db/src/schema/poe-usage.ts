@@ -11,6 +11,7 @@ export const poeUsageLogTable = pgTable("poe_usage_log", {
   completionTokens: integer("completion_tokens").notNull().default(0),
   totalTokens: integer("total_tokens").notNull().default(0),
   estimatedPoints: integer("estimated_points").notNull().default(0),
+  provider: text("provider"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

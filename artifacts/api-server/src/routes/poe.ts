@@ -270,12 +270,30 @@ function getAuthenticatedUserId(req: Request): string {
   return (req as AuthenticatedRequest).clerkUserId;
 }
 
+/**
+ * Returns true when an OpenAI API error indicates a quota exhaustion (HTTP
+ * 429 with an "insufficient_quota" code) or a generic rate-limit 429. The
+ * check is intentionally broad so both the standard OpenAI SDK error shape
+ * and plain Error wrappers are handled.
+ */
+function isOpenAiQuotaError(err: unknown): boolean {
+  if (!err) return false;
+  const e = err as { status?: number; code?: string; message?: string; error?: { code?: string } };
+  if (e.status === 429) return true;
+  const code = e.code ?? e.error?.code ?? "";
+  if (code === "insufficient_quota" || code === "rate_limit_exceeded") return true;
+  const msg = (e.message ?? "").toLowerCase();
+  if (msg.includes("insufficient_quota") || msg.includes("quota exceeded") || msg.includes("rate limit")) return true;
+  return false;
+}
+
 async function logUsage(
   userId: string,
   model: string,
   endpoint: string,
   promptTokens: number,
   completionTokens: number,
+  provider?: string,
 ): Promise<void> {
   const totalTokens = promptTokens + completionTokens;
   try {
@@ -287,6 +305,7 @@ async function logUsage(
       completionTokens,
       totalTokens,
       estimatedPoints: estimatePoints(model, totalTokens),
+      ...(provider ? { provider } : {}),
     });
   } catch (err) {
     logger.warn({ err }, "[poe] logUsage failed");
@@ -1623,6 +1642,14 @@ router.post("/classify", asyncHandler(async (req, res) => {
           void writeZoneDisk(secondaryKey, cachedEntry);
         }
 
+        await logUsage(
+          userId,
+          OPENAI_CLASSIFY_MODEL,
+          "classify",
+          oaiResult.usage.input_tokens,
+          oaiResult.usage.output_tokens,
+          "openai",
+        );
         logger.info(
           { provider: "openai", model: OPENAI_CLASSIFY_MODEL },
           "[poe/classify] OpenAI vision fallback succeeded",
@@ -1640,10 +1667,17 @@ router.post("/classify", asyncHandler(async (req, res) => {
         });
         return;
       } catch (oaiClassifyErr) {
-        logger.warn(
-          { err: oaiClassifyErr },
-          "[poe/classify] OpenAI vision fallback also failed — falling back to depth heuristic",
-        );
+        if (isOpenAiQuotaError(oaiClassifyErr)) {
+          logger.warn(
+            { provider: "openai", model: OPENAI_CLASSIFY_MODEL, err: oaiClassifyErr },
+            "[poe/classify] OpenAI quota/rate-limit reached — falling back to depth heuristic",
+          );
+        } else {
+          logger.warn(
+            { err: oaiClassifyErr },
+            "[poe/classify] OpenAI vision fallback also failed — falling back to depth heuristic",
+          );
+        }
       }
     }
 
@@ -2133,12 +2167,20 @@ router.post("/help", asyncHandler(async (req, res) => {
           "help",
           oaiCompletion.usage?.prompt_tokens ?? 0,
           oaiCompletion.usage?.completion_tokens ?? 0,
+          "openai",
         );
         logger.info({ provider: "openai", model: OPENAI_HELP_MODEL }, "[poe/help] OpenAI fallback succeeded");
         res.json({ answer: oaiAnswer });
         return;
       } catch (oaiHelpErr) {
-        logger.warn({ err: oaiHelpErr }, "[poe/help] OpenAI fallback also failed");
+        if (isOpenAiQuotaError(oaiHelpErr)) {
+          logger.warn(
+            { provider: "openai", model: OPENAI_HELP_MODEL, err: oaiHelpErr },
+            "[poe/help] OpenAI quota/rate-limit reached — both AI providers exhausted",
+          );
+        } else {
+          logger.warn({ err: oaiHelpErr }, "[poe/help] OpenAI fallback also failed");
+        }
       }
     }
     handlePoeError(poeHelpErr, res);
