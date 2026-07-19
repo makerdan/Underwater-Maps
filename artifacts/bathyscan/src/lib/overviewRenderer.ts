@@ -213,6 +213,7 @@ export function clampTransform(
 export function buildHeatmapBitmap(
   grid: TerrainData,
   colormapTheme: ColormapTheme = "ocean",
+  topography?: number[] | null,
 ): HTMLCanvasElement {
   const { width: W, height: H, depths, minDepth, maxDepth } = grid;
   const depthRange = maxDepth - minDepth || 1;
@@ -228,7 +229,8 @@ export function buildHeatmapBitmap(
     for (let col = 0; col < W; col++) {
       // Flip Y so row 0 (top of canvas) maps to the northernmost data row,
       // matching Minimap.tsx's North-up convention.
-      const rawDepth = depths[(H - 1 - row) * W + col];
+      const dataIdx = (H - 1 - row) * W + col;
+      const rawDepth = depths[dataIdx];
       const i = (row * W + col) * 4;
 
       // Null / NaN depth → survey gap: render as the NO_DATA_COLOR light-gray
@@ -239,6 +241,17 @@ export function buildHeatmapBitmap(
         imageData.data[i]     = NO_DATA_CANVAS_R;
         imageData.data[i + 1] = NO_DATA_CANVAS_G;
         imageData.data[i + 2] = NO_DATA_CANVAS_B;
+        imageData.data[i + 3] = 255;
+        continue;
+      }
+
+      // Land cell (above-water elevation > 0 in topography): render as flat
+      // gray matching the 3D shader land colour so inland reservoirs like Lake
+      // Ray Roberts show the surrounding land distinctly from the water.
+      if (topography && (topography[dataIdx] ?? 0) > 0) {
+        imageData.data[i]     = 120;
+        imageData.data[i + 1] = 120;
+        imageData.data[i + 2] = 120;
         imageData.data[i + 3] = 255;
         continue;
       }

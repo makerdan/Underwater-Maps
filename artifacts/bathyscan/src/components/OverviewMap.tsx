@@ -979,7 +979,7 @@ export const OverviewMap: React.FC = () => {
   const paletteBandBoundaries = usePaletteStore((s) => s.bandBoundaries);
   useEffect(() => {
     if (!overviewGrid) return;
-    bitmapRef.current = buildHeatmapBitmap(overviewGrid, colormapTheme);
+    bitmapRef.current = buildHeatmapBitmap(overviewGrid, colormapTheme, overviewGrid.topography);
     invalidateUpscaleRef.current();
     dirtyRef.current = true;
   }, [overviewGrid, colormapTheme, paletteShallow, paletteDeep, paletteBandColors, paletteCustomStops, paletteBandBoundaries]);
@@ -1003,7 +1003,7 @@ export const OverviewMap: React.FC = () => {
       if (v.datasetId === primaryId) continue; // primary handled by the effect above
       const og = v.overviewGrid;
       if (!og) continue;
-      secondaryBitmapsRef.current.set(v.datasetId, buildHeatmapBitmap(og, colormapTheme));
+      secondaryBitmapsRef.current.set(v.datasetId, buildHeatmapBitmap(og, colormapTheme, og.topography));
     }
 
     // Compute the combined bbox when 2+ datasets have overview grids loaded.
@@ -1073,7 +1073,7 @@ export const OverviewMap: React.FC = () => {
       const og = useTerrainStore.getState().overviewGrid;
       const theme = useSettingsStore.getState().colormapTheme;
       if (og) {
-        bitmapRef.current = buildHeatmapBitmap(og, theme);
+        bitmapRef.current = buildHeatmapBitmap(og, theme, og.topography);
       }
       const visibleNow = visibleDatasetsRef.current;
       const primaryId = visibleNow[0]?.datasetId ?? null;
@@ -1082,7 +1082,7 @@ export const OverviewMap: React.FC = () => {
         if (v.datasetId === primaryId || !v.overviewGrid) continue;
         secondaryBitmapsRef.current.set(
           v.datasetId,
-          buildHeatmapBitmap(v.overviewGrid, theme),
+          buildHeatmapBitmap(v.overviewGrid, theme, v.overviewGrid.topography),
         );
       }
       invalidateUpscaleRef.current();
@@ -1132,7 +1132,28 @@ export const OverviewMap: React.FC = () => {
       const bitmap = bitmapRef.current;
       const t = transformRef.current;
 
-      if (!ctx || !grid || !bitmap || !t) {
+      if (!ctx) {
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
+      const cW = canvas.width;
+      const cH = canvas.height;
+
+      // Always paint the background first so the canvas shows the dark-navy
+      // colour even before data arrives — prevents the default transparent-
+      // black canvas from appearing as a solid black flash on open.
+      ctx.fillStyle = "#020818";
+      ctx.fillRect(0, 0, cW, cH);
+
+      if (!grid || !bitmap || !t) {
+        // Show a pulsing loading indicator while overview data is fetching.
+        ctx.fillStyle = "rgba(0,229,255,0.35)";
+        ctx.font = "11px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const dotsCount = 1 + (Math.floor(Date.now() / 400) % 3);
+        ctx.fillText("LOADING" + ".".repeat(dotsCount), cW / 2, cH / 2);
         rafRef.current = requestAnimationFrame(loop);
         return;
       }
@@ -1184,9 +1205,6 @@ export const OverviewMap: React.FC = () => {
       }
       dirtyRef.current = false;
 
-      const cW = canvas.width;
-      const cH = canvas.height;
-
       // Detect view changes and invalidate stale upscaled bitmap
       const viewKey = `${t.scale.toFixed(2)}_${t.offsetX.toFixed(0)}_${t.offsetY.toFixed(0)}`;
       if (viewKey !== lastViewKey) {
@@ -1195,10 +1213,6 @@ export const OverviewMap: React.FC = () => {
         }
         lastViewKey = viewKey;
       }
-
-      // Background
-      ctx.fillStyle = "#020818";
-      ctx.fillRect(0, 0, cW, cH);
 
       // Multi-dataset heatmap rendering:
       //   1. Secondary datasets (behind, in dataset order)

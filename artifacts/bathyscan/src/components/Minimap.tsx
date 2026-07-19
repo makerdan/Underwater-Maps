@@ -36,6 +36,7 @@ function drawHeatmap(
   minDepth: number,
   maxDepth: number,
   colormapTheme: ColormapTheme = "ocean",
+  topography?: number[] | null,
 ) {
   const depthRange = maxDepth - minDepth || 1;
   const toColor = getColormap(colormapTheme);
@@ -56,6 +57,16 @@ function drawHeatmap(
         imageData.data[i]     = ND_R;
         imageData.data[i + 1] = ND_G;
         imageData.data[i + 2] = ND_B;
+        imageData.data[i + 3] = 255;
+        continue;
+      }
+
+      // Land cell (above-water elevation > 0 in topography): render as flat
+      // gray matching overviewRenderer.ts and the 3D shader land colour.
+      if (topography && (topography[idx] ?? 0) > 0) {
+        imageData.data[i]     = 120;
+        imageData.data[i + 1] = 120;
+        imageData.data[i + 2] = 120;
         imageData.data[i + 3] = 255;
         continue;
       }
@@ -333,6 +344,7 @@ export const Minimap: React.FC = () => {
       terrain.minDepth,
       terrain.maxDepth,
       colormapTheme,
+      terrain.topography,
     );
     heatmapCanvasRef.current = offscreen;
 
