@@ -101,6 +101,120 @@ const POE_QUERY_TIMEOUT_MS = 30_000;
 const POE_HELP_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
+// OpenAI fallback — lazy dynamic import so the module-init throw in
+// lib/integrations-openai-ai-server/src/client.ts (when env vars are absent)
+// does NOT crash poe.ts import in tests or environments without OpenAI.
+// ---------------------------------------------------------------------------
+
+/** OpenAI model used for help Q&A fallback (chat completions, no vision). */
+export const OPENAI_HELP_MODEL = "gpt-4o";
+/** OpenAI model used for classify vision fallback (supports image_url). */
+export const OPENAI_CLASSIFY_MODEL = "gpt-4o";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type OpenAiClient = any;
+let _openAiClient: OpenAiClient | "unavailable" | undefined = undefined;
+
+/**
+ * Returns the OpenAI client singleton if the integration is configured,
+ * or null if the env vars are absent / the module throws on load.
+ * Result is cached after the first call.
+ */
+async function tryGetOpenAiClient(): Promise<OpenAiClient | null> {
+  if (_openAiClient === "unavailable") return null;
+  if (_openAiClient !== undefined) return _openAiClient;
+  try {
+    const mod = await import("@workspace/integrations-openai-ai-server");
+    _openAiClient = mod.openai;
+    return _openAiClient;
+  } catch {
+    _openAiClient = "unavailable";
+    return null;
+  }
+}
+
+/**
+ * TEST-ONLY — resets the cached OpenAI client so the next `tryGetOpenAiClient`
+ * call re-runs the dynamic import. Allows tests to inject a mock after
+ * `vi.mock("@workspace/integrations-openai-ai-server", ...)`.
+ */
+export function __resetOpenAiClientCacheForTests(): void {
+  _openAiClient = undefined;
+}
+
+/**
+ * Call the OpenAI vision API with a 32×32 tile PNG data URL and the
+ * classification system prompt. Returns `{ zones, usage }` on success;
+ * throws on failure so callers decide whether to fall back to heuristic.
+ *
+ * Shared by both the single-tile path (inline in the route catch block) and
+ * the tiled path (via `classifyOneTileAi`'s catch block) so the two paths
+ * use identical model, prompt, and JSON schema.
+ */
+async function classifyOneTileWithOpenAi(
+  gridBase64: string,
+  waterType: "saltwater" | "freshwater",
+  promptText: string,
+): Promise<{ zones: string[]; usage: { input_tokens: number; output_tokens: number } }> {
+  const client = await tryGetOpenAiClient();
+  if (!client) throw new Error("openai_unavailable");
+
+  const response = await (client.chat.completions.create as (
+    body: Record<string, unknown>,
+    opts?: { signal?: AbortSignal },
+  ) => Promise<{
+    choices: Array<{ message: { content?: string | null } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  }>)(
+    {
+      model: OPENAI_CLASSIFY_MODEL,
+      messages: [
+        { role: "system", content: buildClassifySystemPrompt(waterType) },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: promptText },
+            { type: "image_url", image_url: { url: gridBase64, detail: "low" } },
+          ],
+        },
+      ],
+      max_tokens: 2048,
+      temperature: 0.1,
+    },
+    { signal: AbortSignal.timeout(POE_CLASSIFY_TIMEOUT_MS) },
+  );
+
+  const text = response.choices[0]?.message?.content ?? "";
+  if (!text.trim()) throw new ZoneParseError("OpenAI returned empty classification response");
+
+  let rawParsed: unknown;
+  try {
+    rawParsed = JSON.parse(text);
+  } catch {
+    const m = text.match(/\{[\s\S]*\}/);
+    if (m) {
+      try { rawParsed = JSON.parse(m[0]); }
+      catch { throw new ZoneParseError(`OpenAI returned invalid JSON for zone classification: ${text.slice(0, 200)}`); }
+    } else {
+      throw new ZoneParseError(`OpenAI returned non-JSON for zone classification: ${text.slice(0, 200)}`);
+    }
+  }
+
+  const zones = decodeRleZones((rawParsed as { zones?: unknown }).zones, waterType);
+  if (!zones) {
+    throw new ZoneParseError(`OpenAI returned unparseable zones payload: ${text.slice(0, 200)}`);
+  }
+
+  return {
+    zones,
+    usage: {
+      input_tokens: response.usage?.prompt_tokens ?? 0,
+      output_tokens: response.usage?.completion_tokens ?? 0,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // GET /models — Clerk-gated and rate-limited like the other Poe routes
 // ---------------------------------------------------------------------------
 
@@ -948,18 +1062,42 @@ async function classifyOneTileAi(
         output_tokens: result.usage?.output_tokens ?? 0,
       },
     };
-  } catch (err) {
+  } catch (poeErr) {
     // ZoneParseError means the model returned unparseable text (a quality
     // issue), not a service outage. Do NOT count it as a circuit-breaker
     // failure — otherwise 5 consecutive "prose" responses open the breaker
     // and cripple the substrate overlay for the rest of the server's uptime.
     if (
-      (err as Error)?.message !== "poe_circuit_open" &&
-      !(err instanceof ZoneParseError)
+      (poeErr as Error)?.message !== "poe_circuit_open" &&
+      !(poeErr instanceof ZoneParseError)
     ) {
       poeBreaker.recordFailure();
     }
-    throw err;
+
+    // OpenAI vision fallback for tiles — runs before giving up and returning
+    // null (which triggers per-tile heuristic in runTiledClassify). If the
+    // tile succeeds via OpenAI the result is source "ai" from the caller's
+    // perspective and gets written to the tile cache normally.
+    const promptTextForFallback = `Classify the seafloor/lake-bed zones in this depth map.`;
+    try {
+      const oaiResult = await classifyOneTileWithOpenAi(
+        gridBase64,
+        waterType,
+        promptTextForFallback,
+      );
+      logger.info(
+        { provider: "openai", model: OPENAI_CLASSIFY_MODEL },
+        "[poe/classify] tile-level OpenAI vision fallback succeeded",
+      );
+      return oaiResult;
+    } catch (oaiErr) {
+      logger.warn(
+        { err: oaiErr },
+        "[poe/classify] tile-level OpenAI vision fallback also failed — tile falls back to heuristic",
+      );
+    }
+
+    throw poeErr;
   }
 }
 
@@ -1401,28 +1539,95 @@ router.post("/classify", asyncHandler(async (req, res) => {
       tilesAi: 1,
       tilesHeuristic: 0,
     });
-  } catch (err) {
+  } catch (poeClassifyErr) {
     // Record Poe failures so the circuit breaker can track consecutive errors.
     // Circuit-open errors are self-inflicted (we threw them above) — don't
     // count those or the breaker would never close.
     // ZoneParseError is a content-quality issue (model returned prose instead
     // of JSON) — NOT a service outage — so it must not trip the breaker either.
     if (
-      !(err as { circuitOpen?: boolean }).circuitOpen &&
-      !(err instanceof ZoneParseError)
+      !(poeClassifyErr as { circuitOpen?: boolean }).circuitOpen &&
+      !(poeClassifyErr instanceof ZoneParseError)
     ) {
       poeBreaker.recordFailure();
     }
-    // Depth-based fallback — always return a 200 with *some* overlay so the
-    // frontend never sees a non-2xx from this endpoint. Heuristic results are
-    // NEVER written to globalPoeCache / datasetZonesCache / disk so a later
-    // successful AI call can take over and be cached normally.
-    // If depths32 is available (the normal path — client always sends it) we
-    // compute a genuine depth-banded heuristic; otherwise we emit a uniform
-    // fill of the first zone, which is still a valid 200 response.
+
+    // ── OpenAI vision fallback ─────────────────────────────────────────────
+    // Runs before the depth-based heuristic so users get AI-quality labels
+    // even when Poe is down. Same prompt contract as Poe; result is cached
+    // identically so a later Poe recovery doesn't double-classify.
+    const openAiClient = await tryGetOpenAiClient();
+    if (openAiClient) {
+      try {
+        logger.info(
+          { provider: "openai", model: OPENAI_CLASSIFY_MODEL },
+          "[poe/classify] Poe unavailable — trying OpenAI vision fallback",
+        );
+        const promptText = substratePrompt
+          ? `Classify the seafloor/lake-bed zones in this depth map.\n\n${substratePrompt}\n\nFor every cell where a substrate label is provided above, you MUST output that exact label. Only reason from the depth map for cells marked "?".`
+          : `Classify the seafloor/lake-bed zones in this depth map.`;
+
+        const oaiResult = await classifyOneTileWithOpenAi(gridBase64, waterType, promptText);
+        let oaiZones = oaiResult.zones;
+
+        // Apply substrate reconciliation (same as Poe path)
+        if (substrate.hasCoverage && oaiZones.length === substrate.labels.length) {
+          const reconciled = oaiZones.slice();
+          for (let i = 0; i < substrate.labels.length; i++) {
+            const lbl = substrate.labels[i];
+            if (lbl) reconciled[i] = substrateToZone(lbl, waterType);
+          }
+          oaiZones = reconciled;
+        }
+
+        globalPoeCache.set(cacheKey, JSON.stringify(oaiZones));
+        if (gridHash) {
+          const secondaryKey = zoneCacheKey(userId, gridHash, waterType, substrateFp);
+          const cachedEntry: CachedZones = {
+            zones: oaiZones,
+            waterType,
+            classifiedAt: Date.now(),
+            source: "ai",
+            contentHash,
+            coarseWidth: TILE_SIZE,
+            coarseHeight: TILE_SIZE,
+          };
+          datasetZonesCache.set(secondaryKey, cachedEntry);
+          void writeZoneDisk(secondaryKey, cachedEntry);
+        }
+
+        logger.info(
+          { provider: "openai", model: OPENAI_CLASSIFY_MODEL },
+          "[poe/classify] OpenAI vision fallback succeeded",
+        );
+        res.json({
+          zones: oaiZones,
+          fromCache: false,
+          source: "ai",
+          substrateFp,
+          coarseWidth: TILE_SIZE,
+          coarseHeight: TILE_SIZE,
+          tilesTotal: 1,
+          tilesAi: 1,
+          tilesHeuristic: 0,
+        });
+        return;
+      } catch (oaiClassifyErr) {
+        logger.warn(
+          { err: oaiClassifyErr },
+          "[poe/classify] OpenAI vision fallback also failed — falling back to depth heuristic",
+        );
+      }
+    }
+
+    // ── Depth-based heuristic ──────────────────────────────────────────────
+    // Always return a 200 with *some* overlay so the frontend never sees a
+    // non-2xx from this endpoint. Heuristic results are NEVER written to
+    // globalPoeCache / datasetZonesCache / disk so a later successful AI
+    // call can take over and be cached normally.
     logger.warn(
-      { err },
-      `[poe/classify] AI unavailable (${(err as Error)?.message ?? "unknown"}) — returning depth-based heuristic`,
+      { err: poeClassifyErr },
+      `[poe/classify] AI unavailable (${(poeClassifyErr as Error)?.message ?? "unknown"}) — returning depth-based heuristic`,
     );
     const substrateZoneLabels = substrate.hasCoverage
       ? substrate.labels.map((l) => (l ? substrateToZone(l, waterType) : null))
@@ -1862,9 +2067,54 @@ router.post("/help", asyncHandler(async (req, res) => {
       usage?.completion_tokens ?? 0,
     );
 
+    logger.info({ provider: "poe", model: POE_MODELS.DESCRIBE_QUICK }, "[poe/help] answered via Poe");
     res.json({ answer });
-  } catch (err) {
-    handlePoeError(err, res);
+  } catch (poeHelpErr) {
+    // ── OpenAI chat-completions fallback ──────────────────────────────────
+    // Uses the same system prompt (docs-grounded, BathyScan-scoped) and chat
+    // history so the answer quality is equivalent to the Poe path.
+    const openAiHelpClient = await tryGetOpenAiClient();
+    if (openAiHelpClient) {
+      try {
+        logger.info(
+          { provider: "openai", model: OPENAI_HELP_MODEL },
+          "[poe/help] Poe unavailable — trying OpenAI fallback",
+        );
+        const oaiCompletion = await (openAiHelpClient.chat.completions.create as (
+          body: Record<string, unknown>,
+          opts?: { signal?: AbortSignal },
+        ) => Promise<{
+          choices: Array<{ message: { content?: string | null } }>;
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+        }>)(
+          {
+            model: OPENAI_HELP_MODEL,
+            messages: [
+              { role: "system" as const, content: systemPrompt },
+              ...cleanHistory.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+              { role: "user" as const, content: question.trim() },
+            ],
+            max_tokens: 400,
+            temperature: 0.3,
+          },
+          { signal: AbortSignal.timeout(POE_HELP_TIMEOUT_MS) },
+        );
+        const oaiAnswer = oaiCompletion.choices[0]?.message?.content ?? "";
+        await logUsage(
+          userId,
+          OPENAI_HELP_MODEL,
+          "help",
+          oaiCompletion.usage?.prompt_tokens ?? 0,
+          oaiCompletion.usage?.completion_tokens ?? 0,
+        );
+        logger.info({ provider: "openai", model: OPENAI_HELP_MODEL }, "[poe/help] OpenAI fallback succeeded");
+        res.json({ answer: oaiAnswer });
+        return;
+      } catch (oaiHelpErr) {
+        logger.warn({ err: oaiHelpErr }, "[poe/help] OpenAI fallback also failed");
+      }
+    }
+    handlePoeError(poeHelpErr, res);
   }
 }));
 
