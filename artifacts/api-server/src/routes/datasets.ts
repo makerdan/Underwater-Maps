@@ -2124,6 +2124,10 @@ router.post(
     gridResolution: req.body["gridResolution"],
   });
   if (!paramsParsed.success) {
+    logger.warn(
+      { route: "POST /api/datasets/upload", issues: paramsParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "POST /api/datasets/upload — Zod body validation failed (resolution/gridResolution)",
+    );
     res.status(400).json({
       error: "invalid_param",
       details: paramsParsed.error.issues
@@ -2642,6 +2646,10 @@ router.get(
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const objectKey = String(req.query["objectKey"] ?? "");
     if (!objectKey) {
+      logger.warn(
+        { route: "GET /api/datasets/upload/gcs-job-status" },
+        "GET /api/datasets/upload/gcs-job-status — missing required query param: objectKey",
+      );
       res.status(400).json({ error: "invalid_param", details: "objectKey is required" });
       return;
     }
