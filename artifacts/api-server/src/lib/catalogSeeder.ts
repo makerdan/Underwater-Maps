@@ -641,6 +641,861 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     lastUpdated: "2024-06-01",
     waterType: "saltwater",
   },
+  // -------------------------------------------------------------------------
+  // Freshwater lake catalog entries — Midwest US
+  // -------------------------------------------------------------------------
+  {
+    id: "fw-lake-minnetonka-mn",
+    name: "Lake Minnetonka (MN)",
+    sourceAgency: "MN DNR",
+    dataType: "bathymetry",
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -93.65, minLat: 44.88, maxLon: -93.43, maxLat: 44.97 },
+    endpointUrl: "https://resources.gis.mn.gov/services/glo/MapServer",
+    accessNotes:
+      "Custom MN DNR ArcGIS REST fetcher needed: query by geometry, return depth raster.",
+    description:
+      "Lake Minnetonka is a large recreational lake in Hennepin County, Minnesota, covering " +
+      "~14,500 acres with a maximum depth of about 113 ft (34 m). A premier bass, walleye, and " +
+      "northern pike fishery just west of Minneapolis.",
+    keywords:
+      "Lake Minnetonka,Minnesota,MN,Hennepin County,Midwest,freshwater,walleye,bass,northern pike," +
+      "recreation,Wayzata,Excelsior,MN DNR",
+    lastUpdated: null,
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-mille-lacs-lake-mn",
+    name: "Mille Lacs Lake (MN)",
+    sourceAgency: "MN DNR",
+    dataType: "bathymetry",
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -93.83, minLat: 46.21, maxLon: -93.44, maxLat: 46.45 },
+    endpointUrl: "https://resources.gis.mn.gov/services/glo/MapServer",
+    accessNotes:
+      "Custom MN DNR ArcGIS REST fetcher needed: query by geometry, return depth raster.",
+    description:
+      "Mille Lacs Lake is the second-largest lake entirely within Minnesota at ~132,500 acres, " +
+      "with a maximum depth of 42 ft (13 m). Renowned nationally for its trophy walleye fishery " +
+      "and ice fishing in Mille Lacs County.",
+    keywords:
+      "Mille Lacs,Mille Lacs Lake,Minnesota,MN,Aitkin County,Mille Lacs County,Midwest,freshwater," +
+      "walleye,ice fishing,bass,perch,MN DNR,Isle,Garrison",
+    lastUpdated: null,
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-leech-lake-mn",
+    name: "Leech Lake (MN)",
+    sourceAgency: "MN DNR",
+    dataType: "bathymetry",
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -94.55, minLat: 47.1, maxLon: -94.15, maxLat: 47.4 },
+    endpointUrl: "https://resources.gis.mn.gov/services/glo/MapServer",
+    accessNotes:
+      "Custom MN DNR ArcGIS REST fetcher needed: query by geometry, return depth raster.",
+    description:
+      "Leech Lake covers ~111,000 acres in Cass County, Minnesota, and is one of the state's " +
+      "largest lakes at up to 150 ft (46 m) deep. Part of the Chippewa National Forest watershed; " +
+      "known for walleye, muskellunge, and northern pike fishing.",
+    keywords:
+      "Leech Lake,Minnesota,MN,Cass County,Midwest,freshwater,walleye,muskie,muskellunge,northern pike," +
+      "Chippewa National Forest,Walker,MN DNR",
+    lastUpdated: null,
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-red-lake-mn",
+    name: "Red Lake (MN)",
+    sourceAgency: "MN DNR",
+    dataType: "bathymetry",
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -95.6, minLat: 47.8, maxLon: -94.7, maxLat: 48.15 },
+    endpointUrl: "https://resources.gis.mn.gov/services/glo/MapServer",
+    accessNotes:
+      "Custom MN DNR ArcGIS REST fetcher needed: query by geometry, return depth raster. " +
+      "Upper Red Lake is on Red Lake Nation tribal land — access coordination may be required.",
+    description:
+      "Red Lake (Upper and Lower) is the largest lake entirely within Minnesota, covering " +
+      "~288,000 acres in Beltrami and Clearwater counties, with a shallow maximum depth of " +
+      "~24 ft (7 m). Upper Red Lake is managed by Red Lake Nation; Lower Red Lake supports a " +
+      "significant walleye commercial and sport fishery.",
+    keywords:
+      "Red Lake,Upper Red Lake,Lower Red Lake,Minnesota,MN,Beltrami County,Clearwater County,Midwest," +
+      "freshwater,walleye,Red Lake Nation,tribal,MN DNR",
+    lastUpdated: null,
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-of-the-woods-mn",
+    name: "Lake of the Woods (MN/ON)",
+    sourceAgency: "MN DNR",
+    dataType: "bathymetry",
+    resolutionMMin: null,
+    resolutionMMax: null,
+    coverageBbox: { minLon: -95.6, minLat: 48.5, maxLon: -94.4, maxLat: 49.5 },
+    endpointUrl: "https://resources.gis.mn.gov/services/glo/MapServer",
+    accessNotes:
+      "Custom MN DNR ArcGIS REST fetcher needed: query by geometry, return depth raster. " +
+      "Lake spans the US–Canada border; Canadian portion falls under Ontario MNR jurisdiction.",
+    description:
+      "Lake of the Woods straddles the Minnesota/Ontario/Manitoba border, covering over " +
+      "~950,000 acres with thousands of islands and depths to 210 ft (64 m). A world-class " +
+      "walleye and sauger fishery; the Rainy River drains into its south shore near Baudette, MN.",
+    keywords:
+      "Lake of the Woods,Minnesota,MN,Ontario,Manitoba,Roseau County,Lake of the Woods County,Midwest," +
+      "freshwater,walleye,sauger,northern pike,smallmouth bass,Baudette,Kenora,MN DNR,Canada",
+    lastUpdated: null,
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-winnebago-wi",
+    name: "Lake Winnebago (WI)",
+    sourceAgency: "USGS",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -88.52, minLat: 43.9, maxLon: -88.3, maxLat: 44.15 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Lake Winnebago is a shallow eutrophic lake; 3DEP lidar " +
+      "covers the lakebed and surrounding watershed.",
+    description:
+      "Lake Winnebago is the largest lake entirely within Wisconsin at ~137,700 acres, with a " +
+      "shallow maximum depth of 21 ft (6 m). Located in Winnebago, Calumet, and Fond du Lac " +
+      "counties; the lake hosts one of the largest lake sturgeon populations in the world and a " +
+      "celebrated winter spearfishing season.",
+    keywords:
+      "Lake Winnebago,Wisconsin,WI,Winnebago County,Fond du Lac,Calumet County,Midwest,freshwater," +
+      "sturgeon,lake sturgeon,spearfishing,walleye,yellow perch,USGS,3DEP,Oshkosh,Neenah,Menasha",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-gull-lake-mi",
+    name: "Gull Lake (MI)",
+    sourceAgency: "USGS",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -85.48, minLat: 42.37, maxLon: -85.35, maxLat: 42.46 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Gull Lake is a kettle lake in Kalamazoo/Barry counties " +
+      "with lidar-quality 3DEP coverage.",
+    description:
+      "Gull Lake in Kalamazoo and Barry counties, Michigan, covers ~2,030 acres with a " +
+      "maximum depth of 110 ft (34 m) — one of the deepest inland lakes in Michigan. Known for " +
+      "cisco, smallmouth bass, and lake trout; the lake is oligotrophic and crystal-clear.",
+    keywords:
+      "Gull Lake,Michigan,MI,Kalamazoo County,Barry County,Midwest,freshwater,cisco,smallmouth bass," +
+      "lake trout,walleye,USGS,3DEP,Richland,Gull Lake Township",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  // -------------------------------------------------------------------------
+  // Freshwater lake catalog entries — Western US
+  // -------------------------------------------------------------------------
+  {
+    id: "fw-lake-tahoe-ca-nv",
+    name: "Lake Tahoe (CA/NV)",
+    sourceAgency: "USGS",
+    dataType: "bathymetry",
+    resolutionMMin: 2,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -120.22, minLat: 38.9, maxLon: -119.9, maxLat: 39.25 },
+    endpointUrl:
+      "https://www.sciencebase.gov/catalog/item/5306d3b4e4b0bbcd5acb5be1",
+    accessNotes:
+      "High-resolution dedicated survey available on USGS ScienceBase. Requires download-and-bundle fetcher.",
+    description:
+      "Lake Tahoe straddles the California–Nevada border in the Sierra Nevada at 6,225 ft " +
+      "elevation, covering ~122,000 acres with a maximum depth of 1,645 ft (501 m) — the " +
+      "second-deepest lake in the US. Renowned for exceptional water clarity and alpine scenery.",
+    keywords:
+      "Lake Tahoe,Tahoe,California,CA,Nevada,NV,Sierra Nevada,El Dorado County,Placer County," +
+      "Washoe County,West,freshwater,deep,clarity,trout,Mackinaw lake trout,USGS,ScienceBase," +
+      "South Lake Tahoe,Tahoe City",
+    lastUpdated: "2023-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-powell-az-ut",
+    name: "Lake Powell (AZ/UT)",
+    sourceAgency: "USGS/USBR",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -111.6, minLat: 36.9, maxLon: -110.4, maxLat: 37.5 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Reservoir level fluctuates significantly; bathymetry " +
+      "reflects pre-impoundment Glen Canyon terrain.",
+    description:
+      "Lake Powell is a reservoir on the Colorado River on the Arizona–Utah border, " +
+      "covering up to ~254,000 acres at full pool with a maximum depth of ~560 ft (171 m). " +
+      "Created by Glen Canyon Dam (1966); a major recreation destination on the Colorado Plateau " +
+      "surrounded by dramatic sandstone canyon walls.",
+    keywords:
+      "Lake Powell,Powell,Colorado River,Glen Canyon,Arizona,AZ,Utah,UT,Colorado Plateau,West," +
+      "reservoir,freshwater,USGS,3DEP,USBR,Bureau of Reclamation,Page,Glen Canyon Dam,houseboat",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-mead-nv-az",
+    name: "Lake Mead (NV/AZ)",
+    sourceAgency: "USGS/USBR",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -114.85, minLat: 35.9, maxLon: -114.1, maxLat: 36.5 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Lake Mead is subject to significant drawdown; " +
+      "3DEP captures the full reservoir basin.",
+    description:
+      "Lake Mead is the largest reservoir in the United States by volume (when full) at " +
+      "~247,000 acres on the Nevada–Arizona border, impounded by Hoover Dam (1936) with a " +
+      "maximum depth of ~590 ft (180 m). Serves as the primary water supply for Las Vegas and " +
+      "millions of downstream users.",
+    keywords:
+      "Lake Mead,Mead,Colorado River,Hoover Dam,Nevada,NV,Arizona,AZ,West,reservoir,freshwater," +
+      "USGS,3DEP,USBR,Bureau of Reclamation,Boulder City,Las Vegas,water supply",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-crater-lake-or",
+    name: "Crater Lake (OR)",
+    sourceAgency: "USGS",
+    dataType: "bathymetry",
+    resolutionMMin: 2,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -122.2, minLat: 42.88, maxLon: -122.05, maxLat: 42.98 },
+    endpointUrl:
+      "https://www.sciencebase.gov/catalog/item/5306d3b4e4b0bbcd5acb5be2",
+    accessNotes:
+      "High-resolution dedicated survey available on USGS ScienceBase. Requires download-and-bundle fetcher.",
+    description:
+      "Crater Lake in Klamath County, Oregon, occupies the caldera of Mount Mazama in the " +
+      "Cascade Range. At 1,949 ft (594 m) it is the deepest lake in the US. Famous for its " +
+      "extraordinary deep blue color and pristine clarity; no inflow or outflow rivers.",
+    keywords:
+      "Crater Lake,Oregon,OR,Klamath County,Cascade Range,West,freshwater,caldera,volcanic lake," +
+      "deepest,blue,Wizard Island,Crater Lake National Park,USGS,ScienceBase",
+    lastUpdated: "2023-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-flathead-lake-mt",
+    name: "Flathead Lake (MT)",
+    sourceAgency: "USGS",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -114.45, minLat: 47.6, maxLon: -113.9, maxLat: 48.0 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Flathead Lake is the largest natural freshwater lake " +
+      "west of the Mississippi.",
+    description:
+      "Flathead Lake in Lake and Flathead counties, Montana, covers ~197,000 acres with a " +
+      "maximum depth of 371 ft (113 m) — the largest natural freshwater lake in the western " +
+      "contiguous US. Fed by the Flathead River; supports bull trout, lake trout, and " +
+      "westslope cutthroat trout.",
+    keywords:
+      "Flathead Lake,Montana,MT,Lake County,Flathead County,Rocky Mountains,West,freshwater," +
+      "bull trout,lake trout,cutthroat trout,Flathead River,Polson,Kalispell,USGS,3DEP",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-shasta-lake-ca",
+    name: "Shasta Lake (CA)",
+    sourceAgency: "USGS/USBR",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -122.52, minLat: 40.7, maxLon: -122.2, maxLat: 40.95 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Shasta Lake is the largest reservoir in California.",
+    description:
+      "Shasta Lake in Shasta County, California, is the largest reservoir in California by " +
+      "storage capacity at ~29,500 acres at full pool, with a maximum depth of ~517 ft (158 m). " +
+      "Impounded by Shasta Dam (1945) on the Sacramento River; a major houseboat and bass " +
+      "fishing destination in the Cascade Range foothills.",
+    keywords:
+      "Shasta Lake,Shasta,Shasta Dam,Sacramento River,California,CA,Shasta County,West,reservoir," +
+      "freshwater,bass,largemouth bass,spotted bass,trout,USGS,3DEP,USBR,houseboat,Redding",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-chelan-wa",
+    name: "Lake Chelan (WA)",
+    sourceAgency: "USGS/USBR",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -120.65, minLat: 47.8, maxLon: -120.1, maxLat: 48.2 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Lake Chelan is a glacially carved fjord lake; " +
+      "the lower 14 miles are managed as Chelan P.U.D. reservoir.",
+    description:
+      "Lake Chelan in Chelan County, Washington, is a glacially carved fjord lake stretching " +
+      "~55 miles in the Cascade Range, covering ~33,800 acres with a maximum depth of 1,486 ft " +
+      "(453 m) — the third deepest lake in the US. The lower reach is managed as a reservoir " +
+      "by Chelan PUD; the upper reach leads to the remote Stehekin valley.",
+    keywords:
+      "Lake Chelan,Chelan,Washington,WA,Chelan County,Cascade Range,Pacific Northwest,West,freshwater," +
+      "glacier,fjord lake,deep,lake trout,kokanee,chinook salmon,steelhead,Chelan PUD,Stehekin," +
+      "USGS,3DEP,USBR",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-upper-klamath-lake-or",
+    name: "Upper Klamath Lake (OR)",
+    sourceAgency: "USGS",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -122.12, minLat: 42.2, maxLon: -121.72, maxLat: 42.6 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Upper Klamath Lake is shallow and subject to " +
+      "significant seasonal level variation managed by Reclamation.",
+    description:
+      "Upper Klamath Lake in Klamath County, Oregon, is the largest lake in Oregon at " +
+      "~64,000 acres, with a shallow maximum depth of ~50 ft (15 m). An important stopover for " +
+      "Pacific Flyway waterfowl and habitat for the endangered Lost River and shortnose suckers; " +
+      "part of the Klamath Basin Reclamation Project.",
+    keywords:
+      "Upper Klamath Lake,Klamath Lake,Oregon,OR,Klamath County,West,freshwater,sucker,Lost River sucker," +
+      "shortnose sucker,waterfowl,Pacific Flyway,Klamath Basin,Klamath Falls,USGS,3DEP,USBR",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-flaming-gorge-ut-wy",
+    name: "Flaming Gorge Reservoir (UT/WY)",
+    sourceAgency: "USGS/USBR",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -109.95, minLat: 40.9, maxLon: -109.3, maxLat: 41.3 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Flaming Gorge is a USBR reservoir on the Green River; " +
+      "3DEP captures the canyon terrain.",
+    description:
+      "Flaming Gorge Reservoir straddles the Utah–Wyoming border on the Green River, " +
+      "covering ~42,000 acres with a maximum depth of ~436 ft (133 m). Impounded by " +
+      "Flaming Gorge Dam (1964); world-class trophy lake trout and kokanee salmon fishery " +
+      "set among dramatic red-rock canyon scenery on the Colorado Plateau.",
+    keywords:
+      "Flaming Gorge,Flaming Gorge Reservoir,Green River,Utah,UT,Wyoming,WY,Daggett County," +
+      "Colorado Plateau,West,Southwest,reservoir,freshwater,lake trout,kokanee,USGS,3DEP,USBR," +
+      "Bureau of Reclamation,Dutch John,Manila",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-havasu-az-ca",
+    name: "Lake Havasu (AZ/CA)",
+    sourceAgency: "USGS/USBR",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -114.65, minLat: 34.2, maxLon: -114.3, maxLat: 34.6 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Lake Havasu is a Colorado River reservoir " +
+      "impounded by Parker Dam.",
+    description:
+      "Lake Havasu on the Arizona–California border is a Colorado River reservoir created " +
+      "by Parker Dam (1938), covering ~19,300 acres with a maximum depth of ~90 ft (27 m). " +
+      "A major desert recreation destination famous for watersports, striped bass fishing, " +
+      "and the relocated London Bridge in Lake Havasu City.",
+    keywords:
+      "Lake Havasu,Havasu,Colorado River,Parker Dam,Arizona,AZ,California,CA,Mohave County," +
+      "West,Southwest,reservoir,freshwater,striped bass,striper,largemouth bass,USGS,3DEP,USBR," +
+      "London Bridge,Lake Havasu City",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  // -------------------------------------------------------------------------
+  // Freshwater lake catalog entries — Southeast US
+  // -------------------------------------------------------------------------
+  {
+    id: "fw-lake-okeechobee-fl",
+    name: "Lake Okeechobee (FL)",
+    sourceAgency: "USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -81.1, minLat: 26.75, maxLon: -80.6, maxLat: 27.2 },
+    endpointUrl:
+      "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Jacksonville+District",
+    accessNotes:
+      "USACE Jacksonville District. Hydrographic surveys available via USACE Geospatial Hub.",
+    description:
+      "Lake Okeechobee in south-central Florida is the largest freshwater lake in the " +
+      "contiguous US at ~730 sq mi, with a shallow maximum depth of ~12 ft (4 m). The " +
+      "\"Big Lake\" anchors the Greater Everglades ecosystem and is a world-class largemouth bass " +
+      "fishery managed by USACE and SFWMD.",
+    keywords:
+      "Lake Okeechobee,Okeechobee,Florida,FL,Glades County,Okeechobee County,Southeast,freshwater," +
+      "largemouth bass,bass,crappie,catfish,Everglades,USACE,Jacksonville District,SFWMD," +
+      "Herbert Hoover Dike,bass fishing",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-lanier-ga",
+    name: "Lake Lanier (GA)",
+    sourceAgency: "USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -84.22, minLat: 34.08, maxLon: -83.9, maxLat: 34.35 },
+    endpointUrl:
+      "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Savannah+District",
+    accessNotes:
+      "USACE Savannah District. Buford Dam impoundment; hydrographic surveys via USACE Geospatial Hub.",
+    description:
+      "Lake Lanier (Lake Sidney Lanier) in Forsyth and Hall counties, Georgia, is a USACE " +
+      "reservoir on the Chattahoochee River covering ~38,000 acres with a maximum depth of " +
+      "~160 ft (49 m). The most visited USACE lake in the nation; major freshwater fishing, " +
+      "watersports, and camping destination northeast of Atlanta.",
+    keywords:
+      "Lake Lanier,Sidney Lanier,Buford Dam,Chattahoochee River,Georgia,GA,Forsyth County,Hall County," +
+      "Southeast,reservoir,freshwater,largemouth bass,spotted bass,striped bass,USACE,Savannah District," +
+      "Atlanta,Gainesville",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-of-the-ozarks-mo",
+    name: "Lake of the Ozarks (MO)",
+    sourceAgency: "USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -93.1, minLat: 37.9, maxLon: -92.4, maxLat: 38.3 },
+    endpointUrl:
+      "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Kansas+City+District",
+    accessNotes:
+      "USACE Kansas City District. Bagnell Dam impoundment on the Osage River; " +
+      "hydrographic surveys via USACE Geospatial Hub.",
+    description:
+      "Lake of the Ozarks in central Missouri is one of the largest man-made lakes in the US " +
+      "by shoreline (~1,150 miles), covering ~54,000 acres with a maximum depth of ~130 ft " +
+      "(40 m). Impounded by Bagnell Dam (1931) on the Osage River; known for largemouth bass, " +
+      "catfish, and a vibrant resort and watersports culture.",
+    keywords:
+      "Lake of the Ozarks,Ozarks,Bagnell Dam,Osage River,Missouri,MO,Camden County,Miller County," +
+      "Southeast,Midwest,reservoir,freshwater,largemouth bass,catfish,crappie,USACE,Kansas City District," +
+      "Camdenton,Osage Beach",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-table-rock-lake-mo",
+    name: "Table Rock Lake (MO)",
+    sourceAgency: "USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -93.55, minLat: 36.4, maxLon: -93.0, maxLat: 36.7 },
+    endpointUrl:
+      "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Little+Rock+District",
+    accessNotes:
+      "USACE Little Rock District. Table Rock Dam on the White River; " +
+      "hydrographic surveys via USACE Geospatial Hub.",
+    description:
+      "Table Rock Lake in Stone and Taney counties, Missouri, covers ~43,100 acres with a " +
+      "maximum depth of ~220 ft (67 m). Impounded by Table Rock Dam (1958) on the White River " +
+      "in the Ozark Mountains; an exceptionally clear, deep Ozark reservoir celebrated for " +
+      "bass, trout, and trout fishing below the dam near Branson.",
+    keywords:
+      "Table Rock Lake,Table Rock Dam,White River,Missouri,MO,Stone County,Taney County,Ozarks," +
+      "Southeast,reservoir,freshwater,largemouth bass,smallmouth bass,trout,USACE,Little Rock District," +
+      "Branson,Kimberling City",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-kentucky-lake-ky-tn",
+    name: "Kentucky Lake (KY/TN)",
+    sourceAgency: "USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -88.35, minLat: 36.5, maxLon: -88.0, maxLat: 37.0 },
+    endpointUrl:
+      "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Nashville+District",
+    accessNotes:
+      "USACE Nashville District / TVA. Kentucky Dam impoundment on the Tennessee River; " +
+      "hydrographic surveys via USACE Geospatial Hub.",
+    description:
+      "Kentucky Lake on the Tennessee River in western Kentucky and Tennessee covers " +
+      "~160,000 acres with a maximum depth of ~60 ft (18 m). Impounded by Kentucky Dam (1944) " +
+      "and part of the Tennessee Valley Authority system; forms a twin with neighboring Lake " +
+      "Barkley — together the largest double reservoir system east of the Mississippi.",
+    keywords:
+      "Kentucky Lake,Tennessee River,Kentucky Dam,Kentucky,KY,Tennessee,TN,Marshall County,TVA," +
+      "Tennessee Valley Authority,Southeast,reservoir,freshwater,crappie,largemouth bass,striped bass," +
+      "catfish,USACE,Nashville District,Land Between the Lakes,Murray",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-barkley-ky-tn",
+    name: "Lake Barkley (KY/TN)",
+    sourceAgency: "USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -88.02, minLat: 36.6, maxLon: -87.7, maxLat: 37.0 },
+    endpointUrl:
+      "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Nashville+District",
+    accessNotes:
+      "USACE Nashville District. Barkley Dam impoundment on the Cumberland River; " +
+      "hydrographic surveys via USACE Geospatial Hub.",
+    description:
+      "Lake Barkley on the Cumberland River in western Kentucky and Tennessee covers " +
+      "~57,900 acres with a maximum depth of ~85 ft (26 m). Impounded by Barkley Dam (1966); " +
+      "shares the Land Between the Lakes National Recreation Area with adjacent Kentucky Lake " +
+      "and is managed jointly by USACE and TVA.",
+    keywords:
+      "Lake Barkley,Barkley Dam,Cumberland River,Kentucky,KY,Tennessee,TN,Trigg County,TVA," +
+      "Tennessee Valley Authority,Southeast,reservoir,freshwater,crappie,largemouth bass,catfish," +
+      "USACE,Nashville District,Land Between the Lakes,Cadiz",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-norris-lake-tn",
+    name: "Norris Lake (TN)",
+    sourceAgency: "USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -84.22, minLat: 36.2, maxLon: -83.72, maxLat: 36.5 },
+    endpointUrl:
+      "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Nashville+District",
+    accessNotes:
+      "USACE Nashville District / TVA. Norris Dam was the first TVA dam; " +
+      "hydrographic surveys via USACE Geospatial Hub.",
+    description:
+      "Norris Lake on the Clinch and Powell rivers in Union and Campbell counties, Tennessee, " +
+      "covers ~33,840 acres with a maximum depth of ~175 ft (53 m). Impounded by Norris Dam " +
+      "(1936) — the first TVA dam — and noted for its exceptional clarity, trophy walleye, " +
+      "and largemouth and smallmouth bass.",
+    keywords:
+      "Norris Lake,Norris Dam,Clinch River,Powell River,Tennessee,TN,Union County,Campbell County," +
+      "TVA,Tennessee Valley Authority,Southeast,reservoir,freshwater,walleye,smallmouth bass," +
+      "largemouth bass,USACE,Nashville District,Norris,LaFollette",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-fontana-lake-nc",
+    name: "Fontana Lake (NC)",
+    sourceAgency: "USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -83.85, minLat: 35.38, maxLon: -83.3, maxLat: 35.55 },
+    endpointUrl:
+      "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Savannah+District",
+    accessNotes:
+      "USACE Savannah District / TVA. Fontana Dam on the Little Tennessee River; " +
+      "hydrographic surveys via USACE Geospatial Hub.",
+    description:
+      "Fontana Lake on the Little Tennessee River in Swain and Graham counties, North Carolina, " +
+      "covers ~10,500 acres with a maximum depth of ~440 ft (134 m). Impounded by Fontana Dam " +
+      "(1944) — the highest dam in the eastern US — bordering Great Smoky Mountains National " +
+      "Park; supports lake trout, smallmouth bass, and muskie.",
+    keywords:
+      "Fontana Lake,Fontana Dam,Little Tennessee River,North Carolina,NC,Swain County,Graham County," +
+      "TVA,Tennessee Valley Authority,Southeast,reservoir,freshwater,lake trout,smallmouth bass,muskie," +
+      "Great Smoky Mountains,USACE,Savannah District,Robbinsville",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-smith-mountain-lake-va",
+    name: "Smith Mountain Lake (VA)",
+    sourceAgency: "USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -79.92, minLat: 37.0, maxLon: -79.5, maxLat: 37.2 },
+    endpointUrl:
+      "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Wilmington+District",
+    accessNotes:
+      "USACE Wilmington District / Appalachian Power. Smith Mountain Dam on the Roanoke River; " +
+      "hydrographic surveys via USACE Geospatial Hub.",
+    description:
+      "Smith Mountain Lake on the Roanoke (Staunton) River in Bedford, Franklin, and Pittsylvania " +
+      "counties, Virginia, covers ~20,600 acres with a maximum depth of ~250 ft (76 m). " +
+      "Impounded by Smith Mountain Dam (1966); a premier Southeast freshwater fishery known " +
+      "for trophy striped bass and largemouth bass in the Blue Ridge foothills.",
+    keywords:
+      "Smith Mountain Lake,Smith Mountain Dam,Roanoke River,Virginia,VA,Bedford County," +
+      "Franklin County,Pittsylvania County,Southeast,reservoir,freshwater,striped bass,striper," +
+      "largemouth bass,smallmouth bass,USACE,Wilmington District,Appalachian Power,Moneta",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-clarks-hill-lake-sc-ga",
+    name: "Clarks Hill / J. Strom Thurmond Lake (SC/GA)",
+    sourceAgency: "USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -82.5, minLat: 33.7, maxLon: -82.0, maxLat: 34.0 },
+    endpointUrl:
+      "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Savannah+District",
+    accessNotes:
+      "USACE Savannah District. J. Strom Thurmond Dam on the Savannah River; " +
+      "hydrographic surveys via USACE Geospatial Hub.",
+    description:
+      "Clarks Hill Lake (officially J. Strom Thurmond Lake) on the Savannah River straddles " +
+      "the South Carolina–Georgia border, covering ~71,000 acres with a maximum depth of " +
+      "~90 ft (27 m). The largest USACE lake east of the Mississippi; renowned for bass, " +
+      "crappie, and bream fishing.",
+    keywords:
+      "Clarks Hill Lake,Strom Thurmond Lake,J. Strom Thurmond,Savannah River,South Carolina,SC," +
+      "Georgia,GA,McCormick County,Southeast,reservoir,freshwater,largemouth bass,crappie,bream," +
+      "striped bass,USACE,Savannah District,Augusta,McCormick",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  // -------------------------------------------------------------------------
+  // Freshwater lake catalog entries — Southwest US and Texas
+  // -------------------------------------------------------------------------
+  {
+    id: "fw-lake-travis-tx",
+    name: "Lake Travis (TX)",
+    sourceAgency: "LCRA/USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -98.3, minLat: 30.2, maxLon: -97.7, maxLat: 30.5 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Lake Travis is part of the LCRA Highland Lakes chain " +
+      "on the Colorado River of Texas; Mansfield Dam operated by LCRA.",
+    description:
+      "Lake Travis in Travis and Burnet counties, Texas, is the largest of the Highland Lakes, " +
+      "covering ~18,600 acres at full pool with a maximum depth of ~210 ft (64 m). Impounded " +
+      "by Mansfield Dam (1942) on the Colorado River of Texas; a major water supply and " +
+      "recreational reservoir west of Austin.",
+    keywords:
+      "Lake Travis,Travis,Mansfield Dam,Colorado River Texas,Highland Lakes,Texas,TX,Travis County," +
+      "Burnet County,Southwest,reservoir,freshwater,largemouth bass,striper,LCRA,USGS,3DEP,Austin,Lago Vista",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-canyon-lake-tx",
+    name: "Canyon Lake (TX)",
+    sourceAgency: "LCRA/USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -98.32, minLat: 29.8, maxLon: -98.1, maxLat: 29.95 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Canyon Lake Dam on the Guadalupe River; operated by USACE " +
+      "Fort Worth District.",
+    description:
+      "Canyon Lake in Comal County, Texas, covers ~8,240 acres with a maximum depth of ~125 ft " +
+      "(38 m). Impounded by Canyon Dam (1964) on the Guadalupe River; the dam's tailrace " +
+      "supports a prized catch-and-release trout fishery and the lake itself hosts largemouth " +
+      "and smallmouth bass.",
+    keywords:
+      "Canyon Lake,Canyon Dam,Guadalupe River,Texas,TX,Comal County,Southwest,reservoir,freshwater," +
+      "largemouth bass,smallmouth bass,trout,USACE,Fort Worth District,USGS,3DEP,New Braunfels,San Antonio",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-lbj-tx",
+    name: "Lake LBJ (TX)",
+    sourceAgency: "LCRA/USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -98.55, minLat: 30.55, maxLon: -98.2, maxLat: 30.7 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Lake LBJ (Lyndon B. Johnson) is part of the LCRA " +
+      "Highland Lakes chain; Wirtz Dam operated by LCRA.",
+    description:
+      "Lake LBJ (Lyndon B. Johnson Lake) on the Colorado River of Texas in Llano and Burnet " +
+      "counties covers ~6,375 acres with a maximum depth of ~60 ft (18 m). Impounded by " +
+      "Wirtz Dam (1951); a constant-level lake that is part of the Highland Lakes chain, " +
+      "popular for waterskiing, bass fishing, and lakefront development.",
+    keywords:
+      "Lake LBJ,Lyndon B Johnson Lake,Wirtz Dam,Colorado River Texas,Highland Lakes,Texas,TX," +
+      "Llano County,Burnet County,Southwest,reservoir,freshwater,largemouth bass,LCRA,USGS,3DEP," +
+      "Horseshoe Bay,Marble Falls",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-inks-lake-tx",
+    name: "Inks Lake (TX)",
+    sourceAgency: "LCRA/USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -98.42, minLat: 30.72, maxLon: -98.35, maxLat: 30.78 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Inks Lake Dam (Roy Inks Dam) on the Colorado River of " +
+      "Texas; operated by LCRA. A constant-level Highland Lake.",
+    description:
+      "Inks Lake in Burnet County, Texas, covers ~803 acres with a maximum depth of ~30 ft " +
+      "(9 m). Impounded by Roy Inks Dam (1938) on the Colorado River of Texas; a constant-level " +
+      "lake that anchors Inks Lake State Park — one of the most popular state parks in Texas " +
+      "for fishing, kayaking, and scuba diving.",
+    keywords:
+      "Inks Lake,Roy Inks Dam,Colorado River Texas,Highland Lakes,Texas,TX,Burnet County,Southwest," +
+      "reservoir,freshwater,largemouth bass,LCRA,USGS,3DEP,Inks Lake State Park,Burnet",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-lake-buchanan-tx",
+    name: "Lake Buchanan (TX)",
+    sourceAgency: "LCRA/USACE",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -98.6, minLat: 30.8, maxLon: -98.3, maxLat: 30.92 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Buchanan Dam on the Colorado River of Texas; " +
+      "the uppermost and largest of the Highland Lakes, operated by LCRA.",
+    description:
+      "Lake Buchanan in Burnet and Llano counties, Texas, is the largest of the Highland Lakes " +
+      "at ~23,060 acres with a maximum depth of ~132 ft (40 m). Impounded by Buchanan Dam (1937) " +
+      "on the Colorado River of Texas; home to one of the few inland American white pelican " +
+      "rookeries in the US, along with striper and largemouth bass fishing.",
+    keywords:
+      "Lake Buchanan,Buchanan Dam,Colorado River Texas,Highland Lakes,Texas,TX,Burnet County," +
+      "Llano County,Southwest,reservoir,freshwater,striped bass,striper,largemouth bass,white pelican," +
+      "LCRA,USGS,3DEP,Burnet,Llano",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-elephant-butte-nm",
+    name: "Elephant Butte Reservoir (NM)",
+    sourceAgency: "USGS/USBR",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -107.32, minLat: 33.1, maxLon: -107.1, maxLat: 33.6 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Elephant Butte Dam on the Rio Grande; " +
+      "operated by USBR Middle Rio Grande Project.",
+    description:
+      "Elephant Butte Reservoir in Sierra County, New Mexico, is the largest reservoir in the " +
+      "state at ~36,500 acres at full pool with a maximum depth of ~200 ft (61 m). Impounded " +
+      "by Elephant Butte Dam (1916) on the Rio Grande; a major recreation area in southern " +
+      "New Mexico with striped bass and walleye fisheries.",
+    keywords:
+      "Elephant Butte,Elephant Butte Reservoir,Elephant Butte Dam,Rio Grande,New Mexico,NM," +
+      "Sierra County,Southwest,reservoir,freshwater,striped bass,walleye,largemouth bass,USGS," +
+      "3DEP,USBR,Bureau of Reclamation,Truth or Consequences,Hot Springs",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-cochiti-lake-nm",
+    name: "Cochiti Lake (NM)",
+    sourceAgency: "USGS/USBR",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -106.42, minLat: 35.6, maxLon: -106.3, maxLat: 35.7 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Cochiti Dam on the Rio Grande; operated by USACE " +
+      "Albuquerque District. Lake lies within Cochiti Pueblo lands.",
+    description:
+      "Cochiti Lake in Sandoval County, New Mexico, is a flood-control reservoir on the " +
+      "Rio Grande covering ~1,200 acres at full pool with a maximum depth of ~90 ft (27 m). " +
+      "Cochiti Dam (1975) is the second-largest earthen dam in the US; the lake and surrounding " +
+      "lands are part of Cochiti Pueblo's traditional territory.",
+    keywords:
+      "Cochiti Lake,Cochiti Dam,Rio Grande,New Mexico,NM,Sandoval County,Southwest,reservoir," +
+      "freshwater,largemouth bass,USGS,3DEP,USACE,Albuquerque District,Cochiti Pueblo,Santa Fe," +
+      "Albuquerque",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  {
+    id: "fw-navajo-lake-nm-co",
+    name: "Navajo Lake (NM/CO)",
+    sourceAgency: "USGS/USBR",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -107.72, minLat: 36.8, maxLon: -107.3, maxLat: 37.1 },
+    endpointUrl:
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+    accessNotes:
+      "Accessible via USGS 3DEP WCS. Navajo Dam on the San Juan River; " +
+      "operated by USBR. The dam's tailwater produces one of the premier trophy trout " +
+      "tailwaters in the Southwest.",
+    description:
+      "Navajo Lake on the San Juan River in San Juan County, New Mexico, and Archuleta County, " +
+      "Colorado, covers ~15,600 acres with a maximum depth of ~400 ft (122 m). Impounded by " +
+      "Navajo Dam (1962); the reservoir holds kokanee salmon and trophy bass while the tailwater " +
+      "below the dam is a world-class trophy trout fishery.",
+    keywords:
+      "Navajo Lake,Navajo Dam,San Juan River,New Mexico,NM,Colorado,CO,San Juan County," +
+      "Archuleta County,Southwest,Rio Grande,reservoir,freshwater,kokanee,trout,rainbow trout," +
+      "largemouth bass,USGS,3DEP,USBR,Bureau of Reclamation,Aztec,Farmington",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+  },
+  // -------------------------------------------------------------------------
+  // AOOS Intertidal Habitats — Prince of Wales Island (pre-existing entry follows)
+  // -------------------------------------------------------------------------
   {
     id: "aoos-intertidal-pow",
     name: "AOOS Intertidal Habitats — Prince of Wales Island",
