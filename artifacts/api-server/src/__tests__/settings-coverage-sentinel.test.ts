@@ -141,6 +141,7 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   "terrainExaggeration",
   "enableMarineSnow",
   "fogColor",
+  "nodataColor",
   "ambientLightIntensity",
   "directionalLightIntensity",
   "lampRange",

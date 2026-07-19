@@ -5273,6 +5273,11 @@ components:
           pattern: '^#[0-9a-fA-F]{6}$'
           default: '#020818'
           description: RGB hex colour of the underwater fog.
+        nodataColor:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          default: '#bfbfbf'
+          description: RGB hex colour applied to no-data (land / survey gap) tiles on the terrain mesh.
         ambientLightIntensity:
           type: number
           minimum: 0
@@ -5513,6 +5518,7 @@ components:
           pattern: '^#[0-9a-fA-F]{6}$'
           default: '#ff9919'
           description: Tint hex colour for the habitat suitability overlay.
+
         autoStartTrailRecording:
           type: boolean
           default: false

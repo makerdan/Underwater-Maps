@@ -1247,6 +1247,8 @@ export const getSettingsResponseTerrainExaggerationMax = 20;
 export const getSettingsResponseEnableMarineSnowDefault = true;
 export const getSettingsResponseFogColorDefault = `#020818`;
 export const getSettingsResponseFogColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseNodataColorDefault = `#bfbfbf`;
+export const getSettingsResponseNodataColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const getSettingsResponseAmbientLightIntensityDefault = 0.05;
 export const getSettingsResponseAmbientLightIntensityMin = 0;
 export const getSettingsResponseAmbientLightIntensityMax = 2;
@@ -1466,6 +1468,7 @@ export const GetSettingsResponse = zod.object({
   "terrainExaggeration": zod.number().min(1).max(getSettingsResponseTerrainExaggerationMax).default(getSettingsResponseTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
   "enableMarineSnow": zod.boolean().default(getSettingsResponseEnableMarineSnowDefault).describe('Render animated marine snow particle effect in the 3D scene.'),
   "fogColor": zod.string().regex(getSettingsResponseFogColorRegExp).default(getSettingsResponseFogColorDefault).describe('RGB hex colour of the underwater fog.'),
+  "nodataColor": zod.string().regex(getSettingsResponseNodataColorRegExp).default(getSettingsResponseNodataColorDefault).describe('RGB hex colour applied to no-data (land \/ survey gap) tiles on the terrain mesh.'),
   "ambientLightIntensity": zod.number().min(getSettingsResponseAmbientLightIntensityMin).max(getSettingsResponseAmbientLightIntensityMax).default(getSettingsResponseAmbientLightIntensityDefault).describe('Intensity of the ambient (omnidirectional) scene light.'),
   "directionalLightIntensity": zod.number().min(getSettingsResponseDirectionalLightIntensityMin).max(getSettingsResponseDirectionalLightIntensityMax).default(getSettingsResponseDirectionalLightIntensityDefault).describe('Intensity of the primary directional sunlight.'),
   "lampRange": zod.number().min(1).max(getSettingsResponseLampRangeMax).default(getSettingsResponseLampRangeDefault).describe('Range in metres of the camera headlamp point light.'),
@@ -1702,6 +1705,8 @@ export const putSettingsBodyTerrainExaggerationMax = 20;
 export const putSettingsBodyEnableMarineSnowDefault = true;
 export const putSettingsBodyFogColorDefault = `#020818`;
 export const putSettingsBodyFogColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodyNodataColorDefault = `#bfbfbf`;
+export const putSettingsBodyNodataColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const putSettingsBodyAmbientLightIntensityDefault = 0.05;
 export const putSettingsBodyAmbientLightIntensityMin = 0;
 export const putSettingsBodyAmbientLightIntensityMax = 2;
@@ -1921,6 +1926,7 @@ export const PutSettingsBody = zod.object({
   "terrainExaggeration": zod.number().min(1).max(putSettingsBodyTerrainExaggerationMax).default(putSettingsBodyTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
   "enableMarineSnow": zod.boolean().default(putSettingsBodyEnableMarineSnowDefault).describe('Render animated marine snow particle effect in the 3D scene.'),
   "fogColor": zod.string().regex(putSettingsBodyFogColorRegExp).default(putSettingsBodyFogColorDefault).describe('RGB hex colour of the underwater fog.'),
+  "nodataColor": zod.string().regex(putSettingsBodyNodataColorRegExp).default(putSettingsBodyNodataColorDefault).describe('RGB hex colour applied to no-data (land \/ survey gap) tiles on the terrain mesh.'),
   "ambientLightIntensity": zod.number().min(putSettingsBodyAmbientLightIntensityMin).max(putSettingsBodyAmbientLightIntensityMax).default(putSettingsBodyAmbientLightIntensityDefault).describe('Intensity of the ambient (omnidirectional) scene light.'),
   "directionalLightIntensity": zod.number().min(putSettingsBodyDirectionalLightIntensityMin).max(putSettingsBodyDirectionalLightIntensityMax).default(putSettingsBodyDirectionalLightIntensityDefault).describe('Intensity of the primary directional sunlight.'),
   "lampRange": zod.number().min(1).max(putSettingsBodyLampRangeMax).default(putSettingsBodyLampRangeDefault).describe('Range in metres of the camera headlamp point light.'),
@@ -2152,6 +2158,8 @@ export const putSettingsResponseTerrainExaggerationMax = 20;
 export const putSettingsResponseEnableMarineSnowDefault = true;
 export const putSettingsResponseFogColorDefault = `#020818`;
 export const putSettingsResponseFogColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseNodataColorDefault = `#bfbfbf`;
+export const putSettingsResponseNodataColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const putSettingsResponseAmbientLightIntensityDefault = 0.05;
 export const putSettingsResponseAmbientLightIntensityMin = 0;
 export const putSettingsResponseAmbientLightIntensityMax = 2;
@@ -2371,6 +2379,7 @@ export const PutSettingsResponse = zod.object({
   "terrainExaggeration": zod.number().min(1).max(putSettingsResponseTerrainExaggerationMax).default(putSettingsResponseTerrainExaggerationDefault).describe('Vertical exaggeration factor applied to terrain depth for visual clarity.'),
   "enableMarineSnow": zod.boolean().default(putSettingsResponseEnableMarineSnowDefault).describe('Render animated marine snow particle effect in the 3D scene.'),
   "fogColor": zod.string().regex(putSettingsResponseFogColorRegExp).default(putSettingsResponseFogColorDefault).describe('RGB hex colour of the underwater fog.'),
+  "nodataColor": zod.string().regex(putSettingsResponseNodataColorRegExp).default(putSettingsResponseNodataColorDefault).describe('RGB hex colour applied to no-data (land \/ survey gap) tiles on the terrain mesh.'),
   "ambientLightIntensity": zod.number().min(putSettingsResponseAmbientLightIntensityMin).max(putSettingsResponseAmbientLightIntensityMax).default(putSettingsResponseAmbientLightIntensityDefault).describe('Intensity of the ambient (omnidirectional) scene light.'),
   "directionalLightIntensity": zod.number().min(putSettingsResponseDirectionalLightIntensityMin).max(putSettingsResponseDirectionalLightIntensityMax).default(putSettingsResponseDirectionalLightIntensityDefault).describe('Intensity of the primary directional sunlight.'),
   "lampRange": zod.number().min(1).max(putSettingsResponseLampRangeMax).default(putSettingsResponseLampRangeDefault).describe('Range in metres of the camera headlamp point light.'),

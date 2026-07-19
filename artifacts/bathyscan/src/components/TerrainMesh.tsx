@@ -60,6 +60,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     const colormapTheme = useSettingsStore((s) => s.colormapTheme);
     const brightDaylight = useSettingsStore((s) => s.brightDaylight);
     const colormapUserSet = useSettingsStore((s) => s.colormapUserSet);
+    const nodataColorHex = useSettingsStore((s) => s.nodataColor);
     // In Bright Daylight mode, promote the terrain to grayscale — it provides
     // the strongest depth contrast in sunlight. If the user has explicitly
     // chosen a colormap (colormapUserSet === true) their choice is always
@@ -235,14 +236,19 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     const customStops = usePaletteStore((s) => s.customStops);
     const bandColors = usePaletteStore((s) => s.bandColors);
     const bandBoundaries = usePaletteStore((s) => s.bandBoundaries);
+    const nodataColorRgb = React.useMemo(() => {
+      const c = new THREE.Color(nodataColorHex);
+      return { r: c.r, g: c.g, b: c.b };
+    }, [nodataColorHex]);
+
     useEffect(() => {
       const { depths, minDepth, maxDepth } = grid;
       const colorAttr = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
       if (!colorAttr) return;
       const toColor = getColormap(effectiveColormapTheme);
-      applyColormapToVertexColors(depths, minDepth, maxDepth, colorAttr.array as Float32Array, toColor);
+      applyColormapToVertexColors(depths, minDepth, maxDepth, colorAttr.array as Float32Array, toColor, nodataColorRgb);
       colorAttr.needsUpdate = true;
-    }, [paletteShallow, paletteDeep, customStops, effectiveColormapTheme, grid, geometry, bandColors, bandBoundaries]);
+    }, [paletteShallow, paletteDeep, customStops, effectiveColormapTheme, grid, geometry, bandColors, bandBoundaries, nodataColorRgb]);
 
     // Substrate colour mode no longer recolours the mesh from slope-derived
     // heuristics. The real ShoreZone polygons are drawn as a draped overlay

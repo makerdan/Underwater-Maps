@@ -929,6 +929,11 @@ export interface UserSettings {
      */
   fogColor?: string;
   /**
+     * RGB hex colour applied to no-data (land / survey gap) tiles on the terrain mesh.
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  nodataColor?: string;
+  /**
      * Intensity of the ambient (omnidirectional) scene light.
      * @minimum 0
      * @maximum 2

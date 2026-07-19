@@ -114,6 +114,7 @@ export const DEFAULT_SETTINGS = {
   terrainExaggeration: 1,
   enableMarineSnow: true,
   fogColor: "#020818",
+  nodataColor: "#bfbfbf",
   ambientLightIntensity: 0.05,
   directionalLightIntensity: 0.35,
   lampRange: 40,

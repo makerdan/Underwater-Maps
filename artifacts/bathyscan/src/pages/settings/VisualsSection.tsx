@@ -278,6 +278,12 @@ export function VisualsSection() {
           ]}
           sublabel="Terrain surface colour gradient"
         />
+        <ColorRow
+          label="Land / No-data Color"
+          value={s.nodataColor}
+          onChange={s.setNodataColor}
+          sublabel="Color for land and survey gaps — match your basemap background"
+        />
         <ToggleRow
           label="Show Contour Lines"
           value={s.contoursEnabled}

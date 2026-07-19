@@ -580,15 +580,23 @@ export function applyColormapToVertexColors(
   maxDepth: number,
   colors: Float32Array,
   toColor: (t: number) => { r: number; g: number; b: number },
+  nodataColor?: { r: number; g: number; b: number },
 ): void {
   const depthRange = (maxDepth - minDepth) || 1;
   for (let i = 0; i < depths.length; i++) {
     const depth = (depths as (number | null)[])[i];
-    // Null, undefined, or non-finite depth = survey gap — preserve the no-data
-    // colour already set by buildTerrainGeometry; do not overwrite it with the
-    // depth colormap. The non-finite check is belt-and-suspenders for any future
-    // data path that skips the server-side NaN → JSON null serialisation.
-    if (depth === null || depth === undefined || !Number.isFinite(depth)) continue;
+    // Null, undefined, or non-finite depth = survey gap — when a nodataColor is
+    // provided, overwrite the vertex with it (live re-paint on settings change).
+    // When no nodataColor is given, preserve whatever colour is already in the
+    // buffer (backward-compatible skip behaviour for callers that don't supply one).
+    if (depth === null || depth === undefined || !Number.isFinite(depth)) {
+      if (nodataColor) {
+        colors[i * 3]     = nodataColor.r;
+        colors[i * 3 + 1] = nodataColor.g;
+        colors[i * 3 + 2] = nodataColor.b;
+      }
+      continue;
+    }
     const t = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
     const c = toColor(t);
     colors[i * 3]     = c.r;

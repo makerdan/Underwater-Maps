@@ -60,7 +60,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 28;
+export const SETTINGS_SCHEMA_VERSION = 29;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -229,6 +229,8 @@ export interface SettingsState {
   enableCaustics: boolean;
   fogDensity: number;
   fogColor: string;
+  /** RGB hex colour for no-data (land / survey gap) tiles on the terrain mesh (default light gray). */
+  nodataColor: string;
   ambientLightIntensity: number;
   directionalLightIntensity: number;
   lampIntensity: number;
@@ -574,6 +576,7 @@ interface SettingsActions {
   setEnableCaustics: (v: boolean) => void;
   setFogDensity: (v: number) => void;
   setFogColor: (v: string) => void;
+  setNodataColor: (v: string) => void;
   setAmbientLightIntensity: (v: number) => void;
   setDirectionalLightIntensity: (v: number) => void;
   setLampIntensity: (v: number) => void;
@@ -865,6 +868,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   enableCaustics: false,
   fogDensity: 0.012,
   fogColor: "#020818",
+  nodataColor: "#bfbfbf",
   ambientLightIntensity: 0.05,
   directionalLightIntensity: 0.35,
   lampIntensity: 2,
@@ -1028,7 +1032,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   visuals: [
     "qualityPreset", "terrainExaggeration", "enableMarineSnow", "particleDensity",
-    "enableCaustics", "fogDensity", "fogColor", "ambientLightIntensity",
+    "enableCaustics", "fogDensity", "fogColor", "nodataColor", "ambientLightIntensity",
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
     "showWaterSurface", "showWaterTempLayer", "showLandmass", "landmassStyle", "satelliteImagery", "colormapUserSet",
@@ -1163,6 +1167,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setEnableCaustics: (v) => set({ enableCaustics: v, qualityPreset: "custom" }),
         setFogDensity: (v) => set({ fogDensity: v, qualityPreset: "custom" }),
         setFogColor: setter("fogColor"),
+        setNodataColor: setter("nodataColor"),
         setAmbientLightIntensity: (v) => set({ ambientLightIntensity: v, qualityPreset: "custom" }),
         setDirectionalLightIntensity: (v) => set({ directionalLightIntensity: v, qualityPreset: "custom" }),
         setLampIntensity: (v) => set({ lampIntensity: v, qualityPreset: "custom" }),
@@ -1682,6 +1687,12 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).saveFolderExpanded === undefined) {
             migratedSaveFolderExpanded.saveFolderExpanded = DEFAULT_SETTINGS.saveFolderExpanded;
           }
+          // v28 → v29: inject nodataColor default so existing users see the same
+          // light-gray nodata color they had before (now user-configurable).
+          const migratedNodataColor: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).nodataColor === undefined) {
+            migratedNodataColor.nodataColor = DEFAULT_SETTINGS.nodataColor;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1699,6 +1710,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedFollowResume,
             ...migratedBoatThresholds,
             ...migratedSaveFolderExpanded,
+            ...migratedNodataColor,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
