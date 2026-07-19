@@ -56,6 +56,15 @@ export interface SurfaceConditionsResult {
   isFetching: boolean;
   error: boolean;
   estimated: boolean;
+  /**
+   * True when a real currents data source (noaa-coops, usgs, glerl) was
+   * found for this location. False when data came from the sinusoidal
+   * synthetic fallback. Always true when loading or before first fetch.
+   *
+   * Components should suppress currents arrows / panels when this is false
+   * AND the user is in freshwater mode.
+   */
+  currentsAvailable: boolean;
   /** UTC ISO timestamp of the active sample (top-of-hour). */
   timestamp: string | null;
   /** Hour-of-day the snapshot represents (0–23, UTC). */
@@ -111,6 +120,7 @@ function _subscribeNowHour(listener: NowHourListener): () => void {
 export function useSurfaceConditions(
   enabled = true,
   hourOverride?: number,
+  waterType?: "saltwater" | "freshwater",
 ): SurfaceConditionsResult {
   const { terrain } = useAppState();
   const manualWindSpeedKnots = useDriftStore((s) => s.manualWindSpeedKnots);
@@ -123,7 +133,11 @@ export function useSurfaceConditions(
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
   const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;
 
-  const params = { lat: centerLat ?? 0, lon: centerLon ?? 0 };
+  const params = {
+    lat: centerLat ?? 0,
+    lon: centerLon ?? 0,
+    ...(waterType ? { waterType } : {}),
+  };
 
   const { data, isLoading, isFetching, isError, refetch } = useGetSurfaceConditions(params, {
     query: {
@@ -156,6 +170,11 @@ export function useSurfaceConditions(
     };
 
     const estimated = !!data?.estimatedConditions || isError || !data;
+    // currentsAvailable: true when a real station was resolved (noaa-coops, usgs, glerl).
+    // false only when sinusoidal synthetic fallback was used (no real station in range).
+    // When loading or no data yet, optimistically return true so UI doesn't flash "unavailable".
+    const tidalSrc = (data as (typeof data & { tidalDataSource?: string }) | undefined)?.tidalDataSource;
+    const currentsAvailable = !data || isLoading || tidalSrc !== "sinusoidal";
     const hoursRaw = data?.hours ?? [];
 
     const hours: SurfaceSnapshot[] = hoursRaw.map((h, i) => {
@@ -210,6 +229,7 @@ export function useSurfaceConditions(
       isFetching,
       error: isError,
       estimated,
+      currentsAvailable,
       timestamp: snapshot ? ts : null,
       activeHour,
       refetch: () => { void refetch(); },

@@ -20,6 +20,12 @@ interface TidalCurrentArrowsProps {
   depthLayer: DepthLayer;
   terrain: TerrainData;
   depthBias?: boolean;
+  /**
+   * When false the component renders nothing. Used to suppress arrows for
+   * freshwater locations where no real currents data source is available
+   * (no USGS / GLERL station in range). Defaults to true (always render).
+   */
+  available?: boolean;
 }
 
 const DENSITY_MAP: Record<string, number> = {
@@ -71,7 +77,9 @@ export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({
   surfaceY,
   depthLayer,
   depthBias = false,
+  available = true,
 }) => {
+  if (!available) return null;
   const yOffset = LAYER_OFFSETS[depthLayer] ?? 0;
   const attenuate = LAYER_SPEED_ATTENUATE[depthLayer] ?? 1.0;
   const globalDensity = useSettingsStore((s) => s.currentArrowDensity);

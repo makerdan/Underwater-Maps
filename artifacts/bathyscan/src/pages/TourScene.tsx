@@ -465,6 +465,9 @@ const WaterTempSceneContents: React.FC<{ terrain: TerrainData }> = ({ terrain })
     Array.isArray(profile.samples) &&
     (profile.samples as unknown[]).length >= 2;
 
+  const waterType = useSettingsStore((s) => s.waterType);
+  const isFresh = waterType === "freshwater";
+
   const samples: TempSample[] | null = useMemo(() => {
     if (!showWaterTempLayer) return null;
     if (profile?.available && Array.isArray(profile.samples) && profile.samples.length >= 2) {
@@ -479,11 +482,14 @@ const WaterTempSceneContents: React.FC<{ terrain: TerrainData }> = ({ terrain })
         .sort((a, b) => a.depthM - b.depthM)
         .map((s) => ({ depthM: s.depthM, celsius: s.temperatureC }));
     }
-    // Fallback: exponential thermocline model at the scene depth range.
+    // Freshwater with no real data: suppress the volume entirely rather than
+    // showing a synthetic thermocline model that has no empirical basis.
+    if (isFresh) return null;
+    // Saltwater fallback: exponential thermocline model at the scene depth range.
     const maxDepthM = Math.max(20, terrain.maxDepth - terrain.minDepth);
     const thermo = sampleTemperatureProfile(maxDepthM, null, 24);
     return thermo.samples.map((s) => ({ depthM: s.depthM, celsius: s.celsius }));
-  }, [showWaterTempLayer, profile, terrain]);
+  }, [showWaterTempLayer, profile, terrain, isFresh]);
 
   const dataTexture = useWaterTempTexture(samples);
 

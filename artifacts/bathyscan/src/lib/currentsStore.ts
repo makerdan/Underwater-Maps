@@ -25,8 +25,14 @@ export interface NoaaAmbient {
    * nearby; the panel uses this flag to label what the user is actually
    * seeing.
    */
-  source?: "noaa" | "estimated";
-  /** NOAA CO-OPS currents-predictions station id, when source === "noaa". */
+  /**
+   * "noaa"     : real NOAA CO-OPS data (saltwater)
+   * "usgs"     : real USGS NWIS gauge (freshwater)
+   * "glerl"    : real NOAA GLERL Great-Lakes model (freshwater)
+   * "estimated": sinusoidal synthetic fallback (no real station in range)
+   */
+  source?: "noaa" | "usgs" | "glerl" | "estimated";
+  /** Station id, when source is a real data source. */
   stationId?: string;
   /** Human-readable station name (e.g. "Snow Passage, Alaska Current"). */
   stationName?: string;

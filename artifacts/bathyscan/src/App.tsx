@@ -290,7 +290,6 @@ function Main() {
   const serverWarmingUp = useIsConnecting();
   const healthResponseMs = useHealthResponseTime();
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
-  void waterTypeForDatasets;
   const { data: datasets } = useGetDatasets(
     { waterType: waterTypeForDatasets },
     { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForDatasets }) } },
@@ -432,6 +431,7 @@ function Main() {
     tidalOverlay ? centerLat : null,
     tidalOverlay ? centerLon : null,
     tidalOverlay ? timelineCurrentTime : null,
+    waterTypeForDatasets,
   );
 
   // Multi-primary: tidal data for secondary visible datasets.
@@ -439,16 +439,19 @@ function Main() {
     tidalOverlay ? center1Lat : null,
     tidalOverlay ? center1Lon : null,
     tidalOverlay ? timelineCurrentTime : null,
+    waterTypeForDatasets,
   );
   const { data: tidalData2 } = useTidalData(
     tidalOverlay ? center2Lat : null,
     tidalOverlay ? center2Lon : null,
     tidalOverlay ? timelineCurrentTime : null,
+    waterTypeForDatasets,
   );
   const { data: tidalData3 } = useTidalData(
     tidalOverlay ? center3Lat : null,
     tidalOverlay ? center3Lon : null,
     tidalOverlay ? timelineCurrentTime : null,
+    waterTypeForDatasets,
   );
 
   // E2E test bridge: when non-null, overrides live tidal fetch data so tests

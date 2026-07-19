@@ -16,6 +16,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { DataUnavailable } from "@/components/DataUnavailable";
 import { AdvancedSection } from "@/components/AdvancedSection";
 import { useCurrentsStore, type TidalStatus } from "@/lib/currentsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -150,6 +151,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
   const setCurrentsShowArrows = useSettingsStore((s) => s.setCurrentsShowArrows);
   const currentsShowStreamlines = useSettingsStore((s) => s.currentsShowStreamlines);
   const setCurrentsShowStreamlines = useSettingsStore((s) => s.setCurrentsShowStreamlines);
+  const waterType = useSettingsStore((s) => s.waterType);
   const field = useCurrentsStore((st) => st.field);
   const noaaAmbient = useCurrentsStore((st) => st.noaaAmbient);
   const tidalStatus = useCurrentsStore((st) => st.tidalStatus);
@@ -292,6 +294,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
           units={units}
           onRetry={retryTidal}
           onSwitchToManual={() => setCurrentsSource("manual")}
+          waterType={waterType}
         />
       )}
 
@@ -394,13 +397,27 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
 
 interface NoaaReadoutProps {
   tidalStatus: TidalStatus;
-  noaaAmbient: { directionDeg: number; speedKt: number; source?: "noaa" | "estimated"; stationId?: string; stationName?: string } | null;
+  noaaAmbient: { directionDeg: number; speedKt: number; source?: "noaa" | "usgs" | "glerl" | "estimated"; stationId?: string; stationName?: string } | null;
   units: UnitsSystem;
   onRetry: () => void;
   onSwitchToManual: () => void;
+  waterType?: "saltwater" | "freshwater";
 }
 
-function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManual }: NoaaReadoutProps): React.ReactElement {
+/** True when the source string represents a real measured data feed (not synthetic). */
+function isRealSource(src?: string): boolean {
+  return src === "noaa" || src === "usgs" || src === "glerl";
+}
+
+/** Display-friendly label for the data source. */
+function sourceLabel(src?: string): string {
+  if (src === "usgs") return "USGS";
+  if (src === "glerl") return "GLERL";
+  if (src === "noaa") return "NOAA";
+  return "Estimated";
+}
+
+function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManual, waterType }: NoaaReadoutProps): React.ReactElement {
   const actionBtn: React.CSSProperties = {
     background: "none",
     border: "1px solid rgba(0,229,255,0.3)",
@@ -414,16 +431,28 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
     marginTop: 4,
   };
 
+  const isFresh = waterType === "freshwater";
+
   if (tidalStatus === "loading") {
     if (noaaAmbient) {
+      const realSrc = isRealSource(noaaAmbient.source);
       return (
         <div style={{ marginBottom: 8, fontSize: 15, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: "1 1 0" }}>
-              {noaaAmbient.source === "noaa" ? "NOAA" : "Estimated"}:{" "}
-              {noaaAmbient.directionDeg.toFixed(0)}°{" "}
-              {cardinal(noaaAmbient.directionDeg)} @{" "}
-              {formatSpeedFromKnots(noaaAmbient.speedKt, { units, decimals: 2 })}
+              {isFresh && !realSrc ? (
+                <DataUnavailable
+                  message="No currents data for this location"
+                  data-testid="currents-freshwater-unavailable"
+                />
+              ) : (
+                <>
+                  {sourceLabel(noaaAmbient.source)}:{" "}
+                  {noaaAmbient.directionDeg.toFixed(0)}°{" "}
+                  {cardinal(noaaAmbient.directionDeg)} @{" "}
+                  {formatSpeedFromKnots(noaaAmbient.speedKt, { units, decimals: 2 })}
+                </>
+              )}
             </span>
             <span
               data-testid="currents-noaa-refreshing"
@@ -439,14 +468,14 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
               REFRESHING…
             </span>
           </div>
-          {noaaAmbient.source === "noaa" &&
+          {isRealSource(noaaAmbient.source) &&
           (noaaAmbient.stationName || noaaAmbient.stationId) ? (
             <div style={{ fontSize: 13.5, color: "#cbd5e1", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} data-testid="currents-noaa-station">
               Station:{" "}
               {noaaAmbient.stationName ?? "—"}
               {noaaAmbient.stationId ? ` (${noaaAmbient.stationId})` : ""}
             </div>
-          ) : noaaAmbient.source === "estimated" ? (
+          ) : !isFresh && noaaAmbient.source === "estimated" ? (
             <div style={{ fontSize: 13.5, color: "#fbbf24", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} data-testid="currents-noaa-estimated">
               No NOAA station in range — using tide-derived estimate.
             </div>
@@ -462,6 +491,16 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
   }
 
   if (tidalStatus === "unavailable") {
+    if (isFresh) {
+      return (
+        <div style={{ marginBottom: 8 }} data-testid="currents-noaa-readout">
+          <DataUnavailable
+            message="No currents data for this location"
+            data-testid="currents-freshwater-unavailable"
+          />
+        </div>
+      );
+    }
     return (
       <div style={{ marginBottom: 8, fontSize: 15, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
         <div style={{ color: "#fbbf24", marginBottom: 4 }} data-testid="currents-noaa-unavailable">
@@ -480,16 +519,26 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
   }
 
   if (tidalStatus === "ok" && noaaAmbient) {
+    const realSrc = isRealSource(noaaAmbient.source);
+    if (isFresh && !realSrc) {
+      return (
+        <div style={{ marginBottom: 8 }} data-testid="currents-noaa-readout">
+          <DataUnavailable
+            message="No currents data for this location"
+            data-testid="currents-freshwater-unavailable"
+          />
+        </div>
+      );
+    }
     return (
       <div style={{ marginBottom: 8, fontSize: 15, color: "#e2e8f0", minWidth: 0 }} data-testid="currents-noaa-readout">
         <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {noaaAmbient.source === "noaa" ? "NOAA" : "Estimated"}:{" "}
+          {sourceLabel(noaaAmbient.source)}:{" "}
           {noaaAmbient.directionDeg.toFixed(0)}°{" "}
           {cardinal(noaaAmbient.directionDeg)} @{" "}
           {formatSpeedFromKnots(noaaAmbient.speedKt, { units, decimals: 2 })}
         </div>
-        {noaaAmbient.source === "noaa" &&
-        (noaaAmbient.stationName || noaaAmbient.stationId) ? (
+        {realSrc && (noaaAmbient.stationName || noaaAmbient.stationId) ? (
           <div
             style={{ fontSize: 13.5, color: "#cbd5e1", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
             data-testid="currents-noaa-station"
@@ -498,7 +547,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
             {noaaAmbient.stationName ?? "—"}
             {noaaAmbient.stationId ? ` (${noaaAmbient.stationId})` : ""}
           </div>
-        ) : noaaAmbient.source === "estimated" ? (
+        ) : !isFresh && noaaAmbient.source === "estimated" ? (
           <div
             style={{ fontSize: 13.5, color: "#fbbf24", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
             data-testid="currents-noaa-estimated"

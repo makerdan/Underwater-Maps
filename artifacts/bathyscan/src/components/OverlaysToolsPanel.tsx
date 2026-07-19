@@ -8,6 +8,7 @@
  * floating placement.
  */
 import React, { useEffect, useMemo, useRef } from "react";
+import { DataUnavailable } from "@/components/DataUnavailable";
 import {
   THERMAL_STOPS,
   THERMAL_MIN_C,
@@ -621,7 +622,13 @@ export const OverlaysToolsPanel: React.FC = () => {
             activeGlow="0 0 6px rgba(251,146,60,0.5)"
             isLoading={showWaterTempLayer && tempLoading}
           />
-          {isTempEstimated && (
+          {isTempEstimated && waterType === "freshwater" && (
+            <DataUnavailable
+              message="No temperature data for this location"
+              data-testid="temp-layer-freshwater-unavailable"
+            />
+          )}
+          {isTempEstimated && waterType !== "freshwater" && (
             <div
               data-testid="temp-layer-estimated-notice"
               style={{

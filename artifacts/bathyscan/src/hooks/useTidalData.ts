@@ -34,11 +34,20 @@ export type TidalDataResult =
       stationName: string;
       stationId?: string;
       isPredicted: boolean;
-      source?: "noaa" | "estimated";
-      /** Source of the peak-current data (drives whether NOAA currents are real). */
-      currentsSource?: "noaa" | "estimated";
+      /**
+       * Overall source of this tidal observation.
+       * - "noaa"     : real NOAA CO-OPS tide/currents station (saltwater)
+       * - "usgs"     : real USGS NWIS gauge (freshwater)
+       * - "glerl"    : real NOAA GLERL Great-Lakes model (freshwater)
+       * - "estimated": sinusoidal synthetic fallback (no real station in range)
+       */
+      source?: "noaa" | "usgs" | "glerl" | "estimated";
+      /** Source of the peak-current data (drives whether currents are real). */
+      currentsSource?: "noaa" | "usgs" | "glerl" | "estimated";
       /** Source of the tide-height series. */
-      heightsSource?: "noaa" | "estimated";
+      heightsSource?: "noaa" | "usgs" | "glerl" | "estimated";
+      /** Approximate distance to the data station, km. */
+      distanceKm?: number;
       /** NOAA currents-predictions station, when one was in range. */
       currentsStation?: StationRef;
       /** NOAA water-levels station, when one was in range. */
@@ -54,6 +63,7 @@ export function useTidalData(
   lat: number | null,
   lon: number | null,
   scrubDatetime?: Date | null,
+  waterType?: "saltwater" | "freshwater",
 ): { data: TidalDataResult | null; loading: boolean; retry: () => void; isOfflinePack: boolean; packSnapshotAt?: string } {
   const [data, setData] = useState<TidalDataResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -91,6 +101,9 @@ export function useTidalData(
         let url = `${base}api/tidal?lat=${currentLat}&lon=${currentLon}`;
         if (scrubDatetime) {
           url += `&datetime=${encodeURIComponent(scrubDatetime.toISOString())}`;
+        }
+        if (waterType) {
+          url += `&waterType=${encodeURIComponent(waterType)}`;
         }
         const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);

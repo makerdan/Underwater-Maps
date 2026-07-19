@@ -2,6 +2,8 @@ import React, { useMemo, useState } from "react";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { DataSourceBadge } from "@/components/DataSourceBadge";
+import type { DataSource } from "@/components/DataSourceBadge";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { AdvancedSection } from "@/components/AdvancedSection";
 import { formatDistance, formatDepth, formatSpeedFromKnots, cardinal } from "@/lib/units";
@@ -59,78 +61,14 @@ interface TidePanelProps {
   embedded?: boolean;
 }
 
-interface StationSourceBadgeProps {
-  source?: "noaa" | "estimated";
-  stationId?: string;
-  stationName?: string;
+/**
+ * Normalise the raw tidal source string to a DataSource for the badge.
+ * Treats missing/undefined the same as "estimated" (synthetic fallback).
+ */
+function toDataSource(src: string | undefined): DataSource {
+  if (src === "usgs" || src === "glerl" || src === "noaa") return src;
+  return "estimated";
 }
-
-const StationSourceBadge: React.FC<StationSourceBadgeProps> = ({
-  source,
-  stationId,
-  stationName,
-}) => {
-  const isNoaa = source === "noaa";
-  const label = isNoaa
-    ? `From NOAA station${stationName ? ` ${stationName}` : ""}`
-    : "Estimated (no nearby station)";
-  const tooltip = isNoaa
-    ? stationId
-      ? `Real observations from NOAA station ${stationId}`
-      : "Real observations from a nearby NOAA station"
-    : "Synthetic fallback — no NOAA station was in range, slack windows are approximate";
-  const style: React.CSSProperties = isNoaa
-    ? {
-        marginTop: 3,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        fontSize: 13.5,
-        letterSpacing: "0.15em",
-        textTransform: "uppercase",
-        padding: "1px 5px",
-        borderRadius: 2,
-        background: "rgba(52,211,153,0.12)",
-        border: "1px solid rgba(52,211,153,0.5)",
-        color: "#34d399",
-      }
-    : {
-        marginTop: 3,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        fontSize: 13.5,
-        letterSpacing: "0.15em",
-        textTransform: "uppercase",
-        padding: "1px 5px",
-        borderRadius: 2,
-        background: "rgba(148,163,184,0.08)",
-        border: "1px dashed rgba(148,163,184,0.4)",
-        color: "#e2e8f0",
-      };
-  const content = (
-    <span data-testid="tide-source-badge" data-source={isNoaa ? "noaa" : "estimated"} style={style} title={tooltip}>
-      <span aria-hidden="true">{isNoaa ? "●" : "◌"}</span>
-      <span>{label}</span>
-      {isNoaa && stationId && (
-        <span style={{ opacity: 0.85, letterSpacing: 0 }}>#{stationId}</span>
-      )}
-    </span>
-  );
-  if (isNoaa && stationId) {
-    return (
-      <a
-        href={`https://tidesandcurrents.noaa.gov/stationhome.html?id=${encodeURIComponent(stationId)}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{ textDecoration: "none" }}
-      >
-        {content}
-      </a>
-    );
-  }
-  return content;
-};
 
 const DEPTH_LAYERS: DepthLayer[] = ["surface", "mid", "near-bottom"];
 const LAYER_LABELS: Record<DepthLayer, string> = {
@@ -157,6 +95,8 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   const { terrain } = useAppState();
   const [hoveredEvent, setHoveredEvent] = useState<TidalScheduleEvent | null>(null);
   const units = useSettingsStore((s) => s.units);
+  const waterType = useSettingsStore((s) => s.waterType);
+  const isFreshwater = waterType === "freshwater";
   const { schedule, isError: scheduleError } = useTidalSchedule(lat, lon, 7);
 
   const today = useMemo(() => {
@@ -344,7 +284,16 @@ export const TidePanel: React.FC<TidePanelProps> = ({
             </div>
           )}
 
-          {!data.available && !loading && (
+          {!data.available && !loading && waterType === "freshwater" && (
+            <div
+              data-testid="tide-freshwater-unavailable"
+              style={{ color: "#94a3b8", fontSize: 15, marginTop: 4 }}
+            >
+              No water level data for this location.
+            </div>
+          )}
+
+          {!data.available && !loading && waterType !== "freshwater" && (
             <div style={{ color: "#cbd5e1", fontSize: 16.5 }}>
               No tidal station within {formatDistance(100_000, { units })} of this area.
             </div>
@@ -379,10 +328,11 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                   )}
                 </div>
                 <div style={{ color: "#7dd3fc", fontSize: 16.5 }}>{data.stationName}</div>
-                <StationSourceBadge
-                  source={data.source}
+                <DataSourceBadge
+                  source={toDataSource(data.source)}
                   stationId={data.stationId}
                   stationName={data.stationName}
+                  distanceKm={data.distanceKm}
                 />
                 {data.isOfflinePack && (
                   <div
@@ -412,15 +362,15 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                 )}
               </div>
 
-              {/* Tide height */}
+              {/* Tide height / Water level */}
               <div className="flex gap-4 items-end" style={{ minWidth: 0 }}>
                 <div style={{ minWidth: 0, flex: "0 1 auto" }}>
-                  <div style={LABEL}>Tide height</div>
+                  <div style={LABEL}>{isFreshwater ? "Water Level" : "Tide height"}</div>
                   <span style={{ ...CYAN, fontSize: 22.5, fontWeight: 700 }}>
                     {data.tideHeight >= 0 ? "+" : ""}
                     {formatDepth(data.tideHeight, { units, decimals: 2 })}
                   </span>
-                  <span style={{ ...DIM, fontSize: 15, marginLeft: 4 }}>MLLW</span>
+                  <span style={{ ...DIM, fontSize: 15, marginLeft: 4 }}>{isFreshwater ? "m" : "MLLW"}</span>
                   {data.isPredicted && (
                     <span
                       style={{
