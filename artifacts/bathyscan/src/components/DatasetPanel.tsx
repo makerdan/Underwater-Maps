@@ -762,9 +762,19 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // GCS upload poll/watchdog refs — cleared on unmount to avoid state updates after destroy
   const gcsPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gcsWatchdogTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (gcsPollIntervalRef.current) { clearInterval(gcsPollIntervalRef.current); gcsPollIntervalRef.current = null; }
-    if (gcsWatchdogTimeoutRef.current) { clearTimeout(gcsWatchdogTimeoutRef.current); gcsWatchdogTimeoutRef.current = null; }
+  // Ref to the in-flight GCS XHR so it can be aborted immediately on unmount.
+  const gcsXhrRef = useRef<XMLHttpRequest | null>(null);
+  // Set to true on unmount; guards all async GCS state setters so they become
+  // no-ops after the component is destroyed and cannot trigger React warnings.
+  const gcsUnmountedRef = useRef(false);
+  useEffect(() => {
+    gcsUnmountedRef.current = false;
+    return () => {
+      gcsUnmountedRef.current = true;
+      if (gcsXhrRef.current) { gcsXhrRef.current.abort(); gcsXhrRef.current = null; }
+      if (gcsPollIntervalRef.current) { clearInterval(gcsPollIntervalRef.current); gcsPollIntervalRef.current = null; }
+      if (gcsWatchdogTimeoutRef.current) { clearTimeout(gcsWatchdogTimeoutRef.current); gcsWatchdogTimeoutRef.current = null; }
+    };
   }, []);
 
   // Chunked upload session refs — stable across renders, used by retry logic
@@ -1712,31 +1722,39 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     try {
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        // Store the live XHR so the unmount cleanup can call xhr.abort().
+        gcsXhrRef.current = xhr;
         xhr.open("PUT", uploadUrl, true);
         xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
         xhr.upload.addEventListener("progress", (e) => {
-          if (e.lengthComputable) {
+          if (e.lengthComputable && !gcsUnmountedRef.current) {
             setGcsUploadProgress(Math.round((e.loaded / e.total) * 100));
           }
         });
         xhr.addEventListener("load", () => {
+          gcsXhrRef.current = null;
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve();
           } else {
             reject(new Error(`GCS upload failed with status ${xhr.status}`));
           }
         });
-        xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
-        xhr.addEventListener("abort", () => reject(new Error("Upload aborted")));
+        xhr.addEventListener("error", () => { gcsXhrRef.current = null; reject(new Error("Network error during upload")); });
+        xhr.addEventListener("abort", () => { gcsXhrRef.current = null; reject(new Error("Upload aborted")); });
         xhr.send(file);
       });
     } catch (err) {
+      // Silently discard if the component was unmounted (abort triggers this path).
+      if (gcsUnmountedRef.current) return;
       setGcsPhase("error");
       setGcsError(err instanceof Error ? err.message : "Upload to cloud storage failed");
       return;
     }
 
     // Step 3: switch to background-processing state
+    // Guard: the component may have been unmounted between the XHR resolving
+    // and this synchronous continuation running (e.g. fast navigation away).
+    if (gcsUnmountedRef.current) return;
     setGcsPhase("processing");
     setGcsUploadProgress(100);
     setGcsServerStatus(null);
@@ -1759,6 +1777,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           return r.json().catch(() => null) as Promise<{ status: string; datasetId?: string; error?: string; skippedCount?: number; skippedFormats?: string[]; soundingCount?: number; substrateCount?: number; parseWarnings?: string[] } | null>;
         })
         .then((job) => {
+          // Drop the result silently if the component unmounted while the
+          // fetch was in-flight — the interval is already cleared by cleanup.
+          if (gcsUnmountedRef.current) return;
           // Null means the 2xx body was not valid JSON — stop polling immediately.
           // This is distinct from a transient network error; treat it as a real failure.
           if (job === null || typeof job?.status !== "string") {
@@ -1889,6 +1910,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       clearInterval(pollIntervalId);
       gcsPollIntervalRef.current = null;
       gcsWatchdogTimeoutRef.current = null;
+      // No-op if the component unmounted while the timeout was pending.
+      if (gcsUnmountedRef.current) return;
       setGcsPhase((prev) => {
         if (prev === "processing") {
           setGcsServerStatus(null);
