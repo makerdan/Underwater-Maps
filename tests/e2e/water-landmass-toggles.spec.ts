@@ -21,7 +21,7 @@ const RESOLUTION = 16;
 function makeTopography(): number[] {
   // Half the grid above water, half below — guaranteed > 0.5% land cells so
   // the seeded terrain satisfies the same `hasTopography` heuristic the API
-  // server applies to Thorne Bay / Hawaii.
+  // server applies to Lake Ray Roberts / Hawaii.
   const N = RESOLUTION * RESOLUTION;
   const arr: number[] = new Array(N).fill(0);
   for (let i = 0; i < N / 2; i++) arr[i] = 50;
@@ -127,8 +127,8 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     }
   });
 
-  test("TOPO badge appears for Thorne Bay (seeded, dataset with topography)", async ({ page }) => {
-    // Stub the Poe classify endpoint so that seeding thorne-bay with
+  test("TOPO badge appears for Lake Ray Roberts (seeded, dataset with topography)", async ({ page }) => {
+    // Stub the Poe classify endpoint so that seeding lake-ray-roberts with
     // hasTopography=true is not overwritten by the async depth-heuristic
     // fallback (which would take ~9 s and return false for all-below-water depths).
     await page.route("**/api/poe/classify", (route) =>
@@ -142,8 +142,8 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     // new active dataset doesn't overwrite the seed.
     const topography = makeTopography();
     const fixture = {
-      datasetId: "thorne-bay",
-      name: "Thorne Bay — SE Alaska",
+      datasetId: "lake-ray-roberts",
+      name: "Demo: Lake Ray Roberts (TX)",
       resolution: RESOLUTION,
       width: RESOLUTION,
       height: RESOLUTION,
@@ -151,31 +151,25 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
       topography,
       hasTopography: true,
     };
-    await page.route("**/datasets/thorne-bay/terrain*", (route) =>
+    await page.route("**/datasets/lake-ray-roberts/terrain*", (route) =>
       route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(fixture),
       }),
     );
-    // Wait for the startup Thorne Bay auto-load to settle before seeding so
-    // its in-flight pendingTerrain effect doesn't overwrite our seed.
-    const thorneBayBtn = await page
-      .locator('[data-testid="btn-dataset-thorne-bay"]')
-      .waitFor({ state: "visible", timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!thorneBayBtn) {
-      test.skip(true, "btn-dataset-thorne-bay not found — DatasetPicker may not list Thorne Bay in this environment");
-      return;
-    }
+    // Wait for the startup Lake Ray Roberts auto-load to settle before seeding
+    // so its in-flight pendingTerrain effect doesn't overwrite our seed.
+    await page
+      .locator('[data-testid="btn-dataset-lake-ray-roberts"]')
+      .waitFor({ state: "visible", timeout: 15_000 });
     await page.waitForTimeout(1500);
 
     await page.evaluate(
       ({ resolution, topo }) =>
         window.__bathyTest!.seedTerrain({
-          datasetId: "thorne-bay",
-          name: "Thorne Bay — SE Alaska",
+          datasetId: "lake-ray-roberts",
+          name: "Demo: Lake Ray Roberts (TX)",
           resolution,
           width: resolution,
           height: resolution,
@@ -195,35 +189,29 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
           await page.evaluate(() => window.__bathyTest!.getTerrainSummary()),
         { timeout: 15_000 },
       )
-      .toEqual({ datasetId: "thorne-bay", hasTopography: true });
+      .toEqual({ datasetId: "lake-ray-roberts", hasTopography: true });
 
     await expect(page.locator('[data-testid="topo-badge"]').first()).toBeVisible({
       timeout: 10_000,
     });
   });
 
-  test("TOPO badge appears for Thorne Bay (dataset with topography)", async ({ page }) => {
-    // The app auto-loads the Thorne Bay preset on startup. We must wait for
-    // its pending-fetch round-trip to complete (otherwise our seeded terrain
-    // is overwritten by the real API terrain, which may not include any
-    // above-water cells in synthetic-fallback mode).
-    const thorneBayBtn2 = await page
-      .locator('[data-testid="btn-dataset-thorne-bay"]')
-      .waitFor({ state: "visible", timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!thorneBayBtn2) {
-      test.skip(true, "btn-dataset-thorne-bay not found — DatasetPicker may not list Thorne Bay in this environment");
-      return;
-    }
+  test("TOPO badge appears for Lake Ray Roberts (dataset with topography)", async ({ page }) => {
+    // The app auto-loads the Lake Ray Roberts preset on startup. We must wait
+    // for its pending-fetch round-trip to complete (otherwise our seeded
+    // terrain is overwritten by the real API terrain, which may not include
+    // any above-water cells in synthetic-fallback mode).
+    await page
+      .locator('[data-testid="btn-dataset-lake-ray-roberts"]')
+      .waitFor({ state: "visible", timeout: 15_000 });
     await page.waitForTimeout(1500);
 
     const topography = makeTopography();
     await page.evaluate(
       ({ resolution, topo }) =>
         window.__bathyTest!.seedTerrain({
-          datasetId: "thorne-bay",
-          name: "Thorne Bay — SE Alaska",
+          datasetId: "lake-ray-roberts",
+          name: "Demo: Lake Ray Roberts (TX)",
           resolution,
           width: resolution,
           height: resolution,
@@ -277,9 +265,9 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     // response, which would overwrite our seed via `setTerrain(data)`.
     const topography = makeTopography();
     const fixture = {
-      datasetId: "thorne-bay",
-      name: "Thorne Bay — SE Alaska",
-      waterType: "saltwater",
+      datasetId: "lake-ray-roberts",
+      name: "Demo: Lake Ray Roberts (TX)",
+      waterType: "freshwater",
       resolution: RESOLUTION,
       width: RESOLUTION,
       height: RESOLUTION,
@@ -295,7 +283,7 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
       topography,
       hasTopography: true,
     };
-    await page.route("**/datasets/thorne-bay/terrain*", (route) =>
+    await page.route("**/datasets/lake-ray-roberts/terrain*", (route) =>
       route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -303,15 +291,9 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
       }),
     );
 
-    const thorneBayBtn3 = await page
-      .locator('[data-testid="btn-dataset-thorne-bay"]')
-      .waitFor({ state: "visible", timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!thorneBayBtn3) {
-      test.skip(true, "btn-dataset-thorne-bay not found — DatasetPicker may not list Thorne Bay in this environment");
-      return;
-    }
+    await page
+      .locator('[data-testid="btn-dataset-lake-ray-roberts"]')
+      .waitFor({ state: "visible", timeout: 15_000 });
     await page.waitForTimeout(1500);
 
     await page.evaluate(
@@ -325,10 +307,10 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
           await page.evaluate(() => window.__bathyTest!.getTerrainSummary()),
         { timeout: 15_000 },
       )
-      .toEqual({ datasetId: "thorne-bay", hasTopography: true });
+      .toEqual({ datasetId: "lake-ray-roberts", hasTopography: true });
 
-    // Confirm the seeded TOPO badge actually mounted on the Thorne Bay row
-    // before we try to expand its panel — otherwise terrain was overwritten
+    // Confirm the seeded TOPO badge actually mounted on the Lake Ray Roberts
+    // row before we try to expand its panel — otherwise terrain was overwritten
     // by a late effect and the download button would never appear.
     await expect(page.locator('[data-testid="topo-badge"]').first()).toBeAttached({
       timeout: 10_000,
@@ -348,6 +330,6 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
       page.waitForEvent("download", { timeout: 10_000 }),
       downloadBtn.dispatchEvent("click"),
     ]);
-    expect(download.suggestedFilename()).toBe("thorne-bay-topography.json");
+    expect(download.suggestedFilename()).toBe("lake-ray-roberts-topography.json");
   });
 });
