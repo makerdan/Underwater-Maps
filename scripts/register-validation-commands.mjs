@@ -13,6 +13,12 @@
  * code_execution sandbox.  The commands are idempotent — re-registering
  * an already-registered command is safe.
  *
+ * Per-step named resource locking is now handled INSIDE run-tier.mjs, so
+ * the outer validation-lock.mjs wrapper has been removed. Only steps that
+ * actually conflict (codegen race, CPU saturation) acquire a lock, and they
+ * do so for exactly the duration of that step. Fast steps with priority 1
+ * jump the queue ahead of heavy steps with priority 3.
+ *
  * Budget keys live in tests/timeout-guard/budgets.json:
  *   tierFast.runBudgetMs     = 300 000 ms  (5 min)
  *   tierStandard.runBudgetMs = 1 200 000 ms (20 min)
@@ -23,7 +29,7 @@ export const VALIDATION_COMMANDS = [
   {
     name: "test-fast",
     command:
-      "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast",
+      "node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast",
     budgetKey: "tierFast",
     description:
       "typecheck + lint only (~5 min). Pick for UI/copy/style/new-component-only changes.",
@@ -31,7 +37,7 @@ export const VALIDATION_COMMANDS = [
   {
     name: "test-standard",
     command:
-      "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard",
+      "node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard",
     budgetKey: "tierStandard",
     description:
       "typecheck + lint + unit tests + docs/catalog checks (~20 min). " +
@@ -40,10 +46,10 @@ export const VALIDATION_COMMANDS = [
   {
     name: "test-heavy",
     command:
-      "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs aggregate -- node scripts/run-tier.mjs full",
+      "node scripts/run-with-timeout.mjs aggregate -- node scripts/test-heavy-serial.mjs",
     budgetKey: "aggregate",
     description:
-      "all 10 steps (~45 min). Pick for new API routes, schema migrations, " +
+      "all steps including e2e (~45 min). Pick for new API routes, schema migrations, " +
       "auth/security changes, or multi-package refactors.",
   },
 ];

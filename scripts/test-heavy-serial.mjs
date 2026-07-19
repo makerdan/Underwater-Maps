@@ -8,6 +8,13 @@
  * All steps always run (no fail-fast) so a single validation pass reports
  * every failing suite; the exit code is non-zero if any step failed.
  *
+ * Per-step named resource locking is used so the individual suites do not
+ * race for CPU or e2e ports even when this serial runner is invoked
+ * concurrently from multiple validation commands:
+ *   test:unit   → unit-cpu resource (priority 3)
+ *   e2e-palette → unit-cpu + e2e-port resources (priority 3)
+ *   test:e2e    → unit-cpu + e2e-port resources (priority 3)
+ *
  * Invoked by the "test-heavy" validation workflow.
  */
 import { spawnSync } from "node:child_process";
@@ -16,20 +23,73 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const lockScript = resolve(root, "scripts/validation-lock.mjs");
 mkdirSync(resolve(root, ".local/tmp"), { recursive: true });
 
+/**
+ * Build a command array that wraps <cmd> with one or more named resource
+ * locks at the given priority (nesting them for multi-resource steps).
+ * The innermost lock wraps the actual command; outer locks wrap each other.
+ *
+ *   wrapWithLocks(["pnpm", "run", "test:e2e"], ["unit-cpu", "e2e-port"], 3)
+ *   →  validation-lock --resource unit-cpu --priority 3 --
+ *        validation-lock --resource e2e-port --priority 3 --
+ *          pnpm run test:e2e
+ */
+function wrapWithLocks(cmd, resources, priority) {
+  if (!resources || resources.length === 0) return cmd;
+  let wrapped = cmd;
+  for (const resource of [...resources].reverse()) {
+    wrapped = [
+      process.execPath, lockScript,
+      "--resource", resource,
+      "--priority", String(priority),
+      "--",
+      ...wrapped,
+    ];
+  }
+  return wrapped;
+}
+
+const HEAVY_PRIORITY = 3;
+
 const steps = [
-  ["test:unit", "pnpm run test:unit"],
-  [
-    "e2e-palette",
-    "bash -c 'set -o pipefail; E2E_WEB_PORT=3250 E2E_API_PORT=3261 npx playwright test tests/e2e/palette-cross-device-sync.spec.ts tests/e2e/onboarding-tour.spec.ts tests/e2e/settings-cross-device-sync.spec.ts tests/e2e/settings-save-buttons.spec.ts tests/e2e/zone-colour-server-sync.spec.ts tests/e2e/tooltips.spec.ts tests/e2e/adaptive-palette.spec.ts 2>&1 | tee .local/tmp/palette-e2e.log'",
-  ],
-  // IMPORTANT: use the unwrapped test:e2e:run here. The root "test:e2e"
-  // script wraps validation-lock.mjs, but this whole serial runner already
-  // holds that lock (the test-heavy validation command acquires it) — the
-  // nested wrapper would queue behind its own parent and self-deadlock
-  // until the lock timeout.
-  ["test:e2e", "pnpm run test:e2e:run"],
+  {
+    name: "test:unit",
+    cmd: wrapWithLocks(
+      ["pnpm", "run", "test:unit"],
+      ["unit-cpu"],
+      HEAVY_PRIORITY,
+    ),
+  },
+  {
+    name: "e2e-palette",
+    cmd: wrapWithLocks(
+      [
+        "bash", "-c",
+        "set -o pipefail; E2E_WEB_PORT=3250 E2E_API_PORT=3261 npx playwright test " +
+        "tests/e2e/palette-cross-device-sync.spec.ts " +
+        "tests/e2e/onboarding-tour.spec.ts " +
+        "tests/e2e/settings-cross-device-sync.spec.ts " +
+        "tests/e2e/settings-save-buttons.spec.ts " +
+        "tests/e2e/zone-colour-server-sync.spec.ts " +
+        "tests/e2e/tooltips.spec.ts " +
+        "tests/e2e/adaptive-palette.spec.ts " +
+        "2>&1 | tee .local/tmp/palette-e2e.log",
+      ],
+      ["unit-cpu", "e2e-port"],
+      HEAVY_PRIORITY,
+    ),
+  },
+  {
+    // Use test:e2e:run (unwrapped inner command) — locking is handled here.
+    name: "test:e2e",
+    cmd: wrapWithLocks(
+      ["pnpm", "run", "test:e2e:run"],
+      ["unit-cpu", "e2e-port"],
+      HEAVY_PRIORITY,
+    ),
+  },
 ];
 
 /**
@@ -53,11 +113,11 @@ function sweepE2ePorts() {
 const overallStart = Date.now();
 const results = [];
 
-for (const [name, cmd] of steps) {
+for (const { name, cmd } of steps) {
   sweepE2ePorts();
   const start = Date.now();
   console.log(`\n[test-heavy] ▶ step "${name}" starting (total elapsed ${((start - overallStart) / 1000).toFixed(0)}s)`);
-  const res = spawnSync(cmd, { shell: true, stdio: "inherit", cwd: root });
+  const res = spawnSync(cmd[0], cmd.slice(1), { stdio: "inherit", cwd: root });
   const exitCode = res.status ?? 1;
   const secs = ((Date.now() - start) / 1000).toFixed(1);
   results.push({ name, secs, exitCode });

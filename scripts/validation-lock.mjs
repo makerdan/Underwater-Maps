@@ -11,12 +11,20 @@
  * and port collisions between e2e suites.
  *
  * Fix: each heavy validation command is wrapped as
- *   node scripts/validation-lock.mjs -- <command...>
- * The wrapper acquires a global exclusive lock file BEFORE the wrapped
- * command starts, so any run-with-timeout.mjs budget timer inside the
- * command only starts ticking once the step actually has the machine to
- * itself. Steps queue up and run one at a time in whatever order they win
- * the lock.
+ *   node scripts/validation-lock.mjs [--resource <name>] [--priority <1-9>] -- <command...>
+ *
+ * Named resources: pass --resource <name> to acquire a per-resource lock
+ * (.local/validation-lock-<name>.lock) instead of the single global lock.
+ * Steps that don't conflict with each other use different resource names and
+ * run in parallel; steps that share a resource serialize. Default resource
+ * is "global" for backward compatibility.
+ *
+ * Priority queue: pass --priority <N> (1 = highest, 9 = lowest; default 5).
+ * Each waiting process writes a waiter manifest entry to
+ * .local/validation-waiters-<name>/<pid>.json. On each poll tick, a waiter
+ * checks whether any other waiter with a strictly higher priority (lower N)
+ * has been waiting longer than PRIORITY_GRACE_MS; if so it backs off,
+ * biasing the OS-level lock race toward the more important step.
  *
  * Stale-lock handling (three layers, checked by waiting processes):
  *  1. Dead-pid reclaim: the lock file records the holder pid; if that
@@ -30,50 +38,80 @@
  *     it with a loud warning rather than stalling until the wait timeout.
  *
  * Lock file format: line 1 = holder pid, line 2 = acquire time (ms epoch).
- * Lock location: .local/validation-serial.lock (override: VALIDATION_LOCK_FILE)
+ * Lock location: .local/validation-lock-<resource>.lock
+ *   (override: VALIDATION_LOCK_FILE env var, applied before resource logic)
  *
- * Reentrancy: some commands are double-wrapped (e.g. the test-e2e workflow
- * runs `validation-lock.mjs -- pnpm run test:e2e` and the test:e2e script
- * itself wraps validation-lock again). Without reentrancy the inner wrapper
- * deadlocks waiting on the lock its own ancestor holds. The holder exports
- * VALIDATION_LOCK_HELD_PID; a nested wrapper that sees a live holder pid in
- * that variable skips acquisition and runs the command directly.
+ * Reentrancy: nested wrappers for the same resource skip acquisition if an
+ * ancestor already holds it. The holder exports
+ * VALIDATION_LOCK_HELD_PID_<RESOURCE_UPPER> (e.g. _CODEGEN, _UNIT_CPU).
+ * For backward compatibility the legacy VALIDATION_LOCK_HELD_PID var is also
+ * checked/set when resource is "global".
  */
 import {
-  openSync, closeSync, unlinkSync, mkdirSync, writeSync, readFileSync,
-  utimesSync, statSync,
+  openSync, closeSync, unlinkSync, mkdirSync, writeSync, writeFileSync, readFileSync,
+  utimesSync, statSync, readdirSync,
 } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
-const lockFile = process.env.VALIDATION_LOCK_FILE
-  ? resolve(process.env.VALIDATION_LOCK_FILE)
-  : resolve(root, ".local", "validation-serial.lock");
-const lockDir = dirname(lockFile);
+const localDir = resolve(root, ".local");
 
 const POLL_INTERVAL_MS = Number(process.env.VALIDATION_LOCK_POLL_MS || 1_000);
-// Generous: a full e2e suite can hold the lock for up to an hour, and
-// several steps may be queued behind it.
 const TIMEOUT_MS = Number(process.env.VALIDATION_LOCK_TIMEOUT_MS || 3 * 60 * 60 * 1000);
-// Holder refreshes the lock mtime this often.
 const HEARTBEAT_MS = Number(process.env.VALIDATION_LOCK_HEARTBEAT_MS || 30_000);
-// Waiters treat a lock whose mtime is older than this as abandoned
-// (covers SIGKILLed wrapper whose pid got reused by an unrelated process).
 const STALE_HEARTBEAT_MS = Number(process.env.VALIDATION_LOCK_STALE_HEARTBEAT_MS || 5 * 60 * 1000);
-// Safety valve: no single step may hold the lock longer than this.
 const MAX_HOLD_MS = Number(process.env.VALIDATION_LOCK_MAX_HOLD_MS || 2 * 60 * 60 * 1000);
+// How long a higher-priority waiter must have been queued before lower-priority
+// waiters yield to it on their next poll tick.
+const PRIORITY_GRACE_MS = Number(process.env.VALIDATION_LOCK_PRIORITY_GRACE_MS || 2_000);
 
+// ---------------------------------------------------------------------------
+// Argument parsing
+// ---------------------------------------------------------------------------
 const argv = process.argv.slice(2);
 const sep = argv.indexOf("--");
 if (sep === -1 || sep === argv.length - 1) {
-  console.error("Usage: validation-lock.mjs -- <command...>");
+  console.error("Usage: validation-lock.mjs [--resource <name>] [--priority <1-9>] -- <command...>");
   process.exit(2);
 }
+const lockArgs = argv.slice(0, sep);
 const command = argv.slice(sep + 1);
 const commandLabel = command.join(" ");
+
+let resource = "global";
+let priority = 5;
+for (let i = 0; i < lockArgs.length; i++) {
+  if (lockArgs[i] === "--resource" && lockArgs[i + 1] !== undefined) {
+    resource = lockArgs[++i];
+  } else if (lockArgs[i] === "--priority" && lockArgs[i + 1] !== undefined) {
+    priority = Math.max(1, Math.min(9, Number(lockArgs[++i]) || 5));
+  }
+}
+
+// Sanitise resource name for use in file/env paths (alphanumeric + hyphen only).
+const safeResource = resource.replace(/[^a-zA-Z0-9-]/g, "-");
+const resourceUpper = safeResource.toUpperCase().replace(/-/g, "_");
+
+// Lock file: override via env (for tests) or derive from resource name.
+const lockFile = process.env.VALIDATION_LOCK_FILE
+  ? resolve(process.env.VALIDATION_LOCK_FILE)
+  : resolve(localDir, `validation-lock-${safeResource}.lock`);
+const lockDir = dirname(lockFile);
+
+// Waiter manifest directory for this resource.
+const waitersDir = process.env.VALIDATION_LOCK_WAITERS_DIR
+  ? resolve(process.env.VALIDATION_LOCK_WAITERS_DIR)
+  : resolve(localDir, `validation-waiters-${safeResource}`);
+
+// Reentrancy env var for this resource (plus legacy global var).
+const heldPidEnvVar = `VALIDATION_LOCK_HELD_PID_${resourceUpper}`;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function pidAlive(pid) {
   try {
@@ -100,7 +138,6 @@ function tryAcquire() {
     return true;
   } catch (err) {
     if (err.code !== "EEXIST") throw err;
-    // Stale-lock reclaim paths — see header comment.
     try {
       const { pid: holderPid, acquiredAt, mtimeMs } = readLockInfo();
       const now = Date.now();
@@ -123,8 +160,62 @@ function tryAcquire() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Waiter manifest (priority queue sidecar)
+// ---------------------------------------------------------------------------
+
+const waiterFile = join(waitersDir, `${process.pid}.json`);
+let waiterRegistered = false;
+
+function registerWaiter() {
+  try {
+    mkdirSync(waitersDir, { recursive: true });
+    writeFileSync(waiterFile, JSON.stringify({ pid: process.pid, priority, enqueuedAt: Date.now() }));
+    waiterRegistered = true;
+  } catch { /* non-fatal — priority biasing degrades gracefully */ }
+}
+
+function deregisterWaiter() {
+  if (!waiterRegistered) return;
+  waiterRegistered = false;
+  try { unlinkSync(waiterFile); } catch { /* already gone */ }
+}
+
+/**
+ * Returns true if a higher-priority (lower N) waiter for the same resource
+ * has been queued longer than PRIORITY_GRACE_MS. In that case the current
+ * waiter should skip its poll tick to yield to the faster step.
+ */
+function shouldYieldToPriorityWaiter() {
+  try {
+    const now = Date.now();
+    for (const f of readdirSync(waitersDir)) {
+      if (!f.endsWith(".json")) continue;
+      if (f === `${process.pid}.json`) continue;
+      try {
+        const entry = JSON.parse(readFileSync(join(waitersDir, f), "utf8"));
+        if (
+          typeof entry.priority === "number" &&
+          entry.priority < priority &&
+          typeof entry.enqueuedAt === "number" &&
+          now - entry.enqueuedAt > PRIORITY_GRACE_MS &&
+          pidAlive(entry.pid)
+        ) {
+          return true;
+        }
+      } catch { /* stale manifest entry — ignore */ }
+    }
+  } catch { /* waiters dir may not exist yet */ }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Lock lifecycle
+// ---------------------------------------------------------------------------
+
 let lockAcquired = false;
 let heartbeatTimer = null;
+
 function releaseLock() {
   if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
   if (!lockAcquired) return;
@@ -146,37 +237,60 @@ function startHeartbeat() {
 }
 
 async function acquireWithTimeout() {
+  registerWaiter();
   const deadline = Date.now() + TIMEOUT_MS;
   let logged = false;
-  while (true) {
-    if (tryAcquire()) return;
-    if (Date.now() >= deadline) {
-      console.error(
-        `[validation-lock] timed out after ${(TIMEOUT_MS / 60000).toFixed(0)} min waiting for ${lockFile}. ` +
-        "If no other validation step is running, delete the lock file manually.",
-      );
-      process.exit(3);
+  try {
+    while (true) {
+      if (!shouldYieldToPriorityWaiter() && tryAcquire()) {
+        deregisterWaiter();
+        return;
+      }
+      if (Date.now() >= deadline) {
+        deregisterWaiter();
+        console.error(
+          `[validation-lock] timed out after ${(TIMEOUT_MS / 60000).toFixed(0)} min waiting for ` +
+          `${lockFile} (resource="${resource}"). ` +
+          "If no other validation step is running, delete the lock file manually.",
+        );
+        process.exit(3);
+      }
+      if (!logged) {
+        console.log(
+          `[validation-lock] another validation step holds the lock (resource="${resource}") — ` +
+          `queued at priority ${priority}, waiting…`,
+        );
+        logged = true;
+      }
+      await new Promise((res) => setTimeout(res, POLL_INTERVAL_MS));
     }
-    if (!logged) {
-      console.log("[validation-lock] another validation step holds the lock — queued, waiting…");
-      logged = true;
-    }
-    await new Promise((res) => setTimeout(res, POLL_INTERVAL_MS));
+  } catch (err) {
+    deregisterWaiter();
+    throw err;
   }
 }
 
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
 mkdirSync(lockDir, { recursive: true });
 
-// Reentrancy: if an ancestor validation-lock wrapper already holds the lock
-// (e.g. test-heavy-serial runs `pnpm run test:e2e`, which wraps this script
-// again), acquiring here would deadlock — the child waits forever on a lock
-// its own ancestor holds. The holder exports VALIDATION_LOCK_HELD_PID to its
-// children; if it is set and that holder is still alive, run the command
-// directly without re-acquiring.
-const heldPid = Number(process.env.VALIDATION_LOCK_HELD_PID || 0);
+// Reentrancy check: if an ancestor wrapper already holds this named resource,
+// running the command directly avoids a deadlock. The holder exports
+// VALIDATION_LOCK_HELD_PID_<RESOURCE> (and the legacy VALIDATION_LOCK_HELD_PID
+// for the "global" resource) into child env.
+const heldPid = (() => {
+  const v = Number(process.env[heldPidEnvVar] || 0);
+  if (v) return v;
+  // Legacy fallback: honor old VALIDATION_LOCK_HELD_PID for global resource.
+  if (resource === "global") return Number(process.env.VALIDATION_LOCK_HELD_PID || 0);
+  return 0;
+})();
+
 if (Number.isInteger(heldPid) && heldPid > 0 && heldPid !== process.pid && pidAlive(heldPid)) {
   console.log(
-    `[validation-lock] lock already held by ancestor pid ${heldPid} — running reentrantly: ${commandLabel}`,
+    `[validation-lock] lock already held by ancestor pid ${heldPid} (resource="${resource}") — running reentrantly: ${commandLabel}`,
   );
   const child = spawn(command[0], command.slice(1), { stdio: "inherit" });
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
@@ -193,12 +307,13 @@ if (Number.isInteger(heldPid) && heldPid > 0 && heldPid !== process.pid && pidAl
   });
 } else {
   let child = null;
-  process.on("exit", releaseLock);
+  process.on("exit", () => { deregisterWaiter(); releaseLock(); });
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(sig, () => {
       if (child && child.exitCode === null && child.signalCode === null) {
         try { child.kill(sig); } catch { /* already gone */ }
       }
+      deregisterWaiter();
       releaseLock();
       process.exit(1);
     });
@@ -209,11 +324,24 @@ if (Number.isInteger(heldPid) && heldPid > 0 && heldPid !== process.pid && pidAl
   lockAcquired = true;
   startHeartbeat();
   const waitedSecs = ((Date.now() - waitStart) / 1000).toFixed(1);
-  console.log(`[validation-lock] lock acquired after ${waitedSecs}s wait — running: ${commandLabel}`);
+  console.log(
+    `[validation-lock] lock acquired after ${waitedSecs}s wait (resource="${resource}", priority=${priority}) — running: ${commandLabel}`,
+  );
+
+  // Build the child env: set the resource-keyed held-pid var so nested
+  // wrappers for the same resource skip re-acquisition. Also set the legacy
+  // global var when resource is "global" so old callers still work.
+  const childEnv = {
+    ...process.env,
+    [heldPidEnvVar]: String(process.pid),
+  };
+  if (resource === "global") {
+    childEnv.VALIDATION_LOCK_HELD_PID = String(process.pid);
+  }
 
   child = spawn(command[0], command.slice(1), {
     stdio: "inherit",
-    env: { ...process.env, VALIDATION_LOCK_HELD_PID: String(process.pid) },
+    env: childEnv,
   });
   child.on("exit", (code, signal) => {
     releaseLock();

@@ -226,6 +226,27 @@ async function runEfhCase(page: Page, plan: CasePlan): Promise<void> {
     { id: plan.datasetId },
   );
 
+  // If a terrainSeed is provided, inject it directly via the test bridge so
+  // the terrain-sync poll resolves immediately without a network round-trip.
+  // This is required for datasets removed from PRESET_DATASETS (e.g. Thorne
+  // Bay) whose terrain can't be fetched from NCEI in E2E.  seedTerrain also
+  // pre-populates the React Query cache so useActiveDatasetSync's
+  // useGetDatasetsIdTerrain query returns our seed instead of fetching live.
+  if (plan.terrainSeed) {
+    await page.evaluate(
+      ({ id, seed }) => {
+        (
+          window as unknown as {
+            __bathyTest?: {
+              seedTerrain?: (overrides: Record<string, unknown>) => boolean;
+            };
+          }
+        ).__bathyTest?.seedTerrain?.({ datasetId: id, ...seed });
+      },
+      { id: plan.datasetId, seed: plan.terrainSeed },
+    );
+  }
+
   // Wait for useActiveDatasetSync to fetch terrain + overview for the target
   // dataset and commit them — terrainStore.overviewGrid's datasetId is the
   // signal OverviewMap reads. Without this, hasEfh stays false and the EFH
