@@ -886,6 +886,31 @@ You are an expert marine geologist and bathymetric data analyst. You will be sho
 }
 
 /**
+ * Build the `output_format` object for a classify `responses.create` call.
+ * Instructs the Poe API to return a JSON object with a `zones` array whose
+ * items are constrained to the valid labels for the given water type. Passing
+ * a concrete schema (instead of `{}`) prevents Poe from returning a 400 and
+ * gives the model a tighter contract to follow.
+ */
+function buildClassifyOutputFormat(waterType: "saltwater" | "freshwater"): Record<string, unknown> {
+  const zoneEnum: readonly string[] =
+    waterType === "freshwater" ? FRESHWATER_ZONES : SALTWATER_ZONES;
+  return {
+    type: "json_schema",
+    schema: {
+      type: "object",
+      properties: {
+        zones: {
+          type: "array",
+          items: { type: "string", enum: [...zoneEnum] },
+        },
+      },
+      required: ["zones"],
+    },
+  };
+}
+
+/**
  * Render the per-cell substrate ground truth as a compact text block the AI
  * model can consume alongside the depth-map image. Cells without polygon
  * coverage are emitted as `?` so the model knows where it must fall back to
@@ -1009,6 +1034,7 @@ async function classifyOneTileAi(
           model: POE_MODELS.CLASSIFY,
           input,
           instructions: buildClassifySystemPrompt(waterType),
+          output_format: buildClassifyOutputFormat(waterType),
           max_output_tokens: 2048,
           temperature: 0.1,
           truncation: "auto",
@@ -1439,6 +1465,7 @@ router.post("/classify", asyncHandler(async (req, res) => {
           model: POE_MODELS.CLASSIFY,
           input,
           instructions: buildClassifySystemPrompt(waterType),
+          output_format: buildClassifyOutputFormat(waterType),
           max_output_tokens: 2048,
           temperature: 0.1,
           truncation: "auto",

@@ -42,21 +42,18 @@ const TIER_PRIORITY = { fast: 1, standard: 2, full: 3 };
 const args = process.argv.slice(2);
 
 // Single-step mode: node run-tier.mjs --step <name>
-// Runs the named step directly without any locking (the lock wrapper calls us
-// this way so locking is controlled at the outer level).
+// Detect early so we skip tier validation, but defer execution until AFTER
+// ALL_STEPS is initialised (const TDZ means calling runSingleStep here would
+// crash with "Cannot access 'ALL_STEPS' before initialization").
 const stepIdx = args.indexOf("--step");
-if (stepIdx !== -1) {
-  const stepName = args[stepIdx + 1];
-  if (!stepName) {
-    console.error("Usage: run-tier.mjs --step <name>");
-    process.exit(2);
-  }
-  runSingleStep(stepName);
-  process.exit(0);
+const stepName = stepIdx !== -1 ? args[stepIdx + 1] ?? null : null;
+if (stepIdx !== -1 && !stepName) {
+  console.error("Usage: run-tier.mjs --step <name>");
+  process.exit(2);
 }
 
-const tier = args[0];
-if (!tier || !VALID_TIERS.includes(tier)) {
+const tier = stepName ? null : args[0];
+if (!stepName && (!tier || !VALID_TIERS.includes(tier))) {
   console.error(`Usage: run-tier.mjs <fast|standard|full>\nGot: ${JSON.stringify(tier)}`);
   process.exit(2);
 }
@@ -147,7 +144,19 @@ const TIER_STEPS = {
 
 // ---------------------------------------------------------------------------
 // Single-step runner (used by --step mode and inline for no-resource steps)
+// ALL_STEPS is now initialised — safe to reference it here.
 // ---------------------------------------------------------------------------
+
+// Deferred --step mode execution (detected early to skip tier validation, but
+// ALL_STEPS must be initialised before we can look up the step entry).
+if (stepName) {
+  const step = ALL_STEPS.find((s) => s.name === stepName);
+  if (!step) {
+    console.error(`[run-tier] unknown step name: ${JSON.stringify(stepName)}`);
+    process.exit(2);
+  }
+  process.exit(execStep(step));
+}
 
 function runSingleStep(name) {
   const step = ALL_STEPS.find((s) => s.name === name);
