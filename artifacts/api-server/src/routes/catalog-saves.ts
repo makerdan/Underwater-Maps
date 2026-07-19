@@ -58,10 +58,6 @@ import {
 
 const router = Router();
 
-// Kick off catalog seed on first request (non-blocking fallback — server
-// startup also calls this, but it's idempotent so calling it twice is fine).
-void seedDatasetCatalog();
-
 // ---------------------------------------------------------------------------
 // Periodic sweeper: recover saves that are permanently stuck in "processing"
 // ---------------------------------------------------------------------------

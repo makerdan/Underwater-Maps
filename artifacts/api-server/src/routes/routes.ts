@@ -10,6 +10,7 @@ import {
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -42,6 +43,12 @@ router.post("/routes", requireAuth, validateBody(PostRouteBodySchema, "POST /api
       totalDistanceM,
     })
     .returning();
+
+  if (!created) {
+    logger.error({ userId, datasetId }, "POST /api/routes: insert returned no rows");
+    res.status(500).json({ error: "internal_error", details: "Route could not be created" });
+    return;
+  }
 
   res.status(201).json(created);
 }));

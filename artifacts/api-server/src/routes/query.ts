@@ -385,18 +385,18 @@ async function runPoeQuery(
 // ---------------------------------------------------------------------------
 
 const QueryContextSchema = z.object({
-  datasetName: z.string().optional(),
+  datasetName: z.string().max(200).optional(),
   waterType: z.string().optional(),
   minDepth: z.number().optional(),
   maxDepth: z.number().optional(),
   cameraLon: z.number().nullable().optional(),
   cameraLat: z.number().nullable().optional(),
   cameraDepth: z.number().nullable().optional(),
-  topZones: z.array(z.string()).optional(),
+  topZones: z.array(z.string().max(100)).max(20).optional(),
 });
 
 const QueryBodySchema = z.object({
-  query: z.string().trim().min(1, "query is required"),
+  query: z.string().trim().min(1, "query is required").max(2000),
   context: QueryContextSchema.optional(),
 });
 
