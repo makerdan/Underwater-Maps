@@ -49,6 +49,13 @@ export declare class PoeCircuitBreaker {
     recordFailure(): void;
     /** Expose current state for observability (e.g. deep health check). */
     getState(): CircuitState;
+    /**
+     * TEST-ONLY — immediately opens the circuit without going through the
+     * normal failure-accumulation path. Use this in tests to avoid the wall-clock
+     * time cost of exhausting `failureThreshold` retried requests.
+     * Never call this in production code.
+     */
+    forceOpen(): void;
     private transitionTo;
 }
 export {};

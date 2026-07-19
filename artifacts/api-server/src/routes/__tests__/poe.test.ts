@@ -58,7 +58,7 @@ vi.mock("@clerk/shared/keys", () => ({
 import app from "../../app.js";
 import { globalPoeCache } from "@workspace/poe";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
-import { __resetPoeBreaker, __isPoeBreakersOpen, __clearUpscaleCaches, __clearZoneAndDatasetCaches } from "../poe.js";
+import { __resetPoeBreaker, __isPoeBreakersOpen, __clearUpscaleCaches, __clearZoneAndDatasetCaches, __forceOpenPoeBreaker } from "../poe.js";
 
 const GRID_BASE64 = Buffer.from("fake-grid-bytes-for-testing").toString(
   "base64",
@@ -697,21 +697,13 @@ describe("POST /api/poe/upscale", () => {
   });
 
   it("returns 503 when the circuit breaker is open", async () => {
-    // Trip the breaker by recording 5 consecutive failures (failureThreshold = 5).
-    // Each request may call fakeChatCreate up to twice (withRetry(..., 2)), so
-    // reject every call unconditionally.
-    fakeChatCreate.mockRejectedValue(new Error("simulated upstream failure"));
-
-    for (let i = 0; i < 5; i++) {
-      await request(app)
-        .post("/api/poe/upscale")
-        .set("x-e2e-user-id", "user-upscale-trip")
-        .send({ imageBase64: "data:image/png;base64,abc123" });
-    }
+    // Trip the breaker instantly via the test helper — avoids the ~15 s wall-clock
+    // cost of firing 5 real requests through withRetry (which sleeps between
+    // attempts).  The helper calls poeBreaker.forceOpen() directly.
+    __forceOpenPoeBreaker();
 
     // Breaker is now open — the next call must short-circuit to 503 without
     // calling fakeChatCreate.
-    fakeChatCreate.mockReset();
     const res = await request(app)
       .post("/api/poe/upscale")
       .set("x-e2e-user-id", "user-upscale-503")

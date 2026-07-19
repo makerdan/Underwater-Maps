@@ -96,6 +96,17 @@ export class PoeCircuitBreaker {
     return this.state;
   }
 
+  /**
+   * TEST-ONLY — immediately opens the circuit without going through the
+   * normal failure-accumulation path. Use this in tests to avoid the wall-clock
+   * time cost of exhausting `failureThreshold` retried requests.
+   * Never call this in production code.
+   */
+  forceOpen(): void {
+    this.consecutiveFailures = this.failureThreshold;
+    this.transitionTo("open");
+  }
+
   private transitionTo(next: CircuitState): void {
     const prev = this.state;
     this.state = next;

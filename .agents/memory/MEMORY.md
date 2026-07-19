@@ -58,3 +58,5 @@
 - [Playwright dispatchEvent arg order](playwright-dispatchevent-options.md) — timeout goes in the 3rd arg; `{timeout}` as 2nd arg is eventInit and the call hangs to test timeout on absent elements.
 - [Sparse-track gridder blowup](upload-event-loop-freeze.md) — minutes-long upload "freezes" were O(N⁴) IDW ring-fill on sparse tracks in the parse worker; healthz stayed fast — profile the worker, not the server.
 - [Validation tiers](validation-tiers.md) — three registered commands (test-fast/standard/heavy); pick by task type using the decision table in .agents/skills/validation-tiers/SKILL.md.
+- [Disk cache filter must strip extension before regex](disk-cache-filter-extension.md) — readdir returns `<hash>.json`; filtering with a bare-hash regex silently matches nothing. Strip `.json` first or use a `.json`-aware pattern.
+- [Circuit breaker forceOpen for tests](circuit-breaker-force-open.md) — use `forceOpen()` on PoeCircuitBreaker (or `__forceOpenPoeBreaker()` test helper) instead of firing 5 failing requests to trip the breaker; saves ~15 s per run.

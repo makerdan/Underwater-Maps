@@ -1207,6 +1207,17 @@ export function __isPoeBreakersOpen(): boolean {
 }
 
 /**
+ * TEST-ONLY — immediately opens the module-level `poeBreaker` without
+ * exhausting the failure threshold via real (retried, slept) requests.
+ * Use this in unit tests that need the breaker to be open to verify 503
+ * short-circuit behaviour, instead of firing N slow HTTP requests.
+ * Never imported or called in production code.
+ */
+export function __forceOpenPoeBreaker(): void {
+  poeBreaker.forceOpen();
+}
+
+/**
  * Tiled-classification driver. Plans a tile grid for `(widthFull, heightFull)`,
  * pulls each tile's 32×32 depths out of `depthsFull`, classifies each tile via
  * the LLM (bounded concurrency, per-tile caching), and stitches the results
