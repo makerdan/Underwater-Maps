@@ -1,0 +1,110 @@
+Bug Audit: Typecheck & Validation Tooling — Report
+Summary Table
+Severity	Count
+Critical	0
+High	2
+Medium	7
+Low	5
+Total	14
+🔴 HIGH
+H-1 — validation-lock.mjs: MAX_HOLD_MS safety valve reclaims lock but leaves holder's child running
+File: scripts/validation-lock.mjs ~lines 148–158 (tryAcquire())
+Category: Correctness / Concurrency
+Scenario: A validation step is hung (e.g., a stuck vitest worker) and has held the lock past MAX_HOLD_MS (2 hours). A waiting process calls tryAcquire(), hits the max-hold branch, logs a warning, and calls unlinkSync(lockFile). It then acquires the lock and spawns its own child. The original holder's child process — still alive, still running the same resource-locked step — is never signalled. Both children now execute the step concurrently, directly re-creating the CPU contention and port conflicts the lock was built to prevent. For unit-cpu or e2e-port resources this can cause budget breaches and flapping port-bind errors.
+Recommended fix: Before unlinking the lock file, read the holder PID from line 1, SIGTERM it (and after a grace period, SIGKILL it). Only then unlink and proceed.
+
+H-2 — lib/poe/tsconfig.json: Missing outDir, rootDir, emitDeclarationOnly — JS emitted into source tree
+File: lib/poe/tsconfig.json (all lines)
+Category: Build correctness
+Scenario: Every other lib (lib/db, lib/api-zod, lib/api-client-react, lib/integrations-openai-ai-server) sets "outDir": "dist", "rootDir": "src", and "emitDeclarationOnly": true. lib/poe sets "composite": true (necessary for project references in the root tsconfig.json) but omits all three. When pnpm run typecheck:libs runs tsc --build, TypeScript emits compiled .js files directly into lib/poe/src/ alongside the .ts source files. This pollutes version control, can cause bundlers and Node module resolution to pick up the stale .js instead of the source .ts, and hides the issue because the lib appears "built" when it hasn't been properly compiled into dist/.
+Recommended fix: Add "outDir": "dist", "rootDir": "src", "emitDeclarationOnly": true to lib/poe/tsconfig.json, matching the sibling lib pattern. Add lib/poe/dist to .gitignore if not already covered.
+
+🟠 MEDIUM
+M-1 — check:codegen-stale npm script is destructive (side-effectful "check")
+File: package.json (check:codegen-stale script)
+Category: Developer experience / Correctness
+Scenario: The script runs pnpm --filter @workspace/api-spec run codegen:generate (which overwrites lib/api-zod/src/generated/api.ts and lib/api-client-react/src/generated/api.ts) and then runs git diff --quiet to check staleness. Any developer who runs pnpm check:codegen-stale expecting a read-only check will have their working tree modified. If they had intentional local edits to those generated files in progress, those edits are silently overwritten. The check-drift.mjs umbrella also invokes this script under the api-codegen drift class. The non-destructive alternative (isCodegenFresh() in run-tier.mjs) already exists and uses mtime comparison.
+Recommended fix: Either rename the script to fix:codegen-stale and add a separate read-only check:codegen-stale that uses mtime comparison, or generate into a temp directory and diff against the real output without touching tracked files.
+
+M-2 — validation-lock.mjs: PID-reuse window bypasses dead-pid reclaim
+File: scripts/validation-lock.mjs ~lines 145–147 (tryAcquire())
+Category: Correctness / Race condition
+Scenario: If a holder is SIGKILLed and its PID is immediately reused by an unrelated process (OS PID wrapping), pidAlive(holderPid) returns true (via process.kill(pid, 0) → EPERM or success), blocking the dead-pid reclaim path. The stale-heartbeat fallback (STALE_HEARTBEAT_MS, default 5 minutes) is the only remaining safety net, meaning the lock appears live for up to 5 minutes after the true holder has already died. During this window any waiting validation step is blocked unnecessarily.
+Recommended fix: Additionally check whether the process command matches an expected runner (e.g., compare /proc/<pid>/comm or cmdline to "node"), or shorten STALE_HEARTBEAT_MS to reduce the window (e.g., 60s default). Document the known race in the code.
+
+M-3 — Root tsconfig.json missing lib/integrations-openai-ai-react from project references
+File: tsconfig.json (references array)
+Category: Build correctness
+Scenario: lib/integrations-openai-ai-react exists (it has its own tsconfig.json with composite: true, declarationMap, outDir: "dist", emitDeclarationOnly: true) and declares itself as a proper composite project. However, it is not listed in the root tsconfig.json references. If any artifact or lib imports from @workspace/integrations-openai-ai-react, tsc --build will not build or type-check it as part of the reference graph, leaving its .d.ts output stale or missing and potentially causing downstream typecheck gaps. The omission was confirmed by grep — only package.json references the lib as a dependency.
+Recommended fix: Add { "path": "./lib/integrations-openai-ai-react" } to the root tsconfig.json references array, matching the pattern for other libs.
+
+M-4 — tsconfig.base.json: strictFunctionTypes: false suppresses function type variance
+File: tsconfig.base.json line 14
+Category: Type safety
+Scenario: Setting "strict": true implicitly enables strictFunctionTypes, which enforces contravariance on function parameter types. Explicitly setting "strictFunctionTypes": false overrides this, meaning TypeScript will accept a callback whose parameter type is a supertype when a subtype was required. In practice, this allows type errors like passing (animal: Animal) => void where (dog: Dog) => void is expected, which can cause runtime errors when the callback receives a narrower type than it handles.
+Recommended fix: Remove the explicit false override and allow strict: true to enable function type variance. Resolve any resulting new errors — they represent real latent type bugs.
+
+M-5 — lib/poe/vitest.config.ts: No timeout settings and no file-budget guard
+File: lib/poe/vitest.config.ts (entire file)
+Category: Test reliability
+Scenario: Every other vitest config (api-server, bathyscan, api-zod) sets testTimeout and hookTimeout from budgets.json and installs installFileBudgetGuard() in a setup file for Layer 3 wall-clock enforcement. lib/poe/vitest.config.ts sets neither. Tests in this package run with vitest's default per-test timeout (5 s) and have no Layer 3 file-level budget guard. A slow or hanging Poe API test (e.g., due to a mocked streaming response stalling) would not produce a meaningful diagnostic and would not fail fast.
+Recommended fix: Add a "poe" entry to tests/timeout-guard/budgets.json, then set testTimeout and hookTimeout from it in lib/poe/vitest.config.ts. Add a setup file that calls installFileBudgetGuard("poe").
+
+M-6 — test-heavy-serial.mjs: No per-step Layer 4 (run-with-timeout) budget wrapper
+File: scripts/test-heavy-serial.mjs ~lines 56–93 (step definitions)
+Category: Observability / Budget enforcement
+Scenario: Individual steps within the serial runner (test:unit, e2e-palette, test:e2e) are run with spawnSync directly. The only timeout guard is the outer run-with-timeout.mjs aggregate wrapper (45-minute total). If a single step hangs — e.g., a vitest worker that never exits after all tests complete — the hung step consumes the full remaining aggregate budget before the outer guard fires. When it does fire, the breach report can only say "aggregate budget breached" with no targeted diagnostic. By contrast, if run-with-timeout.mjs were applied per-step, the breach report would immediately name the offending step and its individual budget.
+Recommended fix: Wrap each step's command in run-with-timeout.mjs using appropriate budget keys (apiServerUnit.runBudgetMs for test:unit, e2e.runBudgetMs for the e2e steps), layered inside the existing validation-lock wrapping.
+
+M-7 — check-audit.mjs: pnpm audit JSON format assumed to be pnpm v7 shape
+File: scripts/check-audit.mjs ~lines 85–98
+Category: Silent false-green risk
+Scenario: The script accesses report.advisories which is the pnpm v7 audit JSON structure. pnpm v8 changed the audit output format — the top-level structure differs and advisory objects have a different shape. If pnpm is upgraded and the format changes, Object.values(report.advisories ?? {}) evaluates to [] (because report.advisories is either undefined or a different type), and the script exits 0 with "no unexempted high or critical vulnerabilities found" — a silent false-green that lets any number of real high/critical CVEs pass through the gate unnoticed.
+Recommended fix: Add a format guard after parsing: verify that report.advisories is an object and that the overall shape matches expectations; if it doesn't, exit non-zero with "pnpm audit JSON format changed — update check-audit.mjs". Alternatively, parse via pnpm audit --json | jq with a version-aware selector.
+
+🟡 LOW
+L-1 — tsconfig.base.json: Three permissive compiler flags allow silent bug accumulation
+File: tsconfig.base.json lines 10, 12, 15
+Category: Type safety
+
+noImplicitOverride: false — subclass methods can silently shadow base class methods without the override keyword. A rename of a base method would silently turn an intended override into dead code.
+noUnusedLocals: false — unused variables, imports, and function parameters accumulate silently. Dead code is a common source of stale conditional branches and misleading tests.
+skipLibCheck: true — declaration file errors in node_modules are never reported. Mismatched or incorrect type declarations from third-party packages can manifest only at runtime.
+Recommended fix: Enable noImplicitOverride: true immediately (zero-risk, just requires adding override keywords). Enable noUnusedLocals: true after a cleanup pass. Leave skipLibCheck: true for now as removing it typically generates significant noise from third-party types.
+L-2 — isCodegenFresh(): mtime equality triggers unnecessary codegen
+File: scripts/run-tier.mjs line 70
+Category: Correctness / Performance
+Scenario: The freshness check uses if (statSync(input).mtimeMs >= generatedMtime) return false. If an input file's mtime is exactly equal to the generated file's mtime (can happen when files are restored from backup, duplicated, or on coarse-grained filesystems), the check considers the generated file stale and re-runs codegen unnecessarily. This is harmless functionally but wastes ~30s per needless codegen pass in the fast tier.
+Recommended fix: Change to > generatedMtime (strict greater-than) since the generated file should have a newer mtime than its inputs after a successful codegen run.
+
+L-3 — check-hardcoded-ports.mjs: ALLOWLIST bypassed in --scan DIR mode
+File: scripts/check-hardcoded-ports.mjs line 130
+Category: False positive risk
+Scenario: In --scan DIR mode the allowlist check is skipped: if (!usingCustomRoots && ALLOWLIST.has(rel)) continue. Scanning tests/e2e/ directly would flag tests/e2e/ports.ts (the canonical port registry) as a violation. This is unlikely to affect CI (the default mode is used there) but makes the --scan mode unreliable for targeted re-checks.
+Recommended fix: Apply the ALLOWLIST even in --scan mode, or document the limitation clearly so callers know to exclude the registry file manually.
+
+L-4 — check-e2e-user-ids.sh: Narrow user-ID detection pattern
+File: scripts/check-e2e-user-ids.sh lines 36–38
+Category: Guard coverage
+Scenario: Pattern 1 only matches strings containing the literal substring -user (regex "[A-Za-z0-9_-]*-user[A-Za-z0-9_-]*"). A hardcoded user ID that doesn't follow this exact naming convention — e.g., "bypass_e2e", "testId123", "dev-bypass" — would not be caught. The guard is effective only against the current documented E2E user ID format.
+Recommended fix: Parameterise the pattern to match the actual current E2E_USER_ID value rather than a structural guess, or add an additional pattern that checks for the x-e2e-user-id header being assigned any string literal (not just ones containing -user).
+
+L-5 — check-drift.mjs: Stale reference to .github/workflows/drift-detection.yml
+File: scripts/check-drift.mjs line 12 (comment)
+Category: Documentation accuracy
+Scenario: The script header says "CI runs each class as a separate named step (see .github/workflows/drift-detection.yml)". This project is hosted on Replit, not GitHub Actions; that file does not exist. The comment misleads anyone reading the drift runner about where CI is configured.
+Recommended fix: Update the comment to reference the actual validation setup (the three tiered validation commands registered via scripts/register-validation-commands.mjs).
+
+Areas Audited and Found Clean
+scripts/kill-port-holders.mjs — /proc parsing is correct (lastIndexOf(")") handles comm names containing parentheses), own-tree exemption logic is sound, SIGTERM→SIGKILL sequence with port-confirmation polling is well-implemented, the env-guard against recursive invocation is present.
+scripts/validation-lock.mjs reentrancy check — the per-resource VALIDATION_LOCK_HELD_PID_<RESOURCE> env var scheme correctly prevents deadlocks in nested callers; the legacy global fallback preserves backward compatibility.
+scripts/run-with-timeout.mjs signal handling — SIGTERM-to-group followed by SIGKILL-to-group with .unref() is correct; the breached flag prevents a race between the timer callback and the child exit handler.
+scripts/test-heavy-serial.mjs step sequencing — sweepE2ePorts() with --include-own-tree correctly handles orphaned webServers from finished steps; the non-fail-fast exit code accumulation correctly reports all step failures.
+scripts/check-lock-skill-sync.mjs — anchor pattern for VALIDATION_LOCK_HELD_PID (bare, non-underscore-suffixed) correctly distinguishes it from the prefixed variant; script existence checks exit non-zero; all failure paths exit non-zero.
+scripts/check-schema-drift.mjs — file list diffing strategy is correct; cleanup (rmSync + journal restore) runs unconditionally in all paths before the final process.exit.
+scripts/check-port-drift.mjs — entry point existence checks emit clear errors; the PORT-env regex correctly matches both process.env["PORT"] and process.env.PORT forms.
+tests/timeout-guard/vitest-guard.mjs — installFileBudgetGuard throws on unknown keys (no silent no-op); RSS tracking uses afterEach + afterAll correctly; report files write to .local/ and never surface as test failures themselves.
+artifacts/api-server/vitest.config.ts PortTestFirstSequencer — correctly handles the case where the priority file is absent (returns an empty portFirst array; rest still sorts normally).
+scripts/check-audit.mjs exemption logic — GHSA extraction from adv.url is correct; fix dates are present on all exemptions; the no-output early-exit path is safe.
+budgets.json accuracy — the apiServerUnit.runBudgetMs of 900s (15 min) and aggregate.totalBudgetMs of 2700s (45 min) are consistent with the known runtime profile (~7.5 min for the unit suite, leaving comfortable headroom). rssWarnMb: 8192 matches --max-old-space-size=8192 in api-server/vitest.config.ts.
+Implement each high severity issue as its own task. Group together the low severity issues. Divide the medium severity issues into multiple tasks. Add regression hardening for all.
