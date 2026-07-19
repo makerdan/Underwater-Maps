@@ -195,7 +195,7 @@ router.get("/datasets/catalog", asyncHandler(async (req, res): Promise<void> => 
     return true;
   });
 
-  res.json(filtered.map((e) => toCatalogResponse(e)));
+  res.json(filtered.map((e) => toCatalogResponse(e, entryCreatedAtIso(e))));
 }));
 
 // ---------------------------------------------------------------------------
