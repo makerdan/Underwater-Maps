@@ -18,7 +18,7 @@ import { NO_DATA_COLOR } from "./terrain";
 // Convert a linear-sRGB channel value (as used by THREE.js vertex colours and
 // NO_DATA_COLOR) to a display-sRGB byte for the 2D canvas context.
 // Mirrors the THREE.Color.convertLinearToSRGB() path used below for colormap
-// colours so the no-data steel-blue looks the same in the minimap as in the 3D
+// colours so the no-data light-gray looks the same in the minimap as in the 3D
 // terrain mesh.
 function linearToSRGBByte(c: number): number {
   const s = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
@@ -231,7 +231,7 @@ export function buildHeatmapBitmap(
       const rawDepth = depths[(H - 1 - row) * W + col];
       const i = (row * W + col) * 4;
 
-      // Null / NaN depth → survey gap: render as the NO_DATA_COLOR steel-blue
+      // Null / NaN depth → survey gap: render as the NO_DATA_COLOR light-gray
       // so coverage boundaries are visible at a glance, matching the 3D
       // terrain mesh which places null-depth vertices at the water surface
       // with the same muted colour (see buildTerrainGeometry in terrain.ts).

@@ -50,7 +50,7 @@ function drawHeatmap(
       const rawDepth = depths[idx];
       const i = (py * W + px) * 4;
 
-      // Null/undefined depth → survey gap: render as NO_DATA_COLOR steel-blue,
+      // Null/undefined depth → survey gap: render as NO_DATA_COLOR light-gray,
       // matching overviewRenderer.ts and the 3D terrain mesh behaviour.
       if (rawDepth === null || rawDepth === undefined) {
         imageData.data[i]     = ND_R;
