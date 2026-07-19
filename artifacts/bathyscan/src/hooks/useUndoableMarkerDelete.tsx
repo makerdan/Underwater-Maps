@@ -44,10 +44,21 @@ export function useUndoableMarkerDelete() {
   const mutation = useDeleteMarkersId();
   const { toast } = useToast();
   const pendingRef = useRef(new Map<string, PendingEntry>());
+  /** Marker IDs whose DELETE request is currently in-flight (network). */
+  const mutatingRef = useRef(new Set<string>());
 
   const requestDelete = useCallback(
     (marker: Pick<Marker, "id" | "label">, datasetId: string) => {
       if (!datasetId) return;
+      const undoKey = `${datasetId}:${marker.id}`;
+      // Guard against double-fire: bail if the same marker is already queued
+      // in the undo window or has a network DELETE in-flight.
+      if (
+        pendingRef.current.has(undoKey) ||
+        mutatingRef.current.has(marker.id)
+      ) {
+        return;
+      }
       const key = getGetMarkersQueryKey({ datasetId });
 
       // Snapshot used ONLY for undo-rollback of this specific marker.
@@ -58,8 +69,6 @@ export function useUndoableMarkerDelete() {
         prev ? prev.filter((m) => m.id !== marker.id) : prev,
       );
 
-      const undoKey = `${datasetId}:${marker.id}`;
-
       // Closure flag — set by undo() to prevent the mutation from firing even
       // if the timer callback was already queued when the user clicked "Undo".
       let aborted = false;
@@ -67,13 +76,16 @@ export function useUndoableMarkerDelete() {
       const commit = () => {
         if (aborted) return;
         pendingRef.current.delete(undoKey);
+        mutatingRef.current.add(marker.id);
         mutation.mutate(
           { id: marker.id },
           {
             onSuccess: () => {
+              mutatingRef.current.delete(marker.id);
               void qc.invalidateQueries({ queryKey: key });
             },
             onError: (err) => {
+              mutatingRef.current.delete(marker.id);
               const status = (err as { response?: { status?: number } })?.response?.status;
               if (status === 404) {
                 // Already deleted elsewhere — inform the user and re-sync.

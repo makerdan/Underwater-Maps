@@ -242,4 +242,87 @@ describe("useUndoableMarkerDelete", () => {
 
     expect(cacheGet().map((m) => m.id)).toEqual(["m1", "m2"]);
   });
+
+  it("ignores a second requestDelete for the same marker while in the undo window", () => {
+    const { result } = renderHook(() => useUndoableMarkerDelete());
+
+    act(() => {
+      result.current({ id: "m1", label: "Point A" }, "ds-1");
+    });
+
+    // Second call for the same marker while the first is still in its undo window.
+    act(() => {
+      result.current({ id: "m1", label: "Point A" }, "ds-1");
+    });
+
+    // Advance past both possible timers.
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS * 2);
+    });
+
+    // Only one mutation should have been dispatched.
+    expect(deleteMutate).toHaveBeenCalledOnce();
+    expect(deleteMutate.mock.calls[0]![0]).toEqual({ id: "m1" });
+  });
+
+  it("ignores a second requestDelete for the same marker while the network request is in-flight", () => {
+    const { result } = renderHook(() => useUndoableMarkerDelete());
+
+    act(() => {
+      result.current({ id: "m1", label: "Point A" }, "ds-1");
+    });
+
+    // Advance past the undo window so the first mutation fires.
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
+
+    expect(deleteMutate).toHaveBeenCalledOnce();
+
+    // The mutation is now in-flight (onSuccess/onError have not been called).
+    // A second requestDelete for the same marker should be a no-op.
+    act(() => {
+      result.current({ id: "m1", label: "Point A" }, "ds-1");
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
+
+    // Still only the original single mutation call.
+    expect(deleteMutate).toHaveBeenCalledOnce();
+  });
+
+  it("allows a fresh delete for the same marker after the previous mutation completes", () => {
+    const { result } = renderHook(() => useUndoableMarkerDelete());
+
+    // First delete — goes through undo window and network.
+    act(() => {
+      result.current({ id: "m1", label: "Point A" }, "ds-1");
+    });
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
+
+    // Simulate network success — this should clear the mutatingRef entry.
+    const firstOpts = deleteMutate.mock.calls[0]![1] as { onSuccess: () => void };
+    act(() => {
+      firstOpts.onSuccess();
+    });
+
+    // Restore the marker into the cache so the second delete has something to act on.
+    fakeCache.set(JSON.stringify(MARKERS_KEY), [...INITIAL_MARKERS]);
+    deleteMutate.mockReset();
+
+    // Second delete for the same marker should now be accepted.
+    act(() => {
+      result.current({ id: "m1", label: "Point A" }, "ds-1");
+    });
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
+
+    expect(deleteMutate).toHaveBeenCalledOnce();
+    expect(deleteMutate.mock.calls[0]![0]).toEqual({ id: "m1" });
+  });
 });
