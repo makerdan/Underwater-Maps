@@ -118,7 +118,10 @@ export const ColumnMappingStep: React.FC<Props> = ({
   const [assignment, setAssignment] = useState<ColumnAssignment>(() => {
     // Priority: explicit initialAssignment → localStorage restore → auto-detected
     if (initialAssignment != null) return initialAssignment;
-    const saved = meta.fileType === "csv" ? loadAssignment(fingerprint) : null;
+    const saved =
+      meta.fileType === "csv" || meta.fileType === "excel"
+        ? loadAssignment(fingerprint)
+        : null;
     return saved ?? defaultAssignment(meta);
   });
 
@@ -151,7 +154,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
 
   const handleConfirm = useCallback(() => {
     if (!canContinue) return;
-    if (meta.fileType === "csv") {
+    if (meta.fileType === "csv" || meta.fileType === "excel") {
       saveAssignment(fingerprint, assignment);
     }
     onConfirm(assignment);

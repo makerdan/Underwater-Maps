@@ -274,6 +274,76 @@ describe("ColumnMappingStep", () => {
     expect(options).toContain("WAYPOINT_NAME");
   });
 
+  it("saves assignment to localStorage for Excel files on confirm", () => {
+    const setItem = vi.fn();
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn(() => null),
+      setItem,
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    });
+    const excelMeta = makeMeta(["Lat", "Lon", "Site"], [], "excel");
+    const onConfirm = vi.fn();
+    render(
+      <ColumnMappingStep
+        meta={excelMeta}
+        initialAssignment={{ lat: "Lat", lon: "Lon", name: "Site", depth: null, type: null, notes: null }}
+        onConfirm={onConfirm}
+        onBack={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("column-mapping-continue"));
+    expect(setItem).toHaveBeenCalledOnce();
+    const [key, value] = setItem.mock.calls[0] as [string, string];
+    expect(key).toMatch(/^bathyscan:colmap:/);
+    const saved = JSON.parse(value) as Record<string, string | null>;
+    expect(saved.lat).toBe("Lat");
+    expect(saved.lon).toBe("Lon");
+    expect(saved.name).toBe("Site");
+  });
+
+  it("restores saved assignment from localStorage for Excel files", () => {
+    const savedAssignment = { lat: "Lat", lon: "Lon", name: "Site", depth: null, type: null, notes: null };
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn(() => JSON.stringify(savedAssignment)),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    });
+    const excelMeta = makeMeta(["Lat", "Lon", "Site"], [], "excel");
+    render(
+      <ColumnMappingStep
+        meta={excelMeta}
+        onConfirm={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    expect((screen.getByTestId("col-map-select-lat") as HTMLSelectElement).value).toBe("Lat");
+    expect((screen.getByTestId("col-map-select-lon") as HTMLSelectElement).value).toBe("Lon");
+    expect((screen.getByTestId("col-map-select-name") as HTMLSelectElement).value).toBe("Site");
+  });
+
+  it("does NOT save assignment to localStorage for self-describing files on confirm", () => {
+    const setItem = vi.fn();
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn(() => null),
+      setItem,
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    });
+    const gpxMeta = makeMeta(["Lat", "Lon"], [], "self-describing");
+    render(
+      <ColumnMappingStep
+        meta={gpxMeta}
+        initialAssignment={{ lat: "Lat", lon: "Lon", name: null, depth: null, type: null, notes: null }}
+        onConfirm={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("column-mapping-continue"));
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
   it("renders no header options when meta has no columns (self-describing format like GPX)", () => {
     const gpxMeta = makeMeta([], [], "self-describing");
     const { container } = render(
