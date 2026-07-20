@@ -1182,6 +1182,19 @@ export interface UserSettings {
   manualConditionsActiveSource?: UserSettingsManualConditionsActiveSource;
 }
 
+export interface BucketObjectInfo {
+  /** Full GCS object key */
+  key: string;
+  /** User ID parsed from the object key path */
+  owner?: string;
+  /** Object size in bytes */
+  sizeBytes?: number;
+  /** Milliseconds since the object was last updated */
+  ageMs: number;
+  /** Failure reason, present for failed objects */
+  error?: string;
+}
+
 export interface ApiError {
   /** Machine-readable error code */
   error: string;
@@ -3563,20 +3576,29 @@ export type GetTidalSchedule200 = {
   events?: GetTidalSchedule200EventsItem[];
 };
 
+export type AdminBucketMonitor200Counts = {
+  pending: number;
+  processing: number;
+  done: number;
+  failed: number;
+};
+
 export type AdminBucketMonitor200Lifecycle = {
-  processedDatasetsTtlDays?: number;
-  failedDatasetsTtlDays?: number;
-  note?: string;
+  processedDatasetsTtlDays: number;
+  failedDatasetsTtlDays: number;
+  note: string;
+  permissionDenied: boolean;
   lastAppliedAt?: string | null;
   lastApplyError?: string | null;
 };
 
 export type AdminBucketMonitor200 = {
-  pending?: number;
-  processing?: number;
-  done?: number;
-  failed?: number;
-  lifecycle?: AdminBucketMonitor200Lifecycle;
+  counts: AdminBucketMonitor200Counts;
+  pending: BucketObjectInfo[];
+  processing: BucketObjectInfo[];
+  done: BucketObjectInfo[];
+  failed: BucketObjectInfo[];
+  lifecycle: AdminBucketMonitor200Lifecycle;
 };
 
 export type AdminLargeDatasetsDiff200EntriesItemStatus = typeof AdminLargeDatasetsDiff200EntriesItemStatus[keyof typeof AdminLargeDatasetsDiff200EntriesItemStatus];

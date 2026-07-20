@@ -3367,17 +3367,39 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [counts, pending, processing, done, failed, lifecycle]
                 properties:
+                  counts:
+                    type: object
+                    required: [pending, processing, done, failed]
+                    properties:
+                      pending:
+                        type: integer
+                      processing:
+                        type: integer
+                      done:
+                        type: integer
+                      failed:
+                        type: integer
                   pending:
-                    type: integer
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BucketObjectInfo"
                   processing:
-                    type: integer
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BucketObjectInfo"
                   done:
-                    type: integer
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BucketObjectInfo"
                   failed:
-                    type: integer
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BucketObjectInfo"
                   lifecycle:
                     type: object
+                    required: [processedDatasetsTtlDays, failedDatasetsTtlDays, note, permissionDenied]
                     properties:
                       processedDatasetsTtlDays:
                         type: integer
@@ -3385,6 +3407,8 @@ paths:
                         type: integer
                       note:
                         type: string
+                      permissionDenied:
+                        type: boolean
                       lastAppliedAt:
                         type: string
                         nullable: true
@@ -5894,6 +5918,28 @@ components:
             type: string
           default: {}
           description: Per-dataset active conditions source ('real' or 'manual'), keyed by dataset id.
+
+    BucketObjectInfo:
+      type: object
+      required:
+        - key
+        - ageMs
+      properties:
+        key:
+          type: string
+          description: Full GCS object key
+        owner:
+          type: string
+          description: User ID parsed from the object key path
+        sizeBytes:
+          type: integer
+          description: Object size in bytes
+        ageMs:
+          type: integer
+          description: Milliseconds since the object was last updated
+        error:
+          type: string
+          description: Failure reason, present for failed objects
 
     ApiError:
       type: object

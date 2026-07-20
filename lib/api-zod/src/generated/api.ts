@@ -4068,17 +4068,48 @@ export const GetDeepHealthzResponse = zod.object({
  * @summary GCS dataset landing bucket processing summary
  */
 export const AdminBucketMonitorResponse = zod.object({
-  "pending": zod.number().optional(),
-  "processing": zod.number().optional(),
-  "done": zod.number().optional(),
-  "failed": zod.number().optional(),
+  "counts": zod.object({
+  "pending": zod.number(),
+  "processing": zod.number(),
+  "done": zod.number(),
+  "failed": zod.number()
+}),
+  "pending": zod.array(zod.object({
+  "key": zod.string().describe('Full GCS object key'),
+  "owner": zod.string().optional().describe('User ID parsed from the object key path'),
+  "sizeBytes": zod.number().optional().describe('Object size in bytes'),
+  "ageMs": zod.number().describe('Milliseconds since the object was last updated'),
+  "error": zod.string().optional().describe('Failure reason, present for failed objects')
+})),
+  "processing": zod.array(zod.object({
+  "key": zod.string().describe('Full GCS object key'),
+  "owner": zod.string().optional().describe('User ID parsed from the object key path'),
+  "sizeBytes": zod.number().optional().describe('Object size in bytes'),
+  "ageMs": zod.number().describe('Milliseconds since the object was last updated'),
+  "error": zod.string().optional().describe('Failure reason, present for failed objects')
+})),
+  "done": zod.array(zod.object({
+  "key": zod.string().describe('Full GCS object key'),
+  "owner": zod.string().optional().describe('User ID parsed from the object key path'),
+  "sizeBytes": zod.number().optional().describe('Object size in bytes'),
+  "ageMs": zod.number().describe('Milliseconds since the object was last updated'),
+  "error": zod.string().optional().describe('Failure reason, present for failed objects')
+})),
+  "failed": zod.array(zod.object({
+  "key": zod.string().describe('Full GCS object key'),
+  "owner": zod.string().optional().describe('User ID parsed from the object key path'),
+  "sizeBytes": zod.number().optional().describe('Object size in bytes'),
+  "ageMs": zod.number().describe('Milliseconds since the object was last updated'),
+  "error": zod.string().optional().describe('Failure reason, present for failed objects')
+})),
   "lifecycle": zod.object({
-  "processedDatasetsTtlDays": zod.number().optional(),
-  "failedDatasetsTtlDays": zod.number().optional(),
-  "note": zod.string().optional(),
+  "processedDatasetsTtlDays": zod.number(),
+  "failedDatasetsTtlDays": zod.number(),
+  "note": zod.string(),
+  "permissionDenied": zod.boolean(),
   "lastAppliedAt": zod.string().nullish(),
   "lastApplyError": zod.string().nullish()
-}).optional()
+})
 })
 
 

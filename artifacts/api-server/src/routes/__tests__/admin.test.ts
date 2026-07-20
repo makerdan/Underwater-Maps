@@ -19,11 +19,21 @@ const { mockGetLargeDatasetsDiff } = vi.hoisted(() => ({
 
 vi.mock("../../lib/bucketMonitor.js", () => ({
   getBucketStatus: vi.fn().mockResolvedValue({
-    pending: 0,
-    processing: 0,
-    done: 5,
-    failed: 1,
-    objects: [],
+    counts: { pending: 0, processing: 0, done: 5, failed: 1 },
+    pending: [],
+    processing: [],
+    done: [
+      { key: "processed-datasets/user_1/a.laz", owner: "user_1", sizeBytes: 123, ageMs: 1000 },
+    ],
+    failed: [
+      {
+        key: "failed-datasets/user_1/b.laz",
+        owner: "user_1",
+        sizeBytes: 456,
+        ageMs: 2000,
+        error: "parse failed",
+      },
+    ],
   }),
   getLifecycleApplyStatus: vi.fn().mockReturnValue({ appliedAt: null, error: null }),
   LIFECYCLE_TTLS: { processedDays: 30, failedDays: 14 },

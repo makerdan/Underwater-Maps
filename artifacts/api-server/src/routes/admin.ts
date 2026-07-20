@@ -14,6 +14,7 @@ import { queryRateLimitUsage } from "../middlewares/rateLimit.js";
 import { AdminRateLimitUsageQuerySchema } from "./schemas.js";
 import { getUpscaleCacheStats, UPSCALE_CREDITS_PER_CALL } from "./poe.js";
 import {
+  AdminBucketMonitorResponse,
   AdminLargeDatasetsDiffResponse,
 } from "@workspace/api-zod";
 
@@ -61,21 +62,23 @@ router.get(
 
     const summary = await getBucketStatus();
     const applyStatus = getLifecycleApplyStatus();
-    // TODO: AdminBucketMonitorResponse schema defines pending/processing/done/failed as
-    // numbers, but the actual BucketStatusSummary shape has them as item arrays alongside
-    // a separate `counts` object. Schema must be updated in OpenAPI spec before strict
-    // validateResponse can be applied here.
-    res.json({
-      ...summary,
-      lifecycle: {
-        processedDatasetsTtlDays: LIFECYCLE_TTLS.processedDays,
-        failedDatasetsTtlDays: LIFECYCLE_TTLS.failedDays,
-        note: "GCS lifecycle rules automatically delete objects in processed-datasets/ after 30 days and failed-datasets/ after 14 days.",
-        permissionDenied: applyStatus.permissionDenied ?? false,
-        lastAppliedAt: applyStatus.appliedAt,
-        lastApplyError: applyStatus.error,
-      },
-    });
+    res.json(
+      validateResponse(
+        AdminBucketMonitorResponse,
+        {
+          ...summary,
+          lifecycle: {
+            processedDatasetsTtlDays: LIFECYCLE_TTLS.processedDays,
+            failedDatasetsTtlDays: LIFECYCLE_TTLS.failedDays,
+            note: "GCS lifecycle rules automatically delete objects in processed-datasets/ after 30 days and failed-datasets/ after 14 days.",
+            permissionDenied: applyStatus.permissionDenied ?? false,
+            lastAppliedAt: applyStatus.appliedAt,
+            lastApplyError: applyStatus.error,
+          },
+        },
+        "GET /api/admin/bucket-monitor",
+      ),
+    );
   }),
 );
 
