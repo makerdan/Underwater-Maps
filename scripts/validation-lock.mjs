@@ -142,6 +142,7 @@ function tryAcquire() {
       const { pid: holderPid, acquiredAt, mtimeMs } = readLockInfo();
       const now = Date.now();
       let reason = null;
+      let isHungHolder = false;
       if (Number.isInteger(holderPid) && holderPid > 0 && !pidAlive(holderPid)) {
         reason = `held by dead pid ${holderPid}`;
       } else if (now - mtimeMs > STALE_HEARTBEAT_MS) {
@@ -150,9 +151,17 @@ function tryAcquire() {
         reason = `held for ${Math.round((now - acquiredAt) / 60000)} min by pid ${holderPid}, ` +
           `exceeding the ${Math.round(MAX_HOLD_MS / 60000)} min max-hold safety valve — holder appears hung`;
         console.error(`[validation-lock] WARNING: forcibly reclaiming lock: ${reason}`);
+        isHungHolder = true;
       }
       if (reason) {
         console.log(`[validation-lock] reclaiming stale lock (${reason})`);
+        if (isHungHolder && Number.isInteger(holderPid) && holderPid > 0) {
+          try {
+            process.kill(holderPid, "SIGTERM");
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3_000);
+            try { process.kill(holderPid, "SIGKILL"); } catch { /* ESRCH — already exited, suppress */ }
+          } catch { /* process already gone — proceed with reclaim */ }
+        }
         try { unlinkSync(lockFile); } catch { /* raced with another reclaimer */ }
       }
     } catch { /* lock vanished between open and read — just retry */ }
