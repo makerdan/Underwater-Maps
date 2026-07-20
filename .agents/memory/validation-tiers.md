@@ -9,11 +9,11 @@ description: Three tiered validation commands for BathyScan — fast/standard/he
 
 | Command | Script arg | Steps | Budget |
 |---|---|---|---|
-| `test-fast` | `fast` | typecheck, lint | 5 min |
-| `test-standard` | `standard` | + test:unit, check:docs-stale, check:catalog-coverage | 20 min |
-| `test-heavy` | `full` | all 10 steps | 45 min |
+| `test-fast` | `fast` | typecheck, lint + quick static checks | 5 min |
+| `test-standard` | `standard` | + test:unit, check:docs-stale, check:catalog-coverage, check:schema-stale | 20 min |
+| `test-heavy` | (serial runner) | preflight `standard --skip test:unit` + test:unit + e2e-palette + test:e2e | 50 min |
 
-All three delegate to `scripts/run-tier.mjs <fast|standard|full>`, wrapped by `scripts/validation-lock.mjs`.
+Fast/standard delegate to `scripts/run-tier.mjs <tier>`; heavy uses `scripts/test-heavy-serial.mjs`. `run-tier.mjs` supports repeatable `--skip <step>` flags. `check:port-drift` is full-tier only. Heavy's test:unit step has no per-step budget — covered by the `aggregate` budget.
 
 ## Quick Decision Rules
 

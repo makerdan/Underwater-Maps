@@ -4,8 +4,11 @@
  * preflight + unit + palette e2e + full e2e).
  *
  * Structure:
- *   1. PREFLIGHT (fail-fast): runs `run-tier.mjs fast` which covers
- *      typecheck, lint, check:lock-skill-sync, and check:root-relative-api.
+ *   1. PREFLIGHT (fail-fast): runs `run-tier.mjs standard --skip test:unit`
+ *      which covers typecheck, lint, check:lock-skill-sync,
+ *      check:root-relative-api, check:deps-suppression, check:docs-stale,
+ *      check:catalog-coverage, and check:schema-stale (test:unit is skipped
+ *      because the heavy runner runs it itself below with its own locking).
  *      If any of these fail the script exits immediately — no point spending
  *      45 min on unit/e2e suites when the code doesn't even typecheck or lint.
  *
@@ -80,16 +83,20 @@ function wrapWithTimeout(cmd, budgetKey, label) {
 const HEAVY_PRIORITY = 3;
 
 // ---------------------------------------------------------------------------
-// PREFLIGHT: typecheck + lint + quick checks (fail-fast)
-// Run before the expensive suites so obvious errors surface in ~5 min rather
-// than after 45 min.  run-tier.mjs fast covers:
-//   typecheck, lint, check:lock-skill-sync, check:root-relative-api
+// PREFLIGHT: typecheck + lint + static checks (fail-fast)
+// Run before the expensive suites so obvious errors surface early rather
+// than after 45 min.  run-tier.mjs standard --skip test:unit covers:
+//   typecheck, lint, check:lock-skill-sync, check:root-relative-api,
+//   check:deps-suppression, check:docs-stale, check:catalog-coverage,
+//   check:schema-stale
+// test:unit is skipped here because the heavy runner runs it below with its
+// own resource locking — running it twice would waste ~25 min per heavy run.
 // ---------------------------------------------------------------------------
 
 const runTierScript = resolve(root, "scripts/run-tier.mjs");
 const preflightStart = Date.now();
-console.log("\n[test-heavy] ▶ PREFLIGHT: typecheck + lint + quick checks (run-tier.mjs fast)");
-const preflightRes = spawnSync(process.execPath, [runTierScript, "fast"], { stdio: "inherit", cwd: root });
+console.log("\n[test-heavy] ▶ PREFLIGHT: typecheck + lint + static checks (run-tier.mjs standard --skip test:unit)");
+const preflightRes = spawnSync(process.execPath, [runTierScript, "standard", "--skip", "test:unit"], { stdio: "inherit", cwd: root });
 const preflightCode = preflightRes.status ?? 1;
 const preflightSecs = ((Date.now() - preflightStart) / 1000).toFixed(1);
 console.log(`[test-heavy] ■ PREFLIGHT finished in ${preflightSecs}s (exit ${preflightCode})`);
@@ -100,13 +107,14 @@ if (preflightCode !== 0) {
 
 const steps = [
   {
+    // No per-step wrapWithTimeout here: `pnpm run test:unit` runs ALL
+    // packages' unit suites (api-server + bathyscan + lib-db, up to ~30 min
+    // combined), so no single per-suite budget key fits. Each package's
+    // vitest run enforces its own runBudgetMs internally, and the combined
+    // step is covered by the outer `aggregate` budget on the whole heavy run.
     name: "test:unit",
     cmd: wrapWithLocks(
-      wrapWithTimeout(
-        ["pnpm", "run", "test:unit"],
-        "apiServerUnit",
-        "test:unit",
-      ),
+      ["pnpm", "run", "test:unit"],
       ["unit-cpu"],
       HEAVY_PRIORITY,
     ),

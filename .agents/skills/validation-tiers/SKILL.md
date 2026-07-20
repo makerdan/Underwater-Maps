@@ -14,25 +14,28 @@ BathyScan has three registered validation commands. Pick the **lowest** tier tha
 
 | Command | Script | Steps | Typical duration |
 |---|---|---|---|
-| `test-fast` | `node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast` | typecheck, lint, check:lock-skill-sync, check:root-relative-api | ~5 min |
-| `test-standard` | `node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard` | typecheck, lint, check:lock-skill-sync, check:root-relative-api, test:unit, check:docs-stale, check:catalog-coverage | ~20 min |
-| `test-heavy` | `node scripts/run-with-timeout.mjs aggregate -- node scripts/test-heavy-serial.mjs` | preflight (typecheck, lint, check:lock-skill-sync, check:root-relative-api) + test:unit + e2e-palette + test:e2e | ~45 min |
+| `test-fast` | `node scripts/run-with-timeout.mjs tierFast -- node scripts/run-tier.mjs fast` | typecheck, lint, check:lock-skill-sync, check:root-relative-api, check:deps-suppression | ~5 min |
+| `test-standard` | `node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard` | fast steps + test:unit, check:docs-stale, check:catalog-coverage, check:schema-stale | ~20 min |
+| `test-heavy` | `node scripts/run-with-timeout.mjs aggregate -- node scripts/test-heavy-serial.mjs` | preflight (standard tier minus test:unit) + test:unit + e2e-palette + test:e2e | ~45 min |
 
 **All steps and checks (across all tiers):**
 1. `typecheck` — codegen freshness check + tsc across all packages
 2. `lint` — ESLint (covers `artifacts/bathyscan/src`, `artifacts/api-server/src`, `tests/e2e`)
 3. `check:lock-skill-sync` — verifies key flag names/env-vars documented in Port-Authority skill still appear in scripts/validation-lock.mjs
 4. `check:root-relative-api` — forbids root-relative `/api/` fetch calls that bypass the artifact base path
-5. `test:unit` — Vitest unit suites (api-server, bathyscan, api-zod)
-6. `check:docs-stale` — API route docs in README/replit.md match openapi.yaml
-7. `check:catalog-coverage` — every catalog entry has a test
-8. `check:e2e-user-ids` — no hardcoded user-ID literals in e2e specs (heavy-tier only, via post-preflight suites)
-9. `check:e2e-cjs-globals` — no CJS globals in e2e files (heavy-tier only)
-10. `check:fixture-freshness` — test fixture snapshots are up to date (heavy-tier only)
-11. `check:ports` — no port collisions between services (heavy-tier only)
-12. `check:audit` — npm dependency vulnerability audit (heavy-tier only)
+5. `check:deps-suppression` — exhaustive-deps suppressions must carry a rationale
+6. `test:unit` — Vitest unit suites (api-server, bathyscan, api-zod)
+7. `check:docs-stale` — API route docs in README/replit.md match openapi.yaml
+8. `check:catalog-coverage` — every catalog entry has a test
+9. `check:schema-stale` — Drizzle schema vs migration snapshot diff
+10. `check:e2e-user-ids` — no hardcoded user-ID literals in e2e specs (full tier only)
+11. `check:e2e-cjs-globals` — no CJS globals in e2e files (full tier only)
+12. `check:fixture-freshness` — test fixture snapshots are up to date (full tier only)
+13. `check:ports` — no port collisions between services (full tier only)
+14. `check:port-drift` — entry-point port wiring consistency (Vite config, API bootstrap, Playwright URLs) (full tier only)
+15. `check:audit` — npm dependency vulnerability audit (full tier only)
 
-**test-heavy structure**: runs `run-tier.mjs fast` as a fail-fast preflight (steps 1–4) before launching the three serialized heavy suites (test:unit, e2e-palette, test:e2e). Heavy suites run with no-fail-fast so all three are reported in one pass. Checks 8–12 are wired inside the unit/e2e suite scripts, not as top-level serial steps.
+**test-heavy structure**: runs `run-tier.mjs standard --skip test:unit` as a fail-fast preflight (steps 1–5 plus 7–9; test:unit is skipped because the heavy runner runs it itself) before launching the three serialized heavy suites (test:unit, e2e-palette, test:e2e). Heavy suites run with no-fail-fast so all three are reported in one pass. The test:unit heavy step has no per-step budget — it is covered by the outer `aggregate` budget.
 
 ## Decision Table
 
@@ -73,18 +76,18 @@ When both apply, run `test-standard` **and** `e2e-repro` (in that order, since `
 Time budgets are defined in `tests/timeout-guard/budgets.json`:
 - `tierFast.runBudgetMs` — 300 000 ms (5 min)
 - `tierStandard.runBudgetMs` — 1 200 000 ms (20 min)
-- `aggregate.totalBudgetMs` — 2 700 000 ms (45 min)
+- `aggregate.totalBudgetMs` — 3 000 000 ms (50 min)
 
 ## Implementation
 
-`scripts/run-tier.mjs` accepts a single positional argument (`fast | standard | full`) and runs the corresponding slice of steps with per-step timing output. It exits non-zero on first failure (fail-fast).
+`scripts/run-tier.mjs` accepts a positional tier argument (`fast | standard | full`) plus optional repeatable `--skip <step-name>` flags, and runs the corresponding slice of steps with per-step timing output. It exits non-zero on first failure (fail-fast).
 
-- `fast` = steps 1–4 (typecheck, lint, check:lock-skill-sync, check:root-relative-api)
-- `standard` = steps 1–7 (adds test:unit, check:docs-stale, check:catalog-coverage)
+- `fast` = steps 1–5 (typecheck, lint, check:lock-skill-sync, check:root-relative-api, check:deps-suppression)
+- `standard` = steps 1–9 (adds test:unit, check:docs-stale, check:catalog-coverage, check:schema-stale)
 - `full` = all steps (available but not currently used by any registered command)
 
 `test-fast` and `test-standard` wrap `run-tier.mjs` with `scripts/run-with-timeout.mjs <budgetKey>` to enforce wall-clock budgets.
 
-`test-heavy` uses `scripts/test-heavy-serial.mjs` which runs `run-tier.mjs fast` as a fail-fast preflight, then serializes the three heavy suites (test:unit, e2e-palette, test:e2e) with port sweeps between them. The heavy suites use no-fail-fast so all failures are reported in a single pass.
+`test-heavy` uses `scripts/test-heavy-serial.mjs` which runs `run-tier.mjs standard --skip test:unit` as a fail-fast preflight, then serializes the three heavy suites (test:unit, e2e-palette, test:e2e) with port sweeps between them. The heavy suites use no-fail-fast so all failures are reported in a single pass.
 
 The canonical command strings and their budget keys are maintained in `scripts/register-validation-commands.mjs` (importable as an ES module). After a fresh environment setup, an agent should import that file from the code_execution sandbox and call `setValidationCommand({ name, command })` for each entry to restore the registrations.

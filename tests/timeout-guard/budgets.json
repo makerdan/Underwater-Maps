@@ -50,7 +50,7 @@
     "runBudgetMs": 120000
   },
   "aggregate": {
-    "$comment": "Covers preflight (typecheck ~3 min + lint ~2 min) + test:unit for all packages (~25 min) + check steps (~3 min). The preflight alone accounts for ~5 min, so this must be sized above the sum of all runBudgetMs values. Bump here if clean heavy runs start breaching.",
+    "$comment": "Covers the whole heavy run: preflight standard tier minus test:unit (typecheck ~3 min + lint ~2 min + docs/catalog/schema checks ~1 min) + test:unit for all packages (~25-30 min, no per-step budget — covered here) + e2e-palette + test:e2e. Must be sized above the sum of the covered steps' expected durations. Bump here if clean heavy runs start breaching.",
     "totalBudgetMs": 3000000
   },
   "tierFast": {

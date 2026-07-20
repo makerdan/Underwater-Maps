@@ -15,6 +15,11 @@
  * Single-step mode (used by the lock wrapper itself):
  *   node scripts/run-tier.mjs --step <name>
  *
+ * Step skipping (used by test-heavy-serial.mjs so its PREFLIGHT can run the
+ * standard tier without duplicating test:unit, which the heavy runner runs
+ * itself with its own locking):
+ *   node scripts/run-tier.mjs standard --skip test:unit
+ *
  * Budget keys in tests/timeout-guard/budgets.json:
  *   tierFast     → 5 min
  *   tierStandard → 20 min
@@ -46,8 +51,23 @@ const args = process.argv.slice(2);
 const isStepMode = args.includes("--step");
 const tier = args[0];
 if (!isStepMode && (!tier || !VALID_TIERS.includes(tier))) {
-  console.error(`Usage: run-tier.mjs <fast|standard|full>\nGot: ${JSON.stringify(tier)}`);
+  console.error(`Usage: run-tier.mjs <fast|standard|full> [--skip <step> ...]\nGot: ${JSON.stringify(tier)}`);
   process.exit(2);
+}
+
+// --skip <name> (repeatable): omit named steps from the tier run. Used by
+// test-heavy-serial.mjs to run the standard tier without test:unit.
+const skippedSteps = [];
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === "--skip") {
+    const name = args[i + 1];
+    if (!name) {
+      console.error("Usage: run-tier.mjs <tier> --skip <step-name>");
+      process.exit(2);
+    }
+    skippedSteps.push(name);
+    i++;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +153,9 @@ const ALL_STEPS = [
   { name: "check:e2e-cjs-globals", resource: null, cmd: "pnpm run check:e2e-cjs-globals" },
   { name: "check:fixture-freshness", resource: null, cmd: "pnpm run check:fixture-freshness" },
   { name: "check:ports", resource: null, cmd: "pnpm run check:ports" },
+  // no resource: pure static analysis of entry-point port wiring (Vite config,
+  // API bootstrap, Playwright URLs); targeted/narrow so full tier only
+  { name: "check:port-drift", resource: null, cmd: "pnpm run check:port-drift" },
   { name: "check:audit", resource: null, cmd: "pnpm run check:audit" },
 ];
 
@@ -215,7 +238,17 @@ function runStep(step, tierPriority) {
 // Tier runner
 // ---------------------------------------------------------------------------
 
-const steps = TIER_STEPS[tier];
+let steps = TIER_STEPS[tier];
+if (skippedSteps.length > 0) {
+  for (const name of skippedSteps) {
+    if (!ALL_STEPS.some((s) => s.name === name)) {
+      console.error(`[run-tier] --skip: unknown step name: ${JSON.stringify(name)}`);
+      process.exit(2);
+    }
+  }
+  steps = steps.filter((s) => !skippedSteps.includes(s.name));
+  console.log(`[run-tier] skipping step(s): ${skippedSteps.join(", ")}`);
+}
 const tierPriority = TIER_PRIORITY[tier];
 
 console.log(`\n[run-tier] tier="${tier}" priority=${tierPriority} — running ${steps.length} step(s): ${steps.map((s) => s.name).join(", ")}`);
