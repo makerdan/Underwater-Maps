@@ -456,11 +456,7 @@ describe("DatasetPanel — gcsUploadFile Authorization header", () => {
     const file = makeFakeFile("survey.csv", "text/csv", 60 * 1024 * 1024);
 
     // Kick off the upload, advance past the 3-second retry delay, then settle.
-    let _dropPromise: Promise<void>;
     await act(async () => {
-      _dropPromise = new Promise<void>((resolve) => {
-        setTimeout(resolve, 10_000);
-      });
       dropzoneMock.trigger([file]);
       await vi.advanceTimersByTimeAsync(3_500);
     });

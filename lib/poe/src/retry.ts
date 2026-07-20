@@ -1,4 +1,4 @@
-import { PoeCreditsError, PoeRateLimitError, ZoneParseError, mapHttpStatusToError } from "./errors.js";
+import { PoeCreditsError, ZoneParseError, mapHttpStatusToError } from "./errors.js";
 
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 

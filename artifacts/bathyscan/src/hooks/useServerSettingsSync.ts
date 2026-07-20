@@ -228,14 +228,6 @@ export function isServerSettled(): boolean {
   return _serverSettled;
 }
 
-// ─── Singleton guard ──────────────────────────────────────────────────────────
-// These module-level mutable variables are shared across all invocations of the
-// hook. Mounting the hook more than once (e.g. during hot-reload, Strict Mode
-// double-invoke, or a test that forgets to unmount) produces incorrect
-// concurrency behaviour: two flush paths can race, and edit-rev tracking
-// de-syncs. Detect this early in DEV mode.
-let _hookMounted = false;
-
 // ─── Payload builder (pure function of store state) ───────────────────────────
 function buildPayload(): Record<string, unknown> {
   const {

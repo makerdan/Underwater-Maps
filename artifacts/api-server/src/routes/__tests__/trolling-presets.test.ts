@@ -16,17 +16,6 @@ type Row = Record<string, unknown>;
 const state: { presets: Row[]; folders: Row[] } = { presets: [], folders: [] };
 
 vi.mock("@workspace/db", () => {
-  function _makeChain(rows: () => Row[]) {
-    const chain = {
-      where: () => chain,
-      orderBy: () => Promise.resolve(rows()),
-      returning: () => Promise.resolve(rows()),
-      then: (resolve: (v: Row[]) => unknown, reject: (e: unknown) => unknown) =>
-        Promise.resolve(rows()).then(resolve, reject),
-    };
-    return chain;
-  }
-
   const db = {
     select: () => ({
       from: (_tbl: { __name: string }) => ({

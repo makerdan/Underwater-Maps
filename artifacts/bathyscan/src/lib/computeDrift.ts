@@ -31,7 +31,6 @@ import { lonLatToWorldXZ } from "./terrain";
 import { BACKTROLL_DRAG_COEFFICIENT, BACKTROLL_LEEWAY_COEFFICIENT } from "./boatSpeed";
 import {
   currentVector,
-  shallowWaterTidalScale,
   computeBlendedDrift,
   KM_PER_KNOT_HOUR,
   KM_PER_DEG_LAT,
@@ -43,8 +42,6 @@ const DEG2RAD = Math.PI / 180;
 
 /** Threshold below which speed-over-ground is flagged as "stalled" (knots). */
 const STALL_SOG_THRESHOLD_KT = 0.05;
-
-// shallowWaterTidalScale and currentVector are imported from ./boatPhysics.
 
 function degToRad(deg: number): number {
   return deg * DEG2RAD;
@@ -239,10 +236,6 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
     // tidal scaling and the bottom-reach / bottom-contact calculations.
     const terrainDepth = getDepthAt(hourStartLat, hourStartLon, terrain);
     const tideHeightM = cond.tideHeightM ?? 0;
-
-    // Shallow-water tidal amplification: scale is > 1 only on shoals.
-    // Retained for future use; prefixed to suppress the unused-var lint rule.
-    const _tidalScale = shallowWaterTidalScale(terrainDepth, tideHeightM);
 
     if (useWaypoints) {
       // Sub-step the hour: travel toward the current leg target at boat speed,
