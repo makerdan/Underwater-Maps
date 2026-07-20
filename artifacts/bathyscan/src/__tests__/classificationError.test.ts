@@ -19,7 +19,7 @@ describe("categorizeClassificationError", () => {
     expect(out.detail).toContain("POE_API_KEY environment variable");
   });
 
-  it("maps a 401 ApiError to category 'unauthorized'", () => {
+  it("maps a 401 ApiError (auth_error) to category 'unauthorized' with session message", () => {
     const err = {
       status: 401,
       data: { error: "auth_error", details: "AI service authentication failed" },
@@ -27,8 +27,20 @@ describe("categorizeClassificationError", () => {
     };
     const out = categorizeClassificationError(err);
     expect(out.category).toBe("unauthorized");
-    expect(out.reason).toMatch(/unauthorized/i);
-    expect(out.reason).toMatch(/POE_API_KEY/);
+    expect(out.reason).toMatch(/sign|session/i);
+    expect(out.reason).not.toContain("POE_API_KEY");
+  });
+
+  it("maps a 401 with requireAuth body (Unauthorized) to 'unauthorized' with session message", () => {
+    const err = {
+      status: 401,
+      data: { error: "Unauthorized" },
+      message: "Unauthorized",
+    };
+    const out = categorizeClassificationError(err);
+    expect(out.category).toBe("unauthorized");
+    expect(out.reason).toMatch(/sign|session/i);
+    expect(out.reason).not.toContain("POE_API_KEY");
   });
 
   it("maps a 429 ApiError to category 'rate_limited'", () => {

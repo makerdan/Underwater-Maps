@@ -1530,7 +1530,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const [nceiAccumulated, setNceiAccumulated] = useState<NceiPortalResult[]>([]);
   const prevNceiPageRef = useRef<NceiPortalResult[] | undefined>(undefined);
   const { setDatasetId, setPendingExternalUserDatasetId, datasetId: currentDatasetId } = useAppState();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
 
   // Debounce search query
@@ -1594,7 +1594,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       queryKey: getGetDatasetsMySavesQueryKey(),
       // Always fetch when signed in so the search tab can reflect already-saved
       // entries without requiring the user to visit the saves tab first.
-      enabled: !!isSignedIn,
+      enabled: isLoaded && isSignedIn === true,
       // Materialization runs server-side after POST /save returns. Poll so
       // status (queued → processing → ready/failed) and the resulting
       // datasetId become visible without forcing the user to refresh.
@@ -1738,7 +1738,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const { data: userDatasets = [], isPending: isUploadPending } = useGetUserDatasets({
     query: {
       queryKey: getGetUserDatasetsQueryKey(),
-      enabled: !!isSignedIn,
+      enabled: isLoaded && isSignedIn === true,
     },
   });
 
@@ -1836,7 +1836,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   }, []);
 
   const { data: userFolders = [] } = useGetUserFolders({
-    query: { enabled: !!isSignedIn, queryKey: getGetUserFoldersQueryKey() },
+    query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserFoldersQueryKey() },
   });
 
   // Move-to-folder dialog state

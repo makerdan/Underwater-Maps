@@ -127,7 +127,7 @@ export function routesQueryKey(datasetId: string) {
 }
 
 export const RoutesPanel: React.FC = () => {
-  const { isSignedIn } = useUser();
+  const { isSignedIn, isLoaded } = useUser();
   const { datasetId, terrain } = useAppState();
   const units = useSettingsStore((s) => s.units);
   const collapsed = usePanelCollapseStore((s) => s.collapsed["routes"]);
@@ -148,7 +148,7 @@ export const RoutesPanel: React.FC = () => {
   const { data: routes, isLoading } = useQuery<SavedRoute[]>({
     queryKey: datasetId ? routesQueryKey(datasetId) : ["routes", "__none__"],
     queryFn: () => fetchRoutes(datasetId!),
-    enabled: !!isSignedIn && !!datasetId,
+    enabled: isLoaded && isSignedIn === true && !!datasetId,
     staleTime: 30_000,
   });
 

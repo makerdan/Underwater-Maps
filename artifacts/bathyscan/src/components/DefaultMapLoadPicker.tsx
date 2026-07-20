@@ -53,7 +53,7 @@ function decode(raw: string): DefaultMapLoad | null {
 }
 
 export function DefaultMapLoadPicker({ value, onChange }: DefaultMapLoadPickerProps) {
-  const { isSignedIn } = useUser();
+  const { isSignedIn, isLoaded } = useUser();
   const waterType = useSettingsStore((s) => s.waterType);
 
   const { data: presets, isLoading: presetsLoading } = useGetDatasets(
@@ -62,7 +62,7 @@ export function DefaultMapLoadPicker({ value, onChange }: DefaultMapLoadPickerPr
   );
 
   const { data: uploads, isLoading: uploadsLoading } = useGetUserDatasets({
-    query: { enabled: !!isSignedIn, queryKey: getGetUserDatasetsQueryKey(), staleTime: 60_000 },
+    query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserDatasetsQueryKey(), staleTime: 60_000 },
   });
 
   const loading = presetsLoading || (!!isSignedIn && uploadsLoading);

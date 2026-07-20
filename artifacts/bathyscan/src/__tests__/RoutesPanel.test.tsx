@@ -18,8 +18,21 @@ import { RoutesPanel } from "@/components/RoutesPanel";
 
 // ── Shared mutable state ──────────────────────────────────────────────────────
 let isSignedIn = true;
+let isLoaded = true;
 const invalidateQueriesSpy = vi.fn();
 const fetchSpy = vi.fn();
+
+// ── useQuery call recorder — captures options so tests can assert on `enabled` ─
+// Module-level object (same pattern as invalidateQueriesSpy) — no vi.hoisted needed.
+let _useQueryCalls: unknown[] = [];
+const useQueryRecorder = {
+  get calls(): unknown[] { return _useQueryCalls; },
+  fn(opts: unknown): { data: undefined; isLoading: false } {
+    _useQueryCalls.push(opts);
+    return { data: undefined, isLoading: false };
+  },
+  clear(): void { _useQueryCalls = []; },
+};
 
 type TerrainStub = { dataSource?: string; synthetic?: boolean } | null;
 let mockTerrain: TerrainStub = null;
@@ -86,7 +99,7 @@ vi.mock("@/lib/depthProfileStore", () => {
 vi.mock("@/lib/clerkCompat", async () => {
   const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
   return mockClerkCompat({
-    useUser: () => ({ isSignedIn, user: isSignedIn ? { id: "user-a" } : null }),
+    useUser: () => ({ isSignedIn, isLoaded, user: isSignedIn ? { id: "user-a" } : null }),
   });
 });
 
@@ -136,7 +149,7 @@ vi.mock("@/components/help/HelpButton", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: invalidateQueriesSpy }),
-  useQuery: () => ({ data: undefined, isLoading: false }),
+  useQuery: (opts: unknown) => useQueryRecorder.fn(opts),
   useMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
@@ -178,7 +191,9 @@ vi.mock("@workspace/api-client-react", () =>
 beforeEach(() => {
   invalidateQueriesSpy.mockClear();
   fetchSpy.mockClear();
+  useQueryRecorder.clear();
   isSignedIn = true;
+  isLoaded = true;
   activeProfile = PATH_PROFILE;
   mockTerrain = null;
   mockDatasetId = "ds-1";
@@ -457,5 +472,39 @@ describe("RoutesPanel — synthetic terrain guard", () => {
 
     expect(screen.getByText(/load a dataset to view routes/i)).toBeInTheDocument();
     expect(screen.queryByTestId("routes-panel-synthetic-msg")).not.toBeInTheDocument();
+  });
+});
+
+// ── RoutesPanel — auth startup race guard ──────────────────────────────────────
+
+describe("RoutesPanel — isLoaded guard prevents startup 401", () => {
+  it("passes enabled=false to useQuery when isLoaded=false even if isSignedIn=true", () => {
+    isLoaded = false;
+    isSignedIn = true;
+    mockDatasetId = "ds-1";
+
+    renderWithProviders(<RoutesPanel />);
+
+    const routesCall = useQueryRecorder.calls.find((c) => {
+      const opts = c as { queryKey?: unknown[]; enabled?: boolean };
+      return Array.isArray(opts?.queryKey) && opts.queryKey[0] === "routes";
+    });
+    expect(routesCall).toBeDefined();
+    expect((routesCall as { enabled: boolean }).enabled).toBe(false);
+  });
+
+  it("passes enabled=true to useQuery when both isLoaded=true and isSignedIn=true", () => {
+    isLoaded = true;
+    isSignedIn = true;
+    mockDatasetId = "ds-1";
+
+    renderWithProviders(<RoutesPanel />);
+
+    const routesCall = useQueryRecorder.calls.find((c) => {
+      const opts = c as { queryKey?: unknown[]; enabled?: boolean };
+      return Array.isArray(opts?.queryKey) && opts.queryKey[0] === "routes";
+    });
+    expect(routesCall).toBeDefined();
+    expect((routesCall as { enabled: boolean }).enabled).toBe(true);
   });
 });

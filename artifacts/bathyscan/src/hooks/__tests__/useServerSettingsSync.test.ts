@@ -19,19 +19,29 @@ const { mutateAsyncFn, toastFn } = vi.hoisted(() => {
   return { mutateAsyncFn, toastFn };
 });
 
+const { clerkAuthState, useGetSettingsMock } = vi.hoisted(() => {
+  const clerkAuthState = { isSignedIn: true as boolean | null, isLoaded: true };
+  const useGetSettingsMock = vi.fn((args?: unknown) => {
+    const enabled =
+      (args as { query?: { enabled?: boolean } } | undefined)?.query?.enabled ?? true;
+    return {
+      data: enabled ? { __updatedAt: "2026-01-01T00:00:00Z" } : undefined,
+      isError: false,
+    };
+  });
+  return { clerkAuthState, useGetSettingsMock };
+});
+
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
 vi.mock("@workspace/api-client-react", () => ({
-  useGetSettings: () => ({
-    data: { __updatedAt: "2026-01-01T00:00:00Z" },
-    isError: false,
-  }),
+  useGetSettings: useGetSettingsMock,
   usePutSettings: () => ({ mutateAsync: mutateAsyncFn }),
   getGetSettingsQueryKey: () => ["Settings"],
 }));
 
 vi.mock("@/lib/clerkCompat", () => ({
-  useUser: () => ({ isSignedIn: true, isLoaded: true }),
+  useUser: () => ({ ...clerkAuthState }),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -277,5 +287,45 @@ describe("useServerSettingsSync — singleton DEV-mode warning", () => {
 
     second.unmount();
     first.unmount();
+  });
+});
+
+// ── Tests — isLoaded=false startup race guard ─────────────────────────────────
+
+describe("useServerSettingsSync — isLoaded=false guard", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mutateAsyncFn.mockResolvedValue({ __updatedAt: "2026-07-01T00:00:00Z" });
+    useGetSettingsMock.mockClear();
+    settingsStoreState.hydrateFromServer.mockClear();
+    clerkAuthState.isSignedIn = true;
+    clerkAuthState.isLoaded = false;
+  });
+
+  afterEach(() => {
+    clerkAuthState.isLoaded = true;
+    clerkAuthState.isSignedIn = true;
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it("does not call hydrateFromServer when isLoaded=false (GET query is disabled)", async () => {
+    const { unmount } = renderHook(() => useServerSettingsSync());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(settingsStoreState.hydrateFromServer).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it("does not fire a PUT when isLoaded=false", async () => {
+    const { unmount } = renderHook(() => useServerSettingsSync());
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+    expect(mutateAsyncFn).not.toHaveBeenCalled();
+    unmount();
   });
 });

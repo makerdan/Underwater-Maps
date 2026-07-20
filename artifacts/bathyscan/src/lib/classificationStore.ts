@@ -81,7 +81,7 @@ export function categorizeClassificationError(err: unknown): ClassificationError
   if (status === 401 || e?.data?.error === "auth_error") {
     return {
       category: "unauthorized",
-      reason: "AI classifier unauthorized — check `POE_API_KEY`.",
+      reason: "Sign out and sign back in — your session may have expired.",
       detail: serverMessage,
     };
   }
