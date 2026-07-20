@@ -32,6 +32,7 @@ import { BACKTROLL_DRAG_COEFFICIENT, BACKTROLL_LEEWAY_COEFFICIENT } from "./boat
 import {
   currentVector,
   computeBlendedDrift,
+  shallowWaterTidalScale,
   KM_PER_KNOT_HOUR,
   KM_PER_DEG_LAT,
 } from "./boatPhysics";
@@ -300,6 +301,9 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
           tidalDir = sampled.directionDeg;
         }
       }
+      // Shallow-water amplification: flow accelerates over shoals by continuity
+      // (Q = A × v). Scale is 1.0 at depths ≥ 30 m, up to 3× in very shallow water.
+      tidalSpeed *= shallowWaterTidalScale(terrainDepth, tideHeightM);
       const leewayFactor = backtroll ? BACKTROLL_LEEWAY_COEFFICIENT : (profile.leewayFactor * profile.windageFactor);
       const blended = computeBlendedDrift({
         tidalSpeedKnots: tidalSpeed,
@@ -336,6 +340,9 @@ export function computeDrift(opts: ComputeDriftOptions): DriftWaypoint[] {
           tidalDir = sampled.directionDeg;
         }
       }
+      // Shallow-water amplification: flow accelerates over shoals by continuity
+      // (Q = A × v). Scale is 1.0 at depths ≥ 30 m, up to 3× in very shallow water.
+      tidalSpeed *= shallowWaterTidalScale(terrainDepth, tideHeightM);
       const leewayFactor = backtroll ? BACKTROLL_LEEWAY_COEFFICIENT : (profile.leewayFactor * profile.windageFactor);
       const blended = computeBlendedDrift({
         tidalSpeedKnots: tidalSpeed,
