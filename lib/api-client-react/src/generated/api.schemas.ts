@@ -873,6 +873,18 @@ export interface UserSettings {
   intertidalHotspotsEnabled?: boolean;
   /** Scoring mode used to rank intertidal hotspot polygons. */
   intertidalScoreMode?: UserSettingsIntertidalScoreMode;
+  /**
+     * User-supplied Mean High Water mark override in feet for the active freshwater dataset. Null means use the tide-gauge derived value. Preserved when the user switches to a saltwater preset so freshwater lake settings survive the switch intact.
+     * @minimum -500
+     * @maximum 500
+     */
+  intertidalMhwOverrideFt?: number | null;
+  /**
+     * User-supplied Mean Higher High Water mark override in feet for the active freshwater dataset. Null means use the tide-gauge derived value. Preserved when the user switches to a saltwater preset so freshwater lake settings survive the switch intact.
+     * @minimum -500
+     * @maximum 500
+     */
+  intertidalMhhwOverrideFt?: number | null;
   /** Whether the Essential Fish Habitat overlay is visible. */
   efhOverlayEnabled?: boolean;
   /** Species names whose EFH polygons are hidden from the overlay. */

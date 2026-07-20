@@ -1211,6 +1211,14 @@ export const getSettingsResponseSubstrateColorModeDefault = false;
 export const getSettingsResponseHiddenSubstrateClassesDefault = [];
 export const getSettingsResponseIntertidalHotspotsEnabledDefault = false;
 export const getSettingsResponseIntertidalScoreModeDefault = `tidepool`;
+export const getSettingsResponseIntertidalMhwOverrideFtDefault = null;
+export const getSettingsResponseIntertidalMhwOverrideFtMin = -500;
+export const getSettingsResponseIntertidalMhwOverrideFtMax = 500;
+
+export const getSettingsResponseIntertidalMhhwOverrideFtDefault = null;
+export const getSettingsResponseIntertidalMhhwOverrideFtMin = -500;
+export const getSettingsResponseIntertidalMhhwOverrideFtMax = 500;
+
 export const getSettingsResponseEfhOverlayEnabledDefault = false;
 export const getSettingsResponseHiddenEfhSpeciesDefault = [];
 export const getSettingsResponseHyd93ActiveFeatureCodesDefault = [89, 103, 146, 530, 988];
@@ -1445,6 +1453,8 @@ export const GetSettingsResponse = zod.object({
   "hiddenSubstrateClasses": zod.array(zod.string()).default(getSettingsResponseHiddenSubstrateClassesDefault).describe('List of substrate class names hidden from the substrate overlay.'),
   "intertidalHotspotsEnabled": zod.boolean().default(getSettingsResponseIntertidalHotspotsEnabledDefault).describe('Whether the intertidal hotspot overlay is enabled.'),
   "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default(getSettingsResponseIntertidalScoreModeDefault).describe('Scoring mode used to rank intertidal hotspot polygons.'),
+  "intertidalMhwOverrideFt": zod.number().min(getSettingsResponseIntertidalMhwOverrideFtMin).max(getSettingsResponseIntertidalMhwOverrideFtMax).nullish().default(getSettingsResponseIntertidalMhwOverrideFtDefault).describe('User-supplied Mean High Water mark override in feet for the active freshwater dataset. Null means use the tide-gauge derived value. Preserved when the user switches to a saltwater preset so freshwater lake settings survive the switch intact.'),
+  "intertidalMhhwOverrideFt": zod.number().min(getSettingsResponseIntertidalMhhwOverrideFtMin).max(getSettingsResponseIntertidalMhhwOverrideFtMax).nullish().default(getSettingsResponseIntertidalMhhwOverrideFtDefault).describe('User-supplied Mean Higher High Water mark override in feet for the active freshwater dataset. Null means use the tide-gauge derived value. Preserved when the user switches to a saltwater preset so freshwater lake settings survive the switch intact.'),
   "efhOverlayEnabled": zod.boolean().default(getSettingsResponseEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat overlay is visible.'),
   "hiddenEfhSpecies": zod.array(zod.string()).default(getSettingsResponseHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
   "hyd93ActiveFeatureCodes": zod.array(zod.number().int()).default(getSettingsResponseHyd93ActiveFeatureCodesDefault).describe('HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction).'),
@@ -1673,6 +1683,14 @@ export const putSettingsBodySubstrateColorModeDefault = false;
 export const putSettingsBodyHiddenSubstrateClassesDefault = [];
 export const putSettingsBodyIntertidalHotspotsEnabledDefault = false;
 export const putSettingsBodyIntertidalScoreModeDefault = `tidepool`;
+export const putSettingsBodyIntertidalMhwOverrideFtDefault = null;
+export const putSettingsBodyIntertidalMhwOverrideFtMin = -500;
+export const putSettingsBodyIntertidalMhwOverrideFtMax = 500;
+
+export const putSettingsBodyIntertidalMhhwOverrideFtDefault = null;
+export const putSettingsBodyIntertidalMhhwOverrideFtMin = -500;
+export const putSettingsBodyIntertidalMhhwOverrideFtMax = 500;
+
 export const putSettingsBodyEfhOverlayEnabledDefault = false;
 export const putSettingsBodyHiddenEfhSpeciesDefault = [];
 export const putSettingsBodyHyd93ActiveFeatureCodesDefault = [89, 103, 146, 530, 988];
@@ -1907,6 +1925,8 @@ export const PutSettingsBody = zod.object({
   "hiddenSubstrateClasses": zod.array(zod.string()).default(putSettingsBodyHiddenSubstrateClassesDefault).describe('List of substrate class names hidden from the substrate overlay.'),
   "intertidalHotspotsEnabled": zod.boolean().default(putSettingsBodyIntertidalHotspotsEnabledDefault).describe('Whether the intertidal hotspot overlay is enabled.'),
   "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default(putSettingsBodyIntertidalScoreModeDefault).describe('Scoring mode used to rank intertidal hotspot polygons.'),
+  "intertidalMhwOverrideFt": zod.number().min(putSettingsBodyIntertidalMhwOverrideFtMin).max(putSettingsBodyIntertidalMhwOverrideFtMax).nullish().default(putSettingsBodyIntertidalMhwOverrideFtDefault).describe('User-supplied Mean High Water mark override in feet for the active freshwater dataset. Null means use the tide-gauge derived value. Preserved when the user switches to a saltwater preset so freshwater lake settings survive the switch intact.'),
+  "intertidalMhhwOverrideFt": zod.number().min(putSettingsBodyIntertidalMhhwOverrideFtMin).max(putSettingsBodyIntertidalMhhwOverrideFtMax).nullish().default(putSettingsBodyIntertidalMhhwOverrideFtDefault).describe('User-supplied Mean Higher High Water mark override in feet for the active freshwater dataset. Null means use the tide-gauge derived value. Preserved when the user switches to a saltwater preset so freshwater lake settings survive the switch intact.'),
   "efhOverlayEnabled": zod.boolean().default(putSettingsBodyEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat overlay is visible.'),
   "hiddenEfhSpecies": zod.array(zod.string()).default(putSettingsBodyHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
   "hyd93ActiveFeatureCodes": zod.array(zod.number().int()).default(putSettingsBodyHyd93ActiveFeatureCodesDefault).describe('HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction).'),
@@ -2130,6 +2150,14 @@ export const putSettingsResponseSubstrateColorModeDefault = false;
 export const putSettingsResponseHiddenSubstrateClassesDefault = [];
 export const putSettingsResponseIntertidalHotspotsEnabledDefault = false;
 export const putSettingsResponseIntertidalScoreModeDefault = `tidepool`;
+export const putSettingsResponseIntertidalMhwOverrideFtDefault = null;
+export const putSettingsResponseIntertidalMhwOverrideFtMin = -500;
+export const putSettingsResponseIntertidalMhwOverrideFtMax = 500;
+
+export const putSettingsResponseIntertidalMhhwOverrideFtDefault = null;
+export const putSettingsResponseIntertidalMhhwOverrideFtMin = -500;
+export const putSettingsResponseIntertidalMhhwOverrideFtMax = 500;
+
 export const putSettingsResponseEfhOverlayEnabledDefault = false;
 export const putSettingsResponseHiddenEfhSpeciesDefault = [];
 export const putSettingsResponseHyd93ActiveFeatureCodesDefault = [89, 103, 146, 530, 988];
@@ -2364,6 +2392,8 @@ export const PutSettingsResponse = zod.object({
   "hiddenSubstrateClasses": zod.array(zod.string()).default(putSettingsResponseHiddenSubstrateClassesDefault).describe('List of substrate class names hidden from the substrate overlay.'),
   "intertidalHotspotsEnabled": zod.boolean().default(putSettingsResponseIntertidalHotspotsEnabledDefault).describe('Whether the intertidal hotspot overlay is enabled.'),
   "intertidalScoreMode": zod.enum(['tidepool', 'beachcombing']).default(putSettingsResponseIntertidalScoreModeDefault).describe('Scoring mode used to rank intertidal hotspot polygons.'),
+  "intertidalMhwOverrideFt": zod.number().min(putSettingsResponseIntertidalMhwOverrideFtMin).max(putSettingsResponseIntertidalMhwOverrideFtMax).nullish().default(putSettingsResponseIntertidalMhwOverrideFtDefault).describe('User-supplied Mean High Water mark override in feet for the active freshwater dataset. Null means use the tide-gauge derived value. Preserved when the user switches to a saltwater preset so freshwater lake settings survive the switch intact.'),
+  "intertidalMhhwOverrideFt": zod.number().min(putSettingsResponseIntertidalMhhwOverrideFtMin).max(putSettingsResponseIntertidalMhhwOverrideFtMax).nullish().default(putSettingsResponseIntertidalMhhwOverrideFtDefault).describe('User-supplied Mean Higher High Water mark override in feet for the active freshwater dataset. Null means use the tide-gauge derived value. Preserved when the user switches to a saltwater preset so freshwater lake settings survive the switch intact.'),
   "efhOverlayEnabled": zod.boolean().default(putSettingsResponseEfhOverlayEnabledDefault).describe('Whether the Essential Fish Habitat overlay is visible.'),
   "hiddenEfhSpecies": zod.array(zod.string()).default(putSettingsResponseHiddenEfhSpeciesDefault).describe('Species names whose EFH polygons are hidden from the overlay.'),
   "hyd93ActiveFeatureCodes": zod.array(zod.number().int()).default(putSettingsResponseHyd93ActiveFeatureCodesDefault).describe('HYD93 feature type codes currently visible (89=Rocks, 103=Kelp, 146=Ledge, 530=Rocky reef, 988=Obstruction).'),

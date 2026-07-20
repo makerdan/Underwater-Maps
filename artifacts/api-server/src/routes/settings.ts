@@ -73,6 +73,12 @@ export const DEFAULT_SETTINGS = {
   hiddenSubstrateClasses: [] as string[],
   intertidalHotspotsEnabled: false,
   intertidalScoreMode: "tidepool",
+  // ── Freshwater intertidal water-level overrides (promoted from extras path) ──
+  // Null means use the tide-gauge derived value; a finite number overrides it.
+  // These are freshwater-specific and are preserved when the user switches to a
+  // saltwater preset so lake settings survive the switch intact.
+  intertidalMhwOverrideFt: null as null | number,
+  intertidalMhhwOverrideFt: null as null | number,
   efhOverlayEnabled: false,
   hiddenEfhSpecies: [] as string[],
   hyd93ActiveFeatureCodes: [89, 103, 146, 530, 988] as number[],
@@ -419,6 +425,37 @@ router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(asy
     throw selectErr;
   }
   const stored = (existing?.settings ?? {}) as Record<string, unknown>;
+
+  // ── Freshwater band-limit guard ───────────────────────────────────────────
+  // When the client switches waterType from "freshwater" → "saltwater" and
+  // simultaneously sends the intertidal water-level override fields (which
+  // default to null for saltwater), the merge below would silently overwrite
+  // the user's freshwater-specific MHW / MHHW override values. Detect this
+  // pattern and strip those keys from sentValidated so the stored freshwater
+  // values survive the preset switch intact.
+  //
+  // We only apply this guard when:
+  //   1. The stored row's waterType was "freshwater"
+  //   2. The incoming request is switching waterType to "saltwater"
+  //   3. The intertidal override key is present in the request body
+  //
+  // The guard is intentionally narrow to avoid interfering with deliberate
+  // user resets that happen while already in saltwater mode.
+  if (
+    stored.waterType === "freshwater" &&
+    sentValidated.waterType === "saltwater"
+  ) {
+    const FW_BAND_LIMIT_KEYS = ["intertidalMhwOverrideFt", "intertidalMhhwOverrideFt"] as const;
+    for (const key of FW_BAND_LIMIT_KEYS) {
+      if (key in sentValidated) {
+        delete sentValidated[key];
+        logger.debug(
+          { userId, key },
+          "PUT /api/settings — freshwater band-limit guard: preserving stored value on saltwater switch",
+        );
+      }
+    }
+  }
 
   // Object.create(null) gives a null-prototype object so a "__proto__" key
   // in any of the spread sources (e.g. a legacy stored row) is copied as an

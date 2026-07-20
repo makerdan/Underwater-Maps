@@ -229,6 +229,13 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   // settings-schema-sync.test.ts; behaviour covered by ManualConditionsForm tests.
   "datasetManualConditions",
   "manualConditionsActiveSource",
+
+  // ── freshwater intertidal water-level overrides (settings-validation.test.ts) ──
+  // MHW / MHHW override fields promoted from extras-path to validated schema.
+  // Validation and freshwater band-limit guard behaviour covered in
+  // settings-validation.test.ts.
+  "intertidalMhwOverrideFt",
+  "intertidalMhhwOverrideFt",
 ]);
 
 describe("PutSettingsBody field-coverage sentinel", () => {

@@ -5165,6 +5165,28 @@ components:
           enum: [tidepool, beachcombing]
           default: tidepool
           description: Scoring mode used to rank intertidal hotspot polygons.
+        intertidalMhwOverrideFt:
+          type: number
+          minimum: -500
+          maximum: 500
+          nullable: true
+          default: null
+          description: >-
+            User-supplied Mean High Water mark override in feet for the active
+            freshwater dataset. Null means use the tide-gauge derived value.
+            Preserved when the user switches to a saltwater preset so freshwater
+            lake settings survive the switch intact.
+        intertidalMhhwOverrideFt:
+          type: number
+          minimum: -500
+          maximum: 500
+          nullable: true
+          default: null
+          description: >-
+            User-supplied Mean Higher High Water mark override in feet for the
+            active freshwater dataset. Null means use the tide-gauge derived
+            value. Preserved when the user switches to a saltwater preset so
+            freshwater lake settings survive the switch intact.
         efhOverlayEnabled:
           type: boolean
           default: false
