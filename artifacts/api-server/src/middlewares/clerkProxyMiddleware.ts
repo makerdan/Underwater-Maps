@@ -27,6 +27,47 @@ const CLERK_FAPI = "https://frontend-api.clerk.dev";
 export const CLERK_PROXY_PATH = "/api/__clerk";
 
 /**
+ * Builds the set of trusted hostnames that may appear in x-forwarded-host.
+ *
+ * Sources (all stripped to host-only, no protocol or port):
+ *   1. Each origin in `ALLOWED_ORIGINS` (comma-separated full origins).
+ *   2. `REPLIT_DEV_DOMAIN` if set.
+ *   3. The request's own `Host` header (the un-proxied server hostname).
+ *
+ * Exported so it can be unit-tested independently.
+ */
+export function buildTrustedHostSet(reqHost: string | undefined): Set<string> {
+  const trusted = new Set<string>();
+
+  const addOrigin = (origin: string) => {
+    try {
+      const { hostname } = new URL(origin.trim());
+      if (hostname) trusted.add(hostname);
+    } catch {
+      // ignore malformed origins
+    }
+  };
+
+  const allowedOrigins = process.env["ALLOWED_ORIGINS"] ?? "";
+  for (const token of allowedOrigins.split(",")) {
+    if (token.trim()) addOrigin(token.trim());
+  }
+
+  const replitDev = process.env["REPLIT_DEV_DOMAIN"];
+  if (replitDev) {
+    trusted.add(replitDev.trim());
+  }
+
+  if (reqHost) {
+    // Host header may include a port — strip it for comparison.
+    const hostOnly = reqHost.trim().replace(/:\d+$/, "");
+    if (hostOnly) trusted.add(hostOnly);
+  }
+
+  return trusted;
+}
+
+/**
  * Returns the first effective public hostname for the given request,
  * preferring x-forwarded-host over the Host header so callers behind a
  * proxy see the original client-facing host.
@@ -42,14 +83,34 @@ export const CLERK_PROXY_PATH = "/api/__clerk";
  * (clerkMiddleware callback) and this proxy middleware agree on which
  * hostname is canonical — otherwise multi-domain/custom-domain flows
  * break.
+ *
+ * Security: the candidate host from x-forwarded-host is validated against
+ * a trusted-domain allowlist built from ALLOWED_ORIGINS, REPLIT_DEV_DOMAIN,
+ * and the request's own Host header. If the forwarded host is not trusted,
+ * the function falls back to req.headers.host to prevent host header
+ * injection into the Clerk-Proxy-Url.
  */
 export function getClerkProxyHost(req: {
   headers: IncomingHttpHeaders;
 }): string | undefined {
+  const serverHost = req.headers.host?.trim();
+
   const forwarded = req.headers["x-forwarded-host"];
   const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   const firstHop = raw?.split(",")[0]?.trim();
-  return firstHop || req.headers.host?.trim() || undefined;
+
+  if (firstHop) {
+    const trusted = buildTrustedHostSet(serverHost);
+    // Strip port from candidate before allowlist check.
+    const candidateHost = firstHop.replace(/:\d+$/, "");
+    if (trusted.has(candidateHost)) {
+      return firstHop;
+    }
+    // Untrusted forwarded host — fall back to the server's own Host header.
+    return serverHost || undefined;
+  }
+
+  return serverHost || undefined;
 }
 
 export function clerkProxyMiddleware(): RequestHandler {
