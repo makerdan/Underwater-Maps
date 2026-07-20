@@ -64,7 +64,10 @@ if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_REPO_URL}" ]; then
   # Push directly to the authenticated URL — no remote mutation, so the
   # credential never persists in .git/config even if the push fails.
   # Force-push because Replit is the sole source of truth for this mirror.
-  git push --force "https://x-access-token:${GITHUB_TOKEN}@${GITHUB_REPO_URL#https://}" HEAD:main
+  # Disable LFS lock verification inline (-c flag, no .git/config mutation):
+  # the GitHub remote does not support the Git LFS locking API and returns
+  # "Fatal error: Unable to verify locks" without this flag.
+  git -c lfs.locksverify=false push --force "https://x-access-token:${GITHUB_TOKEN}@${GITHUB_REPO_URL#https://}" HEAD:main
   echo "[post-merge] GitHub mirror up to date."
 else
   echo "[post-merge] GITHUB_TOKEN or GITHUB_REPO_URL not set — skipping GitHub sync."
