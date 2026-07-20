@@ -21,7 +21,9 @@ Trigger phrases: "clean up tasks", "audit drafts", "prune backlog", "too many op
 
 Before doing anything else, fetch the full PROPOSED list.
 
-**Orphan-recovery check (run first):** Scan PROPOSED tasks for any whose title starts with `CONSOLIDATION - `. For each one found, parse its description to extract the original task refs it covers (they are cited by ref in the "What & Why" section of the consolidation task). For each cited original task that still exists and does not yet have a `DELETE - ` prefix, immediately call `updateProjectTask({taskRef, title:"DELETE - <original title>"})` to prefix it. Report how many orphaned originals were repaired (may be zero). This makes partial-run recovery fully automatic on re-run.
+**Orphan-recovery check (run first):** Scan PROPOSED tasks for any whose title starts with `CONSOLIDATION - `. For each one found, extract all task refs from its description using the pattern `#\d+` (match every token of the form `#` followed by one or more digits, anywhere in the description — do **not** restrict the search to a named section like "What & Why", because template drift would silently suppress matches). For each extracted ref that resolves to a PROPOSED task whose title does not yet start with `DELETE - `, immediately call `updateProjectTask({taskRef, title:"DELETE - <original title>"})` to prefix it. Report how many orphaned originals were repaired (may be zero). This makes partial-run recovery fully automatic on re-run.
+
+> **Format contract:** Consolidation task descriptions must cite each covered original as `#NNNN` (hash + digits) somewhere in the description body. Any change to the description template must preserve these bare `#NNNN` tokens so the broad regex sweep above continues to find them.
 
 **Skip check (run after orphan recovery):** Skip (do not process) any task whose title already starts with `DELETE - ` or `CONSOLIDATION - `. Log how many were skipped. If all remaining tasks are already prefixed, print the summary table and stop.
 
