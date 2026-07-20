@@ -155,6 +155,54 @@ describe("DELETE /api/markers/:id — auth required", () => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/markers — label and notes length boundary tests
+//
+// The PostMarkersBody Zod schema (from @workspace/api-zod) enforces the
+// canonical label max (200) and notes max (2000).  The server route also has
+// a secondary semantic guard at 422 for anything that slips through. These
+// tests use the real (un-mocked) @workspace/api-zod schemas so that any
+// future change to the schema constants is caught immediately at test-standard
+// tier rather than surfacing only after users hit a 400 on a valid edit.
+// ---------------------------------------------------------------------------
+describe("POST /api/markers — label length boundary (canonical LABEL_MAX = 200)", () => {
+  it("returns 201 when label is exactly 200 characters", async () => {
+    const res = await request(app)
+      .post("/api/markers")
+      .set(AUTHED_HEADER)
+      .send({ datasetId: "thorne-bay", lon: -132.53, lat: 55.69, depth: 100, label: "a".repeat(200) });
+    expect(res.status).toBe(201);
+  });
+
+  it("returns 400 when label is 201 characters (one over the limit)", async () => {
+    const res = await request(app)
+      .post("/api/markers")
+      .set(AUTHED_HEADER)
+      .send({ datasetId: "thorne-bay", lon: -132.53, lat: 55.69, depth: 100, label: "a".repeat(201) });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+describe("POST /api/markers — notes length boundary (canonical NOTES_MAX = 2000)", () => {
+  it("returns 201 when notes is exactly 2000 characters", async () => {
+    const res = await request(app)
+      .post("/api/markers")
+      .set(AUTHED_HEADER)
+      .send({ datasetId: "thorne-bay", lon: -132.53, lat: 55.69, depth: 100, label: "Test", notes: "n".repeat(2000) });
+    expect(res.status).toBe(201);
+  });
+
+  it("returns 400 when notes is 2001 characters (one over the limit)", async () => {
+    const res = await request(app)
+      .post("/api/markers")
+      .set(AUTHED_HEADER)
+      .send({ datasetId: "thorne-bay", lon: -132.53, lat: 55.69, depth: 100, label: "Test", notes: "n".repeat(2001) });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Cross-user delete ownership enforcement
 //
 // The DELETE /api/markers/:id WHERE clause includes BOTH id AND userId, so

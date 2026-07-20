@@ -7525,7 +7525,7 @@ components:
         label:
           type: string
           minLength: 1
-          maxLength: 60
+          maxLength: 200
         type:
           type: string
           enum: [fish, shipwreck, coral, vent, custom, depth_pole, log, vegetation, sample, bass, trout, pike, walleye, crayfish, salmon, tuna, halibut, shark, swordfish, rockfish, cod, mahi_mahi, grouper, snapper, crab, lobster, shrimp, krill, jellyfish, octopus, squid, sea_urchin, starfish, sea_turtle, school_herring, school_sardine, school_mackerel, school_tuna, school_anchovy, catfish, crappie, bluegill, sunfish, carp, yellow_perch, muskie, largemouth_bass, smallmouth_bass, channel_catfish, freshwater_shrimp, freshwater_crab, snapping_turtle, bullfrog, beaver_dam, lily_pad, cattail, reed_bed, submerged_grass, spring, school_perch, school_bluegill, school_bass, school_crappie, school_carp]

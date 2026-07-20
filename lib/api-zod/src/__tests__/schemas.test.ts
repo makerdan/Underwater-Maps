@@ -574,6 +574,24 @@ describe("PostDatasetsBboxQueryBody", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Marker label/notes limit consistency — drift guard
+//
+// POST and PATCH must share the same canonical limits so a user who creates
+// a marker with a long-but-valid label can always edit it later.  If someone
+// changes one schema but not the other this test will catch it immediately.
+// ---------------------------------------------------------------------------
+
+describe("marker label/notes limits — POST and PATCH must be equal", () => {
+  it("label max is the same for PostMarkersBody and PatchMarkersIdBody", () => {
+    expect(postMarkersBodyLabelMax).toBe(patchMarkersIdBodyLabelMax);
+  });
+
+  it("notes max is the same for PostMarkersBody and PatchMarkersIdBody", () => {
+    expect(postMarkersBodyNotesMax).toBe(patchMarkersIdBodyNotesMax);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PostTrailsBody
 // ---------------------------------------------------------------------------
 

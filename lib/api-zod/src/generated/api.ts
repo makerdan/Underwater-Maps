@@ -830,7 +830,7 @@ export const PatchMarkersIdParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const patchMarkersIdBodyLabelMax = 60;
+export const patchMarkersIdBodyLabelMax = 200;
 
 export const patchMarkersIdBodyNotesMax = 2000;
 
