@@ -236,6 +236,48 @@ function extractBody(src, searchFrom) {
 }
 
 /**
+ * Extract the concise (braceless) body of an arrow function, e.g.
+ *   export const f = (url) => fetch(url);
+ * `parenIdx` must point at the opening `(` of the parameter list.
+ *
+ * Finds the matching `)`, skips an optional return-type annotation, and if a
+ * `=>` follows with a non-`{` body, returns the expression text up to the
+ * terminating `;` (or end of line / end of source).  Returns null when the
+ * arrow has a braces body (handled by extractBody) or no arrow is present.
+ */
+function extractConciseArrowBody(src, parenIdx) {
+  let depth = 0;
+  let closeParen = -1;
+  for (let i = parenIdx; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") {
+      depth--;
+      if (depth === 0) {
+        closeParen = i;
+        break;
+      }
+    }
+  }
+  if (closeParen === -1) return null;
+
+  // Optional return-type annotation (e.g. `: Promise<Response>`) then `=>`.
+  const after = src.slice(closeParen + 1, closeParen + 200);
+  const arrow = after.match(/^\s*(?::[^=;{]{0,150}?)?=>\s*/);
+  if (!arrow) return null;
+
+  const bodyStart = closeParen + 1 + arrow[0].length;
+  if (src[bodyStart] === "{") return null; // braces body — extractBody's job
+
+  const semi = src.indexOf(";", bodyStart);
+  const nl = src.indexOf("\n", bodyStart);
+  let end = src.length;
+  if (semi !== -1) end = Math.min(end, semi);
+  if (nl !== -1) end = Math.min(end, nl);
+  return src.slice(bodyStart, end);
+}
+
+/**
  * Scan `src` for exported function definitions that:
  *   (a) accept a URL-like value as their first positional parameter
  *   (b) call native fetch() OR a registered fetch wrapper somewhere in
@@ -269,7 +311,8 @@ export function detectFetchWrappersInSource(src, wrappers = FETCH_WRAPPERS) {
     if (!URL_PARAM_NAMES.has(param)) continue;
 
     // Extract the function body and check for a bare fetch()/wrapper call.
-    const body = extractBody(src, afterMatch);
+    const body =
+      extractBody(src, afterMatch) ?? extractConciseArrowBody(src, parenIdx);
     if (body && (BARE_FETCH_CALL_RE.test(body) || wrapperCallRe.test(body))) {
       found.add(name);
     }

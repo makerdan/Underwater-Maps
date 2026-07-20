@@ -199,8 +199,10 @@ export async function inputWrap(input: RequestInfo | URL) {
 }
 `;
   const detected = detectFetchWrappersInSource(src, FETCH_WRAPPERS);
-  // Note: bodyless arrow (`=> fetch(url)`) has no braces; extractBody returns
-  // null so arrowWrap is a known limitation — braces-bodied forms must match.
+  assert.ok(
+    detected.has("arrowWrap"),
+    "concise (braceless) arrow fetch wrapper must be detected",
+  );
   assert.ok(detected.has("exprWrap"));
   assert.ok(detected.has("inputWrap"));
 });
