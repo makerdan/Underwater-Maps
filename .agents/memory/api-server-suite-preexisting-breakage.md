@@ -9,5 +9,7 @@ Known pre-existing failure classes (tracked in follow-up task "Fix broken server
 - Test files that vi.mock ../middlewares/rateLimit.js without exporting __resetRateLimitMemory crash in src/__tests__/setup.ts (zone-cache-* files).
 - admin.test.ts expects error code `invalid_param`; validate middleware now returns `invalid_request`.
 
-**Why:** these 70 failures make test-standard/test-heavy always fail; without knowing they're pre-existing you'll burn time bisecting your own change.
+Status update (later 2026-07-20): baseline is now 9 failed files / 3 failed tests (NYSDEC_BATHY_FEATURE_SERVICE missing from terrain.js mocks in 6 files, auth-bypass 500-vs-401, rate-limit-isolation guard listing 8 offender files, admin invalid_param). Catalog-search keyword-coverage failures are fixed and no longer part of the baseline.
+
+**Why:** these failures make test-standard/test-heavy always fail; without knowing they're pre-existing you'll burn time bisecting your own change.
 **How to apply:** verify your touched surfaces solo (route tests + component tests) and use skip_validation_reason citing this until the suite is repaired.
