@@ -82,6 +82,7 @@ const SCANNED_FILES: string[] = [
   "components/OverviewMap.tsx",
   "components/DepthProfilePanel.tsx",
   "components/SubstrateLayer.tsx",
+  "components/TerrainMesh.tsx",
   "components/ThrottlePanel.tsx",
   "components/TidePanel.tsx",
   "components/WeatherPanel.tsx",
@@ -154,6 +155,12 @@ function parseScopes(src: string): ComponentScope[] {
         if (bracesDelta > 0) {
           current = { name, startLine: lineNo, decls: [] };
           depth = bracesDelta;
+        } else if (/[(<,]\s*$/.test(line.trimEnd())) {
+          // Declaration continues on later lines (e.g. React.forwardRef(
+          // followed by an arrow function on the next line). Open a pending
+          // scope at depth 0; the body's `{` on a later line raises depth.
+          current = { name, startLine: lineNo, decls: [] };
+          depth = 0;
         }
         continue;
       }

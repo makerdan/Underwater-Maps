@@ -84,6 +84,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     highContrastHud: false,
     colorBlindSafePalette: false,
     manualConditionsActiveSource: {} as Record<string, "real" | "manual">,
+    datasetManualConditions: {},
   };
   const useSettingsStore = Object.assign(
     (sel: (s: typeof defaults) => unknown) => sel(defaults),

@@ -35,6 +35,11 @@ const h = vi.hoisted(() => {
 
 // ── Mock stores ────────────────────────────────────────────────────────────────
 
+vi.mock("@/lib/context", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/context")>();
+  return { ...actual, useAppState: () => ({ terrain: null }) };
+});
+
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
   const settingsState = () => ({
@@ -62,7 +67,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     layerArrowDensity: {},
     manualConditionsActiveSource: {} as Record<string, "real" | "manual">,
     setManualConditionsActiveSource: vi.fn(),
-    datasetManualConditions: {} as Record<string, unknown>,
+    datasetManualConditions: {},
     setDatasetManualConditions: vi.fn(),
   });
   const useSettingsStore = Object.assign(

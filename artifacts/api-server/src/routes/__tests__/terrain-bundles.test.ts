@@ -143,6 +143,7 @@ describe("POST /terrain/bundles", () => {
   it("404 for unknown presetId", async () => {
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-user-id", "bypass-user")
       .send({ presetId: "does-not-exist" });
 
     expect(res.status).toBe(404);
@@ -152,6 +153,7 @@ describe("POST /terrain/bundles", () => {
   it("422 for preset without fetchStrategy", async () => {
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-user-id", "bypass-user")
       .send({ presetId: "no-strategy-preset" });
 
     expect(res.status).toBe(422);
@@ -161,6 +163,7 @@ describe("POST /terrain/bundles", () => {
   it("400 for missing presetId", async () => {
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-user-id", "bypass-user")
       .send({});
 
     expect(res.status).toBe(400);
@@ -172,6 +175,7 @@ describe("POST /terrain/bundles", () => {
 
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-user-id", "bypass-user")
       .send({ presetId: "lake-ray-roberts" });
 
     expect(res.status).toBe(202);
@@ -189,6 +193,7 @@ describe("POST /terrain/bundles", () => {
 
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-user-id", "bypass-user")
       .send({ presetId: "lake-ray-roberts" });
 
     expect(res.status).toBe(200);
@@ -205,6 +210,7 @@ describe("POST /terrain/bundles", () => {
 
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-user-id", "bypass-user")
       .send({ presetId: "lake-ray-roberts" });
 
     expect(res.status).toBe(202);
@@ -219,7 +225,7 @@ describe("GET /terrain/bundles/:presetId/status", () => {
 
   it("404 when no job found", async () => {
     mockSelect.mockReturnValue(makeChain([]));
-    const res = await request(app).get("/terrain/bundles/lake-ray-roberts/status");
+    const res = await request(app).get("/terrain/bundles/lake-ray-roberts/status").set("x-e2e-user-id", "bypass-user");
     expect(res.status).toBe(404);
   });
 
@@ -233,7 +239,7 @@ describe("GET /terrain/bundles/:presetId/status", () => {
       completedAt: null,
     }]));
 
-    const res = await request(app).get("/terrain/bundles/lake-ray-roberts/status");
+    const res = await request(app).get("/terrain/bundles/lake-ray-roberts/status").set("x-e2e-user-id", "bypass-user");
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ jobId: "job-1", status: "running" });
   });
@@ -247,7 +253,7 @@ describe("GET /terrain/bundles/:presetId", () => {
 
   it("404 when no job", async () => {
     mockSelect.mockReturnValue(makeChain([]));
-    const res = await request(app).get("/terrain/bundles/lake-ray-roberts");
+    const res = await request(app).get("/terrain/bundles/lake-ray-roberts").set("x-e2e-user-id", "bypass-user");
     expect(res.status).toBe(404);
   });
 
@@ -259,7 +265,7 @@ describe("GET /terrain/bundles/:presetId", () => {
       errorMessage: null,
     }]));
 
-    const res = await request(app).get("/terrain/bundles/lake-ray-roberts");
+    const res = await request(app).get("/terrain/bundles/lake-ray-roberts").set("x-e2e-user-id", "bypass-user");
     expect(res.status).toBe(202);
     expect(res.body).toMatchObject({ status: "pending" });
   });
@@ -275,7 +281,7 @@ describe("GET /terrain/bundles/:presetId", () => {
     const bundleJson = JSON.stringify({ depths: [], label: "Test" });
     mockFileDownload.mockResolvedValue([Buffer.from(bundleJson)]);
 
-    const res = await request(app).get("/terrain/bundles/lake-ray-roberts");
+    const res = await request(app).get("/terrain/bundles/lake-ray-roberts").set("x-e2e-user-id", "bypass-user");
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ label: "Test" });
   });

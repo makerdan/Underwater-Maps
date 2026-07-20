@@ -23,6 +23,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 // are in the Temporal Dead Zone (TDZ) when getState() is called during module
 // initialization (uiStore.ts:608 → settingsState()). vi.hoisted() runs first.
 
+vi.mock("@/lib/context", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/context")>();
+  return { ...actual, useAppState: () => ({ terrain: null }) };
+});
+
 const h = vi.hoisted(() => {
   let currentsEnabled = true;
   let advancedCollapsed = true;

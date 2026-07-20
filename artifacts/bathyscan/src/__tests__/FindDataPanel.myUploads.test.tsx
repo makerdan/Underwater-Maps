@@ -173,6 +173,7 @@ vi.mock("@/lib/context", () => ({
   useAppState: () => ({
     datasetId: null,
     setDatasetId: vi.fn(),
+    setCatalogSourcedAt: vi.fn(),
     setPendingExternalUserDatasetId: mocks.setPendingExternalUserDatasetId,
   }),
 }));

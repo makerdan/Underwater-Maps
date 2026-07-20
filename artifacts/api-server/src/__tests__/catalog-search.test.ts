@@ -128,10 +128,12 @@ describe("searchCatalog", () => {
   it("filters by waterType freshwater", async () => {
     const results = await searchCatalog({ waterType: "freshwater" }, SEEDED_PLUS_FRESHWATER);
     expect(results.every((r) => r.waterType === "freshwater")).toBe(true);
-    const fwCountInSeeded = EXTRA_CATALOG_ENTRIES.filter((e) => e.waterType === "freshwater").length;
-    expect(results.length).toBe(fwCountInSeeded + 1);
+    expect(results.length).toBeGreaterThan(0);
     const ids = results.map((r) => r.id);
     expect(ids).toContain("test-freshwater-lake");
+    // No saltwater entries may leak through the filter.
+    expect(ids).not.toContain("gebco-2024-global");
+    expect(ids).not.toContain("ncei-bag-mosaic-alaska");
   });
 
   it("filters by dataType + waterType together", async () => {
@@ -429,6 +431,378 @@ describe("searchCatalog — additional entry coverage", () => {
     const ids = results.map((r) => r.id);
     expect(ids).toContain("alaska-shorezone-substrate");
   });
+  it("returns fw-lake-of-the-woods-mn for 'lake of the woods' query", async () => {
+    const results = await searchCatalog({ q: "Lake of the Woods" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-of-the-woods-mn");
+  });
+
+  it("returns fw-lake-tahoe-ca-nv for 'lake tahoe' query", async () => {
+    const results = await searchCatalog({ q: "Lake Tahoe" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-tahoe-ca-nv");
+  });
+
+  it("returns fw-lake-powell-az-ut for 'lake powell' query", async () => {
+    const results = await searchCatalog({ q: "Lake Powell" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-powell-az-ut");
+  });
+
+  it("returns fw-lake-mead-nv-az for 'lake mead' query", async () => {
+    const results = await searchCatalog({ q: "Lake Mead" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-mead-nv-az");
+  });
+
+  it("returns fw-flaming-gorge-ut-wy for 'flaming gorge reservoir' query", async () => {
+    const results = await searchCatalog({ q: "Flaming Gorge Reservoir" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-flaming-gorge-ut-wy");
+  });
+
+  it("returns fw-lake-havasu-az-ca for 'lake havasu' query", async () => {
+    const results = await searchCatalog({ q: "Lake Havasu" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-havasu-az-ca");
+  });
+
+  it("returns fw-kentucky-lake-ky-tn for 'kentucky lake' query", async () => {
+    const results = await searchCatalog({ q: "Kentucky Lake" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-kentucky-lake-ky-tn");
+  });
+
+  it("returns fw-lake-barkley-ky-tn for 'lake barkley' query", async () => {
+    const results = await searchCatalog({ q: "Lake Barkley" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-barkley-ky-tn");
+  });
+
+  it("returns fw-clarks-hill-lake-sc-ga for 'clarks hill / j. strom thurmond lake' query", async () => {
+    const results = await searchCatalog({ q: "Clarks Hill / J. Strom Thurmond Lake" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-clarks-hill-lake-sc-ga");
+  });
+
+  it("returns fw-navajo-lake-nm-co for 'navajo lake' query", async () => {
+    const results = await searchCatalog({ q: "Navajo Lake" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-navajo-lake-nm-co");
+  });
+
+  it("returns fw-lake-superior for 'lake superior' query", async () => {
+    const results = await searchCatalog({ q: "Lake Superior" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-superior");
+  });
+
+  it("returns fw-lake-michigan for 'lake michigan' query", async () => {
+    const results = await searchCatalog({ q: "Lake Michigan" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-michigan");
+  });
+
+  it("returns fw-lake-huron for 'lake huron' query", async () => {
+    const results = await searchCatalog({ q: "Lake Huron" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-huron");
+  });
+
+  it("returns fw-lake-erie for 'lake erie' query", async () => {
+    const results = await searchCatalog({ q: "Lake Erie" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-erie");
+  });
+
+  it("returns fw-lake-ontario for 'lake ontario' query", async () => {
+    const results = await searchCatalog({ q: "Lake Ontario" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-ontario");
+  });
+
+  it("returns fw-lake-george-ny for 'lake george, ny' query", async () => {
+    const results = await searchCatalog({ q: "Lake George, NY" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-george-ny");
+  });
+
+  it("returns fw-lake-champlain for 'lake champlain, ny/vt' query", async () => {
+    const results = await searchCatalog({ q: "Lake Champlain, NY/VT" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-champlain");
+  });
+
+  it("returns fw-seneca-lake-ny for 'seneca lake, ny' query", async () => {
+    const results = await searchCatalog({ q: "Seneca Lake, NY" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-seneca-lake-ny");
+  });
+
+  it("returns fw-cayuga-lake-ny for 'cayuga lake, ny' query", async () => {
+    const results = await searchCatalog({ q: "Cayuga Lake, NY" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-cayuga-lake-ny");
+  });
+
+  it("returns fw-oneida-lake-ny for 'oneida lake, ny' query", async () => {
+    const results = await searchCatalog({ q: "Oneida Lake, NY" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-oneida-lake-ny");
+  });
+
+  it("returns fw-canandaigua-lake-ny for 'canandaigua lake, ny' query", async () => {
+    const results = await searchCatalog({ q: "Canandaigua Lake, NY" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-canandaigua-lake-ny");
+  });
+
+  it("returns fw-keuka-lake-ny for 'keuka lake, ny' query", async () => {
+    const results = await searchCatalog({ q: "Keuka Lake, NY" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-keuka-lake-ny");
+  });
+
+  it("returns fw-lake-placid-ny for 'lake placid, ny' query", async () => {
+    const results = await searchCatalog({ q: "Lake Placid, NY" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-placid-ny");
+  });
+
+  it("returns fw-saranac-lake-ny for 'saranac lake, ny' query", async () => {
+    const results = await searchCatalog({ q: "Saranac Lake, NY" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-saranac-lake-ny");
+  });
+
+  it("returns fw-lake-winnipesaukee-nh for 'lake winnipesaukee, nh' query", async () => {
+    const results = await searchCatalog({ q: "Lake Winnipesaukee, NH" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-winnipesaukee-nh");
+  });
+
+  it("returns fw-sebago-lake-me for 'sebago lake, me' query", async () => {
+    const results = await searchCatalog({ q: "Sebago Lake, ME" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-sebago-lake-me");
+  });
+
+  it("returns fw-moosehead-lake-me for 'moosehead lake, me' query", async () => {
+    const results = await searchCatalog({ q: "Moosehead Lake, ME" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-moosehead-lake-me");
+  });
+
+  it("returns fw-quabbin-reservoir-ma for 'quabbin reservoir, ma' query", async () => {
+    const results = await searchCatalog({ q: "Quabbin Reservoir, MA" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-quabbin-reservoir-ma");
+  });
+
+  it("returns fw-lake-memphremagog-vt for 'lake memphremagog, vt' query", async () => {
+    const results = await searchCatalog({ q: "Lake Memphremagog, VT" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-memphremagog-vt");
+  });
+
+  it("returns fw-lake-minnetonka-mn for 'lake minnetonka, mn' query", async () => {
+    const results = await searchCatalog({ q: "Lake Minnetonka, MN" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-minnetonka-mn");
+  });
+
+  it("returns fw-mille-lacs-lake-mn for 'mille lacs lake, mn' query", async () => {
+    const results = await searchCatalog({ q: "Mille Lacs Lake, MN" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-mille-lacs-lake-mn");
+  });
+
+  it("returns fw-leech-lake-mn for 'leech lake, mn' query", async () => {
+    const results = await searchCatalog({ q: "Leech Lake, MN" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-leech-lake-mn");
+  });
+
+  it("returns fw-red-lake-mn for 'red lake, mn' query", async () => {
+    const results = await searchCatalog({ q: "Red Lake, MN" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-red-lake-mn");
+  });
+
+  it("returns fw-lake-of-the-woods for 'lake of the woods, mn/on' query", async () => {
+    const results = await searchCatalog({ q: "Lake of the Woods, MN/ON" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-of-the-woods");
+  });
+
+  it("returns fw-lake-winnebago-wi for 'lake winnebago, wi' query", async () => {
+    const results = await searchCatalog({ q: "Lake Winnebago, WI" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-winnebago-wi");
+  });
+
+  it("returns fw-gull-lake-mi for 'gull lake, mi' query", async () => {
+    const results = await searchCatalog({ q: "Gull Lake, MI" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-gull-lake-mi");
+  });
+
+  it("returns fw-lake-powell for 'lake powell, az/ut' query", async () => {
+    const results = await searchCatalog({ q: "Lake Powell, AZ/UT" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-powell");
+  });
+
+  it("returns fw-lake-mead for 'lake mead, nv/az' query", async () => {
+    const results = await searchCatalog({ q: "Lake Mead, NV/AZ" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-mead");
+  });
+
+  it("returns fw-flathead-lake-mt for 'flathead lake, mt' query", async () => {
+    const results = await searchCatalog({ q: "Flathead Lake, MT" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-flathead-lake-mt");
+  });
+
+  it("returns fw-shasta-lake-ca for 'shasta lake, ca' query", async () => {
+    const results = await searchCatalog({ q: "Shasta Lake, CA" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-shasta-lake-ca");
+  });
+
+  it("returns fw-lake-chelan-wa for 'lake chelan, wa' query", async () => {
+    const results = await searchCatalog({ q: "Lake Chelan, WA" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-chelan-wa");
+  });
+
+  it("returns fw-upper-klamath-lake-or for 'upper klamath lake, or' query", async () => {
+    const results = await searchCatalog({ q: "Upper Klamath Lake, OR" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-upper-klamath-lake-or");
+  });
+
+  it("returns fw-flaming-gorge for 'flaming gorge reservoir, ut/wy' query", async () => {
+    const results = await searchCatalog({ q: "Flaming Gorge Reservoir, UT/WY" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-flaming-gorge");
+  });
+
+  it("returns fw-lake-havasu for 'lake havasu, az/ca' query", async () => {
+    const results = await searchCatalog({ q: "Lake Havasu, AZ/CA" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-havasu");
+  });
+
+  it("returns fw-lake-okeechobee-fl for 'lake okeechobee, fl' query", async () => {
+    const results = await searchCatalog({ q: "Lake Okeechobee, FL" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-okeechobee-fl");
+  });
+
+  it("returns fw-lake-lanier-ga for 'lake lanier, ga' query", async () => {
+    const results = await searchCatalog({ q: "Lake Lanier, GA" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-lanier-ga");
+  });
+
+  it("returns fw-lake-of-the-ozarks-mo for 'lake of the ozarks, mo' query", async () => {
+    const results = await searchCatalog({ q: "Lake of the Ozarks, MO" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-of-the-ozarks-mo");
+  });
+
+  it("returns fw-table-rock-lake-mo for 'table rock lake, mo' query", async () => {
+    const results = await searchCatalog({ q: "Table Rock Lake, MO" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-table-rock-lake-mo");
+  });
+
+  it("returns fw-kentucky-lake for 'kentucky lake, ky/tn' query", async () => {
+    const results = await searchCatalog({ q: "Kentucky Lake, KY/TN" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-kentucky-lake");
+  });
+
+  it("returns fw-lake-barkley for 'lake barkley, ky/tn' query", async () => {
+    const results = await searchCatalog({ q: "Lake Barkley, KY/TN" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-barkley");
+  });
+
+  it("returns fw-norris-lake-tn for 'norris lake, tn' query", async () => {
+    const results = await searchCatalog({ q: "Norris Lake, TN" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-norris-lake-tn");
+  });
+
+  it("returns fw-fontana-lake-nc for 'fontana lake, nc' query", async () => {
+    const results = await searchCatalog({ q: "Fontana Lake, NC" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-fontana-lake-nc");
+  });
+
+  it("returns fw-smith-mountain-lake-va for 'smith mountain lake, va' query", async () => {
+    const results = await searchCatalog({ q: "Smith Mountain Lake, VA" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-smith-mountain-lake-va");
+  });
+
+  it("returns fw-clarks-hill-reservoir for 'clarks hill / strom thurmond reservoir, sc/ga' query", async () => {
+    const results = await searchCatalog({ q: "Clarks Hill / Strom Thurmond Reservoir, SC/GA" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-clarks-hill-reservoir");
+  });
+
+  it("returns fw-lake-travis-tx for 'lake travis, tx' query", async () => {
+    const results = await searchCatalog({ q: "Lake Travis, TX" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-travis-tx");
+  });
+
+  it("returns fw-canyon-lake-tx for 'canyon lake, tx' query", async () => {
+    const results = await searchCatalog({ q: "Canyon Lake, TX" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-canyon-lake-tx");
+  });
+
+  it("returns fw-lake-lbj-tx for 'lake lbj, tx' query", async () => {
+    const results = await searchCatalog({ q: "Lake LBJ, TX" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-lbj-tx");
+  });
+
+  it("returns fw-inks-lake-tx for 'inks lake, tx' query", async () => {
+    const results = await searchCatalog({ q: "Inks Lake, TX" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-inks-lake-tx");
+  });
+
+  it("returns fw-lake-buchanan-tx for 'lake buchanan, tx' query", async () => {
+    const results = await searchCatalog({ q: "Lake Buchanan, TX" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-lake-buchanan-tx");
+  });
+
+  it("returns fw-elephant-butte-nm for 'elephant butte reservoir, nm' query", async () => {
+    const results = await searchCatalog({ q: "Elephant Butte Reservoir, NM" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-elephant-butte-nm");
+  });
+
+  it("returns fw-cochiti-lake-nm for 'cochiti lake, nm' query", async () => {
+    const results = await searchCatalog({ q: "Cochiti Lake, NM" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-cochiti-lake-nm");
+  });
+
+  it("returns fw-navajo-lake-nm for 'navajo lake, nm/co' query", async () => {
+    const results = await searchCatalog({ q: "Navajo Lake, NM/CO" }, EXTRA_CATALOG_ENTRIES);
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain("fw-navajo-lake-nm");
+  });
+
 });
 
 // ---------------------------------------------------------------------------

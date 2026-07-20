@@ -383,7 +383,7 @@ describe("useWhatsHere — only habitat overlay active", () => {
     setHabitatSpecies("rockfish");
     const scores = new Float32Array(16).fill(0.75);
     act(() => {
-      useHabitatStore.setState({ activeSpecies: "rockfish", scores, hotspots: [] });
+      useHabitatStore.setState({ activeSpecies: "rockfish", scores: { status: "done", data: scores } as never, hotspots: [] });
     });
 
     const { result } = renderHook(
@@ -475,7 +475,7 @@ describe("useWhatsHere — null safety", () => {
     setHabitatSpecies("rockfish");
     const scores = new Float32Array(16).fill(0.8);
     act(() => {
-      useHabitatStore.setState({ activeSpecies: "rockfish", scores, hotspots: [] });
+      useHabitatStore.setState({ activeSpecies: "rockfish", scores: { status: "done", data: scores } as never, hotspots: [] });
     });
 
     const badTerrain = { ...TERRAIN, resolution: 0 };

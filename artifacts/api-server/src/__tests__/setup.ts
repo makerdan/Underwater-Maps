@@ -64,10 +64,15 @@ beforeEach(async () => {
   // this setupFile would load it before vi.mock(), causing rateLimit.ts to
   // capture the real @workspace/db pool and break mock interception for tests
   // that mock @workspace/db.
-  const { __resetRateLimitMemory } = await import(
-    "../middlewares/rateLimit.js"
-  );
-  __resetRateLimitMemory();
+  // Some test files vi.mock() rateLimit.js without stubbing this test-only
+  // export; accessing a missing export on a mocked module throws, so tolerate
+  // that case — a fully mocked rateLimit module has no real buckets to reset.
+  try {
+    const mod = await import("../middlewares/rateLimit.js");
+    mod.__resetRateLimitMemory();
+  } catch {
+    // rateLimit.js is mocked without __resetRateLimitMemory — nothing to reset.
+  }
 });
 
 // Force a major GC cycle after every test file completes.
