@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { db, gpsTrailsTable, gpsTrailPointsTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { createRateLimit } from "../middlewares/rateLimit.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { z } from "zod";
@@ -79,7 +80,7 @@ router.get("/trails", requireAuth, asyncHandler(async (req, res): Promise<void> 
 // ---------------------------------------------------------------------------
 // POST /trails
 // ---------------------------------------------------------------------------
-router.post("/trails", trailUploadRateLimit, requireAuth, validateBody(PostTrailBodySchema, "POST /api/trails"), asyncHandler(async (req, res): Promise<void> => {
+router.post("/trails", trailUploadRateLimit, requireAuth, dataMutationRateLimit, validateBody(PostTrailBodySchema, "POST /api/trails"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const { datasetId, name, colour, startedAt, endedAt, points } = res.locals.parsedBody;
 
@@ -130,7 +131,7 @@ router.post("/trails", trailUploadRateLimit, requireAuth, validateBody(PostTrail
 // ---------------------------------------------------------------------------
 // DELETE /trails/:id
 // ---------------------------------------------------------------------------
-router.delete("/trails/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.delete("/trails/:id", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const parsed = TrailIdParamSchema.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid trail id" });

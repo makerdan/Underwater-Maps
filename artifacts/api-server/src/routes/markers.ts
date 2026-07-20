@@ -7,7 +7,7 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
-import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
+import { dataMutationRateLimit, bulkDeleteMarkersRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const LABEL_MAX = 200;
 const NOTES_MAX = 2000;
@@ -131,7 +131,7 @@ router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMar
   res.status(201).json(created);
 }));
 
-router.delete("/markers/mine", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
+router.delete("/markers/mine", requireAuth, bulkDeleteMarkersRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const deleted = await db
     .delete(markersTable)

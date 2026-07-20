@@ -108,6 +108,9 @@ import {
   SETTINGS_MUTATION_ROUTE,
   SETTINGS_MUTATION_WINDOW_MS,
   SETTINGS_MUTATION_MAX,
+  BULK_DELETE_MARKERS_ROUTE,
+  BULK_DELETE_MARKERS_WINDOW_MS,
+  BULK_DELETE_MARKERS_MAX,
 } from "../../middlewares/dataMutationRateLimit.js";
 
 beforeEach(() => {
@@ -329,6 +332,182 @@ describe("POST /api/datasets/catalog/:id/save — per-user rate limit (120/min)"
 
     const res = await request(app)
       .post("/api/datasets/catalog/preset-glba_main/save")
+      .set("x-e2e-user-id", USER);
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(res.headers["retry-after"]).toBeDefined();
+  });
+});
+
+// ── bulk-delete cap ────────────────────────────────────────────────────────────
+
+function bulkDeleteKey(userId: string): string {
+  return `u:${BULK_DELETE_MARKERS_ROUTE}:${userId}`;
+}
+
+describe("DELETE /api/markers/mine — separate lower rate limit (5/min)", () => {
+  const USER = "user_bulk_delete_rl_test";
+
+  it("allows request when under the bulk-delete cap", async () => {
+    const res = await request(app)
+      .delete("/api/markers/mine")
+      .set("x-e2e-user-id", USER);
+
+    expect(res.status).not.toBe(429);
+    expect(res.headers["x-ratelimit-limit"]).toBe(String(BULK_DELETE_MARKERS_MAX));
+    expect(res.headers["x-ratelimit-remaining"]).toBeDefined();
+  });
+
+  it("returns 429 when the bulk-delete cap is exhausted", async () => {
+    __prefillRateLimitMemory(
+      bulkDeleteKey(USER),
+      BULK_DELETE_MARKERS_MAX,
+      BULK_DELETE_MARKERS_WINDOW_MS,
+    );
+
+    const res = await request(app)
+      .delete("/api/markers/mine")
+      .set("x-e2e-user-id", USER);
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(res.headers["retry-after"]).toBeDefined();
+    expect(res.headers["x-ratelimit-remaining"]).toBe("0");
+  });
+
+  it("bulk-delete limit is independent of the general data-mutation limit", async () => {
+    // Exhaust the bulk-delete bucket only — general mutations should still pass.
+    __prefillRateLimitMemory(
+      bulkDeleteKey(USER),
+      BULK_DELETE_MARKERS_MAX,
+      BULK_DELETE_MARKERS_WINDOW_MS,
+    );
+
+    const bulkBlocked = await request(app)
+      .delete("/api/markers/mine")
+      .set("x-e2e-user-id", USER);
+    expect(bulkBlocked.status).toBe(429);
+
+    // A regular POST /api/markers should still be allowed for the same user.
+    const markerOk = await request(app)
+      .post("/api/markers")
+      .set("x-e2e-user-id", USER)
+      .send({ lon: -136.0, lat: 58.5, depth: 50, label: "Test", type: "custom" });
+    expect(markerOk.status).not.toBe(429);
+  });
+});
+
+// ── GPS trail mutations ────────────────────────────────────────────────────────
+
+describe("DELETE /api/trails/:id — per-user rate limit (120/min)", () => {
+  const USER = "user_trail_delete_rl_test";
+  const TRAIL_ID = "00000000-0000-0000-0000-000000000002";
+
+  it("returns 429 when the per-user limit is exhausted", async () => {
+    __prefillRateLimitMemory(userKey(USER), DATA_MUTATION_MAX, DATA_MUTATION_WINDOW_MS);
+
+    const res = await request(app)
+      .delete(`/api/trails/${TRAIL_ID}`)
+      .set("x-e2e-user-id", USER);
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(res.headers["retry-after"]).toBeDefined();
+    expect(res.headers["x-ratelimit-remaining"]).toBe("0");
+  });
+
+  it("allows request when under the limit and sets X-RateLimit headers", async () => {
+    const res = await request(app)
+      .delete(`/api/trails/${TRAIL_ID}`)
+      .set("x-e2e-user-id", USER);
+
+    expect(res.status).not.toBe(429);
+    expect(res.headers["x-ratelimit-limit"]).toBe(String(DATA_MUTATION_MAX));
+  });
+});
+
+// ── trolling-preset mutations ──────────────────────────────────────────────────
+
+describe("POST /api/trolling-presets — per-user rate limit (120/min)", () => {
+  const USER = "user_trolling_post_rl_test";
+
+  it("returns 429 when the per-user limit is exhausted", async () => {
+    __prefillRateLimitMemory(userKey(USER), DATA_MUTATION_MAX, DATA_MUTATION_WINDOW_MS);
+
+    const res = await request(app)
+      .post("/api/trolling-presets")
+      .set("x-e2e-user-id", USER)
+      .send({ name: "My Preset", headingDeg: 90, speedKnots: 2.5 });
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(res.headers["retry-after"]).toBeDefined();
+  });
+});
+
+describe("PATCH /api/trolling-presets/:id — per-user rate limit (120/min)", () => {
+  const USER = "user_trolling_patch_rl_test";
+  const PRESET_ID = "00000000-0000-0000-0000-000000000003";
+
+  it("returns 429 when the per-user limit is exhausted", async () => {
+    __prefillRateLimitMemory(userKey(USER), DATA_MUTATION_MAX, DATA_MUTATION_WINDOW_MS);
+
+    const res = await request(app)
+      .patch(`/api/trolling-presets/${PRESET_ID}`)
+      .set("x-e2e-user-id", USER)
+      .send({ name: "Updated Name" });
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(res.headers["retry-after"]).toBeDefined();
+  });
+});
+
+describe("DELETE /api/trolling-presets/:id — per-user rate limit (120/min)", () => {
+  const USER = "user_trolling_delete_rl_test";
+  const PRESET_ID = "00000000-0000-0000-0000-000000000004";
+
+  it("returns 429 when the per-user limit is exhausted", async () => {
+    __prefillRateLimitMemory(userKey(USER), DATA_MUTATION_MAX, DATA_MUTATION_WINDOW_MS);
+
+    const res = await request(app)
+      .delete(`/api/trolling-presets/${PRESET_ID}`)
+      .set("x-e2e-user-id", USER);
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(res.headers["retry-after"]).toBeDefined();
+  });
+});
+
+// ── trolling-preset-folder mutations ──────────────────────────────────────────
+
+describe("POST /api/trolling-preset-folders — per-user rate limit (120/min)", () => {
+  const USER = "user_tpf_post_rl_test";
+
+  it("returns 429 when the per-user limit is exhausted", async () => {
+    __prefillRateLimitMemory(userKey(USER), DATA_MUTATION_MAX, DATA_MUTATION_WINDOW_MS);
+
+    const res = await request(app)
+      .post("/api/trolling-preset-folders")
+      .set("x-e2e-user-id", USER)
+      .send({ name: "My Folder" });
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(res.headers["retry-after"]).toBeDefined();
+  });
+});
+
+describe("DELETE /api/trolling-preset-folders/:id — per-user rate limit (120/min)", () => {
+  const USER = "user_tpf_delete_rl_test";
+
+  it("returns 429 when the per-user limit is exhausted", async () => {
+    __prefillRateLimitMemory(userKey(USER), DATA_MUTATION_MAX, DATA_MUTATION_WINDOW_MS);
+
+    const res = await request(app)
+      .delete("/api/trolling-preset-folders/some-folder-id")
       .set("x-e2e-user-id", USER);
 
     expect(res.status).toBe(429);

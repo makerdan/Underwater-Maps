@@ -1,9 +1,14 @@
 /**
  * trails-rate-limit.test.ts
  *
- * Verifies that POST /api/trails enforces the IP-based rate limit of 10
- * requests per minute. Uses the in-memory rate-limit backend so the test is
- * hermetic (no Postgres required).
+ * Verifies that POST /api/trails enforces its stacked rate limits:
+ *   - IP-based limit: 10 requests per minute per IP (trailUploadRateLimit)
+ *   - User-based limit: 120 mutations per minute per user (dataMutationRateLimit)
+ *
+ * Both limiters run in series. Because the user-based limit is applied last
+ * (after requireAuth resolves the userId), the X-RateLimit-* headers on allowed
+ * responses reflect the user-based limit (120). The IP limit still blocks
+ * requests before the user limit is reached.
  *
  * Performance note: instead of exhausting the quota by sending max-1 real HTTP
  * requests, __prefillRateLimitMemory() pre-loads the in-memory bucket with the
@@ -60,6 +65,11 @@ import {
   __resetRateLimitMemory,
   __prefillRateLimitMemory,
 } from "../../middlewares/rateLimit.js";
+import {
+  DATA_MUTATION_MAX,
+  DATA_MUTATION_WINDOW_MS,
+  DATA_MUTATION_ROUTE,
+} from "../../middlewares/dataMutationRateLimit.js";
 
 // Route + window constants matching the production createRateLimit() call
 // in routes/trails.ts.
@@ -136,15 +146,34 @@ describe("POST /api/trails — IP rate limit (10 req / min)", () => {
     expect(freshRes.status).not.toBe(429);
   });
 
-  it("sets X-RateLimit-* headers on allowed requests", async () => {
+  it("sets X-RateLimit-* headers on allowed requests (user-based limit reflected last)", async () => {
     const res = await request(app)
       .post("/api/trails")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", "203.0.113.50")
       .send(VALID_TRAIL_BODY);
 
-    expect(res.headers["x-ratelimit-limit"]).toBe("10");
+    // POST /api/trails stacks two rate limiters: IP (10/min) and user (120/min).
+    // The user-based dataMutationRateLimit runs after requireAuth, so its headers
+    // overwrite the IP headers on allowed responses. The IP limit is still enforced
+    // (see the 429 test above) — it just doesn't show in the response headers when
+    // the user limit is what ultimately set them.
+    expect(res.headers["x-ratelimit-limit"]).toBe(String(DATA_MUTATION_MAX));
     expect(res.headers["x-ratelimit-remaining"]).toBeDefined();
     expect(res.headers["x-ratelimit-reset"]).toBeDefined();
+  });
+
+  it("user-based limit is also enforced on POST /api/trails", async () => {
+    const userKey = `u:${DATA_MUTATION_ROUTE}:${E2E_USER}`;
+    __prefillRateLimitMemory(userKey, DATA_MUTATION_MAX, DATA_MUTATION_WINDOW_MS);
+
+    const res = await request(app)
+      .post("/api/trails")
+      .set("x-e2e-user-id", E2E_USER)
+      .set("x-forwarded-for", "203.0.113.51")
+      .send(VALID_TRAIL_BODY);
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
   });
 });

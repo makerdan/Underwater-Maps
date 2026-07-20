@@ -9,6 +9,7 @@ import {
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.get("/trolling-presets", requireAuth, asyncHandler(async (req, res): Prom
   res.json(rows);
 }));
 
-router.post("/trolling-presets", requireAuth, validateBody(PostTrollingPresetsBody, "POST /api/trolling-presets"), asyncHandler(async (req, res): Promise<void> => {
+router.post("/trolling-presets", requireAuth, dataMutationRateLimit, validateBody(PostTrollingPresetsBody, "POST /api/trolling-presets"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const { name, headingDeg, speedKnots, startLat, startLon, waypoints, folderId } = res.locals.parsedBody;
 
@@ -59,7 +60,7 @@ router.post("/trolling-presets", requireAuth, validateBody(PostTrollingPresetsBo
   res.status(201).json(created);
 }));
 
-router.patch("/trolling-presets/:id", requireAuth, validateBody(PatchTrollingPresetsIdBody, "PATCH /api/trolling-presets/:id"), asyncHandler(async (req, res): Promise<void> => {
+router.patch("/trolling-presets/:id", requireAuth, dataMutationRateLimit, validateBody(PatchTrollingPresetsIdBody, "PATCH /api/trolling-presets/:id"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
@@ -104,7 +105,7 @@ router.patch("/trolling-presets/:id", requireAuth, validateBody(PatchTrollingPre
   res.json(updated);
 }));
 
-router.delete("/trolling-presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.delete("/trolling-presets/:id", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const parsed = DeleteTrollingPresetsIdParams.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_request", details: "Invalid preset id" });

@@ -5,6 +5,7 @@ import { startBucketMonitor } from "./lib/bucketMonitor.js";
 import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
 import { startUploadCleanupJob } from "./lib/uploadCleanupJob.js";
 import { startOrphanedPhotosCleanupJob } from "./lib/orphanedPhotosCleanupJob.js";
+import { startRateLimitPruneJob } from "./lib/rateLimitPruneJob.js";
 import { recoverStaleUploadJobs, cleanupStaleChunks, loadCalibrationFromDb } from "./routes/datasets.js";
 import type * as http from "http";
 
@@ -56,6 +57,7 @@ const SIGTERM_DRAIN_MS = 10_000;
 let activeServer: http.Server | null = null;
 let stopUploadCleanupJob: (() => void) | null = null;
 let stopOrphanedPhotosCleanupJob: (() => void) | null = null;
+let stopRateLimitPruneJob: (() => void) | null = null;
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown on SIGTERM
@@ -69,6 +71,7 @@ process.on("SIGTERM", () => {
     logger.warn("SIGTERM received but no active server — exiting immediately");
     stopUploadCleanupJob?.();
     stopOrphanedPhotosCleanupJob?.();
+    stopRateLimitPruneJob?.();
     process.exit(0);
     return;
   }
@@ -83,6 +86,7 @@ process.on("SIGTERM", () => {
   // where an interval fires after the DB connection pool starts tearing down.
   stopUploadCleanupJob?.();
   stopOrphanedPhotosCleanupJob?.();
+  stopRateLimitPruneJob?.();
 
   // Stop accepting new connections. Close idle keep-alive sockets immediately
   // so the drain window doesn't stall waiting for them to time out naturally.
@@ -211,6 +215,16 @@ function startServer(port: number): void {
       stopOrphanedPhotosCleanupJob = startOrphanedPhotosCleanupJob();
     } catch (err) {
       logger.error({ err }, "[startup] startOrphanedPhotosCleanupJob failed");
+    }
+
+    // Start the rate-limit prune job — deletes rate_limit_events rows older
+    // than 5 minutes from the Postgres store on a fixed 5-minute interval.
+    // The inline CTE in consume() handles active-key pruning; this job covers
+    // keys with infrequent traffic so the table never grows unbounded.
+    try {
+      stopRateLimitPruneJob = startRateLimitPruneJob();
+    } catch (err) {
+      logger.error({ err }, "[startup] startRateLimitPruneJob failed");
     }
   });
 }

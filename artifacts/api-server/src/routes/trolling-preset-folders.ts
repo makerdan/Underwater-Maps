@@ -15,6 +15,7 @@ import {
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const router = Router();
 
@@ -43,7 +44,7 @@ router.get("/trolling-preset-folders", requireAuth, asyncHandler(async (req, res
   res.json(rows.map(folderToJson));
 }));
 
-router.post("/trolling-preset-folders", requireAuth, validateBody(PostTrollingPresetFoldersBody, "POST /api/trolling-preset-folders"), asyncHandler(async (req, res) => {
+router.post("/trolling-preset-folders", requireAuth, dataMutationRateLimit, validateBody(PostTrollingPresetFoldersBody, "POST /api/trolling-preset-folders"), asyncHandler(async (req, res) => {
   const { name: rawName } = res.locals.parsedBody;
   const name = trimName(rawName);
   if (!name) {
@@ -74,7 +75,7 @@ router.post("/trolling-preset-folders", requireAuth, validateBody(PostTrollingPr
   res.status(201).json(folderToJson(created));
 }));
 
-router.patch("/trolling-preset-folders/:id", requireAuth, validateBody(PatchTrollingPresetFoldersIdBody, "PATCH /api/trolling-preset-folders/:id"), asyncHandler(async (req, res) => {
+router.patch("/trolling-preset-folders/:id", requireAuth, dataMutationRateLimit, validateBody(PatchTrollingPresetFoldersIdBody, "PATCH /api/trolling-preset-folders/:id"), asyncHandler(async (req, res) => {
   const { name: rawName } = res.locals.parsedBody;
   const name = trimName(rawName);
   if (!name) {
@@ -117,7 +118,7 @@ router.patch("/trolling-preset-folders/:id", requireAuth, validateBody(PatchTrol
   res.json(folderToJson(updated));
 }));
 
-router.delete("/trolling-preset-folders/:id", requireAuth, asyncHandler(async (req, res) => {
+router.delete("/trolling-preset-folders/:id", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res) => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
   // FK onDelete:set null in the trolling_presets table moves any presets in

@@ -162,6 +162,27 @@ export function __resetRateLimitMemory(): void {
 }
 
 /**
+ * Test-only hook: sweep timestamps older than maxAgeMs from all in-memory
+ * buckets, mirroring what the Postgres prune job does for the durable store.
+ * Returns the number of timestamps removed.
+ */
+export function __pruneMemoryBackend(maxAgeMs: number): number {
+  const cutoff = Date.now() - maxAgeMs;
+  let swept = 0;
+  for (const [key, timestamps] of memoryBuckets.entries()) {
+    const before = timestamps.length;
+    const live = timestamps.filter((t) => t > cutoff);
+    swept += before - live.length;
+    if (live.length > 0) {
+      memoryBuckets.set(key, live);
+    } else {
+      memoryBuckets.delete(key);
+    }
+  }
+  return swept;
+}
+
+/**
  * Test-only hook: pre-fill an in-memory rate-limit bucket with `count`
  * synthetic timestamps spread evenly within the given window.
  *
@@ -265,6 +286,42 @@ const fallbackBackend: RateLimitBackend = {
     }
   },
 };
+
+// ---------------------------------------------------------------------------
+// Standalone prune — deletes all rows older than maxAgeMs from the durable
+// store. The inline CTE prunes on each consume() call, but infrequently-used
+// keys accumulate stale rows between requests. The scheduled prune job calls
+// this on a fixed interval so the table stays bounded regardless of traffic.
+// ---------------------------------------------------------------------------
+
+const PRUNE_SQL = `
+  DELETE FROM rate_limit_events
+  WHERE created_at < now() - ($1::bigint || ' milliseconds')::interval
+`;
+
+/**
+ * Delete all rate_limit_events rows older than `maxAgeMs` milliseconds.
+ *
+ * Uses the Postgres backend in production and the in-memory sweep helper in
+ * test environments (RATE_LIMIT_BACKEND=memory). Returns the number of rows /
+ * timestamps removed. Errors are caught and logged — callers never need to
+ * handle them.
+ */
+export async function pruneRateLimitEvents(maxAgeMs: number): Promise<number> {
+  if (process.env["RATE_LIMIT_BACKEND"] === "memory") {
+    return __pruneMemoryBackend(maxAgeMs);
+  }
+  try {
+    const result = await pool.query(PRUNE_SQL, [maxAgeMs]);
+    return result.rowCount ?? 0;
+  } catch (err) {
+    logger.warn(
+      { code: "rate_limit_prune_error", err: (err as Error)?.message ?? "unknown" },
+      "Rate-limit prune failed — stale rows may accumulate until next run",
+    );
+    return 0;
+  }
+}
 
 function clientIp(req: Request): string {
   // req.ip is authoritative when app.set("trust proxy", 1) is configured —
