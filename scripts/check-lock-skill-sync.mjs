@@ -207,8 +207,8 @@ function checkAnchors(source, anchors) {
 const lockSource = readScript(LOCK_SCRIPT, "scripts/validation-lock.mjs");
 const freePortsSource = readScript(FREE_PORTS_SCRIPT, "scripts/kill-port-holders.mjs");
 
-const lockFailures = checkAnchors(lockSource, LOCK_ANCHORS, "validation-lock.mjs");
-const freePortsFailures = checkAnchors(freePortsSource, FREE_PORTS_ANCHORS, "kill-port-holders.mjs");
+const lockFailures = checkAnchors(lockSource, LOCK_ANCHORS);
+const freePortsFailures = checkAnchors(freePortsSource, FREE_PORTS_ANCHORS);
 
 const totalAnchors = LOCK_ANCHORS.length + FREE_PORTS_ANCHORS.length;
 const totalFailures = lockFailures.length + freePortsFailures.length;

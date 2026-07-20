@@ -162,8 +162,9 @@ if (stepIdx !== -1) {
     console.error("Usage: run-tier.mjs --step <name>");
     process.exit(2);
   }
+  // runSingleStep() always calls process.exit(exitCode) itself and never
+  // returns, so no exit call is needed (or reachable) after it.
   runSingleStep(stepName);
-  process.exit(0);
 }
 
 // ---------------------------------------------------------------------------
