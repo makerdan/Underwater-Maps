@@ -119,6 +119,7 @@ export function buildSelectedSubstrate(
   feature: SubstrateFeature,
   sourceName: string,
   creditUrl: string,
+  fetchedAt?: string | null,
 ): import("@/lib/uiStore").SelectedSubstrate {
   const props = feature.properties;
   return {
@@ -134,6 +135,7 @@ export function buildSelectedSubstrate(
     encChart: props.encChart ?? null,
     sourceName,
     creditUrl,
+    fetchedAt: fetchedAt ?? null,
   };
 }
 
@@ -507,10 +509,11 @@ export const SubstrateLayer: React.FC = () => {
   });
 
   const meta = (collection as SubstrateFeatureCollection | undefined)?.metadata as
-    | { sourceName?: string; creditUrl?: string }
+    | { sourceName?: string; creditUrl?: string; fetchedAt?: string }
     | undefined;
   const sourceName = meta?.sourceName ?? "Alaska ShoreZone (NOAA AKR / ADF&G)";
   const creditUrl = meta?.creditUrl ?? "https://alaskafisheries.noaa.gov/shorezone/";
+  const fetchedAt = meta?.fetchedAt ?? null;
 
   // Build geometry for ALL polygon features once. hiddenSubstrateClasses is intentionally
   // excluded from the deps — visibility is toggled via mesh.visible so GPU buffers
@@ -548,9 +551,9 @@ export const SubstrateLayer: React.FC = () => {
   const handleClick = useCallback(
     (feature: SubstrateFeature) => (e: ThreeEvent<MouseEvent>) => {
       e.stopPropagation();
-      setSelectedSubstrate(buildSelectedSubstrate(feature, sourceName, creditUrl));
+      setSelectedSubstrate(buildSelectedSubstrate(feature, sourceName, creditUrl, fetchedAt));
     },
-    [setSelectedSubstrate, sourceName, creditUrl],
+    [setSelectedSubstrate, sourceName, creditUrl, fetchedAt],
   );
 
   if (!substrateColorMode || (!allPolys.length && !allPoints.length)) return null;

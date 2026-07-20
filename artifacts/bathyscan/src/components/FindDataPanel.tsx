@@ -14,6 +14,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatFreshness } from "@/lib/freshnessUtils";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -505,6 +506,11 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
           <span>· Updated {entry.lastUpdated.slice(0, 7)}</span>
         )}
       </div>
+      {formatFreshness(entry.createdAt) && (
+        <div style={{ fontSize: 11, color: "#475569", letterSpacing: "0.06em", marginBottom: 4 }}>
+          Sourced {formatFreshness(entry.createdAt)}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
         {presetId && (
@@ -602,7 +608,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
 
 const SaveCard: React.FC<{
   save: UserCatalogSave;
-  onLoadUserDataset: (userDatasetId: string) => void;
+  onLoadUserDataset: (userDatasetId: string, createdAt?: string | null) => void;
   onRetry: (saveId: string) => void;
   retrying: boolean;
   onDelete: (save: UserCatalogSave) => void;
@@ -818,7 +824,7 @@ const SaveCard: React.FC<{
       {save.status === "ready" && save.datasetId && (
         <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
           <button
-            onClick={() => onLoadUserDataset(save.datasetId!)}
+            onClick={() => onLoadUserDataset(save.datasetId!, save.catalog?.createdAt)}
             style={{
               marginTop: 8,
               fontSize: 12,
@@ -1028,7 +1034,7 @@ const SaveMoveDialog: React.FC<{
 /** Wraps a SaveCard with drag behaviour. */
 const DraggableSaveCard: React.FC<{
   save: UserCatalogSave;
-  onLoadUserDataset: (id: string) => void;
+  onLoadUserDataset: (id: string, createdAt?: string | null) => void;
   onRetry: (id: string) => void;
   retrying: boolean;
   onDelete: (save: UserCatalogSave) => void;
@@ -1529,7 +1535,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const nceiFromRef = useRef(1);
   const [nceiAccumulated, setNceiAccumulated] = useState<NceiPortalResult[]>([]);
   const prevNceiPageRef = useRef<NceiPortalResult[] | undefined>(undefined);
-  const { setDatasetId, setPendingExternalUserDatasetId, datasetId: currentDatasetId } = useAppState();
+  const { setDatasetId, setPendingExternalUserDatasetId, setCatalogSourcedAt, datasetId: currentDatasetId } = useAppState();
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
 
@@ -1559,7 +1565,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     q: debouncedQuery || undefined,
     dataType: (dataTypeFilter && dataTypeFilter !== "intertidal" ? dataTypeFilter : undefined) as GetDatasetsCatalogSearchDataType | undefined,
   };
-  const { data: rawSearchResults = [], isFetching: isSearching } = useGetDatasetsCatalogSearch(
+  const { data: rawSearchResults = [], isFetching: isSearching, dataUpdatedAt: catalogDataUpdatedAt } = useGetDatasetsCatalogSearch(
     searchParams,
     {
       query: {
@@ -1680,6 +1686,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     data: nceiPage,
     isFetching: isNceiSearching,
     error: nceiError,
+    dataUpdatedAt: nceiDataUpdatedAt,
   } = useGetNceiSearch(nceiSearchParams, {
     query: {
       queryKey: getGetNceiSearchQueryKey(nceiSearchParams),
@@ -2082,31 +2089,37 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
 
   const handleLoad = useCallback(
     (presetDatasetId: string) => {
+      const entry = searchResults.find(
+        (e) => e.id === `preset-${presetDatasetId}` || e.id === presetDatasetId,
+      );
+      const createdAt = entry?.createdAt ?? null;
       void requestDatasetSwitch({
         datasetId: presetDatasetId,
         onConfirm: () => {
           setDatasetId(presetDatasetId);
+          setCatalogSourcedAt({ forDatasetId: presetDatasetId, date: createdAt });
           onClose();
         },
       });
     },
-    [setDatasetId, onClose],
+    [setDatasetId, setCatalogSourcedAt, searchResults, onClose],
   );
 
   // Load a materialized catalog save through the unified user-datasets read
   // path. DatasetPanel listens on `pendingExternalUserDatasetId` and runs the
   // /user/datasets/:id/{terrain,overview} fetch + classification pipeline.
   const handleLoadUserDataset = useCallback(
-    (userDatasetId: string) => {
+    (userDatasetId: string, createdAt?: string | null) => {
       void requestDatasetSwitch({
         datasetId: userDatasetId,
         onConfirm: () => {
           setPendingExternalUserDatasetId(userDatasetId);
+          setCatalogSourcedAt({ forDatasetId: userDatasetId, date: createdAt ?? null });
           onClose();
         },
       });
     },
-    [setPendingExternalUserDatasetId, onClose],
+    [setPendingExternalUserDatasetId, setCatalogSourcedAt, onClose],
   );
 
   return (
@@ -2273,6 +2286,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 />
               );
             })}
+            {searchResults.length > 0 && catalogDataUpdatedAt > 0 && !isSearching && (
+              <div style={{ fontSize: 11, color: "#475569", letterSpacing: "0.06em", textAlign: "right", paddingTop: 6, paddingBottom: 2 }}>
+                Results as of {formatFreshness(catalogDataUpdatedAt)}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2715,6 +2733,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 canSave={!!isSignedIn}
               />
             ))}
+            {nceiAccumulated.length > 0 && nceiDataUpdatedAt > 0 && !isNceiSearching && (
+              <div style={{ fontSize: 11, color: "#475569", letterSpacing: "0.06em", textAlign: "right", paddingTop: 6, paddingBottom: 2 }}>
+                Results as of {formatFreshness(nceiDataUpdatedAt)}
+              </div>
+            )}
             {isNceiSearching && nceiFrom > 1 && (
               <div style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
                 Loading more…

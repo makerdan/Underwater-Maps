@@ -15,10 +15,13 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useLandTerrainStore } from "@/lib/landTerrainStore";
 import { HelpIcon } from "@/components/help/HelpButton";
+import { formatFreshness } from "@/lib/freshnessUtils";
 
 interface ProvenancePanelProps {
   terrain: TerrainData;
   hasEfh?: boolean;
+  /** ISO 8601 creation date of the catalog entry for the loaded dataset. */
+  catalogSourcedAt?: string | null;
 }
 
 type DataSource =
@@ -78,6 +81,7 @@ const SOURCE_META: Record<
 export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
   terrain,
   hasEfh,
+  catalogSourcedAt,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const zoneSource = useClassificationStore((s) => s.source);
@@ -364,6 +368,12 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
                     ? "AI-classified from depth grid"
                     : "Estimated from depth (AI unavailable)"}
                 </span>
+              </>
+            )}
+            {formatFreshness(catalogSourcedAt) && (
+              <>
+                <span style={{ color: "#cbd5e1" }}>Sourced:</span>
+                <span>{formatFreshness(catalogSourcedAt)}</span>
               </>
             )}
           </div>

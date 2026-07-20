@@ -33,6 +33,13 @@ interface AppState {
   // /user/datasets/:id/{terrain,overview} flow, then clears the value.
   pendingExternalUserDatasetId: string | null;
   setPendingExternalUserDatasetId: (id: string | null) => void;
+  /**
+   * Creation date for the most-recently loaded catalog entry, keyed by the dataset ID
+   * it came from. Only display when `forDatasetId` matches the active `terrain.datasetId`
+   * to prevent stale dates leaking across dataset switches.
+   */
+  catalogSourcedAt: { forDatasetId: string; date: string | null } | null;
+  setCatalogSourcedAt: (entry: { forDatasetId: string; date: string | null } | null) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -75,6 +82,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   });
   const [pendingExternalUserDatasetId, setPendingExternalUserDatasetId] =
     useState<string | null>(null);
+  const [catalogSourcedAt, setCatalogSourcedAt] = useState<{ forDatasetId: string; date: string | null } | null>(null);
 
   const setTidalOverlay = useCallback((b: boolean) => {
     setTidalOverlayRaw(b);
@@ -111,6 +119,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setBoatSpeedMph,
         pendingExternalUserDatasetId,
         setPendingExternalUserDatasetId,
+        catalogSourcedAt,
+        setCatalogSourcedAt,
       }}
     >
       {children}

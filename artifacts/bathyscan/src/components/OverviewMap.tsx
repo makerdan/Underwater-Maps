@@ -816,11 +816,12 @@ export const OverviewMap: React.FC = () => {
   });
 
   const substrateMeta = (substrateCollection as SubstrateFeatureCollection | undefined)
-    ?.metadata as { sourceName?: string; creditUrl?: string } | undefined;
+    ?.metadata as { sourceName?: string; creditUrl?: string; fetchedAt?: string } | undefined;
   const substrateSourceName =
     substrateMeta?.sourceName ?? "Alaska ShoreZone (NOAA AKR / ADF&G)";
   const substrateCreditUrl =
     substrateMeta?.creditUrl ?? "https://alaskafisheries.noaa.gov/shorezone/";
+  const substrateFetchedAt = substrateMeta?.fetchedAt ?? null;
   useEffect(() => {
     substrateFeaturesRef.current = substrateCollection?.features ?? [];
     dirtyRef.current = true;
@@ -1820,6 +1821,7 @@ export const OverviewMap: React.FC = () => {
             encChart: p.encChart ?? null,
             sourceName: substrateSourceName,
             creditUrl: substrateCreditUrl,
+            fetchedAt: substrateFetchedAt,
           });
           return;
         }
@@ -1955,7 +1957,7 @@ export const OverviewMap: React.FC = () => {
       canvas.removeEventListener("click", handleClick);
       canvas.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [overviewGrid, substrateCreditUrl, substrateSourceName, setDatasetId, setTerrain]);
+  }, [overviewGrid, substrateCreditUrl, substrateSourceName, substrateFetchedAt, setDatasetId, setTerrain]);
 
   // ---------------------------------------------------------------------------
   // Render

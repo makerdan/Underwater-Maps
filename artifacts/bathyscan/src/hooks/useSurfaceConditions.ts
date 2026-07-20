@@ -66,6 +66,14 @@ export interface SurfaceConditionsResult {
   isFetching: boolean;
   error: boolean;
   estimated: boolean;
+  /** Millisecond timestamp of the last successful data fetch (0 if never loaded). */
+  dataUpdatedAt: number;
+  /**
+   * ISO string of when conditions data was last fetched from the backend, or null
+   * before the first successful response. Use this for "Conditions as of …" labels;
+   * it reflects actual backend fetch time, not the synthetic active-hour timestamp.
+   */
+  fetchedAt: string | null;
   /**
    * True when a real currents data source (noaa-coops, usgs, glerl) was
    * found for this location. False when data came from the sinusoidal
@@ -155,7 +163,7 @@ export function useSurfaceConditions(
     ...(waterType ? { waterType } : {}),
   };
 
-  const { data, isLoading, isFetching, isError, refetch } = useGetSurfaceConditions(params, {
+  const { data, isLoading, isFetching, isError, refetch, dataUpdatedAt } = useGetSurfaceConditions(params, {
     query: {
       queryKey: getGetSurfaceConditionsQueryKey(params),
       enabled: enabled && centerLat !== null && centerLon !== null,
@@ -276,11 +284,13 @@ export function useSurfaceConditions(
       estimated: isManualActive ? false : estimated,
       currentsAvailable: isManualActive ? true : currentsAvailable,
       timestamp: effectiveSnapshot ? ts : null,
+      fetchedAt: dataUpdatedAt > 0 ? new Date(dataUpdatedAt).toISOString() : null,
       activeHour,
       refetch: () => { void refetch(); },
       fallback,
+      dataUpdatedAt,
     };
-  }, [data, isLoading, isFetching, isError, refetch, centerLat, centerLon,
+  }, [data, isLoading, isFetching, isError, refetch, dataUpdatedAt, centerLat, centerLon,
       manualWindSpeedKnots, manualWindDegrees,
       manualTidalSpeedKnots, manualTidalDegrees,
       driftPlannerActive, driftHour, hourOverride, nowHour,

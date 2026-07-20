@@ -30,6 +30,7 @@ import { useTimelineStore } from "@/lib/timelineStore";
 import { computeDrift } from "@/lib/computeDrift";
 import { BOAT_PROFILES } from "@/lib/boatProfiles";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
+import { formatFreshness } from "@/lib/freshnessUtils";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { LocationBadge } from "@/components/LocationBadge";
 import { formatSpeedFromKnots, cardinal } from "@/lib/units";
@@ -703,7 +704,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
   const surfaceConditionsHourOverride = driftPlannerActive
     ? undefined
     : timelineCurrentTime.getUTCHours();
-  const { data, hours: sharedHours, loading: isLoading, isFetching, error: isError, estimated, refetch, centerLat: cLat, centerLon: cLon } =
+  const { data, hours: sharedHours, loading: isLoading, isFetching, error: isError, estimated, refetch, centerLat: cLat, centerLon: cLon, fetchedAt: conditionsFetchedAt } =
     useSurfaceConditions(!!terrain, surfaceConditionsHourOverride);
 
   // Single source of truth for the auto-drift recompute. Every input that
@@ -865,6 +866,18 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
             isLoading={isLoading}
             isFetching={isFetching}
           />
+        </div>
+      )}
+      {conditionsFetchedAt && !isLoading && (
+        <div
+          style={{
+            fontSize: 11,
+            color: "#475569",
+            letterSpacing: "0.06em",
+            marginBottom: 6,
+          }}
+        >
+          Conditions as of {formatFreshness(conditionsFetchedAt)}
         </div>
       )}
 

@@ -11,6 +11,7 @@
 import React, { useEffect } from "react";
 import { useUiStore } from "@/lib/uiStore";
 import { HelpIcon } from "@/components/help/HelpButton";
+import { formatFreshness } from "@/lib/freshnessUtils";
 
 export const SubstrateDetailPanel: React.FC = () => {
   const selectedSubstrate = useUiStore((s) => s.selectedSubstrate);
@@ -170,6 +171,18 @@ export const SubstrateDetailPanel: React.FC = () => {
           {selectedSubstrate.sourceName}
         </a>
       </div>
+      {formatFreshness(selectedSubstrate.fetchedAt) && (
+        <div
+          style={{
+            marginTop: 5,
+            fontSize: 11,
+            color: "#475569",
+            letterSpacing: "0.06em",
+          }}
+        >
+          Data as of {formatFreshness(selectedSubstrate.fetchedAt)}
+        </div>
+      )}
     </div>
   );
 };

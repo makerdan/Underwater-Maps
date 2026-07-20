@@ -127,6 +127,8 @@ export interface SelectedSubstrate {
   /** Source / credit metadata from the FeatureCollection. */
   sourceName: string;
   creditUrl: string;
+  /** ISO 8601 timestamp of when the source dataset was last fetched/compiled. */
+  fetchedAt?: string | null;
 }
 
 /** A manual coordinate-search request queued for the OverviewMap to run. */

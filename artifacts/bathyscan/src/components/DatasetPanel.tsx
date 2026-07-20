@@ -703,6 +703,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     terrain,
     pendingExternalUserDatasetId,
     setPendingExternalUserDatasetId,
+    catalogSourcedAt,
   } = useAppState();
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
@@ -2999,7 +3000,15 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       </div>
                       {active && terrain && terrain.datasetId === ds.id && (
                         <div onClick={(e) => e.stopPropagation()}>
-                          <ProvenancePanel terrain={terrain} hasEfh={ds.hasEfh ?? false} />
+                          <ProvenancePanel
+                            terrain={terrain}
+                            hasEfh={ds.hasEfh ?? false}
+                            catalogSourcedAt={
+                              catalogSourcedAt?.forDatasetId === terrain.datasetId
+                                ? catalogSourcedAt.date
+                                : null
+                            }
+                          />
                           <div style={{ marginTop: 4, paddingTop: 4, borderTop: "1px solid rgba(0,229,255,0.08)" }}>
                             <button
                               data-testid={`btn-save-offline-${ds.id}`}
