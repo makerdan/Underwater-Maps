@@ -11,6 +11,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
 import { logger } from "../lib/logger.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.get("/routes", requireAuth, validateQuery(GetRoutesQuerySchema, "GET /api
   res.json(rows);
 }));
 
-router.post("/routes", requireAuth, validateBody(PostRouteBodySchema, "POST /api/routes"), asyncHandler(async (req, res): Promise<void> => {
+router.post("/routes", requireAuth, dataMutationRateLimit, validateBody(PostRouteBodySchema, "POST /api/routes"), asyncHandler(async (req, res): Promise<void> => {
   const { datasetId, name, waypoints, totalDistanceM } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
@@ -54,7 +55,7 @@ router.post("/routes", requireAuth, validateBody(PostRouteBodySchema, "POST /api
 }));
 
 // PATCH /routes/:id
-router.patch("/routes/:id", requireAuth, validateParams(RouteIdParamSchema, "PATCH /api/routes/:id", { details: "Invalid route id" }), validateBody(PatchRouteBodySchema, "PATCH /api/routes/:id"), asyncHandler(async (req, res): Promise<void> => {
+router.patch("/routes/:id", requireAuth, dataMutationRateLimit, validateParams(RouteIdParamSchema, "PATCH /api/routes/:id", { details: "Invalid route id" }), validateBody(PatchRouteBodySchema, "PATCH /api/routes/:id"), asyncHandler(async (req, res): Promise<void> => {
   const { id } = res.locals.parsedParams;
   const { name } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
@@ -74,7 +75,7 @@ router.patch("/routes/:id", requireAuth, validateParams(RouteIdParamSchema, "PAT
 }));
 
 // DELETE /routes/:id
-router.delete("/routes/:id", requireAuth, validateParams(RouteIdParamSchema, "DELETE /api/routes/:id", { details: "Invalid route id" }), asyncHandler(async (req, res): Promise<void> => {
+router.delete("/routes/:id", requireAuth, dataMutationRateLimit, validateParams(RouteIdParamSchema, "DELETE /api/routes/:id", { details: "Invalid route id" }), asyncHandler(async (req, res): Promise<void> => {
   const { id } = res.locals.parsedParams;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 

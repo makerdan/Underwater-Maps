@@ -7,6 +7,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";
 import { sanitizeZodIssue } from "../middlewares/validateBody.js";
+import { settingsMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const router = Router();
 
@@ -291,7 +292,7 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
 
 const MAX_TOTAL_SETTINGS_BYTES = 256 * 1024;
 
-router.put("/settings", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const body = (req.body ?? {}) as Record<string, unknown>;
   const parsed = PutSettingsBody.safeParse(body);

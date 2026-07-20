@@ -16,6 +16,7 @@ import { validateBody, validateQuery, validateParams } from "../middlewares/vali
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getObjectAclPolicy, setObjectAclPolicy } from "../lib/objectAcl";
 import { logger } from "../lib/logger.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const router = Router();
 
@@ -133,7 +134,7 @@ router.get("/markers/:markerId/catches", requireAuth, validateParams(GetMarkersM
 }));
 
 // ─── Create a catch entry on a marker ─────────────────────────────────────────
-router.post("/markers/:markerId/catches", requireAuth, validateParams(PostMarkersMarkerIdCatchesParams, "POST /api/markers/:markerId/catches", { details: "Invalid marker id" }), validateBody(PostMarkersMarkerIdCatchesBody, "POST /api/markers/:markerId/catches"), asyncHandler(async (req, res): Promise<void> => {
+router.post("/markers/:markerId/catches", requireAuth, dataMutationRateLimit, validateParams(PostMarkersMarkerIdCatchesParams, "POST /api/markers/:markerId/catches", { details: "Invalid marker id" }), validateBody(PostMarkersMarkerIdCatchesBody, "POST /api/markers/:markerId/catches"), asyncHandler(async (req, res): Promise<void> => {
   const { markerId } = res.locals.parsedParams;
   const { symbol, symbolName = "", notes, photos = [] } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
@@ -177,7 +178,7 @@ router.post("/markers/:markerId/catches", requireAuth, validateParams(PostMarker
 }));
 
 // ─── Edit a catch entry ───────────────────────────────────────────────────────
-router.patch("/catches/:id", requireAuth, validateParams(PatchCatchesIdParams, "PATCH /api/catches/:id", { details: "Invalid catch id" }), validateBody(PatchCatchesIdBody, "PATCH /api/catches/:id"), asyncHandler(async (req, res): Promise<void> => {
+router.patch("/catches/:id", requireAuth, dataMutationRateLimit, validateParams(PatchCatchesIdParams, "PATCH /api/catches/:id", { details: "Invalid catch id" }), validateBody(PatchCatchesIdBody, "PATCH /api/catches/:id"), asyncHandler(async (req, res): Promise<void> => {
   const { id } = res.locals.parsedParams;
   const updateData = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
@@ -247,7 +248,7 @@ router.patch("/catches/:id", requireAuth, validateParams(PatchCatchesIdParams, "
 }));
 
 // ─── Delete a catch entry ─────────────────────────────────────────────────────
-router.delete("/catches/:id", requireAuth, validateParams(DeleteCatchesIdParams, "DELETE /api/catches/:id", { details: "Invalid catch id" }), asyncHandler(async (req, res): Promise<void> => {
+router.delete("/catches/:id", requireAuth, dataMutationRateLimit, validateParams(DeleteCatchesIdParams, "DELETE /api/catches/:id", { details: "Invalid catch id" }), asyncHandler(async (req, res): Promise<void> => {
   const { id } = res.locals.parsedParams;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 

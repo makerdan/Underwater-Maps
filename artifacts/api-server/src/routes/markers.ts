@@ -7,6 +7,7 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const LABEL_MAX = 200;
 const NOTES_MAX = 2000;
@@ -58,7 +59,7 @@ router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /a
   res.json(rows);
 }));
 
-router.post("/markers", requireAuth, validateBody(PostMarkersBody, "POST /api/markers"), asyncHandler(async (req, res): Promise<void> => {
+router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMarkersBody, "POST /api/markers"), asyncHandler(async (req, res): Promise<void> => {
   const { datasetId, lon, lat, depth, type = "custom", label, notes, quickCatch, conditions } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
@@ -130,7 +131,7 @@ router.post("/markers", requireAuth, validateBody(PostMarkersBody, "POST /api/ma
   res.status(201).json(created);
 }));
 
-router.delete("/markers/mine", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.delete("/markers/mine", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const deleted = await db
     .delete(markersTable)
@@ -140,7 +141,7 @@ router.delete("/markers/mine", requireAuth, asyncHandler(async (req, res): Promi
   res.json({ deleted: deleted.length });
 }));
 
-router.patch("/markers/:id", requireAuth, validateParams(PatchMarkersIdParams, "PATCH /api/markers/:id", { details: "Invalid marker id" }), validateBody(PatchMarkersIdBody, "PATCH /api/markers/:id"), asyncHandler(async (req, res): Promise<void> => {
+router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(PatchMarkersIdParams, "PATCH /api/markers/:id", { details: "Invalid marker id" }), validateBody(PatchMarkersIdBody, "PATCH /api/markers/:id"), asyncHandler(async (req, res): Promise<void> => {
   const { id } = res.locals.parsedParams;
   const updateData = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
@@ -164,7 +165,7 @@ router.patch("/markers/:id", requireAuth, validateParams(PatchMarkersIdParams, "
   res.json(updated);
 }));
 
-router.delete("/markers/:id", requireAuth, validateParams(DeleteMarkersIdParams, "DELETE /api/markers/:id", { details: "Invalid marker id" }), asyncHandler(async (req, res): Promise<void> => {
+router.delete("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(DeleteMarkersIdParams, "DELETE /api/markers/:id", { details: "Invalid marker id" }), asyncHandler(async (req, res): Promise<void> => {
   const { id } = res.locals.parsedParams;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 

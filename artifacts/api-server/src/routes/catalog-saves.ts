@@ -34,6 +34,7 @@ import { db, userCatalogSavesTable, customDatasetsTable, datasetFoldersTable, ty
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import {
   getCatalogEntries,
   searchCatalog,
@@ -399,7 +400,7 @@ router.post("/datasets/point-radius-query", validateBody(PointRadiusQueryBody, "
 // POST /datasets/catalog/:id/save  (auth-gated)
 // ---------------------------------------------------------------------------
 
-router.post("/datasets/catalog/:id/save", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const idParsed = CatalogIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {

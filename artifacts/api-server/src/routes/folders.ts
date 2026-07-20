@@ -30,6 +30,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { logger } from "../lib/logger.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const FolderIdParamSchema = z.string().uuid("Folder id must be a valid UUID");
 
@@ -106,7 +107,7 @@ router.get("/user/folders", requireAuth, asyncHandler(async (req, res): Promise<
 }));
 
 // ── POST /user/folders ─────────────────────────────────────────────────────
-router.post("/user/folders", requireAuth, validateBody(PostUserFoldersBody, "POST /api/user/folders"), asyncHandler(async (req, res): Promise<void> => {
+router.post("/user/folders", requireAuth, dataMutationRateLimit, validateBody(PostUserFoldersBody, "POST /api/user/folders"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const { name: rawName, parentId: rawParentId } = res.locals.parsedBody;
   const name = trimName(rawName);
@@ -139,7 +140,7 @@ router.post("/user/folders", requireAuth, validateBody(PostUserFoldersBody, "POS
 }));
 
 // ── PATCH /user/folders/:id/rename ─────────────────────────────────────────
-router.patch("/user/folders/:id/rename", requireAuth, validateBody(PatchUserFoldersIdRenameBody, "PATCH /api/user/folders/:id/rename"), asyncHandler(async (req, res): Promise<void> => {
+router.patch("/user/folders/:id/rename", requireAuth, dataMutationRateLimit, validateBody(PatchUserFoldersIdRenameBody, "PATCH /api/user/folders/:id/rename"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const idParsed = FolderIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
@@ -178,7 +179,7 @@ router.patch("/user/folders/:id/rename", requireAuth, validateBody(PatchUserFold
 }));
 
 // ── PATCH /user/folders/:id/move ───────────────────────────────────────────
-router.patch("/user/folders/:id/move", requireAuth, validateBody(PatchUserFoldersIdMoveBody, "PATCH /api/user/folders/:id/move"), asyncHandler(async (req, res): Promise<void> => {
+router.patch("/user/folders/:id/move", requireAuth, dataMutationRateLimit, validateBody(PatchUserFoldersIdMoveBody, "PATCH /api/user/folders/:id/move"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const idParsed = FolderIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
@@ -228,7 +229,7 @@ router.patch("/user/folders/:id/move", requireAuth, validateBody(PatchUserFolder
 }));
 
 // ── POST /user/folders/:id/duplicate ───────────────────────────────────────
-router.post("/user/folders/:id/duplicate", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.post("/user/folders/:id/duplicate", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
@@ -338,7 +339,7 @@ router.post("/user/folders/:id/duplicate", requireAuth, asyncHandler(async (req,
 }));
 
 // ── DELETE /user/folders/:id ───────────────────────────────────────────────
-router.delete("/user/folders/:id", requireAuth, validateBody(DeleteUserFoldersIdBody, "DELETE /api/user/folders/:id"), asyncHandler(async (req, res): Promise<void> => {
+router.delete("/user/folders/:id", requireAuth, dataMutationRateLimit, validateBody(DeleteUserFoldersIdBody, "DELETE /api/user/folders/:id"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
   const { mode } = res.locals.parsedBody;
