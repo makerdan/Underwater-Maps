@@ -54,8 +54,8 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { useToast } from "@/hooks/use-toast";
 
 const TROLLING_PRESET_WAYPOINTS_MAX = 50;
-const MARKER_LABEL_MAX = 60;
-const MARKER_NOTES_MAX = 500;
+const MARKER_LABEL_MAX = 200;
+const MARKER_NOTES_MAX = 2000;
 const TROLLING_NAME_MAX = 80;
 
 const DEFAULT_HEADING_DEG = 0;

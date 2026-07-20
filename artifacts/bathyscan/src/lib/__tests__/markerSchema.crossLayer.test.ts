@@ -45,16 +45,16 @@ const SERVER_MARKER_ENUM_VALUES: Set<string> = new Set(
 // ---------------------------------------------------------------------------
 
 describe("cross-layer consistency: markerFormSchema vs PostMarkersBody", () => {
-  it("frontend MARKER_LABEL_MAX (60) is intentionally smaller than server postMarkersBodyLabelMax (200)", () => {
-    expect(MARKER_LABEL_MAX).toBe(60);
+  it("frontend MARKER_LABEL_MAX (200) matches server postMarkersBodyLabelMax (200)", () => {
+    expect(MARKER_LABEL_MAX).toBe(200);
     expect(postMarkersBodyLabelMax).toBe(200);
-    expect(MARKER_LABEL_MAX).toBeLessThan(postMarkersBodyLabelMax);
+    expect(MARKER_LABEL_MAX).toBe(postMarkersBodyLabelMax);
   });
 
-  it("frontend MARKER_NOTES_MAX (280) is intentionally smaller than server postMarkersBodyNotesMax (2000)", () => {
-    expect(MARKER_NOTES_MAX).toBe(280);
+  it("frontend MARKER_NOTES_MAX (2000) matches server postMarkersBodyNotesMax (2000)", () => {
+    expect(MARKER_NOTES_MAX).toBe(2000);
     expect(postMarkersBodyNotesMax).toBe(2000);
-    expect(MARKER_NOTES_MAX).toBeLessThan(postMarkersBodyNotesMax);
+    expect(MARKER_NOTES_MAX).toBe(postMarkersBodyNotesMax);
   });
 
   it("frontend markerLabelSchema rejects a label one character over the shared limit", () => {
