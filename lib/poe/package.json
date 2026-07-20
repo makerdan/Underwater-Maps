@@ -7,8 +7,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "vitest run",
-    "test:unit": "vitest run",
+    "test": "node ../../scripts/run-with-timeout.mjs poe --label \"poe test\" -- vitest run",
+    "test:unit": "node ../../scripts/run-with-timeout.mjs poe --label \"poe test:unit\" -- vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
