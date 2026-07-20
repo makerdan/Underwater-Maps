@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 /**
- * Serialized runner for the three heavy test suites (unit, palette e2e,
- * full e2e). Running them in parallel overloads the machine and causes
- * timeout-guard budget breaches with no real test failures, so this script
- * runs them one after another with per-step timing.
+ * Serialized runner for the full heavy validation tier (lint/typecheck
+ * preflight + unit + palette e2e + full e2e).
  *
- * All steps always run (no fail-fast) so a single validation pass reports
- * every failing suite; the exit code is non-zero if any step failed.
+ * Structure:
+ *   1. PREFLIGHT (fail-fast): runs `run-tier.mjs fast` which covers
+ *      typecheck, lint, check:lock-skill-sync, and check:root-relative-api.
+ *      If any of these fail the script exits immediately — no point spending
+ *      45 min on unit/e2e suites when the code doesn't even typecheck or lint.
+ *
+ *   2. HEAVY SUITES (no-fail-fast): test:unit, e2e-palette, test:e2e run one
+ *      after another so a single validation pass reports every failing suite.
+ *      The exit code is non-zero if any suite failed.
+ *
+ * Running the heavy suites in parallel overloads the machine and causes
+ * timeout-guard budget breaches with no real test failures, so they run
+ * serially with port sweeps between them.
  *
  * Per-step named resource locking is used so the individual suites do not
  * race for CPU or e2e ports even when this serial runner is invoked
@@ -69,6 +78,25 @@ function wrapWithTimeout(cmd, budgetKey, label) {
 }
 
 const HEAVY_PRIORITY = 3;
+
+// ---------------------------------------------------------------------------
+// PREFLIGHT: typecheck + lint + quick checks (fail-fast)
+// Run before the expensive suites so obvious errors surface in ~5 min rather
+// than after 45 min.  run-tier.mjs fast covers:
+//   typecheck, lint, check:lock-skill-sync, check:root-relative-api
+// ---------------------------------------------------------------------------
+
+const runTierScript = resolve(root, "scripts/run-tier.mjs");
+const preflightStart = Date.now();
+console.log("\n[test-heavy] ▶ PREFLIGHT: typecheck + lint + quick checks (run-tier.mjs fast)");
+const preflightRes = spawnSync(process.execPath, [runTierScript, "fast"], { stdio: "inherit", cwd: root });
+const preflightCode = preflightRes.status ?? 1;
+const preflightSecs = ((Date.now() - preflightStart) / 1000).toFixed(1);
+console.log(`[test-heavy] ■ PREFLIGHT finished in ${preflightSecs}s (exit ${preflightCode})`);
+if (preflightCode !== 0) {
+  console.error("[test-heavy] PREFLIGHT failed — aborting before heavy suites. Fix typecheck/lint errors first.");
+  process.exit(preflightCode);
+}
 
 const steps = [
   {
