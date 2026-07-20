@@ -2702,7 +2702,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             justifyContent: "space-between",
             gap: 8,
           }}>
-            <span style={{ fontSize: 15, letterSpacing: "0.12em", color: "#cbd5e1" }}>ENVIRONMENT</span>
             <WaterTypeToggle />
           </div>
           {/* ── MY LIBRARY section (preset datasets + user library) ── */}

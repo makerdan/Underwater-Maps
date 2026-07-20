@@ -22,7 +22,6 @@ export function GeneralSection() {
       <SectionActionsRow sections={["environment", "hud", "data"]} withReset={false} />
       {/* Environment card */}
       <div style={S.card}>
-        <div style={S.cardHeader}>ENVIRONMENT</div>
         <div style={S.row}>
           <div>
             <div style={S.label}>Exploration Mode</div>

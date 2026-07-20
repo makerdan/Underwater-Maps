@@ -67,8 +67,24 @@ if [ -n "${GITHUB_TOKEN}" ] && [ -n "${GITHUB_REPO_URL}" ]; then
   # Disable LFS lock verification inline (-c flag, no .git/config mutation):
   # the GitHub remote does not support the Git LFS locking API and returns
   # "Fatal error: Unable to verify locks" without this flag.
-  git -c lfs.locksverify=false push --force "https://x-access-token:${GITHUB_TOKEN}@${GITHUB_REPO_URL#https://}" HEAD:main
-  echo "[post-merge] GitHub mirror up to date."
+  # Retry a few times: concurrent post-merge runs can race on the remote ref
+  # ("cannot lock ref ... but expected ..."), which succeeds on retry.
+  # A mirror-push failure must not fail the whole setup — the mirror is a
+  # convenience copy, and the next merge will force-push the current state.
+  mirror_pushed=0
+  for attempt in 1 2 3; do
+    if git -c lfs.locksverify=false push --force "https://x-access-token:${GITHUB_TOKEN}@${GITHUB_REPO_URL#https://}" HEAD:main; then
+      mirror_pushed=1
+      break
+    fi
+    echo "[post-merge] mirror push attempt ${attempt} failed — retrying in 3s…"
+    sleep 3
+  done
+  if [ "${mirror_pushed}" = "1" ]; then
+    echo "[post-merge] GitHub mirror up to date."
+  else
+    echo "[post-merge] WARNING: GitHub mirror push failed after 3 attempts — continuing (next merge will retry)."
+  fi
 else
   echo "[post-merge] GITHUB_TOKEN or GITHUB_REPO_URL not set — skipping GitHub sync."
 fi
