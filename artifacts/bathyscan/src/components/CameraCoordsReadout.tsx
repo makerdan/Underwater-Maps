@@ -43,6 +43,13 @@ function toDMS(decimal: number): string {
 
 export const CameraCoordsReadout: React.FC = () => {
   const cameraPosition = useCameraStore((s) => s.cameraPosition);
+  // Stale-value transition guard: subscribe to cameraDepth directly so the
+  // readout re-renders in the same commit that `setCameraGeo` publishes a
+  // null depth. Deriving the SURFACE/number branch purely from this store
+  // snapshot (no local state, no memoized formatted string) guarantees a
+  // stale numeric depth can never flash after the camera surfaces —
+  // `setCameraGeo` updates position and depth atomically in one set().
+  const cameraDepth = useCameraStore((s) => s.cameraDepth);
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
   const showCameraPosition = useSettingsStore((s) => s.showCameraPosition);
   const units = useSettingsStore((s) => s.units);

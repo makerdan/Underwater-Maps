@@ -6,7 +6,7 @@
  * settings key (unchanged) and the side-pane collapse store.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CameraCoordsReadout } from "@/components/CameraCoordsReadout";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
@@ -87,6 +87,31 @@ describe("CameraCoordsReadout", () => {
     );
     expect(screen.getByTestId("camera-depth-surface")).toBeInTheDocument();
     expect(screen.getByTestId("camera-depth-surface").textContent).toBe("SURFACE");
+  });
+
+  it("switches cleanly to SURFACE on a rapid underwater→surface transition (no stale numeric flash)", () => {
+    const { setCameraGeo } = useCameraStore.getState();
+    act(() => {
+      setCameraGeo({ lon: -122.5, lat: 47.6, depth: 42, heading: 0, altitude: -42 });
+    });
+    const { container } = render(
+      <TooltipProvider>
+        <CameraCoordsReadout />
+      </TooltipProvider>,
+    );
+    expect(container.textContent ?? "").toMatch(/42/);
+    expect(screen.queryByTestId("camera-depth-surface")).not.toBeInTheDocument();
+
+    // Rapid frame-boundary updates: 42 m → 3 m → surfaced (null) in
+    // consecutive store commits. After the null commit the readout must
+    // show SURFACE with no numeric depth remaining anywhere in the panel.
+    act(() => {
+      setCameraGeo({ lon: -122.5, lat: 47.6, depth: 3, heading: 0, altitude: -3 });
+      setCameraGeo({ lon: -122.5, lat: 47.6, depth: null, heading: 0, altitude: 2 });
+    });
+    expect(screen.getByTestId("camera-depth-surface").textContent).toBe("SURFACE");
+    const depRow = screen.getByText(/DEP/).parentElement;
+    expect(depRow?.textContent).toBe("DEP SURFACE");
   });
 
   it("shows formatted depth when cameraDepth is non-null (camera underwater)", () => {

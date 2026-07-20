@@ -725,6 +725,14 @@ export const HUD: React.FC = () => {
                   );
                 })()}
               </>
+            ) : cameraDepth === null ? (
+              // Crosshair depth is null while the camera is above water:
+              // the ray is pointing at the sky or the water surface, so
+              // say SURFACE (matching CameraCoordsReadout) instead of the
+              // ambiguous "—" / NO TERRAIN placeholder.
+              <div data-testid="hud-crosshair-depth-surface" style={CYAN}>
+                SURFACE
+              </div>
             ) : (
               <div style={{ color: "#1e3a5f" }}>— NO TERRAIN —</div>
             )}

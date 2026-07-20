@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 
 const makeApiClientMock = vi.hoisted(() => {
   function noop() {}
@@ -131,12 +131,33 @@ describe("HUD", () => {
     expect(text).not.toMatch(/\b0\s*M\b/i);
   });
 
-  it("shows crosshair depth as '—' when crosshairGps is null (above-water ray)", () => {
-    useCameraStore.setState({ crosshairGps: null });
+  it("shows SURFACE when crosshairGps is null and camera is above water", () => {
+    useCameraStore.setState({ crosshairGps: null, cameraDepth: null });
     render(<HUD />);
-    const depthDisplays = screen
-      .queryAllByText("—")
-      .filter((el) => el.tagName !== "TITLE");
-    expect(depthDisplays.length).toBeGreaterThanOrEqual(0);
+    const surface = screen.getByTestId("hud-crosshair-depth-surface");
+    expect(surface).toBeInTheDocument();
+    expect(surface.textContent).toBe("SURFACE");
+    expect(screen.queryByText("— NO TERRAIN —")).not.toBeInTheDocument();
+  });
+
+  it("keeps '— NO TERRAIN —' when crosshairGps is null but camera is underwater", () => {
+    useCameraStore.setState({ crosshairGps: null, cameraDepth: 42 });
+    render(<HUD />);
+    expect(screen.queryByTestId("hud-crosshair-depth-surface")).not.toBeInTheDocument();
+    expect(screen.getByText("— NO TERRAIN —")).toBeInTheDocument();
+  });
+
+  it("never renders a stale numeric crosshair state after the ray leaves terrain", () => {
+    useCameraStore.setState({
+      crosshairGps: { lon: -122.5, lat: 47.6, depth: 55 },
+      cameraDepth: 30,
+    });
+    const { container } = render(<HUD />);
+    expect(container.textContent ?? "").toMatch(/-55/);
+    act(() => {
+      useCameraStore.setState({ crosshairGps: null, cameraDepth: null });
+    });
+    expect(container.textContent ?? "").not.toMatch(/-55/);
+    expect(screen.getByTestId("hud-crosshair-depth-surface").textContent).toBe("SURFACE");
   });
 });
