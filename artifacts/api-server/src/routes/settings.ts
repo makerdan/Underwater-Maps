@@ -530,7 +530,15 @@ router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(asy
     throw upsertErr;
   }
 
-  res.json(safeSettings);
+  let validated: z.infer<typeof GetSettingsResponse>;
+  try {
+    validated = GetSettingsResponse.parse(safeSettings);
+  } catch (err) {
+    logger.error({ userId, err }, "PUT /api/settings — response schema validation failed");
+    res.status(500).json({ error: "internal_error", details: "Settings failed response schema validation" });
+    return;
+  }
+  res.json(mergeForResponse(safeSettings, validated));
 }));
 
 export default router;

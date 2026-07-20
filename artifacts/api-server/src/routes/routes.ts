@@ -6,10 +6,14 @@ import {
   PostRouteBodySchema,
   RouteIdParamSchema,
   PatchRouteBodySchema,
+  GetRoutesResponse,
+  GetRoutesResponseItem,
+  PatchRouteResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import { logger } from "../lib/logger.js";
 import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
@@ -26,7 +30,7 @@ router.get("/routes", requireAuth, validateQuery(GetRoutesQuerySchema, "GET /api
     .where(and(eq(routesTable.userId, userId), eq(routesTable.datasetId, datasetId)))
     .orderBy(routesTable.createdAt);
 
-  res.json(rows);
+  res.json(validateResponse(GetRoutesResponse, rows, "GET /api/routes"));
 }));
 
 router.post("/routes", requireAuth, dataMutationRateLimit, validateBody(PostRouteBodySchema, "POST /api/routes"), asyncHandler(async (req, res): Promise<void> => {
@@ -51,7 +55,7 @@ router.post("/routes", requireAuth, dataMutationRateLimit, validateBody(PostRout
     return;
   }
 
-  res.status(201).json(created);
+  res.status(201).json(validateResponse(GetRoutesResponseItem, created, "POST /api/routes"));
 }));
 
 // PATCH /routes/:id
@@ -71,7 +75,7 @@ router.patch("/routes/:id", requireAuth, dataMutationRateLimit, validateParams(R
     return;
   }
 
-  res.json(updated);
+  res.json(validateResponse(PatchRouteResponse, updated, "PATCH /api/routes/:id"));
 }));
 
 // DELETE /routes/:id

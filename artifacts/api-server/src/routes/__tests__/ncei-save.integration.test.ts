@@ -441,6 +441,23 @@ vi.mock("@clerk/shared/keys", () => ({
   publishableKeyFromHost: () => "pk_test_mock",
 }));
 
+vi.mock("@workspace/api-zod", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/api-zod")>();
+  return {
+    ...actual,
+    GetDatasetsMySavesResponseItem: { parse: (x: unknown) => x },
+    GetDatasetsMySavesResponse: { parse: (x: unknown) => x },
+    GetDatasetsMySavesIdStatusResponse: { parse: (x: unknown) => x },
+    PostDatasetsMySavesIdRetryResponse: { parse: (x: unknown) => x },
+    PatchDatasetsMySavesIdRenameResponse: { parse: (x: unknown) => x },
+    PatchDatasetsMySavesIdMoveResponse: { parse: (x: unknown) => x },
+    GetDatasetsCatalogResponse: { parse: (x: unknown) => x },
+    GetDatasetsCatalogSearchResponse: { parse: (x: unknown) => x },
+    PostDatasetsBboxQueryResponse: { parse: (x: unknown) => x },
+    PostDatasetsPointRadiusQueryResponse: { parse: (x: unknown) => x },
+  };
+});
+
 import app from "../../app.js";
 
 // ---------------------------------------------------------------------------

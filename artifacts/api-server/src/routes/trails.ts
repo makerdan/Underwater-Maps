@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, gpsTrailsTable, gpsTrailPointsTable } from "@workspace/db";
+import { GetTrailsResponse, GetTrailsResponseItem } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import { z } from "zod";
 
 const trailUploadRateLimit = createRateLimit({
@@ -74,7 +76,7 @@ router.get("/trails", requireAuth, asyncHandler(async (req, res): Promise<void> 
     )
     .orderBy(gpsTrailsTable.startedAt);
 
-  res.json(rows);
+  res.json(validateResponse(GetTrailsResponse, rows, "GET /api/trails"));
 }));
 
 // ---------------------------------------------------------------------------
@@ -125,7 +127,7 @@ router.post("/trails", trailUploadRateLimit, requireAuth, dataMutationRateLimit,
     return created;
   });
 
-  res.status(201).json(trail);
+  res.status(201).json(validateResponse(GetTrailsResponseItem, trail, "POST /api/trails"));
 }));
 
 // ---------------------------------------------------------------------------

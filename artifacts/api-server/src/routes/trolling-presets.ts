@@ -20,6 +20,7 @@ router.get("/trolling-presets", requireAuth, asyncHandler(async (req, res): Prom
     .from(trollingPresetsTable)
     .where(eq(trollingPresetsTable.userId, userId))
     .orderBy(asc(trollingPresetsTable.sortOrder), asc(trollingPresetsTable.createdAt));
+  // TODO: no response schema in @workspace/api-zod for this route; add validateResponse when a schema is available
   res.json(rows);
 }));
 

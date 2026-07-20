@@ -13,9 +13,11 @@ import {
   gpsTrailsTable,
   gpsTrailPointsTable,
 } from "@workspace/db";
+import { ExportUserDataResponse, DeleteAccountResponse } from "@workspace/api-zod";
 import { z } from "zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 
 const router = Router();
 
@@ -81,7 +83,7 @@ router.get("/me/export", requireAuth, asyncHandler(async (req, res): Promise<voi
     "Content-Disposition",
     `attachment; filename="bathyscan-export-${Date.now()}.json"`,
   );
-  res.json(payload);
+  res.json(validateResponse(ExportUserDataResponse, payload, "GET /api/me/export"));
 }));
 
 router.delete("/me", requireAuth, asyncHandler(async (req, res): Promise<void> => {
@@ -108,7 +110,7 @@ router.delete("/me", requireAuth, asyncHandler(async (req, res): Promise<void> =
   await db.delete(customDatasetsTable).where(eq(customDatasetsTable.userId, userId));
   await db.delete(userSettingsTable).where(eq(userSettingsTable.userId, userId));
 
-  res.json({ ok: true, deletedAt: new Date().toISOString() });
+  res.json(validateResponse(DeleteAccountResponse, { ok: true, deletedAt: new Date().toISOString() }, "DELETE /api/me"));
 }));
 
 export default router;

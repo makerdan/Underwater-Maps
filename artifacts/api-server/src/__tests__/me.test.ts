@@ -86,6 +86,7 @@ vi.mock("@clerk/shared/keys", () => ({
 vi.mock("../middlewares/dataMutationRateLimit.js", () => ({
   dataMutationRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
   settingsMutationRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
+  bulkDeleteMarkersRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
   DATA_MUTATION_ROUTE: "data-mutations",
   DATA_MUTATION_WINDOW_MS: 60_000,
   DATA_MUTATION_MAX: 120,

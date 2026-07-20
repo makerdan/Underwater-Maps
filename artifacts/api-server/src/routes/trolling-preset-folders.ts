@@ -41,6 +41,7 @@ router.get("/trolling-preset-folders", requireAuth, asyncHandler(async (req, res
     .select()
     .from(trollingPresetFoldersTable)
     .where(eq(trollingPresetFoldersTable.userId, userId));
+  // TODO: no response schema in @workspace/api-zod for this route; add validateResponse when a schema is available
   res.json(rows.map(folderToJson));
 }));
 

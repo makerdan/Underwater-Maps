@@ -34,7 +34,20 @@ import { db, userCatalogSavesTable, customDatasetsTable, datasetFoldersTable, ty
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
+import {
+  GetDatasetsCatalogResponse,
+  GetDatasetsCatalogSearchResponse,
+  PostDatasetsBboxQueryResponse,
+  PostDatasetsPointRadiusQueryResponse,
+  GetDatasetsMySavesResponse,
+  GetDatasetsMySavesResponseItem,
+  GetDatasetsMySavesIdStatusResponse,
+  PostDatasetsMySavesIdRetryResponse,
+  PatchDatasetsMySavesIdRenameResponse,
+  PatchDatasetsMySavesIdMoveResponse,
+} from "@workspace/api-zod";
 import {
   getCatalogEntries,
   searchCatalog,
@@ -194,7 +207,7 @@ router.get("/datasets/catalog", asyncHandler(async (req, res): Promise<void> => 
     return true;
   });
 
-  res.json(filtered.map((e) => toCatalogResponse(e, entryCreatedAtIso(e))));
+  res.json(validateResponse(GetDatasetsCatalogResponse, filtered.map((e) => toCatalogResponse(e, entryCreatedAtIso(e))), "GET /api/datasets/catalog"));
 }));
 
 // ---------------------------------------------------------------------------
@@ -214,10 +227,14 @@ router.get("/datasets/catalog/search", asyncHandler(async (req, res): Promise<vo
 
   const results = await searchCatalog({ q, dataType, waterType, minLon, minLat, maxLon, maxLat });
   res.json(
-    results.map((r) => ({
-      ...toCatalogResponse(r, r.createdAt),
-      relevanceScore: r.relevanceScore,
-    })),
+    validateResponse(
+      GetDatasetsCatalogSearchResponse,
+      results.map((r) => ({
+        ...toCatalogResponse(r, r.createdAt),
+        relevanceScore: r.relevanceScore,
+      })),
+      "GET /api/datasets/catalog/search",
+    ),
   );
 }));
 
@@ -286,13 +303,13 @@ router.post("/datasets/bbox-query", validateBody(BboxQueryBody, "POST /api/datas
     maxLon: east,
     maxLat: north,
   });
-  res.json({
+  res.json(validateResponse(PostDatasetsBboxQueryResponse, {
     bbox: { north, south, east, west },
     datasets: results.map((r) => ({
       ...toCatalogResponse(r, r.createdAt),
       relevanceScore: r.relevanceScore,
     })),
-  });
+  }, "POST /api/datasets/bbox-query"));
 }));
 
 // ---------------------------------------------------------------------------
@@ -385,7 +402,7 @@ router.post("/datasets/point-radius-query", validateBody(PointRadiusQueryBody, "
     maxLon: east,
     maxLat: north,
   });
-  res.json({
+  res.json(validateResponse(PostDatasetsPointRadiusQueryResponse, {
     center: { lat, lon },
     radiusKm,
     bbox: { north, south, east, west },
@@ -393,7 +410,7 @@ router.post("/datasets/point-radius-query", validateBody(PointRadiusQueryBody, "
       ...toCatalogResponse(r, r.createdAt),
       relevanceScore: r.relevanceScore,
     })),
-  });
+  }, "POST /api/datasets/point-radius-query"));
 }));
 
 // ---------------------------------------------------------------------------
@@ -434,7 +451,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, as
     );
 
   if (existing.length > 0 && existing[0]) {
-    res.status(200).json(formatSaveRow(existing[0], entry));
+    res.status(200).json(validateResponse(GetDatasetsMySavesResponseItem, formatSaveRow(existing[0], entry), "POST /api/datasets/catalog/:id/save (existing)"));
     return;
   }
 
@@ -458,7 +475,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, as
   // the eventual ready/failed status.
   void materializeSave(created.id, userId, entry);
 
-  res.status(201).json(formatSaveRow(created, entry));
+  res.status(201).json(validateResponse(GetDatasetsMySavesResponseItem, formatSaveRow(created, entry), "POST /api/datasets/catalog/:id/save"));
 }));
 
 /**
@@ -991,7 +1008,7 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, asyncHandler(async (req
   // Only failed saves are retryable. Already-processing or ready rows are a
   // no-op so accidental double-clicks don't kick off duplicate jobs.
   if (row.status !== "failed") {
-    res.status(200).json(formatSaveRow(row, entry));
+    res.status(200).json(validateResponse(PostDatasetsMySavesIdRetryResponse, formatSaveRow(row, entry), "POST /api/datasets/my-saves/:id/retry (no-op)"));
     return;
   }
 
@@ -1008,7 +1025,7 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, asyncHandler(async (req
 
   void materializeSave(updated.id, userId, entry);
 
-  res.status(200).json(formatSaveRow(updated, entry));
+  res.status(200).json(validateResponse(PostDatasetsMySavesIdRetryResponse, formatSaveRow(updated, entry), "POST /api/datasets/my-saves/:id/retry"));
 }));
 
 // ---------------------------------------------------------------------------
@@ -1032,7 +1049,7 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
     return formatSaveRow(row, entry ?? null);
   });
 
-  res.json(result);
+  res.json(validateResponse(GetDatasetsMySavesResponse, result, "GET /api/datasets/my-saves"));
 }));
 
 // ---------------------------------------------------------------------------
@@ -1063,7 +1080,7 @@ router.get("/datasets/my-saves/:id/status", requireAuth, asyncHandler(async (req
 
   const entries = await getCatalogEntries();
   const entry = entries.find((e) => e.id === rows[0]!.catalogId) ?? null;
-  res.json(formatSaveRow(rows[0], entry));
+  res.json(validateResponse(GetDatasetsMySavesIdStatusResponse, formatSaveRow(rows[0], entry), "GET /api/datasets/my-saves/:id/status"));
 }));
 
 // ---------------------------------------------------------------------------
@@ -1188,7 +1205,7 @@ router.patch("/datasets/my-saves/:id/rename", requireAuth, validateBody(RenameSa
 
   const entries = await getCatalogEntries();
   const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
-  res.json(formatSaveRow(updated, entry));
+  res.json(validateResponse(PatchDatasetsMySavesIdRenameResponse, formatSaveRow(updated, entry), "PATCH /api/datasets/my-saves/:id/rename"));
 }));
 
 // ---------------------------------------------------------------------------
@@ -1240,7 +1257,7 @@ router.patch("/datasets/my-saves/:id/move", requireAuth, validateBody(MoveSaveBo
 
   const entries = await getCatalogEntries();
   const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
-  res.json(formatSaveRow(updated, entry));
+  res.json(validateResponse(PatchDatasetsMySavesIdMoveResponse, formatSaveRow(updated, entry), "PATCH /api/datasets/my-saves/:id/move"));
 }));
 
 export default router;

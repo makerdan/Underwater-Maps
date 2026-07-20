@@ -21,7 +21,13 @@ import {
   GetDatasetsIdTerrainResponse,
   GetDatasetsIdOverviewResponse,
   PostDatasetsUploadResponse,
+  GetDatasetZonesResponse,
+  GetTerrainLandResponse,
+  GetDatasetsIdPreviewResponse,
+  GetTerrainDownloadInfoResponse,
+  GetUploadJobStatusResponse,
 } from "@workspace/api-zod";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import {
   ALL_PRESET_DATASETS,
   buildTerrainGrid,
@@ -1570,18 +1576,18 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
           rawSource === "gebco" ? "gebco"
           : rawSource === "synthetic" ? "synthetic"
           : "ncei";
-        res.json({
+        res.json(validateResponse(GetDatasetsIdPreviewResponse, {
           datasetId: id,
           name: row.name,
           bbox: { minLon: tj.minLon, minLat: tj.minLat, maxLon: tj.maxLon, maxLat: tj.maxLat },
           dataSource,
-        });
+        }, "GET /api/datasets/:id/preview (custom)"));
         return;
       }
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
-    res.json(preview);
+    res.json(validateResponse(GetDatasetsIdPreviewResponse, preview, "GET /api/datasets/:id/preview"));
   } catch (err) {
     // Preflight itself failed (rare — internal probes already catch). Always
     // return a graceful 200 with dataSource=unknown so the client can decide
@@ -1590,13 +1596,13 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
     // entries should still get the same fallback shape.
     const meta = ALL_PRESET_DATASETS.find((d) => d.id === id);
     const msg = err instanceof Error ? err.message : "Preflight failed";
-    res.json({
+    res.json(validateResponse(GetDatasetsIdPreviewResponse, {
       datasetId: id,
       name: meta?.name ?? id,
       bbox: meta?.bbox ?? { minLon: 0, minLat: 0, maxLon: 0, maxLat: 0 },
       dataSource: "unknown" as const,
       syntheticReason: `Could not verify data source: ${msg}`,
-    });
+    }, "GET /api/datasets/:id/preview (fallback)"));
   }
 }));
 
@@ -1728,26 +1734,26 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
   const namespacedKey = zoneCacheKey(cacheUserId, gridHash, waterType, substrateFp);
   const inMemory = datasetZonesCache.get(namespacedKey);
   if (inMemory && inMemory.waterType === waterType) {
-    res.json({
+    res.json(validateResponse(GetDatasetZonesResponse, {
       ...inMemory,
       source: inMemory.source ?? "ai",
       substrateFp,
       coarseWidth: inMemory.coarseWidth ?? 32,
       coarseHeight: inMemory.coarseHeight ?? 32,
-    });
+    }, "GET /api/datasets/:id/zones (memory)"));
     return;
   }
 
   const onDisk = await readZoneDiskByHash(cacheUserId, gridHash, waterType, substrateFp);
   if (onDisk && onDisk.waterType === waterType) {
     datasetZonesCache.set(namespacedKey, onDisk);
-    res.json({
+    res.json(validateResponse(GetDatasetZonesResponse, {
       ...onDisk,
       source: onDisk.source ?? "ai",
       substrateFp,
       coarseWidth: onDisk.coarseWidth ?? 32,
       coarseHeight: onDisk.coarseHeight ?? 32,
-    });
+    }, "GET /api/datasets/:id/zones (disk)"));
     return;
   }
 
@@ -1798,7 +1804,7 @@ router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
 
   try {
     const grid = await fetchCopernicusDem({ minLon, minLat, maxLon, maxLat }, gridSize);
-    res.json(grid);
+    res.json(validateResponse(GetTerrainLandResponse, grid, "GET /api/terrain/land"));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Land DEM fetch failed";
     res.status(502).json({ error: "upstream_error", details: msg });
@@ -1955,7 +1961,7 @@ router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res):
 
   try {
     const info = await previewBboxForDownload({ north, south, east, west });
-    res.json(info);
+    res.json(validateResponse(GetTerrainDownloadInfoResponse, info, "GET /api/terrain/download/info"));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Preflight failed";
     res.status(502).json({ error: "upstream_error", details: msg });
@@ -2753,7 +2759,7 @@ router.get(
         return;
       }
       const isTerminal = memJob.status === "done" || memJob.status === "error";
-      res.json({
+      res.json(validateResponse(GetUploadJobStatusResponse, {
         status: memJob.status,
         progress: memJob.progress,
         ...(memJob.error !== undefined ? { error: memJob.error } : {}),
@@ -2767,7 +2773,7 @@ router.get(
         ...(!isTerminal
           ? { currentStageStartedAt: memJob.stageStartedAt?.toISOString() ?? null }
           : {}),
-      });
+      }, "GET /api/datasets/upload/jobs/:jobId (memory)"));
       return;
     }
 
@@ -2792,7 +2798,7 @@ router.get(
     }
 
     const isDbTerminal = dbJob.status === "done" || dbJob.status === "error";
-    res.json({
+    res.json(validateResponse(GetUploadJobStatusResponse, {
       status: dbJob.status,
       progress: dbJob.progress,
       ...(dbJob.error !== null ? { error: dbJob.error } : {}),
@@ -2800,7 +2806,7 @@ router.get(
       ...(!isDbTerminal
         ? { currentStageStartedAt: dbJob.stageStartedAt?.toISOString() ?? null }
         : {}),
-    });
+    }, "GET /api/datasets/upload/jobs/:jobId (db)"));
     // Note: skippedCount/skippedFormats are in-memory only and not persisted to
     // DB (they are cosmetic toast metadata, not durable state).  After a server
     // restart the fields are simply absent, which the frontend handles gracefully

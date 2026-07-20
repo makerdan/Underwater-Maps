@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { and, eq, sql, isNull, gte, lte } from "drizzle-orm";
 import { db, markersTable, catchCountersTable, catchEntriesTable } from "@workspace/db";
-import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody } from "@workspace/api-zod";
+import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody, GetMarkersResponse, GetMarkersResponseItem, PatchMarkersIdResponse, DeleteMarkersMineResponse } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
 import { dataMutationRateLimit, bulkDeleteMarkersRateLimit } from "../middlewares/dataMutationRateLimit.js";
@@ -25,7 +26,7 @@ router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /a
       .from(markersTable)
       .where(and(eq(markersTable.datasetId, datasetId), eq(markersTable.userId, userId)))
       .orderBy(markersTable.createdAt);
-    res.json(rows);
+    res.json(validateResponse(GetMarkersResponse, rows, "GET /api/markers"));
     return;
   }
 
@@ -56,7 +57,7 @@ router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /a
     )
     .orderBy(markersTable.createdAt);
 
-  res.json(rows);
+  res.json(validateResponse(GetMarkersResponse, rows, "GET /api/markers (bounds)"));
 }));
 
 router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMarkersBody, "POST /api/markers"), asyncHandler(async (req, res): Promise<void> => {
@@ -128,7 +129,7 @@ router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMar
     })
     .returning();
 
-  res.status(201).json(created);
+  res.status(201).json(validateResponse(GetMarkersResponseItem, created, "POST /api/markers"));
 }));
 
 router.delete("/markers/mine", requireAuth, bulkDeleteMarkersRateLimit, asyncHandler(async (req, res): Promise<void> => {
@@ -138,7 +139,7 @@ router.delete("/markers/mine", requireAuth, bulkDeleteMarkersRateLimit, asyncHan
     .where(eq(markersTable.userId, userId))
     .returning({ id: markersTable.id });
 
-  res.json({ deleted: deleted.length });
+  res.json(validateResponse(DeleteMarkersMineResponse, { deleted: deleted.length }, "DELETE /api/markers/mine"));
 }));
 
 router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(PatchMarkersIdParams, "PATCH /api/markers/:id", { details: "Invalid marker id" }), validateBody(PatchMarkersIdBody, "PATCH /api/markers/:id"), asyncHandler(async (req, res): Promise<void> => {
@@ -162,7 +163,7 @@ router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(
     return;
   }
 
-  res.json(updated);
+  res.json(validateResponse(PatchMarkersIdResponse, updated, "PATCH /api/markers/:id"));
 }));
 
 router.delete("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(DeleteMarkersIdParams, "DELETE /api/markers/:id", { details: "Invalid marker id" }), asyncHandler(async (req, res): Promise<void> => {

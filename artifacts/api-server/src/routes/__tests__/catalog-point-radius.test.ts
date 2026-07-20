@@ -29,6 +29,46 @@ vi.mock("http-proxy-middleware", () => ({
 }));
 vi.mock("@clerk/shared/keys", () => ({ publishableKeyFromHost: vi.fn(() => "pk_test_mock") }));
 
+vi.mock("@workspace/api-zod", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/api-zod")>();
+  return {
+    ...actual,
+    PostDatasetsBboxQueryResponse: { parse: (x: unknown) => x },
+    PostDatasetsPointRadiusQueryResponse: { parse: (x: unknown) => x },
+    GetDatasetsCatalogResponse: { parse: (x: unknown) => x },
+    GetDatasetsCatalogSearchResponse: { parse: (x: unknown) => x },
+    GetDatasetsMySavesResponse: { parse: (x: unknown) => x },
+    GetDatasetsMySavesResponseItem: { parse: (x: unknown) => x },
+    GetDatasetsMySavesIdStatusResponse: { parse: (x: unknown) => x },
+    PostDatasetsMySavesIdRetryResponse: { parse: (x: unknown) => x },
+    PatchDatasetsMySavesIdRenameResponse: { parse: (x: unknown) => x },
+    PatchDatasetsMySavesIdMoveResponse: { parse: (x: unknown) => x },
+    GetMarkersResponse: { parse: (x: unknown) => x },
+    GetMarkersResponseItem: { parse: (x: unknown) => x },
+    PatchMarkersIdResponse: { parse: (x: unknown) => x },
+    DeleteMarkersMineResponse: { parse: (x: unknown) => x },
+    GetCatchesResponse: { parse: (x: unknown) => x },
+    GetMarkersMarkerIdCatchesResponse: { parse: (x: unknown) => x },
+    GetMarkersMarkerIdCatchesResponseItem: { parse: (x: unknown) => x },
+    PatchCatchesIdResponse: { parse: (x: unknown) => x },
+    PostCatchPhotosUploadUrlResponse: { parse: (x: unknown) => x },
+    GetRoutesResponse: { parse: (x: unknown) => x },
+    GetRoutesResponseItem: { parse: (x: unknown) => x },
+    PatchRouteResponse: { parse: (x: unknown) => x },
+    GetTrailsResponse: { parse: (x: unknown) => x },
+    GetTrailsResponseItem: { parse: (x: unknown) => x },
+    ExportUserDataResponse: { parse: (x: unknown) => x },
+    DeleteAccountResponse: { parse: (x: unknown) => x },
+    PostUserDatasetsIdGeorefResponse: { parse: (x: unknown) => x },
+    GetUserDatasetsIdHyd93FeaturesResponse: { parse: (x: unknown) => x },
+    GetDatasetZonesResponse: { parse: (x: unknown) => x },
+    GetTerrainLandResponse: { parse: (x: unknown) => x },
+    GetDatasetsIdPreviewResponse: { parse: (x: unknown) => x },
+    GetTerrainDownloadInfoResponse: { parse: (x: unknown) => x },
+    GetUploadJobStatusResponse: { parse: (x: unknown) => x },
+  };
+});
+
 const SAMPLE_RESULT = {
   id: "preset-thorne-bay",
   title: "Thorne Bay Bathymetry",

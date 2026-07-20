@@ -83,6 +83,22 @@ vi.mock("http-proxy-middleware", () => ({
   createProxyMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 vi.mock("@clerk/shared/keys", () => ({ publishableKeyFromHost: vi.fn(() => "pk_test_mock") }));
+vi.mock("@workspace/api-zod", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/api-zod")>();
+  return {
+    ...actual,
+    PatchDatasetsMySavesIdMoveResponse: { parse: (x: unknown) => x },
+    PatchDatasetsMySavesIdRenameResponse: { parse: (x: unknown) => x },
+    GetDatasetsMySavesResponse: { parse: (x: unknown) => x },
+    GetDatasetsMySavesResponseItem: { parse: (x: unknown) => x },
+    GetDatasetsMySavesIdStatusResponse: { parse: (x: unknown) => x },
+    PostDatasetsMySavesIdRetryResponse: { parse: (x: unknown) => x },
+    GetDatasetsCatalogResponse: { parse: (x: unknown) => x },
+    GetDatasetsCatalogSearchResponse: { parse: (x: unknown) => x },
+    PostDatasetsBboxQueryResponse: { parse: (x: unknown) => x },
+    PostDatasetsPointRadiusQueryResponse: { parse: (x: unknown) => x },
+  };
+});
 vi.mock("../../lib/catalogSeeder.js", () => ({
   seedDatasetCatalog: vi.fn(async () => {}),
   getCatalogEntries: vi.fn(async () => []),

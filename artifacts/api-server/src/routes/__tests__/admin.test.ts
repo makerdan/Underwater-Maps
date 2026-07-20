@@ -222,7 +222,7 @@ describe("GET /admin/rate-limit/usage — query param validation", () => {
   it("rejects non-numeric windowMs with 400", async () => {
     const res = await get("/admin/rate-limit/usage?windowMs=soon");
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("invalid_param");
+    expect(res.body.error).toBe("invalid_request");
     expect(mockQueryRateLimitUsage).not.toHaveBeenCalled();
   });
 

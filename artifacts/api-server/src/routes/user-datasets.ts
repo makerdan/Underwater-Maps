@@ -10,6 +10,8 @@ import {
   PatchUserDatasetsIdMoveResponse,
   PatchUserDatasetsIdRenameBody,
   PatchUserDatasetsIdRenameResponse,
+  PostUserDatasetsIdGeorefResponse,
+  GetUserDatasetsIdHyd93FeaturesResponse,
 } from "@workspace/api-zod";
 import { z } from "zod";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
@@ -18,6 +20,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { validateBody } from "../middlewares/validateBody.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -368,7 +371,7 @@ router.post("/user/datasets/:id/georef", requireAuth, validateBody(GeorefBodySch
     return;
   }
 
-  res.json(metaJson(updated));
+  res.json(validateResponse(PostUserDatasetsIdGeorefResponse, metaJson(updated), "POST /api/user/datasets/:id/georef"));
 }));
 
 // ── GET /user/datasets/:id/hyd93-features ──────────────────────────────────
@@ -388,7 +391,7 @@ router.get("/user/datasets/:id/hyd93-features", requireAuth, asyncHandler(async 
 
   // Return an empty array when the dataset has no HYD93 annotation features
   // (e.g. it was not sourced from an a93.gz archive, or contained no annotation rows).
-  res.json(row.hyd93FeaturesJson ?? []);
+  res.json(validateResponse(GetUserDatasetsIdHyd93FeaturesResponse, row.hyd93FeaturesJson ?? [], "GET /api/user/datasets/:id/hyd93-features"));
 }));
 
 // ── DELETE /user/datasets/:id ───────────────────────────────────────────────

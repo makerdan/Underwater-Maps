@@ -9,10 +9,16 @@ import {
   PatchCatchesIdParams,
   PatchCatchesIdBody,
   DeleteCatchesIdParams,
+  GetCatchesResponse,
+  GetMarkersMarkerIdCatchesResponse,
+  GetMarkersMarkerIdCatchesResponseItem,
+  PatchCatchesIdResponse,
+  PostCatchPhotosUploadUrlResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getObjectAclPolicy, setObjectAclPolicy } from "../lib/objectAcl";
 import { logger } from "../lib/logger.js";
@@ -107,7 +113,7 @@ router.get("/catches", requireAuth, validateQuery(GetCatchesQueryParams, "GET /a
     ))
     .orderBy(catchEntriesTable.createdAt);
 
-  res.json(rows);
+  res.json(validateResponse(GetCatchesResponse, rows, "GET /api/catches"));
 }));
 
 // ─── List catches for one marker ──────────────────────────────────────────────
@@ -130,7 +136,7 @@ router.get("/markers/:markerId/catches", requireAuth, validateParams(GetMarkersM
     .where(and(eq(catchEntriesTable.markerId, markerId), eq(catchEntriesTable.userId, userId)))
     .orderBy(catchEntriesTable.createdAt);
 
-  res.json(rows);
+  res.json(validateResponse(GetMarkersMarkerIdCatchesResponse, rows, "GET /api/markers/:markerId/catches"));
 }));
 
 // ─── Create a catch entry on a marker ─────────────────────────────────────────
@@ -174,7 +180,7 @@ router.post("/markers/:markerId/catches", requireAuth, dataMutationRateLimit, va
     .values({ markerId, userId, symbol, symbolName, notes: notes ?? null, photos: aclPhotos })
     .returning();
 
-  res.status(201).json(created);
+  res.status(201).json(validateResponse(GetMarkersMarkerIdCatchesResponseItem, created, "POST /api/markers/:markerId/catches"));
 }));
 
 // ─── Edit a catch entry ───────────────────────────────────────────────────────
@@ -244,7 +250,7 @@ router.patch("/catches/:id", requireAuth, dataMutationRateLimit, validateParams(
     }
   }
 
-  res.json(updated);
+  res.json(validateResponse(PatchCatchesIdResponse, updated, "PATCH /api/catches/:id"));
 }));
 
 // ─── Delete a catch entry ─────────────────────────────────────────────────────
@@ -285,7 +291,7 @@ router.post("/catch-photos/upload-url", requireAuth, asyncHandler(async (_req, r
   const service = new ObjectStorageService();
   const uploadURL = await service.getObjectEntityUploadURL();
   const objectPath = service.normalizeObjectEntityPath(uploadURL);
-  res.json({ uploadURL, objectPath });
+  res.json(validateResponse(PostCatchPhotosUploadUrlResponse, { uploadURL, objectPath }, "POST /api/catch-photos/upload-url"));
 }));
 
 export default router;
