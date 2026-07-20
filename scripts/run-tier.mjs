@@ -3,9 +3,12 @@
  * run-tier.mjs — tiered validation runner.
  *
  * Usage:
- *   node scripts/run-tier.mjs fast       # typecheck + lint + check:lock-skill-sync (~5 min)
- *   node scripts/run-tier.mjs standard   # typecheck + lint + check:lock-skill-sync + unit + doc/catalog/schema checks (~20 min)
- *   node scripts/run-tier.mjs full       # all 11 steps, identical to test-all-steps.mjs (~45 min)
+ *   node scripts/run-tier.mjs fast       # typecheck + lint + static checks (~5 min)
+ *   node scripts/run-tier.mjs standard   # fast tier + unit + doc/catalog/schema checks (~20 min)
+ *   node scripts/run-tier.mjs full       # all steps, identical to test-all-steps.mjs (~45 min)
+ *
+ * NOTE: ALL_STEPS must stay identical (names and order) to the steps array in
+ * scripts/test-all-steps.mjs — enforced by scripts/check-runner-step-sync.mjs.
  *
  * Per-step named resource locking is handled internally; the outer caller
  * does NOT need to wrap this in validation-lock.mjs. Only steps that actually
@@ -122,6 +125,8 @@ const ALL_STEPS = [
   { name: "check:root-relative-api", resource: null, cmd: "pnpm run check:root-relative-api" },
   // no resource: grep-based exhaustive-deps suppression rationale gate, sub-second
   { name: "check:deps-suppression", resource: null, cmd: "pnpm run check:deps-suppression" },
+  // no resource: static runner step-list sync + CI coverage meta-check, sub-second
+  { name: "check:runner-step-sync", resource: null, cmd: "pnpm run check:runner-step-sync" },
   // unit-cpu resource: prevents CPU saturation / budget breach
   { name: "test:unit", resource: "unit-cpu", cmd: "pnpm run test:unit" },
   // all check:* steps are lightweight; no resource needed
@@ -131,6 +136,8 @@ const ALL_STEPS = [
   { name: "check:schema-stale", resource: null, cmd: "pnpm run check:schema-stale" },
   { name: "check:e2e-user-ids", resource: null, cmd: "pnpm run check:e2e-user-ids" },
   { name: "check:e2e-cjs-globals", resource: null, cmd: "pnpm run check:e2e-cjs-globals" },
+  // no resource: grep-based panel-collapse localStorage guard, sub-second
+  { name: "check:e2e-panel-collapse", resource: null, cmd: "pnpm run check:e2e-panel-collapse" },
   { name: "check:fixture-freshness", resource: null, cmd: "pnpm run check:fixture-freshness" },
   { name: "check:ports", resource: null, cmd: "pnpm run check:ports" },
   // no resource: pure static analysis of entry-point port wiring (Vite config,
@@ -142,8 +149,8 @@ const ALL_STEPS = [
 ];
 
 const TIER_STEPS = {
-  fast:     ALL_STEPS.slice(0, 5),
-  standard: ALL_STEPS.slice(0, 9),
+  fast:     ALL_STEPS.slice(0, 6),
+  standard: ALL_STEPS.slice(0, 10),
   full:     ALL_STEPS,
 };
 

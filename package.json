@@ -25,6 +25,7 @@
     "check:lock-skill-sync": "node scripts/check-lock-skill-sync.mjs",
     "check:root-relative-api": "node scripts/check-root-relative-api.mjs",
     "check:deps-suppression": "node scripts/check-deps-suppression.mjs",
+    "check:runner-step-sync": "node scripts/check-runner-step-sync.mjs",
     "check:ports": "node scripts/check-hardcoded-ports.mjs",
     "check:e2e-user-ids": "bash scripts/check-e2e-user-ids.sh",
     "check:e2e-panel-collapse": "bash scripts/check-e2e-panel-collapse.sh",
