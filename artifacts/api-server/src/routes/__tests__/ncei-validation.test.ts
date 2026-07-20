@@ -66,6 +66,7 @@ const EMPTY_NCEI_RESPONSE = { hits: { total: { value: 0 }, hits: [] } };
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   fetchMock = vi.fn().mockResolvedValue({
     ok: true,
@@ -80,6 +81,7 @@ afterEach(() => {
 });
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 describe("GET /api/ncei/search — query param validation", () => {
   it("returns 200 with an empty array for a minimal valid request", async () => {

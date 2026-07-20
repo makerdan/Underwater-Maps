@@ -26,7 +26,7 @@
  * streamGunzipToFile runs with real zlib so the decompression path is live.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as zlib from "zlib";
 import request from "supertest";
 
@@ -122,6 +122,11 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
+
+beforeEach(() => {
+  __resetRateLimitMemory();
+});
 
 const AUTHED_HEADER = { "x-mock-clerk-user-id": "user_gz_chunk_test" };
 

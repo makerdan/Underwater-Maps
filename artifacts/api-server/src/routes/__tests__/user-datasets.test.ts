@@ -249,10 +249,12 @@ vi.mock("@workspace/integrations-openai-ai-server", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 const E2E_USER = "user_e2e_terrain_test";
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   state.selectCalls = 0;
   state.sizeBytes = 1000;

@@ -44,6 +44,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 const AUTH = { "x-mock-clerk-user-id": "user_security_test" };
 
@@ -124,6 +125,7 @@ describe("PUT /api/settings — Zod 400 stderr log must not expose .received", (
   let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+  __resetRateLimitMemory();
     stderrChunks = [];
     stderrSpy = (vi.spyOn(process.stderr, "write").mockImplementation(
       (chunk: string | Uint8Array) => {

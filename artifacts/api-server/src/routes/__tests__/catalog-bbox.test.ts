@@ -97,8 +97,10 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
 });
 

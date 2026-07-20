@@ -69,3 +69,4 @@
 - [Duplicate-hooks parser forwardRef gap](duplicate-hooks-parser-forwardref.md) — scope parser skips components whose decl line lacks a `{` (forwardRef); pending-scope branch handles them, extend it for new wrapper styles.
 - [vi.hoisted TS inference gap](vi-hoisted-ts-inference.md) — vi.hoisted() return type may not resolve correctly in workspace-level pnpm typecheck even when local tsc passes; use plain module-level const/let objects instead (same pattern as vi.fn() spies).
 - [api-server suite pre-existing breakage](api-server-suite-preexisting-breakage.md) — 70 failures/10 files (2026-07-20): missing x-e2e-user-id header→Clerk 500s, rateLimit mock export, invalid_param mismatch; run failing files solo before blaming your diff.
+- [catalog-search waterType filter count](catalog-search-watertype-count.md) — test that filters SEEDED_PLUS_FRESHWATER by waterType must use dynamic count; stale comment said EXTRA_CATALOG_ENTRIES was saltwater-only.

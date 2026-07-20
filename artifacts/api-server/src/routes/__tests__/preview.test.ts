@@ -53,10 +53,12 @@ vi.mock("../../lib/terrain.js", async () => {
 });
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 const VALID_UUID = "11111111-2222-3333-4444-555555555555";
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   previewDatasetMock.mockReset();
   dbSelectRowsMock.mockResolvedValue([]);
   getAuthMock.mockReturnValue({ userId: null });

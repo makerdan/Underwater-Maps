@@ -36,6 +36,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 const E2E_USER = "user_e2e_resolution_test";
 
@@ -57,6 +58,7 @@ const VALID_CSV = [
 ].join("\n");
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
 });
 

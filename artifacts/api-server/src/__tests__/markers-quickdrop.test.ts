@@ -67,6 +67,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 const AUTHED_HEADER = { "x-mock-clerk-user-id": "user_qd_test" };
 
@@ -97,6 +98,7 @@ const CONDITIONS = {
 };
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   qdMocks.state.lastSeq = 0;
   qdMocks.insertMock.mockClear();
   qdMocks.markerValuesMock.mockClear();

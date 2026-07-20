@@ -62,8 +62,10 @@ vi.mock("@clerk/shared/keys", () => ({
 
 import app from "../../app.js";
 import { getAuth } from "@clerk/express";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   // Reset the DB mock row store before each test.
   _mockJobRows = [];

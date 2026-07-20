@@ -74,10 +74,12 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 let currentUserId: string | null = "user-settings-test";
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   currentUserId = "user-settings-test";
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
 });

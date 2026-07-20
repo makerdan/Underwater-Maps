@@ -96,6 +96,9 @@ vi.mock("../middlewares/dataMutationRateLimit.js", () => ({
   SETTINGS_MUTATION_ROUTE: "settings-mutations",
   SETTINGS_MUTATION_WINDOW_MS: 60_000,
   SETTINGS_MUTATION_MAX: 30,
+  BULK_DELETE_MARKERS_ROUTE: "markers-bulk-delete",
+  BULK_DELETE_MARKERS_WINDOW_MS: 60_000,
+  BULK_DELETE_MARKERS_MAX: 5,
 }));
 
 import app from "../app.js";

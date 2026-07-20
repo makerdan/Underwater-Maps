@@ -15,7 +15,7 @@
  *      stored freshwater values must survive the preset switch intact.
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import request from "supertest";
 
 // ─── Shared mock state ────────────────────────────────────────────────────────
@@ -60,6 +60,11 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
+
+beforeEach(() => {
+  __resetRateLimitMemory();
+});
 
 const AUTH = { "x-mock-clerk-user-id": "user_validation_test" };
 

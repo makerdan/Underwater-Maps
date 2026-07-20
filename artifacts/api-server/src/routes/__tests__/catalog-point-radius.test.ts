@@ -100,10 +100,12 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
 
 import app from "../../app.js";
 import { searchCatalog } from "../../lib/catalogSeeder.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 const searchCatalogMock = vi.mocked(searchCatalog);
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   searchCatalogMock.mockClear();
 });

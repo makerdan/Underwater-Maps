@@ -122,6 +122,7 @@ vi.mock("@clerk/shared/keys", () => ({
 
 import app from "../app.js";
 import { recoverStaleUploadJobs } from "../routes/datasets.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -183,6 +184,7 @@ async function finalizeUpload(
 
 describe("GET /datasets/upload/chunk/status/:uploadId", () => {
   beforeEach(() => {
+  __resetRateLimitMemory();
     resetSelectDefault();
     resetUpdateDefault();
   });

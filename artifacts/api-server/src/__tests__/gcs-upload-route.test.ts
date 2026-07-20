@@ -62,6 +62,7 @@ vi.mock("@clerk/shared/keys", () => ({
 
 import app from "../app.js";
 import { signDatasetUploadUrl, getBucketStatus, getJobByObjectKey, recoverGcsJobStatus } from "../lib/bucketMonitor.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 const AUTHED = { "x-mock-clerk-user-id": "user_test_gcs" };
 
@@ -71,6 +72,7 @@ const AUTHED = { "x-mock-clerk-user-id": "user_test_gcs" };
 
 describe("POST /api/datasets/upload/request-gcs-url", () => {
   beforeEach(() => {
+  __resetRateLimitMemory();
     vi.mocked(signDatasetUploadUrl).mockResolvedValue({
       uploadUrl: "https://storage.googleapis.com/test-bucket/pending-datasets/user_test_gcs/uuid-001/survey.csv?sig=fake",
       objectKey: "pending-datasets/user_test_gcs/uuid-001/survey.csv",

@@ -115,6 +115,7 @@ vi.mock("../middlewares/requireAuth.js", () => ({
 vi.mock("../middlewares/rateLimit.js", () => ({
   createRateLimit: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
   stampBaselineRateLimitHeaders: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+  __resetRateLimitMemory: vi.fn(),
 }));
 
 vi.mock("../lib/substrateGrid.js", () => ({
@@ -156,6 +157,7 @@ vi.mock("../lib/bucketMonitor.js", () => ({
 // ---------------------------------------------------------------------------
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 import {
   upscaleMemCache,
   upscaleCacheKey,
@@ -169,6 +171,7 @@ import {
 
 describe("upscale cache — server-side", () => {
   beforeEach(() => {
+  __resetRateLimitMemory();
     upscaleMemCache.clear();
     mockCreate.mockReset();
     __resetUpscaleCacheCounters();

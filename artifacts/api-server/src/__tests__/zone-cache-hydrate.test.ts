@@ -90,6 +90,7 @@ vi.mock("../middlewares/requireAuth.js", () => ({
 vi.mock("../middlewares/rateLimit.js", () => ({
   createRateLimit: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
   stampBaselineRateLimitHeaders: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+  __resetRateLimitMemory: vi.fn(),
 }));
 
 vi.mock("../lib/bucketMonitor.js", () => ({

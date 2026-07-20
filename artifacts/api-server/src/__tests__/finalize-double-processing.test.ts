@@ -125,6 +125,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -177,6 +178,7 @@ async function waitForJobDone(jobId: string): Promise<void> {
 
 describe("POST /datasets/upload/chunk/finalize — double-finalize guard", () => {
   beforeEach(() => {
+  __resetRateLimitMemory();
     resetDbDefaults();
     workerSpawns.count = 0;
   });

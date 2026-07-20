@@ -459,6 +459,7 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
 });
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -530,6 +531,7 @@ const EXPECTED_CATALOG_ID = "ncei-portal-gov.noaa.ncei:test-survey-west-coast-00
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   H.dbState.catalog.length = 0;
   H.dbState.saves.length = 0;

@@ -20,7 +20,7 @@
  * O(N⁴) for sparse data, and the default 256 would be slow in CI.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -84,6 +84,11 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
+
+beforeEach(() => {
+  __resetRateLimitMemory();
+});
 
 const AUTHED_HEADER = { "x-mock-clerk-user-id": "user_bag_upload_tests" };
 

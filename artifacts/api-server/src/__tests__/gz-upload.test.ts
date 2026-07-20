@@ -18,7 +18,7 @@
  * take several minutes.
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import * as zlib from "zlib";
 import { Transform } from "stream";
 import { readFileSync } from "fs";
@@ -103,6 +103,11 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
+
+beforeEach(() => {
+  __resetRateLimitMemory();
+});
 
 const AUTHED_HEADER = { "x-mock-clerk-user-id": "user_gz_tests" };
 

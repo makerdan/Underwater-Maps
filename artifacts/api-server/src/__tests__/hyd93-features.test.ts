@@ -119,6 +119,7 @@ vi.mock("@clerk/shared/keys", () => ({
 
 import { routeTarEntries } from "../lib/noaaTarRouter.js";
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 const AUTHED_HEADER = { "x-mock-clerk-user-id": "user_hyd93_test" };
 const DATASET_ID = "hyd93-test-dataset-id";
@@ -243,6 +244,7 @@ describe("routeTarEntries — HYD93 .a93.gz annotation extraction", () => {
 
 describe("GET /api/user/datasets/:id/hyd93-features", () => {
   beforeEach(() => {
+  __resetRateLimitMemory();
     // Reset to "no row found" between tests so each test controls its own result.
     dbState.selectResult = [];
   });

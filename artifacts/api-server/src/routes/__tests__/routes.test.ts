@@ -188,6 +188,7 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
 });
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 const SAMPLE_WAYPOINTS = [
   { lon: -122.0, lat: 37.0, depth: 10 },
@@ -195,6 +196,7 @@ const SAMPLE_WAYPOINTS = [
 ];
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   state.routes = [];
   currentUserId = "user-a";
   vi.mocked(logger.warn).mockClear();

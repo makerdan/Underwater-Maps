@@ -98,6 +98,7 @@ vi.mock("../../lib/cacheRegistry.js", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 const VALID_PRESET: PresetDataset = {
   id: "test-dataset-01",
@@ -117,6 +118,7 @@ const CORRUPT_PRESET: PresetDataset = {
 };
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   terrainState.presets = [];
 });

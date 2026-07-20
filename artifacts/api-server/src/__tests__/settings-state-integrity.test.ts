@@ -16,7 +16,7 @@
  * via supertest; (2) is a static grep of the source file.
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import request from "supertest";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -66,6 +66,11 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
+
+beforeEach(() => {
+  __resetRateLimitMemory();
+});
 
 const AUTH = { "x-mock-clerk-user-id": "user_integrity_test" };
 

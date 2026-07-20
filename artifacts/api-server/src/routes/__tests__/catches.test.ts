@@ -275,8 +275,10 @@ vi.mock("@workspace/integrations-openai-ai-server", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   state.markerRows = [];
   state.catchRows = [];

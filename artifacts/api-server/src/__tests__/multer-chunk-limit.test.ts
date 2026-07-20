@@ -36,11 +36,13 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 const E2E_USER = "user_chunk_limit_test";
 const CHUNK_6MB_PLUS_ONE = Buffer.alloc(6 * 1024 * 1024 + 1, 0x41);
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
 });
 

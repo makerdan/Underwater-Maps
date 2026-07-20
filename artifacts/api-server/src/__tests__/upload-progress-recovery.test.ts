@@ -93,11 +93,13 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 const E2E_USER = "user_progress_recovery_test";
 const SMALL_CHUNK = Buffer.alloc(512, 0x42);
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   mockDbSelectResult.current = [];
   insertValuesSpy.mockClear();

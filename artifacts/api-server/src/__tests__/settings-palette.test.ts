@@ -8,7 +8,7 @@
  * are exercised end-to-end.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 
 const settingsPaletteMocks = vi.hoisted(() => {
@@ -51,6 +51,11 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
+
+beforeEach(() => {
+  __resetRateLimitMemory();
+});
 
 const AUTH = { "x-mock-clerk-user-id": "user_palette123" };
 
