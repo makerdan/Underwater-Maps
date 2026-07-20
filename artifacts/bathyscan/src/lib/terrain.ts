@@ -9,6 +9,13 @@ export const WORLD_SIZE = 100;
 export const MAX_DEPTH_WORLD = 50;
 
 /**
+ * R3F Canvas initial camera position — must be below the water surface (Y < 0)
+ * so the very first rendered frame is already underwater.
+ * `applyCameraSpawn` (inside useFlyControls) overrides this once terrain loads.
+ */
+export const INITIAL_CAMERA_POSITION: [number, number, number] = [0, -20, 0];
+
+/**
  * Build a Three.js BufferGeometry from a TerrainData grid.
  *
  * - Uses PlaneGeometry(WORLD_SIZE, WORLD_SIZE, N−1, N−1) so there is one

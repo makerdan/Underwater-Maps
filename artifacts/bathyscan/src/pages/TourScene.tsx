@@ -25,7 +25,7 @@ import { DepthPoleLayer, DepthPoleDomLabels } from "@/components/DepthPoleLayer"
 import { GpsMarker } from "@/components/GpsMarker";
 import { DepthProfileLine } from "@/components/DepthProfileLine";
 import type { TidalDataResult } from "@/hooks/useTidalData";
-import { MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
+import { INITIAL_CAMERA_POSITION, MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { runFollowBoundsCheck } from "@/lib/followBoundsCheck";
@@ -123,6 +123,7 @@ const StubFollowBoundsWatcher: React.FC = () => {
 // or upstream flat-plane fallback).
 // ---------------------------------------------------------------------------
 const MAX_LAND_HEIGHT_WORLD = MAX_DEPTH_WORLD * 0.4; // e.g. 20 world units
+
 
 const LandTerrainMesh: React.FC = () => {
   const { terrain } = useAppState();
@@ -987,7 +988,7 @@ export const TourScene: React.FC<TourSceneProps> = ({
           still handles co-planar z-fighting for overlapping surfaces. */}
       <Canvas
         aria-label="3D seafloor terrain viewer"
-        camera={{ position: [0, 20, 40], fov, near: WORLD_SIZE / 10_000, far: renderDistance }}
+        camera={{ position: INITIAL_CAMERA_POSITION, fov, near: WORLD_SIZE / 10_000, far: renderDistance }}
         gl={{
           antialias,
           // E2E-only: keep the WebGL drawing buffer so Playwright can read

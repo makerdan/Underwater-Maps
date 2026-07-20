@@ -54,6 +54,11 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     const prevGeometryRef = useRef<THREE.BufferGeometry | null>(null);
     const prevSkirtGeometryRef = useRef<THREE.BufferGeometry | null>(null);
     const fadeRef = useRef({ opacity: 0, fading: false });
+    // Tracks the grid identity for which the last fade fully completed.
+    // Used to skip opacity resets when the same grid triggers the effect again
+    // (React StrictMode double-invocations, rapid re-renders without a real
+    // dataset change).
+    const completedFadeGridRef = useRef<TerrainData | null>(null);
 
     // Subscribe to AI zone map (updates when classification completes)
     const zoneMap = useClassificationStore((s) => s.zoneMap);
@@ -293,11 +298,34 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     }, [grid.datasetId, synthetic]);
 
     // Trigger fade-in whenever the loaded grid changes.
+    //
+    // Guard: skip the opacity reset when this effect fires for a grid whose fade
+    // already completed (same object identity). This prevents React StrictMode's
+    // double-invocation and rapid re-renders from bouncing opacity back to 0
+    // after useFrame has already started advancing it.
+    //
+    // Stall-recovery: start a 600 ms timeout that forces the mesh fully opaque
+    // if the Three.js render loop is paused (hidden tab, WebGL context pause,
+    // headless e2e) and fading has not completed on its own.
     useEffect(() => {
+      if (completedFadeGridRef.current === grid) return;
+
       material.uniforms["uOpacity"]!.value = 0;
       skirtMaterial.opacity = 0;
       fadeRef.current.opacity = 0;
       fadeRef.current.fading = true;
+
+      const stallTimer = setTimeout(() => {
+        if (fadeRef.current.fading) {
+          material.uniforms["uOpacity"]!.value = 1;
+          skirtMaterial.opacity = 1;
+          fadeRef.current.opacity = 1;
+          fadeRef.current.fading = false;
+          completedFadeGridRef.current = grid;
+        }
+      }, 600);
+
+      return () => clearTimeout(stallTimer);
     }, [grid, material, skirtMaterial]);
 
     // Track the last DataTexture we uploaded so we can dispose it when it changes.
@@ -399,7 +427,10 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
         f.opacity = Math.min(1, f.opacity + delta * 2.5);
         material.uniforms["uOpacity"]!.value = f.opacity;
         skirtMaterial.opacity = f.opacity;
-        if (f.opacity >= 1) f.fading = false;
+        if (f.opacity >= 1) {
+          f.fading = false;
+          completedFadeGridRef.current = grid;
+        }
       }
       // Lamp = camera (submersible viewpoint)
       material.uniforms["uLampPos"]!.value.copy(state.camera.position);
