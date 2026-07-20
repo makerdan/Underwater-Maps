@@ -8,7 +8,7 @@
  * section that actually hits live endpoints. Those tests are skipped by default.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import request from "supertest";
 import express from "express";
 
@@ -104,8 +104,19 @@ vi.mock("../../lib/fetchers/index.js", () => ({
 // Bypass auth for all tests
 // ---------------------------------------------------------------------------
 
+const _prevBypass = process.env["E2E_AUTH_BYPASS"];
+const _prevObjDir = process.env["PRIVATE_OBJECT_DIR"];
 process.env["E2E_AUTH_BYPASS"] = "1";
 process.env["PRIVATE_OBJECT_DIR"] = "/test-bucket/test-prefix/";
+
+// Restore env so later files in the singleFork suite (e.g. the
+// auth-bypass-production-guard test) do not inherit the bypass flag.
+afterAll(() => {
+  if (_prevBypass === undefined) delete process.env["E2E_AUTH_BYPASS"];
+  else process.env["E2E_AUTH_BYPASS"] = _prevBypass;
+  if (_prevObjDir === undefined) delete process.env["PRIVATE_OBJECT_DIR"];
+  else process.env["PRIVATE_OBJECT_DIR"] = _prevObjDir;
+});
 
 // Import after mocks are set up
 const { default: terrainBundlesRouter } = await import("../terrain-bundles.js");

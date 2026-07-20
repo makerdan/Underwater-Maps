@@ -502,6 +502,9 @@ vi.mock("../../lib/terrain.js", () => {
     PRESET_DATASETS: [preset],
     FRESHWATER_PRESET_DATASETS: [],
     NCEI_DATASET_COVERAGES: [],
+    BUNDLED_TERRAIN: [],
+    NYSDEC_BATHY_FEATURE_SERVICE: "https://example.test/nysdec",
+    MN_DNR_BATHY_FEATURE_SERVICE: "https://example.test/mndnr",
     buildTerrainGrid: async (id: string, resolution: number) =>
       makeGrid(id, resolution),
     // GEBCO direct-bbox fetcher used by the non-preset catalog branch.
