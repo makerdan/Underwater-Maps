@@ -19,7 +19,11 @@ Trigger phrases: "clean up tasks", "audit drafts", "prune backlog", "too many op
 
 ## Phase 0 — Re-run guard
 
-Before doing anything else, fetch the full PROPOSED list. Skip (do not process) any task whose title already starts with `DELETE - ` or `CONSOLIDATION - `. Log how many were skipped. If all tasks are already prefixed, print the summary table and stop.
+Before doing anything else, fetch the full PROPOSED list.
+
+**Orphan-recovery check (run first):** Scan PROPOSED tasks for any whose title starts with `CONSOLIDATION - `. For each one found, parse its description to extract the original task refs it covers (they are cited by ref in the "What & Why" section of the consolidation task). For each cited original task that still exists and does not yet have a `DELETE - ` prefix, immediately call `updateProjectTask({taskRef, title:"DELETE - <original title>"})` to prefix it. Report how many orphaned originals were repaired (may be zero). This makes partial-run recovery fully automatic on re-run.
+
+**Skip check (run after orphan recovery):** Skip (do not process) any task whose title already starts with `DELETE - ` or `CONSOLIDATION - `. Log how many were skipped. If all remaining tasks are already prefixed, print the summary table and stop.
 
 ---
 
@@ -105,9 +109,11 @@ In this order:
    - Include all original goals as numbered steps
    - End with a **Regression hardening** section (see format below)
    - Be split across multiple tasks if total steps exceed 5
-2. Call `proposeProjectTasks` with the new consolidation task refs so the user can accept them.
-3. Only after the user accepts the consolidation tasks: rename all DELETE-marked originals by prepending `DELETE - ` via `updateProjectTask({taskRef, title:"DELETE - <original title>"})`. Batch these calls.
-4. Rename the original tasks of each consolidation group the same way.
+2. Rename all DELETE-marked originals by prepending `DELETE - ` via `updateProjectTask({taskRef, title:"DELETE - <original title>"})`. Batch these calls.
+3. Rename the original tasks of each consolidation group the same way (prepend `DELETE - `). Batch these calls.
+4. Call `proposeProjectTasks` with the new consolidation task refs so the user can accept them.
+
+**Important:** Steps 2 and 3 (all `updateProjectTask` rename calls) must run **before** `proposeProjectTasks`. `proposeProjectTasks` pauses the agent loop; any mutation placed after it will not execute in the same run.
 
 ---
 
@@ -151,3 +157,4 @@ Skipped (already prefixed): N tasks
 - **Never touch PENDING, IN_PROGRESS, IMPLEMENTED, or MERGED tasks** — scope is PROPOSED only.
 - **Re-run safe** — tasks already prefixed `DELETE - ` or `CONSOLIDATION - ` are always skipped in Phase 0.
 - **Orphan check first** — never DELETE a task with downstream dependents without flagging the orphan risk.
+- **Never place `updateProjectTask` rename calls after `proposeProjectTasks`** — `proposeProjectTasks` pauses the agent loop; any mutation placed after it will not execute in the same run. All renames must complete before `proposeProjectTasks` is called.
