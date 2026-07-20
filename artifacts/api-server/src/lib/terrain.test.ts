@@ -324,4 +324,59 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     const priority = getDatasetSourcePriority("thorne-bay");
     expect(priority[0]).toBe("ncei-bag-mosaic");
   });
+
+  // -------------------------------------------------------------------------
+  // MN DNR routing regression guard
+  // -------------------------------------------------------------------------
+
+  it("DATASET_SOURCE_PRIORITY: MN DNR surveyed lakes list mn-dnr-bathy first (not usgs-3dep or gebco)", () => {
+    const mnDnrSurveyedIds = [
+      "fw-lake-minnetonka-mn",
+      "fw-mille-lacs-lake-mn",
+    ];
+    for (const id of mnDnrSurveyedIds) {
+      const priority = getDatasetSourcePriority(id);
+      expect(
+        priority[0],
+        `${id} must route to mn-dnr-bathy first — a regression here silently falls through to ${priority[1] ?? "gebco"} at coarse resolution`,
+      ).toBe("mn-dnr-bathy");
+      expect(
+        priority[0],
+        `${id} must NOT route to usgs-3dep or gebco first`,
+      ).not.toMatch(/^(usgs-3dep|gebco)$/);
+    }
+  });
+
+  it("DATASET_SOURCE_PRIORITY: all five MN lakes have explicit entries (not falling through to DEFAULT_SOURCE_PRIORITY)", () => {
+    const mnLakeIds = [
+      "fw-lake-minnetonka-mn",
+      "fw-mille-lacs-lake-mn",
+      "fw-leech-lake-mn",
+      "fw-red-lake-mn",
+      "fw-lake-of-the-woods",
+    ];
+    for (const id of mnLakeIds) {
+      expect(
+        Object.prototype.hasOwnProperty.call(DATASET_SOURCE_PRIORITY, id),
+        `${id} must have an explicit DATASET_SOURCE_PRIORITY entry`,
+      ).toBe(true);
+    }
+  });
+
+  it("DATASET_SOURCE_PRIORITY: all five MN lakes include gebco as final fallback", () => {
+    const mnLakeIds = [
+      "fw-lake-minnetonka-mn",
+      "fw-mille-lacs-lake-mn",
+      "fw-leech-lake-mn",
+      "fw-red-lake-mn",
+      "fw-lake-of-the-woods",
+    ];
+    for (const id of mnLakeIds) {
+      const priority = getDatasetSourcePriority(id);
+      expect(
+        priority[priority.length - 1],
+        `${id} must have gebco as the final fallback`,
+      ).toBe("gebco");
+    }
+  });
 });
