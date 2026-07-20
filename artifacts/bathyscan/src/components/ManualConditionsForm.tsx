@@ -292,9 +292,12 @@ export const ManualConditionsForm: React.FC<ManualConditionsFormProps> = ({
     return fields.includes(f);
   }, [fields]);
 
-  // Sync if persisted conditions change externally (e.g. hydration from server)
+  // Sync draft when external conditions change (e.g. persist hydration, or another
+  // component applies conditions to the same dataset). Session takes precedence.
   useEffect(() => {
-    if (!sessionConditions && persistedConditions) {
+    if (sessionConditions) {
+      setDraft(sessionConditions);
+    } else if (persistedConditions) {
       setDraft(persistedConditions);
       setRemember(true);
     }

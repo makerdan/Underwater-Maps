@@ -7,9 +7,12 @@
  *   • snapshot.estimated is false and currentsAvailable is true under manual mode
  *   • per-dataset keying: switching datasetId changes the active conditions
  *   • source="real" falls back to the API-derived snapshot
+ *   • ManualConditionsForm drift preview is non-blank on first render when
+ *     session conditions are pre-set (stale-init regression guard)
  */
+import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { renderHook, render, screen } from "@testing-library/react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import type { ManualConditions } from "@/lib/settingsStore";
@@ -205,5 +208,87 @@ describe("useSurfaceConditions — manual conditions wiring", () => {
     const { result } = renderHook(() => useSurfaceConditions());
     // Falls back to API snapshot because manualConds is null
     expect(result.current.snapshot?.windSpeedKnots).toBe(5);
+  });
+});
+
+// ── Stale-init regression: drift preview on first render ──────────────────────
+//
+// Guards against: drift preview showing blank or 0 on first render when the
+// form opens with persisted session conditions.
+//
+// These tests render ManualConditionsForm directly against the real Zustand
+// stores (settingsStore + uiStore) — no component-level mock needed because
+// all of the form's dependencies (boatPhysics, units, boatProfiles) are pure
+// functions that work without additional mocking.
+
+describe("ManualConditionsForm — drift preview init (stale-init regression)", () => {
+  beforeEach(() => {
+    useSettingsStore.setState({
+      datasetManualConditions: {},
+      manualConditionsActiveSource: {},
+    });
+    useUiStore.setState({ sessionManualConditions: {} });
+  });
+
+  it("preview shows non-zero km on first render when sessionConditions are pre-set", async () => {
+    const { ManualConditionsForm } = await import("@/components/ManualConditionsForm");
+
+    useUiStore.setState({
+      sessionManualConditions: {
+        [LAKE_A]: SAMPLE_A,
+      },
+    });
+
+    render(<ManualConditionsForm datasetId={LAKE_A} />);
+
+    const previewEl = screen.getByTestId("manual-conditions-drift-preview-value");
+    expect(previewEl.textContent).toMatch(/km/);
+    // SAMPLE_A has non-zero wind (12 kn) and current (0.5 kn) — preview must
+    // show a distance > 0, never blank or literally "0 km"
+    expect(previewEl.textContent).not.toMatch(/^~0\.0 km/);
+  });
+
+  it("preview shows correct non-default value when persistedConditions are pre-set and no session", async () => {
+    const { ManualConditionsForm } = await import("@/components/ManualConditionsForm");
+
+    useSettingsStore.setState({
+      datasetManualConditions: { [LAKE_A]: SAMPLE_A },
+      manualConditionsActiveSource: {},
+    });
+
+    render(<ManualConditionsForm datasetId={LAKE_A} />);
+
+    const previewEl = screen.getByTestId("manual-conditions-drift-preview-value");
+    // Must show km — never blank
+    expect(previewEl.textContent).toMatch(/km/);
+    // SAMPLE_A wind=12 kn, current=0.5 kn → drift > 0.1 km
+    const windInput = screen.getByTestId("manual-conditions-wind-speed") as HTMLInputElement;
+    expect(Number(windInput.value)).toBe(SAMPLE_A.windSpeedKnots);
+  });
+
+  it("preview reflects session conditions even before user interacts with the form", async () => {
+    const { ManualConditionsForm } = await import("@/components/ManualConditionsForm");
+
+    const highWindConditions: ManualConditions = {
+      windSpeedKnots: 40,
+      windDirectionDeg: 0,
+      surfaceTempC: null,
+      currentSpeedKnots: 2,
+      currentDirectionDeg: 0,
+      waterLevelM: null,
+    };
+    useUiStore.setState({
+      sessionManualConditions: { [LAKE_A]: highWindConditions },
+    });
+
+    render(<ManualConditionsForm datasetId={LAKE_A} />);
+
+    const windInput = screen.getByTestId("manual-conditions-wind-speed") as HTMLInputElement;
+    // Form must open with the session values (40 kn), not with DEFAULT_CONDITIONS (8 kn)
+    expect(Number(windInput.value)).toBe(40);
+
+    const previewEl = screen.getByTestId("manual-conditions-drift-preview-value");
+    // High wind → drift estimate must show km, not blank
+    expect(previewEl.textContent).toMatch(/km/);
   });
 });

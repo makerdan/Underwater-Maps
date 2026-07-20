@@ -89,6 +89,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useDriftStore } from "@/lib/driftStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
 import { WeatherPanel } from "@/components/WeatherPanel";
+import { DriftPlannerPanel } from "@/components/DriftPlannerPanel";
 import { DriftTimeline } from "@/components/DriftTimeline";
 import { HelpButton } from "@/components/help/HelpButton";
 import { HelpWindow } from "@/components/help/HelpWindow";
@@ -1442,6 +1443,7 @@ function Main() {
               {/* (2) Drift & Route — drift planner */}
               <SidebarSectionGroup>
                 <SidebarSection id="driftRoute" title="Drift & Route">
+                  <DriftPlannerPanel />
                   {!driftPlannerActive ? (
                     <div
                       data-testid="drift-empty-state"
