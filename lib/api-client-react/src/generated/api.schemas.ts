@@ -3942,3 +3942,74 @@ export type ListGithubWorkflowRuns200 = {
   workflow_runs: GithubWorkflowRun[];
 };
 
+export type PostTerrainBundlesBody = {
+  /** Preset dataset ID to fetch bathymetry for */
+  presetId: string;
+};
+
+export type PostTerrainBundles200Status = typeof PostTerrainBundles200Status[keyof typeof PostTerrainBundles200Status];
+
+
+export const PostTerrainBundles200Status = {
+  complete: 'complete',
+} as const;
+
+export type PostTerrainBundles200 = {
+  jobId?: string;
+  status?: PostTerrainBundles200Status;
+  message?: string;
+};
+
+export type PostTerrainBundles202Status = typeof PostTerrainBundles202Status[keyof typeof PostTerrainBundles202Status];
+
+
+export const PostTerrainBundles202Status = {
+  pending: 'pending',
+  running: 'running',
+} as const;
+
+export type PostTerrainBundles202 = {
+  jobId?: string;
+  status?: PostTerrainBundles202Status;
+  message?: string;
+};
+
+export type GetTerrainBundlesPresetIdStatus200Status = typeof GetTerrainBundlesPresetIdStatus200Status[keyof typeof GetTerrainBundlesPresetIdStatus200Status];
+
+
+export const GetTerrainBundlesPresetIdStatus200Status = {
+  pending: 'pending',
+  running: 'running',
+  complete: 'complete',
+  error: 'error',
+} as const;
+
+export type GetTerrainBundlesPresetIdStatus200 = {
+  jobId?: string;
+  status?: GetTerrainBundlesPresetIdStatus200Status;
+  progressNote?: string | null;
+  errorMessage?: string | null;
+  createdAt?: string;
+  completedAt?: string | null;
+};
+
+/**
+ * Processed depth grid bundle with metadata
+ */
+export type GetTerrainBundlesPresetId200 = { [key: string]: unknown };
+
+export type GetTerrainBundlesPresetId202Status = typeof GetTerrainBundlesPresetId202Status[keyof typeof GetTerrainBundlesPresetId202Status];
+
+
+export const GetTerrainBundlesPresetId202Status = {
+  pending: 'pending',
+  running: 'running',
+  error: 'error',
+} as const;
+
+export type GetTerrainBundlesPresetId202 = {
+  jobId?: string;
+  status?: GetTerrainBundlesPresetId202Status;
+  message?: string;
+};
+

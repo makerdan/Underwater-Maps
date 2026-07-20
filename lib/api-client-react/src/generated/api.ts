@@ -66,6 +66,9 @@ import type {
   GetRoutesParams,
   GetSurfaceConditionsParams,
   GetTemperatureProfileParams,
+  GetTerrainBundlesPresetId200,
+  GetTerrainBundlesPresetId202,
+  GetTerrainBundlesPresetIdStatus200,
   GetTerrainDownloadInfo200,
   GetTerrainDownloadInfoParams,
   GetTerrainDownloadParams,
@@ -125,6 +128,9 @@ import type {
   PostDatasetsPointRadiusQueryBody,
   PostDatasetsUploadBody,
   PostGithubWorkflowDispatchBody,
+  PostTerrainBundles200,
+  PostTerrainBundles202,
+  PostTerrainBundlesBody,
   PutGithubFileContents200,
   PutGithubFileContentsBody,
   QueryResult,
@@ -9155,6 +9161,241 @@ export function useGetGithubWorkflowRun<TData = Awaited<ReturnType<typeof getGit
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetGithubWorkflowRunQueryOptions(owner,repo,runId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostTerrainBundlesUrl = () => {
+
+
+
+
+  return `/api/terrain/bundles`
+}
+
+/**
+ * Creates or re-queues a background job that fetches a full bathymetry
+grid for the specified preset and writes it to the authenticated user's
+private GCS storage.  Returns immediately with the job ID and status.
+Poll `GET /terrain/bundles/{presetId}/status` for progress.
+
+ * @summary Trigger on-demand bathymetry bundle download
+ */
+export const postTerrainBundles = async (postTerrainBundlesBody: PostTerrainBundlesBody, options?: RequestInit): Promise<PostTerrainBundles200 | PostTerrainBundles202> => {
+
+  return customFetch<PostTerrainBundles200 | PostTerrainBundles202>(getPostTerrainBundlesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      postTerrainBundlesBody,)
+  }
+);}
+
+
+
+
+export const getPostTerrainBundlesMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTerrainBundles>>, TError,{data: BodyType<PostTerrainBundlesBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postTerrainBundles>>, TError,{data: BodyType<PostTerrainBundlesBody>}, TContext> => {
+
+const mutationKey = ['postTerrainBundles'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postTerrainBundles>>, {data: BodyType<PostTerrainBundlesBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postTerrainBundles(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostTerrainBundlesMutationResult = NonNullable<Awaited<ReturnType<typeof postTerrainBundles>>>
+    export type PostTerrainBundlesMutationBody = BodyType<PostTerrainBundlesBody>
+    export type PostTerrainBundlesMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Trigger on-demand bathymetry bundle download
+ */
+export const usePostTerrainBundles = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTerrainBundles>>, TError,{data: BodyType<PostTerrainBundlesBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postTerrainBundles>>,
+        TError,
+        {data: BodyType<PostTerrainBundlesBody>},
+        TContext
+      > => {
+      return useMutation(getPostTerrainBundlesMutationOptions(options));
+    }
+
+export const getGetTerrainBundlesPresetIdStatusUrl = (presetId: string,) => {
+
+
+
+
+  return `/api/terrain/bundles/${presetId}/status`
+}
+
+/**
+ * Returns the current state of the on-demand download job for this preset.
+ * @summary Get bundle job status
+ */
+export const getTerrainBundlesPresetIdStatus = async (presetId: string, options?: RequestInit): Promise<GetTerrainBundlesPresetIdStatus200> => {
+
+  return customFetch<GetTerrainBundlesPresetIdStatus200>(getGetTerrainBundlesPresetIdStatusUrl(presetId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTerrainBundlesPresetIdStatusQueryKey = (presetId: string,) => {
+    return [
+    `/api/terrain/bundles/${presetId}/status`
+    ] as const;
+    }
+
+
+export const getGetTerrainBundlesPresetIdStatusQueryOptions = <TData = Awaited<ReturnType<typeof getTerrainBundlesPresetIdStatus>>, TError = ErrorType<ApiError>>(presetId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainBundlesPresetIdStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTerrainBundlesPresetIdStatusQueryKey(presetId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTerrainBundlesPresetIdStatus>>> = ({ signal }) => getTerrainBundlesPresetIdStatus(presetId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(presetId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTerrainBundlesPresetIdStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTerrainBundlesPresetIdStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getTerrainBundlesPresetIdStatus>>>
+export type GetTerrainBundlesPresetIdStatusQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get bundle job status
+ */
+
+export function useGetTerrainBundlesPresetIdStatus<TData = Awaited<ReturnType<typeof getTerrainBundlesPresetIdStatus>>, TError = ErrorType<ApiError>>(
+ presetId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainBundlesPresetIdStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTerrainBundlesPresetIdStatusQueryOptions(presetId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetTerrainBundlesPresetIdUrl = (presetId: string,) => {
+
+
+
+
+  return `/api/terrain/bundles/${presetId}`
+}
+
+/**
+ * Returns the full processed bathymetry bundle for a preset if the
+download job is complete.  Returns 202 if still pending/running,
+or 404 if no job exists.
+
+ * @summary Get processed bathymetry bundle
+ */
+export const getTerrainBundlesPresetId = async (presetId: string, options?: RequestInit): Promise<GetTerrainBundlesPresetId200 | GetTerrainBundlesPresetId202> => {
+
+  return customFetch<GetTerrainBundlesPresetId200 | GetTerrainBundlesPresetId202>(getGetTerrainBundlesPresetIdUrl(presetId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTerrainBundlesPresetIdQueryKey = (presetId: string,) => {
+    return [
+    `/api/terrain/bundles/${presetId}`
+    ] as const;
+    }
+
+
+export const getGetTerrainBundlesPresetIdQueryOptions = <TData = Awaited<ReturnType<typeof getTerrainBundlesPresetId>>, TError = ErrorType<ApiError>>(presetId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainBundlesPresetId>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTerrainBundlesPresetIdQueryKey(presetId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTerrainBundlesPresetId>>> = ({ signal }) => getTerrainBundlesPresetId(presetId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(presetId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTerrainBundlesPresetId>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTerrainBundlesPresetIdQueryResult = NonNullable<Awaited<ReturnType<typeof getTerrainBundlesPresetId>>>
+export type GetTerrainBundlesPresetIdQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get processed bathymetry bundle
+ */
+
+export function useGetTerrainBundlesPresetId<TData = Awaited<ReturnType<typeof getTerrainBundlesPresetId>>, TError = ErrorType<ApiError>>(
+ presetId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTerrainBundlesPresetId>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTerrainBundlesPresetIdQueryOptions(presetId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

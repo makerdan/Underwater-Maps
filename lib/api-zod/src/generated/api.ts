@@ -4644,3 +4644,56 @@ export const GetGithubWorkflowRunResponse = zod.object({
 }).describe('Slim representation of a GitHub Actions workflow run')
 
 
+/**
+ * Creates or re-queues a background job that fetches a full bathymetry
+grid for the specified preset and writes it to the authenticated user's
+private GCS storage.  Returns immediately with the job ID and status.
+Poll `GET /terrain/bundles/{presetId}/status` for progress.
+
+ * @summary Trigger on-demand bathymetry bundle download
+ */
+export const PostTerrainBundlesBody = zod.object({
+  "presetId": zod.string().describe('Preset dataset ID to fetch bathymetry for')
+})
+
+export const PostTerrainBundlesResponse = zod.object({
+  "jobId": zod.string().uuid().optional(),
+  "status": zod.enum(['complete']).optional(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * Returns the current state of the on-demand download job for this preset.
+ * @summary Get bundle job status
+ */
+export const GetTerrainBundlesPresetIdStatusParams = zod.object({
+  "presetId": zod.coerce.string().describe('Preset dataset ID')
+})
+
+export const GetTerrainBundlesPresetIdStatusResponse = zod.object({
+  "jobId": zod.string().uuid().optional(),
+  "status": zod.enum(['pending', 'running', 'complete', 'error']).optional(),
+  "progressNote": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional(),
+  "completedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * Returns the full processed bathymetry bundle for a preset if the
+download job is complete.  Returns 202 if still pending/running,
+or 404 if no job exists.
+
+ * @summary Get processed bathymetry bundle
+ */
+export const GetTerrainBundlesPresetIdParams = zod.object({
+  "presetId": zod.coerce.string().describe('Preset dataset ID')
+})
+
+export const GetTerrainBundlesPresetIdResponse = zod.object({
+
+}).passthrough().describe('Processed depth grid bundle with metadata')
+
+
