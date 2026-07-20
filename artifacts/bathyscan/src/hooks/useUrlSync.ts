@@ -31,19 +31,18 @@ export function useUrlSync(datasetId: string | null, appReady: boolean): void {
 
     function pushUrl(): void {
       lastFiredRef.current = Date.now();
-      const { cameraLon, cameraLat, cameraDepth, heading } =
+      const { cameraPosition, cameraDepth, heading } =
         useCameraStore.getState();
       if (
-        cameraLon === null ||
-        cameraLat === null ||
+        !cameraPosition.known ||
         cameraDepth === null ||
         !datasetId
       )
         return;
 
       const qs = encodeViewParams({
-        lon: cameraLon,
-        lat: cameraLat,
+        lon: cameraPosition.lon,
+        lat: cameraPosition.lat,
         depth: cameraDepth,
         heading,
         datasetId,
@@ -79,8 +78,7 @@ export function useUrlSync(datasetId: string | null, appReady: boolean): void {
     // every frame; filtering here avoids unnecessary schedule() calls.
     const unsub = useCameraStore.subscribe((state, prevState) => {
       if (
-        state.cameraLon !== prevState.cameraLon ||
-        state.cameraLat !== prevState.cameraLat ||
+        state.cameraPosition !== prevState.cameraPosition ||
         state.cameraDepth !== prevState.cameraDepth ||
         state.heading !== prevState.heading
       ) {

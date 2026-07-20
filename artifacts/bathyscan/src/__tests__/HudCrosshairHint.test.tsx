@@ -103,8 +103,7 @@ beforeEach(() => {
   useCameraStore.setState({
     crosshairGps: { lon: -122.4, lat: 47.6, depth: 50 },
     lastClickedGps: null,
-    cameraLon: null,
-    cameraLat: null,
+    cameraPosition: { known: false },
     cameraDepth: null,
     heading: 0,
     speedIndex: 0,

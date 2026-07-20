@@ -25,7 +25,7 @@ export interface FollowCheckState {
  *          may proceed with camera tracking), false otherwise.
  */
 export function runFollowBoundsCheck(state: FollowCheckState): boolean {
-  const followMode = useCameraStore.getState().gpsFollowMode;
+  const followMode = useCameraStore.getState().gpsFollowState !== "off";
   if (!followMode) {
     state.toastFired = false;
     return false;

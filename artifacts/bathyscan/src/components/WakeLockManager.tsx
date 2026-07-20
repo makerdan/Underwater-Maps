@@ -12,7 +12,7 @@ import { useCameraStore } from "@/lib/cameraStore";
 
 export const WakeLockManager: React.FC = () => {
   const sidebarMode = useUiStore((s) => s.sidebarMode);
-  const gpsFollowMode = useCameraStore((s) => s.gpsFollowMode);
-  useWakeLock(sidebarMode === "live" || gpsFollowMode);
+  const gpsFollowActive = useCameraStore((s) => s.gpsFollowState !== "off");
+  useWakeLock(sidebarMode === "live" || gpsFollowActive);
   return null;
 };

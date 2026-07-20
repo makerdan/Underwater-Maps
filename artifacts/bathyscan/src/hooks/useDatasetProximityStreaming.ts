@@ -114,9 +114,9 @@ export function useDatasetProximityStreaming({
   useEffect(() => {
     const tick = () => {
       const cam = useCameraStore.getState();
-      if (cam.cameraLon === null || cam.cameraLat === null) return;
-      const camLon = cam.cameraLon;
-      const camLat = cam.cameraLat;
+      if (!cam.cameraPosition.known) return;
+      const camLon = cam.cameraPosition.lon;
+      const camLat = cam.cameraPosition.lat;
 
       const { selectedIds, selectedSources, visibleDatasets } =
         useTerrainStore.getState();

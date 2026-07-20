@@ -183,7 +183,8 @@ export const HUD: React.FC = () => {
     return formatted;
   };
 
-  const gpsFollowMode = useCameraStore((s) => s.gpsFollowMode);
+  const gpsFollowState = useCameraStore((s) => s.gpsFollowState);
+  const gpsFollowMode = gpsFollowState !== "off";
   const setGpsFollowMode = useCameraStore((s) => s.setGpsFollowMode);
 
   const gpsInBounds = gpsActive && gpsPosition && overviewGrid &&
@@ -500,7 +501,7 @@ export const HUD: React.FC = () => {
               data-testid="hud-gps-follow-toggle"
               aria-pressed={gpsFollowMode}
               disabled={!gpsInBounds}
-              onClick={() => setGpsFollowMode(!gpsFollowMode)}
+              onClick={() => setGpsFollowMode(gpsFollowState === "off")}
               style={{
                 ...PANEL,
                 pointerEvents: "auto",

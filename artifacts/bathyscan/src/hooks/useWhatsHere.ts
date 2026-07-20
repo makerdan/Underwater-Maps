@@ -88,7 +88,7 @@ export function useWhatsHere(
   }, [depth, sstAnchor]);
 
   const habitatScore = useMemo((): number | null => {
-    if (!activeSpecies || !scores || !terrain || lat === null || lon === null) return null;
+    if (!activeSpecies || scores.status !== "done" || !terrain || lat === null || lon === null) return null;
     const N = terrain.resolution;
     if (!N || N < 1) return null;
     const lonRange = terrain.maxLon - terrain.minLon;
@@ -97,7 +97,7 @@ export function useWhatsHere(
     const col = Math.max(0, Math.min(N - 1, Math.round(((lon - terrain.minLon) / lonRange) * (N - 1))));
     const row = Math.max(0, Math.min(N - 1, Math.round(((lat - terrain.minLat) / latRange) * (N - 1))));
     const idx = row * N + col;
-    const s = scores[idx];
+    const s = scores.data[idx];
     return s !== undefined ? s : null;
   }, [activeSpecies, scores, terrain, lat, lon]);
 

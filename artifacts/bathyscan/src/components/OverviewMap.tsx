@@ -299,8 +299,7 @@ export const OverviewMap: React.FC = () => {
   const [svgTransform, setSvgTransform] = useState<OverviewTransform | null>(null);
 
   // Camera position selectors (reactive — update camera arrow in SVG without waiting for rAF).
-  const cameraLon = useCameraStore((s) => s.cameraLon);
-  const cameraLat = useCameraStore((s) => s.cameraLat);
+  const cameraPosition = useCameraStore((s) => s.cameraPosition);
   const cameraHeading = useCameraStore((s) => s.heading);
 
   // Marker visibility settings (reactive for SVG render and context-menu close guard).
@@ -1348,10 +1347,10 @@ export const OverviewMap: React.FC = () => {
       // Habitat overlay (drawn above depth heatmap, below markers)
       const habitatScores = useHabitatStore.getState().scores;
       const habitatActive = useHabitatStore.getState().activeSpecies !== null;
-      if (habitatActive && habitatScores) {
+      if (habitatActive && habitatScores.status === "done") {
         // renderHabitatOverlay scales habitat scores to the primary grid's bbox —
         // must use overviewGrid, not the synthetic world-extent grid.
-        renderHabitatOverlay(ctx, habitatScores, grid, t);
+        renderHabitatOverlay(ctx, habitatScores.data, grid, t);
       }
 
       // EFH overlay (dashed species polygon outlines + legend)
@@ -2115,8 +2114,8 @@ export const OverviewMap: React.FC = () => {
             })}
 
             {/* ── Camera arrow ──────────────────────────────────────────────── */}
-            {cameraLon !== null && cameraLat !== null && (() => {
-              const [cx, cy] = lonLatToCanvas(cameraLon, cameraLat, wg, svgTransform);
+            {cameraPosition.known && (() => {
+              const [cx, cy] = lonLatToCanvas(cameraPosition.lon, cameraPosition.lat, wg, svgTransform);
               if (!inCanvas(cx, cy, 20)) return null;
               const size = 11;
               const rot = 180 - cameraHeading;

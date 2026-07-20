@@ -59,6 +59,7 @@
     "@vitest/ui": "^4.1.7",
     "@workspace/api-client-react": "workspace:*",
     "@workspace/api-zod": "workspace:*",
+    "@workspace/shared-types": "workspace:*",
     "axe-core": "^4.11.4",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",

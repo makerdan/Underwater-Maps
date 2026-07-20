@@ -174,8 +174,7 @@ function setupStores() {
   });
 
   useCameraStore.setState({
-    cameraLon: -120.5,
-    cameraLat: 48.0,
+    cameraPosition: { known: true, lon: -120.5, lat: 48.0 },
     heading: 0,
     cameraDepth: 50,
     cameraAltitude: 30,

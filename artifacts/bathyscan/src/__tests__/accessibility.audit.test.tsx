@@ -372,12 +372,12 @@ describe("CanvasAriaAnnouncer aria-live region", () => {
       const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
       React.useEffect(() => {
         const unsub = useCameraStore.subscribe((state) => {
-          const { cameraLon, cameraLat, cameraDepth } = state;
-          if (cameraLon === null || cameraLat === null || cameraDepth === null) return;
+          const { cameraPosition, cameraDepth } = state;
+          if (!cameraPosition.known || cameraDepth === null) return;
           if (timerRef.current !== null) clearTimeout(timerRef.current);
           timerRef.current = setTimeout(() => {
             setText(
-              `Depth ${Math.round(cameraDepth)} m, lat ${cameraLat.toFixed(4)}, lon ${cameraLon.toFixed(4)}`,
+              `Depth ${Math.round(cameraDepth)} m, lat ${cameraPosition.lat.toFixed(4)}, lon ${cameraPosition.lon.toFixed(4)}`,
             );
           }, 0);
         });
@@ -410,7 +410,7 @@ describe("CanvasAriaAnnouncer aria-live region", () => {
     expect(region).toHaveAttribute("aria-atomic", "true");
 
     await act(async () => {
-      useCameraStore.setState({ cameraLon: -122.5, cameraLat: 37.8, cameraDepth: 45 });
+      useCameraStore.setState({ cameraPosition: { known: true, lon: -122.5, lat: 37.8 }, cameraDepth: 45 });
       await new Promise((r) => setTimeout(r, 20));
     });
 

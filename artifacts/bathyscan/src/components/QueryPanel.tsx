@@ -113,8 +113,8 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
       waterType:   grid?.waterType,
       minDepth:    grid?.minDepth ?? 0,
       maxDepth:    grid?.maxDepth ?? 1000,
-      cameraLon:   cam.cameraLon,
-      cameraLat:   cam.cameraLat,
+      cameraLon:   cam.cameraPosition.known ? cam.cameraPosition.lon : null,
+      cameraLat:   cam.cameraPosition.known ? cam.cameraPosition.lat : null,
       cameraDepth: cam.cameraDepth,
       topZones,
     };

@@ -16,6 +16,8 @@ export interface QueryContext {
   maxDepth: number;
   cameraLon: number | null;
   cameraLat: number | null;
+  // NOTE: these fields use nullable numbers rather than CameraPosition so the
+  // LLM context payload stays a plain serialisable shape.
   cameraDepth: number | null;
   topZones: string[];
 }

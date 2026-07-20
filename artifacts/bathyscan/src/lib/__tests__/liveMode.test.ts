@@ -59,7 +59,7 @@ beforeEach(() => {
   const trail = useTrailStore.getState();
   if (trail.recording) trail.stopRecording();
   useTrailStore.getState().clearPoints();
-  useCameraStore.setState({ gpsFollowMode: false });
+  useCameraStore.setState({ gpsFollowState: "off" });
   useSettingsStore.setState({ gpsRecordingInterval: 1000 });
 });
 
@@ -85,14 +85,14 @@ describe("liveMode — entering", () => {
 
   it("does NOT enable follow mode before the first GPS fix", () => {
     enterLiveMode();
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
   });
 
   it("enables follow mode when the first GPS fix arrives", () => {
     enterLiveMode();
     fireFix();
     expect(useGpsStore.getState().active).toBe(true);
-    expect(useCameraStore.getState().gpsFollowMode).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("off");
   });
 
   it("enables follow mode immediately when GPS is already active", () => {
@@ -102,7 +102,7 @@ describe("liveMode — entering", () => {
       position: { longitude: 142, latitude: 11, accuracy: 5, timestamp: Date.now() },
     });
     enterLiveMode();
-    expect(useCameraStore.getState().gpsFollowMode).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("off");
   });
 
   it("is idempotent — a second enter does not restart the watch", () => {
@@ -119,7 +119,7 @@ describe("liveMode — GPS errors", () => {
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "GPS unavailable" }),
     );
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
   });
 
   it("surfaces a toast when geolocation is unsupported", () => {
@@ -138,9 +138,9 @@ describe("liveMode — exiting", () => {
   it("disables follow mode", () => {
     enterLiveMode();
     fireFix();
-    expect(useCameraStore.getState().gpsFollowMode).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("off");
     exitLiveMode();
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
     expect(isLiveModeActive()).toBe(false);
   });
 
@@ -196,7 +196,7 @@ describe("liveMode — exiting", () => {
     enterLiveMode();
     exitLiveMode();
     fireFix();
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
   });
 });
 

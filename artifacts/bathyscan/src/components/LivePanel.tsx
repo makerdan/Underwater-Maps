@@ -74,9 +74,10 @@ export const LivePanel: React.FC = () => {
   const startRecording = useTrailStore((s) => s.startRecording);
   const stopRecording = useTrailStore((s) => s.stopRecording);
 
-  const gpsFollowMode = useCameraStore((s) => s.gpsFollowMode);
+  const gpsFollowState = useCameraStore((s) => s.gpsFollowState);
+  const gpsFollowMode = gpsFollowState !== "off";
+  const followPausedByInteraction = gpsFollowState === "paused";
   const setGpsFollowMode = useCameraStore((s) => s.setGpsFollowMode);
-  const followPausedByInteraction = useCameraStore((s) => s.followPausedByInteraction);
   const followResumeDelaySec = useSettingsStore((s) => s.followResumeDelaySec);
 
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
@@ -366,7 +367,7 @@ export const LivePanel: React.FC = () => {
         aria-pressed={gpsFollowMode}
         data-follow-paused={gpsFollowMode && followPausedByInteraction ? "true" : "false"}
         disabled={!gpsActive}
-        onClick={() => setGpsFollowMode(!gpsFollowMode)}
+        onClick={() => setGpsFollowMode(gpsFollowState === "off")}
         style={bigButtonStyle(gpsFollowMode, gpsActive)}
       >
         {gpsFollowMode

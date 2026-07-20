@@ -775,12 +775,12 @@ const CanvasAriaAnnouncer: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = useCameraStore.subscribe((state) => {
-      const { cameraLon, cameraLat, cameraDepth } = state;
-      if (cameraLon === null || cameraLat === null || cameraDepth === null) return;
+      const { cameraPosition, cameraDepth } = state;
+      if (!cameraPosition.known || cameraDepth === null) return;
       if (timerRef.current !== null) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         setText(
-          `Depth ${Math.round(cameraDepth)} m, lat ${cameraLat.toFixed(4)}, lon ${cameraLon.toFixed(4)}`,
+          `Depth ${Math.round(cameraDepth)} m, lat ${cameraPosition.lat.toFixed(4)}, lon ${cameraPosition.lon.toFixed(4)}`,
         );
       }, 1000);
     });

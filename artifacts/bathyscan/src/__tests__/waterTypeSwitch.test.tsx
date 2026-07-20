@@ -119,7 +119,7 @@ function resetAllStores() {
   });
   useHabitatStore.setState({
     activeSpecies: null,
-    scores: null,
+    scores: { status: "idle" } as never,
     hotspots: [],
     scoreCache: new Map(),
   });
@@ -151,7 +151,7 @@ describe("water-type switch (end-to-end)", () => {
     });
     useHabitatStore.setState({
       activeSpecies: "rockfish" as never,
-      scores: new Float32Array([0.5, 0.6]),
+      scores: { status: "done", data: new Float32Array([0.5, 0.6]) } as never,
       hotspots: [{ row: 1, col: 2 } as never],
       scoreCache: new Map(),
     });
@@ -183,7 +183,7 @@ describe("water-type switch (end-to-end)", () => {
     expect(useClassificationStore.getState().hasEdits).toBe(false);
     expect(useClassificationStore.getState().currentGridHash).toBeNull();
     expect(useHabitatStore.getState().activeSpecies).toBeNull();
-    expect(useHabitatStore.getState().scores).toBeNull();
+    expect(useHabitatStore.getState().scores.status).toBe("idle");
     expect(useHabitatStore.getState().hotspots).toEqual([]);
 
     // Colormap auto-flipped from "ocean" (saltwater default) to "freshwater".

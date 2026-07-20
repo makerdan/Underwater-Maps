@@ -370,10 +370,10 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       const N = grid.resolution;
       const prevTex = habitatTexRef.current;
 
-      if (habitatScores && habitatScores.length === N * N) {
+      if (habitatScores.status === "done" && habitatScores.data.length === N * N) {
         const bytes = new Uint8Array(N * N);
         for (let i = 0; i < bytes.length; i++) {
-          const s = habitatScores[i] ?? 0;
+          const s = habitatScores.data[i] ?? 0;
           const clamped = s < 0 ? 0 : s > 1 ? 1 : s;
           bytes[i] = Math.round(clamped * 255);
         }

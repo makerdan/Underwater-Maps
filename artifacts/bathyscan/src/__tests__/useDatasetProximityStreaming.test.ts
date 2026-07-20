@@ -178,7 +178,7 @@ describe("useDatasetProximityStreaming hook — timer integration", () => {
 
   it("activates a selected nearby dataset after evicting far active datasets", () => {
     // Camera at (0,0) — inside NEAR_BBOX, ~111 km from FAR_BBOX.
-    useCameraStore.setState({ cameraLon: 0, cameraLat: 0 });
+    useCameraStore.setState({ cameraPosition: { known: true, lon: 0, lat: 0 } });
 
     // Fill to cap (3): seed (setGrids, not in selectedIds) + far-1 + far-2 (toggleVisible).
     useTerrainStore.getState().setGrids({ activeGrid: makeGrid("seed") });
@@ -218,7 +218,7 @@ describe("useDatasetProximityStreaming hook — timer integration", () => {
 
   it("evicts a far active dataset on the next tick", () => {
     // Camera at (0,0) — FAR_BBOX is ~111 km away.
-    useCameraStore.setState({ cameraLon: 0, cameraLat: 0 });
+    useCameraStore.setState({ cameraPosition: { known: true, lon: 0, lat: 0 } });
 
     // "far-a" is active AND selected.
     useTerrainStore.getState().setGrids({ activeGrid: makeGrid("far-a") });
@@ -244,7 +244,7 @@ describe("useDatasetProximityStreaming hook — timer integration", () => {
   it("evicts farthest active (including pinned non-selected) to admit nearby queued", () => {
     // Camera at (0,0). "pinned" loaded via setGrids — not in selectedIds.
     // "near-queued" is selected but at cap, so queued.
-    useCameraStore.setState({ cameraLon: 0, cameraLat: 0 });
+    useCameraStore.setState({ cameraPosition: { known: true, lon: 0, lat: 0 } });
 
     useTerrainStore.getState().setGrids({ activeGrid: makeGrid("pinned") });
     useTerrainStore.getState().toggleVisible({ datasetId: "active-2", source: "preset" });

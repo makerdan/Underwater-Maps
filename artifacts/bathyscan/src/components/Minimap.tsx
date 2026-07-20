@@ -211,7 +211,8 @@ export const Minimap: React.FC = () => {
         if (ctx && heatmapCanvasRef.current) {
           rebuildStaticLayer(terrain);
           const camState = useCameraStore.getState();
-          compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
+          const cpos0 = camState.cameraPosition;
+          compositeFrame(ctx, cpos0.known ? cpos0.lon : null, cpos0.known ? cpos0.lat : null, camState.heading, terrain);
         }
       }
       return;
@@ -227,7 +228,8 @@ export const Minimap: React.FC = () => {
       if (!ctx || !heatmapCanvasRef.current) return;
       rebuildStaticLayer(terrain);
       const camState = useCameraStore.getState();
-      compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
+      const cposLoad = camState.cameraPosition;
+      compositeFrame(ctx, cposLoad.known ? cposLoad.lon : null, cposLoad.known ? cposLoad.lat : null, camState.heading, terrain);
     };
     img.onerror = () => {
       satelliteImgRef.current = null;
@@ -350,7 +352,8 @@ export const Minimap: React.FC = () => {
 
     rebuildStaticLayer(terrain);
     const camState = useCameraStore.getState();
-    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
+    const cp0 = camState.cameraPosition;
+    compositeFrame(ctx, cp0.known ? cp0.lon : null, cp0.known ? cp0.lat : null, camState.heading, terrain);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers that change every render; data deps are listed explicitly
   }, [terrain, colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries]);
 
@@ -362,7 +365,8 @@ export const Minimap: React.FC = () => {
     if (!ctx) return;
     rebuildStaticLayer(terrain);
     const camState = useCameraStore.getState();
-    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
+    const cp1 = camState.cameraPosition;
+    compositeFrame(ctx, cp1.known ? cp1.lon : null, cp1.known ? cp1.lat : null, camState.heading, terrain);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers; terrain is captured from outer scope (current at call time)
   }, [tileUrl]);
 
@@ -373,7 +377,8 @@ export const Minimap: React.FC = () => {
       if (!canvas || !terrain) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      compositeFrame(ctx, state.cameraLon, state.cameraLat, state.heading, terrain);
+      const cp2 = state.cameraPosition;
+      compositeFrame(ctx, cp2.known ? cp2.lon : null, cp2.known ? cp2.lat : null, state.heading, terrain);
     });
 
     return () => { unsub(); };
@@ -388,7 +393,8 @@ export const Minimap: React.FC = () => {
     if (!ctx) return;
     rebuildStaticLayer(terrain);
     const camState = useCameraStore.getState();
-    compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
+    const cp3 = camState.cameraPosition;
+    compositeFrame(ctx, cp3.known ? cp3.lon : null, cp3.known ? cp3.lat : null, camState.heading, terrain);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers; data deps (markers, terrain) are listed explicitly
   }, [markers, terrain]);
 

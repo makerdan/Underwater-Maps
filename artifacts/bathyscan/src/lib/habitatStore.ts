@@ -4,9 +4,22 @@
  * Holds the active species, computed score array, and extracted hotspots.
  * Scoring results are memoised per-species so switching back is instant.
  * Call compute() whenever the terrain or zone map changes.
+ *
+ * `scores` uses `RemoteData<Float32Array>` — a PoC migration from the former
+ * `scores: Float32Array | null` nullable field.  The discriminated union makes
+ * every async state explicit and unrepresentable-invalid:
+ *
+ *   - `idle`    — no species selected, or species set but grid not yet available
+ *   - `loading` — (reserved for a future async compute path)
+ *   - `done`    — scores available at `scores.data`
+ *   - `error`   — compute failed (should not happen in practice, but is modelled)
+ *
+ * Consumers narrow with `if (scores.status === 'done') { use scores.data }`.
  */
 import { create } from "zustand";
 import type { TerrainData } from "@workspace/api-client-react";
+import { RemoteData } from "@workspace/shared-types";
+import type { RemoteData as RemoteDataT } from "@workspace/shared-types";
 import {
   computeHabitatScore,
   extractHotspots,
@@ -21,7 +34,8 @@ interface CacheEntry {
 
 interface HabitatState {
   activeSpecies: SpeciesId | null;
-  scores: Float32Array | null;
+  /** Score array for the active species. Use `.status === 'done'` to access `.data`. */
+  scores: RemoteDataT<Float32Array>;
   hotspots: HotspotCandidate[];
   /** Per-species memo cache — cleared when terrain changes. */
   scoreCache: Map<SpeciesId, CacheEntry>;
@@ -36,13 +50,13 @@ interface HabitatState {
 
 export const useHabitatStore = create<HabitatState>((set, get) => ({
   activeSpecies: null,
-  scores: null,
+  scores: RemoteData.idle(),
   hotspots: [],
   scoreCache: new Map(),
 
   setSpecies: (id, grid, zoneMap) => {
     if (id === null) {
-      set({ activeSpecies: null, scores: null, hotspots: [] });
+      set({ activeSpecies: null, scores: RemoteData.idle(), hotspots: [] });
       return;
     }
 
@@ -50,12 +64,11 @@ export const useHabitatStore = create<HabitatState>((set, get) => ({
     const cached = cache.get(id);
 
     if (cached) {
-      set({ activeSpecies: id, scores: cached.scores, hotspots: cached.hotspots });
+      set({ activeSpecies: id, scores: RemoteData.done(cached.scores), hotspots: cached.hotspots });
       return;
     }
 
-    // No cache hit — set the id first, then compute if grid is available
-    set({ activeSpecies: id, scores: null, hotspots: [] });
+    set({ activeSpecies: id, scores: RemoteData.idle(), hotspots: [] });
     if (grid) {
       get().compute(grid, zoneMap ?? null);
     }
@@ -68,22 +81,24 @@ export const useHabitatStore = create<HabitatState>((set, get) => ({
     const config: SpeciesConfig | undefined = SPECIES_CONFIGS[activeSpecies];
     if (!config) return;
 
-    // Cache hit — serve instantly
     const cached = scoreCache.get(activeSpecies);
     if (cached) {
-      set({ scores: cached.scores, hotspots: cached.hotspots });
+      set({ scores: RemoteData.done(cached.scores), hotspots: cached.hotspots });
       return;
     }
 
-    // Compute
-    const scores = computeHabitatScore(grid, zoneMap, config);
-    const hotspots = extractHotspots(scores, grid, zoneMap);
+    try {
+      const scores = computeHabitatScore(grid, zoneMap, config);
+      const hotspots = extractHotspots(scores, grid, zoneMap);
 
-    const newCache = new Map(scoreCache);
-    newCache.set(activeSpecies, { scores, hotspots });
-    set({ scores, hotspots, scoreCache: newCache });
+      const newCache = new Map(scoreCache);
+      newCache.set(activeSpecies, { scores, hotspots });
+      set({ scores: RemoteData.done(scores), hotspots, scoreCache: newCache });
+    } catch (err) {
+      set({ scores: RemoteData.error(err instanceof Error ? err : new Error(String(err))) });
+    }
   },
 
   clear: () =>
-    set({ activeSpecies: null, scores: null, hotspots: [], scoreCache: new Map() }),
+    set({ activeSpecies: null, scores: RemoteData.idle(), hotspots: [], scoreCache: new Map() }),
 }));

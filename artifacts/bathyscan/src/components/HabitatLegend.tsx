@@ -23,7 +23,7 @@ export const HabitatLegend: React.FC<HabitatLegendProps> = ({ embedded = false }
   const activeSpecies = useHabitatStore((s) => s.activeSpecies);
   const scores = useHabitatStore((s) => s.scores);
 
-  if (!activeSpecies || !scores) return null;
+  if (!activeSpecies || scores.status !== "done") return null;
 
   const speciesLabel = SPECIES_CONFIGS[activeSpecies]?.label ?? activeSpecies;
 

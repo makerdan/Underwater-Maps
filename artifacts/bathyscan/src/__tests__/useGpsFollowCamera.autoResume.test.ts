@@ -95,7 +95,7 @@ function runFrame() {
 /** Enter active follow mode with an in-bounds GPS fix. */
 function startFollowing() {
   act(() => {
-    useCameraStore.setState({ gpsFollowMode: true });
+    useCameraStore.setState({ gpsFollowState: "following" });
     useGpsStore.setState({ active: true, position: POS_IN });
     useTerrainStore.setState({ activeGrid: ACTIVE_GRID });
   });
@@ -111,8 +111,7 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
     dateNowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowMs);
 
     useCameraStore.setState({
-      gpsFollowMode: false,
-      followPausedByInteraction: false,
+      gpsFollowState: "off",
       followLastInteractionAt: 0,
     });
     useGpsStore.setState({ active: false, position: null, error: null, watchId: null });
@@ -140,8 +139,8 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
     const before = camera.position.clone();
     runFrame();
 
-    expect(useCameraStore.getState().gpsFollowMode).toBe(true);
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("off");
+    expect(useCameraStore.getState().gpsFollowState).toBe("paused");
     expect(camera.position.equals(before)).toBe(true);
     unmount();
   });
@@ -158,14 +157,14 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
     advanceTime(19_000);
     const before = camera.position.clone();
     runFrame();
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).toBe("paused");
     expect(camera.position.equals(before)).toBe(true);
 
     // 20s total elapsed — pause clears and the lerp moves the camera.
     advanceTime(1_000);
     runFrame();
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(false);
-    expect(useCameraStore.getState().gpsFollowMode).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("paused");
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("off");
     expect(camera.position.equals(before)).toBe(false);
     unmount();
   });
@@ -187,12 +186,12 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
     // 15s after the second interaction (30s after the first) — still paused.
     advanceTime(15_000);
     runFrame();
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).toBe("paused");
 
     // 20s after the second interaction — resumes.
     advanceTime(5_000);
     runFrame();
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("paused");
     unmount();
   });
 
@@ -207,11 +206,11 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
 
     advanceTime(4_000);
     runFrame();
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).toBe("paused");
 
     advanceTime(1_000);
     runFrame();
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("paused");
     unmount();
   });
 
@@ -224,14 +223,14 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
       useCameraStore.getState().setGpsFollowMode(false);
     });
 
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
     expect(useCameraStore.getState().followLastInteractionAt).toBe(0);
 
     // Even after the delay elapses, follow stays off.
     advanceTime(60_000);
     const before = camera.position.clone();
     runFrame();
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
     expect(camera.position.equals(before)).toBe(true);
     unmount();
   });
@@ -246,8 +245,7 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
     });
 
     runFrame();
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
     unmount();
   });
 
@@ -261,8 +259,7 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
     });
 
     runFrame();
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
     expect(handoffSpy).toHaveBeenCalledWith(
       POS_OUT.longitude,
       POS_OUT.latitude,
@@ -271,7 +268,7 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
     // Delay elapsing later must not re-enable follow mode.
     advanceTime(60_000);
     runFrame();
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
     unmount();
   });
 
@@ -282,7 +279,7 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
       useCameraStore.getState().pauseFollowForInteraction();
     });
 
-    expect(useCameraStore.getState().followPausedByInteraction).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("paused");
     unmount();
   });
 });

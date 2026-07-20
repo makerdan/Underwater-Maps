@@ -130,8 +130,8 @@ function showStatistic(args: { metric: string }, opts: ToolOptions): string {
 function describeCurrentLocation(opts: ToolOptions): string {
   const cam = useCameraStore.getState();
   const { activeGrid } = useTerrainStore.getState();
-  const lon = cam.cameraLon;
-  const lat = cam.cameraLat;
+  const lon = cam.cameraPosition.known ? cam.cameraPosition.lon : null;
+  const lat = cam.cameraPosition.known ? cam.cameraPosition.lat : null;
   const depth = cam.cameraDepth;
 
   const parts: string[] = [];

@@ -31,7 +31,7 @@ beforeEach(() => {
   });
   __resetLiveModeForTests();
   useGpsStore.setState({ active: false, position: null, error: null, watchId: null });
-  useCameraStore.setState({ gpsFollowMode: false });
+  useCameraStore.setState({ gpsFollowState: "off" });
   useUiStore.setState({ sidebarMode: "explore" });
   useSettingsStore.setState({ sidebarMode: "explore" });
 });

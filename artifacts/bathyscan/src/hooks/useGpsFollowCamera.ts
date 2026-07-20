@@ -62,7 +62,7 @@ export function useGpsFollowCamera(): void {
     // inactivity delay elapses, clear the pause — the lerp below then
     // glides the camera smoothly back onto the GPS position.
     const camStore = useCameraStore.getState();
-    if (camStore.followPausedByInteraction) {
+    if (camStore.gpsFollowState === "paused") {
       const delayMs =
         useSettingsStore.getState().followResumeDelaySec * 1000;
       if (Date.now() - camStore.followLastInteractionAt < delayMs) {

@@ -325,7 +325,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
       // Bust cache and recompute for current species
       useHabitatStore.getState().clear();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- terrain?.datasetId is the identity key; object ref changes are not meaningful here
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- terrain?.datasetId is the swap signal; terrain object itself is read via getState() inside to avoid stale closures
   }, [terrain?.datasetId]);
 
   // Clear species selection when waterType changes so stale overlays don't persist
@@ -372,8 +372,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
         .getState()
         .setSpecies(defaultSpecies as SpeciesId, terrain, currentZoneMap);
     }
-  // Only run on terrain swap / water-type change — not every render.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- terrain?.datasetId is the identity key; reads terrain via getState() pattern avoids stale closure
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- terrain?.datasetId and waterType are the swap signals; all stale-closure-prone values (autoShowZoneOverlay, defaultHabitatSpecies, etc.) are read via getState() inside
   }, [terrain?.datasetId, waterType]);
 
   const handleSpeciesChange = (id: SpeciesId | "") => {
@@ -422,7 +421,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
 
   if (!terrain) return null;
 
-  const showOverlay = !!activeSpecies && !!scores;
+  const showOverlay = !!activeSpecies && scores.status === "done";
 
   return (
     <div style={embedded ? { width: "100%" } : PANEL} className="habitat-panel">

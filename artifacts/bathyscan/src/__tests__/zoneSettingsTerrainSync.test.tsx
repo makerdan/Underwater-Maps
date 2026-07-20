@@ -250,8 +250,8 @@ vi.mock("@/lib/highlightStore", () => ({
 }));
 
 vi.mock("@/lib/habitatStore", () => ({
-  useHabitatStore: (sel: (s: { scores: null; activeSpecies: null }) => unknown) =>
-    sel({ scores: null, activeSpecies: null }),
+  useHabitatStore: (sel: (s: { scores: { status: "idle" }; activeSpecies: null }) => unknown) =>
+    sel({ scores: { status: "idle" }, activeSpecies: null }),
 }));
 
 vi.mock("@/lib/paletteStore", async (importOriginal) => {

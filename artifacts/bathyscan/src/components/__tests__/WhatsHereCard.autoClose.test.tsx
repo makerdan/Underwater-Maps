@@ -46,7 +46,7 @@ vi.mock("@/hooks/use-mobile", () => ({
 vi.mock("@/lib/cameraStore", () => {
   let _sub: ((s: unknown, p: unknown) => void) | null = null;
   const store = {
-    getState: () => ({ cameraLon: null, cameraLat: null, cameraDepth: null, heading: 0 }),
+    getState: () => ({ cameraPosition: { known: false }, cameraDepth: null, heading: 0 }),
     subscribe: vi.fn((cb: (s: unknown, p: unknown) => void) => {
       _sub = cb;
       return () => { _sub = null; };

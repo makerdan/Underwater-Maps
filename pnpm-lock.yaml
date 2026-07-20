@@ -512,6 +512,9 @@ importers:
       '@workspace/api-zod':
         specifier: workspace:*
         version: link:../../lib/api-zod
+      '@workspace/shared-types':
+        specifier: workspace:*
+        version: link:../../lib/shared-types
       axe-core:
         specifier: ^4.11.4
         version: 4.11.4
@@ -873,6 +876,8 @@ importers:
       vitest:
         specifier: ^3.2.6
         version: 3.2.7(@types/node@25.6.2)(@vitest/ui@4.1.7)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.8.4)
+
+  lib/shared-types: {}
 
   scripts:
     devDependencies:

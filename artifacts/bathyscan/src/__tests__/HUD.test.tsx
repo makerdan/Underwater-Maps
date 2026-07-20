@@ -90,8 +90,7 @@ describe("HUD", () => {
     useCameraStore.setState({
       crosshairGps: null,
       lastClickedGps: null,
-      cameraLon: null,
-      cameraLat: null,
+      cameraPosition: { known: false },
       cameraDepth: null,
       heading: 0,
       speedIndex: 0,

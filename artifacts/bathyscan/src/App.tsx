@@ -713,12 +713,12 @@ function Main() {
     if (!terrain || !datasetId) return;
 
     const saveLastSession = () => {
-      const { cameraLon, cameraLat, cameraDepth, heading } =
+      const { cameraPosition, cameraDepth, heading } =
         useCameraStore.getState();
-      if (cameraLon === null || cameraLat === null || cameraDepth === null) return;
+      if (!cameraPosition.known || cameraDepth === null) return;
       useSettingsStore.getState().setLastSession({
-        lon: cameraLon,
-        lat: cameraLat,
+        lon: cameraPosition.lon,
+        lat: cameraPosition.lat,
         depth: cameraDepth,
         heading,
         datasetId,
@@ -734,8 +734,7 @@ function Main() {
 
     const unsub = useCameraStore.subscribe((state, prevState) => {
       if (
-        state.cameraLon !== prevState.cameraLon ||
-        state.cameraLat !== prevState.cameraLat ||
+        state.cameraPosition !== prevState.cameraPosition ||
         state.cameraDepth !== prevState.cameraDepth ||
         state.heading !== prevState.heading
       ) {

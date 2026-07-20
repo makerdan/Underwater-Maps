@@ -155,12 +155,11 @@ describe("HUD — GPS Follow Mode button", () => {
     useCameraStore.setState({
       crosshairGps: null,
       lastClickedGps: null,
-      cameraLon: null,
-      cameraLat: null,
+      cameraPosition: { known: false },
       cameraDepth: null,
       heading: 0,
       speedIndex: 0,
-      gpsFollowMode: false,
+      gpsFollowState: "off",
     });
     mockGps = { active: false, position: null };
     mockTerrain = { overviewGrid: null };
@@ -206,7 +205,7 @@ describe("HUD — GPS Follow Mode button", () => {
   it("renders the Follow Me button with aria-pressed=true when follow mode is on", () => {
     mockGps = { active: true, position: POS_IN };
     mockTerrain = { overviewGrid: GRID_IN };
-    useCameraStore.setState({ gpsFollowMode: true });
+    useCameraStore.setState({ gpsFollowState: "following" });
     renderHUD();
 
     const btn = screen.getByTestId("hud-gps-follow-toggle");

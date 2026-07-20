@@ -90,7 +90,7 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
     handoffSpy.mockClear();
 
     // Reset stores to a known baseline.
-    useCameraStore.setState({ gpsFollowMode: false });
+    useCameraStore.setState({ gpsFollowState: "off" });
     useGpsStore.setState({ active: false, position: null, error: null, watchId: null });
     useTerrainStore.setState({
       visibleDatasets: [],
@@ -106,14 +106,14 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
 
     // Now configure the state that the frame callback will read.
     act(() => {
-      useCameraStore.setState({ gpsFollowMode: true });
+      useCameraStore.setState({ gpsFollowState: "following" });
       useGpsStore.setState({ active: true, position: POS_OUT });
       useTerrainStore.setState({ activeGrid: ACTIVE_GRID });
     });
 
     runFrame();
 
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
     unmount();
   });
 
@@ -121,7 +121,7 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
     const { unmount } = mountHook();
 
     act(() => {
-      useCameraStore.setState({ gpsFollowMode: true });
+      useCameraStore.setState({ gpsFollowState: "following" });
       useGpsStore.setState({ active: true, position: POS_OUT });
       useTerrainStore.setState({ activeGrid: ACTIVE_GRID });
     });
@@ -137,7 +137,7 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
     const { unmount } = mountHook();
 
     act(() => {
-      useCameraStore.setState({ gpsFollowMode: true });
+      useCameraStore.setState({ gpsFollowState: "following" });
       useGpsStore.setState({ active: true, position: POS_OUT });
       useTerrainStore.setState({ activeGrid: ACTIVE_GRID });
     });
@@ -156,14 +156,14 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
     const { unmount } = mountHook();
 
     act(() => {
-      useCameraStore.setState({ gpsFollowMode: true });
+      useCameraStore.setState({ gpsFollowState: "following" });
       useGpsStore.setState({ active: true, position: POS_IN });
       useTerrainStore.setState({ activeGrid: ACTIVE_GRID });
     });
 
     runFrame();
 
-    expect(useCameraStore.getState().gpsFollowMode).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("off");
     expect(handoffSpy).not.toHaveBeenCalled();
     unmount();
   });
@@ -172,14 +172,14 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
     const { unmount } = mountHook();
 
     act(() => {
-      useCameraStore.setState({ gpsFollowMode: true });
+      useCameraStore.setState({ gpsFollowState: "following" });
       useGpsStore.setState({ active: false, position: null });
       useTerrainStore.setState({ activeGrid: ACTIVE_GRID });
     });
 
     runFrame();
 
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
     expect(handoffSpy).not.toHaveBeenCalled();
     unmount();
   });
@@ -189,14 +189,14 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
 
     // follow mode is already false — the frame callback should return early.
     act(() => {
-      useCameraStore.setState({ gpsFollowMode: false });
+      useCameraStore.setState({ gpsFollowState: "off" });
       useGpsStore.setState({ active: true, position: POS_OUT });
       useTerrainStore.setState({ activeGrid: ACTIVE_GRID });
     });
 
     runFrame();
 
-    expect(useCameraStore.getState().gpsFollowMode).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
     expect(handoffSpy).not.toHaveBeenCalled();
     unmount();
   });

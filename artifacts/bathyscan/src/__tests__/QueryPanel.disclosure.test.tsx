@@ -54,7 +54,7 @@ vi.mock("@/lib/terrainStore", () => ({
 
 vi.mock("@/lib/cameraStore", () => ({
   useCameraStore: {
-    getState: () => ({ cameraLon: null, cameraLat: null, cameraDepth: null }),
+    getState: () => ({ cameraPosition: { known: false }, cameraDepth: null }),
   },
 }));
 

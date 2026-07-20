@@ -78,11 +78,11 @@ const CAM_FAR_FROM_ALL = { lon: 5.0, lat: 5.0 };
 // ---------------------------------------------------------------------------
 
 function setCameraAt(lon: number, lat: number) {
-  useCameraStore.setState({ cameraLon: lon, cameraLat: lat });
+  useCameraStore.setState({ cameraPosition: { known: true, lon, lat } });
 }
 
 function resetStores() {
-  useCameraStore.setState({ cameraLon: null, cameraLat: null, cameraDepth: 0, heading: 0 });
+  useCameraStore.setState({ cameraPosition: { known: false }, cameraDepth: 0, heading: 0 });
   useTerrainStore.setState({
     visibleDatasets: [],
     primaryDatasetIds: [],

@@ -129,8 +129,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
     const unsub = useCameraStore.subscribe((state, prevState) => {
       if (pinnedRef.current) return;
       if (
-        state.cameraLon !== prevState.cameraLon ||
-        state.cameraLat !== prevState.cameraLat ||
+        state.cameraPosition !== prevState.cameraPosition ||
         state.cameraDepth !== prevState.cameraDepth ||
         state.heading !== prevState.heading
       ) {

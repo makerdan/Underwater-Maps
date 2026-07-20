@@ -42,9 +42,7 @@ function toDMS(decimal: number): string {
 }
 
 export const CameraCoordsReadout: React.FC = () => {
-  const cameraLon = useCameraStore((s) => s.cameraLon);
-  const cameraLat = useCameraStore((s) => s.cameraLat);
-  const cameraDepth = useCameraStore((s) => s.cameraDepth);
+  const cameraPosition = useCameraStore((s) => s.cameraPosition);
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
   const showCameraPosition = useSettingsStore((s) => s.showCameraPosition);
   const units = useSettingsStore((s) => s.units);
@@ -54,10 +52,11 @@ export const CameraCoordsReadout: React.FC = () => {
 
   if (!showCameraPosition) return null;
 
-  const fmtCoord = (n: number | null): string => {
-    if (n === null) return "—";
-    return coordinateFormat === "dms" ? toDMS(n) : fmt(n, 4);
-  };
+  const fmtCoord = (n: number): string =>
+    coordinateFormat === "dms" ? toDMS(n) : fmt(n, 4);
+
+  const lonStr = cameraPosition.known ? fmtCoord(cameraPosition.lon) : "—";
+  const latStr = cameraPosition.known ? fmtCoord(cameraPosition.lat) : "—";
 
   return (
     <div style={{ ...PANEL, opacity: hudOpacity, userSelect: "none" }}>
@@ -88,11 +87,11 @@ export const CameraCoordsReadout: React.FC = () => {
         <div style={{ padding: "4px 12px 8px" }}>
           <div>
             <span style={{ color: "#cbd5e1" }}>LON </span>
-            <span style={CYAN}>{fmtCoord(cameraLon)}</span>
+            <span style={CYAN}>{lonStr}</span>
           </div>
           <div>
             <span style={{ color: "#cbd5e1" }}>LAT </span>
-            <span style={CYAN}>{fmtCoord(cameraLat)}</span>
+            <span style={CYAN}>{latStr}</span>
           </div>
           <div>
             <span style={{ color: "#cbd5e1" }}>DEP </span>

@@ -18,8 +18,7 @@ function resetStores() {
   useCameraStore.setState({
     crosshairGps: null,
     lastClickedGps: null,
-    cameraLon: -122.5,
-    cameraLat: 47.6,
+    cameraPosition: { known: true, lon: -122.5, lat: 47.6 },
     cameraDepth: null,
     heading: 0,
     speedIndex: 0,

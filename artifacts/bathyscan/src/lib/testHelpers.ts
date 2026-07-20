@@ -1332,7 +1332,7 @@ export function installTestHelpers(): void {
     },
     getHabitatSummary: () => {
       const s = useHabitatStore.getState();
-      if (!s.scores) {
+      if (s.scores.status !== "done") {
         return {
           activeSpecies: s.activeSpecies,
           scoreCount: 0,
@@ -1343,14 +1343,14 @@ export function installTestHelpers(): void {
       }
       let nz = 0;
       let max = 0;
-      for (let i = 0; i < s.scores.length; i++) {
-        const v = s.scores[i] ?? 0;
+      for (let i = 0; i < s.scores.data.length; i++) {
+        const v = s.scores.data[i] ?? 0;
         if (v > 0) nz++;
         if (v > max) max = v;
       }
       return {
         activeSpecies: s.activeSpecies,
-        scoreCount: s.scores.length,
+        scoreCount: s.scores.data.length,
         nonZeroCount: nz,
         maxScore: max,
         hotspotCount: s.hotspots.length,

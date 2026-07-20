@@ -48,8 +48,8 @@ import { toast } from "@/hooks/use-toast";
  */
 function pauseFollowMode(): void {
   const state = useCameraStore.getState();
-  if (!state.gpsFollowMode) return;
-  const wasPaused = state.followPausedByInteraction;
+  if (state.gpsFollowState === "off") return;
+  const wasPaused = state.gpsFollowState === "paused";
   state.pauseFollowForInteraction();
   if (!wasPaused) {
     const delaySec = useSettingsStore.getState().followResumeDelaySec;
@@ -434,7 +434,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       // through so the user can actually look around while paused.
       const dx = e.movementX ?? 0;
       const dy = e.movementY ?? 0;
-      if ((Math.abs(dx) > 0 || Math.abs(dy) > 0) && useCameraStore.getState().gpsFollowMode) {
+      if ((Math.abs(dx) > 0 || Math.abs(dy) > 0) && useCameraStore.getState().gpsFollowState !== "off") {
         pauseFollowMode();
       }
       const sens = sensitivityRef.current * 0.002;
@@ -891,7 +891,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     // inactivity timer (keydown auto-repeat is not guaranteed, so poll here).
     {
       const camState = useCameraStore.getState();
-      if (camState.gpsFollowMode && camState.followPausedByInteraction) {
+      if (camState.gpsFollowState === "paused") {
         const b = keyBindingsRef.current;
         const held = [
           getBoundKey(b, "moveForward"), getBoundKey(b, "moveBackward"),
@@ -907,8 +907,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
     // GPS follow mode is actively steering the camera — manual movement is
     // allowed again while follow is paused for interaction).
     const camStateForMove = useCameraStore.getState();
-    const followSteering =
-      camStateForMove.gpsFollowMode && !camStateForMove.followPausedByInteraction;
+    const followSteering = camStateForMove.gpsFollowState === "following";
     if (!orbitState.current.active && !followSteering) {
       const isRealistic = realisticModeRef.current && terrainRef.current !== null;
       const grid = terrainRef.current;

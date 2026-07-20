@@ -141,7 +141,7 @@ function setSubstrateOverlay(enabled: boolean) {
 
 function setHabitatSpecies(id: "rockfish" | "dungeness_crab" | null) {
   act(() => {
-    useHabitatStore.setState({ activeSpecies: id as string | null as never, scores: null, hotspots: [] });
+    useHabitatStore.setState({ activeSpecies: id as string | null as never, scores: { status: "idle" } as never, hotspots: [] });
   });
 }
 
@@ -154,8 +154,7 @@ beforeEach(() => {
   setSubstrateOverlay(false);
   setHabitatSpecies(null);
   useCameraStore.setState({
-    cameraLon: null,
-    cameraLat: null,
+    cameraPosition: { known: false },
     cameraDepth: null,
     heading: 0,
   });

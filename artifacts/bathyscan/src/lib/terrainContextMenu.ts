@@ -132,10 +132,11 @@ export function buildTerrainMenuItems(
       onClick: () => {
         if (!datasetId) return;
         const cam = useCameraStore.getState();
-        const camLon = cam.cameraLon;
-        const camLat = cam.cameraLat;
+        const pos = cam.cameraPosition;
         const camDepth = cam.cameraDepth;
-        if (camLon === null || camLat === null || camDepth === null) return;
+        if (!pos.known || camDepth === null) return;
+        const camLon = pos.lon;
+        const camLat = pos.lat;
         const name = window.prompt("Saved view name:", "My view");
         if (!name || !name.trim()) return;
         useSettingsStore.getState().addBookmark(datasetId, {
