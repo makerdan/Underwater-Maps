@@ -2646,7 +2646,7 @@ export const MarkerPatchType = {
 export interface MarkerPatch {
   /**
      * @minLength 1
-     * @maxLength 60
+     * @maxLength 200
      */
   label?: string;
   type?: MarkerPatchType;
