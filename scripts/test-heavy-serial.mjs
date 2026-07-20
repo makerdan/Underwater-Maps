@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const lockScript = resolve(root, "scripts/validation-lock.mjs");
+const timeoutScript = resolve(root, "scripts/run-with-timeout.mjs");
 mkdirSync(resolve(root, ".local/tmp"), { recursive: true });
 
 /**
@@ -51,13 +52,33 @@ function wrapWithLocks(cmd, resources, priority) {
   return wrapped;
 }
 
+/**
+ * Wrap <cmd> with a Layer 4 per-step run budget using run-with-timeout.mjs.
+ * This is applied INSIDE the lock wrappers so the budget timer starts only
+ * after the lock is acquired, attributing hangs to the specific step rather
+ * than to lock-wait time.
+ */
+function wrapWithTimeout(cmd, budgetKey, label) {
+  return [
+    process.execPath, timeoutScript,
+    budgetKey,
+    "--label", label,
+    "--",
+    ...cmd,
+  ];
+}
+
 const HEAVY_PRIORITY = 3;
 
 const steps = [
   {
     name: "test:unit",
     cmd: wrapWithLocks(
-      ["pnpm", "run", "test:unit"],
+      wrapWithTimeout(
+        ["pnpm", "run", "test:unit"],
+        "apiServerUnit",
+        "test:unit",
+      ),
       ["unit-cpu"],
       HEAVY_PRIORITY,
     ),
@@ -65,18 +86,22 @@ const steps = [
   {
     name: "e2e-palette",
     cmd: wrapWithLocks(
-      [
-        "bash", "-c",
-        "set -o pipefail; E2E_WEB_PORT=3250 E2E_API_PORT=3261 npx playwright test " +
-        "tests/e2e/palette-cross-device-sync.spec.ts " +
-        "tests/e2e/onboarding-tour.spec.ts " +
-        "tests/e2e/settings-cross-device-sync.spec.ts " +
-        "tests/e2e/settings-save-buttons.spec.ts " +
-        "tests/e2e/zone-colour-server-sync.spec.ts " +
-        "tests/e2e/tooltips.spec.ts " +
-        "tests/e2e/adaptive-palette.spec.ts " +
-        "2>&1 | tee .local/tmp/palette-e2e.log",
-      ],
+      wrapWithTimeout(
+        [
+          "bash", "-c",
+          "set -o pipefail; E2E_WEB_PORT=3250 E2E_API_PORT=3261 npx playwright test " +
+          "tests/e2e/palette-cross-device-sync.spec.ts " +
+          "tests/e2e/onboarding-tour.spec.ts " +
+          "tests/e2e/settings-cross-device-sync.spec.ts " +
+          "tests/e2e/settings-save-buttons.spec.ts " +
+          "tests/e2e/zone-colour-server-sync.spec.ts " +
+          "tests/e2e/tooltips.spec.ts " +
+          "tests/e2e/adaptive-palette.spec.ts " +
+          "2>&1 | tee .local/tmp/palette-e2e.log",
+        ],
+        "e2e",
+        "e2e-palette",
+      ),
       ["unit-cpu", "e2e-port"],
       HEAVY_PRIORITY,
     ),
@@ -85,7 +110,11 @@ const steps = [
     // Use test:e2e:run (unwrapped inner command) — locking is handled here.
     name: "test:e2e",
     cmd: wrapWithLocks(
-      ["pnpm", "run", "test:e2e:run"],
+      wrapWithTimeout(
+        ["pnpm", "run", "test:e2e:run"],
+        "e2e",
+        "test:e2e",
+      ),
       ["unit-cpu", "e2e-port"],
       HEAVY_PRIORITY,
     ),

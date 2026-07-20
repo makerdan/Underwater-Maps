@@ -80,9 +80,23 @@ try {
 }
 
 // ---------------------------------------------------------------------------
+// Validate report shape
+// ---------------------------------------------------------------------------
+if (
+  typeof report.advisories !== "object" ||
+  report.advisories === null ||
+  Array.isArray(report.advisories)
+) {
+  console.error(
+    "check:audit — pnpm audit JSON format changed — report.advisories not found. Update check-audit.mjs.",
+  );
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
 // Filter findings
 // ---------------------------------------------------------------------------
-const advisories = Object.values(report.advisories ?? {});
+const advisories = Object.values(report.advisories);
 const blocking = [];
 const exempted = [];
 

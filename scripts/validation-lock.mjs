@@ -62,7 +62,13 @@ const localDir = resolve(root, ".local");
 const POLL_INTERVAL_MS = Number(process.env.VALIDATION_LOCK_POLL_MS || 1_000);
 const TIMEOUT_MS = Number(process.env.VALIDATION_LOCK_TIMEOUT_MS || 3 * 60 * 60 * 1000);
 const HEARTBEAT_MS = Number(process.env.VALIDATION_LOCK_HEARTBEAT_MS || 30_000);
-const STALE_HEARTBEAT_MS = Number(process.env.VALIDATION_LOCK_STALE_HEARTBEAT_MS || 5 * 60 * 1000);
+// Lowered from 5 min to 60 s to shrink the PID-reuse window: if a lock holder
+// is SIGKILLed and its PID is immediately reused by an unrelated OS process,
+// pidAlive(holderPid) returns true and this stale-heartbeat fallback is the
+// only reclaim path.  60 s keeps the false-live window acceptably short while
+// still tolerating brief system pauses.  Override via env var for CI machines
+// with exceptionally long scheduling pauses.
+const STALE_HEARTBEAT_MS = Number(process.env.VALIDATION_LOCK_STALE_HEARTBEAT_MS || 60_000);
 const MAX_HOLD_MS = Number(process.env.VALIDATION_LOCK_MAX_HOLD_MS || 2 * 60 * 60 * 1000);
 // How long a higher-priority waiter must have been queued before lower-priority
 // waiters yield to it on their next poll tick.
