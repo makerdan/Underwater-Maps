@@ -434,6 +434,12 @@ const QueryBodySchema = z.object({
   context: QueryContextSchema.optional(),
 });
 
+const QueryResponseSchema = z.object({
+  toolCalls: z.array(z.unknown()),
+  toolErrors: z.array(z.unknown()),
+  textResponse: z.string().nullable(),
+});
+
 router.post(
   "/query",
   stampBaselineRateLimitHeaders(QUERY_USER_MAX, QUERY_USER_WINDOW_MS),
@@ -531,6 +537,8 @@ router.post(
     logger.warn({ toolErrors: result.toolErrors }, "[query] rejected malformed LLM tool calls");
   }
 
+  const _qp = QueryResponseSchema.safeParse({ toolCalls: result.toolCalls, toolErrors: result.toolErrors, textResponse: result.textResponse });
+  if (!_qp.success) logger.warn({ err: _qp.error }, "POST /api/query — response shape mismatch");
   res.json({ toolCalls: result.toolCalls, toolErrors: result.toolErrors, textResponse: result.textResponse });
   }),
 );

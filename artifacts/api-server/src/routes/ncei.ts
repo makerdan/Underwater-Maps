@@ -45,6 +45,7 @@
 import { Router } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 import { NceiSearchQuerySchema } from "@workspace/api-zod";
 import { db, datasetCatalogTable, userCatalogSavesTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
@@ -449,6 +450,8 @@ router.get("/ncei/search", asyncHandler(async (req, res): Promise<void> => {
   const cacheKey = makeCacheKey(q, bbox, from, max, broad);
   const cached = getCachedResults(cacheKey);
   if (cached) {
+    const _cp = z.array(NceiPortalResultSchema).safeParse(cached);
+    if (!_cp.success) logger.warn({ err: _cp.error }, "GET /api/ncei/search — cached response shape mismatch");
     res.json(cached);
     return;
   }
@@ -500,6 +503,8 @@ router.get("/ncei/search", asyncHandler(async (req, res): Promise<void> => {
     .filter((r): r is NceiPortalResult => r !== null);
 
   setCachedResults(cacheKey, results);
+  const _rp = z.array(NceiPortalResultSchema).safeParse(results);
+  if (!_rp.success) logger.warn({ err: _rp.error }, "GET /api/ncei/search — response shape mismatch");
   res.json(results);
 }));
 

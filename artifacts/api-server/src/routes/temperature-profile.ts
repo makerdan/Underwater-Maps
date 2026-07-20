@@ -30,8 +30,34 @@ import { fetchArgoProfile } from "../lib/argoErddap";
 import { LatLonQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 
 const router = Router();
+
+const TemperatureProfileSampleSchema = z.object({
+  depthM: z.number(),
+  temperatureC: z.number(),
+});
+
+const TemperatureProfileResponseSchema = z.union([
+  z.object({
+    available: z.literal(true),
+    lat: z.number(),
+    lon: z.number(),
+    samples: z.array(TemperatureProfileSampleSchema),
+    source: z.string(),
+    sourceUrl: z.string().optional(),
+    timestamp: z.string().optional(),
+    provider: z.string(),
+  }),
+  z.object({
+    available: z.literal(false),
+    lat: z.number(),
+    lon: z.number(),
+    samples: z.array(TemperatureProfileSampleSchema),
+    provider: z.string(),
+  }),
+]);
 
 export interface TemperatureProfileSample {
   depthM: number;
@@ -97,8 +123,8 @@ router.get("/temperature-profile", asyncHandler(async (req, res): Promise<void> 
         // Defensive: ensure samples are sorted shallow→deep so clients can
         // plot them without re-sorting.
         const samples = [...payload.samples].sort((a, b) => a.depthM - b.depthM);
-        res.json({
-          available: true,
+        res.json(validateResponse(TemperatureProfileResponseSchema, {
+          available: true as const,
           lat,
           lon,
           samples,
@@ -106,7 +132,7 @@ router.get("/temperature-profile", asyncHandler(async (req, res): Promise<void> 
           sourceUrl: payload.sourceUrl ?? undefined,
           timestamp: payload.timestamp ?? undefined,
           provider: payload.provider,
-        });
+        }, "GET /api/temperature-profile"));
         return;
       }
     } catch (err) {
@@ -116,13 +142,13 @@ router.get("/temperature-profile", asyncHandler(async (req, res): Promise<void> 
     }
   }
 
-  res.json({
-    available: false,
+  res.json(validateResponse(TemperatureProfileResponseSchema, {
+    available: false as const,
     lat,
     lon,
     samples: [],
     provider: "none",
-  });
+  }, "GET /api/temperature-profile"));
 }));
 
 export default router;

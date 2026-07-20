@@ -41,6 +41,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { db, customDatasetsTable, type StoredNoaaSubstrateSample } from "@workspace/db";
@@ -196,6 +197,16 @@ const CUSTOM_DATASET_UUID_RE =
  *    Non-owner / non-existent custom datasets return 404 (not 403) to avoid
  *    confirming existence to unauthenticated or cross-user callers.
  */
+// Response schema for safeParse+warn. Uses z.array(z.unknown()) for features so that
+// kelp-substrate samples and other raw NOAA BSText values do not generate false-positive
+// warnings. Catches gross structural regressions (missing 'type', non-array 'features')
+// without throwing 500 on valid but schema-extended feature properties.
+const SubstrateResponseSchema = z.object({
+  type: z.literal("FeatureCollection"),
+  features: z.array(z.unknown()),
+  metadata: z.record(z.unknown()),
+});
+
 router.get("/substrate/:id", asyncHandler(async (req, res) => {
   const paramParsed = DatasetIdParamSchema.safeParse(req.params);
   if (!paramParsed.success) {
@@ -296,31 +307,41 @@ router.get("/substrate/:id", asyncHandler(async (req, res) => {
       const nearestBundle =
         (customSlice.nearestSource && NEAREST_BUNDLE_BY_SOURCE[customSlice.nearestSource]) ||
         ALASKA_SHOREZONE;
-      res.json({
-        type: "FeatureCollection",
-        features: [],
-        metadata: {
-          ...customBaseMetadata,
-          nearestCoverage: {
-            source:     nearestBundle.metadata.source,
-            region:     nearestBundle.metadata.region,
-            bbox:       nearestBundle.metadata.bbox,
-            distanceKm,
+      {
+        const _b = {
+          type: "FeatureCollection" as const,
+          features: [] as unknown[],
+          metadata: {
+            ...customBaseMetadata,
+            nearestCoverage: {
+              source:     nearestBundle.metadata.source,
+              region:     nearestBundle.metadata.region,
+              bbox:       nearestBundle.metadata.bbox,
+              distanceKm,
+            },
+            note:
+              `No published substrate polygons (ShoreZone or ENC) intersect the ` +
+              `uploaded dataset '${datasetId}' AOI bbox. Nearest real coverage is the ` +
+              `${nearestBundle.metadata.region}, ~${distanceKm} km away.`,
           },
-          note:
-            `No published substrate polygons (ShoreZone or ENC) intersect the ` +
-            `uploaded dataset '${datasetId}' AOI bbox. Nearest real coverage is the ` +
-            `${nearestBundle.metadata.region}, ~${distanceKm} km away.`,
-        },
-      });
+        };
+        const _c = SubstrateResponseSchema.safeParse(_b);
+        if (!_c.success) logger.warn({ err: _c.error }, "GET /api/substrate/:id — response shape mismatch");
+        res.json(_b);
+      }
       return;
     }
 
-    res.json({
-      type: "FeatureCollection",
-      features: mergedFeatures,
-      metadata: customBaseMetadata,
-    });
+    {
+      const _b = {
+        type: "FeatureCollection" as const,
+        features: mergedFeatures,
+        metadata: customBaseMetadata,
+      };
+      const _c = SubstrateResponseSchema.safeParse(_b);
+      if (!_c.success) logger.warn({ err: _c.error }, "GET /api/substrate/:id — response shape mismatch");
+      res.json(_b);
+    }
     return;
   }
 
@@ -389,31 +410,41 @@ router.get("/substrate/:id", asyncHandler(async (req, res) => {
     const nearestBundle =
       (slice.nearestSource && NEAREST_BUNDLE_BY_SOURCE[slice.nearestSource]) ||
       ALASKA_SHOREZONE;
-    res.json({
-      type: "FeatureCollection",
-      features: [],
-      metadata: {
-        ...baseMetadata,
-        nearestCoverage: {
-          source:     nearestBundle.metadata.source,
-          region:     nearestBundle.metadata.region,
-          bbox:       nearestBundle.metadata.bbox,
-          distanceKm,
+    {
+      const _b = {
+        type: "FeatureCollection" as const,
+        features: [] as unknown[],
+        metadata: {
+          ...baseMetadata,
+          nearestCoverage: {
+            source:     nearestBundle.metadata.source,
+            region:     nearestBundle.metadata.region,
+            bbox:       nearestBundle.metadata.bbox,
+            distanceKm,
+          },
+          note:
+            `No published substrate polygons (ShoreZone or ENC) intersect the ` +
+            `'${datasetId}' AOI bbox. Nearest real coverage is the ` +
+            `${nearestBundle.metadata.region}, ~${distanceKm} km away.`,
         },
-        note:
-          `No published substrate polygons (ShoreZone or ENC) intersect the ` +
-          `'${datasetId}' AOI bbox. Nearest real coverage is the ` +
-          `${nearestBundle.metadata.region}, ~${distanceKm} km away.`,
-      },
-    });
+      };
+      const _c = SubstrateResponseSchema.safeParse(_b);
+      if (!_c.success) logger.warn({ err: _c.error }, "GET /api/substrate/:id — response shape mismatch");
+      res.json(_b);
+    }
     return;
   }
 
-  res.json({
-    type: "FeatureCollection",
-    features: slice.features,
-    metadata: baseMetadata,
-  });
+  {
+    const _b = {
+      type: "FeatureCollection" as const,
+      features: slice.features,
+      metadata: baseMetadata,
+    };
+    const _c = SubstrateResponseSchema.safeParse(_b);
+    if (!_c.success) logger.warn({ err: _c.error }, "GET /api/substrate/:id — response shape mismatch");
+    res.json(_b);
+  }
 }));
 
 export default router;

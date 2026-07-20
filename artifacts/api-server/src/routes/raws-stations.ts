@@ -30,6 +30,12 @@ const RawsStationsQuerySchema = LatLonQuerySchema.extend({
 
 const router = Router();
 
+const RawsStationsResponseSchema = z.object({
+  available: z.boolean(),
+  stations: z.array(z.record(z.unknown())),
+  source: z.string(),
+});
+
 function haversineKm(
   lat1: number,
   lon1: number,
@@ -60,7 +66,10 @@ router.get("/raws-stations", asyncHandler(async (req, res): Promise<void> => {
   try {
     const all = await fetchRawsStations();
     if (!all) {
-      res.json({ available: false, stations: [], source: "aoos-raws" });
+      const _r0 = { available: false, stations: [] as RawsStation[], source: "aoos-raws" };
+      const _p0 = RawsStationsResponseSchema.safeParse(_r0);
+      if (!_p0.success) logger.warn({ err: _p0.error }, "GET /api/raws-stations — response shape mismatch");
+      res.json(_r0);
       return;
     }
 
@@ -68,10 +77,16 @@ router.get("/raws-stations", asyncHandler(async (req, res): Promise<void> => {
       (s) => haversineKm(lat, lon, s.lat, s.lon) <= radiusKm,
     );
 
-    res.json({ available: true, stations: nearby, source: "aoos-raws" });
+    const _r1 = { available: true, stations: nearby, source: "aoos-raws" };
+    const _p1 = RawsStationsResponseSchema.safeParse(_r1);
+    if (!_p1.success) logger.warn({ err: _p1.error }, "GET /api/raws-stations — response shape mismatch");
+    res.json(_r1);
   } catch (err) {
     logger.warn({ err }, "raws-stations: unexpected error");
-    res.json({ available: false, stations: [], source: "aoos-raws" });
+    const _r2 = { available: false, stations: [] as RawsStation[], source: "aoos-raws" };
+    const _p2 = RawsStationsResponseSchema.safeParse(_r2);
+    if (!_p2.success) logger.warn({ err: _p2.error }, "GET /api/raws-stations — response shape mismatch");
+    res.json(_r2);
   }
 }));
 

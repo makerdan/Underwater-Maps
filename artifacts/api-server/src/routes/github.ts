@@ -4,6 +4,13 @@ import { requireAuth } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { getGithubClient } from "../lib/github.js";
+import { logger } from "../lib/logger.js";
+
+const GithubReposListResponseSchema = z.array(z.record(z.unknown()));
+const GithubContentsResponseSchema = z.union([
+  z.record(z.unknown()),
+  z.array(z.record(z.unknown())),
+]);
 
 const GithubOwnerRepoSchema = z.object({
   owner: z.string().min(1, "owner is required").max(100).regex(/^[a-zA-Z0-9_.-]+$/, "owner contains invalid characters"),
@@ -90,6 +97,8 @@ router.get(
     }
     try {
       const { data } = await octokit.repos.listForAuthenticatedUser({ per_page: 100 });
+      const _rp = GithubReposListResponseSchema.safeParse(data);
+      if (!_rp.success) logger.warn({ err: _rp.error }, "GET /api/github/repos — response shape mismatch");
       res.json(data);
     } catch (err) {
       handleGithubError(res, err);
@@ -130,6 +139,8 @@ router.get(
         path,
         ...(ref !== undefined ? { ref } : {}),
       });
+      const _rp = GithubContentsResponseSchema.safeParse(data);
+      if (!_rp.success) logger.warn({ err: _rp.error }, "GET /api/github/repos/:owner/:repo/contents/*path — response shape mismatch");
       res.json(data);
     } catch (err) {
       handleGithubError(res, err);

@@ -3,6 +3,13 @@ import { z } from "zod";
 import { parsePositiveIntEnv } from "../lib/env.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
+import {
+  GetPoeModelsResponse,
+  PoeClassifyResponse,
+  PoeQueryResponse,
+  PoeHelpResponse,
+} from "@workspace/api-zod";
 import { promises as fsPromises } from "fs";
 import path from "path";
 import { createHash } from "crypto";
@@ -284,7 +291,13 @@ let modelsCache: { data: unknown; expiresAt: number } | null = null;
 
 router.get("/models", asyncHandler(async (_req, res) => {
   if (modelsCache && Date.now() < modelsCache.expiresAt) {
-    res.json(modelsCache.data);
+    // Proxy route: validate shape and warn on mismatch, but still send the cached response.
+    const cached = modelsCache.data;
+    const parsed = GetPoeModelsResponse.safeParse(cached);
+    if (!parsed.success) {
+      logger.warn({ err: parsed.error }, "GET /api/poe/models — cached response shape mismatch");
+    }
+    res.json(cached);
     return;
   }
 
@@ -296,6 +309,11 @@ router.get("/models", asyncHandler(async (_req, res) => {
       signal: AbortSignal.timeout(POE_MODELS_TIMEOUT_MS),
     });
     const data = await response.json();
+    // Proxy route: validate shape and warn on mismatch, but still forward the upstream response.
+    const parsed = GetPoeModelsResponse.safeParse(data);
+    if (!parsed.success) {
+      logger.warn({ err: parsed.error }, "GET /api/poe/models — upstream response shape mismatch");
+    }
     modelsCache = { data, expiresAt: Date.now() + 60 * 60 * 1000 };
     res.json(data);
   } catch {
@@ -1405,7 +1423,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
       : null;
     const coarseWidth = secondary?.coarseWidth ?? TILE_SIZE;
     const coarseHeight = secondary?.coarseHeight ?? TILE_SIZE;
-    res.json({
+    res.json(validateResponse(PoeClassifyResponse, {
       zones,
       fromCache: true,
       source: secondary?.source ?? "ai",
@@ -1413,7 +1431,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
       coarseWidth,
       coarseHeight,
       tilesTotal: (coarseWidth / TILE_SIZE) * (coarseHeight / TILE_SIZE),
-    });
+    }, "POST /api/poe/classify"));
     return;
   }
 
@@ -1434,7 +1452,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
       if (!inMemoryHit) datasetZonesCache.set(secondaryKey, diskHit);
       const coarseWidth = diskHit.coarseWidth ?? TILE_SIZE;
       const coarseHeight = diskHit.coarseHeight ?? TILE_SIZE;
-      res.json({
+      res.json(validateResponse(PoeClassifyResponse, {
         zones: diskHit.zones,
         fromCache: true,
         source: diskHit.source ?? "ai",
@@ -1442,7 +1460,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
         coarseWidth,
         coarseHeight,
         tilesTotal: (coarseWidth / TILE_SIZE) * (coarseHeight / TILE_SIZE),
-      });
+      }, "POST /api/poe/classify"));
       return;
     }
   }
@@ -1495,7 +1513,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
           void writeZoneDisk(secondaryKey, cachedEntry);
         }
 
-        res.json({
+        res.json(validateResponse(PoeClassifyResponse, {
           zones: out.zones,
           fromCache: false,
           source: out.source,
@@ -1505,7 +1523,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
           tilesTotal: out.plan.tiles.length,
           tilesAi: out.tilesAi,
           tilesHeuristic: out.tilesHeuristic,
-        });
+        }, "POST /api/poe/classify"));
         return;
       } catch (err) {
         // If the *driver itself* explodes (not just per-tile failures —
@@ -1653,7 +1671,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
     );
 
     poeBreaker.recordSuccess();
-    res.json({
+    res.json(validateResponse(PoeClassifyResponse, {
       zones,
       fromCache: false,
       source: "ai",
@@ -1663,7 +1681,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
       tilesTotal: 1,
       tilesAi: 1,
       tilesHeuristic: 0,
-    });
+    }, "POST /api/poe/classify"));
   } catch (poeClassifyErr) {
     // Record Poe failures so the circuit breaker can track consecutive errors.
     // Circuit-open errors are self-inflicted (we threw them above) — don't
@@ -1733,7 +1751,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
           { provider: "openai", model: OPENAI_CLASSIFY_MODEL },
           "[poe/classify] OpenAI vision fallback succeeded",
         );
-        res.json({
+        res.json(validateResponse(PoeClassifyResponse, {
           zones: oaiZones,
           fromCache: false,
           source: "ai",
@@ -1743,7 +1761,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
           tilesTotal: 1,
           tilesAi: 1,
           tilesHeuristic: 0,
-        });
+        }, "POST /api/poe/classify"));
         return;
       } catch (oaiClassifyErr) {
         if (isOpenAiQuotaError(oaiClassifyErr)) {
@@ -1777,7 +1795,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
     const zones = validDepths
       ? heuristicClassifyByDepth(validDepths, waterType, substrateZoneLabels)
       : new Array<string>(1024).fill(fallbackZone);
-    res.json({
+    res.json(validateResponse(PoeClassifyResponse, {
       zones,
       fromCache: false,
       source: "heuristic",
@@ -1787,7 +1805,7 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
       tilesTotal: 1,
       tilesAi: 0,
       tilesHeuristic: 1,
-    });
+    }, "POST /api/poe/classify"));
     return;
     // NOTE: handlePoeError is intentionally NOT called here. The classify
     // endpoint always returns 200 — either AI labels or a heuristic fill.
@@ -2065,11 +2083,11 @@ router.post("/query", validateBody(PoeQueryBodySchema, "POST /api/poe/query"), a
       response.usage?.output_tokens ?? 0,
     );
 
-    res.json({
+    res.json(validateResponse(PoeQueryResponse, {
       toolCalls,
       text: response.output_text ?? null,
       responseId: response.id ?? null,
-    });
+    }, "POST /api/poe/query"));
   } catch (err) {
     handlePoeError(err, res);
   }
@@ -2196,7 +2214,7 @@ router.post("/help", validateBody(HelpBodySchema, "POST /api/poe/help"), asyncHa
     );
 
     logger.info({ provider: "poe", model: POE_MODELS.DESCRIBE_QUICK }, "[poe/help] answered via Poe");
-    res.json({ answer });
+    res.json(validateResponse(PoeHelpResponse, { answer }, "POST /api/poe/help"));
   } catch (poeHelpErr) {
     // ── OpenAI chat-completions fallback ──────────────────────────────────
     // Uses the same system prompt (docs-grounded, BathyScan-scoped) and chat
@@ -2237,7 +2255,7 @@ router.post("/help", validateBody(HelpBodySchema, "POST /api/poe/help"), asyncHa
           "openai",
         );
         logger.info({ provider: "openai", model: OPENAI_HELP_MODEL }, "[poe/help] OpenAI fallback succeeded");
-        res.json({ answer: oaiAnswer });
+        res.json(validateResponse(PoeHelpResponse, { answer: oaiAnswer }, "POST /api/poe/help"));
         return;
       } catch (oaiHelpErr) {
         if (isOpenAiQuotaError(oaiHelpErr)) {

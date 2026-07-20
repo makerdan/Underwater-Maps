@@ -28,6 +28,7 @@
 
 import { z } from "zod";
 import { Router } from "express";
+import { logger } from "../lib/logger.js";
 import {
   buildSyntheticEvents,
   computeSlackSample,
@@ -666,22 +667,38 @@ router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> =
     };
   });
 
-  res.json({
-    available: true,
-    lat,
-    lon,
-    dataSource: estimatedConditions ? "estimated" : "open-meteo",
-    tidalDataSource: tidal.source,
-    ...(tidal.stationId ? { tidalStationId: tidal.stationId } : {}),
-    ...(tidal.stationName ? { tidalStationName: tidal.stationName } : {}),
-    ...(typeof tidal.distanceKm === "number" ? { tidalStationDistanceKm: tidal.distanceKm } : {}),
-    tideHeightSource: tideHeightsResult !== null ? "noaa-coops" : "none",
-    ...(tideHeightsResult ? { tideHeightStationId: tideHeightsResult.stationId } : {}),
-    ...(tideHeightsResult ? { tideHeightStationName: tideHeightsResult.stationName } : {}),
-    estimatedConditions,
-    hours,
-    forecast48h,
-  });
+  const SurfaceConditionsResponseSchema = z.object({
+    available: z.literal(true),
+    lat: z.number(),
+    lon: z.number(),
+    dataSource: z.string(),
+    tidalDataSource: z.string(),
+    estimatedConditions: z.boolean(),
+    hours: z.array(z.record(z.unknown())),
+    forecast48h: z.array(z.record(z.unknown())),
+  }).passthrough();
+
+  {
+    const _b = {
+      available: true as const,
+      lat,
+      lon,
+      dataSource: estimatedConditions ? "estimated" : "open-meteo",
+      tidalDataSource: tidal.source,
+      ...(tidal.stationId ? { tidalStationId: tidal.stationId } : {}),
+      ...(tidal.stationName ? { tidalStationName: tidal.stationName } : {}),
+      ...(typeof tidal.distanceKm === "number" ? { tidalStationDistanceKm: tidal.distanceKm } : {}),
+      tideHeightSource: tideHeightsResult !== null ? "noaa-coops" : "none",
+      ...(tideHeightsResult ? { tideHeightStationId: tideHeightsResult.stationId } : {}),
+      ...(tideHeightsResult ? { tideHeightStationName: tideHeightsResult.stationName } : {}),
+      estimatedConditions,
+      hours,
+      forecast48h,
+    };
+    const _sp = SurfaceConditionsResponseSchema.safeParse(_b);
+    if (!_sp.success) logger.warn({ err: _sp.error }, "GET /api/surface-conditions — response shape mismatch");
+    res.json(_b);
+  }
 }));
 
 export default router;

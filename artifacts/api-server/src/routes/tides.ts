@@ -12,7 +12,13 @@ import { Router } from "express";
 import { logger } from "../lib/logger.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import { LatLonQuerySchema } from "./schemas.js";
+import {
+  GetTidesStationResponse,
+  GetTidesStationIdResponse,
+  GetTidesStationIdDatumsResponse,
+} from "@workspace/api-zod";
 import {
   getStationList,
   haversineKm,
@@ -251,10 +257,10 @@ router.get(
     const { lat, lon } = parsed.data;
     const station = await findNearestTideStation(lat, lon);
     if (!station) {
-      res.json({ available: false });
+      res.json(validateResponse(GetTidesStationResponse, { available: false }, "GET /api/tides/station"));
       return;
     }
-    res.json({ available: true, station });
+    res.json(validateResponse(GetTidesStationResponse, { available: true, station }, "GET /api/tides/station"));
   }),
 );
 
@@ -280,7 +286,7 @@ router.get(
       });
       return;
     }
-    res.json(result);
+    res.json(validateResponse(GetTidesStationIdResponse, result, "GET /api/tides/:stationId"));
   }),
 );
 
@@ -304,7 +310,7 @@ router.get(
       });
       return;
     }
-    res.json(result);
+    res.json(validateResponse(GetTidesStationIdDatumsResponse, result, "GET /api/tides/:stationId/datums"));
   }),
 );
 

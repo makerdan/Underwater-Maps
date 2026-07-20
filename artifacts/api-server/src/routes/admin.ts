@@ -1,7 +1,9 @@
 import { Router } from "express";
+import { z } from "zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateQuery } from "../middlewares/validateBody.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import {
   getBucketStatus,
   LIFECYCLE_TTLS,
@@ -11,6 +13,9 @@ import {
 import { queryRateLimitUsage } from "../middlewares/rateLimit.js";
 import { AdminRateLimitUsageQuerySchema } from "./schemas.js";
 import { getUpscaleCacheStats, UPSCALE_CREDITS_PER_CALL } from "./poe.js";
+import {
+  AdminLargeDatasetsDiffResponse,
+} from "@workspace/api-zod";
 
 const router = Router();
 
@@ -56,6 +61,10 @@ router.get(
 
     const summary = await getBucketStatus();
     const applyStatus = getLifecycleApplyStatus();
+    // TODO: AdminBucketMonitorResponse schema defines pending/processing/done/failed as
+    // numbers, but the actual BucketStatusSummary shape has them as item arrays alongside
+    // a separate `counts` object. Schema must be updated in OpenAPI spec before strict
+    // validateResponse can be applied here.
     res.json({
       ...summary,
       lifecycle: {
@@ -93,9 +102,25 @@ router.get(
     }
 
     const diff = await getLargeDatasetsDiff();
-    res.json(diff);
+    res.json(validateResponse(AdminLargeDatasetsDiffResponse, diff, "GET /api/admin/large-datasets-diff"));
   }),
 );
+
+const AdminRateLimitUsageRowSchema = z.object({
+  bucket_key: z.string(),
+  route: z.string(),
+  mode: z.enum(["user", "ip"]),
+  count: z.number(),
+  max: z.number().nullable(),
+  remaining: z.number().nullable(),
+});
+
+const AdminRateLimitUsageResponseSchema = z.object({
+  windowMs: z.number(),
+  generatedAt: z.string(),
+  count: z.number(),
+  rows: z.array(AdminRateLimitUsageRowSchema),
+});
 
 /**
  * GET /admin/rate-limit/usage
@@ -138,14 +163,22 @@ router.get(
 
     const rows = await queryRateLimitUsage(windowMs, topN);
 
-    res.json({
+    res.json(validateResponse(AdminRateLimitUsageResponseSchema, {
       windowMs,
       generatedAt: new Date().toISOString(),
       count: rows.length,
       rows,
-    });
+    }, "GET /api/admin/rate-limit/usage"));
   }),
 );
+
+const AdminUpscaleCacheStatsResponseSchema = z.object({
+  hits: z.number(),
+  misses: z.number(),
+  hitRate: z.number(),
+  creditsPerCall: z.number(),
+  generatedAt: z.string(),
+});
 
 /**
  * GET /admin/upscale-cache-stats
@@ -177,11 +210,11 @@ router.get(
     }
 
     const stats = getUpscaleCacheStats();
-    res.json({
+    res.json(validateResponse(AdminUpscaleCacheStatsResponseSchema, {
       ...stats,
       creditsPerCall: UPSCALE_CREDITS_PER_CALL,
       generatedAt: new Date().toISOString(),
-    });
+    }, "GET /api/admin/upscale-cache-stats"));
   }),
 );
 

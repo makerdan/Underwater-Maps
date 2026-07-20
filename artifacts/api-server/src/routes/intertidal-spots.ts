@@ -32,6 +32,7 @@ import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { db, customDatasetsTable } from "@workspace/db";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import {
   getSubstrateForDataset,
@@ -40,6 +41,7 @@ import {
 } from "../lib/shoreZoneData.js";
 import { scoreTidepool, scoreBeachcombing, buildScoreSignals } from "../lib/intertidalScorer.js";
 import type { IntertidalScoringProps } from "../lib/intertidalScorer.js";
+import { GetIntertidalSpotsResponse } from "@workspace/api-zod";
 
 const IntertidalSpotsQuerySchema = z.object({
   type: z.enum(["tidepool", "beachcombing", "both"]).optional().default("both"),
@@ -100,7 +102,7 @@ function buildAndSendResponse(
   const seAlaskaFeatures = slice.features.filter((f) => SE_ALASKA_SOURCES.has(f.properties.source));
 
   if (seAlaskaFeatures.length === 0) {
-    res.json({
+    res.json(validateResponse(GetIntertidalSpotsResponse, {
       type: "FeatureCollection",
       features: [],
       metadata: {
@@ -112,7 +114,7 @@ function buildAndSendResponse(
         sourceCredit:
           "Alaska ShoreZone (NOAA AKR / ADF&G) and AOOS Alaska Coastal Habitats — both public domain.",
       },
-    });
+    }, "GET /api/intertidal-spots/:id"));
     return;
   }
 
@@ -151,7 +153,7 @@ function buildAndSendResponse(
     },
   }));
 
-  res.json({
+  res.json(validateResponse(GetIntertidalSpotsResponse, {
     type: "FeatureCollection",
     features,
     metadata: {
@@ -163,7 +165,7 @@ function buildAndSendResponse(
       sourceCredit:
         "Alaska ShoreZone (NOAA AKR / ADF&G) and AOOS Alaska Coastal Habitats — both public domain.",
     },
-  });
+  }, "GET /api/intertidal-spots/:id"));
 }
 
 /**

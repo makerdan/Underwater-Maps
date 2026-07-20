@@ -3,6 +3,7 @@ import { logger } from "../lib/logger.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import {
   buildSyntheticEvents,
   computeSlackSample,
@@ -15,7 +16,12 @@ import {
   TidalScheduleQuerySchema,
   TidalPackQuerySchema,
 } from "./schemas.js";
+import { z } from "zod";
 import type { ZodError } from "zod";
+import {
+  GetTidalScheduleResponse,
+  GetTidalPackResponse,
+} from "@workspace/api-zod";
 
 /**
  * Map a Zod query-validation error onto the tidal routes' legacy
@@ -603,6 +609,16 @@ function tidalResultCacheKey(lat: number, lon: number, refMs: number): string {
   return `${latBucket}|${lonBucket}|${timeBucket}`;
 }
 
+// Loose response schema for safeParse+warn on GET /tidal.  Uses passthrough() so that
+// extra fields (stationName, stationId, isPredicted, heightsSource, currentsSource, slack,
+// isModeled, etc.) and the "glerl"/"usgs" source values are not treated as schema violations.
+// Strict validateResponse(GetTidalResponse, …) is intentionally avoided because the OpenAPI
+// spec enum(['noaa', 'estimated']) does not yet cover the GLERL / USGS source paths.
+const TidalLooseResponseSchema = z.union([
+  z.object({ available: z.literal(false), source: z.string() }).passthrough(),
+  z.object({ available: z.literal(true), source: z.string() }).passthrough(),
+]);
+
 // GET /tidal?lat=&lon=&datetime=
 router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
   const parsed = TidalQuerySchema.safeParse(req.query);
@@ -667,6 +683,8 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
       slack: fwSample.slack,
     };
     freshwaterResultCache.set(fwCacheKey, { body: glerlBody, ts: fwNow });
+    const _gp = TidalLooseResponseSchema.safeParse(glerlBody);
+    if (!_gp.success) logger.warn({ err: _gp.error }, "GET /api/tidal — GLERL response shape mismatch");
     res.json(glerlBody);
     return;
   }
@@ -767,6 +785,8 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
         res.json(staleBody);
         return;
       }
+      const _fp = TidalLooseResponseSchema.safeParse({ available: false, source: "usgs" });
+      if (!_fp.success) logger.warn({ err: _fp.error }, "GET /api/tidal — unavailable fallback shape mismatch");
       res.json({ available: false, source: "usgs" } as TidalResponse);
       return;
     }
@@ -800,6 +820,8 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
       slack: fwSample.slack,
     };
     freshwaterResultCache.set(fwCacheKey, { body: usgsBody, ts: fwNow });
+    const _up = TidalLooseResponseSchema.safeParse(usgsBody);
+    if (!_up.success) logger.warn({ err: _up.error }, "GET /api/tidal — USGS response shape mismatch");
     res.json(usgsBody);
     return;
   }
@@ -827,6 +849,8 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
     slack: sample.slack,
   };
   tidalResultCache.set(cacheKey, { body, ts: Date.now() });
+  const _bp = TidalLooseResponseSchema.safeParse(body);
+  if (!_bp.success) logger.warn({ err: _bp.error }, "GET /api/tidal — response shape mismatch");
   res.json(body);
 }));
 
@@ -929,7 +953,7 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
     });
   }
 
-  res.json({
+  res.json(validateResponse(GetTidalScheduleResponse, {
     available: true,
     source,
     stationId,
@@ -937,7 +961,7 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
     rangeStart: startTime.toISOString(),
     rangeEnd: new Date(endMs).toISOString(),
     events: scheduleEvents,
-  });
+  }, "GET /api/tidal/schedule"));
 }));
 
 // GET /tidal/pack?lat=&lon=&days=N
@@ -1044,13 +1068,13 @@ router.get("/tidal/pack", asyncHandler(async (req, res): Promise<void> => {
 
   const tidalExpiresAt = new Date(endMs).toISOString();
 
-  res.json({
+  res.json(validateResponse(GetTidalPackResponse, {
     station: stationName ?? stationId ?? null,
     generatedAt: now.toISOString(),
     heightPredictions,
     currentPredictions,
     tidalExpiresAt,
-  });
+  }, "GET /api/tidal/pack"));
 }));
 
 interface TideHeightPrediction {

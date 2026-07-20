@@ -24,6 +24,7 @@ import { eq, and } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { db, customDatasetsTable } from "@workspace/db";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { logger } from "../lib/logger.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import {
   SALTWATER_EFH_BY_DATASET,
@@ -77,17 +78,30 @@ function filterBySpecies(
   );
 }
 
+const EfhResponseSchema = z.object({
+  type: z.literal("FeatureCollection"),
+  features: z.array(z.unknown()),
+  metadata: z.record(z.unknown()),
+});
+
+function warnEfhShape(data: unknown): void {
+  const _p = EfhResponseSchema.safeParse(data);
+  if (!_p.success) logger.warn({ err: _p.error }, "GET /api/efh — response shape mismatch");
+}
+
 /** Build an empty-EFH response (no bundled data for this dataset). */
 function emptyEfhResponse(datasetId: string | undefined) {
-  return {
+  const r = {
     type: "FeatureCollection" as const,
-    features: [],
+    features: [] as unknown[],
     metadata: {
       note: `No EFH data bundled for dataset '${datasetId}'.`,
       creditUrl:
         "https://www.fisheries.noaa.gov/resource/data/alaska-essential-fish-habitat-efh-species-shapefiles",
     },
   };
+  warnEfhShape(r);
+  return r;
 }
 
 /**
@@ -114,11 +128,15 @@ router.get("/efh", (req, res) => {
     return;
   }
 
-  res.json({
-    type: "FeatureCollection",
-    features: filterBySpecies(collection.features, species),
-    metadata: collection.metadata,
-  });
+  {
+    const _r = {
+      type: "FeatureCollection" as const,
+      features: filterBySpecies(collection.features, species),
+      metadata: collection.metadata,
+    };
+    warnEfhShape(_r);
+    res.json(_r);
+  }
 });
 
 /**
@@ -170,11 +188,15 @@ router.get("/efh/:id", asyncHandler(async (req, res) => {
       return;
     }
 
-    res.json({
-      type: "FeatureCollection",
-      features: filterBySpecies(collection.features, queryParsed.data.species),
-      metadata: collection.metadata,
-    });
+    {
+      const _r = {
+        type: "FeatureCollection" as const,
+        features: filterBySpecies(collection.features, queryParsed.data.species),
+        metadata: collection.metadata,
+      };
+      warnEfhShape(_r);
+      res.json(_r);
+    }
     return;
   }
 
@@ -200,11 +222,15 @@ router.get("/efh/:id", asyncHandler(async (req, res) => {
     return;
   }
 
-  res.json({
-    type: "FeatureCollection",
-    features: filterBySpecies(collection.features, queryParsed.data.species),
-    metadata: collection.metadata,
-  });
+  {
+    const _r = {
+      type: "FeatureCollection" as const,
+      features: filterBySpecies(collection.features, queryParsed.data.species),
+      metadata: collection.metadata,
+    };
+    warnEfhShape(_r);
+    res.json(_r);
+  }
 }));
 
 export default router;

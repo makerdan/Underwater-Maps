@@ -20,6 +20,16 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
+const RawsWeatherResponseSchema = z.union([
+  z.object({
+    available: z.literal(true),
+    observation: z.record(z.unknown()),
+    stale: z.boolean().optional(),
+    station: z.object({ datasetId: z.string() }),
+  }),
+  z.object({ available: z.literal(false) }),
+]);
+
 const RawsWeatherQuerySchema = z.object({
   datasetId: z
     .string({ required_error: "datasetId is required" })
@@ -45,18 +55,27 @@ router.get("/raws-weather", asyncHandler(async (req, res): Promise<void> => {
       ? await fetchRawsObservationAt(datasetId, new Date(time))
       : await fetchRawsObservation(datasetId);
     if (!result) {
-      res.json({ available: false });
+      const _r0 = { available: false as const };
+      const _p0 = RawsWeatherResponseSchema.safeParse(_r0);
+      if (!_p0.success) logger.warn({ err: _p0.error }, "GET /api/raws-weather — response shape mismatch");
+      res.json(_r0);
       return;
     }
-    res.json({
-      available: true,
+    const _r1 = {
+      available: true as const,
       observation: result.observation,
       stale: result.stale,
       station: { datasetId },
-    });
+    };
+    const _p1 = RawsWeatherResponseSchema.safeParse(_r1);
+    if (!_p1.success) logger.warn({ err: _p1.error }, "GET /api/raws-weather — response shape mismatch");
+    res.json(_r1);
   } catch (err) {
     logger.warn({ err, datasetId }, "raws-weather: unexpected error");
-    res.json({ available: false });
+    const _r2 = { available: false as const };
+    const _p2 = RawsWeatherResponseSchema.safeParse(_r2);
+    if (!_p2.success) logger.warn({ err: _p2.error }, "GET /api/raws-weather — response shape mismatch");
+    res.json(_r2);
   }
 }));
 
