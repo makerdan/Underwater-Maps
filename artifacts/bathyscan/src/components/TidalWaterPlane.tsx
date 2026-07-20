@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { WORLD_SIZE, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
+import { applyWaterPlaneVisibility } from "./WaterSurfacePlane";
 
 interface TidalWaterPlaneProps {
   tideHeight: number;
@@ -10,7 +11,13 @@ interface TidalWaterPlaneProps {
   depthBias?: boolean;
 }
 
-function computeSurfaceY(terrain: TerrainData, tideHeightM: number): number {
+/**
+ * Compute the world-Y coordinate of the tidal water surface.
+ *
+ * Exported for unit tests so the same formula can be verified without
+ * mounting a full R3F canvas.
+ */
+export function computeSurfaceY(terrain: TerrainData, tideHeightM: number): number {
   const depthRange = (terrain.maxDepth - terrain.minDepth) || 1;
   const seaSurfaceY = (terrain.minDepth / depthRange) * MAX_DEPTH_WORLD;
   const tideOffsetY = (tideHeightM / depthRange) * MAX_DEPTH_WORLD;
@@ -24,15 +31,42 @@ export const TidalWaterPlane: React.FC<TidalWaterPlaneProps> = ({ tideHeight, te
   const currentY = useRef(targetY.current);
   const uvOffsetRef = useRef(0);
 
+  // Hysteresis ref for the gap-zone guard (mirrors WaterSurfacePlane).
+  // Starts true so the initial frame (camera underwater) shows the plane.
+  const belowSurface = useRef<boolean>(true);
+
+  // Track terrain identity so we can snap Y on a dataset switch.
+  const prevTerrainRef = useRef<TerrainData>(terrain);
+
+  // Update targetY whenever tide height or terrain changes.
+  // When terrain identity switches (full dataset change) we also snap
+  // currentY immediately so there is no stale-Y frame before the lerp
+  // catches up.
   useMemo(() => {
-    targetY.current = computeSurfaceY(terrain, tideHeight);
+    const next = computeSurfaceY(terrain, tideHeight);
+    targetY.current = next;
+    if (terrain !== prevTerrainRef.current) {
+      // Dataset switched — snap both Y refs and reset the hysteresis guard.
+      currentY.current = next;
+      belowSurface.current = true;
+      prevTerrainRef.current = terrain;
+      if (meshRef.current) {
+        meshRef.current.position.y = next;
+      }
+    }
   }, [tideHeight, terrain]);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
+    // Smooth-lerp toward target (only moves during tidal height changes, not
+    // dataset switches — those are snapped above).
     currentY.current += (targetY.current - currentY.current) * Math.min(1, delta * 2);
 
     if (meshRef.current) {
       meshRef.current.position.y = currentY.current;
+
+      // Apply the same gap-zone visibility guard used by WaterSurfacePlane.
+      // The relevant surfY for this plane is currentY (the actual mesh position).
+      applyWaterPlaneVisibility(meshRef.current, belowSurface, state.camera.position.y, currentY.current);
     }
 
     uvOffsetRef.current += delta * 0.04;

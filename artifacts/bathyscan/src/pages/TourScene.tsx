@@ -25,7 +25,7 @@ import { DepthPoleLayer, DepthPoleDomLabels } from "@/components/DepthPoleLayer"
 import { GpsMarker } from "@/components/GpsMarker";
 import { DepthProfileLine } from "@/components/DepthProfileLine";
 import type { TidalDataResult } from "@/hooks/useTidalData";
-import { INITIAL_CAMERA_POSITION, MAX_DEPTH_WORLD, WORLD_SIZE, getSeaSurfaceY } from "@/lib/terrain";
+import { INITIAL_CAMERA_POSITION, MAX_DEPTH_WORLD, WORLD_SIZE, getSeaSurfaceY, buildWaterSurface, type WaterSurface } from "@/lib/terrain";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { runFollowBoundsCheck } from "@/lib/followBoundsCheck";
@@ -317,8 +317,8 @@ const NonPrimaryDatasetMeshes: React.FC<{
   tidalDataMap?: Map<string, TidalDataResult>;
   tidalOverlay?: boolean;
   depthLayer?: DepthLayer;
-  showWaterSurface?: boolean;
-}> = ({ primary, showLandmass, tidalDataMap, tidalOverlay, depthLayer = "surface", showWaterSurface = true }) => {
+  waterSurface?: WaterSurface;
+}> = ({ primary, showLandmass, tidalDataMap, tidalOverlay, depthLayer = "surface", waterSurface = { visible: true, y: 0 } }) => {
   const visible = useTerrainStore((s) => s.visibleDatasets);
   const primaryId = useTerrainStore((s) => s.primaryDatasetId);
   const primaryLonRange = (primary.maxLon - primary.minLon) || 1;
@@ -376,7 +376,7 @@ const NonPrimaryDatasetMeshes: React.FC<{
                   tidalData={secTidalData}
                   depthLayer={depthLayer}
                   terrain={g}
-                  showWaterSurface={showWaterSurface}
+                  waterSurface={waterSurface}
                   depthBias
                 />
               )}
@@ -426,14 +426,14 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
 //
 // When tidal overlay is on we substitute TidalWaterPlane for the static
 // WaterSurfacePlane so the surface visibly rises/falls with the tide.
-// Both are gated on `showWaterSurface` so disabling the toggle hides any
+// Both are gated on the WaterSurface union so disabling the toggle hides any
 // water plane (useful for cross-sections / dry-bathymetry views).
 // ---------------------------------------------------------------------------
 interface TidalSceneContentsProps {
   tidalData: TidalDataResult | null;
   depthLayer: DepthLayer;
   terrain: TerrainData;
-  showWaterSurface: boolean;
+  waterSurface: WaterSurface;
   depthBias?: boolean;
 }
 
@@ -441,7 +441,7 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
   tidalData,
   depthLayer,
   terrain,
-  showWaterSurface,
+  waterSurface,
   depthBias = false,
 }) => {
   if (!tidalData?.available) return null;
@@ -450,7 +450,7 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
 
   return (
     <>
-      {showWaterSurface && (
+      {waterSurface.visible && (
         <TidalWaterPlane tideHeight={tidalData.tideHeight} terrain={terrain} depthBias={depthBias} />
       )}
       <TidalCurrentArrows
@@ -687,7 +687,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
           tidalDataMap={tidalDataMap}
           tidalOverlay={tidalOverlay}
           depthLayer={depthLayer}
-          showWaterSurface={showWaterSurface}
+          waterSurface={buildWaterSurface(showWaterSurface, terrain)}
         />
       )}
       <EfhZoneLayer />
@@ -701,10 +701,10 @@ const SceneContents: React.FC<SceneContentsProps> = ({
           tidalData={tidalData}
           depthLayer={depthLayer}
           terrain={terrain}
-          showWaterSurface={showWaterSurface}
+          waterSurface={buildWaterSurface(showWaterSurface, terrain)}
         />
       ) : (
-        terrain && showWaterSurface && <WaterSurfacePlane terrain={terrain} />
+        <WaterSurfacePlane waterSurface={buildWaterSurface(showWaterSurface, terrain ?? null)} />
       )}
 
       {terrain && <WaterTempSceneContents terrain={terrain} />}

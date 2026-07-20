@@ -1,19 +1,20 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { WORLD_SIZE, getSeaSurfaceY } from "@/lib/terrain";
-import type { TerrainData } from "@workspace/api-client-react";
+import { WORLD_SIZE, type WaterSurface } from "@/lib/terrain";
 import { useSettingsStore } from "@/lib/settingsStore";
 
 interface WaterSurfacePlaneProps {
-  terrain: TerrainData;
+  waterSurface: WaterSurface;
 }
 
 /**
  * Static sea-level water surface plane.
  *
- * Rendered at the dataset's sea-surface Y (derived from terrain.minDepth) and
- * sized to WORLD_SIZE * 1.1 so it covers the full bathymetry and any landmass.
+ * Accepts a pre-built WaterSurface discriminated union so that "visible but
+ * Y is stale" is an unrepresentable state.  Returns null immediately when
+ * `waterSurface.visible` is false (user toggled it off, or no terrain loaded).
+ *
  * Colour and clarity are tied to the active water type: deep-ocean blue for
  * saltwater, clearer green-teal for freshwater lakes.
  *
@@ -53,10 +54,10 @@ export function applyWaterPlaneVisibility(
   mesh.visible = belowSurface.current;
 }
 
-export const WaterSurfacePlane: React.FC<WaterSurfacePlaneProps> = ({ terrain }) => {
+export const WaterSurfacePlane: React.FC<WaterSurfacePlaneProps> = ({ waterSurface }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const waterType = useSettingsStore((s) => s.waterType);
-  const surfY = getSeaSurfaceY(terrain);
+
   // Hysteresis ref: true = camera is "below surface" → plane visible.
   // Initial true so the very first frame (camera starts underwater) shows the plane.
   const belowSurface = useRef<boolean>(true);
@@ -80,8 +81,18 @@ export const WaterSurfacePlane: React.FC<WaterSurfacePlaneProps> = ({ terrain })
 
   useFrame(({ camera }) => {
     if (!meshRef.current) return;
-    applyWaterPlaneVisibility(meshRef.current, belowSurface, camera.position.y, surfY);
+    if (!waterSurface.visible) {
+      meshRef.current.visible = false;
+      return;
+    }
+    applyWaterPlaneVisibility(meshRef.current, belowSurface, camera.position.y, waterSurface.y);
   });
+
+  // Return null immediately when the surface is hidden — avoids mounting the
+  // mesh at all, which is cheaper than mounting+hiding it every frame.
+  if (!waterSurface.visible) return null;
+
+  const surfY = waterSurface.y;
 
   return (
     <mesh

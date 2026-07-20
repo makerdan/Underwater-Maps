@@ -38,6 +38,32 @@ export function getSeaSurfaceY(terrain: TerrainData): number {
 }
 
 /**
+ * Discriminated union representing the water surface state.
+ *
+ * Bundles visibility + Y-coordinate atomically so "surface visible but Y is
+ * stale" is an unrepresentable state.  Callsites pattern-match on `visible`
+ * before reading `y` — no separate boolean + number fields that can drift
+ * out of sync.
+ */
+export type WaterSurface = { visible: false } | { visible: true; y: number };
+
+/**
+ * Build a WaterSurface union from the current settings flag and terrain.
+ *
+ * Returns `{ visible: false }` when the user has disabled the water surface
+ * or when no terrain is loaded yet.  Returns `{ visible: true; y }` where
+ * `y` is always freshly computed from the current terrain so no stale-Y
+ * state can be represented.
+ */
+export function buildWaterSurface(
+  show: boolean,
+  terrain: TerrainData | null,
+): WaterSurface {
+  if (!show || !terrain) return { visible: false };
+  return { visible: true, y: getSeaSurfaceY(terrain) };
+}
+
+/**
  * Build a Three.js BufferGeometry from a TerrainData grid.
  *
  * - Uses PlaneGeometry(WORLD_SIZE, WORLD_SIZE, N−1, N−1) so there is one
