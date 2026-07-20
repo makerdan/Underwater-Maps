@@ -26,6 +26,11 @@ import {
   GetDatasetsIdPreviewResponse,
   GetTerrainDownloadInfoResponse,
   GetUploadJobStatusResponse,
+  UploadDatasetChunkResponse,
+  GetChunkUploadStatusResponse,
+  FinalizeChunkedUploadResponse,
+  RequestGcsUploadUrlResponse,
+  GetGcsJobStatusResponse,
 } from "@workspace/api-zod";
 import { validateResponse } from "../middlewares/validateResponse.js";
 import {
@@ -2380,7 +2385,7 @@ router.post(
       void updateChunksReceivedInDB(uploadId, chunkIndex + 1);
     }
 
-    res.json({ received: chunkIndex });
+    res.json(validateResponse(UploadDatasetChunkResponse, { received: chunkIndex }, "POST /api/datasets/upload/chunk"));
   }),
 );
 
@@ -2461,7 +2466,7 @@ router.get(
     }
 
     receivedChunks.sort((a, b) => a - b);
-    res.json({ uploadId, receivedChunks });
+    res.json(validateResponse(GetChunkUploadStatusResponse, { uploadId, receivedChunks }, "GET /api/datasets/upload/chunk/status/:uploadId"));
   }),
 );
 
@@ -2642,7 +2647,7 @@ router.post(
     // Fire-and-forget — the client polls /jobs/:jobId
     void processUploadJob(jobId, uploadId, totalChunks, fileName, resolution, userId, smoothing);
 
-    res.json({ jobId });
+    res.json(validateResponse(FinalizeChunkedUploadResponse, { jobId }, "POST /api/datasets/upload/chunk/finalize"));
   }),
 );
 
@@ -2673,7 +2678,7 @@ router.post(
 
     const userId = (req as AuthenticatedRequest).clerkUserId;
     const { uploadUrl, objectKey } = await signDatasetUploadUrl(userId, fileName);
-    res.json({ uploadUrl, objectKey });
+    res.json(validateResponse(RequestGcsUploadUrlResponse, { uploadUrl, objectKey }, "POST /api/datasets/upload/request-gcs-url"));
   }),
 );
 
@@ -2714,17 +2719,17 @@ router.get(
       // Not in memory — fall back to GCS metadata (handles server restarts)
       const recovered = await recoverGcsJobStatus(objectKey);
       if (recovered.status === "unknown") {
-        res.json({ status: "unknown", error: "Job not found — please re-upload your file." });
+        res.json(validateResponse(GetGcsJobStatusResponse, { status: "unknown", error: "Job not found — please re-upload your file." }, "GET /api/datasets/upload/gcs-job-status"));
       } else {
-        res.json({
+        res.json(validateResponse(GetGcsJobStatusResponse, {
           status: recovered.status,
           ...(recovered.error !== undefined ? { error: recovered.error } : {}),
-        });
+        }, "GET /api/datasets/upload/gcs-job-status"));
       }
       return;
     }
 
-    res.json({
+    res.json(validateResponse(GetGcsJobStatusResponse, {
       status: job.status,
       ...(job.datasetId !== undefined ? { datasetId: job.datasetId } : {}),
       ...(job.error !== undefined ? { error: job.error } : {}),
@@ -2733,7 +2738,7 @@ router.get(
       ...(job.soundingCount !== undefined ? { soundingCount: job.soundingCount } : {}),
       ...(job.substrateCount !== undefined ? { substrateCount: job.substrateCount } : {}),
       ...(job.parseWarnings !== undefined ? { parseWarnings: job.parseWarnings } : {}),
-    });
+    }, "GET /api/datasets/upload/gcs-job-status"));
   }),
 );
 

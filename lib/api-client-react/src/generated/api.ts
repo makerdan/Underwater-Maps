@@ -47,6 +47,7 @@ import type {
   FinalizeChunkedUploadBody,
   GeorefBody,
   GetCatchesParams,
+  GetChunkUploadStatus200,
   GetDatasetZonesParams,
   GetDatasetsCatalogParams,
   GetDatasetsCatalogSearchParams,
@@ -6255,6 +6256,84 @@ export const useUploadDatasetChunk = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getUploadDatasetChunkMutationOptions(options));
     }
+
+export const getGetChunkUploadStatusUrl = (uploadId: string,) => {
+
+
+
+
+  return `/api/datasets/upload/chunk/status/${uploadId}`
+}
+
+/**
+ * Returns the chunk indices already received on disk (or reconstructed from the database after a server restart) so the client can resume a chunked upload from the first missing slice instead of starting over.
+ * @summary List which chunk indices have been received for an upload session
+ */
+export const getChunkUploadStatus = async (uploadId: string, options?: RequestInit): Promise<GetChunkUploadStatus200> => {
+
+  return customFetch<GetChunkUploadStatus200>(getGetChunkUploadStatusUrl(uploadId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetChunkUploadStatusQueryKey = (uploadId: string,) => {
+    return [
+    `/api/datasets/upload/chunk/status/${uploadId}`
+    ] as const;
+    }
+
+
+export const getGetChunkUploadStatusQueryOptions = <TData = Awaited<ReturnType<typeof getChunkUploadStatus>>, TError = ErrorType<ApiError>>(uploadId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getChunkUploadStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetChunkUploadStatusQueryKey(uploadId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getChunkUploadStatus>>> = ({ signal }) => getChunkUploadStatus(uploadId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(uploadId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getChunkUploadStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetChunkUploadStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getChunkUploadStatus>>>
+export type GetChunkUploadStatusQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List which chunk indices have been received for an upload session
+ */
+
+export function useGetChunkUploadStatus<TData = Awaited<ReturnType<typeof getChunkUploadStatus>>, TError = ErrorType<ApiError>>(
+ uploadId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getChunkUploadStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetChunkUploadStatusQueryOptions(uploadId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getFinalizeChunkedUploadUrl = () => {
 

@@ -3848,6 +3848,20 @@ export const UploadDatasetChunkResponse = zod.object({
 
 
 /**
+ * Returns the chunk indices already received on disk (or reconstructed from the database after a server restart) so the client can resume a chunked upload from the first missing slice instead of starting over.
+ * @summary List which chunk indices have been received for an upload session
+ */
+export const GetChunkUploadStatusParams = zod.object({
+  "uploadId": zod.coerce.string()
+})
+
+export const GetChunkUploadStatusResponse = zod.object({
+  "uploadId": zod.string(),
+  "receivedChunks": zod.array(zod.number())
+})
+
+
+/**
  * Called after all chunks have been sent. Enqueues an async job that reassembles chunks, parses the file, builds the terrain grid, and saves to DB. Returns a jobId to poll.
  * @summary Finalize a chunked upload and start processing
  */
@@ -3908,7 +3922,7 @@ export const GetGcsJobStatusQueryParams = zod.object({
 })
 
 export const GetGcsJobStatusResponse = zod.object({
-  "status": zod.enum(['pending', 'queued', 'processing', 'done', 'error']).optional(),
+  "status": zod.enum(['pending', 'queued', 'processing', 'done', 'error', 'failed', 'complete', 'unknown']).optional(),
   "datasetId": zod.string().optional(),
   "error": zod.string().optional()
 })

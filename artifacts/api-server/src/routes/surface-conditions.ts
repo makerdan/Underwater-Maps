@@ -28,7 +28,6 @@
 
 import { z } from "zod";
 import { Router } from "express";
-import { logger } from "../lib/logger.js";
 import {
   buildSyntheticEvents,
   computeSlackSample,
@@ -38,6 +37,7 @@ import {
 import { registerCache } from "../lib/cacheRegistry.js";
 import { LatLonQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import { isGreatLakes } from "./tidal.js";
 
 const router = Router();
@@ -695,9 +695,7 @@ router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> =
       hours,
       forecast48h,
     };
-    const _sp = SurfaceConditionsResponseSchema.safeParse(_b);
-    if (!_sp.success) logger.warn({ err: _sp.error }, "GET /api/surface-conditions — response shape mismatch");
-    res.json(_b);
+    res.json(validateResponse(SurfaceConditionsResponseSchema, _b, "GET /api/surface-conditions"));
   }
 }));
 

@@ -9,6 +9,7 @@ import {
   PoeClassifyResponse,
   PoeQueryResponse,
   PoeHelpResponse,
+  PoeUpscaleResponse,
 } from "@workspace/api-zod";
 import { promises as fsPromises } from "fs";
 import path from "path";
@@ -2711,7 +2712,7 @@ router.post("/upscale", asyncHandler(async (req, res) => {
   if (memHit) {
     _upscaleHits++;
     logger.info({ key: cacheKey.slice(0, 8), factor, bytes: memHit.length }, "[upscale-cache] HIT (memory)");
-    res.json({ imageBase64: memHit });
+    res.json(validateResponse(PoeUpscaleResponse, { imageBase64: memHit }, "POST /api/poe/upscale"));
     return;
   }
 
@@ -2722,7 +2723,7 @@ router.post("/upscale", asyncHandler(async (req, res) => {
     _upscaleHits++;
     setMemCacheEntry(cacheKey, diskHit.imageBase64); // enforces bytes cap on write
     logger.info({ key: cacheKey.slice(0, 8), factor, bytes: diskHit.bytes }, "[upscale-cache] HIT (disk)");
-    res.json({ imageBase64: diskHit.imageBase64 });
+    res.json(validateResponse(PoeUpscaleResponse, { imageBase64: diskHit.imageBase64 }, "POST /api/poe/upscale"));
     return;
   }
 
@@ -2833,7 +2834,7 @@ router.post("/upscale", asyncHandler(async (req, res) => {
       res.status(502).json({ error: "no_image_in_response", details: "TopazLabs returned no image" });
       return;
     }
-    res.json({ imageBase64: result });
+    res.json(validateResponse(PoeUpscaleResponse, { imageBase64: result }, "POST /api/poe/upscale"));
   } catch (err) {
     logger.warn({ err }, "[poe/upscale] Upscale request failed");
     handlePoeError(err, res);

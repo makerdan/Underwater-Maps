@@ -3345,6 +3345,11 @@ export type UploadDatasetChunk200 = {
   received?: number;
 };
 
+export type GetChunkUploadStatus200 = {
+  uploadId: string;
+  receivedChunks: number[];
+};
+
 export type FinalizeChunkedUploadBody = {
   uploadId: string;
   fileName: string;
@@ -3402,6 +3407,9 @@ export const GetGcsJobStatus200Status = {
   processing: 'processing',
   done: 'done',
   error: 'error',
+  failed: 'failed',
+  complete: 'complete',
+  unknown: 'unknown',
 } as const;
 
 export type GetGcsJobStatus200 = {

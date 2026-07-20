@@ -1,6 +1,6 @@
 ---
 name: api-server unit suite pre-existing breakage (FIXED 2026-07-20)
-description: The 2026-07-20 pre-existing api-server failures are repaired; suite is green. Patterns to watch for when new failures of the same classes appear.
+description: The 2026-07-20 pre-existing api-server failures are repaired; suite is green. Patterns to watch for when new failures of the same classes appear. (Previously: 4 tests/9 files including NYSDEC terrain mock suites, catalog-search coverage, rate-limit guard, admin invalid_param).
 ---
 Status: FIXED — test-standard is fully green (176/176 api-server files) as of 2026-07-20. Do NOT use this entry to justify skipping validation anymore.
 
