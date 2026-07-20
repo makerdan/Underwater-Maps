@@ -4,75 +4,37 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  extractRunTierSteps,
-  extractTestAllSteps,
-  compareStepLists,
   findUncoveredChecks,
   findStaleAllowlistEntries,
   CI_COVERAGE_ALLOWLIST,
 } from "../check-runner-step-sync.mjs";
+import { getValidationSteps } from "../validation-steps.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "../..");
 
 // ---------------------------------------------------------------------------
-// Fixtures — deliberately minimal runner sources
+// Shared step-list module — both runners consume the same list, so the old
+// parser-based sync check is gone; assert the shared module's shape instead.
 // ---------------------------------------------------------------------------
 
-const runTierFixture = `
-const ALL_STEPS = [
-  { name: "typecheck", resource: "codegen", cmd: runTypecheckStep },
-  { name: "lint", resource: null, cmd: "pnpm run lint" },
-  { name: "check:foo", resource: null, cmd: "pnpm run check:foo" },
-];
-`;
-
-const testAllFixtureInSync = `
-const steps = [
-  ["typecheck", runTypecheckStep],
-  ["lint", "pnpm run lint"],
-  ["check:foo", "pnpm run check:foo"],
-];
-`;
-
-const testAllFixtureDiverged = `
-const steps = [
-  ["typecheck", runTypecheckStep],
-  ["check:foo", "pnpm run check:foo"],
-];
-`;
-
-// ---------------------------------------------------------------------------
-// Step-list parsing and sync
-// ---------------------------------------------------------------------------
-
-test("extracts ordered step names from both runner formats", () => {
-  assert.deepEqual(extractRunTierSteps(runTierFixture), ["typecheck", "lint", "check:foo"]);
-  assert.deepEqual(extractTestAllSteps(testAllFixtureInSync), ["typecheck", "lint", "check:foo"]);
-});
-
-test("in-sync step lists produce no divergences", () => {
-  const problems = compareStepLists(
-    extractRunTierSteps(runTierFixture),
-    extractTestAllSteps(testAllFixtureInSync),
-  );
-  assert.deepEqual(problems, []);
-});
-
-test("deliberately diverged step lists are detected", () => {
-  const problems = compareStepLists(
-    extractRunTierSteps(runTierFixture),
-    extractTestAllSteps(testAllFixtureDiverged),
-  );
-  assert.ok(problems.length > 0, "expected at least one divergence");
-  assert.match(problems[0], /position 1/);
-  assert.match(problems[0], /"lint"/);
-});
-
-test("parser throws loudly if the array markers vanish (guards against parse typos passing quietly)", () => {
-  assert.throws(() => extractRunTierSteps("const OTHER = [];"), /could not find/);
-  assert.throws(() => extractTestAllSteps("const other = [];"), /could not find/);
-  assert.throws(() => extractRunTierSteps("const ALL_STEPS = [\n];"), /zero step names/);
+test("shared step list has valid entries and no duplicate names", () => {
+  const steps = getValidationSteps("test");
+  assert.ok(steps.length > 0, "expected at least one step");
+  for (const s of steps) {
+    assert.equal(typeof s.name, "string");
+    assert.ok(s.name.length > 0);
+    assert.ok(
+      typeof s.cmd === "string" || typeof s.cmd === "function",
+      `step ${s.name}: cmd must be a string or function`,
+    );
+    assert.ok(
+      s.resource === null || typeof s.resource === "string",
+      `step ${s.name}: resource must be null or a string`,
+    );
+  }
+  const names = steps.map((s) => s.name);
+  assert.equal(new Set(names).size, names.length, "duplicate step names in shared list");
 });
 
 // ---------------------------------------------------------------------------
@@ -104,15 +66,11 @@ test("stale allowlist entries are flagged (removed script or now in CI)", () => 
 // Real-tree assertions — the actual repo files must currently pass
 // ---------------------------------------------------------------------------
 
-test("actual runner files are currently in sync and all check:* scripts covered", () => {
-  const runTierSource = readFileSync(resolve(root, "scripts/run-tier.mjs"), "utf8");
-  const testAllSource = readFileSync(resolve(root, "scripts/test-all-steps.mjs"), "utf8");
+test("all check:* scripts in package.json are covered by the shared step list or allowlist", () => {
   const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+  const ciSteps = getValidationSteps("test").map((s) => s.name);
 
-  const a = extractRunTierSteps(runTierSource);
-  const b = extractTestAllSteps(testAllSource);
-  assert.deepEqual(compareStepLists(a, b), []);
-  assert.deepEqual(findUncoveredChecks(pkg, a), []);
-  assert.deepEqual(findStaleAllowlistEntries(pkg, a), []);
+  assert.deepEqual(findUncoveredChecks(pkg, ciSteps), []);
+  assert.deepEqual(findStaleAllowlistEntries(pkg, ciSteps), []);
   assert.ok(Object.values(CI_COVERAGE_ALLOWLIST).every((r) => typeof r === "string" && r.length > 10));
 });

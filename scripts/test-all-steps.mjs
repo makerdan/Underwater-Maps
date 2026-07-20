@@ -9,61 +9,11 @@
  *   node scripts/run-with-timeout.mjs aggregate -- node scripts/test-all-steps.mjs
  */
 import { spawnSync } from "node:child_process";
-import { isCodegenFresh } from "./codegen-freshness.mjs";
+import { getValidationSteps } from "./validation-steps.mjs";
 
-// isCodegenFresh() is imported from ./codegen-freshness.mjs (shared with
-// run-tier.mjs).
-
-/**
- * Runs the typecheck step with a freshness-aware codegen pre-pass.
- *
- * If the generated api.ts is already newer than all codegen inputs (openapi.yaml
- * and orval.config.ts) we skip the codegen invocation — this is the common case
- * when the `typecheck` workflow already ran codegen moments ago.  When stale we
- * fall through to the normal codegen step before running tsc.
- *
- * Either way, typecheck:libs and the per-artifact typecheck passes always run.
- */
-function runTypecheckStep() {
-  if (isCodegenFresh()) {
-    console.log("[test-all] codegen is fresh — skipping");
-  } else {
-    const codegenRes = spawnSync(
-      "pnpm --filter @workspace/api-spec run codegen:generate",
-      { shell: true, stdio: "inherit" },
-    );
-    if (codegenRes.status !== 0) {
-      return codegenRes.status ?? 1;
-    }
-  }
-
-  const typecheckRes = spawnSync(
-    'pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck',
-    { shell: true, stdio: "inherit" },
-  );
-  return typecheckRes.status ?? 1;
-}
-
-const steps = [
-  ["typecheck", runTypecheckStep],
-  ["lint", "pnpm run lint"],
-  ["check:lock-skill-sync", "pnpm run check:lock-skill-sync"],
-  ["check:root-relative-api", "pnpm run check:root-relative-api"],
-  ["check:deps-suppression", "pnpm run check:deps-suppression"],
-  ["check:runner-step-sync", "pnpm run check:runner-step-sync"],
-  ["test:unit", "pnpm run test:unit"],
-  ["check:docs-stale", "pnpm run check:docs-stale"],
-  ["check:catalog-coverage", "pnpm run check:catalog-coverage"],
-  ["check:schema-stale", "pnpm run check:schema-stale"],
-  ["check:e2e-user-ids", "pnpm run check:e2e-user-ids"],
-  ["check:e2e-cjs-globals", "pnpm run check:e2e-cjs-globals"],
-  ["check:e2e-panel-collapse", "pnpm run check:e2e-panel-collapse"],
-  ["check:fixture-freshness", "pnpm run check:fixture-freshness"],
-  ["check:ports", "pnpm run check:ports"],
-  ["check:port-drift", "pnpm run check:port-drift"],
-  ["check:audit", "pnpm run check:audit"],
-  ["check:bare-pino-http-mock", "pnpm run check:bare-pino-http-mock"],
-];
+// Canonical step list lives in scripts/validation-steps.mjs (shared with
+// run-tier.mjs so the two runners cannot drift).
+const steps = getValidationSteps("test-all").map((s) => [s.name, s.cmd]);
 
 const overallStart = Date.now();
 const timings = [];

@@ -7,8 +7,9 @@
  *   node scripts/run-tier.mjs standard   # fast tier + unit + doc/catalog/schema checks (~20 min)
  *   node scripts/run-tier.mjs full       # all steps, identical to test-all-steps.mjs (~45 min)
  *
- * NOTE: ALL_STEPS must stay identical (names and order) to the steps array in
- * scripts/test-all-steps.mjs — enforced by scripts/check-runner-step-sync.mjs.
+ * NOTE: The step list is shared with scripts/test-all-steps.mjs via
+ * scripts/validation-steps.mjs — the single source of truth, so the two
+ * runners cannot drift.
  *
  * Per-step named resource locking is handled internally; the outer caller
  * does NOT need to wrap this in validation-lock.mjs. Only steps that actually
@@ -31,7 +32,7 @@
 import { spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isCodegenFresh } from "./codegen-freshness.mjs";
+import { getValidationSteps } from "./validation-steps.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -74,79 +75,11 @@ for (let i = 0; i < args.length; i++) {
 }
 
 // ---------------------------------------------------------------------------
-// Codegen freshness check
+// Step registry — canonical list lives in scripts/validation-steps.mjs
+// (shared with test-all-steps.mjs so the two runners cannot drift).
 // ---------------------------------------------------------------------------
 
-// isCodegenFresh() is imported from ./codegen-freshness.mjs (shared with
-// test-all-steps.mjs).
-
-/**
- * Runs the typecheck step with a freshness-aware codegen pre-pass.
- * Returns exit code.
- */
-function runTypecheckStep() {
-  if (isCodegenFresh()) {
-    console.log("[run-tier] codegen is fresh — skipping");
-  } else {
-    const codegenRes = spawnSync(
-      "pnpm --filter @workspace/api-spec run codegen:generate",
-      { shell: true, stdio: "inherit" },
-    );
-    if (codegenRes.status !== 0) {
-      return codegenRes.status ?? 1;
-    }
-  }
-
-  const typecheckRes = spawnSync(
-    'pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck',
-    { shell: true, stdio: "inherit" },
-  );
-  return typecheckRes.status ?? 1;
-}
-
-// ---------------------------------------------------------------------------
-// Step registry
-//
-// Each step entry:
-//   name      — display name and --step key
-//   resource  — named lock resource to acquire (null = run without lock)
-//   cmd       — shell command string, or a function returning exit code
-// ---------------------------------------------------------------------------
-
-/** @type {Array<{name: string, resource: string|null, cmd: string|Function}>} */
-const ALL_STEPS = [
-  // codegen resource: prevents concurrent api.ts regeneration
-  { name: "typecheck", resource: "codegen", cmd: runTypecheckStep },
-  // no resource: lint is read-only and does not conflict with anything
-  { name: "lint", resource: null, cmd: "pnpm run lint" },
-  // no resource: grep-based drift check, sub-second
-  { name: "check:lock-skill-sync", resource: null, cmd: "pnpm run check:lock-skill-sync" },
-  // no resource: grep-based root-relative /api/ fetch guard, sub-second
-  { name: "check:root-relative-api", resource: null, cmd: "pnpm run check:root-relative-api" },
-  // no resource: grep-based exhaustive-deps suppression rationale gate, sub-second
-  { name: "check:deps-suppression", resource: null, cmd: "pnpm run check:deps-suppression" },
-  // no resource: static runner step-list sync + CI coverage meta-check, sub-second
-  { name: "check:runner-step-sync", resource: null, cmd: "pnpm run check:runner-step-sync" },
-  // unit-cpu resource: prevents CPU saturation / budget breach
-  { name: "test:unit", resource: "unit-cpu", cmd: "pnpm run test:unit" },
-  // all check:* steps are lightweight; no resource needed
-  { name: "check:docs-stale", resource: null, cmd: "pnpm run check:docs-stale" },
-  { name: "check:catalog-coverage", resource: null, cmd: "pnpm run check:catalog-coverage" },
-  // no resource: pure schema-vs-snapshot diff, no DB connection, sub-second
-  { name: "check:schema-stale", resource: null, cmd: "pnpm run check:schema-stale" },
-  { name: "check:e2e-user-ids", resource: null, cmd: "pnpm run check:e2e-user-ids" },
-  { name: "check:e2e-cjs-globals", resource: null, cmd: "pnpm run check:e2e-cjs-globals" },
-  // no resource: grep-based panel-collapse localStorage guard, sub-second
-  { name: "check:e2e-panel-collapse", resource: null, cmd: "pnpm run check:e2e-panel-collapse" },
-  { name: "check:fixture-freshness", resource: null, cmd: "pnpm run check:fixture-freshness" },
-  { name: "check:ports", resource: null, cmd: "pnpm run check:ports" },
-  // no resource: pure static analysis of entry-point port wiring (Vite config,
-  // API bootstrap, Playwright URLs); targeted/narrow so full tier only
-  { name: "check:port-drift", resource: null, cmd: "pnpm run check:port-drift" },
-  { name: "check:audit", resource: null, cmd: "pnpm run check:audit" },
-  // no resource: pure grep scan, sub-second
-  { name: "check:bare-pino-http-mock", resource: null, cmd: "pnpm run check:bare-pino-http-mock" },
-];
+const ALL_STEPS = getValidationSteps("run-tier");
 
 const TIER_STEPS = {
   fast:     ALL_STEPS.slice(0, 6),

@@ -1,18 +1,16 @@
 #!/usr/bin/env node
 /**
- * check-runner-step-sync.mjs — Static drift guard for the validation runners.
+ * check-runner-step-sync.mjs — CI coverage meta-check for the validation runners.
  *
- * Two checks, both parsing the same files:
+ * The step lists for scripts/run-tier.mjs and scripts/test-all-steps.mjs are
+ * now a single shared module (scripts/validation-steps.mjs), so step-list
+ * drift between the runners is structurally impossible and no longer checked.
  *
- * 1. Step-list sync — the ordered step lists in scripts/run-tier.mjs
- *    (ALL_STEPS) and scripts/test-all-steps.mjs (steps) must be identical.
- *    run-tier's "full" tier documents itself as identical to test-all-steps;
- *    silent divergence means a step runs in one CI path but not the other.
- *
- * 2. CI coverage meta-check — every "check:*" script defined in the root
- *    package.json must appear in the CI step sequence (the shared step list),
- *    unless it is explicitly allowlisted below with a reason. This catches
- *    check scripts that exist but silently never run in CI.
+ * What remains is the CI coverage meta-check: every "check:*" script defined
+ * in the root package.json must appear in the shared CI step sequence, unless
+ * it is explicitly allowlisted below with a reason. This catches check
+ * scripts that exist but silently never run in CI, and allowlist entries that
+ * have gone stale.
  *
  * Usage:
  *   node scripts/check-runner-step-sync.mjs
@@ -22,6 +20,7 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { getValidationSteps } from "./validation-steps.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -29,7 +28,7 @@ const root = resolve(__dirname, "..");
 // ---------------------------------------------------------------------------
 // CI coverage allowlist
 //
-// check:* scripts that intentionally do NOT appear in the runner step lists.
+// check:* scripts that intentionally do NOT appear in the shared step list.
 // Every entry MUST carry a reason explaining where its coverage comes from.
 // ---------------------------------------------------------------------------
 
@@ -47,69 +46,8 @@ export const CI_COVERAGE_ALLOWLIST = {
 };
 
 // ---------------------------------------------------------------------------
-// Parsers
+// Checks
 // ---------------------------------------------------------------------------
-
-/**
- * Extracts the ordered step names from run-tier.mjs source by parsing the
- * ALL_STEPS array literal (entries of shape `{ name: "...", resource: ... }`).
- */
-export function extractRunTierSteps(source) {
-  const start = source.indexOf("const ALL_STEPS = [");
-  if (start === -1) {
-    throw new Error("run-tier.mjs: could not find `const ALL_STEPS = [` — parser needs updating");
-  }
-  const end = source.indexOf("];", start);
-  if (end === -1) {
-    throw new Error("run-tier.mjs: could not find end of ALL_STEPS array");
-  }
-  const block = source.slice(start, end);
-  const names = [...block.matchAll(/\{\s*name:\s*"([^"]+)"/g)].map((m) => m[1]);
-  if (names.length === 0) {
-    throw new Error("run-tier.mjs: parsed zero step names from ALL_STEPS — parser needs updating");
-  }
-  return names;
-}
-
-/**
- * Extracts the ordered step names from test-all-steps.mjs source by parsing
- * the steps array literal (entries of shape `["name", cmdOrFn]`).
- */
-export function extractTestAllSteps(source) {
-  const start = source.indexOf("const steps = [");
-  if (start === -1) {
-    throw new Error("test-all-steps.mjs: could not find `const steps = [` — parser needs updating");
-  }
-  const end = source.indexOf("];", start);
-  if (end === -1) {
-    throw new Error("test-all-steps.mjs: could not find end of steps array");
-  }
-  const block = source.slice(start, end);
-  const names = [...block.matchAll(/\[\s*"([^"]+)"\s*,/g)].map((m) => m[1]);
-  if (names.length === 0) {
-    throw new Error("test-all-steps.mjs: parsed zero step names from steps — parser needs updating");
-  }
-  return names;
-}
-
-/**
- * Compares two ordered step-name lists. Returns an array of human-readable
- * divergence descriptions (empty when identical).
- */
-export function compareStepLists(runTierSteps, testAllSteps) {
-  const problems = [];
-  const max = Math.max(runTierSteps.length, testAllSteps.length);
-  for (let i = 0; i < max; i++) {
-    const a = runTierSteps[i];
-    const b = testAllSteps[i];
-    if (a !== b) {
-      problems.push(
-        `position ${i}: run-tier.mjs has ${a ? JSON.stringify(a) : "(missing)"} but test-all-steps.mjs has ${b ? JSON.stringify(b) : "(missing)"}`,
-      );
-    }
-  }
-  return problems;
-}
 
 /**
  * Returns the names of check:* scripts in the given package.json object that
@@ -137,39 +75,25 @@ export function findStaleAllowlistEntries(pkg, ciSteps, allowlist = CI_COVERAGE_
 // ---------------------------------------------------------------------------
 
 function main() {
-  const runTierSource = readFileSync(resolve(root, "scripts/run-tier.mjs"), "utf8");
-  const testAllSource = readFileSync(resolve(root, "scripts/test-all-steps.mjs"), "utf8");
   const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
-
-  const runTierSteps = extractRunTierSteps(runTierSource);
-  const testAllSteps = extractTestAllSteps(testAllSource);
+  const ciSteps = getValidationSteps("check-runner-step-sync").map((s) => s.name);
 
   let failed = false;
 
-  const divergences = compareStepLists(runTierSteps, testAllSteps);
-  if (divergences.length > 0) {
-    failed = true;
-    console.error("[check-runner-step-sync] FAIL — step lists diverge between run-tier.mjs and test-all-steps.mjs:");
-    for (const d of divergences) console.error(`  ${d}`);
-    console.error(
-      "  Fix: keep ALL_STEPS in scripts/run-tier.mjs and steps in scripts/test-all-steps.mjs identical\n" +
-      "  (same names, same order). Add/remove/move the step in BOTH files.",
-    );
-  }
-
-  const uncovered = findUncoveredChecks(pkg, runTierSteps);
+  const uncovered = findUncoveredChecks(pkg, ciSteps);
   if (uncovered.length > 0) {
     failed = true;
     console.error("[check-runner-step-sync] FAIL — check:* script(s) defined in package.json but never run in CI:");
     for (const n of uncovered) console.error(`  ${n}`);
     console.error(
-      "  Fix: add the script as a step in BOTH scripts/run-tier.mjs (ALL_STEPS) and\n" +
-      "  scripts/test-all-steps.mjs, OR add it to CI_COVERAGE_ALLOWLIST in\n" +
-      "  scripts/check-runner-step-sync.mjs with a reason explaining where its coverage comes from.",
+      "  Fix: add the script as a step in scripts/validation-steps.mjs (the shared\n" +
+      "  step list used by run-tier.mjs and test-all-steps.mjs), OR add it to\n" +
+      "  CI_COVERAGE_ALLOWLIST in scripts/check-runner-step-sync.mjs with a reason\n" +
+      "  explaining where its coverage comes from.",
     );
   }
 
-  const stale = findStaleAllowlistEntries(pkg, runTierSteps);
+  const stale = findStaleAllowlistEntries(pkg, ciSteps);
   if (stale.length > 0) {
     failed = true;
     console.error("[check-runner-step-sync] FAIL — stale CI_COVERAGE_ALLOWLIST entr(ies):");
@@ -180,7 +104,7 @@ function main() {
   if (failed) process.exit(1);
 
   console.log(
-    `[check-runner-step-sync] OK — ${runTierSteps.length} steps in sync; ` +
+    `[check-runner-step-sync] OK — ${ciSteps.length} shared steps; ` +
     `all check:* scripts covered (${Object.keys(CI_COVERAGE_ALLOWLIST).length} allowlisted).`,
   );
 }
