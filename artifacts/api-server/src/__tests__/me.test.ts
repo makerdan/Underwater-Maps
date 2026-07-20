@@ -8,7 +8,7 @@
  *   • 400 when each field receives an out-of-range or wrong-type value
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
 // vi.hoisted ensures these refs are available inside the vi.mock() factory,
@@ -95,6 +95,7 @@ vi.mock("../middlewares/dataMutationRateLimit.js", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 const AUTH = { "x-mock-clerk-user-id": "user_test123" };
 
@@ -103,6 +104,12 @@ const AUTH = { "x-mock-clerk-user-id": "user_test123" };
 beforeEach(() => {
   selectWhereMock.mockResolvedValue([]);
   onConflictDoUpdateMock.mockResolvedValue([]);
+  vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
+  __resetRateLimitMemory();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("PUT /api/settings — auth required", () => {
