@@ -47,7 +47,7 @@ import {
   type MarkerCategory,
 } from "@/lib/markerConstants";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
-import { markerLabelSchema, markerNotesSchema } from "@/lib/markerFormSchema";
+import { markerLabelSchema, markerNotesSchema, MARKER_LABEL_MAX, MARKER_NOTES_MAX } from "@/lib/markerFormSchema";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { useCatchJournalStore } from "@/lib/catchJournalStore";
 
@@ -565,11 +565,11 @@ export const MarkerForm: React.FC = () => {
             type="text"
             value={label}
             onChange={(e) => {
-              setLabel(e.target.value.slice(0, 60));
+              setLabel(e.target.value.slice(0, MARKER_LABEL_MAX));
               if (e.target.value.trim()) setLabelError("");
             }}
             placeholder="e.g. Large school of rockfish"
-            maxLength={60}
+            maxLength={MARKER_LABEL_MAX}
             style={{
               width: "100%",
               background: "rgba(0,229,255,0.04)",
@@ -587,7 +587,7 @@ export const MarkerForm: React.FC = () => {
             <div style={{ fontSize: 13.5, color: "#ef4444", marginTop: 3 }}>⚠ {labelError}</div>
           )}
           <div style={{ fontSize: 12, color: "#1e293b", marginTop: 2, textAlign: "right" }}>
-            {label.length}/60
+            {label.length}/{MARKER_LABEL_MAX}
           </div>
         </div>
 
@@ -630,11 +630,11 @@ export const MarkerForm: React.FC = () => {
             <textarea
               value={notes}
               onChange={(e) => {
-                setNotes(e.target.value.slice(0, 280));
+                setNotes(e.target.value.slice(0, MARKER_NOTES_MAX));
                 if (notesError) setNotesError("");
               }}
               placeholder="e.g. Good rockfish spot at incoming tide, 18m depth"
-              maxLength={280}
+              maxLength={MARKER_NOTES_MAX}
               rows={3}
               style={{
                 width: "100%",
@@ -653,8 +653,8 @@ export const MarkerForm: React.FC = () => {
             {notesError && (
               <div style={{ fontSize: 13.5, color: "#ef4444", marginTop: 3 }}>⚠ {notesError}</div>
             )}
-            <div style={{ fontSize: 12, color: notes.length >= 250 ? "#f59e0b" : "#475569", textAlign: "right" }}>
-              {notes.length}/280
+            <div style={{ fontSize: 12, color: notes.length >= MARKER_NOTES_MAX - 50 ? "#f59e0b" : "#475569", textAlign: "right" }}>
+              {notes.length}/{MARKER_NOTES_MAX}
             </div>
           </div>
         )}

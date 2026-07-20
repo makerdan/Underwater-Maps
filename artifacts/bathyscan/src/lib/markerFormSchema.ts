@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const NO_CONTROL_CHARS = /^[^\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]*$/u;
 
-export const MARKER_LABEL_MAX = 60;
+export const MARKER_LABEL_MAX = 200;
 
 export const markerLabelSchema = z
   .string()
@@ -15,7 +15,7 @@ export const markerLabelSchema = z
       .regex(NO_CONTROL_CHARS, "Label contains invalid control characters"),
   );
 
-export const MARKER_NOTES_MAX = 280;
+export const MARKER_NOTES_MAX = 2000;
 
 export const markerNotesSchema = z
   .string()

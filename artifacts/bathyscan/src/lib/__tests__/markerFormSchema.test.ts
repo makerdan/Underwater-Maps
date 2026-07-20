@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { markerLabelSchema, markerNotesSchema, markerFormSchema, MARKER_NOTES_MAX } from "../markerFormSchema";
+import { markerLabelSchema, markerNotesSchema, markerFormSchema, MARKER_LABEL_MAX, MARKER_NOTES_MAX } from "../markerFormSchema";
 
 describe("markerLabelSchema", () => {
   it("trims whitespace and accepts normal labels", () => {
@@ -13,10 +13,10 @@ describe("markerLabelSchema", () => {
     expect(markerLabelSchema.safeParse("   ").success).toBe(false);
   });
 
-  it("rejects labels longer than 60 characters after trimming", () => {
-    const long = "x".repeat(61);
+  it("rejects labels longer than MARKER_LABEL_MAX characters after trimming", () => {
+    const long = "x".repeat(MARKER_LABEL_MAX + 1);
     expect(markerLabelSchema.safeParse(long).success).toBe(false);
-    const ok = "x".repeat(60);
+    const ok = "x".repeat(MARKER_LABEL_MAX);
     expect(markerLabelSchema.safeParse(ok).success).toBe(true);
   });
 
@@ -27,15 +27,15 @@ describe("markerLabelSchema", () => {
 
   // ── Boundary value tests ────────────────────────────────────────────────
 
-  it("accepts a label at exactly the 60-character limit (boundary)", () => {
-    const exactly60 = "a".repeat(60);
-    const r = markerLabelSchema.safeParse(exactly60);
+  it(`accepts a label at exactly the ${MARKER_LABEL_MAX}-character limit (boundary)`, () => {
+    const atLimit = "a".repeat(MARKER_LABEL_MAX);
+    const r = markerLabelSchema.safeParse(atLimit);
     expect(r.success).toBe(true);
   });
 
-  it("rejects a label at 61 characters (one over the limit)", () => {
-    const sixtyOne = "a".repeat(61);
-    expect(markerLabelSchema.safeParse(sixtyOne).success).toBe(false);
+  it(`rejects a label at ${MARKER_LABEL_MAX + 1} characters (one over the limit)`, () => {
+    const oneOver = "a".repeat(MARKER_LABEL_MAX + 1);
+    expect(markerLabelSchema.safeParse(oneOver).success).toBe(false);
   });
 
   it("rejects a label with an embedded null byte (\\u0000)", () => {
@@ -47,23 +47,22 @@ describe("markerLabelSchema", () => {
   // The schema uses Zod's .max() which counts JavaScript code units (.length),
   // not grapheme clusters. A combining diacritic sequence like "a\u0301"
   // (a + combining acute accent → á) has .length === 2 per rendered grapheme.
-  // A 30-grapheme string of such pairs occupies exactly 60 code units — the
-  // limit — and should be accepted. A 31-grapheme string occupies 62 code
-  // units and should be rejected.
+  // MARKER_LABEL_MAX/2 such pairs occupy exactly MARKER_LABEL_MAX code units —
+  // the limit — and should be accepted. One more pair puts it over the limit.
 
-  it("accepts a 30-grapheme combining-diacritic string (60 code units = limit)", () => {
+  it(`accepts a ${MARKER_LABEL_MAX / 2}-grapheme combining-diacritic string (${MARKER_LABEL_MAX} code units = limit)`, () => {
     // "a\u0301" = á via combining acute (2 code units, 1 rendered grapheme)
-    // 30 × 2 = 60 code units → at the boundary, accepted.
-    const combining30 = "a\u0301".repeat(30);
-    expect(combining30.length).toBe(60);
-    expect(markerLabelSchema.safeParse(combining30).success).toBe(true);
+    const halfMax = MARKER_LABEL_MAX / 2;
+    const combiningAtLimit = "a\u0301".repeat(halfMax);
+    expect(combiningAtLimit.length).toBe(MARKER_LABEL_MAX);
+    expect(markerLabelSchema.safeParse(combiningAtLimit).success).toBe(true);
   });
 
-  it("rejects a 31-grapheme combining-diacritic string (62 code units > limit)", () => {
-    // 31 × 2 = 62 code units → over the boundary, rejected.
-    const combining31 = "a\u0301".repeat(31);
-    expect(combining31.length).toBe(62);
-    expect(markerLabelSchema.safeParse(combining31).success).toBe(false);
+  it(`rejects a ${MARKER_LABEL_MAX / 2 + 1}-grapheme combining-diacritic string (${MARKER_LABEL_MAX + 2} code units > limit)`, () => {
+    const halfMaxPlusOne = MARKER_LABEL_MAX / 2 + 1;
+    const combiningOverLimit = "a\u0301".repeat(halfMaxPlusOne);
+    expect(combiningOverLimit.length).toBe(MARKER_LABEL_MAX + 2);
+    expect(markerLabelSchema.safeParse(combiningOverLimit).success).toBe(false);
   });
 });
 
@@ -85,14 +84,14 @@ describe("markerNotesSchema", () => {
 
   // ── Boundary value tests ────────────────────────────────────────────────
 
-  it("accepts notes at exactly MARKER_NOTES_MAX (280) characters (boundary)", () => {
-    const exactly280 = "n".repeat(MARKER_NOTES_MAX);
-    expect(markerNotesSchema.safeParse(exactly280).success).toBe(true);
+  it(`accepts notes at exactly MARKER_NOTES_MAX (${MARKER_NOTES_MAX}) characters (boundary)`, () => {
+    const atLimit = "n".repeat(MARKER_NOTES_MAX);
+    expect(markerNotesSchema.safeParse(atLimit).success).toBe(true);
   });
 
-  it("rejects notes at 281 characters (one over the limit)", () => {
-    const twoEightyOne = "n".repeat(MARKER_NOTES_MAX + 1);
-    expect(markerNotesSchema.safeParse(twoEightyOne).success).toBe(false);
+  it(`rejects notes at ${MARKER_NOTES_MAX + 1} characters (one over the limit)`, () => {
+    const oneOver = "n".repeat(MARKER_NOTES_MAX + 1);
+    expect(markerNotesSchema.safeParse(oneOver).success).toBe(false);
   });
 
   it("rejects notes with an embedded null byte (\\u0000)", () => {
@@ -101,18 +100,21 @@ describe("markerNotesSchema", () => {
 
   // ── Unicode combining-character edge cases ──────────────────────────────
   //
-  // 140 combining-diacritic pairs occupy exactly 280 code units (= limit).
+  // MARKER_NOTES_MAX/2 combining-diacritic pairs occupy exactly MARKER_NOTES_MAX
+  // code units (= limit).
 
-  it("accepts 140-grapheme combining-diacritic notes (280 code units = limit)", () => {
-    const combining140 = "n\u0303".repeat(140);
-    expect(combining140.length).toBe(280);
-    expect(markerNotesSchema.safeParse(combining140).success).toBe(true);
+  it(`accepts ${MARKER_NOTES_MAX / 2}-grapheme combining-diacritic notes (${MARKER_NOTES_MAX} code units = limit)`, () => {
+    const halfMax = MARKER_NOTES_MAX / 2;
+    const combiningAtLimit = "n\u0303".repeat(halfMax);
+    expect(combiningAtLimit.length).toBe(MARKER_NOTES_MAX);
+    expect(markerNotesSchema.safeParse(combiningAtLimit).success).toBe(true);
   });
 
-  it("rejects 141-grapheme combining-diacritic notes (282 code units > limit)", () => {
-    const combining141 = "n\u0303".repeat(141);
-    expect(combining141.length).toBe(282);
-    expect(markerNotesSchema.safeParse(combining141).success).toBe(false);
+  it(`rejects ${MARKER_NOTES_MAX / 2 + 1}-grapheme combining-diacritic notes (${MARKER_NOTES_MAX + 2} code units > limit)`, () => {
+    const halfMaxPlusOne = MARKER_NOTES_MAX / 2 + 1;
+    const combiningOverLimit = "n\u0303".repeat(halfMaxPlusOne);
+    expect(combiningOverLimit.length).toBe(MARKER_NOTES_MAX + 2);
+    expect(markerNotesSchema.safeParse(combiningOverLimit).success).toBe(false);
   });
 });
 
@@ -132,26 +134,26 @@ describe("markerFormSchema", () => {
     if (r.success) expect(r.data.notes).toBe("");
   });
 
-  it("accepts a label at exactly 60 chars with notes at exactly 280 chars", () => {
+  it(`accepts a label at exactly ${MARKER_LABEL_MAX} chars with notes at exactly ${MARKER_NOTES_MAX} chars`, () => {
     const r = markerFormSchema.safeParse({
-      label: "a".repeat(60),
-      notes: "b".repeat(280),
+      label: "a".repeat(MARKER_LABEL_MAX),
+      notes: "b".repeat(MARKER_NOTES_MAX),
     });
     expect(r.success).toBe(true);
   });
 
-  it("rejects when label is 61 chars even if notes are within limits", () => {
+  it(`rejects when label is ${MARKER_LABEL_MAX + 1} chars even if notes are within limits`, () => {
     const r = markerFormSchema.safeParse({
-      label: "a".repeat(61),
+      label: "a".repeat(MARKER_LABEL_MAX + 1),
       notes: "b".repeat(10),
     });
     expect(r.success).toBe(false);
   });
 
-  it("rejects when notes are 281 chars even if label is within limits", () => {
+  it(`rejects when notes are ${MARKER_NOTES_MAX + 1} chars even if label is within limits`, () => {
     const r = markerFormSchema.safeParse({
       label: "Valid Label",
-      notes: "b".repeat(281),
+      notes: "b".repeat(MARKER_NOTES_MAX + 1),
     });
     expect(r.success).toBe(false);
   });

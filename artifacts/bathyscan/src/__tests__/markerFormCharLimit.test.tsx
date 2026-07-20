@@ -13,7 +13,7 @@ import { MarkerForm } from "@/components/MarkerForm";
 import { markerNotesSchema, MARKER_NOTES_MAX } from "@/lib/markerFormSchema";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
 
-const UI_NOTES_MAX = 280;
+const UI_NOTES_MAX = 2000;
 
 // ── API client proxy (hoisted) ────────────────────────────────────────────────
 const makeApiClientMock = vi.hoisted(() => {
@@ -110,19 +110,19 @@ const SAMPLE_MARKER = {
 
 // ── markerNotesSchema character limit ────────────────────────────────────────
 describe("markerNotesSchema — character limit", () => {
-  it("exports MARKER_NOTES_MAX as 280", () => {
+  it(`exports MARKER_NOTES_MAX as ${UI_NOTES_MAX}`, () => {
     expect(MARKER_NOTES_MAX).toBe(UI_NOTES_MAX);
   });
 
-  it("rejects notes longer than 280 characters after trimming", () => {
-    expect(markerNotesSchema.safeParse("a".repeat(281)).success).toBe(false);
+  it(`rejects notes longer than ${UI_NOTES_MAX} characters after trimming`, () => {
+    expect(markerNotesSchema.safeParse("a".repeat(UI_NOTES_MAX + 1)).success).toBe(false);
   });
 
-  it("accepts notes exactly at the 280-character limit", () => {
-    expect(markerNotesSchema.safeParse("a".repeat(280)).success).toBe(true);
+  it(`accepts notes exactly at the ${UI_NOTES_MAX}-character limit`, () => {
+    expect(markerNotesSchema.safeParse("a".repeat(UI_NOTES_MAX)).success).toBe(true);
   });
 
-  it("schema max and UI cap agree — both equal 280", () => {
+  it(`schema max and UI cap agree — both equal ${UI_NOTES_MAX}`, () => {
     const over = "a".repeat(UI_NOTES_MAX + 1);
     const at = "a".repeat(UI_NOTES_MAX);
     expect(markerNotesSchema.safeParse(over).success).toBe(false);
@@ -141,7 +141,7 @@ describe("MarkerForm — notes textarea maxLength", () => {
     useMarkerEditStore.getState().close();
   });
 
-  it("notes textarea has maxLength of 280", () => {
+  it(`notes textarea has maxLength of ${UI_NOTES_MAX}`, () => {
     renderWithProviders(<MarkerForm />);
     const textarea = screen.getByPlaceholderText(
       /Good rockfish spot/i,

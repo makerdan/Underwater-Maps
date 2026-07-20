@@ -101,16 +101,16 @@ describe("cross-layer consistency: markerFormSchema vs PostMarkersBody", () => {
     expect(PostMarkersBody.safeParse(body).success).toBe(true);
   });
 
-  // DOCUMENTED INTENTIONAL GAP: Server POST /markers now allows up to 2000-char notes
-  // while PATCH /markers/:id caps at 500 and the frontend form caps at 280.
-  // This means PATCH is more restrictive than POST; any change to any value must be
-  // reviewed here to avoid silent data-loss on edit.
-  it("DOCUMENTED GAP: postMarkersBodyNotesMax (2000) exceeds patchMarkersIdBodyNotesMax (500) which exceeds MARKER_NOTES_MAX (280)", () => {
-    expect(patchMarkersIdBodyNotesMax).toBe(500);
-    expect(postMarkersBodyNotesMax).toBe(2000);
-    expect(MARKER_NOTES_MAX).toBe(280);
-    expect(MARKER_NOTES_MAX).toBeLessThan(patchMarkersIdBodyNotesMax);
+  // DOCUMENTED INTENTIONAL GAP: PATCH /markers/:id caps notes at 500 chars while
+  // POST /markers and the frontend form allow up to 2000. This means direct-API
+  // edits via PATCH are more restricted than initial creation.
+  // Any change to either value must be reviewed here.
+  it("DOCUMENTED GAP: patchMarkersIdBodyNotesMax (500) intentionally below MARKER_NOTES_MAX and postMarkersBodyNotesMax (2000) — PATCH is more restricted than POST for notes", () => {
+    expect(patchMarkersIdBodyNotesMax).toBeLessThan(MARKER_NOTES_MAX);
     expect(patchMarkersIdBodyNotesMax).toBeLessThan(postMarkersBodyNotesMax);
+    expect(patchMarkersIdBodyNotesMax).toBe(500);
+    expect(MARKER_NOTES_MAX).toBe(2000);
+    expect(postMarkersBodyNotesMax).toBe(2000);
   });
 });
 

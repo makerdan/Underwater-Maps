@@ -29,7 +29,7 @@ vi.mock("@workspace/api-client-react", () => ({
   postTrollingPresets: mockPostTrollingPresets,
   usePostMarkers: () => ({ mutateAsync: mockPostMarkers }),
   usePostTrollingPresets: () => ({ mutateAsync: mockPostTrollingPresets }),
-  useDeleteMarkersId: () => ({ mutateAsync: () => Promise.resolve(undefined) }),
+  useDeleteMarkersId: () => ({ mutateAsync: vi.fn() }),
   getGetMarkersQueryKey: (...a: unknown[]) => ["markers", ...a],
   getGetTrollingPresetsQueryKey: () => ["trollingPresets"],
   MarkerInputType: { custom: "custom" },

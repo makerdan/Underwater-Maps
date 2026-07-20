@@ -38,7 +38,9 @@ describe("PostMarkersBody", () => {
     expect(PostMarkersBody.safeParse(valid).success).toBe(true);
   });
 
-  it("accepts when datasetId is missing (nullish — dataset-free markers)", () => {
+  it("accepts when datasetId is missing (nullish — dataset-free markers are supported)", () => {
+    // datasetId was made nullish to allow dataset-free (unassigned) markers.
+    // Omitting it is now valid; the old assertion that expected false is stale.
     const { datasetId: _omit, ...rest } = valid;
     expect(PostMarkersBody.safeParse(rest).success).toBe(true);
   });
@@ -138,7 +140,10 @@ describe("GetMarkersQueryParams", () => {
     if (r.success) expect(typeof r.data.datasetId).toBe("string");
   });
 
-  it("returns undefined when datasetId is absent (optional field)", () => {
+  it("leaves datasetId as undefined when omitted (coerce.string + .optional() — undefined is not coerced)", () => {
+    // zod.coerce.string().optional() does not coerce an absent field to the
+    // string "undefined"; the .optional() short-circuits coercion for missing
+    // keys so the parsed value remains undefined.  The old assertion was stale.
     const r = GetMarkersQueryParams.safeParse({});
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.datasetId).toBeUndefined();
