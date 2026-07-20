@@ -16,6 +16,28 @@ export const MAX_DEPTH_WORLD = 50;
 export const INITIAL_CAMERA_POSITION: [number, number, number] = [0, -20, 0];
 
 /**
+ * Compute the world-Y coordinate of the true sea surface for a given terrain.
+ *
+ * The terrain mesh maps depth=minDepth → Y=0 and depth=maxDepth → Y=-MAX_DEPTH_WORLD.
+ * When minDepth > 0 (survey starts below the actual sea surface) the true sea
+ * surface sits above Y=0 — a positive world-Y.
+ *
+ * Formula mirrors the vertex-displacement in buildTerrainGeometry:
+ *   surfY = (minDepth / depthRange) * MAX_DEPTH_WORLD
+ *
+ * Guards:
+ * - depthRange ≤ 0 (corrupt/degenerate data) → treated as 1 to avoid division by zero.
+ * - minDepth > maxDepth (inverted/corrupt) → result clamped to [0, MAX_DEPTH_WORLD].
+ * - Result always clamped to [0, MAX_DEPTH_WORLD] so it stays within scene bounds.
+ */
+export function getSeaSurfaceY(terrain: TerrainData): number {
+  let depthRange = terrain.maxDepth - terrain.minDepth;
+  if (depthRange <= 0) depthRange = 1;
+  const raw = (terrain.minDepth / depthRange) * MAX_DEPTH_WORLD;
+  return Math.min(Math.max(raw, 0), MAX_DEPTH_WORLD);
+}
+
+/**
  * Build a Three.js BufferGeometry from a TerrainData grid.
  *
  * - Uses PlaneGeometry(WORLD_SIZE, WORLD_SIZE, N−1, N−1) so there is one

@@ -1,17 +1,12 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { WORLD_SIZE, MAX_DEPTH_WORLD } from "@/lib/terrain";
+import { WORLD_SIZE, getSeaSurfaceY } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
 
 interface WaterSurfacePlaneProps {
   terrain: TerrainData;
-}
-
-function seaSurfaceY(terrain: TerrainData): number {
-  const depthRange = (terrain.maxDepth - terrain.minDepth) || 1;
-  return (terrain.minDepth / depthRange) * MAX_DEPTH_WORLD;
 }
 
 /**
@@ -25,10 +20,46 @@ function seaSurfaceY(terrain: TerrainData): number {
  * This is the single, shared water plane for the scene. The tidal water plane
  * (TidalWaterPlane) replaces this one when tidal overlay is active.
  */
+/**
+ * Pure visibility helper — exported for unit tests.
+ *
+ * Applies hysteresis around the water-surface level (surfY) and explicitly
+ * hides the plane when the camera is in the gap zone between terrain top
+ * (Y=0) and the true water surface (Y=surfY > 0).  The gap zone is where
+ * the camera can look up through the DoubleSide plane and see a bright
+ * sky-blue face filling the viewport.
+ *
+ * Rules:
+ *  1. Gap zone (surfY > 0 && 0 < camY < surfY): always hide + reset state.
+ *  2. Exit "below surface" (hide) when camY > surfY + 0.5.
+ *  3. Enter "below surface" (show) when camY < surfY - 0.5.
+ */
+export function applyWaterPlaneVisibility(
+  mesh: { visible: boolean },
+  belowSurface: { current: boolean },
+  camY: number,
+  surfY: number,
+): void {
+  if (surfY > 0 && camY > 0 && camY < surfY) {
+    belowSurface.current = false;
+    mesh.visible = false;
+    return;
+  }
+  if (belowSurface.current) {
+    if (camY > surfY + 0.5) belowSurface.current = false;
+  } else {
+    if (camY < surfY - 0.5) belowSurface.current = true;
+  }
+  mesh.visible = belowSurface.current;
+}
+
 export const WaterSurfacePlane: React.FC<WaterSurfacePlaneProps> = ({ terrain }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const waterType = useSettingsStore((s) => s.waterType);
-  const surfY = seaSurfaceY(terrain);
+  const surfY = getSeaSurfaceY(terrain);
+  // Hysteresis ref: true = camera is "below surface" → plane visible.
+  // Initial true so the very first frame (camera starts underwater) shows the plane.
+  const belowSurface = useRef<boolean>(true);
 
   const geometry = useMemo(() => {
     const geo = new THREE.PlaneGeometry(WORLD_SIZE * 1.1, WORLD_SIZE * 1.1, 1, 1);
@@ -48,10 +79,8 @@ export const WaterSurfacePlane: React.FC<WaterSurfacePlaneProps> = ({ terrain })
   const opacity = isFresh ? 0.22 : 0.3;
 
   useFrame(({ camera }) => {
-    if (meshRef.current) {
-      // Hide when above the surface so we don't double-tint the sky.
-      meshRef.current.visible = camera.position.y < surfY + 0.5;
-    }
+    if (!meshRef.current) return;
+    applyWaterPlaneVisibility(meshRef.current, belowSurface, camera.position.y, surfY);
   });
 
   return (

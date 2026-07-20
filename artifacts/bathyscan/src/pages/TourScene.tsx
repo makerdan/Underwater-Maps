@@ -25,7 +25,7 @@ import { DepthPoleLayer, DepthPoleDomLabels } from "@/components/DepthPoleLayer"
 import { GpsMarker } from "@/components/GpsMarker";
 import { DepthProfileLine } from "@/components/DepthProfileLine";
 import type { TidalDataResult } from "@/hooks/useTidalData";
-import { INITIAL_CAMERA_POSITION, MAX_DEPTH_WORLD, WORLD_SIZE } from "@/lib/terrain";
+import { INITIAL_CAMERA_POSITION, MAX_DEPTH_WORLD, WORLD_SIZE, getSeaSurfaceY } from "@/lib/terrain";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { runFollowBoundsCheck } from "@/lib/followBoundsCheck";
@@ -422,14 +422,6 @@ const FlyControlsScene: React.FC<FlyControlsSceneProps> = ({ terrainMeshRef }) =
 };
 
 // ---------------------------------------------------------------------------
-// Helper: compute sea surface Y for a given terrain
-// ---------------------------------------------------------------------------
-function seaSurfaceY(terrain: TerrainData): number {
-  const depthRange = (terrain.maxDepth - terrain.minDepth) || 1;
-  return (terrain.minDepth / depthRange) * MAX_DEPTH_WORLD;
-}
-
-// ---------------------------------------------------------------------------
 // Tidal 3D contents — lives inside <Canvas>.
 //
 // When tidal overlay is on we substitute TidalWaterPlane for the static
@@ -454,7 +446,7 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
 }) => {
   if (!tidalData?.available) return null;
 
-  const surfY = seaSurfaceY(terrain);
+  const surfY = getSeaSurfaceY(terrain);
 
   return (
     <>
@@ -532,7 +524,7 @@ const WaterTempSceneContents: React.FC<{ terrain: TerrainData }> = ({ terrain })
   // water surface is hidden (user has explicitly turned off water visuals).
   if (!showWaterSurface) return null;
 
-  const surfY = seaSurfaceY(terrain);
+  const surfY = getSeaSurfaceY(terrain);
   const seafloorY = -MAX_DEPTH_WORLD;
 
   return (
@@ -564,7 +556,7 @@ const DriftSceneContents: React.FC = () => {
 
   if (!driftPlannerActive || !terrain) return null;
 
-  const surfaceY = seaSurfaceY(terrain);
+  const surfaceY = getSeaSurfaceY(terrain);
   return (
     <>
       <DriftWaterPlane surfaceY={surfaceY} terrain={terrain} />

@@ -20,6 +20,7 @@ import {
   worldYToMetres,
   applyColormapToVertexColors,
   getTerrainSurfaceY,
+  getSeaSurfaceY,
   NO_DATA_COLOR,
   WORLD_SIZE,
   MAX_DEPTH_WORLD,
@@ -622,5 +623,59 @@ describe("buildTerrainGeometry — null depth (survey-gap) cells", () => {
     expect(colorAttr[0]).toBeCloseTo(NO_DATA_COLOR.r, 5);
     expect(colorAttr[1]).toBeCloseTo(NO_DATA_COLOR.g, 5);
     expect(colorAttr[2]).toBeCloseTo(NO_DATA_COLOR.b, 5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSeaSurfaceY
+// ---------------------------------------------------------------------------
+
+describe("getSeaSurfaceY", () => {
+  it("minDepth=0 → surfY=0 (terrain top is exactly at sea level)", () => {
+    const grid = makeGrid(4, { minDepth: 0, maxDepth: 1000 });
+    expect(getSeaSurfaceY(grid)).toBeCloseTo(0, 5);
+  });
+
+  it("minDepth=5, maxDepth=100 → surfY > 0 (survey starts below sea surface)", () => {
+    const grid = makeGrid(4, { minDepth: 5, maxDepth: 100 });
+    const expected = (5 / 95) * MAX_DEPTH_WORLD;
+    expect(getSeaSurfaceY(grid)).toBeCloseTo(expected, 5);
+    expect(getSeaSurfaceY(grid)).toBeGreaterThan(0);
+  });
+
+  it("corrupt data (minDepth > maxDepth) → result clamped to [0, MAX_DEPTH_WORLD]", () => {
+    const grid = makeGrid(4, { minDepth: 500, maxDepth: 100 });
+    const result = getSeaSurfaceY(grid);
+    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBeLessThanOrEqual(MAX_DEPTH_WORLD);
+  });
+
+  it("minDepth=maxDepth (degenerate flat grid) → uses depthRange=1 fallback, result clamped", () => {
+    const grid = makeGrid(4, { minDepth: 50, maxDepth: 50 });
+    const result = getSeaSurfaceY(grid);
+    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBeLessThanOrEqual(MAX_DEPTH_WORLD);
+  });
+
+  it("result is always within [0, MAX_DEPTH_WORLD] for any minDepth/maxDepth combo", () => {
+    const cases: Array<{ minDepth: number; maxDepth: number }> = [
+      { minDepth: 0, maxDepth: 0 },
+      { minDepth: 0, maxDepth: 10000 },
+      { minDepth: 100, maxDepth: 200 },
+      { minDepth: 200, maxDepth: 100 },
+      { minDepth: -50, maxDepth: 1000 },
+      { minDepth: 10000, maxDepth: 10000 },
+    ];
+    for (const { minDepth, maxDepth } of cases) {
+      const grid = makeGrid(4, { minDepth, maxDepth });
+      const result = getSeaSurfaceY(grid);
+      expect(result).toBeGreaterThanOrEqual(0);
+      expect(result).toBeLessThanOrEqual(MAX_DEPTH_WORLD);
+    }
+  });
+
+  it("negative minDepth (land elevation data) → surfY=0 (clamped, never negative)", () => {
+    const grid = makeGrid(4, { minDepth: -10, maxDepth: 1000 });
+    expect(getSeaSurfaceY(grid)).toBeCloseTo(0, 5);
   });
 });
