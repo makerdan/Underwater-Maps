@@ -17,8 +17,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 
-const mockWarn = vi.hoisted(() => vi.fn());
-
 vi.mock("pino-http", () => {
   const pinoMock = vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next());
   const childMock = vi.fn(() => ({
@@ -33,20 +31,13 @@ vi.mock("pino-http", () => {
   };
 });
 
-vi.mock("../../lib/logger.js", () => ({
-  logger: {
-    warn: mockWarn,
-    info: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    child: vi.fn(() => ({
-      warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn(),
-      levels: { values: { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 }, labels: {} },
-      child: vi.fn(() => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() })),
-    })),
-    levels: { values: { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 }, labels: {} },
-  },
-}));
+// No factory — Vitest resolves this to src/lib/__mocks__/logger.ts, which
+// provides a recursive child() mock matching real pino behaviour. Any future
+// route test that also mocks pino-http should do the same: call
+// vi.mock("../../lib/logger.js") (no factory) so the shared mock is used and
+// the recursive child() invariant is always enforced.
+vi.mock("../../lib/logger.js");
+import { logger } from "../../lib/logger.js";
 
 type RouteRow = Record<string, unknown>;
 
@@ -179,7 +170,7 @@ const SAMPLE_WAYPOINTS = [
 beforeEach(() => {
   state.routes = [];
   currentUserId = "user-a";
-  mockWarn.mockClear();
+  vi.mocked(logger.warn).mockClear();
 });
 
 // ─── GET /api/routes ─────────────────────────────────────────────────────────
@@ -265,7 +256,7 @@ describe("POST /api/routes", () => {
   it("emits logger.warn with route label when body fails Zod validation", async () => {
     const res = await request(app).post("/api/routes").send({ name: "No Dataset" });
     expect(res.status).toBe(400);
-    expect(mockWarn).toHaveBeenCalledWith(
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
       expect.objectContaining({ route: "POST /api/routes" }),
       expect.stringContaining("POST /api/routes"),
     );
