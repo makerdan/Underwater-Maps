@@ -71,3 +71,9 @@ id = "-VoSsGRoF6SIEVHcKKGlk"
 uri = "file://port-authority-skills.zip"
 type = "unspecified"
 title = "Port Authority Skills (both)"
+
+[[outputs]]
+id = "DvSBBEXtcuVYH8C1FNK9F"
+uri = "file://task-triage-skill.zip"
+type = "unspecified"
+title = "Task Triage Skill (both copies)"
