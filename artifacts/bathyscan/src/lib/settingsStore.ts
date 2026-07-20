@@ -1167,6 +1167,20 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
+/**
+ * Module-level write-time guard for manual conditions.
+ *
+ * Bumped every time `setDatasetManualConditions` or
+ * `setManualConditionsActiveSource` is called. `hydrateFromServer` checks this
+ * before applying the server's `datasetManualConditions` /
+ * `manualConditionsActiveSource` values: if the user wrote new conditions more
+ * recently than the server payload was authored, the local values are kept.
+ * This prevents a concurrent PUT flush triggered by a lake-switch from
+ * silently overwriting freshly entered manual conditions.
+ */
+let _manualConditionsLastWriteMs = 0;
+const MANUAL_CONDITIONS_GUARD_MS = 30_000;
+
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set, get) => {
@@ -1413,20 +1427,24 @@ export const useSettingsStore = create<SettingsStore>()(
         setSidebarMode: setter("sidebarMode"),
 
         // Manual conditions
-        setDatasetManualConditions: (datasetId, conditions) =>
+        setDatasetManualConditions: (datasetId, conditions) => {
+          _manualConditionsLastWriteMs = Date.now();
           set((state) => ({
             datasetManualConditions: { ...state.datasetManualConditions, [datasetId]: conditions },
-          })),
+          }));
+        },
         clearDatasetManualConditions: (datasetId) =>
           set((state) => {
             const next = { ...state.datasetManualConditions };
             delete next[datasetId];
             return { datasetManualConditions: next };
           }),
-        setManualConditionsActiveSource: (datasetId, source) =>
+        setManualConditionsActiveSource: (datasetId, source) => {
+          _manualConditionsLastWriteMs = Date.now();
           set((state) => ({
             manualConditionsActiveSource: { ...state.manualConditionsActiveSource, [datasetId]: source },
-          })),
+          }));
+        },
 
         // Shortcuts
         setKeyBinding: (action, code) =>
@@ -1480,6 +1498,21 @@ export const useSettingsStore = create<SettingsStore>()(
             for (const [k, serverVal] of Object.entries(partialRec)) {
               if (k === "__updatedAt") continue;
               if (!dataKeySet.has(k)) continue;
+              // Sync-race guard: skip manual-conditions keys that were written
+              // locally more recently than the server payload was authored.
+              // A lake-switch can trigger a concurrent PUT that the server
+              // processes after a freshly entered value — keeping the local
+              // value here prevents that stale server response from reverting
+              // the user's input.
+              if (
+                (k === "datasetManualConditions" || k === "manualConditionsActiveSource") &&
+                _manualConditionsLastWriteMs > 0 &&
+                Date.now() - _manualConditionsLastWriteMs < MANUAL_CONDITIONS_GUARD_MS &&
+                (serverUpdatedAt === undefined ||
+                  new Date(_manualConditionsLastWriteMs).toISOString() > serverUpdatedAt)
+              ) {
+                continue;
+              }
               // Guard the high-risk union/range fields so a corrupted server
               // value cannot silently overwrite a valid local value.
               let safeVal: unknown = serverVal;

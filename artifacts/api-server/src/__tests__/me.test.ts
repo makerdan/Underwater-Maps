@@ -78,6 +78,22 @@ vi.mock("@clerk/shared/keys", () => ({
   publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
 }));
 
+// Bypass the per-user rate limiter (30 writes/min for settings mutations).
+// In tests, the Postgres backend is unavailable so the limiter falls back to
+// in-memory state. Without this mock the ~30+ PUT requests in this file
+// exhaust the bucket and subsequent requests receive 429 instead of 200/400,
+// causing the palette / v16+ field tests to fail.
+vi.mock("../middlewares/dataMutationRateLimit.js", () => ({
+  dataMutationRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
+  settingsMutationRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
+  DATA_MUTATION_ROUTE: "data-mutations",
+  DATA_MUTATION_WINDOW_MS: 60_000,
+  DATA_MUTATION_MAX: 120,
+  SETTINGS_MUTATION_ROUTE: "settings-mutations",
+  SETTINGS_MUTATION_WINDOW_MS: 60_000,
+  SETTINGS_MUTATION_MAX: 30,
+}));
+
 import app from "../app.js";
 
 const AUTH = { "x-mock-clerk-user-id": "user_test123" };

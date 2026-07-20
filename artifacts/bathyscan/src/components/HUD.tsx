@@ -156,6 +156,17 @@ export const HUD: React.FC = () => {
     terrain?.datasetId ?? null,
   );
 
+  // Manual conditions badge — true whenever the active dataset has the manual
+  // source selected, regardless of whether conditions are already stored.
+  // This matches the "MANUAL CONDITIONS ACTIVE" acceptance criterion: the badge
+  // signals the user's mode preference, not the presence of specific values.
+  const _manualActiveSource = useSettingsStore((s) => s.manualConditionsActiveSource);
+  const manualConditionsActiveDid = (() => {
+    const did = terrain?.datasetId;
+    if (!did) return false;
+    return (_manualActiveSource[did] ?? "real") === "manual";
+  })();
+
   const fmtCoord = (n: number | null): string => {
     if (n === null) return "—";
     return coordinateFormat === "dms" ? toDMS(n) : fmt(n, 4);
@@ -390,6 +401,26 @@ export const HUD: React.FC = () => {
               }}
             >
               ◆ RAW BATHYMETRY
+            </div>
+          </ViewscreenTooltip>
+        )}
+
+        {/* Manual conditions active badge */}
+        {manualConditionsActiveDid && (
+          <ViewscreenTooltip label="Surface conditions are using your manual override values for this lake" side="bottom">
+            <div
+              data-testid="hud-manual-conditions-badge"
+              style={{
+                ...PANEL,
+                fontSize: 15,
+                border: "1px solid rgba(34,211,238,0.4)",
+                background: "rgba(34,211,238,0.07)",
+                color: "#22d3ee",
+                letterSpacing: "0.18em",
+                fontWeight: 700,
+              }}
+            >
+              {isNarrow ? "✎" : "✎ MANUAL CONDITIONS ACTIVE"}
             </div>
           </ViewscreenTooltip>
         )}

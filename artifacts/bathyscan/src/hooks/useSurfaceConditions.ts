@@ -11,6 +11,13 @@
  *     1-minute interval so the displayed time never drifts behind real time.
  *   - Callers can pin a specific hour via the `hourOverride` argument.
  *
+ * Manual conditions override (freshwater):
+ *   When `manualConditionsActiveSource[datasetId] === "manual"` the snapshot
+ *   is built from the user's manually entered values (session storage takes
+ *   precedence over persisted) rather than live API data. `estimated` and
+ *   `currentsAvailable` are forced to false/true respectively so downstream
+ *   consumers treat the values as authoritative.
+ *
  * Interval deduplication:
  *   A module-level singleton drives `nowHour` updates. The first consumer
  *   starts the interval; subsequent mounts only increment a reference count.
@@ -26,6 +33,9 @@ import {
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useDriftStore } from "@/lib/driftStore";
+import { useSettingsStore } from "@/lib/settingsStore";
+import type { ManualConditions } from "@/lib/settingsStore";
+import { useUiStore } from "@/lib/uiStore";
 
 export type { ForecastHour };
 
@@ -130,6 +140,12 @@ export function useSurfaceConditions(
   const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
   const driftHour = useDriftStore((s) => s.driftHour);
 
+  // Manual conditions — per-dataset keying.
+  // Session conditions (uiStore) take precedence over persisted (settingsStore).
+  const manualConditionsActiveSource = useSettingsStore((s) => s.manualConditionsActiveSource);
+  const datasetManualConditions = useSettingsStore((s) => s.datasetManualConditions);
+  const sessionManualConditions = useUiStore((s) => s.sessionManualConditions);
+
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
   const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;
 
@@ -202,6 +218,34 @@ export function useSurfaceConditions(
 
     const snapshot = hours.find((h) => h.hour === activeHour) ?? hours[0] ?? null;
 
+    // ── Manual conditions override ───────────────────────────────────────────
+    // When the user has chosen source="manual" for this dataset, replace the
+    // API-derived snapshot with their manually entered values. Session
+    // conditions (uiStore) take precedence over persisted (settingsStore) so
+    // that in-progress form edits are reflected immediately, even before the
+    // user clicks Apply.
+    const datasetId = terrain?.datasetId ?? null;
+    const manualSource: "real" | "manual" = datasetId
+      ? (manualConditionsActiveSource[datasetId] ?? "real")
+      : "real";
+    const manualConds: ManualConditions | null = datasetId
+      ? ((sessionManualConditions[datasetId] ?? datasetManualConditions[datasetId]) ?? null)
+      : null;
+    const isManualActive = manualSource === "manual" && manualConds !== null;
+
+    const effectiveSnapshot: SurfaceSnapshot | null = isManualActive && manualConds
+      ? {
+          hour: activeHour,
+          windSpeedKnots: manualConds.windSpeedKnots,
+          windDegrees: manualConds.windDirectionDeg,
+          tidalSpeedKnots: manualConds.currentSpeedKnots,
+          tidalDegrees: manualConds.currentDirectionDeg,
+          waveHeightM: 0,
+          tideRising: true,
+        }
+      : snapshot;
+    // ────────────────────────────────────────────────────────────────────────
+
     const ts = (() => {
       try {
         // Use Date.now() rather than new Date() so Vitest fake-timers always
@@ -220,7 +264,7 @@ export function useSurfaceConditions(
 
     return {
       data,
-      snapshot,
+      snapshot: effectiveSnapshot,
       hours,
       forecast48h,
       centerLat,
@@ -228,9 +272,10 @@ export function useSurfaceConditions(
       loading: isLoading,
       isFetching,
       error: isError,
-      estimated,
-      currentsAvailable,
-      timestamp: snapshot ? ts : null,
+      // Manual conditions are authoritative — not estimated, currents available.
+      estimated: isManualActive ? false : estimated,
+      currentsAvailable: isManualActive ? true : currentsAvailable,
+      timestamp: effectiveSnapshot ? ts : null,
       activeHour,
       refetch: () => { void refetch(); },
       fallback,
@@ -238,5 +283,7 @@ export function useSurfaceConditions(
   }, [data, isLoading, isFetching, isError, refetch, centerLat, centerLon,
       manualWindSpeedKnots, manualWindDegrees,
       manualTidalSpeedKnots, manualTidalDegrees,
-      driftPlannerActive, driftHour, hourOverride, nowHour]);
+      driftPlannerActive, driftHour, hourOverride, nowHour,
+      manualConditionsActiveSource, datasetManualConditions, sessionManualConditions,
+      terrain]);
 }
