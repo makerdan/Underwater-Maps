@@ -1,0 +1,69 @@
+name: Scheduled Terrain Refresh — Crater Lake & Lake Tahoe
+
+on:
+  schedule:
+    # Crater Lake: nightly at 03:00 UTC — probes USGS ScienceBase item 5b28e9e7e4b0702d0e816a50
+    - cron: '0 3 * * *'
+    # Lake Tahoe: nightly at 04:00 UTC — probes USGS ScienceBase item 5a8ea03fe4b00583a4ddae3b
+    # (staggered 1 h to avoid simultaneous ScienceBase hits)
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  crater-lake-terrain:
+    name: Crater Lake terrain bundle refresh
+    # Run only on the 03:00 cron (or manual dispatch) — not on the 04:00 Lake Tahoe trigger
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 3 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Refresh Crater Lake terrain bundle
+        env:
+          CRATER_LAKE_REFRESH_WEBHOOK_URL: ${{ secrets.CRATER_LAKE_REFRESH_WEBHOOK_URL }}
+        run: pnpm --filter @workspace/scripts run scheduled-refresh-crater-lake-terrain
+
+  lake-tahoe-terrain:
+    name: Lake Tahoe terrain bundle refresh
+    # Run only on the 04:00 cron (or manual dispatch) — not on the 03:00 Crater Lake trigger
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 4 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Refresh Lake Tahoe terrain bundle
+        env:
+          LAKE_TAHOE_REFRESH_WEBHOOK_URL: ${{ secrets.LAKE_TAHOE_REFRESH_WEBHOOK_URL }}
+        run: pnpm --filter @workspace/scripts run scheduled-refresh-lake-tahoe-terrain

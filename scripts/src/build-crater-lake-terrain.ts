@@ -34,6 +34,8 @@ const OUT_PATH = resolve(
   "artifacts/api-server/src/lib/craterLakeTerrain.gen.json",
 );
 
+export const CRATER_LAKE_TERRAIN_OUT_PATH = OUT_PATH;
+
 const SCIENCEBASE_ITEM_ID = "5b28e9e7e4b0702d0e816a50";
 const DATASET_ID = "fw-crater-lake-or";
 const RESOLUTION = 256;

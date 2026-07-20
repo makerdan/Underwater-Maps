@@ -18,6 +18,8 @@
     "build-crater-lake-terrain": "tsx ./src/build-crater-lake-terrain.ts",
     "build-lake-tahoe-terrain": "tsx ./src/build-lake-tahoe-terrain.ts",
     "scheduled-refresh-lake-ray-roberts-terrain": "tsx ./src/scheduled-refresh-lake-ray-roberts-terrain.ts",
+    "scheduled-refresh-crater-lake-terrain": "tsx ./src/scheduled-refresh-crater-lake-terrain.ts",
+    "scheduled-refresh-lake-tahoe-terrain": "tsx ./src/scheduled-refresh-lake-tahoe-terrain.ts",
     "scheduled-refresh-shorezone-data": "tsx ./src/scheduled-refresh-shorezone-data.ts",
     "scheduled-refresh-enc-substrate": "tsx ./src/scheduled-refresh-enc-substrate.ts",
     "scheduled-refresh-usseabed-substrate": "tsx ./src/scheduled-refresh-usseabed-substrate.ts",

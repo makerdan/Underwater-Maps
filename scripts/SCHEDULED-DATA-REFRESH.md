@@ -20,8 +20,10 @@ This document is the operational wire-up for those schedules.
 | CONUS USSEABED substrate | `build-usseabed-substrate.ts` | `scheduled-refresh-usseabed-substrate` | `USSEABED_SUBSTRATE_REFRESH_WEBHOOK_URL` |
 | TX lake substrate | `build-tx-lake-substrate.ts` | `scheduled-refresh-tx-lake-substrate` | `TX_LAKE_SUBSTRATE_REFRESH_WEBHOOK_URL` |
 | TX freshwater EFH | `build-tx-freshwater-efh.ts` | `scheduled-refresh-tx-freshwater-efh` | `TX_FRESHWATER_EFH_REFRESH_WEBHOOK_URL` |
+| Crater Lake terrain | `build-crater-lake-terrain.ts` | `scheduled-refresh-crater-lake-terrain` | `CRATER_LAKE_REFRESH_WEBHOOK_URL` |
+| Lake Tahoe terrain | `build-lake-tahoe-terrain.ts` | `scheduled-refresh-lake-tahoe-terrain` | `LAKE_TAHOE_REFRESH_WEBHOOK_URL` |
 
-All six wrappers share a single implementation in
+All eight wrappers share a single implementation in
 `scripts/src/lib/scheduled-refresh.ts`, so the alert format, log shape, and
 exit-code contract are identical across layers.
 
@@ -79,6 +81,8 @@ the schedules across days and into off-peak hours:
 | USSEABED substrate | `0 7 * * 4` (Thu 07:00 UTC) | USGS USSEABED re-releases occasionally; weekly is generous. |
 | TX lake substrate | `0 8 * * 5` (Fri 08:00 UTC) | TPWD habitat layer updates intermittently. |
 | TX freshwater EFH | `0 9 * * 6` (Sat 09:00 UTC) | Same upstream as TX lake substrate; different output shape. |
+| Crater Lake terrain | `0 3 * * *` (daily 03:00 UTC) | USGS ScienceBase item is currently secured; nightly probe catches the moment it becomes public. |
+| Lake Tahoe terrain | `0 4 * * *` (daily 04:00 UTC) | Same rationale as Crater Lake; staggered 1 h to avoid hitting the same ScienceBase endpoints simultaneously. |
 
 Adjust to taste — the wrapper has no opinion about the cadence beyond "more
 often than the upstream actually changes".
@@ -90,14 +94,15 @@ often than the upstream actually changes".
   stdout/stderr.
 * Every line emitted by a wrapper is prefixed with `[LAYER]` (e.g.
   `[SHOREZONE]`, `[ENC-SUBSTRATE]`, `[USSEABED-SUBSTRATE]`,
-  `[TX-LAKE-SUBSTRATE]`, `[TX-FRESHWATER-EFH]`, `[RAY-ROBERTS-TERRAIN]`),
+  `[TX-LAKE-SUBSTRATE]`, `[TX-FRESHWATER-EFH]`, `[RAY-ROBERTS-TERRAIN]`,
+  `[CRATER-LAKE-TERRAIN]`, `[LAKE-TAHOE-TERRAIN]`),
   so `grep` across log exports surfaces the full history per layer.
 * Failed runs surface in the Deployments dashboard with a red status, so a
   silent multi-week outage is not possible.
 
 ## Single-deployment fan-out (alternative)
 
-If you would rather run all six on the same schedule from one deployment, use
+If you would rather run all eight on the same schedule from one deployment, use
 a shell fan-out as the run command. Make sure to keep going on partial
 failures so one flaky upstream does not mask the others, and exit non-zero if
 any layer failed:
@@ -111,7 +116,9 @@ for layer in \
   scheduled-refresh-enc-substrate \
   scheduled-refresh-usseabed-substrate \
   scheduled-refresh-tx-lake-substrate \
-  scheduled-refresh-tx-freshwater-efh; do
+  scheduled-refresh-tx-freshwater-efh \
+  scheduled-refresh-crater-lake-terrain \
+  scheduled-refresh-lake-tahoe-terrain; do
   echo "=== $layer ==="
   pnpm --filter @workspace/scripts run "$layer" || fail=1
 done

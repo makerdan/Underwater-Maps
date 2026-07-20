@@ -39,6 +39,8 @@ const OUT_PATH = resolve(
   "artifacts/api-server/src/lib/lakeTahoeTerrain.gen.json",
 );
 
+export const LAKE_TAHOE_TERRAIN_OUT_PATH = OUT_PATH;
+
 const SCIENCEBASE_ITEM_ID = "5a8ea03fe4b00583a4ddae3b";
 const DATASET_ID = "fw-lake-tahoe";
 const RESOLUTION = 256;
