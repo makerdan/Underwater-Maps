@@ -2,11 +2,20 @@
 /**
  * Root-relative /api/ fetch guard.
  *
- * Scans `artifacts/bathyscan/src` for any registered fetch-wrapper calls that
+ * Scans one or more source trees for any registered fetch-wrapper calls that
  * use a root-relative `/api/` path (e.g. fetch("/api/settings")).
  * These calls break when the app is served from a sub-path because they escape
  * the artifact's base-path prefix.  All API calls must use `${API_BASE}api/…`
  * instead.
+ *
+ * ─── Scan roots ───────────────────────────────────────────────────────────────
+ * SCAN_ROOTS lists every source tree that should be checked.  Each entry is a
+ * path relative to the repo root.  Add a new entry whenever a new artifact
+ * gains helpers that call the BathyScan API.
+ *
+ * External-URL wrappers (ERDDAP, NOAA, GCS, Poe, …) are out of scope: they
+ * always receive absolute https://… URLs so the root-relative pattern never
+ * matches them.  Do NOT add those wrappers to FETCH_WRAPPERS.
  *
  * ─── Adding a new fetch wrapper ───────────────────────────────────────────────
  * When you introduce a new helper that accepts a URL as its first argument and
@@ -14,7 +23,7 @@
  * name to the FETCH_WRAPPERS array below.  The guard will then automatically
  * flag any call-site that passes a root-relative `/api/` URL to that helper.
  *
- * Do NOT add wrappers that call external third-party URLs (ERDDAP, NOAA, GCS,
+ * Do NOT add wrappers that call external/third-party URLs (ERDDAP, NOAA, GCS,
  * etc.) — those legitimately use absolute URLs and are out of scope.
  *
  * Example:
@@ -42,7 +51,22 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SCAN_ROOT = path.join(repoRoot, "artifacts/bathyscan/src");
+
+/**
+ * Source trees to scan.  Paths are relative to the repo root.
+ *
+ * ─── Adding a new scan root ───────────────────────────────────────────────────
+ * Append the relative path to the array below.  The scan will automatically
+ * pick up all .ts/.tsx/.js/.jsx/.mjs files (excluding test files, dist, etc.).
+ *
+ * NOTE: Only add trees that make internal calls to the BathyScan /api/ routes.
+ *       Do NOT add trees whose fetch calls are exclusively to external services.
+ * ──────────────────────────────────────────────────────────────────────────────
+ */
+const SCAN_ROOTS = [
+  "artifacts/bathyscan/src",
+  "artifacts/api-server/src",
+];
 
 const SCAN_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 
@@ -62,7 +86,7 @@ const SKIP_DIRS = new Set([
  *    for step-by-step instructions.
  */
 const FETCH_WRAPPERS = [
-  "fetch",                 // native browser fetch
+  "fetch",                 // native fetch (used in both bathyscan and api-server)
   "authorizedFetch",       // artifacts/bathyscan/src/lib/authorizedFetch.ts
   "fetchJsonWithProgress", // artifacts/bathyscan/src/lib/fetchWithProgress.ts
 ];
@@ -108,18 +132,23 @@ function relToRepo(file) {
 }
 
 const violations = [];
+let totalFiles = 0;
 
-for (const file of walk(SCAN_ROOT)) {
-  const rel = relToRepo(file);
-  if (isTestFile(rel)) continue;
+for (const scanRoot of SCAN_ROOTS) {
+  const absRoot = path.join(repoRoot, scanRoot);
+  for (const file of walk(absRoot)) {
+    const rel = relToRepo(file);
+    if (isTestFile(rel)) continue;
+    totalFiles++;
 
-  const lines = fs.readFileSync(file, "utf8").split("\n");
-  lines.forEach((line, idx) => {
-    if (COMMENT_LINE_RE.test(line)) return;
-    if (ROOT_RELATIVE_API_RE.test(line)) {
-      violations.push({ file: rel, line: idx + 1, text: line.trim() });
-    }
-  });
+    const lines = fs.readFileSync(file, "utf8").split("\n");
+    lines.forEach((line, idx) => {
+      if (COMMENT_LINE_RE.test(line)) return;
+      if (ROOT_RELATIVE_API_RE.test(line)) {
+        violations.push({ file: rel, line: idx + 1, text: line.trim() });
+      }
+    });
+  }
 }
 
 if (violations.length > 0) {
@@ -134,12 +163,15 @@ if (violations.length > 0) {
     `\n${violations.length} violation(s). Use \`\${API_BASE}api/…\` instead of ` +
       `"/api/…" so calls work when the app is served from a sub-path.\n` +
       `See artifacts/bathyscan/src/lib/authorizedFetch.ts and fetchWithProgress.ts.\n` +
-      `To register a new fetch wrapper, add its name to FETCH_WRAPPERS in this script.`,
+      `To register a new fetch wrapper, add its name to FETCH_WRAPPERS in this script.\n` +
+      `To add a new scan root, add the path to SCAN_ROOTS in this script.`,
   );
   process.exit(1);
 }
 
 console.log(
-  `root-relative-api-guard: OK — no root-relative /api/ fetch calls found.` +
-  ` (checked ${FETCH_WRAPPERS.length} wrapper(s): ${FETCH_WRAPPERS.join(", ")})`,
+  `root-relative-api-guard: OK — no root-relative /api/ fetch calls found.\n` +
+  `  scanned roots  : ${SCAN_ROOTS.join(", ")}\n` +
+  `  fetch wrappers : ${FETCH_WRAPPERS.join(", ")}\n` +
+  `  files checked  : ${totalFiles}`,
 );
