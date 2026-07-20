@@ -43,6 +43,12 @@
     "fileBudgetMs": 60000,
     "runBudgetMs": 120000
   },
+  "libDbUnit": {
+    "testTimeoutMs": 15000,
+    "hookTimeoutMs": 60000,
+    "fileBudgetMs": 60000,
+    "runBudgetMs": 120000
+  },
   "aggregate": {
     "totalBudgetMs": 2700000
   },

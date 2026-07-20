@@ -4,7 +4,7 @@
  *
  * Usage:
  *   node scripts/run-tier.mjs fast       # typecheck + lint + check:lock-skill-sync (~5 min)
- *   node scripts/run-tier.mjs standard   # typecheck + lint + check:lock-skill-sync + unit + doc/catalog checks (~20 min)
+ *   node scripts/run-tier.mjs standard   # typecheck + lint + check:lock-skill-sync + unit + doc/catalog/schema checks (~20 min)
  *   node scripts/run-tier.mjs full       # all 11 steps, identical to test-all-steps.mjs (~45 min)
  *
  * Per-step named resource locking is handled internally; the outer caller
@@ -127,6 +127,8 @@ const ALL_STEPS = [
   // all check:* steps are lightweight; no resource needed
   { name: "check:docs-stale", resource: null, cmd: "pnpm run check:docs-stale" },
   { name: "check:catalog-coverage", resource: null, cmd: "pnpm run check:catalog-coverage" },
+  // no resource: pure schema-vs-snapshot diff, no DB connection, sub-second
+  { name: "check:schema-stale", resource: null, cmd: "pnpm run check:schema-stale" },
   { name: "check:e2e-user-ids", resource: null, cmd: "pnpm run check:e2e-user-ids" },
   { name: "check:e2e-cjs-globals", resource: null, cmd: "pnpm run check:e2e-cjs-globals" },
   { name: "check:fixture-freshness", resource: null, cmd: "pnpm run check:fixture-freshness" },
@@ -136,7 +138,7 @@ const ALL_STEPS = [
 
 const TIER_STEPS = {
   fast:     ALL_STEPS.slice(0, 5),
-  standard: ALL_STEPS.slice(0, 8),
+  standard: ALL_STEPS.slice(0, 9),
   full:     ALL_STEPS,
 };
 

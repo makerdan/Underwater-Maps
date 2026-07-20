@@ -12,7 +12,8 @@
     "push": "drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
     "backfill:upload-dataset-ids": "tsx ./src/scripts/backfill-upload-dataset-ids.ts",
-    "purge:null-userid-markers": "tsx ./src/scripts/purge-null-userid-markers.ts"
+    "purge:null-userid-markers": "tsx ./src/scripts/purge-null-userid-markers.ts",
+    "test:unit": "node ../../scripts/run-with-timeout.mjs libDbUnit --label \"lib-db test:unit\" -- vitest run"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
@@ -24,6 +25,7 @@
     "@types/node": "catalog:",
     "@types/pg": "^8.20.0",
     "drizzle-kit": "^0.31.10",
-    "tsx": "catalog:"
+    "tsx": "catalog:",
+    "vitest": "^3.2.6"
   }
 }
