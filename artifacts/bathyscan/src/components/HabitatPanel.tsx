@@ -321,11 +321,12 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
       useHabitatStore.getState().clear();
       return;
     }
-    if (activeSpecies) {
+    // Read activeSpecies from store state so this effect always checks the
+    // current value — not a potentially stale closure copy.
+    if (useHabitatStore.getState().activeSpecies) {
       // Bust cache and recompute for current species
       useHabitatStore.getState().clear();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terrain?.datasetId]);
 
   // Clear species selection when waterType changes so stale overlays don't persist
@@ -343,22 +344,36 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
   // Apply user defaults once terrain is loaded — pre-select the user's
   // preferred default species (if any & compatible with current water type)
   // and auto-enable the substrate-zone overlay if they've asked for it.
+  // All values that must not be stale are read from their stores via
+  // getState() so this effect fires only on terrain-swap / water-type change
+  // without capturing stale closure copies of autoShowZoneOverlay,
+  // defaultHabitatSpecies, activeSpecies, or zoneMap.
   useEffect(() => {
     if (!terrain) return;
-    if (autoShowZoneOverlay && !useUiStore.getState().zoneOverlayEnabled) {
+    const { autoShowZoneOverlay: autoShow, defaultHabitatSpecies: defaultSpecies } =
+      useSettingsStore.getState();
+    if (autoShow && !useUiStore.getState().zoneOverlayEnabled) {
       useUiStore.getState().setZoneOverlayEnabled(true);
     }
+    const currentActiveSpecies = useHabitatStore.getState().activeSpecies;
+    const currentZoneMap = useClassificationStore.getState().zoneMap;
+    const resolvedWaterType =
+      (terrain.waterType as "saltwater" | "freshwater" | undefined) ??
+      useSettingsStore.getState().waterType;
+    const currentSpeciesIds: readonly string[] =
+      resolvedWaterType === "freshwater"
+        ? (FRESHWATER_SPECIES_IDS as unknown as string[])
+        : (SALTWATER_SPECIES_IDS as unknown as string[]);
     if (
-      defaultHabitatSpecies &&
-      !activeSpecies &&
-      (speciesIds as readonly string[]).includes(defaultHabitatSpecies)
+      defaultSpecies &&
+      !currentActiveSpecies &&
+      currentSpeciesIds.includes(defaultSpecies)
     ) {
       useHabitatStore
         .getState()
-        .setSpecies(defaultHabitatSpecies as SpeciesId, terrain, zoneMap);
+        .setSpecies(defaultSpecies as SpeciesId, terrain, currentZoneMap);
     }
   // Only run on terrain swap / water-type change — not every render.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terrain?.datasetId, waterType]);
 
   const handleSpeciesChange = (id: SpeciesId | "") => {

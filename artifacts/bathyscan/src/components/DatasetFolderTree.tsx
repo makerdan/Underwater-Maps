@@ -502,7 +502,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
     if (!bulkDeleteSignal || bulkDeleteSignal === prevBulkDeleteSignal.current) return;
     prevBulkDeleteSignal.current = bulkDeleteSignal;
     if (selectedIds.size > 0) handleBulkDelete();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- signal-increment pattern; handleBulkDelete is a useCallback that carries its own deps; listing it here would bypass the signal guard
   }, [bulkDeleteSignal]);
 
   // Parent provides a move target to open the Move-to dialog.

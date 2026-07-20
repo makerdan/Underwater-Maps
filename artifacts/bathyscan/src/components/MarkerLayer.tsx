@@ -158,7 +158,7 @@ export const MarkerLayer: React.FC = () => {
     } else {
       setSubsampleState(visibleMarkers.length, rendered.length);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- clear and setSubsampleState are Zustand setters (stable refs)
   }, [visibleMarkers.length, rendered.length]);
 
   // Clear store when this component unmounts (dataset cleared etc.)

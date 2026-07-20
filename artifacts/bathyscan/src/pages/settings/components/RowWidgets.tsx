@@ -103,7 +103,7 @@ export function ColormapSwatch({
   );
   const background = React.useMemo(
     () => colormapCssGradient(theme, "to right", 16),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- paletteVersion is a string fingerprint that encodes all palette state; no other deps needed
     [theme, paletteVersion],
   );
   return (

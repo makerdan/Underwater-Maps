@@ -110,7 +110,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
     return () => {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only timer init; resetTimer reads pinnedRef (always-fresh ref), not a stale closure value
   }, []);
 
   useEffect(() => {
@@ -122,7 +122,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
     } else {
       resetTimer();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- resetTimer reads pinnedRef.current (always fresh); re-registering on every resetTimer recreation would cause timer thrash
   }, [whatsHerePinned]);
 
   useEffect(() => {
@@ -139,7 +139,7 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
       }
     });
     return unsub;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only Zustand subscription; setWhatsHereOpen is a stable setter ref; pinnedRef is always current
   }, []);
 
   const {

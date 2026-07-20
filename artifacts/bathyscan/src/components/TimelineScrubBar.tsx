@@ -106,12 +106,14 @@ export const TimelineScrubBar: React.FC = () => {
 
   // Stop playback when the scrubber becomes hidden (overlay deactivated mid-play).
   // This prevents the interval from silently advancing time while no overlay is visible.
+  // isPlaying and setPlaying are included so the effect reads the current play-state
+  // when visibility changes — without isPlaying the stale closure could miss an active
+  // playback session that started after this effect was last registered.
   useEffect(() => {
     if (!visible && isPlaying) {
       setPlaying(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }, [visible, isPlaying, setPlaying]);
 
   useEffect(() => {
     if (!isPlaying) return;

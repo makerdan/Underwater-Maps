@@ -10,7 +10,7 @@
  * "SIMULATED DATA" badge stays visible). A "Don't ask again this session"
  * checkbox suppresses subsequent prompts for the current tab only.
  */
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSimulatedDataStore } from "@/lib/simulatedDataStore";
 import { useToast } from "@/hooks/use-toast";
@@ -27,37 +27,17 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
   useFocusTrap(dialogRef);
 
-  // Close on Escape — treat as Cancel.
-  useEffect(() => {
-    if (!pending) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        handleCancel();
-      }
-    }
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending]);
+  // Extract onCancel before the early return so handleCancel can be a stable
+  // useCallback with a correct dependency list.
+  const onCancel = pending?.onCancel;
 
-  if (!pending) return null;
-
-  const { datasetName, preview, onConfirm, onCancel } = pending;
-  const reason =
-    preview.syntheticReason ??
-    (preview.dataSource === "synthetic"
-      ? "upstream bathymetry services unreachable"
-      : "could not verify data source");
-  const isUnknown = preview.dataSource === "unknown";
-  const bboxLabel =
-    preview.bbox.maxLon !== 0 || preview.bbox.minLon !== 0
-      ? `${preview.bbox.minLon.toFixed(2)}, ${preview.bbox.minLat.toFixed(2)} → ${preview.bbox.maxLon.toFixed(2)}, ${preview.bbox.maxLat.toFixed(2)}`
-      : null;
-
-  function handleCancel() {
+  // handleCancel is defined here (before the early return) as a stable
+  // useCallback so the keydown effect can list it as a dependency without
+  // capturing a stale version if `suppressed` changes after the listener was
+  // registered.
+  const handleCancel = useCallback(() => {
     const wasStartup = pending?.isStartup ?? false;
-    onCancel();
+    onCancel?.();
     // If the user has suppressed simulated-data warnings (either before this
     // dialog opened, or by ticking "Don't ask again" and then clicking Cancel),
     // skip the toast and the Find-Data re-open entirely. Future synthetic-data
@@ -77,7 +57,35 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
     } catch {
       // ignore — Find Data store optional
     }
-  }
+  }, [pending, onCancel, suppressed, toast, setFindDataPanelOpen]);
+
+  // Close on Escape — treat as Cancel. handleCancel is listed in deps so the
+  // listener always calls the most-recent version (picks up suppressed changes).
+  useEffect(() => {
+    if (!pending) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        handleCancel();
+      }
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [pending, handleCancel]);
+
+  if (!pending) return null;
+
+  const { datasetName, preview, onConfirm } = pending;
+  const reason =
+    preview.syntheticReason ??
+    (preview.dataSource === "synthetic"
+      ? "upstream bathymetry services unreachable"
+      : "could not verify data source");
+  const isUnknown = preview.dataSource === "unknown";
+  const bboxLabel =
+    preview.bbox.maxLon !== 0 || preview.bbox.minLon !== 0
+      ? `${preview.bbox.minLon.toFixed(2)}, ${preview.bbox.minLat.toFixed(2)} → ${preview.bbox.maxLon.toFixed(2)}, ${preview.bbox.maxLat.toFixed(2)}`
+      : null;
 
   function handleConfirm() {
     onConfirm();

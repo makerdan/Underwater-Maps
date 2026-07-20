@@ -165,7 +165,7 @@ export function useUndoableTrailDelete(
     },
     // trailsQueryKey is derived from datasetId — include datasetId in deps
     // so the callback is re-created when the active dataset changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- trailsQueryKey is derived from datasetId (already in deps); listing the key itself would cause an extra recreation on every render
     [qc, mutation, toast, datasetId, refetchTrails],
   );
 

@@ -120,6 +120,8 @@ const ALL_STEPS = [
   { name: "check:lock-skill-sync", resource: null, cmd: "pnpm run check:lock-skill-sync" },
   // no resource: grep-based root-relative /api/ fetch guard, sub-second
   { name: "check:root-relative-api", resource: null, cmd: "pnpm run check:root-relative-api" },
+  // no resource: grep-based exhaustive-deps suppression rationale gate, sub-second
+  { name: "check:deps-suppression", resource: null, cmd: "pnpm run check:deps-suppression" },
   // unit-cpu resource: prevents CPU saturation / budget breach
   { name: "test:unit", resource: "unit-cpu", cmd: "pnpm run test:unit" },
   // all check:* steps are lightweight; no resource needed
@@ -133,8 +135,8 @@ const ALL_STEPS = [
 ];
 
 const TIER_STEPS = {
-  fast:     ALL_STEPS.slice(0, 4),
-  standard: ALL_STEPS.slice(0, 7),
+  fast:     ALL_STEPS.slice(0, 5),
+  standard: ALL_STEPS.slice(0, 8),
   full:     ALL_STEPS,
 };
 

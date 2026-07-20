@@ -172,7 +172,7 @@ export const Minimap: React.FC = () => {
   // theme or palette changes — same dependencies that rebuild the heatmap.
   const legendGradient = useMemo(
     () => colormapCssGradient(colormapTheme, "to bottom", 16),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- paletteVersion fingerprint covers all palette state; colormapCssGradient is a pure function
     [colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries],
   );
 
@@ -233,7 +233,7 @@ export const Minimap: React.FC = () => {
       satelliteImgRef.current = null;
     };
     img.src = tileUrl;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers; including them would re-run the effect every render
   }, [tileUrl]);
 
   const datasetId = terrain?.datasetId ?? "";
@@ -351,7 +351,7 @@ export const Minimap: React.FC = () => {
     rebuildStaticLayer(terrain);
     const camState = useCameraStore.getState();
     compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers that change every render; data deps are listed explicitly
   }, [terrain, colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries]);
 
   // Re-composite when satellite image loads (tileUrl changed)
@@ -363,7 +363,7 @@ export const Minimap: React.FC = () => {
     rebuildStaticLayer(terrain);
     const camState = useCameraStore.getState();
     compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers; terrain is captured from outer scope (current at call time)
   }, [tileUrl]);
 
   // Subscribe to cameraStore and update arrow only — static layer is pre-built.
@@ -377,7 +377,7 @@ export const Minimap: React.FC = () => {
     });
 
     return () => { unsub(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- compositeFrame is a render-scope helper; re-subscribing only on terrain change is intentional
   }, [terrain]);
 
   // Rebuild static layer whenever markers change (new dots without camera move)
@@ -389,7 +389,7 @@ export const Minimap: React.FC = () => {
     rebuildStaticLayer(terrain);
     const camState = useCameraStore.getState();
     compositeFrame(ctx, camState.cameraLon, camState.cameraLat, camState.heading, terrain);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers; data deps (markers, terrain) are listed explicitly
   }, [markers, terrain]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {

@@ -175,7 +175,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
     if (!timelineVisible || currentsSource === "manual") return;
     const phase = (timelineCurrentTime.getTime() % TIDE_CYCLE_MS) / TIDE_CYCLE_MS;
     setCurrentsTidePhase(phase);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- setCurrentsTidePhase is a Zustand setter (stable ref)
   }, [timelineVisible, timelineCurrentTime, currentsSource]);
 
   const wrapStyle: React.CSSProperties = embedded

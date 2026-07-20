@@ -1581,7 +1581,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const waterType = useSettingsStore((s) => s.waterType);
   useEffect(() => {
     void qc.invalidateQueries({ queryKey: getGetDatasetsCatalogSearchQueryKey(searchParams) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- qc is a stable QueryClient ref; waterType is the sole invalidation trigger (searchParams changes self-refetch via react-query)
   }, [waterType]);
 
   // My Saves

@@ -257,7 +257,7 @@ export const EfhZoneLayer: React.FC = () => {
   // toggle state from the previous dataset doesn't bleed into the new one.
   useEffect(() => {
     clearHiddenEfhSpecies();
-  }, [datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [datasetId]); // eslint-disable-line react-hooks/exhaustive-deps -- clearHiddenEfhSpecies is a Zustand setter (stable ref)
 
   // Fire a one-shot toast when the EFH overlay is enabled over synthetic terrain.
   // A ref guards against re-firing on every render: it is set to the datasetId

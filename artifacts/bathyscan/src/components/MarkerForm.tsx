@@ -116,7 +116,7 @@ export const MarkerForm: React.FC = () => {
         setPoleColour(DEPTH_POLE_DEFAULT_COLOUR);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only repopulate the form when the marker object changes, not on every visibleMarkerTypes update
   }, [editMarker]);
 
   useEffect(() => {
@@ -186,7 +186,7 @@ export const MarkerForm: React.FC = () => {
     if (catEl) {
       catEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- scroll-into-view runs once per edit-open; re-running on visibleMarkerTypes or pickerRef changes would cause spurious scrolls
   }, [editMarker]);
 
   // Always clear the beforeClose guard — dirty-form protection is handled
@@ -194,7 +194,7 @@ export const MarkerForm: React.FC = () => {
   useEffect(() => {
     setBeforeClose(null);
     return () => setBeforeClose(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only cleanup; setBeforeClose is a Zustand setter (stable ref)
   }, []);
 
   // Controls the "Discard unsaved changes?" in-app dialog.

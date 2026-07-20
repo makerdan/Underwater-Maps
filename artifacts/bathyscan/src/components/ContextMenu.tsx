@@ -26,8 +26,7 @@ export const ContextMenu: React.FC = () => {
   const [location] = useLocation();
   useEffect(() => {
     if (open) hide();
-    // Intentionally omit `open` and `hide` — we only want to react to location changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hide is a Zustand setter (stable ref); open intentionally omitted to react only to location changes, not every open/close toggle
   }, [location]);
 
   // Dismiss the menu when the window loses focus or the tab is hidden. This

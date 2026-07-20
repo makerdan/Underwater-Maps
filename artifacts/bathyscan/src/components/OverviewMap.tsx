@@ -496,7 +496,7 @@ export const OverviewMap: React.FC = () => {
         setBboxResults(null);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bboxQuery.mutateAsync and pointRadiusQuery.mutateAsync are stable React Query mutation refs
   }, [pendingCoordSearch]);
 
   // Compute the union bbox of all visible datasets that have a loaded overview

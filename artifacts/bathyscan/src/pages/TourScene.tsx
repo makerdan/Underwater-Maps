@@ -221,7 +221,7 @@ const LandTerrainMesh: React.FC = () => {
   }, [tileUrl]);
 
   // Dispose texture on unmount.
-  useEffect(() => () => { satelliteTexture?.dispose(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { satelliteTexture?.dispose(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only cleanup; intentionally captures the texture ref at mount time to avoid re-running disposal on every texture update
 
   // Build the final material: satellite when enabled + available, else procedural ramp.
   const material = useMemo(() => {

@@ -34,7 +34,7 @@ function ContourIntervalRow() {
     prevUnitsRef.current = s.units;
     if (prev === s.units) return;
     s.setContourInterval(defaultContourInterval(s.units));
-  }, [s.units]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [s.units]); // eslint-disable-line react-hooks/exhaustive-deps -- s.setContourInterval is a Zustand setter (stable ref)
   return (
     <SliderRow
       label="Contour Interval"

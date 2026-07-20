@@ -460,7 +460,7 @@ export const CurrentsLayer: React.FC<CurrentsLayerProps> = ({ terrain, noaaAmbie
       ambientSpeedKnots: phaseAmbient.speedKnots,
       ambientDirectionDeg: phaseAmbient.directionDeg,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fieldFingerprint already encodes terrain + ambient; listing raw objects would cause spurious rebuilds on identity changes
   }, [enabled, fieldFingerprint]);
 
   // Publish the field to the runtime store for sampling by Drift Planner.

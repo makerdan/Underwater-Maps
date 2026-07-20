@@ -91,7 +91,7 @@ export const TripWindowPanel: React.FC = () => {
 
   const windows = React.useMemo(
     () => computeTripWindows(forecast48h, thresholds),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- thresholds object is rebuilt every render; expanding to primitive deps avoids an extra useMemo wrapper
     [forecast48h, boatGoWindKn, boatGoWaveM, boatNoGoWindKn, boatNoGoWaveM],
   );
   const best = React.useMemo(
