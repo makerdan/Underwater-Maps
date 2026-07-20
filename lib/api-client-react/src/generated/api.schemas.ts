@@ -2638,7 +2638,7 @@ export interface MarkerPatch {
      */
   label?: string;
   type?: MarkerPatchType;
-  /** @maxLength 500 */
+  /** @maxLength 2000 */
   notes?: string | null;
 }
 
