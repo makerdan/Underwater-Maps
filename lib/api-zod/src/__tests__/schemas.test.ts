@@ -38,7 +38,7 @@ describe("PostMarkersBody", () => {
     expect(PostMarkersBody.safeParse(valid).success).toBe(true);
   });
 
-  it("accepts when datasetId is missing (nullish — dataset-free marker)", () => {
+  it("accepts when datasetId is missing (nullish — dataset-free markers)", () => {
     const { datasetId: _omit, ...rest } = valid;
     expect(PostMarkersBody.safeParse(rest).success).toBe(true);
   });
@@ -138,7 +138,7 @@ describe("GetMarkersQueryParams", () => {
     if (r.success) expect(typeof r.data.datasetId).toBe("string");
   });
 
-  it("returns undefined datasetId when field is absent (optional field skips coercion)", () => {
+  it("returns undefined when datasetId is absent (optional field)", () => {
     const r = GetMarkersQueryParams.safeParse({});
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.datasetId).toBeUndefined();

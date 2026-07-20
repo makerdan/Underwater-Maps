@@ -1,13 +1,16 @@
 ---
-name: bucketMonitor singleFork concurrency leak
-description: activeProcessCount leaks between test files in singleFork vitest pool; reset must be explicit in beforeEach.
+name: bucketMonitor concurrency test under load
+description: bucket-monitor-concurrency.test.ts fails in the full singleFork suite because settle(10) is not enough time for fs.promises.mkdir I/O to complete at position 132/155 with 6.9 GB RSS.
 ---
 
-**Rule:** Any test file that checks concurrency-cap behavior in `bucketMonitor.ts` must call `__resetProcessConcurrencyForTests()` in `beforeEach`.
+**Rule:** Any singleFork test that gates on a condition after real async I/O must use condition-based polling, not a fixed `settle(N)` round count.
 
-**Why:** `activeProcessCount` and `processWaitQueue` are module-level state in `bucketMonitor.ts`. The api-server test suite runs with `singleFork: true` in vitest, so all test files share one process — state leaks between files. If a file that calls `processObject` (e.g. `bucket-monitor-process.test.ts`) runs before `bucket-monitor-concurrency.test.ts` and leaves `activeProcessCount >= PROCESS_CONCURRENCY_CAP (3)`, every new pipeline queues silently and `mockCreateReadStream` is called 0 times instead of 3. The test fails deterministically in the full suite but passes alone.
+**Why:** The api-server singleFork suite runs 155 files in one process. By position ~132/155 the heap is at ~6.9 GB RSS. Under that load, `setTimeout(0)` ticks do not reliably drain all pending I/O callbacks — `fs.promises.mkdir` (called inside `runProcessPipeline` before `createReadStream`) can take more than 10 ticks to complete. `settle(10)` gives 0 `createReadStream` calls instead of 3.
 
-**How to apply:** 
-- Export `__resetProcessConcurrencyForTests` from `bucketMonitor.ts` (sets `activeProcessCount = 0`, clears `processWaitQueue`)
-- Import and call it in `beforeEach` of `bucket-monitor-concurrency.test.ts`
-- If new concurrency tests are added to other files, apply the same pattern
+**Fix applied in `bucket-monitor-concurrency.test.ts`:**
+- Added `waitFor(condition, 3000ms)` helper that polls every 10ms until condition is true or times out.
+- Replaced `await settle()` before the CAP assertion with `await waitFor(() => gcsMocks.mockCreateReadStream.mock.calls.length >= PROCESS_CONCURRENCY_CAP)`.
+
+**How to apply:**
+- For any future concurrency or timing test in the api-server singleFork suite that checks a condition after async I/O, use `waitFor` (condition-based with timeout) rather than `settle(N)` (fixed rounds).
+- `__resetProcessConcurrencyForTests()` is still correct and necessary in `beforeEach` to reset the module-level `activeProcessCount` and `processWaitQueue` state that leaks between files.

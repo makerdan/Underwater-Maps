@@ -118,6 +118,27 @@ async function settle(rounds = 10): Promise<void> {
   }
 }
 
+/**
+ * Wait until condition() returns true, or throw after timeoutMs.
+ *
+ * The singleFork suite runs 150+ test files in one process; by position ~132
+ * (where this file runs) the event loop has significant I/O backlog.  A fixed
+ * settle() round count is not enough because fs.promises.mkdir (called inside
+ * runProcessPipeline before createReadStream) may need more than 10 setTimeout(0)
+ * ticks to complete under that load.  Polling with a real timeout is robust.
+ */
+async function waitFor(condition: () => boolean, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `waitFor timed out after ${timeoutMs}ms (condition never became true)`,
+      );
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 beforeEach(() => {
   process.env["DEFAULT_OBJECT_STORAGE_BUCKET_ID"] = TEST_BUCKET;
   vi.mocked(parseXyzCsv).mockReturnValue(MOCK_POINTS);
@@ -169,7 +190,12 @@ describe("processObject — concurrency cap", () => {
     }
 
     // Only the first CAP downloads may start while all gates are held.
-    await settle();
+    // Use waitFor instead of a fixed settle() round count: at position ~132/155
+    // in the singleFork suite the I/O backlog can delay fs.promises.mkdir beyond
+    // 10 event-loop ticks, causing a spurious 0-call failure under load.
+    await waitFor(
+      () => gcsMocks.mockCreateReadStream.mock.calls.length >= PROCESS_CONCURRENCY_CAP,
+    );
     expect(gcsMocks.mockCreateReadStream).toHaveBeenCalledTimes(PROCESS_CONCURRENCY_CAP);
     expect(current).toBe(PROCESS_CONCURRENCY_CAP);
 
