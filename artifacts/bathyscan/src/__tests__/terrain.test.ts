@@ -120,7 +120,13 @@ describe("worldXZToLonLat / lonLatToWorldXZ round-trip", () => {
 describe("worldYToMetres", () => {
   const grid = makeGrid(4, { minDepth: 0, maxDepth: 10935 });
 
-  it("worldY=0 → minDepth (shallowest)", () => {
+  it("worldY > 0 (above water surface) → null", () => {
+    expect(worldYToMetres(0.001, grid)).toBeNull();
+    expect(worldYToMetres(1, grid)).toBeNull();
+    expect(worldYToMetres(50, grid)).toBeNull();
+  });
+
+  it("worldY=0 (exactly at surface) → minDepth", () => {
     expect(worldYToMetres(0, grid)).toBeCloseTo(0, 1);
   });
 

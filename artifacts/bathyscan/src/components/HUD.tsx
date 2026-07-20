@@ -648,8 +648,8 @@ export const HUD: React.FC = () => {
                     ? `${sample.source}${sample.timestamp ? ` · sampled ${new Date(sample.timestamp).toUTCString()}` : ""} — click for full depth profile`
                     : "No live ocean feed available — showing an estimated thermocline. Click for full depth profile.";
                   const profileDepth = Math.max(
-                    crosshairGps.depth ?? 0,
-                    cameraDepth ?? 0,
+                    crosshairGps.depth,
+                    cameraDepth !== null ? cameraDepth : 0,
                     200,
                   );
                   const { profile, measured } = resolveTemperatureProfile(

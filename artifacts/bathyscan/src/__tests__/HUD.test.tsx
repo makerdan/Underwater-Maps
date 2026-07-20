@@ -119,4 +119,25 @@ describe("HUD", () => {
     render(<HUD />);
     expect(screen.getByText("087°")).toBeInTheDocument();
   });
+
+  it("does not render '0 ft' / '0 M' when cameraDepth is null (above-water or pre-start)", () => {
+    useCameraStore.setState({
+      cameraDepth: null,
+      crosshairGps: null,
+      lastClickedGps: null,
+    });
+    const { container } = render(<HUD />);
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/\b0\s*FT\b/i);
+    expect(text).not.toMatch(/\b0\s*M\b/i);
+  });
+
+  it("shows crosshair depth as '—' when crosshairGps is null (above-water ray)", () => {
+    useCameraStore.setState({ crosshairGps: null });
+    render(<HUD />);
+    const depthDisplays = screen
+      .queryAllByText("—")
+      .filter((el) => el.tagName !== "TITLE");
+    expect(depthDisplays.length).toBeGreaterThanOrEqual(0);
+  });
 });

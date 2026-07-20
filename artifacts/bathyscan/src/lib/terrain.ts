@@ -375,8 +375,13 @@ export function computeZoneWeights(
 /**
  * Convert a world-space Y position (negative = deeper) to an estimated depth
  * in metres for the given grid.
+ *
+ * Returns `null` when the position is above the water surface (worldY > 0)
+ * so callers can distinguish "above water" from "exactly at the shallowest
+ * surveyed depth".
  */
-export function worldYToMetres(worldY: number, grid: TerrainData): number {
+export function worldYToMetres(worldY: number, grid: TerrainData): number | null {
+  if (worldY > 0) return null;
   const t = Math.max(0, Math.min(1, -worldY / MAX_DEPTH_WORLD));
   return grid.minDepth + t * (grid.maxDepth - grid.minDepth);
 }

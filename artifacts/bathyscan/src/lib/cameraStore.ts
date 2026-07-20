@@ -27,7 +27,7 @@ interface CameraStore {
   setCameraGeo: (geo: {
     lon: number;
     lat: number;
-    depth: number;
+    depth: number | null;
     heading: number;
     altitude: number;
   }) => void;

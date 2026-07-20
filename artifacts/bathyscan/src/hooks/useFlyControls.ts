@@ -721,19 +721,21 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
           const pt = hits[0].point;
           const { lon, lat } = worldXZToLonLat(pt.x, pt.z, grid);
           const depth = worldYToMetres(pt.y, grid);
-          useContextMenuStore
-            .getState()
-            .show(
-              x,
-              y,
-              buildTerrainMenuItems(
-                lon,
-                lat,
-                depth,
-                grid.datasetId,
-                () => terrainRef.current,
-              ),
-            );
+          if (depth !== null) {
+            useContextMenuStore
+              .getState()
+              .show(
+                x,
+                y,
+                buildTerrainMenuItems(
+                  lon,
+                  lat,
+                  depth,
+                  grid.datasetId,
+                  () => terrainRef.current,
+                ),
+              );
+          }
         }
       }
     };
@@ -1126,7 +1128,11 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         const pt = hits[0].point;
         const { lon, lat } = worldXZToLonLat(pt.x, pt.z, grid);
         const depth = worldYToMetres(pt.y, grid);
-        useCameraStore.getState().setCrosshairGps({ lon, lat, depth });
+        if (depth !== null) {
+          useCameraStore.getState().setCrosshairGps({ lon, lat, depth });
+        } else {
+          useCameraStore.getState().setCrosshairGps(null);
+        }
       } else {
         useCameraStore.getState().setCrosshairGps(null);
       }
