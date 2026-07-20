@@ -26,9 +26,9 @@
  *   aggregate    → 45 min (reused for "full")
  */
 import { spawnSync } from "node:child_process";
-import { statSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isCodegenFresh } from "./codegen-freshness.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -74,28 +74,8 @@ for (let i = 0; i < args.length; i++) {
 // Codegen freshness check
 // ---------------------------------------------------------------------------
 
-/**
- * Returns true when the generated api.ts is newer than all codegen inputs
- * (openapi.yaml and orval.config.ts), meaning codegen can be safely skipped.
- */
-function isCodegenFresh() {
-  const generatedFile = resolve(root, "lib/api-zod/src/generated/api.ts");
-  const inputs = [
-    resolve(root, "lib/api-spec/openapi.yaml"),
-    resolve(root, "lib/api-spec/orval.config.ts"),
-  ];
-  try {
-    const generatedMtime = statSync(generatedFile).mtimeMs;
-    for (const input of inputs) {
-      if (statSync(input).mtimeMs > generatedMtime) {
-        return false;
-      }
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
+// isCodegenFresh() is imported from ./codegen-freshness.mjs (shared with
+// test-all-steps.mjs).
 
 /**
  * Runs the typecheck step with a freshness-aware codegen pre-pass.
@@ -157,6 +137,8 @@ const ALL_STEPS = [
   // API bootstrap, Playwright URLs); targeted/narrow so full tier only
   { name: "check:port-drift", resource: null, cmd: "pnpm run check:port-drift" },
   { name: "check:audit", resource: null, cmd: "pnpm run check:audit" },
+  // no resource: pure grep scan, sub-second
+  { name: "check:bare-pino-http-mock", resource: null, cmd: "pnpm run check:bare-pino-http-mock" },
 ];
 
 const TIER_STEPS = {

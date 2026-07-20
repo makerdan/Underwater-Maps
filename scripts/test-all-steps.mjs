@@ -9,35 +9,10 @@
  *   node scripts/run-with-timeout.mjs aggregate -- node scripts/test-all-steps.mjs
  */
 import { spawnSync } from "node:child_process";
-import { statSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { isCodegenFresh } from "./codegen-freshness.mjs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = resolve(__dirname, "..");
-
-/**
- * Returns true when the generated api.ts is newer than all codegen inputs
- * (openapi.yaml and orval.config.ts), meaning codegen can be safely skipped.
- */
-function isCodegenFresh() {
-  const generatedFile = resolve(root, "lib/api-zod/src/generated/api.ts");
-  const inputs = [
-    resolve(root, "lib/api-spec/openapi.yaml"),
-    resolve(root, "lib/api-spec/orval.config.ts"),
-  ];
-  try {
-    const generatedMtime = statSync(generatedFile).mtimeMs;
-    for (const input of inputs) {
-      if (statSync(input).mtimeMs >= generatedMtime) {
-        return false;
-      }
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
+// isCodegenFresh() is imported from ./codegen-freshness.mjs (shared with
+// run-tier.mjs).
 
 /**
  * Runs the typecheck step with a freshness-aware codegen pre-pass.
@@ -72,9 +47,13 @@ function runTypecheckStep() {
 const steps = [
   ["typecheck", runTypecheckStep],
   ["lint", "pnpm run lint"],
+  ["check:lock-skill-sync", "pnpm run check:lock-skill-sync"],
+  ["check:root-relative-api", "pnpm run check:root-relative-api"],
+  ["check:deps-suppression", "pnpm run check:deps-suppression"],
   ["test:unit", "pnpm run test:unit"],
   ["check:docs-stale", "pnpm run check:docs-stale"],
   ["check:catalog-coverage", "pnpm run check:catalog-coverage"],
+  ["check:schema-stale", "pnpm run check:schema-stale"],
   ["check:e2e-user-ids", "pnpm run check:e2e-user-ids"],
   ["check:e2e-cjs-globals", "pnpm run check:e2e-cjs-globals"],
   ["check:fixture-freshness", "pnpm run check:fixture-freshness"],
