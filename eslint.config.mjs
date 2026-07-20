@@ -355,6 +355,21 @@ export default [
       "@typescript-eslint/no-redeclare": "error",
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
+      // THREE.Clock was deprecated in three.js r168 in favour of THREE.Timer.
+      // @react-three/fiber v9 still uses it internally; r3f v10 (stable) will
+      // switch to THREE.Timer. Until then, application code must never
+      // instantiate THREE.Clock directly — use THREE.Timer or the clock
+      // exposed via useThree() instead.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "NewExpression[callee.type='MemberExpression'][callee.object.name='THREE'][callee.property.name='Clock']",
+          message:
+            "THREE.Clock is deprecated. Use THREE.Timer (or the clock from useThree()) instead. " +
+            "See artifacts/bathyscan/src/lib/suppressThreeClockWarn.ts for context.",
+        },
+      ],
     },
   },
   {
