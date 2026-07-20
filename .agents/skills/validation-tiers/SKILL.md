@@ -37,10 +37,34 @@ BathyScan has three registered validation commands. Pick the **lowest** tier tha
 
 **test-heavy structure**: runs `run-tier.mjs standard --skip test:unit` as a fail-fast preflight (steps 1–5 plus 7–9; test:unit is skipped because the heavy runner runs it itself) before launching the three serialized heavy suites (test:unit, e2e-palette, test:e2e). Heavy suites run with no-fail-fast so all three are reported in one pass. The test:unit heavy step has no per-step budget — it is covered by the outer `aggregate` budget.
 
+## Trivial Change Fast-Track
+
+A task qualifies as **trivial** if it is limited to:
+- Copy/text changes (labels, tooltips, wording),
+- Style-only changes (CSS/Tailwind classes, colors, spacing), or
+- Single-component cosmetic tweaks with **no** logic, store, or API changes.
+
+For trivial tasks:
+- Run `test-fast` **only**. Do not run `test-standard` or `test-heavy`.
+- **Escalation is forbidden** unless `test-fast` itself fails on code the task touched. A pre-existing failure elsewhere (see below) is never a reason to escalate.
+- Do not investigate or fix unrelated red — record it as baseline breakage and finish the task.
+
+**Plan tier is authoritative:** when a task plan or task description names a validation tier, run exactly that tier. Do not run heavier tiers on your own initiative, even if the escalation rules below would otherwise suggest one — those rules apply only when no tier was specified.
+
+## Pre-Existing Failure Triage
+
+If a validation step fails in files or suites the task did **not** touch:
+
+1. Check whether the task touched the failing file or anything it imports/tests (grep the diff against the failing spec's subject).
+2. If unrelated, run the failing file solo once to confirm the failure reproduces without your changes (or check memory/other tasks for known baseline breakage).
+3. If it is pre-existing: record it as baseline breakage in your summary, **do not attempt to fix it**, and **do not escalate tiers because of it**. Fixing the baseline is its own task.
+4. If the failure is in code the task touched, it is yours: fix it, then re-run the same tier.
+
 ## Decision Table
 
 | Task type | Tier |
 |---|---|
+| Trivial (fast-track — see "Trivial Change Fast-Track" above) | `test-fast` only, no escalation |
 | UI copy / style / layout only | `test-fast` |
 | New UI component (no API changes) | `test-fast` |
 | Bug fix contained to one component | `test-standard` |
@@ -55,7 +79,7 @@ BathyScan has three registered validation commands. Pick the **lowest** tier tha
 
 ## Escalation Rules
 
-Escalate **one tier up** if any of these are true:
+These rules do **not** apply to trivial fast-track tasks or tasks whose plan names a tier (see above). Otherwise, escalate **one tier up** if any of these are true:
 
 - The task touches `lib/api-spec/openapi.yaml` or `orval.config.ts` (codegen inputs) → at minimum `test-standard`; add `test-heavy` if a new route is introduced.
 - The task touches `lib/db/src/schema/` (Drizzle schema) → `test-heavy`.
