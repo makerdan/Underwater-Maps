@@ -68,9 +68,11 @@ vi.mock("../../lib/terrain.js", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 beforeEach(() => {
   vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
+  __resetRateLimitMemory();
 });
 
 afterEach(() => {

@@ -3,7 +3,7 @@
  * passthrough of extra (non-spec) fields. Uses the same Clerk/proxy mock
  * pattern as poe.test.ts and stubs out the DB to keep tests hermetic.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
 // --- DB mock -----------------------------------------------------------------
@@ -94,6 +94,7 @@ vi.mock("@workspace/db", () => {
     gpsTrailsTable,
     gpsTrailPointsTable,
     poeUsageLogTable,
+    pool: { query: vi.fn().mockResolvedValue({ rows: [] }) },
   };
 });
 
@@ -118,6 +119,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 beforeEach(() => {
   state.userSettings = [];
@@ -127,6 +129,12 @@ beforeEach(() => {
   state.gpsTrailPoints = [];
   state.lastInsertedSettings = null;
   state.deletes = [];
+  vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
+  __resetRateLimitMemory();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("GET /api/me/export", () => {

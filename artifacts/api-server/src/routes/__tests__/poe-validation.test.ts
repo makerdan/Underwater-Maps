@@ -9,7 +9,7 @@
  *  - Oversized history array returns 400
  *  - Valid minimal bodies pass validation (reach auth gate or AI layer, not 400)
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
 vi.mock("@workspace/db", () => ({
@@ -123,7 +123,12 @@ let currentUserId: string | null = "user-poe-test";
 beforeEach(() => {
   currentUserId = "user-poe-test";
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
+  vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
   __resetRateLimitMemory();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 // ---------------------------------------------------------------------------

@@ -9,7 +9,7 @@
  *  - Missing uploadId → 400
  *  - Non-integer string for chunkIndex → 400
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
 vi.mock("@workspace/db", () => ({
@@ -68,6 +68,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 let currentUserId: string | null = "user-chunk-test";
 
@@ -77,6 +78,12 @@ const CHUNK_DATA = Buffer.from("fake-chunk-data");
 beforeEach(() => {
   currentUserId = "user-chunk-test";
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
+  vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
+  __resetRateLimitMemory();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("POST /api/datasets/upload/chunk — body field validation", () => {

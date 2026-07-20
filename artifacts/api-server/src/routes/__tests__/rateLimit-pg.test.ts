@@ -65,7 +65,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
-import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
+import { __resetRateLimitMemory, __prefillRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 const MINIMAL_CSV = "lon,lat,depth\n-136.0,58.5,50\n-136.1,58.6,55\n";
 const E2E_USER = "user_pg_rate_limit_test";
@@ -260,15 +260,8 @@ describe("rate-limit pgBackend — DB error falls back to in-memory", () => {
       throw new Error("FATAL: connection refused");
     };
 
-    // Exhaust the memory limit (10 req / min) via fallback.
-    for (let i = 0; i < 10; i++) {
-      await request(app)
-        .post("/api/datasets/upload")
-        .set("x-e2e-user-id", E2E_USER)
-        .set("x-forwarded-for", "203.0.113.200")
-        .field("resolution", "not-a-number")
-        .attach("file", Buffer.from(MINIMAL_CSV), "test.csv");
-    }
+    // Pre-fill the memory fallback bucket to the limit without round-trips.
+    __prefillRateLimitMemory("i:dataset-upload:203.0.113.200", 10, 60_000);
 
     const blocked = await request(app)
       .post("/api/datasets/upload")
@@ -277,7 +270,7 @@ describe("rate-limit pgBackend — DB error falls back to in-memory", () => {
       .field("resolution", "not-a-number")
       .attach("file", Buffer.from(MINIMAL_CSV), "test.csv");
 
-    // After 10 requests, the memory fallback should enforce the limit.
+    // Memory fallback bucket is full — this 11th request must be blocked.
     expect(blocked.status).toBe(429);
     expect(blocked.body).toMatchObject({ error: "rate_limit" });
   });

@@ -38,6 +38,7 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../app.js";
+import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 const ALLOWED_ORIGIN = "https://allowed.example.com";
 const EVIL_ORIGIN = "https://evil.example.com";
@@ -47,6 +48,7 @@ beforeEach(() => {
   vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
   // Isolate tests: clear REPLIT_DEV_DOMAIN so it doesn't accidentally widen the allowlist.
   vi.stubEnv("REPLIT_DEV_DOMAIN", "");
+  __resetRateLimitMemory();
 });
 
 afterEach(() => {

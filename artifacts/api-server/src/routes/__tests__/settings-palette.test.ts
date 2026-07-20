@@ -9,7 +9,7 @@
  * drop the palette fields and the only signal would be users losing their
  * customised colours on the next cross-device sync.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
 type Row = Record<string, unknown>;
@@ -66,6 +66,7 @@ vi.mock("@workspace/db", () => {
     gpsTrailsTable,
     gpsTrailPointsTable,
     poeUsageLogTable,
+    pool: { query: vi.fn().mockResolvedValue({ rows: [] }) },
   };
 });
 
@@ -89,10 +90,17 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 beforeEach(() => {
   state.userSettings = [];
   state.lastInsertedSettings = null;
+  vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
+  __resetRateLimitMemory();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("PUT /api/settings — palette round-trip", () => {
