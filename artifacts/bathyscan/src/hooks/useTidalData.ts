@@ -183,7 +183,7 @@ export function useTidalData(
         timerRef.current = null;
       }
     };
-  }, [lat, lon, scrubDatetime, retryCount, isOnline]);
+  }, [lat, lon, scrubDatetime, retryCount, isOnline, waterType]);
 
   const isOfflinePack =
     data !== null &&
