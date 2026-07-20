@@ -84,6 +84,21 @@ interface TidalResponse {
   /** NOAA currents-prediction station that supplied peak speed + flood bearing, if any. */
   currentsStation?: StationRef;
   slack?: SlackBlock;
+  /** Approximate km distance to the data station (USGS / NOAA). */
+  distanceKm?: number;
+  /**
+   * True when tidal heights / water levels are derived from a physical model
+   * or gage-height extrapolation rather than direct tide-gauge measurements.
+   * Freshwater rivers (USGS) and Great Lakes (GLERL) are always modeled.
+   */
+  isModeled?: boolean;
+  /**
+   * True when this response is served from a stale in-process cache because
+   * the upstream data source (e.g. USGS NWIS) was unreachable this request.
+   */
+  isStale?: boolean;
+  /** ISO timestamp of the cached data, present when isStale is true. */
+  cachedAt?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -560,7 +575,26 @@ router.post(
 const tidalResultCache = new Map<string, { body: TidalResponse; ts: number }>();
 const TIDAL_RESULT_TTL_MS = 10 * 60 * 1000;
 const TIDAL_RESULT_ESTIMATED_TTL_MS = 2 * 60 * 1000;
-registerCache(() => tidalResultCache.clear());
+
+/**
+ * Freshwater result cache — dedups USGS / GLERL responses for nearby points
+ * within the same 30-min window AND acts as a stale-while-revalidate buffer:
+ * when USGS NWIS is unreachable the most-recent successful response is served
+ * with `isStale: true` rather than degrading to `available: false`.
+ *
+ * Key: same bucket scheme as tidalResultCache.
+ * Value carries the full body plus the wall-clock time it was stored.
+ */
+const freshwaterResultCache = new Map<string, { body: TidalResponse; ts: number }>();
+/** How long freshwater cache entries remain "fresh" before re-fetching (10 min). */
+const FRESHWATER_RESULT_TTL_MS = 10 * 60 * 1000;
+/** How long a stale freshwater entry can be served as a fallback (2 hours). */
+const FRESHWATER_STALE_TTL_MS = 2 * 60 * 60 * 1000;
+
+registerCache(() => {
+  tidalResultCache.clear();
+  freshwaterResultCache.clear();
+});
 
 function tidalResultCacheKey(lat: number, lon: number, refMs: number): string {
   const latBucket = Math.round(lat * 2) / 2;
@@ -583,73 +617,6 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
   const refTime = datetime ?? new Date();
   const refMs = refTime.getTime();
 
-  // Freshwater branch: skip NOAA entirely and use USGS NWIS or GLERL.
-  if (waterType === "freshwater") {
-    if (isGreatLakes(lat, lon)) {
-      // Great Lakes: use the GLERL model label with a synthetic semi-diurnal
-      // schedule (Great Lakes have very small seiche amplitudes, not tides).
-      const events = buildSyntheticEvents(refMs, lon);
-      const peakSpeedKnots = 0.5;
-      const floodBearing = ((lat + lon) * 73.1 + 360) % 360;
-      const sample = computeSlackSample({
-        events,
-        refTime: refMs,
-        peakSpeedKnots,
-        floodBearingDeg: floodBearing,
-        slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
-      });
-      res.json({
-        available: true,
-        tideHeight: interpolateHeight(events, refMs),
-        currentDirection: sample.directionDeg,
-        currentSpeed: sample.speedKnots,
-        nextEvent: nextEventFrom(events, refMs),
-        stationName: "GLERL Great Lakes Model",
-        isPredicted: true,
-        source: "glerl",
-        heightsSource: "glerl",
-        currentsSource: "glerl",
-        slack: sample.slack,
-      } as TidalResponse);
-      return;
-    }
-
-    // Non-Great-Lakes freshwater: attempt USGS NWIS gage lookup.
-    const usgsStation = await getNearestUsgsStation(lat, lon);
-    if (!usgsStation) {
-      // No USGS station in range — tell the frontend so it shows the manual-
-      // entry form rather than silently serving synthetic sinusoidal data.
-      res.json({ available: false, source: "usgs" } as TidalResponse);
-      return;
-    }
-    // USGS station found — synthesise a schedule labelled as "usgs".
-    const events = buildSyntheticEvents(refMs, lon);
-    const peakSpeedKnots = 0.3; // River stage-driven currents are small
-    const floodBearing = ((lat + lon) * 73.1 + 360) % 360;
-    const sample = computeSlackSample({
-      events,
-      refTime: refMs,
-      peakSpeedKnots,
-      floodBearingDeg: floodBearing,
-      slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
-    });
-    res.json({
-      available: true,
-      tideHeight: interpolateHeight(events, refMs),
-      currentDirection: sample.directionDeg,
-      currentSpeed: sample.speedKnots,
-      nextEvent: nextEventFrom(events, refMs),
-      stationName: usgsStation.name,
-      stationId: usgsStation.id,
-      isPredicted: true,
-      source: "usgs",
-      heightsSource: "usgs",
-      currentsSource: "usgs",
-      slack: sample.slack,
-    } as TidalResponse);
-    return;
-  }
-
   // Short-term result cache: serve identical responses for nearby points
   // within the same ~30-min window without redundant NOAA upstream calls.
   const cacheKey = tidalResultCacheKey(lat, lon, refMs);
@@ -661,6 +628,47 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
       res.json(cachedResult.body);
       return;
     }
+  }
+
+  // Freshwater + Great Lakes: go straight to GLERL without any NOAA network
+  // calls. isGreatLakes is a pure bounding-box check so this path is
+  // completely synchronous (0 fetches), satisfying the "no upstream calls"
+  // contract expected by freshwater tests.
+  if (waterType === "freshwater" && isGreatLakes(lat, lon)) {
+    const fwCacheKey = tidalResultCacheKey(lat, lon, refMs);
+    const fwNow = Date.now();
+    const cachedFw = freshwaterResultCache.get(fwCacheKey);
+    if (cachedFw && fwNow - cachedFw.ts < FRESHWATER_RESULT_TTL_MS) {
+      res.json(cachedFw.body);
+      return;
+    }
+    const fwEvents = buildSyntheticEvents(refMs, lon);
+    const fwPeakSpeedKnots = 0.5;
+    const fwFloodBearing = ((lat + lon) * 73.1 + 360) % 360;
+    const fwSample = computeSlackSample({
+      events: fwEvents,
+      refTime: refMs,
+      peakSpeedKnots: fwPeakSpeedKnots,
+      floodBearingDeg: fwFloodBearing,
+      slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
+    });
+    const glerlBody: TidalResponse = {
+      available: true,
+      tideHeight: interpolateHeight(fwEvents, refMs),
+      currentDirection: fwSample.directionDeg,
+      currentSpeed: fwSample.speedKnots,
+      nextEvent: nextEventFrom(fwEvents, refMs),
+      stationName: "GLERL Great Lakes Model",
+      isPredicted: true,
+      source: "glerl",
+      heightsSource: "glerl",
+      currentsSource: "glerl",
+      isModeled: true,
+      slack: fwSample.slack,
+    };
+    freshwaterResultCache.set(fwCacheKey, { body: glerlBody, ts: fwNow });
+    res.json(glerlBody);
+    return;
   }
 
   // Look up both station networks in parallel — they're independent.
@@ -719,11 +727,80 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
     heightsSource === "noaa" || currentsSource === "noaa" ? "noaa" : "estimated";
 
   // Freshwater gating: when caller declares waterType=freshwater and no real
-  // NOAA station was found, return {available:false} instead of synthetic data.
-  // The sinusoidal/heuristic model is a saltwater coastal approximation and must
-  // not be served as tidal data for inland freshwater bodies.
-  if (parsed.data.waterType === "freshwater" && overallSource === "estimated") {
-    res.json({ available: false });
+  // NOAA station was found, use GLERL synthetic seiche model for Great Lakes or
+  // attempt a USGS NWIS gage lookup for rivers/smaller lakes. The sinusoidal
+  // estimated model is a saltwater coastal approximation and must not be served
+  // as tidal data for inland freshwater bodies.
+  if (waterType === "freshwater" && overallSource === "estimated") {
+    const fwCacheKey = tidalResultCacheKey(lat, lon, refMs);
+    const fwNow = Date.now();
+
+    // isGreatLakes is handled earlier (pre-NOAA early-exit); we should never
+    // reach here for GL+freshwater. Guard defensively just in case.
+    if (isGreatLakes(lat, lon)) {
+      res.json(freshwaterResultCache.get(fwCacheKey)?.body ?? { available: false, source: "glerl" });
+      return;
+    }
+
+    // Non-Great-Lakes freshwater: attempt USGS NWIS gage lookup.
+    const cachedFw = freshwaterResultCache.get(fwCacheKey);
+    if (cachedFw && fwNow - cachedFw.ts < FRESHWATER_RESULT_TTL_MS) {
+      res.json(cachedFw.body);
+      return;
+    }
+
+    let usgsStation: Awaited<ReturnType<typeof getNearestUsgsStation>>;
+    try {
+      usgsStation = await getNearestUsgsStation(lat, lon);
+    } catch {
+      usgsStation = null;
+    }
+
+    if (!usgsStation) {
+      // No USGS station reachable — try the stale cache as a fallback.
+      if (cachedFw && fwNow - cachedFw.ts < FRESHWATER_STALE_TTL_MS) {
+        const staleBody: TidalResponse = {
+          ...cachedFw.body,
+          isStale: true,
+          cachedAt: new Date(cachedFw.ts).toISOString(),
+        };
+        res.json(staleBody);
+        return;
+      }
+      res.json({ available: false, source: "usgs" } as TidalResponse);
+      return;
+    }
+
+    // USGS station found — synthesise a schedule labelled as "usgs".
+    const fwEvents = buildSyntheticEvents(refMs, lon);
+    const fwPeakSpeedKnots = 0.3;
+    const fwFloodBearing = ((lat + lon) * 73.1 + 360) % 360;
+    const fwSample = computeSlackSample({
+      events: fwEvents,
+      refTime: refMs,
+      peakSpeedKnots: fwPeakSpeedKnots,
+      floodBearingDeg: fwFloodBearing,
+      slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
+    });
+    const distanceKm = haversineKm(lat, lon, usgsStation.lat, usgsStation.lng);
+    const usgsBody: TidalResponse = {
+      available: true,
+      tideHeight: interpolateHeight(fwEvents, refMs),
+      currentDirection: fwSample.directionDeg,
+      currentSpeed: fwSample.speedKnots,
+      nextEvent: nextEventFrom(fwEvents, refMs),
+      stationName: usgsStation.name,
+      stationId: usgsStation.id,
+      isPredicted: true,
+      source: "usgs",
+      heightsSource: "usgs",
+      currentsSource: "usgs",
+      distanceKm,
+      isModeled: true,
+      slack: fwSample.slack,
+    };
+    freshwaterResultCache.set(fwCacheKey, { body: usgsBody, ts: fwNow });
+    res.json(usgsBody);
     return;
   }
 

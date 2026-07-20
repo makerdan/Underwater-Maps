@@ -243,3 +243,165 @@ describe("TidePanel — freshwater empty state", () => {
     expect(screen.queryByText(/water level/i)).toBeNull();
   });
 });
+
+// ── isModeled disclosure and isStale cache badge ──────────────────────────────
+
+function makeAvailableWith(
+  source: "noaa" | "usgs" | "glerl" | "estimated",
+  extras: Partial<Extract<TidalDataResult, { available: true }>> = {},
+): TidalDataResult {
+  return {
+    available: true,
+    tideHeight: 1.5,
+    currentDirection: 180,
+    currentSpeed: 0.3,
+    stationName: "Mock Station",
+    stationId: "MOCK01",
+    isPredicted: true,
+    source,
+    ...extras,
+  };
+}
+
+describe("TidePanel — isModeled synthetic-tide disclosure [freshwater-env]", () => {
+  beforeEach(() => { h.waterType = "freshwater"; });
+
+  it("shows 'GLERL seiche model' disclosure badge when source=glerl and isModeled=true", async () => {
+    const { TidePanel } = await import("@/components/TidePanel");
+    render(
+      <TidePanel
+        data={makeAvailableWith("glerl", { isModeled: true })}
+        loading={false}
+        depthLayer="surface"
+        onDepthLayerChange={vi.fn()}
+        scrubDatetime={null}
+        onScrubChange={vi.fn()}
+        lat={44.5}
+        lon={-87.0}
+        embedded
+      />,
+    );
+    const badge = screen.getByTestId("tide-modeled-disclosure");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("GLERL seiche model");
+  });
+
+  it("shows 'USGS gage-height model' disclosure badge when source=usgs and isModeled=true", async () => {
+    const { TidePanel } = await import("@/components/TidePanel");
+    render(
+      <TidePanel
+        data={makeAvailableWith("usgs", { isModeled: true })}
+        loading={false}
+        depthLayer="surface"
+        onDepthLayerChange={vi.fn()}
+        scrubDatetime={null}
+        onScrubChange={vi.fn()}
+        lat={44.5}
+        lon={-87.0}
+        embedded
+      />,
+    );
+    const badge = screen.getByTestId("tide-modeled-disclosure");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("USGS gage-height model");
+  });
+
+  it("does NOT show modeled disclosure when isModeled is absent", async () => {
+    const { TidePanel } = await import("@/components/TidePanel");
+    render(
+      <TidePanel
+        data={makeAvailableWith("usgs")}
+        loading={false}
+        depthLayer="surface"
+        onDepthLayerChange={vi.fn()}
+        scrubDatetime={null}
+        onScrubChange={vi.fn()}
+        lat={44.5}
+        lon={-87.0}
+        embedded
+      />,
+    );
+    expect(screen.queryByTestId("tide-modeled-disclosure")).toBeNull();
+  });
+
+  it("does NOT show modeled disclosure for saltwater even if isModeled is set", async () => {
+    h.waterType = "saltwater";
+    const { TidePanel } = await import("@/components/TidePanel");
+    render(
+      <TidePanel
+        data={makeAvailableWith("noaa", { isModeled: true })}
+        loading={false}
+        depthLayer="surface"
+        onDepthLayerChange={vi.fn()}
+        scrubDatetime={null}
+        onScrubChange={vi.fn()}
+        lat={47.5}
+        lon={-124.7}
+        embedded
+      />,
+    );
+    expect(screen.queryByTestId("tide-modeled-disclosure")).toBeNull();
+  });
+});
+
+describe("TidePanel — isStale GLERL / USGS cache fallback badge [freshwater-env]", () => {
+  beforeEach(() => { h.waterType = "freshwater"; });
+
+  it("shows CACHED badge when isStale=true", async () => {
+    const { TidePanel } = await import("@/components/TidePanel");
+    render(
+      <TidePanel
+        data={makeAvailableWith("usgs", {
+          isStale: true,
+          cachedAt: new Date("2026-07-20T12:00:00Z").toISOString(),
+        })}
+        loading={false}
+        depthLayer="surface"
+        onDepthLayerChange={vi.fn()}
+        scrubDatetime={null}
+        onScrubChange={vi.fn()}
+        lat={44.5}
+        lon={-87.0}
+        embedded
+      />,
+    );
+    expect(screen.getByTestId("tide-stale-cache-badge")).toBeInTheDocument();
+    expect(screen.getByTestId("tide-stale-cache-badge")).toHaveTextContent("CACHED");
+  });
+
+  it("does NOT show CACHED badge when isStale is absent", async () => {
+    const { TidePanel } = await import("@/components/TidePanel");
+    render(
+      <TidePanel
+        data={makeAvailableWith("usgs")}
+        loading={false}
+        depthLayer="surface"
+        onDepthLayerChange={vi.fn()}
+        scrubDatetime={null}
+        onScrubChange={vi.fn()}
+        lat={44.5}
+        lon={-87.0}
+        embedded
+      />,
+    );
+    expect(screen.queryByTestId("tide-stale-cache-badge")).toBeNull();
+  });
+
+  it("shows CACHED badge for GLERL source too (Great Lakes stale fallback)", async () => {
+    const { TidePanel } = await import("@/components/TidePanel");
+    render(
+      <TidePanel
+        data={makeAvailableWith("glerl", { isStale: true })}
+        loading={false}
+        depthLayer="surface"
+        onDepthLayerChange={vi.fn()}
+        scrubDatetime={null}
+        onScrubChange={vi.fn()}
+        lat={44.5}
+        lon={-87.0}
+        embedded
+      />,
+    );
+    expect(screen.getByTestId("tide-stale-cache-badge")).toBeInTheDocument();
+  });
+});

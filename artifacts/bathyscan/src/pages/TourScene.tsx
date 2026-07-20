@@ -468,6 +468,7 @@ const TidalSceneContents: React.FC<TidalSceneContentsProps> = ({
         depthLayer={depthLayer}
         terrain={terrain}
         depthBias={depthBias}
+        available={tidalData.currentsSource !== "estimated"}
       />
     </>
   );

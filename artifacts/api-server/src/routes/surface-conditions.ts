@@ -488,18 +488,9 @@ async function resolveTidal(
   startMs: number,
   waterType?: string,
 ): Promise<ResolvedTidal> {
-  // Freshwater: skip NOAA and label with the appropriate source.
-  if (waterType === "freshwater") {
-    if (isGreatLakes(lat, lon)) {
-      return {
-        hours: buildSinusoidalTidalHours(lat, lon, startMs),
-        source: "glerl",
-        stationName: "GLERL Great Lakes Model",
-      };
-    }
-    return { hours: buildSinusoidalTidalHours(lat, lon, startMs), source: "usgs" };
-  }
-
+  // Try NOAA first for all water types — a freshwater location near a NOAA
+  // tidal station (e.g. a Great Lakes marina with a water-level gauge) should
+  // get real tidal data just like any saltwater site.
   try {
     const stations = await fetchNoaaStations();
     const nearest = findNearestStation(stations, lat, lon);
@@ -516,7 +507,19 @@ async function resolveTidal(
       }
     }
   } catch {
-    // fall through to slack-model synthetic series
+    // fall through to freshwater or sinusoidal fallback
+  }
+
+  // No NOAA station found — choose fallback based on water type and location.
+  if (waterType === "freshwater") {
+    if (isGreatLakes(lat, lon)) {
+      return {
+        hours: buildSinusoidalTidalHours(lat, lon, startMs),
+        source: "glerl",
+        stationName: "GLERL Great Lakes Model",
+      };
+    }
+    return { hours: buildSinusoidalTidalHours(lat, lon, startMs), source: "usgs" };
   }
   return { hours: buildSinusoidalTidalHours(lat, lon, startMs), source: "sinusoidal" };
 }
@@ -565,14 +568,6 @@ router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> =
     resolveTidal(lat, lon, startMs, waterType),
     resolveTideHeights(lat, lon, utcDate),
   ]);
-
-  // Freshwater gating: when caller declares waterType=freshwater and no real
-  // NOAA tidal station was found (source=sinusoidal), the sinusoidal model is
-  // not applicable. Return {available:false} so callers show ManualConditionsForm.
-  if (parsed.data.waterType === "freshwater" && tidal.source === "sinusoidal") {
-    res.json({ available: false });
-    return;
-  }
 
   // Build a 48-hour sinusoidal tidal baseline for the forecast strip.
   // Hours 0–23 will be overridden by NOAA data when available.

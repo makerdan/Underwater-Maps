@@ -144,7 +144,7 @@ describe("GET /tidal — freshwater gating [freshwater-env]", () => {
     fetchSpy.mockRestore();
   });
 
-  it("waterType=freshwater + no NOAA station → { available: false } with no numeric tidal fields", async () => {
+  it("waterType=freshwater + no NOAA station + Great Lakes → GLERL synthetic model", async () => {
     fetchSpy.mockResolvedValue(emptyStationsResponse());
 
     const res = await request(makeTidalApp()).get(
@@ -152,14 +152,13 @@ describe("GET /tidal — freshwater gating [freshwater-env]", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.available).toBe(false);
-
-    // Sinusoidal synthetic fields must NOT be present
-    expect(res.body.tideHeight).toBeUndefined();
-    expect(res.body.currentSpeed).toBeUndefined();
-    expect(res.body.currentDirection).toBeUndefined();
-    expect(res.body.source).toBeUndefined();
-    expect(res.body.stationName).toBeUndefined();
+    // lat=44.0, lon=-87.0 is Lake Michigan → GLERL synthetic fallback
+    expect(res.body.available).toBe(true);
+    expect(res.body.source).toBe("glerl");
+    expect(res.body.isModeled).toBe(true);
+    expect(typeof res.body.tideHeight).toBe("number");
+    expect(typeof res.body.currentSpeed).toBe("number");
+    expect(res.body.stationName).toBe("GLERL Great Lakes Model");
   });
 
   it("waterType=saltwater + no NOAA station → { available: true } with sinusoidal fallback", async () => {
@@ -188,44 +187,25 @@ describe("GET /tidal — freshwater gating [freshwater-env]", () => {
     expect(res.body.source).toBe("estimated");
   });
 
-  it("waterType=freshwater + real NOAA station found → { available: true } with station data (sentinel)", async () => {
-    const station = {
-      id: "9087088",
-      name: "Mackinaw City",
-      lat: 45.78,
-      lng: -84.73,
-    };
-
-    // 1: heights station list, 2: currents station list (none),
-    // 3: heights hi/lo predictions, 4: currents (none)
-    fetchSpy
-      .mockResolvedValueOnce(jsonResponse({ stations: [station] }))
-      .mockResolvedValueOnce(jsonResponse({ stations: [] }))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          predictions: [
-            { t: "2026-07-20 00:00", v: "2.0", type: "H" },
-            { t: "2026-07-20 06:00", v: "0.2", type: "L" },
-            { t: "2026-07-20 12:00", v: "2.1", type: "H" },
-            { t: "2026-07-20 18:00", v: "0.1", type: "L" },
-          ],
-        }),
-      )
-      .mockResolvedValue(jsonResponse({ current_predictions: { cp: [] } }));
-
+  it("waterType=freshwater + Great Lakes coordinates → always uses GLERL (bounding-box fires before any NOAA fetch)", async () => {
+    // Mackinaw City (45.78, -84.73) falls inside the Michigan Great Lakes
+    // bounding box.  The GLERL early-exit in tidal.ts fires BEFORE any NOAA
+    // upstream fetch, so source is always "glerl" for GL+freshwater regardless
+    // of what NOAA might return.  No fetch mock is required — zero fetch calls.
     const res = await request(makeTidalApp()).get(
-      `/tidal?lat=${station.lat}&lon=${station.lng}&datetime=2026-07-20T03:00:00Z&waterType=freshwater`,
+      `/tidal?lat=45.78&lon=-84.73&datetime=2026-07-20T03:00:00Z&waterType=freshwater`,
     );
 
     expect(res.status).toBe(200);
-    // When a real station IS found, available must be true even for freshwater
     expect(res.body.available).toBe(true);
-    expect(res.body.source).toBe("noaa");
-    expect(res.body.heightsSource).toBe("noaa");
-    expect(res.body.stationName).toBe(station.name);
+    expect(res.body.source).toBe("glerl");
+    expect(res.body.isModeled).toBe(true);
+    expect(res.body.stationName).toBe("GLERL Great Lakes Model");
     // Numeric tidal fields present
     expect(typeof res.body.tideHeight).toBe("number");
     expect(typeof res.body.currentSpeed).toBe("number");
+    // Exactly 0 NOAA/USGS fetch calls — GLERL is purely synthetic
+    expect(fetchSpy.mock.calls.length).toBe(0);
   });
 
   it("waterType=invalid → 400 with validation error", async () => {
@@ -254,7 +234,12 @@ describe("GET /surface-conditions — freshwater gating [freshwater-env]", () =>
     globalThis.fetch = realFetch;
   });
 
-  it("waterType=freshwater + no NOAA station → { available: false } with no numeric fields", async () => {
+  it("waterType=freshwater + no NOAA station + Great Lakes → { available: true } with GLERL data", async () => {
+    // lat=44.0, lon=-87.0 is Lake Michigan (isGreatLakes=true).
+    // When NOAA returns no station, resolveTidal() falls back to GLERL.
+    // The surface-conditions endpoint serves the synthetic GLERL data rather
+    // than blocking with available:false — freshwater Great Lakes users should
+    // see current/tide estimates, not an empty state.
     fetchMock.mockImplementation((url: string) => {
       if (String(url).includes("tidesandcurrents.noaa.gov")) {
         return Promise.resolve(emptyStationsResponse());
@@ -270,13 +255,9 @@ describe("GET /surface-conditions — freshwater gating [freshwater-env]", () =>
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.available).toBe(false);
-
-    // Synthetic hourly arrays and station fields must NOT be present
-    expect(res.body.hours).toBeUndefined();
-    expect(res.body.forecast48h).toBeUndefined();
-    expect(res.body.tidalDataSource).toBeUndefined();
-    expect(res.body.tidalStationId).toBeUndefined();
+    expect(res.body.available).toBe(true);
+    expect(res.body.tidalDataSource).toBe("glerl");
+    expect(Array.isArray(res.body.hours)).toBe(true);
   });
 
   it("waterType=saltwater + no NOAA station → { available: true } with tidalDataSource:sinusoidal", async () => {

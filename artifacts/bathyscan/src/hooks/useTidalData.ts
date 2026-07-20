@@ -57,6 +57,20 @@ export type TidalDataResult =
       isOfflinePack?: boolean;
       /** ISO timestamp of the offline pack snapshot, when isOfflinePack is true. */
       packSnapshotAt?: string;
+      /**
+       * True when the water-level / current data is derived from a physical
+       * model or gage-height extrapolation rather than direct tide-gauge
+       * measurements. Set for all freshwater sources (USGS rivers + GLERL).
+       */
+      isModeled?: boolean;
+      /**
+       * True when the backend served this response from a stale in-process
+       * cache because the upstream source (e.g. USGS NWIS) was unreachable.
+       * The panel should show a "cached / offline" indicator in this state.
+       */
+      isStale?: boolean;
+      /** ISO timestamp of the cached reading, present when isStale is true. */
+      cachedAt?: string;
     };
 
 export function useTidalData(

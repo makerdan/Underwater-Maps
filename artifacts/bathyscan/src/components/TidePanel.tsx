@@ -382,6 +382,61 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                     )}
                   </div>
                 )}
+                {data.isStale && (
+                  <div
+                    data-testid="tide-stale-cache-badge"
+                    style={{
+                      marginTop: 4,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 13.5,
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      padding: "1px 5px",
+                      borderRadius: 2,
+                      background: "rgba(251,191,36,0.08)",
+                      border: "1px solid rgba(251,191,36,0.4)",
+                      color: "#fbbf24",
+                    }}
+                    title={data.cachedAt ? `Station data cached at ${new Date(data.cachedAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })} — upstream source temporarily unreachable` : "Station data served from cache — upstream source temporarily unreachable"}
+                  >
+                    ⚡ CACHED
+                    {data.cachedAt && (
+                      <span style={{ fontSize: 12, color: "#d97706" }}>
+                        · {new Date(data.cachedAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {data.isModeled && isFreshwater && (
+                  <div
+                    data-testid="tide-modeled-disclosure"
+                    style={{
+                      marginTop: 4,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 13.5,
+                      letterSpacing: "0.08em",
+                      padding: "1px 5px",
+                      borderRadius: 2,
+                      background: "rgba(148,163,184,0.07)",
+                      border: "1px dashed rgba(148,163,184,0.35)",
+                      color: "#94a3b8",
+                    }}
+                    title={
+                      data.source === "glerl"
+                        ? "Water level is derived from the GLERL Great Lakes seiche model, not a direct tide-gauge measurement."
+                        : "Water level is extrapolated from the nearest USGS gage-height reading, not a direct tide-gauge measurement. Current direction and speed are modeled estimates."
+                    }
+                  >
+                    <span aria-hidden="true">◌</span>
+                    <span>
+                      {data.source === "glerl" ? "GLERL seiche model" : "USGS gage-height model"}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Tide height / Water level */}
