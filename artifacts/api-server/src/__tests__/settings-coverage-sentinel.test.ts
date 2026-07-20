@@ -222,6 +222,13 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
 
   // ── v23 toolbar-relocation hint (me.test.ts) ──────────────────────────────
   "hasSeenToolbarRelocationHint",
+
+  // ── freshwater manual conditions (settings-schema-sync.test.ts) ───────────
+  // Per-dataset manual conditions and active-source maps added for the
+  // freshwater environmental layer feature. Schema/default parity verified by
+  // settings-schema-sync.test.ts; behaviour covered by ManualConditionsForm tests.
+  "datasetManualConditions",
+  "manualConditionsActiveSource",
 ]);
 
 describe("PutSettingsBody field-coverage sentinel", () => {

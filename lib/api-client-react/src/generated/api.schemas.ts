@@ -728,6 +728,16 @@ export const UserSettingsSidebarMode = {
 } as const;
 
 /**
+ * Per-dataset manual environmental conditions, keyed by dataset id.
+ */
+export type UserSettingsDatasetManualConditions = {[key: string]: unknown};
+
+/**
+ * Per-dataset active conditions source ('real' or 'manual'), keyed by dataset id.
+ */
+export type UserSettingsManualConditionsActiveSource = {[key: string]: string};
+
+/**
  * Per-user application settings with sensible defaults
  */
 export interface UserSettings {
@@ -1154,6 +1164,10 @@ export interface UserSettings {
   timelineRange?: UserSettingsTimelineRange;
   /** Which contextual mode the left sidebar shows. Persisted so the user's last mode survives page reloads. */
   sidebarMode?: UserSettingsSidebarMode;
+  /** Per-dataset manual environmental conditions, keyed by dataset id. */
+  datasetManualConditions?: UserSettingsDatasetManualConditions;
+  /** Per-dataset active conditions source ('real' or 'manual'), keyed by dataset id. */
+  manualConditionsActiveSource?: UserSettingsManualConditionsActiveSource;
 }
 
 export interface ApiError {
@@ -2700,7 +2714,7 @@ export const MarkerInputType = {
 
 export interface MarkerInput {
   /** Dataset this marker belongs to. Pass null for dataset-free (unassigned) markers. */
-  datasetId: string | null;
+  datasetId?: string | null;
   /**
      * @minimum -180
      * @maximum 180

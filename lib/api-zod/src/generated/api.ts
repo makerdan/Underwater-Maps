@@ -786,7 +786,7 @@ export const postMarkersBodyNotesMax = 2000;
 export const postMarkersBodyQuickCatchDefault = false;
 
 export const PostMarkersBody = zod.object({
-  "datasetId": zod.string().nullable().describe('Dataset this marker belongs to. Pass null for dataset-free (unassigned) markers.'),
+  "datasetId": zod.string().nullish().describe('Dataset this marker belongs to. Pass null for dataset-free (unassigned) markers.'),
   "lon": zod.number().min(postMarkersBodyLonMin).max(postMarkersBodyLonMax),
   "lat": zod.number().min(postMarkersBodyLatMin).max(postMarkersBodyLatMax),
   "depth": zod.number(),
@@ -1364,6 +1364,8 @@ export const getSettingsResponseCrosshairMenuGamepadButtonMax = 31;
 
 export const getSettingsResponseShowWaterTempLayerDefault = false;
 export const getSettingsResponseSidebarModeDefault = `explore`;
+export const getSettingsResponseDatasetManualConditionsDefault = {  };
+export const getSettingsResponseManualConditionsActiveSourceDefault = {  };
 
 export const GetSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
@@ -1559,7 +1561,9 @@ export const GetSettingsResponse = zod.object({
   "start": zod.string().describe('Range start as ISO 8601 string.'),
   "end": zod.string().describe('Range end as ISO 8601 string.')
 }).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
-  "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(getSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
+  "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(getSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.'),
+  "datasetManualConditions": zod.record(zod.string(), zod.unknown()).default(getSettingsResponseDatasetManualConditionsDefault).describe('Per-dataset manual environmental conditions, keyed by dataset id.'),
+  "manualConditionsActiveSource": zod.record(zod.string(), zod.string()).default(getSettingsResponseManualConditionsActiveSourceDefault).describe('Per-dataset active conditions source (\'real\' or \'manual\'), keyed by dataset id.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -1822,6 +1826,8 @@ export const putSettingsBodyCrosshairMenuGamepadButtonMax = 31;
 
 export const putSettingsBodyShowWaterTempLayerDefault = false;
 export const putSettingsBodySidebarModeDefault = `explore`;
+export const putSettingsBodyDatasetManualConditionsDefault = {  };
+export const putSettingsBodyManualConditionsActiveSourceDefault = {  };
 
 export const PutSettingsBody = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
@@ -2017,7 +2023,9 @@ export const PutSettingsBody = zod.object({
   "start": zod.string().describe('Range start as ISO 8601 string.'),
   "end": zod.string().describe('Range end as ISO 8601 string.')
 }).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
-  "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(putSettingsBodySidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
+  "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(putSettingsBodySidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.'),
+  "datasetManualConditions": zod.record(zod.string(), zod.unknown()).default(putSettingsBodyDatasetManualConditionsDefault).describe('Per-dataset manual environmental conditions, keyed by dataset id.'),
+  "manualConditionsActiveSource": zod.record(zod.string(), zod.string()).default(putSettingsBodyManualConditionsActiveSourceDefault).describe('Per-dataset active conditions source (\'real\' or \'manual\'), keyed by dataset id.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -2275,6 +2283,8 @@ export const putSettingsResponseCrosshairMenuGamepadButtonMax = 31;
 
 export const putSettingsResponseShowWaterTempLayerDefault = false;
 export const putSettingsResponseSidebarModeDefault = `explore`;
+export const putSettingsResponseDatasetManualConditionsDefault = {  };
+export const putSettingsResponseManualConditionsActiveSourceDefault = {  };
 
 export const PutSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
@@ -2470,7 +2480,9 @@ export const PutSettingsResponse = zod.object({
   "start": zod.string().describe('Range start as ISO 8601 string.'),
   "end": zod.string().describe('Range end as ISO 8601 string.')
 }).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
-  "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(putSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.')
+  "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(putSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.'),
+  "datasetManualConditions": zod.record(zod.string(), zod.unknown()).default(putSettingsResponseDatasetManualConditionsDefault).describe('Per-dataset manual environmental conditions, keyed by dataset id.'),
+  "manualConditionsActiveSource": zod.record(zod.string(), zod.string()).default(putSettingsResponseManualConditionsActiveSourceDefault).describe('Per-dataset active conditions source (\'real\' or \'manual\'), keyed by dataset id.')
 }).describe('Per-user application settings with sensible defaults')
 
 

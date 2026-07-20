@@ -566,6 +566,15 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
   const overallSource: "noaa" | "estimated" =
     heightsSource === "noaa" || currentsSource === "noaa" ? "noaa" : "estimated";
 
+  // Freshwater gating: when caller declares waterType=freshwater and no real
+  // NOAA station was found, return {available:false} instead of synthetic data.
+  // The sinusoidal/heuristic model is a saltwater coastal approximation and must
+  // not be served as tidal data for inland freshwater bodies.
+  if (parsed.data.waterType === "freshwater" && overallSource === "estimated") {
+    res.json({ available: false });
+    return;
+  }
+
   const legacyStationName =
     heightsStationRef?.name ??
     currentsStationRef?.name ??

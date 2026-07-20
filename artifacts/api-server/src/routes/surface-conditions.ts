@@ -538,6 +538,14 @@ router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> =
     resolveTideHeights(lat, lon, utcDate),
   ]);
 
+  // Freshwater gating: when caller declares waterType=freshwater and no real
+  // NOAA tidal station was found (source=sinusoidal), the sinusoidal model is
+  // not applicable. Return {available:false} so callers show ManualConditionsForm.
+  if (parsed.data.waterType === "freshwater" && tidal.source === "sinusoidal") {
+    res.json({ available: false });
+    return;
+  }
+
   // Build a 48-hour sinusoidal tidal baseline for the forecast strip.
   // Hours 0–23 will be overridden by NOAA data when available.
   const tidal48 = buildSinusoidalTidalHours(lat, lon, startMs, 48);

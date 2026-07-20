@@ -5676,6 +5676,17 @@ components:
           enum: [explore, plan, analyze, live]
           default: explore
           description: Which contextual mode the left sidebar shows. Persisted so the user's last mode survives page reloads.
+        datasetManualConditions:
+          type: object
+          additionalProperties: {}
+          default: {}
+          description: Per-dataset manual environmental conditions, keyed by dataset id.
+        manualConditionsActiveSource:
+          type: object
+          additionalProperties:
+            type: string
+          default: {}
+          description: Per-dataset active conditions source ('real' or 'manual'), keyed by dataset id.
 
     ApiError:
       type: object
@@ -7543,7 +7554,6 @@ components:
             - $ref: "#/components/schemas/MarkerConditions"
           description: Optional frozen conditions snapshot captured at drop time
       required:
-        - datasetId
         - lon
         - lat
         - depth

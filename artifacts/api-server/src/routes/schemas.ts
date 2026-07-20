@@ -22,6 +22,12 @@ export const LatLonQuerySchema = z.object({
     .finite("lon must be a finite number")
     .gte(-180, "lon must be between -180 and 180")
     .lte(180, "lon must be between -180 and 180"),
+  waterType: z
+    .enum(["saltwater", "freshwater"], {
+      invalid_type_error: "waterType must be a string",
+      message: "waterType must be 'saltwater' or 'freshwater'",
+    })
+    .optional(),
 });
 
 export type LatLonQuery = z.infer<typeof LatLonQuerySchema>;
@@ -368,6 +374,12 @@ export const TidalQuerySchema = z.object({
   lat: latCoordSchema,
   lon: lonCoordSchema,
   datetime: optionalDateStringSchema,
+  waterType: z
+    .enum(["saltwater", "freshwater"], {
+      invalid_type_error: "waterType must be a string",
+      message: "waterType must be 'saltwater' or 'freshwater'",
+    })
+    .optional(),
 });
 
 export type TidalQuery = z.infer<typeof TidalQuerySchema>;
