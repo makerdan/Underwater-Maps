@@ -128,12 +128,10 @@ describe("searchCatalog", () => {
   it("filters by waterType freshwater", async () => {
     const results = await searchCatalog({ waterType: "freshwater" }, SEEDED_PLUS_FRESHWATER);
     expect(results.every((r) => r.waterType === "freshwater")).toBe(true);
-    expect(results.length).toBeGreaterThan(0);
+    const fwCountInSeeded = EXTRA_CATALOG_ENTRIES.filter((e) => e.waterType === "freshwater").length;
+    expect(results.length).toBe(fwCountInSeeded + 1);
     const ids = results.map((r) => r.id);
     expect(ids).toContain("test-freshwater-lake");
-    // No saltwater entries may leak through the filter.
-    expect(ids).not.toContain("gebco-2024-global");
-    expect(ids).not.toContain("ncei-bag-mosaic-alaska");
   });
 
   it("filters by dataType + waterType together", async () => {
@@ -865,55 +863,6 @@ const PRIMARY_KEYWORD_QUERIES: Record<string, string> = {
   // -------------------------------------------------------------------------
   // Freshwater lake catalog entries
   // -------------------------------------------------------------------------
-  "fw-crater-lake-or":                       "Crater Lake Oregon volcanic caldera depth",
-  "fw-lake-tahoe":                           "Lake Tahoe Sierra Nevada alpine trout clarity",
-  "fw-lake-george-ny":                       "Lake George Warren County Adirondacks",
-  "fw-lake-champlain":                       "Lake Champlain Vermont New York",
-  "fw-seneca-lake-ny":                       "Seneca Lake Finger Lakes New York",
-  "fw-cayuga-lake-ny":                       "Cayuga Lake Ithaca Cornell Finger Lakes",
-  "fw-oneida-lake-ny":                       "Oneida Lake walleye New York",
-  "fw-canandaigua-lake-ny":                  "Canandaigua Lake Finger Lakes Ontario County",
-  "fw-keuka-lake-ny":                        "Keuka Lake Y-shaped Finger Lakes Riesling",
-  "fw-lake-placid-ny":                       "Lake Placid Adirondacks High Peaks Olympics",
-  "fw-saranac-lake-ny":                      "Saranac Lake Upper Saranac Adirondacks",
-  "fw-lake-winnipesaukee-nh":                "Lake Winnipesaukee New Hampshire Belknap",
-  "fw-sebago-lake-me":                       "Sebago Lake Maine Cumberland landlocked salmon",
-  "fw-moosehead-lake-me":                    "Moosehead Lake Maine togue Allagash",
-  "fw-quabbin-reservoir-ma":                 "Quabbin Reservoir Massachusetts Boston DCR",
-  "fw-lake-memphremagog-vt":                 "Lake Memphremagog Vermont Newport transboundary",
-  "fw-lake-minnetonka-mn":                   "Lake Minnetonka Minnesota Minneapolis Hennepin",
-  "fw-mille-lacs-lake-mn":                   "Mille Lacs Lake walleye Minnesota Ojibwe",
-  "fw-leech-lake-mn":                        "Leech Lake Minnesota muskie Chippewa Forest",
-  "fw-red-lake-mn":                          "Red Lake Minnesota walleye Beltrami Chippewa",
-  "fw-lake-of-the-woods":                    "Lake of the Woods Minnesota walleye Angle Inlet",
-  "fw-lake-winnebago-wi":                    "Lake Winnebago Wisconsin sturgeon spearing",
-  "fw-gull-lake-mi":                         "Gull Lake Michigan Kalamazoo Kellogg Biological",
-  "fw-lake-powell":                          "Lake Powell Glen Canyon Colorado River Arizona",
-  "fw-lake-mead":                            "Lake Mead Hoover Dam Nevada Las Vegas",
-  "fw-flathead-lake-mt":                     "Flathead Lake Montana bull trout Glacier National Park",
-  "fw-shasta-lake-ca":                       "Shasta Lake California Sacramento River Shasta County",
-  "fw-lake-chelan-wa":                       "Lake Chelan Washington Stehekin Cascade",
-  "fw-upper-klamath-lake-or":                "Upper Klamath Lake Oregon coho sucker Klamath Falls",
-  "fw-flaming-gorge":                        "Flaming Gorge Green River Utah Wyoming",
-  "fw-lake-havasu":                          "Lake Havasu Arizona London Bridge Parker Dam",
-  "fw-lake-okeechobee-fl":                   "Lake Okeechobee Florida Everglades largemouth bass",
-  "fw-lake-lanier-ga":                       "Lake Lanier Georgia Atlanta Chattahoochee striped bass",
-  "fw-lake-of-the-ozarks-mo":               "Lake of the Ozarks Missouri Bagnell Dam Osage River",
-  "fw-table-rock-lake-mo":                   "Table Rock Lake Branson Ozarks White River",
-  "fw-kentucky-lake":                        "Kentucky Lake TVA Tennessee River Land Between the Lakes",
-  "fw-lake-barkley":                         "Lake Barkley Cumberland River USACE Nashville",
-  "fw-norris-lake-tn":                       "Norris Lake TVA Clinch River Anderson Campbell",
-  "fw-fontana-lake-nc":                      "Fontana Lake Great Smoky Mountains TVA Appalachians",
-  "fw-smith-mountain-lake-va":               "Smith Mountain Lake Virginia striper Roanoke River",
-  "fw-clarks-hill-reservoir":               "Clarks Hill Strom Thurmond Savannah River Georgia",
-  "fw-lake-travis-tx":                       "Lake Travis Texas Austin LCRA Highland Lakes",
-  "fw-canyon-lake-tx":                       "Canyon Lake Texas Guadalupe River Comal",
-  "fw-lake-lbj-tx":                          "Lake LBJ Lyndon Johnson Texas LCRA Wirtz Dam",
-  "fw-inks-lake-tx":                         "Inks Lake Texas Burnet Highland Lakes LCRA",
-  "fw-lake-buchanan-tx":                     "Lake Buchanan Texas Highland Lakes Buchanan Dam",
-  "fw-elephant-butte-nm":                    "Elephant Butte Reservoir New Mexico Rio Grande USBR",
-  "fw-cochiti-lake-nm":                      "Cochiti Lake New Mexico Cochiti Pueblo Rio Grande",
-  "fw-navajo-lake-nm":                       "Navajo Lake San Juan River New Mexico Colorado",
   "fw-lake-of-the-woods-mn":                "Lake of the Woods Minnesota walleye Baudette MN DNR",
   "fw-lake-tahoe-ca-nv":                    "Lake Tahoe California Nevada Sierra Nevada Mackinaw clarity",
   "fw-lake-powell-az-ut":                   "Lake Powell Colorado River Glen Canyon Arizona Utah",

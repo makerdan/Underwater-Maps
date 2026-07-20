@@ -67,7 +67,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     layerArrowDensity: {},
     manualConditionsActiveSource: {} as Record<string, "real" | "manual">,
     setManualConditionsActiveSource: vi.fn(),
-    datasetManualConditions: {},
+    datasetManualConditions: {} as Record<string, unknown>,
     setDatasetManualConditions: vi.fn(),
   });
   const useSettingsStore = Object.assign(

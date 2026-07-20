@@ -77,7 +77,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     hudOpacity: 1,
     waterType: "saltwater" as const,
     manualConditionsActiveSource: {} as Record<string, "real" | "manual">,
-    datasetManualConditions: {},
+    datasetManualConditions: {} as Record<string, unknown>,
   };
   const useSettingsStore = Object.assign(
     (sel: (s: Record<string, unknown>) => unknown) => sel(storeState),

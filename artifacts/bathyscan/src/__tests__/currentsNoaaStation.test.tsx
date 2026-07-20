@@ -19,10 +19,9 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { CurrentsPanel } from "@/components/CurrentsPanel";
 import { MPH_TO_KNOTS, MPH_TO_KPH } from "@/lib/units";
 
-vi.mock("@/lib/context", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/context")>();
-  return { ...actual, useAppState: () => ({ terrain: null }) };
-});
+vi.mock("@/lib/context", () => ({
+  useAppState: () => ({ terrain: null }),
+}));
 
 function resetStores(tidalStatus: TidalStatus = "ok") {
   act(() => {
