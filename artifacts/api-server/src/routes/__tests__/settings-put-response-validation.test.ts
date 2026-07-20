@@ -117,6 +117,9 @@ import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 beforeEach(() => {
   __resetRateLimitMemory();
+});
+
+beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   schemaState.throwOnParse = false;
 });

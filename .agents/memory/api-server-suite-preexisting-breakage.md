@@ -1,13 +1,14 @@
 ---
-name: api-server unit suite baseline
-description: The 2026-07-20 pre-existing api-server test breakage was repaired; how to debug new failures and keep the baseline green.
+name: api-server unit suite pre-existing breakage (FIXED 2026-07-20)
+description: The 2026-07-20 pre-existing api-server failures are repaired; suite is green. Patterns to watch for when new failures of the same classes appear.
 ---
-Rule: the api-server unit suite baseline is green (repaired 2026-07-20); do NOT treat failures as pre-existing — run the failing file solo and capture the real error behind asyncHandler 500s with a temporary express error middleware.
+Status: FIXED — test-standard is fully green (176/176 api-server files) as of 2026-07-20. Do NOT use this entry to justify skipping validation anymore.
 
-Lessons from the repair:
-- Mocks of `lib/terrain.js` must export every const that `catalogFetchStrategy.ts` imports (NYSDEC_BATHY_FEATURE_SERVICE, MN_DNR_BATHY_FEATURE_SERVICE, BUNDLED_TERRAIN, ALL_PRESET_DATASETS). Adding a new terrain export consumed at module init breaks every test file that fully mocks terrain.js — copy the export list from terrain-bundles.test.ts's mock.
-- The rate-limit-isolation guard requires every test file importing app.js to call `__resetRateLimitMemory()` in a beforeEach.
-- New EXTRA_CATALOG_ENTRIES ids must be added to PRIMARY_KEYWORD_QUERIES in catalog-search.test.ts (a name-based query like "Seneca Lake, NY" reliably surfaces the entry).
-- Admin rate-limit-usage query validation intentionally uses errorCode "invalid_param" (see routes/admin.ts), not the default "invalid_request".
+Failure classes that were fixed (watch for recurrence when adding new tests):
+- Any test that vi.mocks `lib/terrain.js` must export `NYSDEC_BATHY_FEATURE_SERVICE`, `MN_DNR_BATHY_FEATURE_SERVICE`, and `BUNDLED_TERRAIN` — `catalogFetchStrategy.ts` reads them at module init via `routes/terrain-bundles.ts`, so a missing export fails the whole file at collect time.
+- Every test file importing `app.js` must reference `__resetRateLimitMemory` (real import + beforeEach, or as an export in a rateLimit.js mock) — enforced by rate-limit-isolation.guard.test.ts.
+- Query-param validation on admin routes returns error code `invalid_param` (route opts in via `errorCode`), while body validation returns `invalid_request`; assert accordingly.
+- New EXTRA_CATALOG_ENTRIES ids must be added to PRIMARY_KEYWORD_QUERIES in catalog-search.test.ts with a distinctive keyword query, or two freshness guards fail.
 
-**How to apply:** when the full suite fails but the file passes solo, suspect cross-file contamination (see other memory topics), not this baseline.
+**Why:** these classes caused ~70 pre-existing failures that masked real regressions; each is a module-init or guard-test coupling that is not obvious from the failing test alone.
+**How to apply:** when a whole api-server file fails at collect with a "No X export defined on mock" error, check the transitive module-init imports of the mocked module, not the test body.

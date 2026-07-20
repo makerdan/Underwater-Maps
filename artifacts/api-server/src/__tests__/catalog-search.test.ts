@@ -878,38 +878,27 @@ const PRIMARY_KEYWORD_QUERIES: Record<string, string> = {
   "fw-lake-huron":                          "Lake Huron Great Lakes Georgian Bay Michigan NOAA",
   "fw-lake-erie":                           "Lake Erie Great Lakes walleye perch Cleveland NOAA",
   "fw-lake-ontario":                        "Lake Ontario Great Lakes Niagara Toronto NOAA NCEI",
-  // -------------------------------------------------------------------------
-  // Freshwater lakes — Northeast (NY / New England)
-  // -------------------------------------------------------------------------
-  "fw-lake-george-ny":                      "Lake George Adirondacks Queen of American Lakes NYSDEC",
+  "fw-lake-george-ny":                      "Lake George Adirondacks Queen of American Lakes",
   "fw-lake-champlain":                      "Lake Champlain Burlington Plattsburgh Green Mountains",
   "fw-seneca-lake-ny":                      "Seneca Lake Finger Lakes deepest lake New York",
   "fw-cayuga-lake-ny":                      "Cayuga Lake Ithaca Cornell Finger Lakes",
   "fw-oneida-lake-ny":                      "Oneida Lake Oswego largest lake New York walleye",
   "fw-canandaigua-lake-ny":                 "Canandaigua Lake Bristol Hills Ontario County",
-  "fw-keuka-lake-ny":                       "Keuka Lake Hammondsport Penn Yan Y-shaped Riesling",
+  "fw-keuka-lake-ny":                       "Keuka Lake Hammondsport Penn Yan Riesling Y-shaped",
   "fw-lake-placid-ny":                      "Lake Placid Olympics Whiteface Mountain High Peaks",
   "fw-saranac-lake-ny":                     "Saranac Lake Upper Saranac Adirondacks paddling",
   "fw-lake-winnipesaukee-nh":               "Lake Winnipesaukee Laconia Meredith Wolfeboro",
   "fw-sebago-lake-me":                      "Sebago Lake Maine landlocked salmon togue Portland",
-  "fw-moosehead-lake-me":                   "Moosehead Lake Greenville Allagash wilderness",
+  "fw-moosehead-lake-me":                   "Moosehead Lake Greenville Allagash wilderness Maine",
   "fw-quabbin-reservoir-ma":                "Quabbin Reservoir Boston water supply DCR Massachusetts",
-  "fw-lake-memphremagog-vt":                "Lake Memphremagog Newport Vermont Memphre Quebec",
-  // -------------------------------------------------------------------------
-  // Freshwater lakes — Midwest
-  // -------------------------------------------------------------------------
+  "fw-lake-memphremagog-vt":                "Lake Memphremagog Newport Vermont Quebec Memphre",
   "fw-lake-minnetonka-mn":                  "Lake Minnetonka Wayzata Excelsior Twin Cities",
-  "fw-mille-lacs-lake-mn":                  "Mille Lacs Lake treaty fishing Aitkin walleye",
+  "fw-mille-lacs-lake-mn":                  "Mille Lacs Lake treaty fishing Ojibwe walleye Aitkin",
   "fw-leech-lake-mn":                       "Leech Lake Walker Chippewa National Forest muskie",
   "fw-red-lake-mn":                         "Red Lake Nation Beltrami Upper Red Lake walleye",
   "fw-lake-of-the-woods":                   "Lake of the Woods Northwest Angle Angle Inlet sauger",
   "fw-lake-winnebago-wi":                   "Lake Winnebago sturgeon spearing Oshkosh Neenah",
-  "fw-gull-lake-mi":                        "Gull Lake Kalamazoo Kellogg Biological Station",
-  "fw-lake-of-the-ozarks-mo":               "Lake of the Ozarks Bagnell Dam Osage River Missouri",
-  "fw-table-rock-lake-mo":                  "Table Rock Lake Branson White River Ozarks",
-  // -------------------------------------------------------------------------
-  // Freshwater lakes — West / Pacific Northwest
-  // -------------------------------------------------------------------------
+  "fw-gull-lake-mi":                        "Gull Lake Kellogg Biological Station Kalamazoo Michigan",
   "fw-lake-tahoe":                          "Lake Tahoe Sierra Nevada mackinaw clarity alpine",
   "fw-lake-powell":                         "Lake Powell Glen Canyon Colorado Plateau striped bass",
   "fw-lake-mead":                           "Lake Mead Hoover Dam Las Vegas largest reservoir US",
@@ -918,27 +907,26 @@ const PRIMARY_KEYWORD_QUERIES: Record<string, string> = {
   "fw-shasta-lake-ca":                      "Shasta Lake Redding largest reservoir California",
   "fw-lake-chelan-wa":                      "Lake Chelan Stehekin third deepest US Washington",
   "fw-upper-klamath-lake-or":               "Upper Klamath Lake Lost River sucker Klamath Falls",
-  "fw-flaming-gorge":                       "Flaming Gorge Green River NRA kokanee Wyoming",
-  // -------------------------------------------------------------------------
-  // Freshwater lakes — Southwest / Southeast
-  // -------------------------------------------------------------------------
+  "fw-flaming-gorge":                       "Flaming Gorge Green River kokanee mackinaw NRA",
   "fw-lake-havasu":                         "Lake Havasu London Bridge Parker Dam Colorado River",
-  "fw-lake-okeechobee-fl":                  "Lake Okeechobee Herbert Hoover Dike Everglades speckled perch",
+  "fw-lake-okeechobee-fl":                  "Lake Okeechobee Everglades Herbert Hoover Dike speckled perch",
   "fw-lake-lanier-ga":                      "Lake Lanier Chattahoochee Gainesville Cumming spotted bass",
-  "fw-kentucky-lake":                       "Kentucky Lake Land Between the Lakes Paris Landing TVA",
-  "fw-lake-barkley":                        "Lake Barkley Cadiz Cumberland River sauger",
-  "fw-norris-lake-tn":                      "Norris Lake Norris Dam Clinch River TVA striped bass",
+  "fw-lake-of-the-ozarks-mo":               "Lake of the Ozarks Bagnell Dam Osage River Missouri",
+  "fw-table-rock-lake-mo":                  "Table Rock Lake Branson White River Ozarks",
+  "fw-kentucky-lake":                       "Kentucky Lake Land Between the Lakes Paris Landing",
+  "fw-lake-barkley":                        "Lake Barkley Cumberland River Cadiz sauger",
+  "fw-norris-lake-tn":                      "Norris Lake Clinch River Norris Dam TVA",
   "fw-fontana-lake-nc":                     "Fontana Lake Great Smoky Mountains highest dam eastern US",
-  "fw-smith-mountain-lake-va":              "Smith Mountain Lake Moneta Huddleston Roanoke River striper",
-  "fw-clarks-hill-reservoir":               "Clarks Hill Strom Thurmond Savannah River reservoir",
-  "fw-lake-travis-tx":                      "Lake Travis Mansfield Dam Austin Highland Lakes LCRA",
-  "fw-canyon-lake-tx":                      "Canyon Lake Guadalupe River New Braunfels Hill Country",
-  "fw-lake-lbj-tx":                         "Lake LBJ Lyndon B. Johnson Wirtz Dam Horseshoe Bay",
+  "fw-smith-mountain-lake-va":              "Smith Mountain Lake Roanoke River striper Moneta",
+  "fw-clarks-hill-reservoir":               "Clarks Hill Strom Thurmond Savannah River",
+  "fw-lake-travis-tx":                      "Lake Travis Austin Mansfield Dam Highland Lakes",
+  "fw-canyon-lake-tx":                      "Canyon Lake Guadalupe River New Braunfels Comal",
+  "fw-lake-lbj-tx":                         "Lake LBJ Wirtz Dam Horseshoe Bay Marble Falls",
   "fw-inks-lake-tx":                        "Inks Lake State Park Inks Dam Burnet",
-  "fw-lake-buchanan-tx":                    "Lake Buchanan Buchanan Dam Llano County Highland Lakes",
+  "fw-lake-buchanan-tx":                    "Lake Buchanan Buchanan Dam Llano County",
   "fw-elephant-butte-nm":                   "Elephant Butte Reservoir Truth or Consequences Rio Grande",
   "fw-cochiti-lake-nm":                     "Cochiti Lake Cochiti Pueblo earthen dam Sandoval",
-  "fw-navajo-lake-nm":                      "Navajo Lake San Juan River Rio Arriba Archuleta",
+  "fw-navajo-lake-nm":                      "Navajo Lake San Juan River tailwater trout Archuleta",
 };
 
 describe("catalog keyword coverage — each entry findable by primary keyword", () => {

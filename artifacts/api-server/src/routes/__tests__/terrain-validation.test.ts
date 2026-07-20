@@ -59,9 +59,9 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 vi.mock("../../lib/terrain.js", () => ({
-  NYSDEC_BATHY_FEATURE_SERVICE: "https://example.com/nysdec",
-  MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
   BUNDLED_TERRAIN: {},
+  NYSDEC_BATHY_FEATURE_SERVICE: "https://example.test/nysdec",
+  MN_DNR_BATHY_FEATURE_SERVICE: "https://example.test/mndnr",
   ALL_PRESET_DATASETS: [],
   buildTerrainGrid: vi.fn().mockResolvedValue(null),
   parseXyzCsv: vi.fn().mockReturnValue([]),
