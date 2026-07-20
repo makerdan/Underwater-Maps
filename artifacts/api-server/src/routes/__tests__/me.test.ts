@@ -120,7 +120,6 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 import app from "../../app.js";
-import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 beforeEach(() => {
   state.userSettings = [];
