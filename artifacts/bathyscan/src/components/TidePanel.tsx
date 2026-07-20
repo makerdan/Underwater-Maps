@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { ManualConditionsForm } from "@/components/ManualConditionsForm";
 import { DataSourceBadge } from "@/components/DataSourceBadge";
 import type { DataSource } from "@/components/DataSourceBadge";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
@@ -93,10 +94,13 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
   const { terrain } = useAppState();
+  const datasetId = terrain?.datasetId ?? "";
   const [hoveredEvent, setHoveredEvent] = useState<TidalScheduleEvent | null>(null);
   const units = useSettingsStore((s) => s.units);
   const waterType = useSettingsStore((s) => s.waterType);
   const isFreshwater = waterType === "freshwater";
+  const rawManualActiveSource = useSettingsStore((s) => s.manualConditionsActiveSource[datasetId]);
+  const setManualConditionsActiveSource = useSettingsStore((s) => s.setManualConditionsActiveSource);
   const { schedule, isError: scheduleError } = useTidalSchedule(lat, lon, 7);
 
   const today = useMemo(() => {
@@ -285,11 +289,29 @@ export const TidePanel: React.FC<TidePanelProps> = ({
           )}
 
           {!data.available && !loading && waterType === "freshwater" && (
-            <div
-              data-testid="tide-freshwater-unavailable"
-              style={{ color: "#94a3b8", fontSize: 15, marginTop: 4 }}
-            >
-              No water level data for this location.
+            <div data-testid="tide-freshwater-unavailable" style={{ marginTop: 4 }}>
+              <div style={{ color: "#94a3b8", fontSize: 13.5, marginBottom: 6, letterSpacing: "0.08em" }}>
+                No water-level station for this lake — enter observed conditions:
+              </div>
+              <ManualConditionsForm
+                datasetId={datasetId}
+                fields={["waterLevel", "temp"]}
+                realDataAvailable={false}
+                activeSource={rawManualActiveSource ?? "manual"}
+                onSourceChange={(src) => setManualConditionsActiveSource(datasetId, src)}
+              />
+            </div>
+          )}
+
+          {data.available && waterType === "freshwater" && (
+            <div style={{ marginBottom: 6 }}>
+              <ManualConditionsForm
+                datasetId={datasetId}
+                fields={["waterLevel", "temp"]}
+                realDataAvailable={true}
+                activeSource={rawManualActiveSource ?? "real"}
+                onSourceChange={(src) => setManualConditionsActiveSource(datasetId, src)}
+              />
             </div>
           )}
 

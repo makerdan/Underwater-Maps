@@ -60,7 +60,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 29;
+export const SETTINGS_SCHEMA_VERSION = 30;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -95,6 +95,21 @@ export interface DatasetHomePosition {
   lon: number;
   lat: number;
   depth: number;
+}
+
+/**
+ * Manual environmental conditions entered by the user for a freshwater lake
+ * or any location where real sensor data is unavailable.
+ * Stored per-dataset (keyed by datasetId) so conditions for one lake don't
+ * bleed into another.
+ */
+export interface ManualConditions {
+  windSpeedKnots: number;
+  windDirectionDeg: number;
+  surfaceTempC: number | null;
+  currentSpeedKnots: number;
+  currentDirectionDeg: number;
+  waterLevelM: number | null;
 }
 
 /**
@@ -430,6 +445,20 @@ export interface SettingsState {
   /** Per-dataset saved camera bookmarks, keyed by dataset id. */
   bookmarks: Record<string, CameraBookmark[]>;
 
+  /**
+   * Per-dataset manually-entered environmental conditions (persisted +
+   * server-synced). Keyed by datasetId. Populated when the user checks
+   * "Remember for this lake" in the ManualConditionsForm.
+   */
+  datasetManualConditions: Record<string, ManualConditions>;
+
+  /**
+   * Per-dataset active data source selection.
+   * 'manual' = use the user's entered values; 'real' = use station/API data.
+   * Keyed by datasetId.
+   */
+  manualConditionsActiveSource: Record<string, 'real' | 'manual'>;
+
   /** Expand/collapse state for dataset library folders, keyed by folder id. */
   datasetFolderExpanded: Record<string, boolean>;
 
@@ -706,6 +735,11 @@ interface SettingsActions {
   renameBookmark: (datasetId: string, bookmarkId: string, name: string) => void;
   deleteBookmark: (datasetId: string, bookmarkId: string) => void;
   reorderBookmarks: (datasetId: string, orderedBookmarks: CameraBookmark[]) => void;
+
+  // Manual conditions
+  setDatasetManualConditions: (datasetId: string, conditions: ManualConditions) => void;
+  clearDatasetManualConditions: (datasetId: string) => void;
+  setManualConditionsActiveSource: (datasetId: string, source: 'real' | 'manual') => void;
 
   setWaterType: (v: WaterType) => void;
 
@@ -986,6 +1020,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   datasetFolderExpanded: {},
   saveFolderExpanded: {},
   bookmarks: {},
+  datasetManualConditions: {},
+  manualConditionsActiveSource: {},
 
   waterType: "saltwater",
 
@@ -1058,6 +1094,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "layerArrowDensity", "windOverlayStyle", "tideOverlayStyle", "currentOverlayStyle",
     "weatherStationsActive", "rawsOverlayActive", "windOverlayActive",
     "tideOverlayActive", "currentOverlayActive", "currentDepthLayers",
+    "datasetManualConditions", "manualConditionsActiveSource",
   ],
   currents: [
     "currentsEnabled", "currentsSource", "currentsManualDirectionDeg",
@@ -1374,6 +1411,22 @@ export const useSettingsStore = create<SettingsStore>()(
         setHyd93FeaturesEnabled: setter("hyd93FeaturesEnabled"),
 
         setSidebarMode: setter("sidebarMode"),
+
+        // Manual conditions
+        setDatasetManualConditions: (datasetId, conditions) =>
+          set((state) => ({
+            datasetManualConditions: { ...state.datasetManualConditions, [datasetId]: conditions },
+          })),
+        clearDatasetManualConditions: (datasetId) =>
+          set((state) => {
+            const next = { ...state.datasetManualConditions };
+            delete next[datasetId];
+            return { datasetManualConditions: next };
+          }),
+        setManualConditionsActiveSource: (datasetId, source) =>
+          set((state) => ({
+            manualConditionsActiveSource: { ...state.manualConditionsActiveSource, [datasetId]: source },
+          })),
 
         // Shortcuts
         setKeyBinding: (action, code) =>
@@ -1693,6 +1746,15 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).nodataColor === undefined) {
             migratedNodataColor.nodataColor = DEFAULT_SETTINGS.nodataColor;
           }
+          // v29 → v30: inject datasetManualConditions and manualConditionsActiveSource
+          // defaults so existing users start with empty records (no manual conditions set).
+          const migratedManualConditions: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).datasetManualConditions === undefined) {
+            migratedManualConditions.datasetManualConditions = DEFAULT_SETTINGS.datasetManualConditions;
+          }
+          if ((rest as Record<string, unknown>).manualConditionsActiveSource === undefined) {
+            migratedManualConditions.manualConditionsActiveSource = DEFAULT_SETTINGS.manualConditionsActiveSource;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1711,6 +1773,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedBoatThresholds,
             ...migratedSaveFolderExpanded,
             ...migratedNodataColor,
+            ...migratedManualConditions,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

@@ -316,6 +316,15 @@ interface UiStore {
   pendingFollowHandoff: string | null;
   requestFollowHandoff: (datasetId: string) => void;
   clearFollowHandoff: () => void;
+
+  /**
+   * Session-only manual conditions entered by the user (cleared on reload).
+   * Keyed by datasetId. When the user checks "Remember for this lake" these
+   * values are also written to settingsStore.datasetManualConditions.
+   */
+  sessionManualConditions: Record<string, import("./settingsStore").ManualConditions>;
+  setSessionManualConditions: (datasetId: string, conditions: import("./settingsStore").ManualConditions) => void;
+  clearSessionManualConditions: (datasetId: string) => void;
 }
 
 // ── Device-local helpers (hasSeenOrbitTouchHint only) ────────────────────────
@@ -528,6 +537,19 @@ export const useUiStore = create<UiStore>((set, get) => {
     pendingFollowHandoff: null,
     requestFollowHandoff: (datasetId) => set({ pendingFollowHandoff: datasetId }),
     clearFollowHandoff: () => set({ pendingFollowHandoff: null }),
+
+    // ── Session-only manual conditions (reset on every reload) ─────────────
+    sessionManualConditions: {},
+    setSessionManualConditions: (datasetId, conditions) =>
+      set((state) => ({
+        sessionManualConditions: { ...state.sessionManualConditions, [datasetId]: conditions },
+      })),
+    clearSessionManualConditions: (datasetId) =>
+      set((state) => {
+        const next = { ...state.sessionManualConditions };
+        delete next[datasetId];
+        return { sessionManualConditions: next };
+      }),
     pendingCoordSearch: null,
     setPendingCoordSearch: (req) => set({ pendingCoordSearch: req }),
     clearPendingCoordSearch: () => set({ pendingCoordSearch: null }),

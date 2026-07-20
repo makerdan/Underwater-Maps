@@ -79,11 +79,13 @@ export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({
   depthBias = false,
   available = true,
 }) => {
-  if (!available) return null;
-  const yOffset = LAYER_OFFSETS[depthLayer] ?? 0;
-  const attenuate = LAYER_SPEED_ATTENUATE[depthLayer] ?? 1.0;
   const globalDensity = useSettingsStore((s) => s.currentArrowDensity);
   const layerDensityMap = useSettingsStore((s) => s.layerArrowDensity);
+
+  if (!available) return null;
+
+  const yOffset = LAYER_OFFSETS[depthLayer] ?? 0;
+  const attenuate = LAYER_SPEED_ATTENUATE[depthLayer] ?? 1.0;
   const arrowDensity = layerDensityMap?.[depthLayer] ?? globalDensity;
   const density = DENSITY_MAP[arrowDensity] ?? 10;
   const layerOpacity = LAYER_OPACITY[depthLayer] ?? 0.75;

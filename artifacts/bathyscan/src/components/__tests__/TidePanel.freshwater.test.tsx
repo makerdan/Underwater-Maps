@@ -92,32 +92,6 @@ function makeAvailable(
   };
 }
 
-function renderPanel(data: TidalDataResult) {
-  return render(
-    React.createElement(
-      React.Suspense,
-      { fallback: null },
-      React.createElement(
-        (async () => {
-          const { TidePanel } = await import("@/components/TidePanel");
-          return TidePanel;
-        })() as unknown as React.ComponentType<Record<string, unknown>>,
-        {
-          data,
-          loading: false,
-          depthLayer: "surface",
-          onDepthLayerChange: vi.fn(),
-          scrubDatetime: null,
-          onScrubChange: vi.fn(),
-          lat: 44.0,
-          lon: -87.5,
-          embedded: true,
-        },
-      ),
-    ),
-  );
-}
-
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("TidePanel — freshwater empty state", () => {
@@ -125,7 +99,7 @@ describe("TidePanel — freshwater empty state", () => {
     h.waterType = "saltwater";
   });
 
-  it("freshwater + unavailable: shows freshwater-specific message", async () => {
+  it("freshwater + unavailable: shows freshwater-specific message and manual entry form", async () => {
     h.waterType = "freshwater";
     const { TidePanel } = await import("@/components/TidePanel");
     render(
@@ -143,8 +117,9 @@ describe("TidePanel — freshwater empty state", () => {
     );
     expect(screen.getByTestId("tide-freshwater-unavailable")).toBeInTheDocument();
     expect(screen.getByTestId("tide-freshwater-unavailable")).toHaveTextContent(
-      "No water level data for this location.",
+      /No water-level station for this lake/,
     );
+    expect(screen.getByTestId("manual-conditions-apply")).toBeInTheDocument();
   });
 
   it("freshwater + unavailable: does NOT show saltwater tidal station message", async () => {

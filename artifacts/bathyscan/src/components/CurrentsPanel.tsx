@@ -16,7 +16,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { DataUnavailable } from "@/components/DataUnavailable";
+import { ManualConditionsForm } from "@/components/ManualConditionsForm";
 import { AdvancedSection } from "@/components/AdvancedSection";
 import { useCurrentsStore, type TidalStatus } from "@/lib/currentsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -25,6 +25,7 @@ import { formatSpeedFromKnots, speedSuffix, MPH_TO_KNOTS, MPH_TO_KPH, cardinal }
 import type { UnitsSystem } from "@/lib/settingsStore";
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useTimelineVisible } from "@/lib/uiStore";
+import { useAppState } from "@/lib/context";
 
 /** Semi-diurnal tide cycle duration in ms (≈ 12.42 h). Used to derive phase from wall-clock time. */
 const TIDE_CYCLE_MS = 12.42 * 3_600_000;
@@ -156,6 +157,10 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
   const noaaAmbient = useCurrentsStore((st) => st.noaaAmbient);
   const tidalStatus = useCurrentsStore((st) => st.tidalStatus);
   const retryTidal = useCurrentsStore((st) => st.retryTidal);
+  const { terrain } = useAppState();
+  const datasetId = terrain?.datasetId ?? "";
+  const manualActiveSource = useSettingsStore((s) => s.manualConditionsActiveSource[datasetId] ?? "manual");
+  const setManualConditionsActiveSource = useSettingsStore((s) => s.setManualConditionsActiveSource);
 
   const timelineVisible = useTimelineVisible();
   const timelineCurrentTime = useTimelineStore((s) => s.currentTime);
@@ -295,6 +300,9 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
           onRetry={retryTidal}
           onSwitchToManual={() => setCurrentsSource("manual")}
           waterType={waterType}
+          datasetId={datasetId}
+          manualActiveSource={manualActiveSource}
+          onManualSourceChange={(src) => setManualConditionsActiveSource(datasetId, src)}
         />
       )}
 
@@ -402,6 +410,9 @@ interface NoaaReadoutProps {
   onRetry: () => void;
   onSwitchToManual: () => void;
   waterType?: "saltwater" | "freshwater";
+  datasetId?: string;
+  manualActiveSource?: "real" | "manual";
+  onManualSourceChange?: (src: "real" | "manual") => void;
 }
 
 /** True when the source string represents a real measured data feed (not synthetic). */
@@ -417,7 +428,7 @@ function sourceLabel(src?: string): string {
   return "Estimated";
 }
 
-function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManual, waterType }: NoaaReadoutProps): React.ReactElement {
+function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManual, waterType, datasetId = "", manualActiveSource = "manual", onManualSourceChange }: NoaaReadoutProps): React.ReactElement {
   const actionBtn: React.CSSProperties = {
     background: "none",
     border: "1px solid rgba(0,229,255,0.3)",
@@ -441,10 +452,9 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: "1 1 0" }}>
               {isFresh && !realSrc ? (
-                <DataUnavailable
-                  message="No currents data for this location"
-                  data-testid="currents-freshwater-unavailable"
-                />
+                <span style={{ color: "#94a3b8", fontSize: 13.5 }} data-testid="currents-freshwater-unavailable">
+                  No currents station for this lake
+                </span>
               ) : (
                 <>
                   {sourceLabel(noaaAmbient.source)}:{" "}
@@ -494,9 +504,15 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
     if (isFresh) {
       return (
         <div style={{ marginBottom: 8 }} data-testid="currents-noaa-readout">
-          <DataUnavailable
-            message="No currents data for this location"
-            data-testid="currents-freshwater-unavailable"
+          <div style={{ color: "#94a3b8", fontSize: 13.5, marginBottom: 6, letterSpacing: "0.08em" }} data-testid="currents-freshwater-unavailable">
+            No currents station for this lake — enter observed conditions:
+          </div>
+          <ManualConditionsForm
+            datasetId={datasetId}
+            fields={["current", "wind"]}
+            realDataAvailable={false}
+            activeSource={manualActiveSource}
+            onSourceChange={onManualSourceChange}
           />
         </div>
       );
@@ -523,9 +539,15 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
     if (isFresh && !realSrc) {
       return (
         <div style={{ marginBottom: 8 }} data-testid="currents-noaa-readout">
-          <DataUnavailable
-            message="No currents data for this location"
-            data-testid="currents-freshwater-unavailable"
+          <div style={{ color: "#94a3b8", fontSize: 13.5, marginBottom: 6, letterSpacing: "0.08em" }} data-testid="currents-freshwater-unavailable">
+            No currents station for this lake — enter observed conditions:
+          </div>
+          <ManualConditionsForm
+            datasetId={datasetId}
+            fields={["current", "wind"]}
+            realDataAvailable={false}
+            activeSource={manualActiveSource}
+            onSourceChange={onManualSourceChange}
           />
         </div>
       );

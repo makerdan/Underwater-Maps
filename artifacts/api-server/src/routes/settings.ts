@@ -182,6 +182,8 @@ export const DEFAULT_SETTINGS = {
   datasetFolderExpanded: {} as Record<string, boolean>,
   saveFolderExpanded: {} as Record<string, boolean>,
   bookmarks: {} as Record<string, unknown[]>,
+  datasetManualConditions: {} as Record<string, unknown>,
+  manualConditionsActiveSource: {} as Record<string, string>,
   keyBindings: {} as Record<string, string>,
   crosshairMenuGamepadButton: 3 as number | null,
   lastSyncedAt: null as string | null,
