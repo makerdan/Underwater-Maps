@@ -897,7 +897,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   // Visuals
   qualityPreset: "medium",
   terrainExaggeration: 1,
-  enableMarineSnow: true,
+  enableMarineSnow: false,
   particleDensity: "sparse",
   enableCaustics: false,
   fogDensity: 0.012,

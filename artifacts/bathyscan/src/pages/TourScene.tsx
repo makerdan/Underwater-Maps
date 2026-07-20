@@ -638,6 +638,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
   const showWaterSurface = useSettingsStore((s) => s.showWaterSurface);
   const showLandmass = useSettingsStore((s) => s.showLandmass);
   const brightDaylight = useSettingsStore((s) => s.brightDaylight);
+  const enableMarineSnow = useSettingsStore((s) => s.enableMarineSnow);
   // True only when a Copernicus DEM grid with real elevation data is loaded.
   // Used to suppress LandmassMesh (flat silhouette fallback) once the richer
   // DEM surface is ready — prevents two land surfaces from stacking.
@@ -678,7 +679,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       <directionalLight position={[10, 30, 20]} intensity={effectiveDirectionalIntensity} color={directionalHue} />
 
       <TestCameraBridge />
-      <Particles />
+      {enableMarineSnow && <Particles />}
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
       {terrain && <TerrainContourLines grid={terrain} />}
       {/* LandmassMesh is a flat-silhouette fallback; hidden once the richer
