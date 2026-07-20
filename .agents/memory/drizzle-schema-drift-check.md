@@ -10,3 +10,6 @@ description: Gotchas when using drizzle-kit generate to detect schema drift in C
 **Why:** Both issues produced false-positive drift failures when building the CI schema-drift check; the ENOENT error message is cryptic and doesn't mention the path config.
 
 **How to apply:** When touching `lib/db/drizzle-check.config.ts`, the migrations journal, or adding migrations — hand-written migrations must get journal + snapshot entries or the drift check breaks.
+
+3. The drift script now also enforces migration↔journal↔snapshot pairing (guard 1 in `scripts/check-schema-drift.mjs`): every journal tag must have a `.sql` file, every `.sql` must be journaled, and every journal entry idx must have `meta/<idx>_snapshot.json`. Legacy gaps are frozen in two allowlists inside the script — never add new entries to them; regenerate the snapshot instead (`cd lib/db && pnpm exec drizzle-kit generate --config ./drizzle-check.config.ts`, then rename the generated file+tag descriptively and make the SQL idempotent with IF NOT EXISTS).
+4. Adding a table to `lib/db/src/schema/` without running generate makes `check:schema-stale` fail for everyone later — commit migration + snapshot + journal in the same change as the schema edit.
