@@ -9,6 +9,7 @@ import {
   searchCatalog,
   invalidateMiniSearchIndex,
   EXTRA_CATALOG_ENTRIES,
+  buildPresetCatalogEntries,
 } from "./catalogSeeder.js";
 import type { CatalogSeedEntry } from "./catalogSeeder.js";
 
@@ -606,5 +607,42 @@ describe("EXTRA_CATALOG_ENTRIES — catalog presence sentinel", () => {
   it("freshwater entries total exceeds 45 (coverage scale sentinel)", () => {
     const freshwaterCount = EXTRA_CATALOG_ENTRIES.filter((e) => e.waterType === "freshwater").length;
     expect(freshwaterCount).toBeGreaterThan(45);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildPresetCatalogEntries — duplicate-ID guard
+// ---------------------------------------------------------------------------
+
+describe("buildPresetCatalogEntries — duplicate-ID guard", () => {
+  it("returns entries without throwing (ALL_PRESET_DATASETS has no duplicate IDs)", () => {
+    expect(() => buildPresetCatalogEntries()).not.toThrow();
+  });
+
+  it("all preset catalog IDs are unique (no duplicates in ALL_PRESET_DATASETS)", () => {
+    const entries = buildPresetCatalogEntries();
+    const ids = entries.map((e) => e.id);
+    const unique = new Set(ids);
+    expect(unique.size, "Duplicate IDs found in buildPresetCatalogEntries()").toBe(ids.length);
+  });
+
+  it("all preset catalog IDs have the 'preset-' prefix", () => {
+    const entries = buildPresetCatalogEntries();
+    for (const entry of entries) {
+      expect(entry.id, `Entry '${entry.id}' is missing the 'preset-' prefix`).toMatch(/^preset-/);
+    }
+  });
+
+  it("combined EXTRA_CATALOG_ENTRIES + preset catalog has no duplicate IDs", () => {
+    const presetEntries = buildPresetCatalogEntries();
+    const allIds = [
+      ...EXTRA_CATALOG_ENTRIES.map((e) => e.id),
+      ...presetEntries.map((e) => e.id),
+    ];
+    const unique = new Set(allIds);
+    expect(
+      unique.size,
+      "Duplicate IDs found across EXTRA_CATALOG_ENTRIES and buildPresetCatalogEntries()",
+    ).toBe(allIds.length);
   });
 });

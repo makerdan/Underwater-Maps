@@ -1764,8 +1764,8 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
   },
 ];
 
-function buildPresetCatalogEntries(): CatalogSeedEntry[] {
-  return ALL_PRESET_DATASETS.map((d) => {
+export function buildPresetCatalogEntries(): CatalogSeedEntry[] {
+  const entries = ALL_PRESET_DATASETS.map((d) => {
     const usesNcei = d.waterType === "saltwater" && d.id in NCEI_DATASET_COVERAGES;
     return {
       id: `preset-${d.id}`,
@@ -1789,6 +1789,22 @@ function buildPresetCatalogEntries(): CatalogSeedEntry[] {
       waterType: d.waterType,
     };
   });
+
+  const ids = entries.map((e) => e.id);
+  const seen = new Set<string>();
+  const dupes: string[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) dupes.push(id);
+    seen.add(id);
+  }
+  if (dupes.length > 0) {
+    throw new Error(
+      `buildPresetCatalogEntries: duplicate preset catalog IDs detected — ` +
+        `each ALL_PRESET_DATASETS entry must have a unique id. Duplicates: ${dupes.join(", ")}`,
+    );
+  }
+
+  return entries;
 }
 
 let seeded = false;
