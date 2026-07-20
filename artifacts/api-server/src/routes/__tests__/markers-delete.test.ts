@@ -10,7 +10,7 @@
  *    objects are passed to deleteObjectEntity (best-effort cleanup)
  *  - photo cleanup is still best-effort: a storage error does not affect the 204
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import request from "supertest";
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
@@ -270,4 +270,15 @@ describe("DELETE /api/markers/:id", () => {
 
     expect(deletedObjectPaths).toEqual(["/objects/uploads/photo-x"]);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Explicit teardown — release mock closures so the V8 heap can reclaim
+// the vi.importActual(@workspace/poe) module registry promptly.  In the
+// singleFork queue this file runs at position 3 (right after markers.test.ts),
+// but the explicit restoreAllMocks call below guarantees the mock references
+// are cleared even if the sequencer order changes in the future.
+// ---------------------------------------------------------------------------
+afterAll(() => {
+  vi.restoreAllMocks();
 });

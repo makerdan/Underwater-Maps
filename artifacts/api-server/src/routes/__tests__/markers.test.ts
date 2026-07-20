@@ -8,7 +8,7 @@
  *    asyncHandler correctly forwards the rejected promise to Express error
  *    middleware instead of leaving the request open.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import request from "supertest";
 
 const state: { throwOnSelect: boolean } = { throwOnSelect: false };
@@ -248,4 +248,15 @@ describe("PATCH /api/markers/:id — safeParse rejection (400)", () => {
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_request" });
   });
+});
+
+// ---------------------------------------------------------------------------
+// Explicit teardown — release mock closures so the V8 heap can reclaim
+// the vi.importActual(@workspace/poe) module registry promptly.  In the
+// singleFork queue this file runs at position 2 (right after portFailFast),
+// but the explicit restoreAllMocks call below guarantees the mock references
+// are cleared even if the sequencer order changes in the future.
+// ---------------------------------------------------------------------------
+afterAll(() => {
+  vi.restoreAllMocks();
 });

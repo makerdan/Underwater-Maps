@@ -4,13 +4,18 @@ import type { TestFile } from "vitest/node";
 import budgets from "../../tests/timeout-guard/budgets.json";
 
 /**
- * Run portFailFast.spawn.test.ts first in the sequential singleFork queue.
+ * Run high-priority files first in the sequential singleFork queue.
  *
- * Without this, vitest schedules files in inode-creation order — newer files
- * sort last. portFailFast was created recently, so it lands at position ~140
- * and starts with ≈0 s left in the 600 s budget.  Hoisting it to position 1
- * gives it the full budget for its esbuild build (if stale) + 3 spawn tests,
- * and leaves the remaining 140 files to fill the rest of the window.
+ * portFailFast.spawn.test.ts — hoisted to position 1 so the esbuild build (if
+ * stale) and its 3 spawn tests always have the full suite budget ahead of them.
+ *
+ * markers.test.ts and markers-delete.test.ts — hoisted to positions 2–3.
+ * Both files import the full Express app via vi.importActual(@workspace/poe),
+ * which creates large module closures in the V8 heap.  When they run late in
+ * the 140+ file singleFork queue the cumulative RSS can exceed the
+ * --max-old-space-size ceiling and OOM-crash the remaining tests.  Running
+ * them second and third (heap still fresh) keeps peak RSS well below the
+ * limit.
  */
 class PortTestFirstSequencer extends BaseSequencer {
   override async sort(files: TestFile[]) {
@@ -18,8 +23,19 @@ class PortTestFirstSequencer extends BaseSequencer {
     const portFirst = sorted.filter((f) =>
       f.moduleId.includes("portFailFast"),
     );
-    const rest = sorted.filter((f) => !f.moduleId.includes("portFailFast"));
-    return [...portFirst, ...rest];
+    const markersEarly = sorted.filter(
+      (f) =>
+        (f.moduleId.includes("/markers.test.") ||
+          f.moduleId.includes("/markers-delete.test.")) &&
+        !f.moduleId.includes("portFailFast"),
+    );
+    const rest = sorted.filter(
+      (f) =>
+        !f.moduleId.includes("portFailFast") &&
+        !f.moduleId.includes("/markers.test.") &&
+        !f.moduleId.includes("/markers-delete.test."),
+    );
+    return [...portFirst, ...markersEarly, ...rest];
   }
 }
 
