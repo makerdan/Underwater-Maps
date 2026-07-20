@@ -1,15 +1,13 @@
 ---
-name: api-server unit suite pre-existing breakage
-description: 70 failures across 10 api-server test files (as of 2026-07-20) unrelated to load; root causes and how to distinguish from your own regressions.
+name: api-server unit suite baseline
+description: The 2026-07-20 pre-existing api-server test breakage was repaired; how to debug new failures and keep the baseline green.
 ---
-Rule: before blaming your diff for api-server test:unit failures, run the failing file solo and capture the real error behind asyncHandler 500s with a temporary express error middleware.
+Rule: the api-server unit suite baseline is green (repaired 2026-07-20); do NOT treat failures as pre-existing — run the failing file solo and capture the real error behind asyncHandler 500s with a temporary express error middleware.
 
-Known pre-existing failure classes (tracked in follow-up task "Fix broken server test suite"):
-- Route tests set E2E_AUTH_BYPASS=1 but never send the `x-e2e-user-id` header — requireAuth falls through to Clerk getAuth, which throws "clerkMiddleware should be registered" → every request 500s (e.g. terrain-bundles.test.ts).
-- Test files that vi.mock ../middlewares/rateLimit.js without exporting __resetRateLimitMemory crash in src/__tests__/setup.ts (zone-cache-* files).
-- admin.test.ts expects error code `invalid_param`; validate middleware now returns `invalid_request`.
+Lessons from the repair:
+- Mocks of `lib/terrain.js` must export every const that `catalogFetchStrategy.ts` imports (NYSDEC_BATHY_FEATURE_SERVICE, MN_DNR_BATHY_FEATURE_SERVICE, BUNDLED_TERRAIN, ALL_PRESET_DATASETS). Adding a new terrain export consumed at module init breaks every test file that fully mocks terrain.js — copy the export list from terrain-bundles.test.ts's mock.
+- The rate-limit-isolation guard requires every test file importing app.js to call `__resetRateLimitMemory()` in a beforeEach.
+- New EXTRA_CATALOG_ENTRIES ids must be added to PRIMARY_KEYWORD_QUERIES in catalog-search.test.ts (a name-based query like "Seneca Lake, NY" reliably surfaces the entry).
+- Admin rate-limit-usage query validation intentionally uses errorCode "invalid_param" (see routes/admin.ts), not the default "invalid_request".
 
-Status update (later 2026-07-20): baseline is now 9 failed files / 3 failed tests (NYSDEC_BATHY_FEATURE_SERVICE missing from terrain.js mocks in 6 files, auth-bypass 500-vs-401, rate-limit-isolation guard listing 8 offender files, admin invalid_param). Catalog-search keyword-coverage failures are fixed and no longer part of the baseline.
-
-**Why:** these failures make test-standard/test-heavy always fail; without knowing they're pre-existing you'll burn time bisecting your own change.
-**How to apply:** verify your touched surfaces solo (route tests + component tests) and use skip_validation_reason citing this until the suite is repaired.
+**How to apply:** when the full suite fails but the file passes solo, suspect cross-file contamination (see other memory topics), not this baseline.

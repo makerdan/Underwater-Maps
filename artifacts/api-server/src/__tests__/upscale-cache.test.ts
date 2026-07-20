@@ -125,6 +125,9 @@ vi.mock("../lib/substrateGrid.js", () => ({
 }));
 
 vi.mock("../lib/terrain.js", () => ({
+  NYSDEC_BATHY_FEATURE_SERVICE: "https://example.com/nysdec",
+  MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
+  BUNDLED_TERRAIN: {},
   ALL_PRESET_DATASETS: [],
   BUNDLED_TERRAIN: [],
   NYSDEC_BATHY_FEATURE_SERVICE: "https://mock.invalid/nysdec",

@@ -113,8 +113,10 @@ vi.mock("../../lib/clerkAdmin.js", () => ({
 }));
 
 import app from "../../app.js";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 beforeEach(() => {
+  __resetRateLimitMemory();
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   schemaState.throwExportUserDataResponse = false;
   schemaState.throwDeleteAccountResponse = false;
