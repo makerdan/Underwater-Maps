@@ -111,7 +111,7 @@ function makeFakeRegistry(behaviours: Record<string, "throw" | "ok">) {
   const calls: string[] = [];
   const orig = { ...BATHYMETRY_SOURCES } as Record<string, (typeof BATHYMETRY_SOURCES)[BathymetrySourceId]>;
   for (const [id, mode] of Object.entries(behaviours)) {
-    (BATHYMETRY_SOURCES as Record<string, { fetch: (...args: unknown[]) => Promise<unknown> }>)[id] = {
+    (BATHYMETRY_SOURCES as Record<string, unknown>)[id] = {
       ...orig[id]!,
       fetch: async () => {
         calls.push(id);

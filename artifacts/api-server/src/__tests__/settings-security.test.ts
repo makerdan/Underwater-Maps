@@ -125,12 +125,12 @@ describe("PUT /api/settings — Zod 400 stderr log must not expose .received", (
 
   beforeEach(() => {
     stderrChunks = [];
-    stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(
+    stderrSpy = (vi.spyOn(process.stderr, "write").mockImplementation(
       (chunk: string | Uint8Array) => {
         stderrChunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
         return true;
       },
-    );
+    ) as unknown) as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {

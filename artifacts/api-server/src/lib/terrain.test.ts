@@ -103,10 +103,10 @@ const URL_GEBCO = "gebco.net";
 // ---------------------------------------------------------------------------
 
 describe("resolveBathymetrySource — WCS fetcher routing", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn<typeof globalThis, "fetch">>;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, "fetch");
+    fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
   });
 
   afterEach(() => {
@@ -124,7 +124,7 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
       maxLat: 43.8,
     });
 
-    fetchSpy.mockImplementation(async (url: RequestInfo | URL) => {
+    fetchSpy.mockImplementation(async (url: unknown) => {
       const urlStr = String(url);
       if (urlStr.includes(URL_3DEP)) return makeOkResponse(VALID_3DEP_GRID);
       // If GEBCO is accidentally called, return an error to ensure the test catches it
@@ -152,7 +152,7 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
       maxLat: 49.0,
     });
 
-    fetchSpy.mockImplementation(async (url: RequestInfo | URL) => {
+    fetchSpy.mockImplementation(async (url: unknown) => {
       const urlStr = String(url);
       if (urlStr.includes(URL_GREAT_LAKES)) return makeOkResponse(VALID_GREAT_LAKES_GRID);
       return new Response("unexpected", { status: 500 });
@@ -179,7 +179,7 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
       maxLat: 43.0,
     });
 
-    fetchSpy.mockImplementation(async (url: RequestInfo | URL) => {
+    fetchSpy.mockImplementation(async (url: unknown) => {
       const urlStr = String(url);
       if (urlStr.includes(URL_GREAT_LAKES)) return makeOkResponse(VALID_GREAT_LAKES_GRID);
       return new Response("unexpected", { status: 500 });
@@ -216,7 +216,7 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
       { waterType: "saltwater" },
     );
 
-    fetchSpy.mockImplementation(async (url: RequestInfo | URL) => {
+    fetchSpy.mockImplementation(async (url: unknown) => {
       const urlStr = String(url);
       if (urlStr.includes(URL_GEBCO)) return makeOkResponse(VALID_GEBCO_GRID);
       return new Response("unexpected", { status: 500 });
@@ -244,7 +244,7 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
       maxLat: 43.8,
     });
 
-    fetchSpy.mockImplementation(async (url: RequestInfo | URL) => {
+    fetchSpy.mockImplementation(async (url: unknown) => {
       const urlStr = String(url);
       if (urlStr.includes(URL_3DEP)) {
         throw new Error("simulated 3DEP network failure");

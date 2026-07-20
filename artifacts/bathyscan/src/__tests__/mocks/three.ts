@@ -132,7 +132,7 @@ export class PerspectiveCamera extends _Stub {
 }
 
 export class CatmullRomCurve3 extends _Stub {
-  getPoints() { return []; }
+  override getPoints() { return []; }
 }
 
 export class BufferAttribute {

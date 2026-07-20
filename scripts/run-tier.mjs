@@ -67,7 +67,7 @@ function isCodegenFresh() {
   try {
     const generatedMtime = statSync(generatedFile).mtimeMs;
     for (const input of inputs) {
-      if (statSync(input).mtimeMs >= generatedMtime) {
+      if (statSync(input).mtimeMs > generatedMtime) {
         return false;
       }
     }

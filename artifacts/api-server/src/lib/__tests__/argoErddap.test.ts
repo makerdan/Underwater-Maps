@@ -124,7 +124,7 @@ describe("fetchArgoProfile", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     __clearArgoCache();
-    fetchSpy = vi.spyOn(globalThis, "fetch");
+    fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
   });
   afterEach(() => {
     fetchSpy.mockRestore();
@@ -192,7 +192,7 @@ describe("fetchArgoProfile caching", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     __clearArgoCache();
-    fetchSpy = vi.spyOn(globalThis, "fetch");
+    fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
   });
   afterEach(() => {
     fetchSpy.mockRestore();

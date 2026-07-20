@@ -29,7 +29,7 @@ function makeApp() {
 let fetchSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
-  fetchSpy = vi.spyOn(globalThis, "fetch");
+  fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
 });
 afterEach(() => {
   fetchSpy.mockRestore();

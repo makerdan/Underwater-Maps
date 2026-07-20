@@ -3,9 +3,10 @@
  * check-drift.mjs — Umbrella drift-detection runner.
  *
  * Runs all six drift classes and prints a per-class pass/fail summary with
- * remediation hints. CI runs each class as a separate named step (see
- * .github/workflows/drift-detection.yml); this runner is the local
- * equivalent: `pnpm run check:drift`.
+ * remediation hints. The tiered validation commands (test-fast, test-standard,
+ * test-heavy) registered via scripts/register-validation-commands.mjs run
+ * individual drift classes as part of their check suites; this runner is the
+ * local equivalent: `pnpm run check:drift`.
  *
  * Drift classes:
  *   1. api-codegen   — OpenAPI spec vs. generated client/Zod code

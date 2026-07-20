@@ -35,13 +35,13 @@ function buildDebugText(error: Error, componentStack: string | null, requestId: 
  * body going blank).
  */
 export class ErrorBoundary extends React.Component<Props, State> {
-  state: State = { error: null, componentStack: null };
+  override state: State = { error: null, componentStack: null };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo): void {
+  override componentDidCatch(error: Error, info: React.ErrorInfo): void {
     this.setState({ componentStack: info.componentStack ?? null });
     if (typeof console !== "undefined") {
       console.error("[ErrorBoundary] caught error", error, info);
@@ -50,7 +50,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   reset = () => this.setState({ error: null, componentStack: null });
 
-  render() {
+  override render() {
     if (this.state.error) {
       if (this.props.fallback !== undefined) return this.props.fallback;
       const label = this.props.label ?? "this section";

@@ -133,8 +133,8 @@ describe("routeTarEntries — all-unsupported archive", () => {
     expect(mockLogger.warn).not.toHaveBeenCalled();
 
     const infoCalls = (mockLogger.info as ReturnType<typeof vi.fn>).mock.calls;
-    const skipCalls = infoCalls.filter(([, msg]: [unknown, string]) =>
-      typeof msg === "string" && msg.includes("skipping"),
+    const skipCalls = infoCalls.filter(
+      (call) => typeof call[1] === "string" && call[1].includes("skipping"),
     );
     expect(skipCalls.length).toBe(2);
   });

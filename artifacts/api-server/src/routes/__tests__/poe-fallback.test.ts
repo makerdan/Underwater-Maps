@@ -428,7 +428,7 @@ describe("logUsage provider tagging", () => {
       .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
 
     const logCall = valuesSpy.mock.calls.find(
-      ([arg]: [Record<string, unknown>]) => arg?.endpoint === "classify",
+      (call) => (call[0] as Record<string, unknown>)?.endpoint === "classify",
     );
     expect(logCall).toBeDefined();
     expect(logCall?.[0]).toMatchObject({ provider: "openai" });
@@ -447,7 +447,7 @@ describe("logUsage provider tagging", () => {
       .send({ question: "How do I use the zone overlay?" });
 
     const logCall = valuesSpy.mock.calls.find(
-      ([arg]: [Record<string, unknown>]) => arg?.endpoint === "help",
+      (call) => (call[0] as Record<string, unknown>)?.endpoint === "help",
     );
     expect(logCall).toBeDefined();
     expect(logCall?.[0]).toMatchObject({ provider: "openai" });
@@ -463,7 +463,7 @@ describe("logUsage provider tagging", () => {
       .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
 
     const logCall = valuesSpy.mock.calls.find(
-      ([arg]: [Record<string, unknown>]) => arg?.endpoint === "classify",
+      (call) => (call[0] as Record<string, unknown>)?.endpoint === "classify",
     );
     if (logCall) {
       // Poe success: provider should be absent (not set to "poe" or any other value)

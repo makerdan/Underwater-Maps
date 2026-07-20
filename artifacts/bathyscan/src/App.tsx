@@ -2149,7 +2149,7 @@ export class ClerkLoadErrorBoundary extends React.Component<
   { children: React.ReactNode },
   ClerkLoadErrorBoundaryState
 > {
-  state: ClerkLoadErrorBoundaryState = {
+  override state: ClerkLoadErrorBoundaryState = {
     failureCount: 0,
     hasError: false,
     retrying: false,
@@ -2171,7 +2171,7 @@ export class ClerkLoadErrorBoundary extends React.Component<
    * not handled — it propagates via render() re-throwing to the nearest parent
    * boundary.
    */
-  componentDidCatch(error: Error, _info: React.ErrorInfo): void {
+  override componentDidCatch(error: Error, _info: React.ErrorInfo): void {
     if (!isClerkLoadError(error)) return;
     // Guard: don't stack a second timer if one is already running.
     if (this._retryTimer !== null) return;
@@ -2191,14 +2191,14 @@ export class ClerkLoadErrorBoundary extends React.Component<
     }
   }
 
-  componentWillUnmount() {
+  override componentWillUnmount() {
     if (this._retryTimer !== null) {
       clearTimeout(this._retryTimer);
       this._retryTimer = null;
     }
   }
 
-  render() {
+  override render() {
     const { hasError, caughtError, failureCount, retrying } = this.state;
     if (!hasError) return this.props.children;
 

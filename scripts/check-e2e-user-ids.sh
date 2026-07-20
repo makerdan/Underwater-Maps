@@ -37,10 +37,12 @@ HITS_CONST=$(grep -rn --include="*.ts" -E '"[A-Za-z0-9_-]*-user[A-Za-z0-9_-]*"' 
   | grep -v "^${FIXTURES_FILE}:" \
   | grep -v '"x-e2e-user-id"' || true)
 
-# Pattern 2: the header key "x-e2e-user-id" assigned a raw string value
-# instead of referencing the E2E_USER_ID constant.
+# Pattern 2: the header key "x-e2e-user-id" assigned any raw string literal
+# instead of referencing the E2E_USER_ID constant.  The value regex is
+# intentionally broad ([^"]+) so IDs that don't contain "-user" are caught
+# (e.g. "bypass_e2e", "testId123").
 HITS_INLINE=$(grep -rn --include="*.ts" \
-  -E '"x-e2e-user-id"\s*:\s*"[A-Za-z0-9_-]+-user[A-Za-z0-9_-]*"' "${E2E_DIR}" \
+  -E '"x-e2e-user-id"\s*:\s*"[^"]+"' "${E2E_DIR}" \
   | grep -v "^${FIXTURES_FILE}:" || true)
 
 HITS="${HITS_CONST}${HITS_INLINE}"

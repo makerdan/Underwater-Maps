@@ -127,7 +127,7 @@ const violations = [];
 for (const root of roots) {
   for (const file of walk(root)) {
     const rel = relToRepo(file);
-    if (!usingCustomRoots && ALLOWLIST.has(rel)) continue;
+    if (ALLOWLIST.has(rel)) continue;
     const lines = fs.readFileSync(file, "utf8").split("\n");
     lines.forEach((line, idx) => {
       for (const pattern of PATTERNS) {

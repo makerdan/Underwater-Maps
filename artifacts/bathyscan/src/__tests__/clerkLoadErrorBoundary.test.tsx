@@ -43,11 +43,11 @@ afterEach(() => {
 // ─── Simple parent boundary — catches whatever ClerkLoadErrorBoundary rethrows ──
 interface SimpleBoundaryState { error: string | null }
 class SimpleBoundary extends React.Component<{ children: React.ReactNode }, SimpleBoundaryState> {
-  state: SimpleBoundaryState = { error: null };
+  override state: SimpleBoundaryState = { error: null };
   static getDerivedStateFromError(e: Error): SimpleBoundaryState {
     return { error: e.message };
   }
-  render() {
+  override render() {
     if (this.state.error) return <div data-testid="parent-caught">{this.state.error}</div>;
     return this.props.children;
   }

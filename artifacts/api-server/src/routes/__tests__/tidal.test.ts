@@ -35,7 +35,7 @@ describe("GET /tidal/schedule", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, "fetch");
+    fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
   });
   afterEach(() => {
     fetchSpy.mockRestore();
@@ -112,7 +112,7 @@ describe("GET /tidal", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, "fetch");
+    fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
   });
   afterEach(() => {
     fetchSpy.mockRestore();

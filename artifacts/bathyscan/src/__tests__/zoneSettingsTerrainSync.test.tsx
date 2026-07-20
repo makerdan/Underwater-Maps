@@ -186,7 +186,7 @@ vi.mock("three", () => {
     Mesh: Stub, Points: Stub, LineSegments: Stub, Line: Stub, LineLoop: Stub,
     Group: Stub, Object3D: Stub, Raycaster: Stub, Sphere: Stub, Box3: Stub,
     Shape: Stub, Path: Stub, ShapeGeometry: Stub,
-    CatmullRomCurve3: class extends Stub { getPoints() { return []; } },
+    CatmullRomCurve3: class extends Stub { override getPoints() { return []; } },
     DoubleSide: 0, FrontSide: 0, BackSide: 1,
     AdditiveBlending: 1, NormalBlending: 2,
     ClampToEdgeWrapping: 1001, RepeatWrapping: 1000, LinearFilter: 1006,
