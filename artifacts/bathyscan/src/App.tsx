@@ -90,6 +90,7 @@ import { useDriftStore } from "@/lib/driftStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
 import { WeatherPanel } from "@/components/WeatherPanel";
 import { DriftPlannerPanel } from "@/components/DriftPlannerPanel";
+import { ManualConditionsChip } from "@/components/ManualConditionsChip";
 import { DriftTimeline } from "@/components/DriftTimeline";
 import { HelpButton } from "@/components/help/HelpButton";
 import { HelpWindow } from "@/components/help/HelpWindow";
@@ -848,6 +849,17 @@ function Main() {
     }
   }, [terrain]);
 
+  // Stale manual-conditions lifecycle: when the active dataset changes, drop
+  // session-only manual conditions for every OTHER dataset so values from a
+  // previous lake never resurface later in the same session. Persisted
+  // per-lake conditions ("Remember for this lake") are untouched.
+  const activeDatasetIdForConditions = terrain?.datasetId ?? null;
+  useEffect(() => {
+    if (activeDatasetIdForConditions) {
+      useUiStore.getState().pruneSessionManualConditions(activeDatasetIdForConditions);
+    }
+  }, [activeDatasetIdForConditions]);
+
   // One-shot camera spawn from share-link params. Fires the first time the
   // terrain matching the URL dataset is loaded, then never again.
   const didApplyUrlSpawnRef = useRef(false);
@@ -1293,6 +1305,9 @@ function Main() {
             <ErrorBoundary label="the sidebar">
             {/* ── Mode tabs (always visible, above all panels) ── */}
             <SidebarModeTabs />
+
+            {/* ── Persistent manual-conditions chip (visible on every tab) ── */}
+            <ManualConditionsChip />
 
             {/* ══════════════════════════════════════════════════
                 EXPLORE MODE — DatasetPanel + OverlaysToolsPanel

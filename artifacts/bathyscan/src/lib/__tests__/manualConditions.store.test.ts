@@ -111,6 +111,61 @@ describe("uiStore — sessionManualConditions", () => {
   });
 });
 
+describe("uiStore — pruneSessionManualConditions (lake switch)", () => {
+  it("drops session conditions for other lakes when switching, keeping the active lake's", () => {
+    const { setSessionManualConditions, pruneSessionManualConditions } = useUiStore.getState();
+    setSessionManualConditions("lake-a", SAMPLE);
+    setSessionManualConditions("lake-b", { ...SAMPLE, windSpeedKnots: 20 });
+
+    // Switch to lake-b: lake-a's session conditions must be dropped.
+    pruneSessionManualConditions("lake-b");
+
+    const state = useUiStore.getState().sessionManualConditions;
+    expect(state["lake-a"]).toBeUndefined();
+    expect(state["lake-b"]!.windSpeedKnots).toBe(20);
+  });
+
+  it("clears everything when the active lake has no session conditions", () => {
+    const { setSessionManualConditions, pruneSessionManualConditions } = useUiStore.getState();
+    setSessionManualConditions("lake-a", SAMPLE);
+
+    pruneSessionManualConditions("lake-b");
+
+    expect(useUiStore.getState().sessionManualConditions).toEqual({});
+  });
+
+  it("switching from Lake A to Lake B and back does not resurrect Lake A's session conditions", () => {
+    const { setSessionManualConditions, pruneSessionManualConditions } = useUiStore.getState();
+    setSessionManualConditions("lake-a", SAMPLE);
+
+    pruneSessionManualConditions("lake-b"); // A → B
+    pruneSessionManualConditions("lake-a"); // B → A
+
+    expect(useUiStore.getState().sessionManualConditions["lake-a"]).toBeUndefined();
+  });
+
+  it("is a no-op (no state churn) when only the active lake has session conditions", () => {
+    const { setSessionManualConditions, pruneSessionManualConditions } = useUiStore.getState();
+    setSessionManualConditions("lake-a", SAMPLE);
+    const before = useUiStore.getState().sessionManualConditions;
+
+    pruneSessionManualConditions("lake-a");
+
+    expect(useUiStore.getState().sessionManualConditions).toBe(before);
+  });
+
+  it("does not touch persisted datasetManualConditions in settingsStore", () => {
+    const { setSessionManualConditions, pruneSessionManualConditions } = useUiStore.getState();
+    const { setDatasetManualConditions } = useSettingsStore.getState();
+    setDatasetManualConditions("lake-a", SAMPLE);
+    setSessionManualConditions("lake-a", SAMPLE);
+
+    pruneSessionManualConditions("lake-b");
+
+    expect(useSettingsStore.getState().datasetManualConditions["lake-a"]).toEqual(SAMPLE);
+  });
+});
+
 describe("DEFAULT_SETTINGS", () => {
   it("includes empty datasetManualConditions and manualConditionsActiveSource", () => {
     expect(DEFAULT_SETTINGS.datasetManualConditions).toEqual({});

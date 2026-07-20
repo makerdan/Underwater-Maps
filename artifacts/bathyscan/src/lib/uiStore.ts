@@ -334,6 +334,14 @@ interface UiStore {
    * calculations.
    */
   onManualConditionsServerClear: (datasetId: string) => void;
+  /**
+   * Call when the active terrain/dataset changes. Drops session-only manual
+   * conditions for every dataset EXCEPT the newly active one, so stale
+   * session values from a previous lake never resurface later in the same
+   * session. Persisted per-lake conditions ("Remember for this lake") in
+   * settingsStore are intentionally untouched.
+   */
+  pruneSessionManualConditions: (activeDatasetId: string) => void;
 }
 
 // ── Device-local helpers (hasSeenOrbitTouchHint only) ────────────────────────
@@ -567,6 +575,16 @@ export const useUiStore = create<UiStore>((set, get) => {
       });
       useSettingsStore.getState().clearDatasetManualConditions(datasetId);
     },
+    pruneSessionManualConditions: (activeDatasetId) =>
+      set((state) => {
+        const keys = Object.keys(state.sessionManualConditions);
+        if (!keys.some((k) => k !== activeDatasetId)) return {};
+        const kept = state.sessionManualConditions[activeDatasetId];
+        return {
+          sessionManualConditions:
+            kept !== undefined ? { [activeDatasetId]: kept } : {},
+        };
+      }),
     pendingCoordSearch: null,
     setPendingCoordSearch: (req) => set({ pendingCoordSearch: req }),
     clearPendingCoordSearch: () => set({ pendingCoordSearch: null }),
