@@ -49,8 +49,25 @@ installFileBudgetGuard(
 // like gcs-job-recovery is unaffected.
 vi.useRealTimers();
 
-beforeEach(() => {
+beforeEach(async () => {
   clearAllCaches();
+  // Reset in-memory rate-limit buckets before every test.
+  //
+  // In singleFork mode every test file shares the same V8 heap, so any
+  // memoryBuckets entries written by test N are still present when test N+1
+  // starts.  This beforeEach (in the setupFile) fires before every test in
+  // every file, providing both file-level and per-test rate-limit isolation.
+  //
+  // Dynamic import (not a top-level static import) is intentional: by the
+  // time beforeEach fires, vi.mock() in the test file has already been
+  // applied to the module registry.  A top-level import of rateLimit.ts in
+  // this setupFile would load it before vi.mock(), causing rateLimit.ts to
+  // capture the real @workspace/db pool and break mock interception for tests
+  // that mock @workspace/db.
+  const { __resetRateLimitMemory } = await import(
+    "../middlewares/rateLimit.js"
+  );
+  __resetRateLimitMemory();
 });
 
 // Force a major GC cycle after every test file completes.
