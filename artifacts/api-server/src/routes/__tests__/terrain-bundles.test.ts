@@ -113,6 +113,13 @@ const { default: terrainBundlesRouter } = await import("../terrain-bundles.js");
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json());
+// requireAuth's E2E bypass authenticates via the x-e2e-user-id header; without
+// it getAuth() throws (no clerkMiddleware in this test app) and every request
+// 500s before reaching the route handler.
+app.use((req, _res, next) => {
+  req.headers["x-e2e-user-id"] = "test-user";
+  next();
+});
 app.use(terrainBundlesRouter);
 
 // ---------------------------------------------------------------------------

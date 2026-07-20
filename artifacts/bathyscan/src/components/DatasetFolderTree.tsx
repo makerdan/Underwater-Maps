@@ -1571,6 +1571,10 @@ const FolderRow: React.FC<FolderRowProps> = ({
       aria-busy={deleting || undefined}
       {...attributes}
       {...(selectionMode ? {} : listeners)}
+      // dnd-kit sets aria-disabled=true when dragging is disabled (e.g. in
+      // selection mode), but the row is still clickable for selection — keep
+      // the accessibility tree (and Playwright actionability) truthful.
+      aria-disabled={(deleting || pendingDelete) ? true : undefined}
       tabIndex={(deleting || pendingDelete) ? -1 : 0}
       onContextMenu={(deleting || pendingDelete) ? undefined : onContextMenu}
       onDoubleClick={(deleting || pendingDelete) ? undefined : onDoubleClick}
@@ -1733,6 +1737,10 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
       aria-busy={deleting || undefined}
       {...attributes}
       {...(selectionMode ? {} : listeners)}
+      // dnd-kit sets aria-disabled=true when dragging is disabled (e.g. in
+      // selection mode), but the row is still clickable for selection — keep
+      // the accessibility tree (and Playwright actionability) truthful.
+      aria-disabled={(deleting || pendingDelete) ? true : undefined}
       tabIndex={(deleting || pendingDelete) ? -1 : 0}
       role="button"
       onClick={(deleting || pendingDelete) ? undefined : onClick}
