@@ -60,6 +60,10 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     setCurrentsShowStreamlines: vi.fn(),
     currentArrowDensity: "normal" as const,
     layerArrowDensity: {},
+    manualConditionsActiveSource: {} as Record<string, "real" | "manual">,
+    setManualConditionsActiveSource: vi.fn(),
+    datasetManualConditions: {} as Record<string, unknown>,
+    setDatasetManualConditions: vi.fn(),
   });
   const useSettingsStore = Object.assign(
     (sel: (s: ReturnType<typeof settingsState>) => unknown) => sel(settingsState()),
@@ -79,6 +83,10 @@ const currentsStoreState = {
   tidalStatus: "idle" as "idle" | "loading" | "ok" | "unavailable",
   retryTidal: vi.fn(),
 };
+
+vi.mock("@/lib/context", () => ({
+  useAppState: () => ({ terrain: null }),
+}));
 
 vi.mock("@/lib/currentsStore", () => ({
   useCurrentsStore: (sel: (s: typeof currentsStoreState) => unknown) => sel(currentsStoreState),

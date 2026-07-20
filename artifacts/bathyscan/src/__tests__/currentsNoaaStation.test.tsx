@@ -11,13 +11,17 @@
  *     source — so we don't silently switch to the manual slider when no
  *     station is in range.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { act } from "react";
 import { useCurrentsStore, type NoaaAmbient, type TidalStatus } from "@/lib/currentsStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { CurrentsPanel } from "@/components/CurrentsPanel";
 import { MPH_TO_KNOTS, MPH_TO_KPH } from "@/lib/units";
+
+vi.mock("@/lib/context", () => ({
+  useAppState: () => ({ terrain: null }),
+}));
 
 function resetStores(tidalStatus: TidalStatus = "ok") {
   act(() => {

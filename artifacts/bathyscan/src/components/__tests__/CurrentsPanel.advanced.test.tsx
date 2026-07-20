@@ -74,6 +74,8 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     setCurrentsShowArrows: vi.fn(),
     currentsShowStreamlines: false,
     setCurrentsShowStreamlines: vi.fn(),
+    manualConditionsActiveSource: {} as Record<string, "real" | "manual">,
+    setManualConditionsActiveSource: vi.fn(),
   });
 
   const useSettingsStore = Object.assign(
@@ -112,6 +114,10 @@ vi.mock("@/lib/panelCollapseStore", () => ({
       }),
       toggle: h.panelToggle,
     }),
+}));
+
+vi.mock("@/lib/context", () => ({
+  useAppState: () => ({ terrain: null }),
 }));
 
 vi.mock("@/lib/currentsStore", () => ({

@@ -80,11 +80,11 @@ describe("HabitatPanel terrain-swap defaults effect — store-state pattern (sta
       const line = lines[i];
       if (!line) continue;
       if (
-        line.includes("eslint-disable") &&
-        line.includes("exhaustive-deps") &&
-        !line.includes(" -- ")
+        lines[i]?.includes("eslint-disable") === true &&
+        lines[i]?.includes("exhaustive-deps") === true &&
+        lines[i]?.includes(" -- ") !== true
       ) {
-        suppressed.push(`line ${i + 1}: ${line.trim()}`);
+        suppressed.push(`line ${i + 1}: ${lines[i]!.trim()}`);
       }
     }
     expect(suppressed, `Bare suppressions in HabitatPanel:\n${suppressed.join("\n")}`).toHaveLength(0);

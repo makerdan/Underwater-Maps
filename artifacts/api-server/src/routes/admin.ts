@@ -122,7 +122,7 @@ router.get(
 router.get(
   "/admin/rate-limit/usage",
   requireAuth,
-  validateQuery(AdminRateLimitUsageQuerySchema, "GET /api/admin/rate-limit/usage"),
+  validateQuery(AdminRateLimitUsageQuerySchema, "GET /api/admin/rate-limit/usage", { errorCode: "invalid_param" }),
   asyncHandler(async (req, res) => {
     const userId = (req as AuthenticatedRequest).clerkUserId;
 

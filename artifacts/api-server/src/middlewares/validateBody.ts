@@ -75,11 +75,15 @@ export function validateBody<T extends z.ZodTypeAny>(
  * @param options    - Optional overrides. `details` replaces the default
  *                     generated details string in the 400 response body,
  *                     preserving the original API contract for each route.
+ *                     `errorCode` overrides the `error` field in the 400
+ *                     response body (default: `"invalid_request"`). Set to
+ *                     `"invalid_param"` for query-param validation on routes
+ *                     whose API contract uses that error code.
  */
 export function validateQuery<T extends z.ZodTypeAny>(
   schema: T,
   routeLabel: string,
-  options?: { details?: string },
+  options?: { details?: string; errorCode?: "invalid_request" | "invalid_param" },
 ): (req: Request, res: Response, next: NextFunction) => void {
   return (req: Request, res: Response, next: NextFunction): void => {
     const parsed = schema.safeParse(req.query);
@@ -94,7 +98,8 @@ export function validateQuery<T extends z.ZodTypeAny>(
         parsed.error.issues
           .map((i) => `${(i.path ?? []).join(".") || "(root)"}: ${i.code}`)
           .join("; ");
-      res.status(400).json({ error: "invalid_request", details });
+      const errorCode = options?.errorCode ?? "invalid_request";
+      res.status(400).json({ error: errorCode, details });
       return;
     }
     res.locals.parsedQuery = parsed.data as z.infer<T>;

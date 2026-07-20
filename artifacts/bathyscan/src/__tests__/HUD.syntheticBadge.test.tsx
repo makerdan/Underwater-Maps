@@ -83,6 +83,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     globalFontSize: "medium" as const,
     highContrastHud: false,
     colorBlindSafePalette: false,
+    manualConditionsActiveSource: {} as Record<string, "real" | "manual">,
   };
   const useSettingsStore = Object.assign(
     (sel: (s: typeof defaults) => unknown) => sel(defaults),

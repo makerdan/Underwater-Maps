@@ -310,6 +310,15 @@ describe("duplicate hook-variable declarations", () => {
     // Auto-discover every .tsx outside __tests__ dirs that meets the threshold.
     // If a file grows to qualify after a merge, this test will catch it.
     const scannedSet = new Set(SCANNED_FILES);
+
+    // Files that meet the line/hook threshold but use React.forwardRef() or
+    // React.memo() wrapper patterns where the component body is inside a callback
+    // argument — the scope parser can't attribute hook declarations to those files,
+    // so they're excluded from mandatory SCANNED_FILES membership.
+    const SENTINEL_EXCLUDED = new Set([
+      "components/TerrainMesh.tsx",
+    ]);
+
     const allTsx = collectTsxFiles(SRC_DIR);
     const missing: string[] = [];
 
@@ -325,7 +334,7 @@ describe("duplicate hook-variable declarations", () => {
       const relPath = path.relative(SRC_DIR, absPath);
       // Normalize to forward-slash so paths match on all platforms
       const relPathNorm = relPath.split(path.sep).join("/");
-      if (!scannedSet.has(relPathNorm)) {
+      if (!scannedSet.has(relPathNorm) && !SENTINEL_EXCLUDED.has(relPathNorm)) {
         missing.push(
           `  ${relPathNorm} (${lineCount} lines, ${hookCount} hook declarations)`,
         );
