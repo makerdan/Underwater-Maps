@@ -12,20 +12,24 @@
  * instead.
  *
  * ── Phase 2: unregistered fetch-wrapper definition scan ───────────────────
- * Scans the api-server source for exported functions that:
+ * Scans the api-server AND bathyscan source trees for exported functions that:
  *   (a) accept a URL as their first argument (named url, href, endpoint, etc.)
  *   (b) call native fetch() inside their body
  * Any such function that is not listed in FETCH_WRAPPERS (can receive internal
  * /api/ paths) or KNOWN_EXTERNAL_WRAPPERS (only ever calls external services)
  * causes this guard to fail with instructions on how to classify it.
  *
- * This prevents silent gaps where a new api-server fetch helper is added but
- * never registered, allowing a future root-relative call to slip through.
+ * This prevents silent gaps where a new fetch helper is added (backend or
+ * frontend) but never registered, allowing a future root-relative call to
+ * slip through.
  *
  * ─── Scan roots ───────────────────────────────────────────────────────────
  * SCAN_ROOTS lists every source tree that should be checked by Phase 1.  Each
  * entry is a path relative to the repo root.  Add a new entry whenever a new
  * artifact gains helpers that call the BathyScan API.
+ *
+ * WRAPPER_DEF_SCAN_ROOTS lists the trees checked by Phase 2 for unregistered
+ * fetch-wrapper definitions.
  *
  * External-URL wrappers (ERDDAP, NOAA, GCS, Poe, …) are out of scope: they
  * always receive absolute https://… URLs so the root-relative pattern never
@@ -58,12 +62,18 @@
  *
  * Usage:
  *   node scripts/check-root-relative-api.mjs
+ *
+ * Self-test:
+ *   node --test scripts/__tests__/check-root-relative-api.test.mjs
+ *   (run automatically by the `check:root-relative-api` npm script before
+ *   the real scan, so a broken detector fails loudly instead of passing
+ *   quietly)
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * Source trees to scan (Phase 1).  Paths are relative to the repo root.
@@ -76,17 +86,20 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
  *       Do NOT add trees whose fetch calls are exclusively to external services.
  * ──────────────────────────────────────────────────────────────────────────
  */
-const SCAN_ROOTS = [
+export const SCAN_ROOTS = [
   "artifacts/bathyscan/src",
   "artifacts/api-server/src",
 ];
 
 /**
- * Source tree to scan for unregistered fetch wrapper definitions (Phase 2).
- * Limited to api-server/src: bathyscan wrappers are already manually registered
- * in FETCH_WRAPPERS above (authorizedFetch, fetchJsonWithProgress).
+ * Source trees to scan for unregistered fetch wrapper definitions (Phase 2).
+ * Covers both the api-server backend and the bathyscan frontend so that new
+ * fetch helpers on either side cannot silently bypass the guard.
  */
-const WRAPPER_DEF_SCAN_ROOT = "artifacts/api-server/src";
+export const WRAPPER_DEF_SCAN_ROOTS = [
+  "artifacts/bathyscan/src",
+  "artifacts/api-server/src",
+];
 
 const SCAN_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 
@@ -104,28 +117,28 @@ const SKIP_DIRS = new Set([
  *  - Do NOT include wrappers that call external/third-party URLs.
  *  - See the "Adding a new internal fetch wrapper" section above for details.
  */
-const FETCH_WRAPPERS = [
+export const FETCH_WRAPPERS = [
   "fetch",                 // native fetch (used in both bathyscan and api-server)
   "authorizedFetch",       // artifacts/bathyscan/src/lib/authorizedFetch.ts
   "fetchJsonWithProgress", // artifacts/bathyscan/src/lib/fetchWithProgress.ts
 ];
 
 /**
- * Exported api-server functions that call native fetch() internally but only
- * ever issue requests to external services (ERDDAP, NOAA, GCS, Copernicus, …).
+ * Exported functions that call native fetch() internally but only ever issue
+ * requests to external services (ERDDAP, NOAA, GCS, Copernicus, …).
  * These are classified as external-only so Phase 2 does not flag them as
  * unregistered.
  *
  * ─── Classifying a new external-only wrapper ──────────────────────────────
  * If your new exported helper:
- *   • accepts a URL-like first argument (url, href, endpoint, uri, …)
+ *   • accepts a URL-like first argument (url, href, endpoint, input, uri, …)
  *   • calls fetch() in its body
  *   • only ever issues requests to external services (never /api/…)
  * add its name here.  If it can receive BathyScan-internal /api/ paths,
  * add it to FETCH_WRAPPERS instead.
  * ──────────────────────────────────────────────────────────────────────────
  */
-const KNOWN_EXTERNAL_WRAPPERS = new Set([
+export const KNOWN_EXTERNAL_WRAPPERS = new Set([
   // Add external-only helpers here as they are introduced.
   // (Existing api-server fetch helpers use domain-specific first params —
   //  bbox, stationId, lat/lon, etc. — not a raw URL, so they are not
@@ -134,11 +147,17 @@ const KNOWN_EXTERNAL_WRAPPERS = new Set([
 
 // ── Phase 1 helpers ────────────────────────────────────────────────────────
 
-// Build a single regex from the registry.
-// Matches: <wrapperName>( immediately followed by a quote + "/api/"
-// The quote may be ", ', or ` (template literal).
-const wrapperPattern = FETCH_WRAPPERS.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-const ROOT_RELATIVE_API_RE = new RegExp(`\\b(?:${wrapperPattern})\\(\\s*["'\`]\\/api\\/`);
+/**
+ * Build the root-relative /api/ call-site regex from a wrapper registry.
+ * Matches: <wrapperName>( immediately followed by a quote + "/api/"
+ * The quote may be ", ', or ` (template literal).
+ */
+export function buildRootRelativeApiRe(wrappers) {
+  const wrapperPattern = wrappers
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  return new RegExp(`\\b(?:${wrapperPattern})\\(\\s*["'\`]\\/api\\/`);
+}
 
 // Lines whose first non-whitespace token is a line-comment (//) or the start
 // of a block-comment (/*) are skipped — commented-out code is not a violation.
@@ -149,15 +168,17 @@ const COMMENT_LINE_RE = /^\s*(?:\/\/|\/\*)/;
 /**
  * First-parameter names that indicate a function accepts a raw URL.
  * Matched case-insensitively against the first positional parameter name.
+ * "input" is included because fetch-compatible wrappers conventionally name
+ * their first parameter `input` (RequestInfo | URL), e.g. authorizedFetch.
  */
-const URL_PARAM_NAMES = new Set([
-  "url", "href", "endpoint", "uri",
+export const URL_PARAM_NAMES = new Set([
+  "url", "href", "endpoint", "uri", "input",
   "apiurl", "requesturl", "targeturl", "apipath",
 ]);
 
 /**
  * Patterns that match the start of an exported function definition.
- * Group 1 captures the exported name in each case.
+ * Group 1/2 capture the exported name in each case.
  *
  * Covers:
  *   export [async] function name(
@@ -217,11 +238,20 @@ function extractBody(src, searchFrom) {
 /**
  * Scan `src` for exported function definitions that:
  *   (a) accept a URL-like value as their first positional parameter
- *   (b) call native fetch() somewhere in their body
+ *   (b) call native fetch() OR a registered fetch wrapper somewhere in
+ *       their body (a helper wrapping authorizedFetch must be registered
+ *       too, or root-relative calls through it would go undetected)
  *
  * Returns a Set of function names matching both criteria.
  */
-function detectFetchWrappersInSource(src) {
+export function detectFetchWrappersInSource(src, wrappers = FETCH_WRAPPERS) {
+  // Match a bare call to native fetch or to any registered wrapper
+  // (e.g. a helper that delegates to authorizedFetch()).
+  const wrapperCallPattern = wrappers
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const wrapperCallRe = new RegExp(`(?<![.\\w])(?:${wrapperCallPattern})\\s*\\(`);
+
   const found = new Set();
   EXPORT_FN_RE.lastIndex = 0;
   let m;
@@ -238,9 +268,9 @@ function detectFetchWrappersInSource(src) {
     const param = firstParamName(src, parenIdx);
     if (!URL_PARAM_NAMES.has(param)) continue;
 
-    // Extract the function body and check for a bare fetch() call.
+    // Extract the function body and check for a bare fetch()/wrapper call.
     const body = extractBody(src, afterMatch);
-    if (body && BARE_FETCH_CALL_RE.test(body)) {
+    if (body && (BARE_FETCH_CALL_RE.test(body) || wrapperCallRe.test(body))) {
       found.add(name);
     }
   }
@@ -275,82 +305,121 @@ function* walk(entry) {
   }
 }
 
-function relToRepo(file) {
-  return path.relative(repoRoot, file).split(path.sep).join("/");
+function relTo(root, file) {
+  return path.relative(root, file).split(path.sep).join("/");
 }
 
 // ── Phase 1: root-relative call-site scan ─────────────────────────────────
 
-const violations = [];
-let totalFiles = 0;
+/**
+ * Scan the given roots (relative to `rootDir`) for root-relative /api/
+ * call-sites through any registered wrapper.
+ *
+ * Returns { violations: [{file, line, text}], totalFiles }.
+ */
+export function runPhase1({
+  rootDir = repoRoot,
+  scanRoots = SCAN_ROOTS,
+  wrappers = FETCH_WRAPPERS,
+} = {}) {
+  const rootRelativeApiRe = buildRootRelativeApiRe(wrappers);
+  const violations = [];
+  let totalFiles = 0;
 
-for (const scanRoot of SCAN_ROOTS) {
-  const absRoot = path.join(repoRoot, scanRoot);
-  for (const file of walk(absRoot)) {
-    const rel = relToRepo(file);
-    if (isTestFile(rel)) continue;
-    totalFiles++;
+  for (const scanRoot of scanRoots) {
+    const absRoot = path.join(rootDir, scanRoot);
+    for (const file of walk(absRoot)) {
+      const rel = relTo(rootDir, file);
+      if (isTestFile(rel)) continue;
+      totalFiles++;
 
-    const lines = fs.readFileSync(file, "utf8").split("\n");
-    lines.forEach((line, idx) => {
-      if (COMMENT_LINE_RE.test(line)) return;
-      if (ROOT_RELATIVE_API_RE.test(line)) {
-        violations.push({ file: rel, line: idx + 1, text: line.trim() });
-      }
-    });
+      const lines = fs.readFileSync(file, "utf8").split("\n");
+      lines.forEach((line, idx) => {
+        if (COMMENT_LINE_RE.test(line)) return;
+        if (rootRelativeApiRe.test(line)) {
+          violations.push({ file: rel, line: idx + 1, text: line.trim() });
+        }
+      });
+    }
   }
-}
-
-if (violations.length > 0) {
-  console.error(
-    "root-relative-api-guard: root-relative /api/ fetch calls found:\n",
-  );
-  for (const v of violations) {
-    console.error(`  ${v.file}:${v.line}`);
-    console.error(`      ${v.text}`);
-  }
-  console.error(
-    `\n${violations.length} violation(s). Use \`\${API_BASE}api/…\` instead of ` +
-      `"/api/…" so calls work when the app is served from a sub-path.\n` +
-      `See artifacts/bathyscan/src/lib/authorizedFetch.ts and fetchWithProgress.ts.\n` +
-      `To register a new fetch wrapper, add its name to FETCH_WRAPPERS in this script.\n` +
-      `To add a new scan root, add the path to SCAN_ROOTS in this script.`,
-  );
-  process.exit(1);
+  return { violations, totalFiles };
 }
 
 // ── Phase 2: unregistered fetch-wrapper definition scan ───────────────────
 
-const allRegistered = new Set([...FETCH_WRAPPERS, ...KNOWN_EXTERNAL_WRAPPERS]);
-/** @type {Array<{file: string, name: string}>} */
-const unregisteredWrappers = [];
+/**
+ * Scan the given roots (relative to `rootDir`) for exported fetch-wrapper
+ * definitions that are not registered in FETCH_WRAPPERS or
+ * KNOWN_EXTERNAL_WRAPPERS.
+ *
+ * Returns { unregisteredWrappers: [{file, name}] }.
+ */
+export function runPhase2({
+  rootDir = repoRoot,
+  wrapperDefScanRoots = WRAPPER_DEF_SCAN_ROOTS,
+  wrappers = FETCH_WRAPPERS,
+  knownExternalWrappers = KNOWN_EXTERNAL_WRAPPERS,
+} = {}) {
+  const allRegistered = new Set([...wrappers, ...knownExternalWrappers]);
+  /** @type {Array<{file: string, name: string}>} */
+  const unregisteredWrappers = [];
 
-const wrapperDefAbsRoot = path.join(repoRoot, WRAPPER_DEF_SCAN_ROOT);
-for (const file of walk(wrapperDefAbsRoot)) {
-  const rel = relToRepo(file);
-  if (isTestFile(rel)) continue;
+  for (const scanRoot of wrapperDefScanRoots) {
+    const absRoot = path.join(rootDir, scanRoot);
+    for (const file of walk(absRoot)) {
+      const rel = relTo(rootDir, file);
+      if (isTestFile(rel)) continue;
 
-  const src = fs.readFileSync(file, "utf8");
-  const detected = detectFetchWrappersInSource(src);
-  for (const name of detected) {
-    if (!allRegistered.has(name)) {
-      unregisteredWrappers.push({ file: rel, name });
+      const src = fs.readFileSync(file, "utf8");
+      const detected = detectFetchWrappersInSource(src, wrappers);
+      for (const name of detected) {
+        if (!allRegistered.has(name)) {
+          unregisteredWrappers.push({ file: rel, name });
+        }
+      }
     }
   }
+  return { unregisteredWrappers };
 }
 
-if (unregisteredWrappers.length > 0) {
-  console.error(
-    "root-relative-api-guard: unregistered fetch wrapper definition(s) detected:\n",
-  );
-  for (const w of unregisteredWrappers) {
-    console.error(`  ${w.name}  (${w.file})`);
+// ── CLI entry point ────────────────────────────────────────────────────────
+
+function main() {
+  const { violations, totalFiles } = runPhase1();
+
+  if (violations.length > 0) {
+    console.error(
+      "root-relative-api-guard: root-relative /api/ fetch calls found:\n",
+    );
+    for (const v of violations) {
+      console.error(`  ${v.file}:${v.line}`);
+      console.error(`      ${v.text}`);
+    }
+    console.error(
+      `\n${violations.length} violation(s). Use \`\${API_BASE}api/…\` instead of ` +
+        `"/api/…" so calls work when the app is served from a sub-path.\n` +
+        `See artifacts/bathyscan/src/lib/authorizedFetch.ts and fetchWithProgress.ts.\n` +
+        `To register a new fetch wrapper, add its name to FETCH_WRAPPERS in this script.\n` +
+        `To add a new scan root, add the path to SCAN_ROOTS in this script.`,
+    );
+    process.exit(1);
   }
-  console.error(`
+
+  const { unregisteredWrappers } = runPhase2();
+
+  if (unregisteredWrappers.length > 0) {
+    console.error(
+      "root-relative-api-guard: unregistered fetch wrapper definition(s) detected:\n",
+    );
+    for (const w of unregisteredWrappers) {
+      console.error(`  ${w.name}  (${w.file})`);
+    }
+    console.error(`
 ${unregisteredWrappers.length} unregistered wrapper(s).
 
-Each exported api-server function that accepts a URL-like first argument and
-calls fetch() internally must be classified in scripts/check-root-relative-api.mjs:
+Each exported function (api-server or bathyscan) that accepts a URL-like first
+argument and calls fetch() — or a registered fetch wrapper — internally must be
+classified in scripts/check-root-relative-api.mjs:
 
   • If it can receive a BathyScan-internal /api/ URL:
       → Add its name to FETCH_WRAPPERS
@@ -361,15 +430,22 @@ calls fetch() internally must be classified in scripts/check-root-relative-api.m
 
 Leaving a wrapper unclassified means a future root-relative /api/ call through
 it will not be caught by this guard.`);
-  process.exit(1);
+    process.exit(1);
+  }
+
+  console.log(
+    `root-relative-api-guard: OK — no root-relative /api/ fetch calls found.\n` +
+    `  scanned roots     : ${SCAN_ROOTS.join(", ")}\n` +
+    `  fetch wrappers    : ${FETCH_WRAPPERS.join(", ")}\n` +
+    `  files checked     : ${totalFiles}\n` +
+    `  wrapper def scan  : ${WRAPPER_DEF_SCAN_ROOTS.join(", ")} (unregistered wrappers: 0)`,
+  );
 }
 
-// ── Summary ────────────────────────────────────────────────────────────────
+const isDirectRun =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-console.log(
-  `root-relative-api-guard: OK — no root-relative /api/ fetch calls found.\n` +
-  `  scanned roots     : ${SCAN_ROOTS.join(", ")}\n` +
-  `  fetch wrappers    : ${FETCH_WRAPPERS.join(", ")}\n` +
-  `  files checked     : ${totalFiles}\n` +
-  `  wrapper def scan  : ${WRAPPER_DEF_SCAN_ROOT} (unregistered wrappers: 0)`,
-);
+if (isDirectRun) {
+  main();
+}
