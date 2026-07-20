@@ -33,7 +33,7 @@ import { WaterSurfacePlane } from "@/components/WaterSurfacePlane";
 import { WaterTempVolumeLayer } from "@/components/WaterTempVolumeLayer";
 import { LandmassMesh } from "@/components/LandmassMesh";
 import type { TerrainData } from "@workspace/api-client-react";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { useDriftStore } from "@/lib/driftStore";
 import { DriftWaterPlane } from "@/components/DriftWaterPlane";
 import { DriftBoat } from "@/components/DriftBoat";
@@ -251,6 +251,31 @@ const LandTerrainMesh: React.FC = () => {
 };
 
 // ---------------------------------------------------------------------------
+/**
+ * Compute the X-axis scale for a secondary dataset mesh relative to the
+ * primary dataset, correcting for latitude-dependent longitude compression.
+ *
+ * At high latitudes, 1° of longitude spans fewer metres than 1° of latitude.
+ * A raw degree ratio (secLonRange / primaryLonRange) ignores this and produces
+ * a horizontally-stretched mesh. The fix multiplies each span by
+ * cos(midpointLatRad) before dividing, converting angular spans to
+ * proportional linear distances at the respective midpoints.
+ *
+ * @param secLonRange   - Secondary dataset longitude span in degrees
+ * @param secAvgLatRad  - Secondary dataset midpoint latitude in radians
+ * @param primLonRange  - Primary dataset longitude span in degrees
+ * @param primAvgLatRad - Primary dataset midpoint latitude in radians
+ */
+export function computeLatCorrectedLonScale(
+  secLonRange: number,
+  secAvgLatRad: number,
+  primLonRange: number,
+  primAvgLatRad: number,
+): number {
+  const denom = (primLonRange * Math.cos(primAvgLatRad)) || 1;
+  return (secLonRange * Math.cos(secAvgLatRad)) / denom;
+}
+
 // NonPrimaryDatasetMeshes — renders every visible-but-not-primary dataset
 // inside the primary's world coordinate system. Each non-primary mesh occupies
 // world units [-WORLD_SIZE/2, WORLD_SIZE/2] in its own frame; we wrap it in
@@ -307,7 +332,14 @@ const NonPrimaryDatasetMeshes: React.FC<{
           const secLonRange = (g.maxLon - g.minLon) || 1;
           const secLatRange = (g.maxLat - g.minLat) || 1;
           const secDepthRange = (g.maxDepth - g.minDepth) || 1;
-          const xScale = secLonRange / primaryLonRange;
+          // Latitude-corrected longitude scale: degrees of longitude shrink
+          // as lat increases (width ∝ cos(lat)). Multiply each dataset's lon
+          // span by cos(midpoint lat) to convert from angular to proportional
+          // linear distance before dividing, so secondary meshes at high
+          // latitudes are not horizontally stretched.
+          const primaryAvgLatRad = ((primary.minLat + primary.maxLat) / 2) * (Math.PI / 180);
+          const secAvgLatRad = ((g.minLat + g.maxLat) / 2) * (Math.PI / 180);
+          const xScale = computeLatCorrectedLonScale(secLonRange, secAvgLatRad, primaryLonRange, primaryAvgLatRad);
           const zScale = secLatRange / primaryLatRange;
           const naturalYScale = secDepthRange / primaryDepthRange;
           const secCenterLon = (g.minLon + g.maxLon) / 2;
@@ -570,6 +602,26 @@ const TestCameraBridge: React.FC = () => {
   return null;
 };
 
+/**
+ * Derive the effective fog/background colour for the scene.
+ *
+ * Freshwater mode shifts the hue toward green-teal ("#0b3a35") to evoke
+ * clear lake water, but ONLY when the user has not explicitly chosen a
+ * custom fog colour. If the user has overridden the factory default, their
+ * choice is respected in all water-type modes.
+ *
+ * @param isFreshwater    - True when waterType === "freshwater"
+ * @param fogColor        - The user's current fogColor setting
+ * @param defaultFogColor - The factory-default fogColor (from DEFAULT_SETTINGS)
+ */
+export function deriveEffectiveFogColor(
+  isFreshwater: boolean,
+  fogColor: string,
+  defaultFogColor: string,
+): string {
+  return isFreshwater && fogColor === defaultFogColor ? "#0b3a35" : fogColor;
+}
+
 const SceneContents: React.FC<SceneContentsProps> = ({
   terrainMeshRef,
   tidalData,
@@ -597,7 +649,10 @@ const SceneContents: React.FC<SceneContentsProps> = ({
   // shift the background/fog hue toward green-teal, thin the fog, and warm
   // the ambient/key lights so lakes don't render with deep-sea twilight.
   const isFresh = waterType === "freshwater";
-  const effectiveFogColor = isFresh ? "#0b3a35" : fogColor;
+  // Only apply the freshwater hue override when the user has NOT customised
+  // the fog colour (i.e. it still matches the factory default). If the user
+  // has explicitly chosen a colour, honour it regardless of water type.
+  const effectiveFogColor = deriveEffectiveFogColor(isFresh, fogColor, DEFAULT_SETTINGS.fogColor);
   const effectiveFogDensity = isFresh ? fogDensity * 0.55 : fogDensity;
   const ambientHue = isFresh ? "#a8d8c8" : "#7aa8c8";
   const directionalHue = isFresh ? "#dfffe8" : "#d0eeff";
@@ -922,9 +977,16 @@ export const TourScene: React.FC<TourSceneProps> = ({
           camera moves. Visually hidden but read by AT on content change. */}
       <CanvasAriaAnnouncer />
 
+      {/* near = WORLD_SIZE / 10_000 = 0.01 world units.
+          Setting an explicit near plane concentrates 24-bit depth-buffer
+          precision in the range where seafloor and water surface geometry
+          actually lives (within WORLD_SIZE = 100 world units). Without an
+          explicit near, R3F defaults to 0.1, which wastes precision on the
+          [0.1, 0.01] sub-range. polygonOffset on terrain/contour/water meshes
+          still handles co-planar z-fighting for overlapping surfaces. */}
       <Canvas
         aria-label="3D seafloor terrain viewer"
-        camera={{ position: [0, 20, 40], fov, far: renderDistance }}
+        camera={{ position: [0, 20, 40], fov, near: WORLD_SIZE / 10_000, far: renderDistance }}
         gl={{
           antialias,
           // E2E-only: keep the WebGL drawing buffer so Playwright can read

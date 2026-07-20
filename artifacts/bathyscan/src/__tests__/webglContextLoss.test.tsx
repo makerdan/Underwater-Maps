@@ -78,6 +78,49 @@ describe("WebGL context loss recovery", () => {
     canvas.removeEventListener("webglcontextlost", onLost, false);
     canvas.removeEventListener("webglcontextrestored", onRestored, false);
   });
+
+  it("recoveryAttempts resets to 0 on restoration so a loss→restore cycle can recover beyond MAX_RECOVERY_ATTEMPTS", () => {
+    // Bug: markRestored() did NOT reset recoveryAttempts. After 3 loss+restore
+    // cycles the counter sat at 3, causing the 4th loss to exceed
+    // MAX_RECOVERY_ATTEMPTS and incorrectly set contextPermanentlyLost even
+    // though all prior losses had recovered successfully.
+    act(() => {
+      useWebglContextStore.setState({
+        contextLost: false,
+        recoveryKey: 0,
+        recoveryAttempts: 0,
+        contextPermanentlyLost: false,
+      });
+    });
+
+    // Cycle 1: loss → restore
+    act(() => { useWebglContextStore.getState().markLost(); });
+    expect(useWebglContextStore.getState().contextPermanentlyLost).toBe(false);
+    act(() => { useWebglContextStore.getState().markRestored(); });
+    expect(useWebglContextStore.getState().recoveryAttempts).toBe(0);
+
+    // Cycle 2: loss → restore
+    act(() => { useWebglContextStore.getState().markLost(); });
+    expect(useWebglContextStore.getState().contextPermanentlyLost).toBe(false);
+    act(() => { useWebglContextStore.getState().markRestored(); });
+    expect(useWebglContextStore.getState().recoveryAttempts).toBe(0);
+
+    // Cycle 3: loss → restore
+    act(() => { useWebglContextStore.getState().markLost(); });
+    expect(useWebglContextStore.getState().contextPermanentlyLost).toBe(false);
+    act(() => { useWebglContextStore.getState().markRestored(); });
+    expect(useWebglContextStore.getState().recoveryAttempts).toBe(0);
+
+    // Cycle 4: loss — should still recover, NOT be permanently lost
+    act(() => { useWebglContextStore.getState().markLost(); });
+    expect(useWebglContextStore.getState().contextPermanentlyLost).toBe(false);
+    expect(useWebglContextStore.getState().contextLost).toBe(true);
+
+    // Restore cycle 4 — confirms the fix works end-to-end
+    act(() => { useWebglContextStore.getState().markRestored(); });
+    expect(useWebglContextStore.getState().contextLost).toBe(false);
+    expect(useWebglContextStore.getState().contextPermanentlyLost).toBe(false);
+  });
 });
 
 // Suppress unused-vars lint in case future revisions remove `vi`.

@@ -54,6 +54,11 @@ export const useWebglContextStore = create<WebglContextStore>((set) => ({
   markRestored: () =>
     set((s) => {
       if (s.contextPermanentlyLost) return {};
-      return { contextLost: false, recoveryKey: s.recoveryKey + 1 };
+      // Reset recoveryAttempts so a successfully-recovered context does not
+      // carry forward a stale attempt count. Without this, three losses each
+      // followed by recovery would leave recoveryAttempts=3, causing the very
+      // next loss to exceed MAX_RECOVERY_ATTEMPTS and incorrectly show the
+      // hard "reload required" overlay even though all prior losses recovered.
+      return { contextLost: false, recoveryKey: s.recoveryKey + 1, recoveryAttempts: 0 };
     }),
 }));

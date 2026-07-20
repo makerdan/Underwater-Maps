@@ -49,6 +49,8 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     setFogDensity: vi.fn(),
     fogColor: "#001a33",
     setFogColor: vi.fn(),
+    nodataColor: "#bfbfbf",
+    setNodataColor: vi.fn(),
     ambientLightIntensity: 0.4,
     setAmbientLightIntensity: vi.fn(),
     directionalLightIntensity: 0.6,
@@ -183,6 +185,18 @@ describe("VisualsSection", () => {
   it("renders nested DEPTH DISPLAY card header", () => {
     render(<VisualsSection />);
     expect(screen.getByText("DEPTH DISPLAY")).toBeInTheDocument();
+  });
+
+  it("renders the Antialiasing label", () => {
+    render(<VisualsSection />);
+    expect(screen.getByText("Antialiasing")).toBeInTheDocument();
+  });
+
+  it("renders the antialiasing reload-hint badge with appropriate text", () => {
+    render(<VisualsSection />);
+    const hint = screen.getByTestId("antialiasing-reload-hint");
+    expect(hint).toBeInTheDocument();
+    expect(hint.textContent).toMatch(/takes effect after reload/i);
   });
 
   describe("intertidal datums card", () => {

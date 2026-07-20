@@ -313,8 +313,29 @@ export function VisualsSection() {
             label="Antialiasing"
             value={s.antialiasing}
             onChange={s.setAntialiasing}
-            sublabel="MSAA edge smoothing (page reload to apply)"
+            sublabel="MSAA edge smoothing — WebGL context-creation parameter"
           />
+          {/* Antialiasing is baked into the WebGL context at creation time,
+              so toggling it has no visible effect until the page is reloaded.
+              Show a prominent inline note so users understand why the scene
+              does not change immediately after toggling. */}
+          <div style={{ padding: "0 16px 10px", marginTop: -2 }}>
+            <span
+              data-testid="antialiasing-reload-hint"
+              style={{
+                display: "inline-block",
+                fontSize: 9,
+                letterSpacing: "0.06em",
+                color: "#f59e0b",
+                background: "rgba(245,158,11,0.08)",
+                border: "1px solid rgba(245,158,11,0.28)",
+                borderRadius: 3,
+                padding: "2px 7px",
+              }}
+            >
+              ⟳ takes effect after reload
+            </span>
+          </div>
         </div>
         <div style={S.card}>
           <div style={S.cardHeader}>ATMOSPHERE</div>
