@@ -21,12 +21,14 @@ import { eq, and } from "drizzle-orm";
 import { db, terrainBundleJobsTable } from "@workspace/db";
 import { objectStorageClient } from "../lib/objectStorage.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
+import { getCatalogEntries } from "../lib/catalogSeeder.js";
+import { deriveCatalogFetchStrategy } from "../lib/catalogFetchStrategy.js";
 import { getFetcher } from "../lib/fetchers/index.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateParams } from "../middlewares/validateBody.js";
 import { logger } from "../lib/logger.js";
-import type { BathyFetchBundle } from "../lib/fetchers/types.js";
+import type { BathyFetchBundle, Bbox, FetchStrategy } from "../lib/fetchers/types.js";
 
 const router = Router();
 
@@ -91,8 +93,111 @@ async function readBundleFromGcs(userId: string, presetId: string): Promise<unkn
 }
 
 // ---------------------------------------------------------------------------
+// Preset / catalog resolution
+// ---------------------------------------------------------------------------
+
+interface BundleTarget {
+  fetchStrategy: FetchStrategy | null;
+  bbox: Bbox;
+}
+
+/**
+ * Resolves a presetId to a fetch strategy + bbox. Checks the in-memory
+ * preset registry first, then falls back to seeded catalog entries
+ * (bathymetry rows only) using the derived strategy for their source.
+ * Returns null when the id is unknown in both places.
+ */
+async function resolveBundleTarget(presetId: string): Promise<BundleTarget | null> {
+  const meta = ALL_PRESET_DATASETS.find((d) => d.id === presetId);
+  if (meta) {
+    return { fetchStrategy: meta.fetchStrategy ?? null, bbox: meta.bbox };
+  }
+  try {
+    const entries = await getCatalogEntries();
+    const entry = entries.find(
+      (e) => e.id === presetId && e.dataType === "bathymetry",
+    );
+    if (!entry || !entry.coverageBbox) return null;
+    return {
+      fetchStrategy: deriveCatalogFetchStrategy(entry),
+      bbox: entry.coverageBbox,
+    };
+  } catch (err) {
+    logger.warn({ err, presetId }, "[terrain-bundles] catalog lookup failed");
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Background job worker
 // ---------------------------------------------------------------------------
+
+/**
+ * In-memory set of job ids currently being processed by this process.
+ * Guards against the same job being dispatched twice (e.g. a POST retry
+ * racing the startup recovery sweep). Best-effort: single-process only,
+ * which matches the single-instance deploy model.
+ */
+const inFlightJobs = new Set<string>();
+
+/**
+ * Dispatches a job to run in the background exactly once per process at a
+ * time. No-op when the job id is already in flight.
+ */
+export function dispatchBundleJob(jobId: string, userId: string, presetId: string): void {
+  if (inFlightJobs.has(jobId)) {
+    logger.info({ jobId, presetId }, "[terrain-bundles] dispatch skipped — job already in flight");
+    return;
+  }
+  inFlightJobs.add(jobId);
+  void runBundleJob(jobId, userId, presetId)
+    .catch((err: unknown) => {
+      logger.warn({ err, jobId }, "[terrain-bundles] unexpected job dispatch failure");
+    })
+    .finally(() => {
+      inFlightJobs.delete(jobId);
+    });
+}
+
+/** Test-only visibility into the duplicate-dispatch guard. */
+export function __getInFlightJobIds(): ReadonlySet<string> {
+  return inFlightJobs;
+}
+
+/**
+ * Startup recovery: any job left in status="running" by a previous process
+ * (killed mid-download) is reset to "pending", then all pending jobs are
+ * re-dispatched. Called from the server "listening" handler.
+ * Returns the number of jobs re-dispatched.
+ */
+export async function recoverStaleTerrainBundleJobs(): Promise<number> {
+  const recovered = await db
+    .update(terrainBundleJobsTable)
+    .set({
+      status: "pending",
+      progressNote: "Recovered after server restart — re-queued",
+      errorMessage: null,
+    })
+    .where(eq(terrainBundleJobsTable.status, "running"))
+    .returning();
+
+  const pending = await db
+    .select()
+    .from(terrainBundleJobsTable)
+    .where(eq(terrainBundleJobsTable.status, "pending"));
+
+  for (const job of pending) {
+    dispatchBundleJob(job.id, job.userId, job.presetId);
+  }
+
+  if (recovered.length > 0 || pending.length > 0) {
+    logger.info(
+      { resetFromRunning: recovered.length, redispatched: pending.length },
+      "[terrain-bundles] startup recovery re-dispatched stale jobs",
+    );
+  }
+  return pending.length;
+}
 
 /**
  * Runs asynchronously after the POST route responds. Downloads the bundle,
@@ -103,8 +208,8 @@ async function runBundleJob(
   userId: string,
   presetId: string,
 ): Promise<void> {
-  const meta = ALL_PRESET_DATASETS.find((d) => d.id === presetId);
-  if (!meta) {
+  const target = await resolveBundleTarget(presetId);
+  if (!target) {
     await db
       .update(terrainBundleJobsTable)
       .set({ status: "error", errorMessage: `Unknown preset: ${presetId}`, completedAt: new Date() })
@@ -112,7 +217,7 @@ async function runBundleJob(
     return;
   }
 
-  if (!meta.fetchStrategy) {
+  if (!target.fetchStrategy) {
     await db
       .update(terrainBundleJobsTable)
       .set({ status: "error", errorMessage: `Preset ${presetId} has no fetchStrategy`, completedAt: new Date() })
@@ -126,8 +231,8 @@ async function runBundleJob(
       .set({ status: "running", progressNote: "Fetching bathymetry data…" })
       .where(eq(terrainBundleJobsTable.id, jobId));
 
-    const fetcher = getFetcher(meta.fetchStrategy);
-    const bundle = await fetcher.fetch(meta.fetchStrategy, meta.bbox, 256);
+    const fetcher = getFetcher(target.fetchStrategy);
+    const bundle = await fetcher.fetch(target.fetchStrategy, target.bbox, 256);
 
     await db
       .update(terrainBundleJobsTable)
@@ -184,12 +289,12 @@ router.post(
     const { clerkUserId: userId } = req as AuthenticatedRequest;
     const { presetId } = req.body as z.infer<typeof PostBundleBodySchema>;
 
-    const meta = ALL_PRESET_DATASETS.find((d) => d.id === presetId);
-    if (!meta) {
+    const target = await resolveBundleTarget(presetId);
+    if (!target) {
       res.status(404).json({ error: "Unknown preset", presetId });
       return;
     }
-    if (!meta.fetchStrategy) {
+    if (!target.fetchStrategy) {
       res.status(422).json({ error: "Preset has no fetchStrategy", presetId });
       return;
     }
@@ -217,7 +322,7 @@ router.post(
           .update(terrainBundleJobsTable)
           .set({ status: "pending", progressNote: "Re-queued (GCS bundle missing)", completedAt: null, errorMessage: null })
           .where(eq(terrainBundleJobsTable.id, job.id));
-        void runBundleJob(job.id, userId, presetId);
+        dispatchBundleJob(job.id, userId, presetId);
         res.status(202).json({ jobId: job.id, status: "pending", message: "Download re-queued" });
         return;
       }
@@ -230,7 +335,7 @@ router.post(
           .update(terrainBundleJobsTable)
           .set({ status: "pending", progressNote: "Retrying…", errorMessage: null, completedAt: null })
           .where(eq(terrainBundleJobsTable.id, job.id));
-        void runBundleJob(job.id, userId, presetId);
+        dispatchBundleJob(job.id, userId, presetId);
         res.status(202).json({ jobId: job.id, status: "pending", message: "Retrying failed job" });
         return;
       }
@@ -251,7 +356,7 @@ router.post(
       return;
     }
 
-    void runBundleJob(newJob.id, userId, presetId);
+    dispatchBundleJob(newJob.id, userId, presetId);
     res.status(202).json({ jobId: newJob.id, status: "pending", message: "Download started" });
   }),
 );

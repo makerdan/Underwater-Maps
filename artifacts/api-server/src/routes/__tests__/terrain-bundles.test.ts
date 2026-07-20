@@ -59,6 +59,9 @@ vi.mock("../../lib/objectStorage.js", () => ({
 }));
 
 vi.mock("../../lib/terrain.js", () => ({
+  BUNDLED_TERRAIN: {},
+  NYSDEC_BATHY_FEATURE_SERVICE: "https://example.com/nysdec",
+  MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
   ALL_PRESET_DATASETS: [
     {
       id: "lake-ray-roberts",

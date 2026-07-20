@@ -416,7 +416,7 @@ function matchGreatLakeCoverage(bbox: {
  *   https://data.gis.ny.gov/datasets/nysdec-lake-bathymetry
  * Underlying REST service for querying contour features directly:
  */
-const NYSDEC_BATHY_FEATURE_SERVICE =
+export const NYSDEC_BATHY_FEATURE_SERVICE =
   "https://services6.arcgis.com/v1XbFnus3vB7bnKv/arcgis/rest/services/DEC_Lake_Bathymetry/FeatureServer/0";
 
 /**
@@ -424,7 +424,7 @@ const NYSDEC_BATHY_FEATURE_SERVICE =
  * Published by MN DNR via the LakeFinder portal:
  *   https://www.dnr.state.mn.us/lakefind/index.html
  */
-const MN_DNR_BATHY_FEATURE_SERVICE =
+export const MN_DNR_BATHY_FEATURE_SERVICE =
   "https://webgis.dnr.state.mn.us/arcgis/rest/services/eng/Lakes_Bathy/FeatureServer/0";
 
 /**

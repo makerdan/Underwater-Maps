@@ -7,6 +7,7 @@ import { startUploadCleanupJob } from "./lib/uploadCleanupJob.js";
 import { startOrphanedPhotosCleanupJob } from "./lib/orphanedPhotosCleanupJob.js";
 import { startRateLimitPruneJob } from "./lib/rateLimitPruneJob.js";
 import { recoverStaleUploadJobs, cleanupStaleChunks, loadCalibrationFromDb } from "./routes/datasets.js";
+import { recoverStaleTerrainBundleJobs } from "./routes/terrain-bundles.js";
 import type * as http from "http";
 
 // ---------------------------------------------------------------------------
@@ -164,6 +165,13 @@ function startServer(port: number): void {
     // process died — re-queues recoverable ones, marks the rest as error.
     void recoverStaleUploadJobs().catch((recoverErr: unknown) => {
       logger.warn({ err: recoverErr }, "Upload job recovery failed (non-critical)");
+    });
+
+    // Reset terrain bundle jobs left in "running" by the previous process and
+    // re-dispatch all pending jobs (duplicate-dispatch protected in the route
+    // module; non-critical, errors are caught).
+    void recoverStaleTerrainBundleJobs().catch((bundleErr: unknown) => {
+      logger.warn({ err: bundleErr }, "Terrain bundle job recovery failed (non-critical)");
     });
 
     // Purge chunk files left behind by uploads that were in flight when the
