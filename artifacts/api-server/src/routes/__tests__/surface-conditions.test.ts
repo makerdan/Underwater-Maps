@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
+import freshwaterGlerl from "./fixtures/freshwater-glerl.json";
 
 import surfaceConditionsRouter, {
   buildSinusoidalTidalHours,
@@ -457,5 +458,105 @@ describe("GET /surface-conditions — integration with mocked NOAA + Open-Meteo"
     expect(res2.body.tideHeightSource).toBe("noaa-coops");
 
     expect(tideHeightsFetchCount).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Freshwater regression tests — waterType=freshwater branch
+//
+// Fixtures in ./fixtures/freshwater-*.json define the canonical USGS/GLERL
+// response shape shared with the frontend FreshwaterPanel tests.
+// ---------------------------------------------------------------------------
+
+describe("GET /surface-conditions?waterType=freshwater", () => {
+  const fetchMock = vi.fn();
+  const realFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    _resetNoaaStationCacheForTests();
+    fetchMock.mockReset();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  function openMeteoMock(url: string): Promise<Response> {
+    if (url.includes("api.open-meteo.com/v1/forecast")) {
+      return Promise.resolve(
+        jsonResponse({
+          hourly: {
+            wind_speed_10m: Array.from({ length: 48 }, () => 5),
+            wind_direction_10m: Array.from({ length: 48 }, () => 90),
+          },
+        }),
+      );
+    }
+    if (url.includes("marine-api.open-meteo.com")) {
+      return Promise.resolve(
+        jsonResponse({ hourly: { wave_height: Array.from({ length: 48 }, () => 0.2) } }),
+      );
+    }
+    return Promise.reject(new Error(`unexpected url: ${url}`));
+  }
+
+  it("returns tidalDataSource:'glerl' for Great Lakes coordinates", async () => {
+    fetchMock.mockImplementation(openMeteoMock);
+
+    const res = await request(makeApp()).get(
+      "/surface-conditions?lat=44.0&lon=-86.0&waterType=freshwater",
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.tidalDataSource).toBe("glerl");
+    expect(res.body.tidalStationName).toMatch(/GLERL/);
+    // Must NOT hit NOAA for station-list-based tidal routing (resolveTidal skips NOAA for freshwater)
+    // Note: resolveTideHeights may still probe NOAA for tide heights — we only guard
+    // the tidal routing source, not the heights-station lookup.
+    expect(res.body.tidalDataSource).not.toBe("noaa-coops");
+    // Shape subset matches the shared fixture
+    expect({ source: res.body.tidalDataSource, stationName: res.body.tidalStationName }).toMatchObject({
+      source: freshwaterGlerl.source,
+      stationName: freshwaterGlerl.stationName,
+    });
+  });
+
+  it("returns tidalDataSource:'usgs' for non-Great-Lakes freshwater coordinates", async () => {
+    fetchMock.mockImplementation(openMeteoMock);
+
+    const res = await request(makeApp()).get(
+      "/surface-conditions?lat=43.55&lon=-89.47&waterType=freshwater",
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.tidalDataSource).toBe("usgs");
+    // Must NOT use NOAA tidal station list routing for freshwater
+    expect(res.body.tidalDataSource).not.toBe("noaa-coops");
+  });
+
+  it("returns 24 hours and 48-hour forecast for freshwater Great Lakes", async () => {
+    fetchMock.mockImplementation(openMeteoMock);
+
+    const res = await request(makeApp()).get(
+      "/surface-conditions?lat=44.0&lon=-86.0&waterType=freshwater",
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.hours).toHaveLength(24);
+    expect(res.body.forecast48h).toHaveLength(48);
+  });
+
+  it("does not return tidalDataSource:'sinusoidal' or 'noaa-coops' for freshwater (regression guard)", async () => {
+    fetchMock.mockImplementation(openMeteoMock);
+
+    const greatLakesRes = await request(makeApp()).get(
+      "/surface-conditions?lat=44.0&lon=-86.0&waterType=freshwater",
+    );
+    expect(greatLakesRes.body.tidalDataSource).not.toBe("sinusoidal");
+    expect(greatLakesRes.body.tidalDataSource).not.toBe("noaa-coops");
+
+    const riverRes = await request(makeApp()).get(
+      "/surface-conditions?lat=43.55&lon=-89.47&waterType=freshwater",
+    );
+    expect(riverRes.body.tidalDataSource).not.toBe("sinusoidal");
+    expect(riverRes.body.tidalDataSource).not.toBe("noaa-coops");
   });
 });

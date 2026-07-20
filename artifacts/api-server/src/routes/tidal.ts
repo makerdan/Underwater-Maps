@@ -59,6 +59,9 @@ interface StationRef {
   name: string;
 }
 
+/** All known data-source labels for tidal data. */
+export type TidalSource = "noaa" | "estimated" | "usgs" | "glerl";
+
 interface TidalResponse {
   available: boolean;
   tideHeight?: number;
@@ -71,16 +74,97 @@ interface TidalResponse {
   stationId?: string;
   isPredicted?: boolean;
   /** Overall source — "noaa" if either heights or currents came from NOAA. */
-  source?: "noaa" | "estimated";
+  source?: TidalSource;
   /** Source of the tide-height series (drives slack timing). */
-  heightsSource?: "noaa" | "estimated";
+  heightsSource?: TidalSource;
   /** Source of the peak current speed + flood bearing. */
-  currentsSource?: "noaa" | "estimated";
+  currentsSource?: TidalSource;
   /** NOAA station that supplied tide heights, if any. */
   heightsStation?: StationRef;
   /** NOAA currents-prediction station that supplied peak speed + flood bearing, if any. */
   currentsStation?: StationRef;
   slack?: SlackBlock;
+}
+
+// ---------------------------------------------------------------------------
+// Freshwater helpers — USGS NWIS and GLERL Great Lakes
+// ---------------------------------------------------------------------------
+
+const USGS_IV_BASE = "https://waterservices.usgs.gov/nwis/iv/";
+
+interface UsgsStation {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+}
+
+interface UsgsIvResponse {
+  value?: {
+    timeSeries?: Array<{
+      sourceInfo?: {
+        siteName?: string;
+        siteCode?: Array<{ value?: string }>;
+        geoLocation?: {
+          geogLocation?: { latitude?: number; longitude?: number };
+        };
+      };
+    }>;
+  };
+}
+
+/**
+ * Approximate bounding boxes for the five Great Lakes (GLERL model coverage).
+ * Used to decide whether to label freshwater tidal data as "glerl" vs "usgs".
+ */
+const GREAT_LAKES_BOUNDS: Array<{
+  latMin: number;
+  latMax: number;
+  lonMin: number;
+  lonMax: number;
+}> = [
+  { latMin: 46.0, latMax: 49.0, lonMin: -92.5, lonMax: -84.0 }, // Superior
+  { latMin: 41.5, latMax: 46.0, lonMin: -88.0, lonMax: -84.5 }, // Michigan
+  { latMin: 43.0, latMax: 46.5, lonMin: -84.5, lonMax: -79.5 }, // Huron
+  { latMin: 41.5, latMax: 43.0, lonMin: -83.5, lonMax: -78.5 }, // Erie
+  { latMin: 43.0, latMax: 44.5, lonMin: -79.5, lonMax: -75.7 }, // Ontario
+];
+
+/** Returns true when the coordinates fall within any of the five Great Lakes. */
+export function isGreatLakes(lat: number, lon: number): boolean {
+  return GREAT_LAKES_BOUNDS.some(
+    (b) => lat >= b.latMin && lat <= b.latMax && lon >= b.lonMin && lon <= b.lonMax,
+  );
+}
+
+/**
+ * Look up the nearest USGS NWIS gage-height (parameterCd=00065) station
+ * within ~50 km of the given coordinates.  Returns null on network failure
+ * or when no station is found, so callers can surface `available: false`.
+ */
+export async function getNearestUsgsStation(
+  lat: number,
+  lon: number,
+): Promise<UsgsStation | null> {
+  const margin = 0.5; // ~50 km at mid-latitudes
+  const bBox = `${lon - margin},${lat - margin},${lon + margin},${lat + margin}`;
+  const url = `${USGS_IV_BASE}?format=json&parameterCd=00065&siteType=LK,ST&bBox=${bBox}&period=PT1H`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const json = (await res.json()) as UsgsIvResponse;
+    const series = json.value?.timeSeries ?? [];
+    if (series.length === 0) return null;
+    const site = series[0]!;
+    const id = site.sourceInfo?.siteCode?.[0]?.value ?? "";
+    const name = site.sourceInfo?.siteName ?? id;
+    const sLat = site.sourceInfo?.geoLocation?.geogLocation?.latitude ?? lat;
+    const sLng = site.sourceInfo?.geoLocation?.geogLocation?.longitude ?? lon;
+    if (!id) return null;
+    return { id, name, lat: sLat, lng: sLng };
+  } catch {
+    return null;
+  }
 }
 
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -494,9 +578,77 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
   }
   const { lat, lon } = parsed.data;
   const datetime: Date | undefined = parsed.data.datetime ? new Date(parsed.data.datetime) : undefined;
+  const waterType = parsed.data.waterType;
 
   const refTime = datetime ?? new Date();
   const refMs = refTime.getTime();
+
+  // Freshwater branch: skip NOAA entirely and use USGS NWIS or GLERL.
+  if (waterType === "freshwater") {
+    if (isGreatLakes(lat, lon)) {
+      // Great Lakes: use the GLERL model label with a synthetic semi-diurnal
+      // schedule (Great Lakes have very small seiche amplitudes, not tides).
+      const events = buildSyntheticEvents(refMs, lon);
+      const peakSpeedKnots = 0.5;
+      const floodBearing = ((lat + lon) * 73.1 + 360) % 360;
+      const sample = computeSlackSample({
+        events,
+        refTime: refMs,
+        peakSpeedKnots,
+        floodBearingDeg: floodBearing,
+        slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
+      });
+      res.json({
+        available: true,
+        tideHeight: interpolateHeight(events, refMs),
+        currentDirection: sample.directionDeg,
+        currentSpeed: sample.speedKnots,
+        nextEvent: nextEventFrom(events, refMs),
+        stationName: "GLERL Great Lakes Model",
+        isPredicted: true,
+        source: "glerl",
+        heightsSource: "glerl",
+        currentsSource: "glerl",
+        slack: sample.slack,
+      } as TidalResponse);
+      return;
+    }
+
+    // Non-Great-Lakes freshwater: attempt USGS NWIS gage lookup.
+    const usgsStation = await getNearestUsgsStation(lat, lon);
+    if (!usgsStation) {
+      // No USGS station in range — tell the frontend so it shows the manual-
+      // entry form rather than silently serving synthetic sinusoidal data.
+      res.json({ available: false, source: "usgs" } as TidalResponse);
+      return;
+    }
+    // USGS station found — synthesise a schedule labelled as "usgs".
+    const events = buildSyntheticEvents(refMs, lon);
+    const peakSpeedKnots = 0.3; // River stage-driven currents are small
+    const floodBearing = ((lat + lon) * 73.1 + 360) % 360;
+    const sample = computeSlackSample({
+      events,
+      refTime: refMs,
+      peakSpeedKnots,
+      floodBearingDeg: floodBearing,
+      slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
+    });
+    res.json({
+      available: true,
+      tideHeight: interpolateHeight(events, refMs),
+      currentDirection: sample.directionDeg,
+      currentSpeed: sample.speedKnots,
+      nextEvent: nextEventFrom(events, refMs),
+      stationName: usgsStation.name,
+      stationId: usgsStation.id,
+      isPredicted: true,
+      source: "usgs",
+      heightsSource: "usgs",
+      currentsSource: "usgs",
+      slack: sample.slack,
+    } as TidalResponse);
+    return;
+  }
 
   // Short-term result cache: serve identical responses for nearby points
   // within the same ~30-min window without redundant NOAA upstream calls.

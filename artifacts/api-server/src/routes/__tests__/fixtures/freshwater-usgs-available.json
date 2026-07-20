@@ -1,0 +1,9 @@
+{
+  "available": true,
+  "source": "usgs",
+  "heightsSource": "usgs",
+  "currentsSource": "usgs",
+  "stationId": "05407000",
+  "stationName": "Wisconsin River at Portage, WI",
+  "isPredicted": true
+}

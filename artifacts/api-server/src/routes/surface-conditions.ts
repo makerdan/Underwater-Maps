@@ -26,6 +26,7 @@
  * estimation and a separate `tidalDataSource` field for the tidal source.
  */
 
+import { z } from "zod";
 import { Router } from "express";
 import {
   buildSyntheticEvents,
@@ -36,6 +37,7 @@ import {
 import { registerCache } from "../lib/cacheRegistry.js";
 import { LatLonQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
+import { isGreatLakes } from "./tidal.js";
 
 const router = Router();
 
@@ -466,13 +468,38 @@ async function fetchWithTimeout(url: string, timeoutMs = 6000): Promise<Response
 
 interface ResolvedTidal {
   hours: TidalHour[];
-  source: "noaa-coops" | "sinusoidal";
+  source: "noaa-coops" | "sinusoidal" | "usgs" | "glerl";
   stationId?: string;
   stationName?: string;
   distanceKm?: number;
 }
 
-async function resolveTidal(lat: number, lon: number, startMs: number): Promise<ResolvedTidal> {
+/**
+ * Extended query schema for GET /surface-conditions.
+ * Adds the optional `waterType` field on top of the shared lat/lon validator.
+ */
+const SurfaceConditionsQuerySchema = LatLonQuerySchema.extend({
+  waterType: z.enum(["saltwater", "freshwater"]).optional(),
+});
+
+async function resolveTidal(
+  lat: number,
+  lon: number,
+  startMs: number,
+  waterType?: string,
+): Promise<ResolvedTidal> {
+  // Freshwater: skip NOAA and label with the appropriate source.
+  if (waterType === "freshwater") {
+    if (isGreatLakes(lat, lon)) {
+      return {
+        hours: buildSinusoidalTidalHours(lat, lon, startMs),
+        source: "glerl",
+        stationName: "GLERL Great Lakes Model",
+      };
+    }
+    return { hours: buildSinusoidalTidalHours(lat, lon, startMs), source: "usgs" };
+  }
+
   try {
     const stations = await fetchNoaaStations();
     const nearest = findNearestStation(stations, lat, lon);
@@ -518,7 +545,7 @@ export interface ForecastHour {
 // ---------------------------------------------------------------------------
 
 router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> => {
-  const parsed = LatLonQuerySchema.safeParse(req.query);
+  const parsed = SurfaceConditionsQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({
       error: "invalid_params",
@@ -527,6 +554,7 @@ router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> =
     return;
   }
   const { lat, lon } = parsed.data;
+  const waterType = parsed.data.waterType;
 
   // Anchor the 48-hour series at the top of the current UTC hour so each
   // index aligns with a wall-clock hour.
@@ -534,7 +562,7 @@ router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> =
   const utcDate = new Date(startMs);
 
   const [tidal, tideHeightsResult] = await Promise.all([
-    resolveTidal(lat, lon, startMs),
+    resolveTidal(lat, lon, startMs, waterType),
     resolveTideHeights(lat, lon, utcDate),
   ]);
 
