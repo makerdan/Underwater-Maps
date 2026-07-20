@@ -4644,6 +4644,191 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /terrain/bundles:
+    post:
+      tags: [terrain]
+      summary: Trigger on-demand bathymetry bundle download
+      description: |
+        Creates or re-queues a background job that fetches a full bathymetry
+        grid for the specified preset and writes it to the authenticated user's
+        private GCS storage.  Returns immediately with the job ID and status.
+        Poll `GET /terrain/bundles/{presetId}/status` for progress.
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [presetId]
+              properties:
+                presetId:
+                  type: string
+                  description: Preset dataset ID to fetch bathymetry for
+      responses:
+        "200":
+          description: Bundle already exists and is available
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [complete]
+                  message:
+                    type: string
+        "202":
+          description: Job created or already in progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending, running]
+                  message:
+                    type: string
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Unknown preset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: Preset has no fetchStrategy configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /terrain/bundles/{presetId}/status:
+    get:
+      tags: [terrain]
+      summary: Get bundle job status
+      description: Returns the current state of the on-demand download job for this preset.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: presetId
+          required: true
+          schema:
+            type: string
+          description: Preset dataset ID
+      responses:
+        "200":
+          description: Job status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending, running, complete, error]
+                  progressNote:
+                    type: string
+                    nullable: true
+                  errorMessage:
+                    type: string
+                    nullable: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  completedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: No job found for this preset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /terrain/bundles/{presetId}:
+    get:
+      tags: [terrain]
+      summary: Get processed bathymetry bundle
+      description: |
+        Returns the full processed bathymetry bundle for a preset if the
+        download job is complete.  Returns 202 if still pending/running,
+        or 404 if no job exists.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: presetId
+          required: true
+          schema:
+            type: string
+          description: Preset dataset ID
+      responses:
+        "200":
+          description: Complete bathymetry bundle
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Processed depth grid bundle with metadata
+        "202":
+          description: Download still in progress or job errored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [pending, running, error]
+                  message:
+                    type: string
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: No bundle found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
 components:
   schemas:
     Hyd93AnnotationPoint:

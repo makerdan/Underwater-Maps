@@ -150,6 +150,15 @@ export interface DatasetMeta {
    * available via the /efh endpoint.
    */
   hasEfh?: boolean;
+  /**
+   * Describes how to fetch on-demand bathymetry data for this preset.
+   * Used by the fetcher router (lib/fetchers/index.ts) when a user triggers
+   * a bundle download via POST /api/terrain/bundles.
+   *
+   * Datasets served from pre-built static bundle files use kind "bundled".
+   * Omitted for catalog-only entries that have no direct fetch strategy.
+   */
+  fetchStrategy?: import("./fetchers/types.js").FetchStrategy;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +188,7 @@ export const FRESHWATER_PRESET_DATASETS: DatasetMeta[] = [
     bbox: { minLon: -97.15, minLat: 33.3, maxLon: -96.92, maxLat: 33.52 },
     hasTopography: true,
     hasEfh: true,
+    fetchStrategy: { kind: "bundled" },
   },
 ];
 

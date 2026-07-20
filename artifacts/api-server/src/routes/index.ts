@@ -30,6 +30,7 @@ import rawsWeatherRouter from "./raws-weather";
 import nceiRouter from "./ncei";
 import adminRouter from "./admin";
 import githubRouter from "./github";
+import terrainBundlesRouter from "./terrain-bundles";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use(rawsWeatherRouter);
 router.use(nceiRouter);
 router.use(adminRouter);
 router.use("/github", githubRouter);
+router.use(terrainBundlesRouter);
 
 export default router;

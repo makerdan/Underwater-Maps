@@ -462,6 +462,9 @@ All routes are served under the `/api` prefix by the Express 5 server.
 | GET | `/terrain/download/info` | Preflight for bbox terrain CSV download |
 | GET | `/terrain/download` | Stream a terrain CSV for a bounding box |
 | DELETE | `/datasets/presets/:id` | Disable a built-in preset dataset |
+| POST | `/terrain/bundles` | Trigger on-demand bathymetry bundle download |
+| GET | `/terrain/bundles/:presetId/status` | Get bundle job status |
+| GET | `/terrain/bundles/:presetId` | Get processed bathymetry bundle |
 
 <!-- GENERATED:API-ROUTES:END -->
 
