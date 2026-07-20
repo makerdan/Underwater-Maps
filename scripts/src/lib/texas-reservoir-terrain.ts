@@ -61,6 +61,7 @@ export type LayerSource =
   | "twdb"
   | "usace"
   | "usgs-3dep"
+  | "usgs-sciencebase"
   | "tnris-stratmap";
 
 export interface LayerProvenance {

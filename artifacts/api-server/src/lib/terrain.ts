@@ -23,6 +23,7 @@ export type TerrainDataSource =
   | "twdb"
   | "usace"
   | "usgs-3dep"
+  | "usgs-sciencebase"
   | "noaa-great-lakes"
   | "nysdec"
   | "mn-dnr";
@@ -939,10 +940,10 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   // ---------------------------------------------------------------------------
   // Western freshwater lakes — 3DEP for reservoirs; ScienceBase stubs noted.
   // ---------------------------------------------------------------------------
-  "fw-lake-tahoe": ["usgs-3dep", "gebco"],
+  "fw-lake-tahoe": ["bundled-survey", "usgs-3dep", "gebco"],
   "fw-lake-powell": ["usgs-3dep", "gebco"],
   "fw-lake-mead": ["usgs-3dep", "gebco"],
-  "fw-crater-lake-or": ["usgs-3dep", "gebco"],
+  "fw-crater-lake-or": ["bundled-survey", "usgs-3dep", "gebco"],
   "fw-flathead-lake-mt": ["usgs-3dep", "gebco"],
   "fw-shasta-lake-ca": ["usgs-3dep", "gebco"],
   "fw-lake-chelan-wa": ["usgs-3dep", "gebco"],
@@ -1610,6 +1611,8 @@ function loadBundledTerrain(fileName: string): BundledTerrain | null {
  */
 export const BUNDLED_TERRAIN: Record<string, BundledTerrain | null> = {
   "lake-ray-roberts": loadBundledTerrain("demoTerrain.gen.json"),
+  "fw-crater-lake-or": loadBundledTerrain("craterLakeTerrain.gen.json"),
+  "fw-lake-tahoe": loadBundledTerrain("lakeTahoeTerrain.gen.json"),
 };
 
 /** Resample a bundled grid to the requested resolution by nearest neighbour. */

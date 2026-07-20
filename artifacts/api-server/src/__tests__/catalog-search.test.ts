@@ -485,6 +485,8 @@ const PRIMARY_KEYWORD_QUERIES: Record<string, string> = {
   "ncei-crm-resurrection-bay":               "Resurrection Bay Seward Kenai Fjords",
   "ncei-crm-prince-william-sound":           "Prince William Sound Valdez PWS",
   "aoos-intertidal-pow":                     "Prince of Wales Island AOOS intertidal",
+  "fw-crater-lake-or":                       "Crater Lake Oregon caldera depth",
+  "fw-lake-tahoe":                           "Lake Tahoe Sierra Nevada bathymetry",
 };
 
 describe("catalog keyword coverage — each entry findable by primary keyword", () => {

@@ -282,30 +282,43 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     }
   });
 
-  it("DATASET_SOURCE_PRIORITY: Northeast freshwater lakes use usgs-3dep first", () => {
-    const northeastIds = [
+  it("DATASET_SOURCE_PRIORITY: Lake Champlain uses usgs-3dep first (no NYSDEC survey)", () => {
+    const priority = getDatasetSourcePriority("fw-lake-champlain");
+    expect(priority[0], "fw-lake-champlain should have usgs-3dep first").toBe("usgs-3dep");
+  });
+
+  it("DATASET_SOURCE_PRIORITY: NYSDEC-surveyed NY lakes lead with nysdec-bathy", () => {
+    const nysdecIds = [
       "fw-lake-george-ny",
-      "fw-lake-champlain",
       "fw-seneca-lake-ny",
       "fw-cayuga-lake-ny",
     ];
-    for (const id of northeastIds) {
+    for (const id of nysdecIds) {
       const priority = getDatasetSourcePriority(id);
-      expect(priority[0], `${id} should have usgs-3dep first`).toBe("usgs-3dep");
+      expect(priority[0], `${id} should have nysdec-bathy first`).toBe("nysdec-bathy");
     }
   });
 
-  it("DATASET_SOURCE_PRIORITY: Western freshwater reservoirs use usgs-3dep first", () => {
+  it("DATASET_SOURCE_PRIORITY: Western freshwater reservoirs use usgs-3dep first (except surveyed lakes)", () => {
     const westernIds = [
-      "fw-lake-tahoe",
       "fw-lake-mead",
       "fw-lake-powell",
-      "fw-crater-lake-or",
       "fw-flathead-lake-mt",
     ];
     for (const id of westernIds) {
       const priority = getDatasetSourcePriority(id);
       expect(priority[0], `${id} should have usgs-3dep first`).toBe("usgs-3dep");
+    }
+  });
+
+  it("DATASET_SOURCE_PRIORITY: USGS ScienceBase-surveyed western lakes lead with bundled-survey", () => {
+    const surveyedIds = [
+      "fw-crater-lake-or",
+      "fw-lake-tahoe",
+    ];
+    for (const id of surveyedIds) {
+      const priority = getDatasetSourcePriority(id);
+      expect(priority[0], `${id} should have bundled-survey first`).toBe("bundled-survey");
     }
   });
 
