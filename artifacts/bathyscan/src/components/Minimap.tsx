@@ -469,12 +469,14 @@ export const Minimap: React.FC = () => {
         >
           MINIMAP
         </div>
-        {/* North indicator */}
+        {/* North indicator — top-center so N is unambiguously at the top edge */}
         <div
+          data-testid="minimap-north"
           style={{
             position: "absolute",
             top: 3,
-            right: 5,
+            left: "50%",
+            transform: "translateX(-50%)",
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: 12,
             fontWeight: 700,
@@ -484,12 +486,14 @@ export const Minimap: React.FC = () => {
         >
           N
         </div>
-        {/* South indicator */}
+        {/* South indicator — bottom-center */}
         <div
+          data-testid="minimap-south"
           style={{
             position: "absolute",
             bottom: 3,
-            right: 5,
+            left: "50%",
+            transform: "translateX(-50%)",
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: 12,
             fontWeight: 700,

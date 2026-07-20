@@ -295,6 +295,17 @@ describe("canvasToLonLat — round-trip fidelity", () => {
     expect(lon2).toBeCloseTo(lon, 8);
     expect(lat2).toBeCloseTo(lat, 8);
   });
+
+  it("a canvas point near the top-center of the terrain rect decodes to a lat closer to maxLat (North-up inverse)", () => {
+    // Top-center of the terrain: cx = midpoint of terrain width, cy ≈ 10px from top.
+    // With pxPerDeg=200, scale=1, offsetX=0, offsetY=0: terrainH = 200px, terrainW = 200px.
+    // Formula: lat = minLat + (1 - (cy - offsetY) / terrainH) * latRange
+    //        = 47 + (1 - 10/200) * 1 = 47.95 — closer to maxLat (48) than minLat (47).
+    const cx = 100; // horizontal midpoint
+    const cy = 10;  // 10px from top edge
+    const { lat } = canvasToLonLat(cx, cy, grid, t);
+    expect(Math.abs(lat - grid.maxLat)).toBeLessThan(Math.abs(lat - grid.minLat));
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -108,11 +108,37 @@ describe("Minimap", () => {
   });
 
   it("renders N, S, E, and W direction labels", () => {
-    const { getByText, getByTestId } = render(<Minimap />);
-    expect(getByText("N")).toBeTruthy();
-    expect(getByText("S")).toBeTruthy();
+    const { getByTestId } = render(<Minimap />);
+    expect(getByTestId("minimap-north").textContent).toBe("N");
+    expect(getByTestId("minimap-south").textContent).toBe("S");
     expect(getByTestId("minimap-east").textContent).toBe("E");
     expect(getByTestId("minimap-west").textContent).toBe("W");
+  });
+
+  it("N label is at the top edge (top ≤ 10px) and S label is at the bottom edge (bottom ≤ 10px)", () => {
+    const { getByTestId } = render(<Minimap />);
+    const north = getByTestId("minimap-north");
+    const south = getByTestId("minimap-south");
+
+    const topPx = parseFloat(north.style.top);
+    expect(topPx).toBeLessThanOrEqual(10);
+
+    const bottomPx = parseFloat(south.style.bottom);
+    expect(bottomPx).toBeLessThanOrEqual(10);
+  });
+
+  it("click at top-center of minimap canvas teleports to North (worldZ > 0)", () => {
+    const { container } = render(<Minimap />);
+    const canvas = container.querySelector("canvas")!;
+
+    canvas.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 180, bottom: 180, width: 180, height: 180, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+
+    fireEvent.click(canvas, { clientX: 90, clientY: 0 });
+
+    const pending = useUiStore.getState().pendingDropIn;
+    expect(pending).not.toBeNull();
+    expect(pending!.worldZ).toBeGreaterThan(0);
   });
 });
 

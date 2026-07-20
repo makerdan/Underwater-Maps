@@ -1980,6 +1980,42 @@ export const OverviewMap: React.FC = () => {
         style={{ width: "100%", height: "100%", cursor: "crosshair", display: "block" }}
       />
 
+      {/* Fixed compass rose — always North-up; pinned to top-right corner so it
+          is visible on top of all overlays and clearly communicates orientation. */}
+      <div
+        data-testid="overview-compass"
+        style={{
+          position: "absolute",
+          top: 14,
+          right: 14,
+          width: 36,
+          height: 36,
+          pointerEvents: "none",
+          zIndex: 42,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(2,8,24,0.72)",
+          border: "1px solid rgba(0,229,255,0.2)",
+          borderRadius: "50%",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9,
+            fontWeight: 700,
+            color: "rgba(0,229,255,0.85)",
+            lineHeight: 1,
+            marginBottom: 1,
+          }}
+        >
+          N
+        </span>
+        <span style={{ fontSize: 9, color: "rgba(0,229,255,0.85)", lineHeight: 1 }}>↑</span>
+      </div>
+
       {/* SVG marker/pin overlay — positioned exactly over the canvas so SVG
           coordinates match canvas pixel coordinates 1:1.  All interactive pin
           elements carry pointerEvents:"all" so clicks don't fall through; the
