@@ -9,6 +9,8 @@ description: >-
 
 # Task Triage
 
+> **No code changes.** This skill makes no code changes. Do not run any validation command (test-fast, test-standard, test-heavy, typecheck, lint) at any point during execution.
+
 A structured backlog-pruning procedure that audits all PROPOSED tasks, eliminates stale or superseded work, consolidates related tasks into actionable bundles, and hardens survivors with regression coverage requirements. Run this before starting any new feature batch to keep the backlog lean and coherent.
 
 ## When to Invoke
@@ -70,6 +72,7 @@ Apply these rules to every non-skipped PROPOSED task and record the decision in 
 
 ### DELETE — apply when any of the following is true
 
+- The task's leading word is "Confirm" (case-insensitive, exact leading word — "Reconfirm" does not qualify). Reason: "title starts with 'Confirm'". This check runs before all other DELETE criteria.
 - A MERGED task already addressed the same bug/feature (cite the task ref)
 - A PENDING or IN_PROGRESS task is already doing the same work (cite the task ref found in Phase 3)
 - The task describes a one-off investigation whose finding is captured in a memory entry or comment
@@ -90,13 +93,27 @@ Every decision row **must** include a one-sentence reason (e.g., "superseded by 
 
 ---
 
+## Phase 5b — Priority ranking (LEAVE ALONE tasks only)
+
+After the decision pass, assign a tier to every LEAVE ALONE task. CONSOLIDATE and DELETE tasks are not ranked.
+
+- **Tier 1**: the task is listed as a `dependsOn` prerequisite for another surviving task, OR its title or description references a broken typecheck, broken test gate, or validation failure that blocks every CI run.
+- **Tier 2**: standalone user-visible feature or data-correctness fix, no unmet dependencies, ready to start immediately.
+- **Tier 3**: everything else (polish, smoke tests, minor improvements, nice-to-haves).
+
+Record each LEAVE ALONE task's tier (T1 / T2 / T3) in the local decision table for use in the dry-run summary.
+
+---
+
 ## Phase 6 — Dry-run summary and user confirmation
 
 Print the full decision table **before making any mutations**:
 
-| Task | Title (truncated) | Action | Reason |
-|------|-------------------|--------|--------|
-| #XXXX | ... | DELETE / CONSOLIDATE into #NEW / LEAVE | one sentence |
+| Task | Title (truncated) | Action | Priority | Reason |
+|------|-------------------|--------|----------|--------|
+| #XXXX | ... | DELETE / CONSOLIDATE into #NEW / LEAVE | T1 / T2 / T3 / — | one sentence |
+
+LEAVE ALONE rows show their assigned tier (T1 / T2 / T3). DELETE and CONSOLIDATE rows show `—`.
 
 After printing the table, call `user_query` to ask the user to confirm before proceeding. If rejected, stop — make no mutations.
 
@@ -113,9 +130,10 @@ In this order:
    - Be split across multiple tasks if total steps exceed 5
 2. Rename all DELETE-marked originals by prepending `DELETE - ` via `updateProjectTask({taskRef, title:"DELETE - <original title>"})`. Batch these calls.
 3. Rename the original tasks of each consolidation group the same way (prepend `DELETE - `). Batch these calls.
-4. Call `proposeProjectTasks` with the new consolidation task refs so the user can accept them.
+4. For every Tier 1 LEAVE ALONE task, call `updateProjectTask({taskRef, title:"T1: <original title>"})`. Batch these calls. Tier 2 and Tier 3 titles are left unchanged.
+5. Call `proposeProjectTasks` with the new consolidation task refs so the user can accept them.
 
-**Important:** Steps 2 and 3 (all `updateProjectTask` rename calls) must run **before** `proposeProjectTasks`. `proposeProjectTasks` pauses the agent loop; any mutation placed after it will not execute in the same run.
+**Important:** Steps 2, 3, and 4 (all `updateProjectTask` rename calls) must run **before** `proposeProjectTasks`. `proposeProjectTasks` pauses the agent loop; any mutation placed after it will not execute in the same run. All renames must complete before `proposeProjectTasks` is called.
 
 ---
 
@@ -160,3 +178,4 @@ Skipped (already prefixed): N tasks
 - **Re-run safe** — tasks already prefixed `DELETE - ` or `CONSOLIDATION - ` are always skipped in Phase 0.
 - **Orphan check first** — never DELETE a task with downstream dependents without flagging the orphan risk.
 - **Never place `updateProjectTask` rename calls after `proposeProjectTasks`** — `proposeProjectTasks` pauses the agent loop; any mutation placed after it will not execute in the same run. All renames must complete before `proposeProjectTasks` is called.
+- **No validation commands** — this skill makes no code changes; never invoke test-fast, test-standard, test-heavy, typecheck, or lint at any point during execution.
