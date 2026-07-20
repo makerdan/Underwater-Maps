@@ -493,8 +493,8 @@ vi.mock("../../lib/terrain.js", () => {
   }
   return {
     NYSDEC_BATHY_FEATURE_SERVICE: "https://example.com/nysdec",
-  MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
-  BUNDLED_TERRAIN: {},
+    MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
+    BUNDLED_TERRAIN: {},
     ALL_PRESET_DATASETS: [preset],
     BUNDLED_TERRAIN: {},
     NYSDEC_BATHY_FEATURE_SERVICE: "https://example.test/nysdec",
@@ -518,9 +518,6 @@ vi.mock("../../lib/terrain.js", () => {
       meta: { datasetId: string },
       resolution: number,
     ) => makeGrid(meta.datasetId, resolution),
-    BUNDLED_TERRAIN: [],
-    NYSDEC_BATHY_FEATURE_SERVICE: "https://mock.invalid/nysdec",
-    MN_DNR_BATHY_FEATURE_SERVICE: "https://mock.invalid/mndnr",
     TERRAIN_CACHE_VERSION: 1,
   };
 });
