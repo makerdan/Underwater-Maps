@@ -286,6 +286,7 @@ All routes are served under the `/api` prefix by the Express 5 server.
 |---|---|---|
 | POST | `/datasets/upload` | Upload an XYZ or CSV file and persist it to the user's dataset library |
 | POST | `/datasets/upload/chunk` | Upload one chunk of a large dataset file |
+| GET | `/datasets/upload/chunk/status/:uploadId` | List which chunk indices have been received for an upload session |
 | POST | `/datasets/upload/chunk/finalize` | Finalize a chunked upload and start processing |
 | GET | `/datasets/upload/jobs/:jobId` | Poll the status of a chunked-upload processing job |
 | POST | `/datasets/upload/request-gcs-url` | Get a presigned GCS PUT URL for oversized file uploads |
