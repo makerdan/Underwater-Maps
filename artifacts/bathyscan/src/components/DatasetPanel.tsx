@@ -55,6 +55,7 @@ import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { BundleDownloadButton } from "@/components/BundleDownloadButton";
 import { GpsImportDialog } from "@/components/GpsImportDialog";
 import { GpsExportDialog } from "@/components/GpsExportDialog";
 import { LoadingDial } from "@/components/LoadingDial";
@@ -1225,6 +1226,23 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     }
     useActiveLoadStore.getState().start({ datasetId: id, bucket: id });
   };
+
+  // On-demand bundle finished downloading + parsing → load it into the viewer
+  // exactly like a completed preset terrain fetch (same store/classify flow).
+  const handleBundleLoaded = useCallback(
+    (ds: DatasetMeta, bundleTerrain: TerrainData) => {
+      setDatasetId(ds.id);
+      setTerrain(bundleTerrain);
+      setActiveUserDatasetId(null);
+      if (!useTerrainStore.getState().multiDatasetMode) {
+        useTerrainStore.getState().setSinglePrimary(ds.id, "preset");
+      }
+      useTerrainStore.getState().setGrids({ activeGrid: bundleTerrain, overviewGrid: bundleTerrain });
+      useClassificationStore.getState().clearZoneMap();
+      void useClassificationStore.getState().classify(bundleTerrain);
+    },
+    [setDatasetId, setTerrain],
+  );
 
   const handleSelectPreset = (ds: DatasetMeta) => {
     if (ds.id === datasetId && !pendingId) return;
@@ -2998,6 +3016,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       <div style={{ fontSize: 15, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}>
                         {formatDepthRange(ds.minDepth, ds.maxDepth, { units })}
                       </div>
+                      {ds.fetchStrategy && isSignedIn && isOnline && (
+                        <BundleDownloadButton dataset={ds} onLoaded={handleBundleLoaded} />
+                      )}
                       {active && terrain && terrain.datasetId === ds.id && (
                         <div onClick={(e) => e.stopPropagation()}>
                           <ProvenancePanel

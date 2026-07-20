@@ -32,7 +32,8 @@ export const GetDatasetsResponseItem = zod.object({
   "maxLat": zod.number()
 }).describe('Bounding box [minLon, minLat, maxLon, maxLat]'),
   "hasTopography": zod.boolean().optional().describe('True when the dataset bbox includes above-water terrain (land\/islands) suitable for landmass visualisation.'),
-  "hasEfh": zod.boolean().optional().describe('True when the dataset has bundled Essential Fish Habitat zone data available via \/efh.')
+  "hasEfh": zod.boolean().optional().describe('True when the dataset has bundled Essential Fish Habitat zone data available via \/efh.'),
+  "fetchStrategy": zod.string().optional().describe('Fetch-strategy kind configured for this preset (e.g. \"sciencebase\",\n\"ncei-wcs\", \"arcgis-rest\", \"usgs-3dep\", \"great-lakes-wcs\",\n\"gebco-wcs\", \"bundled\"). Present only when the preset supports\non-demand bathymetry bundle downloads via POST \/terrain\/bundles.\n')
 })
 export const GetDatasetsResponse = zod.array(GetDatasetsResponseItem)
 

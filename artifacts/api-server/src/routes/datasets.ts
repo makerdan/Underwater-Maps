@@ -1427,6 +1427,7 @@ router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
     bbox: d.bbox,
     ...(d.hasTopography === true ? { hasTopography: true as const } : {}),
     ...(d.hasEfh === true ? { hasEfh: true as const } : {}),
+    ...(d.fetchStrategy ? { fetchStrategy: d.fetchStrategy.kind } : {}),
   }));
   try {
     res.json(GetDatasetsResponse.parse(list));

@@ -1229,6 +1229,12 @@ export interface DatasetMeta {
   hasTopography?: boolean;
   /** True when the dataset has bundled Essential Fish Habitat zone data available via /efh. */
   hasEfh?: boolean;
+  /** Fetch-strategy kind configured for this preset (e.g. "sciencebase",
+  "ncei-wcs", "arcgis-rest", "usgs-3dep", "great-lakes-wcs",
+  "gebco-wcs", "bundled"). Present only when the preset supports
+  on-demand bathymetry bundle downloads via POST /terrain/bundles.
+   */
+  fetchStrategy?: string;
 }
 
 export type TerrainDataWaterType = typeof TerrainDataWaterType[keyof typeof TerrainDataWaterType];
