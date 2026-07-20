@@ -17,25 +17,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 
-vi.mock("pino-http", () => {
-  const pinoMock = vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next());
-  const childMock = vi.fn(() => ({
-    child: childMock,
-    levels: { values: { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 }, labels: {} },
-  }));
-  return {
-    default: Object.assign(pinoMock, {
-      child: childMock,
-      levels: { values: { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 }, labels: {} },
-    }),
-  };
-});
-
 // No factory — Vitest resolves this to src/lib/__mocks__/logger.ts, which
-// provides a recursive child() mock matching real pino behaviour. Any future
-// route test that also mocks pino-http should do the same: call
-// vi.mock("../../lib/logger.js") (no factory) so the shared mock is used and
-// the recursive child() invariant is always enforced.
+// provides a recursive child() mock matching real pino behaviour (including
+// child().child() chains that pino-http v10+ calls on every request).
+// Do NOT add a separate pino-http mock factory in this file — the shared
+// logger mock is sufficient because pino-http calls logger.child({req}) from
+// the already-mocked logger. Adding a factory also breaks check:bare-pino-http-mock.
 vi.mock("../../lib/logger.js");
 import { logger } from "../../lib/logger.js";
 

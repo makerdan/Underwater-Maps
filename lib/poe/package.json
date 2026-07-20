@@ -9,7 +9,7 @@
   "scripts": {
     "test": "node ../../scripts/run-with-timeout.mjs poe --label \"poe test\" -- vitest run",
     "test:unit": "node ../../scripts/run-with-timeout.mjs poe --label \"poe test:unit\" -- vitest run",
-    "test:watch": "vitest"
+    "test:watch": "node ../../scripts/run-with-timeout.mjs poe --label \"poe test:watch\" -- vitest"
   },
   "dependencies": {
     "openai": "^4.103.0",

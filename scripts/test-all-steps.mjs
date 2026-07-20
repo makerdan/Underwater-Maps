@@ -80,6 +80,7 @@ const steps = [
   ["check:fixture-freshness", "pnpm run check:fixture-freshness"],
   ["check:ports", "pnpm run check:ports"],
   ["check:audit", "pnpm run check:audit"],
+  ["check:bare-pino-http-mock", "pnpm run check:bare-pino-http-mock"],
 ];
 
 const overallStart = Date.now();

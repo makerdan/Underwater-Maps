@@ -33,6 +33,7 @@
     "check:schema-stale": "node scripts/check-schema-drift.mjs",
     "check:port-drift": "node scripts/check-port-drift.mjs",
     "check:audit": "node scripts/check-audit.mjs",
+    "check:bare-pino-http-mock": "node scripts/check-bare-pino-http-mock.mjs",
     "check:mock-drift": "pnpm --filter @workspace/bathyscan exec vitest run src/__tests__/apiClientMockSentinel.test.ts src/__tests__/clerkBypassMockSentinel.test.ts && pnpm --filter @workspace/api-server exec vitest run src/__tests__/settings-schema-sync.test.ts src/__tests__/settings-coverage-sentinel.test.ts",
     "check:drift": "node scripts/check-drift.mjs",
     "test-all": "node scripts/run-with-timeout.mjs aggregate --label \"test-all\" -- node scripts/test-all-steps.mjs"

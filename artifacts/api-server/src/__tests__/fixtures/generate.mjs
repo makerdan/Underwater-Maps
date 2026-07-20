@@ -20,6 +20,22 @@
  *   survey_1_2.las   — LAS 1.2, point format 0, uncompressed
  *   survey_1_4.las   — LAS 1.4, point format 6, 64-bit point count
  *   survey.bag       — BAG/HDF5 (BAG_root/elevation float32 grid, metadata XML)
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║  IMPORTANT — SCHEMA CHANGE PROTOCOL                                         ║
+ * ║                                                                              ║
+ * ║  Any change to a build*() function or the data layout it produces MUST be   ║
+ * ║  followed by:                                                                ║
+ * ║    1. Re-running the generator:                                              ║
+ * ║         pnpm --filter @workspace/api-server run fixtures:regen               ║
+ * ║    2. Committing ALL updated fixture files in the same commit:               ║
+ * ║         git add artifacts/api-server/src/__tests__/fixtures/                 ║
+ * ║         git commit -m "chore: regenerate fixtures after schema change"       ║
+ * ║    3. Verifying freshness passes before pushing:                             ║
+ * ║         pnpm run check:fixture-freshness                                     ║
+ * ║                                                                              ║
+ * ║  The CI step check:fixture-freshness (test-all) will fail on any mismatch.  ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
  */
 
 import { writeFile, mkdir } from "fs/promises";
@@ -991,11 +1007,14 @@ async function buildStandardBagProjected() {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+// IMPORTANT: After modifying any build*() function above, re-run this generator
+// and commit ALL updated fixture files. See the schema change protocol at the
+// top of this file. The CI check:fixture-freshness step will catch any mismatch.
 async function main() {
   await mkdir(__dir, { recursive: true });
 
   const tiffBuf = await buildGeoTiff();
-  await writeFile(join(__dir, "survey.tif"), tiffBuf);
+  await writeFile(join(__dir, "survey.tif"), tiffBuf); // commit after any change to buildGeoTiff()
   console.log(`survey.tif   ${tiffBuf.length} bytes`);
 
   const ncBuf = buildNetCdf();
