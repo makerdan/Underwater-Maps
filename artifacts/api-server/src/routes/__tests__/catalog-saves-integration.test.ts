@@ -512,6 +512,9 @@ vi.mock("../../lib/terrain.js", () => {
       meta: { datasetId: string },
       resolution: number,
     ) => makeGrid(meta.datasetId, resolution),
+    BUNDLED_TERRAIN: [],
+    NYSDEC_BATHY_FEATURE_SERVICE: "https://mock.invalid/nysdec",
+    MN_DNR_BATHY_FEATURE_SERVICE: "https://mock.invalid/mndnr",
     TERRAIN_CACHE_VERSION: 1,
   };
 });

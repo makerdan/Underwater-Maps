@@ -72,3 +72,4 @@
 - [api-server suite pre-existing breakage](api-server-suite-preexisting-breakage.md) — 70 failures/10 files (2026-07-20): missing x-e2e-user-id header→Clerk 500s, rateLimit mock export, invalid_param mismatch; run failing files solo before blaming your diff.
 - [catalog-search waterType filter count](catalog-search-watertype-count.md) — test that filters SEEDED_PLUS_FRESHWATER by waterType must use dynamic count; stale comment said EXTRA_CATALOG_ENTRIES was saltwater-only.
 - [supertest requireAuth bypass header](supertest-requireauth-bypass-header.md) — test apps mounting requireAuth routers must inject x-e2e-user-id or getAuth() throws and every request 500s.
+- [terrain.js mock export sync](terrain-mock-export-sync.md) — new module-init exports from lib/terrain.js must be stubbed in every full vi.mock or app-loading tests crash with misleading errors.

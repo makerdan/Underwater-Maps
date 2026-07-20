@@ -83,6 +83,9 @@ const terrainMocks = vi.hoisted(() => {
 });
 
 vi.mock("../lib/terrain.js", () => ({
+  BUNDLED_TERRAIN: [],
+  NYSDEC_BATHY_FEATURE_SERVICE: "https://mock.invalid/nysdec",
+  MN_DNR_BATHY_FEATURE_SERVICE: "https://mock.invalid/mndnr",
   parseXyzCsv: vi.fn(),
   gridPoints: vi.fn().mockReturnValue(terrainMocks.MOCK_TERRAIN),
   ALL_PRESET_DATASETS: [],

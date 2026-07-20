@@ -93,6 +93,9 @@ vi.mock("../lib/substrateGrid.js", () => ({
 }));
 
 vi.mock("../lib/terrain.js", () => ({
+  BUNDLED_TERRAIN: [],
+  NYSDEC_BATHY_FEATURE_SERVICE: "https://mock.invalid/nysdec",
+  MN_DNR_BATHY_FEATURE_SERVICE: "https://mock.invalid/mndnr",
   ALL_PRESET_DATASETS: [],
   buildTerrainGrid: vi.fn(),
   parseXyzCsv: vi.fn(),

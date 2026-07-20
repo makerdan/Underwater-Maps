@@ -42,6 +42,9 @@ vi.mock("@workspace/db", async () => {
 });
 
 vi.mock("../lib/terrain.js", () => ({
+  BUNDLED_TERRAIN: [],
+  NYSDEC_BATHY_FEATURE_SERVICE: "https://mock.invalid/nysdec",
+  MN_DNR_BATHY_FEATURE_SERVICE: "https://mock.invalid/mndnr",
   parseXyzCsv: vi.fn(),
   gridPoints: vi.fn(),
   ALL_PRESET_DATASETS: [],
