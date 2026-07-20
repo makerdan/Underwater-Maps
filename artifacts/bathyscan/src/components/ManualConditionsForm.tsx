@@ -10,11 +10,13 @@
  *   • "Remember for this lake" checkbox → persists to settingsStore
  *   • Source selector toggle (when real data is also available)
  */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import type { ManualConditions } from "@/lib/settingsStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { formatSpeedFromKnots } from "@/lib/units";
+import { computeBlendedDrift, KM_PER_DEG_LAT } from "@/lib/boatPhysics";
+import { getBoatProfile, DEFAULT_BOAT_PROFILE_ID } from "@/lib/boatProfiles";
 
 // ── Compass points (8-way) ───────────────────────────────────────────────────
 const COMPASS_POINTS: Array<{ label: string; deg: number }> = [
@@ -101,6 +103,32 @@ const DIVIDER: React.CSSProperties = {
   margin: "6px 0",
 };
 
+const PREVIEW_BOX: React.CSSProperties = {
+  background: "rgba(0,229,255,0.06)",
+  border: "1px solid rgba(0,229,255,0.15)",
+  borderRadius: 3,
+  padding: "5px 8px",
+  marginTop: 4,
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+};
+
+const PREVIEW_LABEL: React.CSSProperties = {
+  color: "#64748b",
+  fontSize: 11,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  fontWeight: 600,
+  whiteSpace: "nowrap",
+};
+
+const PREVIEW_VALUE: React.CSSProperties = {
+  color: "#7dd3fc",
+  fontSize: 12,
+  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+};
+
 const REMEMBER_ROW: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -141,6 +169,47 @@ const sourceBtn = (active: boolean): React.CSSProperties => ({
   padding: "4px 0",
   textAlign: "center",
 });
+
+// ── Drift preview helper ─────────────────────────────────────────────────────
+
+const EIGHT_POINT_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
+
+/**
+ * Compute a lightweight 1-hour drift preview from manual conditions.
+ *
+ * Uses the same blended model as computeDrift (70% current + 30% wind leeway)
+ * with the default open-skiff boat profile. Returns the estimated drift
+ * distance in km and the compass bearing it moves toward.
+ *
+ * Exported for unit testing.
+ */
+export function computeManualDriftPreview(
+  conditions: ManualConditions,
+  refLat = 45,
+): { distKm: number; bearingDeg: number } {
+  const profile = getBoatProfile(DEFAULT_BOAT_PROFILE_ID);
+  const leewayFactor = profile.leewayFactor * profile.windageFactor;
+  const { dLat, dLon } = computeBlendedDrift({
+    tidalSpeedKnots: conditions.currentSpeedKnots,
+    tidalDegrees: conditions.currentDirectionDeg,
+    windSpeedKnots: conditions.windSpeedKnots,
+    windDegrees: conditions.windDirectionDeg,
+    leewayFactor,
+    refLat,
+  });
+  const kmPerDegLon = KM_PER_DEG_LAT * Math.cos((refLat * Math.PI) / 180);
+  const dLatKm = dLat * KM_PER_DEG_LAT;
+  const dLonKm = dLon * kmPerDegLon;
+  const distKm = Math.sqrt(dLatKm * dLatKm + dLonKm * dLonKm);
+  const bearingRad = Math.atan2(dLonKm, dLatKm);
+  const bearingDeg = ((bearingRad * 180) / Math.PI + 360) % 360;
+  return { distKm, bearingDeg };
+}
+
+function bearingToCompass(deg: number): string {
+  const idx = Math.round(deg / 45) % 8;
+  return EIGHT_POINT_LABELS[idx < 0 ? idx + 8 : idx] ?? "N";
+}
 
 // ── Subcomponent: compass direction selector ─────────────────────────────────
 function CompassSelector({
@@ -215,6 +284,8 @@ export const ManualConditionsForm: React.FC<ManualConditionsFormProps> = ({
   const [draft, setDraft] = useState<ManualConditions>(resolved);
   const [remember, setRemember] = useState<boolean>(!!persistedConditions);
   const [applied, setApplied] = useState<boolean>(false);
+
+  const driftPreview = useMemo(() => computeManualDriftPreview(draft), [draft]);
 
   const showField = useCallback((f: ManualConditionsFields) => {
     if (!fields || fields.length === 0) return true;
@@ -388,6 +459,15 @@ export const ManualConditionsForm: React.FC<ManualConditionsFormProps> = ({
               </div>
             </div>
           )}
+
+          {/* Drift preview */}
+          <div style={PREVIEW_BOX} data-testid="manual-conditions-drift-preview">
+            <span style={PREVIEW_LABEL}>Drift 1 h:</span>
+            <span style={PREVIEW_VALUE} data-testid="manual-conditions-drift-preview-value">
+              ~{driftPreview.distKm < 0.1 ? "<0.1" : driftPreview.distKm.toFixed(1)} km{" "}
+              {bearingToCompass(driftPreview.bearingDeg)}
+            </span>
+          </div>
 
           {/* Remember + Apply */}
           <div style={REMEMBER_ROW}>

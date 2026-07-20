@@ -123,3 +123,113 @@ describe("SETTINGS_SCHEMA_VERSION", () => {
     expect(SETTINGS_SCHEMA_VERSION).toBe(30);
   });
 });
+
+describe("stuck-active guard — clearDatasetManualConditions also clears active source", () => {
+  beforeEach(() => {
+    useSettingsStore.setState({
+      datasetManualConditions: {},
+      manualConditionsActiveSource: {},
+    });
+    useUiStore.setState({ sessionManualConditions: {} });
+  });
+
+  it("clearDatasetManualConditions removes manualConditionsActiveSource for the same dataset", () => {
+    const { setDatasetManualConditions, setManualConditionsActiveSource, clearDatasetManualConditions } =
+      useSettingsStore.getState();
+
+    setDatasetManualConditions("lake-stuck", SAMPLE);
+    setManualConditionsActiveSource("lake-stuck", "manual");
+
+    const before = useSettingsStore.getState();
+    expect(before.datasetManualConditions["lake-stuck"]).toEqual(SAMPLE);
+    expect(before.manualConditionsActiveSource["lake-stuck"]).toBe("manual");
+
+    clearDatasetManualConditions("lake-stuck");
+
+    const after = useSettingsStore.getState();
+    expect(after.datasetManualConditions["lake-stuck"]).toBeUndefined();
+    expect(after.manualConditionsActiveSource["lake-stuck"]).toBeUndefined();
+  });
+
+  it("clearDatasetManualConditions does not affect active source for other datasets", () => {
+    const { setDatasetManualConditions, setManualConditionsActiveSource, clearDatasetManualConditions } =
+      useSettingsStore.getState();
+
+    setDatasetManualConditions("lake-a", SAMPLE);
+    setManualConditionsActiveSource("lake-a", "manual");
+    setDatasetManualConditions("lake-b", SAMPLE);
+    setManualConditionsActiveSource("lake-b", "real");
+
+    clearDatasetManualConditions("lake-a");
+
+    const after = useSettingsStore.getState();
+    expect(after.datasetManualConditions["lake-a"]).toBeUndefined();
+    expect(after.manualConditionsActiveSource["lake-a"]).toBeUndefined();
+    expect(after.datasetManualConditions["lake-b"]).toEqual(SAMPLE);
+    expect(after.manualConditionsActiveSource["lake-b"]).toBe("real");
+  });
+});
+
+describe("stuck-active guard — onManualConditionsServerClear", () => {
+  beforeEach(() => {
+    useSettingsStore.setState({
+      datasetManualConditions: {},
+      manualConditionsActiveSource: {},
+    });
+    useUiStore.setState({ sessionManualConditions: {} });
+  });
+
+  it("clears session conditions when the server record is cleared", () => {
+    const { setSessionManualConditions, onManualConditionsServerClear } = useUiStore.getState();
+    setSessionManualConditions("lake-stale", SAMPLE);
+
+    expect(useUiStore.getState().sessionManualConditions["lake-stale"]).toEqual(SAMPLE);
+
+    onManualConditionsServerClear("lake-stale");
+
+    expect(useUiStore.getState().sessionManualConditions["lake-stale"]).toBeUndefined();
+  });
+
+  it("clears persisted conditions when the server record is cleared", () => {
+    const { setSessionManualConditions, onManualConditionsServerClear } = useUiStore.getState();
+    const { setDatasetManualConditions } = useSettingsStore.getState();
+
+    setDatasetManualConditions("lake-stale", SAMPLE);
+    setSessionManualConditions("lake-stale", SAMPLE);
+
+    onManualConditionsServerClear("lake-stale");
+
+    expect(useSettingsStore.getState().datasetManualConditions["lake-stale"]).toBeUndefined();
+  });
+
+  it("clears active source when the server record is cleared", () => {
+    const { setSessionManualConditions, onManualConditionsServerClear } = useUiStore.getState();
+    const { setDatasetManualConditions, setManualConditionsActiveSource } = useSettingsStore.getState();
+
+    setDatasetManualConditions("lake-stale", SAMPLE);
+    setManualConditionsActiveSource("lake-stale", "manual");
+    setSessionManualConditions("lake-stale", SAMPLE);
+
+    onManualConditionsServerClear("lake-stale");
+
+    expect(useSettingsStore.getState().manualConditionsActiveSource["lake-stale"]).toBeUndefined();
+  });
+
+  it("does not affect conditions for other datasets on server clear", () => {
+    const { setSessionManualConditions, onManualConditionsServerClear } = useUiStore.getState();
+    const { setDatasetManualConditions, setManualConditionsActiveSource } = useSettingsStore.getState();
+
+    setSessionManualConditions("lake-keep", { ...SAMPLE, windSpeedKnots: 7 });
+    setDatasetManualConditions("lake-keep", { ...SAMPLE, windSpeedKnots: 7 });
+    setManualConditionsActiveSource("lake-keep", "manual");
+
+    setSessionManualConditions("lake-stale", SAMPLE);
+    setDatasetManualConditions("lake-stale", SAMPLE);
+
+    onManualConditionsServerClear("lake-stale");
+
+    expect(useUiStore.getState().sessionManualConditions["lake-keep"]?.windSpeedKnots).toBe(7);
+    expect(useSettingsStore.getState().datasetManualConditions["lake-keep"]?.windSpeedKnots).toBe(7);
+    expect(useSettingsStore.getState().manualConditionsActiveSource["lake-keep"]).toBe("manual");
+  });
+});

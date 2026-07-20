@@ -1435,9 +1435,14 @@ export const useSettingsStore = create<SettingsStore>()(
         },
         clearDatasetManualConditions: (datasetId) =>
           set((state) => {
-            const next = { ...state.datasetManualConditions };
-            delete next[datasetId];
-            return { datasetManualConditions: next };
+            const nextConditions = { ...state.datasetManualConditions };
+            delete nextConditions[datasetId];
+            const nextActiveSource = { ...state.manualConditionsActiveSource };
+            delete nextActiveSource[datasetId];
+            return {
+              datasetManualConditions: nextConditions,
+              manualConditionsActiveSource: nextActiveSource,
+            };
           }),
         setManualConditionsActiveSource: (datasetId, source) => {
           _manualConditionsLastWriteMs = Date.now();

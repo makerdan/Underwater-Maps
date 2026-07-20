@@ -325,6 +325,13 @@ interface UiStore {
   sessionManualConditions: Record<string, import("./settingsStore").ManualConditions>;
   setSessionManualConditions: (datasetId: string, conditions: import("./settingsStore").ManualConditions) => void;
   clearSessionManualConditions: (datasetId: string) => void;
+  /**
+   * Call when the server returns null/empty for a dataset's manual conditions
+   * record. Clears both the session conditions and the persisted conditions +
+   * active source via settingsStore so stale values are never applied to drift
+   * calculations.
+   */
+  onManualConditionsServerClear: (datasetId: string) => void;
 }
 
 // ── Device-local helpers (hasSeenOrbitTouchHint only) ────────────────────────
@@ -550,6 +557,14 @@ export const useUiStore = create<UiStore>((set, get) => {
         delete next[datasetId];
         return { sessionManualConditions: next };
       }),
+    onManualConditionsServerClear: (datasetId) => {
+      set((state) => {
+        const next = { ...state.sessionManualConditions };
+        delete next[datasetId];
+        return { sessionManualConditions: next };
+      });
+      useSettingsStore.getState().clearDatasetManualConditions(datasetId);
+    },
     pendingCoordSearch: null,
     setPendingCoordSearch: (req) => set({ pendingCoordSearch: req }),
     clearPendingCoordSearch: () => set({ pendingCoordSearch: null }),
