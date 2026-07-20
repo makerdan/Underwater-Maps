@@ -63,7 +63,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     setSmoothTerrainSpikes: vi.fn(),
     showWaterSurface: true,
     setShowWaterSurface: vi.fn(),
-    showLandmass: true,
+    showLandmass: false,
     setShowLandmass: vi.fn(),
     satelliteImagery: false,
     setSatelliteImagery: vi.fn(),

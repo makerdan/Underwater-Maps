@@ -913,7 +913,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   smoothTerrainSpikes: true,
   showWaterSurface: true,
   showWaterTempLayer: false,
-  showLandmass: true,
+  showLandmass: false,
   landmassStyle: "realistic",
   satelliteImagery: true,
 
