@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 type Row = Record<string, unknown>;
 const state: { userSettings: Row[]; lastInsertedSettings: Row | null } = {

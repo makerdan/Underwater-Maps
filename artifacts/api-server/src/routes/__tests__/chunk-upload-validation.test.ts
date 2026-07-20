@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 vi.mock("@workspace/db", () => ({
   db: {
@@ -47,7 +48,7 @@ vi.mock("@workspace/db", () => ({
   poeUsageLogTable: {},
   uploadJobsTable: {},
   disabledPresetsTable: {},
-  pool: {},
+  pool: { query: vi.fn().mockResolvedValue({ rows: [] }) },
 }));
 
 vi.mock("@clerk/express", () => ({

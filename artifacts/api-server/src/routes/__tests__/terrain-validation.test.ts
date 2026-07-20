@@ -24,6 +24,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { getAuth } from "@clerk/express";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 vi.mock("@workspace/db", () => ({
   db: {

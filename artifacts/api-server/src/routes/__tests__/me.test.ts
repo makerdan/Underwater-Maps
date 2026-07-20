@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
+import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 // --- DB mock -----------------------------------------------------------------
 // Per-table query state. We use shallow proxies that respond to the chained
