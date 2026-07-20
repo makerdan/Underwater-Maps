@@ -78,4 +78,26 @@ describe("CameraCoordsReadout", () => {
     expect(screen.getByText("-122.5000")).toBeInTheDocument();
     expect(screen.getByText("47.6000")).toBeInTheDocument();
   });
+
+  it("shows SURFACE label when cameraDepth is null (camera above water)", () => {
+    useCameraStore.setState({ cameraDepth: null });
+    render(
+      <TooltipProvider>
+        <CameraCoordsReadout />
+      </TooltipProvider>,
+    );
+    expect(screen.getByTestId("camera-depth-surface")).toBeInTheDocument();
+    expect(screen.getByTestId("camera-depth-surface").textContent).toBe("SURFACE");
+  });
+
+  it("shows formatted depth when cameraDepth is non-null (camera underwater)", () => {
+    useCameraStore.setState({ cameraDepth: 42 });
+    render(
+      <TooltipProvider>
+        <CameraCoordsReadout />
+      </TooltipProvider>,
+    );
+    expect(screen.queryByTestId("camera-depth-surface")).not.toBeInTheDocument();
+    expect(screen.getByText(/DEP/)).toBeInTheDocument();
+  });
 });

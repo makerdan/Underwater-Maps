@@ -264,8 +264,6 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
   const scores = useHabitatStore((s) => s.scores);
   const hotspots = useHabitatStore((s) => s.hotspots);
   const settingsWaterType = useSettingsStore((s) => s.waterType);
-  const defaultHabitatSpecies = useSettingsStore((s) => s.defaultHabitatSpecies);
-  const autoShowZoneOverlay = useSettingsStore((s) => s.autoShowZoneOverlay);
   const habitatOverlayIntensity = useSettingsStore((s) => s.habitatOverlayIntensity);
   const setHabitatOverlayIntensity = useSettingsStore((s) => s.setHabitatOverlayIntensity);
   const habitatOverlayColor = useSettingsStore((s) => s.habitatOverlayColor);
@@ -327,6 +325,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
       // Bust cache and recompute for current species
       useHabitatStore.getState().clear();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- terrain?.datasetId is the identity key; object ref changes are not meaningful here
   }, [terrain?.datasetId]);
 
   // Clear species selection when waterType changes so stale overlays don't persist
@@ -374,6 +373,7 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
         .setSpecies(defaultSpecies as SpeciesId, terrain, currentZoneMap);
     }
   // Only run on terrain swap / water-type change — not every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- terrain?.datasetId is the identity key; reads terrain via getState() pattern avoids stale closure
   }, [terrain?.datasetId, waterType]);
 
   const handleSpeciesChange = (id: SpeciesId | "") => {

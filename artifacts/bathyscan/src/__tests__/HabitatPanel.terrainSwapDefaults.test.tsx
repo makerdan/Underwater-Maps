@@ -21,7 +21,7 @@
  * because HabitatPanel has deep UI dependencies. The logic under test lives
  * in the effect body which can be extracted to a helper function in future.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Verify that the fix is present in the source — a lightweight guard that
@@ -77,12 +77,14 @@ describe("HabitatPanel terrain-swap defaults effect — store-state pattern (sta
     const lines = habitatPanelSrc.split("\n");
     const suppressed: string[] = [];
     for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue;
       if (
-        lines[i].includes("eslint-disable") &&
-        lines[i].includes("exhaustive-deps") &&
-        !lines[i].includes(" -- ")
+        line.includes("eslint-disable") &&
+        line.includes("exhaustive-deps") &&
+        !line.includes(" -- ")
       ) {
-        suppressed.push(`line ${i + 1}: ${lines[i].trim()}`);
+        suppressed.push(`line ${i + 1}: ${line.trim()}`);
       }
     }
     expect(suppressed, `Bare suppressions in HabitatPanel:\n${suppressed.join("\n")}`).toHaveLength(0);

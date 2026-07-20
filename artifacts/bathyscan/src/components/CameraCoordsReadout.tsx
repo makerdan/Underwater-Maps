@@ -3,6 +3,7 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { formatDepth } from "@/lib/units";
 
 const COORDS_TOOLTIP =
   "Longitude and latitude of your viewpoint in the 3D scene — where you're looking from, not where your cursor is.";
@@ -43,8 +44,10 @@ function toDMS(decimal: number): string {
 export const CameraCoordsReadout: React.FC = () => {
   const cameraLon = useCameraStore((s) => s.cameraLon);
   const cameraLat = useCameraStore((s) => s.cameraLat);
+  const cameraDepth = useCameraStore((s) => s.cameraDepth);
   const coordinateFormat = useSettingsStore((s) => s.coordinateFormat);
   const showCameraPosition = useSettingsStore((s) => s.showCameraPosition);
+  const units = useSettingsStore((s) => s.units);
   const hudOpacity = useSettingsStore((s) => s.hudOpacity);
   const collapsed = usePanelCollapseStore((s) => s.collapsed.cameraCoords);
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
@@ -90,6 +93,21 @@ export const CameraCoordsReadout: React.FC = () => {
           <div>
             <span style={{ color: "#cbd5e1" }}>LAT </span>
             <span style={CYAN}>{fmtCoord(cameraLat)}</span>
+          </div>
+          <div>
+            <span style={{ color: "#cbd5e1" }}>DEP </span>
+            {cameraDepth === null ? (
+              <span
+                data-testid="camera-depth-surface"
+                style={CYAN}
+              >
+                SURFACE
+              </span>
+            ) : (
+              <span style={CYAN}>
+                {formatDepth(cameraDepth, { units }).toUpperCase()}
+              </span>
+            )}
           </div>
         </div>
       )}
