@@ -35,8 +35,12 @@ catalog:
   # in its own package.json.
   vite: 7.3.6
   # vitest pinned (see toolchain note above); consumed via catalog: by all
-  # test-bearing packages.
+  # test-bearing packages. Companion packages (@vitest/coverage-v8, @vitest/ui)
+  # must stay on the same major.minor.patch as vitest — a major mismatch
+  # produces unmet peer warnings and can silently break coverage runs / the UI.
   vitest: 3.2.7
+  '@vitest/coverage-v8': 3.2.7
+  '@vitest/ui': 3.2.7
   wouter: ^3.10.0
   zod: 3.25.76
 
