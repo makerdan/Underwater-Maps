@@ -1864,6 +1864,29 @@ export const useSettingsStore = create<SettingsStore>()(
 );
 
 
+// ── Defensive selectors for per-dataset manual-conditions maps ──────────────
+// Stale persisted settings (or partial test mocks) can hydrate the store
+// without these keys; indexing `undefined[datasetId]` would crash consumers.
+// These helpers fall back to a stable frozen empty map so zustand selectors
+// keep referential equality across renders.
+
+const EMPTY_MANUAL_CONDITIONS: Record<string, ManualConditions> = Object.freeze({});
+const EMPTY_ACTIVE_SOURCE: Record<string, 'real' | 'manual'> = Object.freeze({});
+
+/** Safe accessor: `datasetManualConditions` map, never undefined. */
+export function selectDatasetManualConditions(
+  s: SettingsState,
+): Record<string, ManualConditions> {
+  return s.datasetManualConditions ?? EMPTY_MANUAL_CONDITIONS;
+}
+
+/** Safe accessor: `manualConditionsActiveSource` map, never undefined. */
+export function selectManualConditionsActiveSource(
+  s: SettingsState,
+): Record<string, 'real' | 'manual'> {
+  return s.manualConditionsActiveSource ?? EMPTY_ACTIVE_SOURCE;
+}
+
 /**
  * Returns true when any setting in the given section has changed since the
  * last successful save (server PUT for signed-in users, or localStorage

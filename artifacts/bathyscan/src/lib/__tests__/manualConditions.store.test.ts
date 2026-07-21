@@ -9,7 +9,15 @@
  *   • Version bump to 30 with migration injecting empty records
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { useSettingsStore, DEFAULT_SETTINGS, SETTINGS_SCHEMA_VERSION, type ManualConditions } from "../settingsStore";
+import {
+  useSettingsStore,
+  DEFAULT_SETTINGS,
+  SETTINGS_SCHEMA_VERSION,
+  selectDatasetManualConditions,
+  selectManualConditionsActiveSource,
+  type ManualConditions,
+  type SettingsState,
+} from "../settingsStore";
 import { useUiStore } from "../uiStore";
 
 const SAMPLE: ManualConditions = {
@@ -286,5 +294,57 @@ describe("stuck-active guard — onManualConditionsServerClear", () => {
     expect(useUiStore.getState().sessionManualConditions["lake-keep"]?.windSpeedKnots).toBe(7);
     expect(useSettingsStore.getState().datasetManualConditions["lake-keep"]?.windSpeedKnots).toBe(7);
     expect(useSettingsStore.getState().manualConditionsActiveSource["lake-keep"]).toBe("manual");
+  });
+});
+
+describe("defensive selectors — hydration with keys absent", () => {
+  // Simulates stale persisted settings (or partial test mocks) that hydrate
+  // the store without the per-dataset manual-conditions maps.
+  const withMissingKeys = <T>(fn: (state: SettingsState) => T): T => {
+    const prev = useSettingsStore.getState();
+    useSettingsStore.setState({
+      datasetManualConditions: undefined,
+      manualConditionsActiveSource: undefined,
+    } as unknown as Partial<SettingsState>);
+    try {
+      return fn(useSettingsStore.getState());
+    } finally {
+      useSettingsStore.setState({
+        datasetManualConditions: prev.datasetManualConditions ?? {},
+        manualConditionsActiveSource: prev.manualConditionsActiveSource ?? {},
+      });
+    }
+  };
+
+  it("selectDatasetManualConditions returns an empty map when the key is absent", () => {
+    const result = withMissingKeys((s) => selectDatasetManualConditions(s));
+    expect(result).toEqual({});
+    expect(result["any-lake"]).toBeUndefined();
+  });
+
+  it("selectManualConditionsActiveSource returns an empty map when the key is absent", () => {
+    const result = withMissingKeys((s) => selectManualConditionsActiveSource(s));
+    expect(result).toEqual({});
+    expect(result["any-lake"] ?? "real").toBe("real");
+  });
+
+  it("selectors return stable references across calls (no re-render churn)", () => {
+    withMissingKeys((s) => {
+      expect(selectDatasetManualConditions(s)).toBe(selectDatasetManualConditions(s));
+      expect(selectManualConditionsActiveSource(s)).toBe(selectManualConditionsActiveSource(s));
+    });
+  });
+
+  it("consumer-style indexing patterns don't throw when the maps are absent", () => {
+    withMissingKeys((s) => {
+      // Patterns used by HUD, CurrentsPanel, TidePanel, DriftPlannerPanel,
+      // ManualConditionsForm, ManualConditionsChip, useSurfaceConditions.
+      expect(() => {
+        const activeSource = selectManualConditionsActiveSource(s)["lake-x"] ?? "manual";
+        const persisted = selectDatasetManualConditions(s)["lake-x"] ?? null;
+        expect(activeSource).toBe("manual");
+        expect(persisted).toBeNull();
+      }).not.toThrow();
+    });
   });
 });

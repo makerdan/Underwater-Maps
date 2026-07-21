@@ -33,7 +33,11 @@ import {
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useDriftStore } from "@/lib/driftStore";
-import { useSettingsStore } from "@/lib/settingsStore";
+import {
+  useSettingsStore,
+  selectDatasetManualConditions,
+  selectManualConditionsActiveSource,
+} from "@/lib/settingsStore";
 import type { ManualConditions } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 
@@ -150,8 +154,8 @@ export function useSurfaceConditions(
 
   // Manual conditions — per-dataset keying.
   // Session conditions (uiStore) take precedence over persisted (settingsStore).
-  const manualConditionsActiveSource = useSettingsStore((s) => s.manualConditionsActiveSource);
-  const datasetManualConditions = useSettingsStore((s) => s.datasetManualConditions);
+  const manualConditionsActiveSource = useSettingsStore(selectManualConditionsActiveSource);
+  const datasetManualConditions = useSettingsStore(selectDatasetManualConditions);
   const sessionManualConditions = useUiStore((s) => s.sessionManualConditions);
 
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;

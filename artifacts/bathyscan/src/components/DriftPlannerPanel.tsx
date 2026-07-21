@@ -15,7 +15,11 @@
 import React, { useMemo } from "react";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
-import { useSettingsStore } from "@/lib/settingsStore";
+import {
+  useSettingsStore,
+  selectDatasetManualConditions,
+  selectManualConditionsActiveSource,
+} from "@/lib/settingsStore";
 import { computeManualDriftPreview } from "@/components/ManualConditionsForm";
 
 // ── Styles ───────────────────────────────────────────────────────────────────
@@ -120,9 +124,11 @@ export const DriftPlannerPanel: React.FC = () => {
   const datasetId = terrain?.datasetId ?? "";
 
   const sessionConditions = useUiStore((s) => s.sessionManualConditions[datasetId]);
-  const persistedConditions = useSettingsStore((s) => s.datasetManualConditions[datasetId]);
+  const persistedConditions = useSettingsStore(
+    (s) => selectDatasetManualConditions(s)[datasetId],
+  );
   const activeSource = useSettingsStore(
-    (s) => s.manualConditionsActiveSource[datasetId] ?? "manual",
+    (s) => selectManualConditionsActiveSource(s)[datasetId] ?? "manual",
   );
 
   const clearSessionManualConditions = useUiStore((s) => s.clearSessionManualConditions);

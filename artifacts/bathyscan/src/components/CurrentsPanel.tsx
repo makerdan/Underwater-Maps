@@ -15,7 +15,7 @@
  */
 
 import React, { useEffect, useRef } from "react";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, selectManualConditionsActiveSource } from "@/lib/settingsStore";
 import { ManualConditionsForm } from "@/components/ManualConditionsForm";
 import { AdvancedSection } from "@/components/AdvancedSection";
 import { useCurrentsStore, type TidalStatus } from "@/lib/currentsStore";
@@ -159,7 +159,9 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
   const retryTidal = useCurrentsStore((st) => st.retryTidal);
   const { terrain } = useAppState();
   const datasetId = terrain?.datasetId ?? "";
-  const manualActiveSource = useSettingsStore((s) => s.manualConditionsActiveSource[datasetId] ?? "manual");
+  const manualActiveSource = useSettingsStore(
+    (s) => selectManualConditionsActiveSource(s)[datasetId] ?? "manual",
+  );
   const setManualConditionsActiveSource = useSettingsStore((s) => s.setManualConditionsActiveSource);
 
   const timelineVisible = useTimelineVisible();

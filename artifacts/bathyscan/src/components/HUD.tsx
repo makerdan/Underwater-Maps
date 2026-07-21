@@ -5,7 +5,7 @@ import { useGpsStore } from "@/lib/gpsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useOfflineStore } from "@/lib/offlineStore";
-import { useSettingsStore, FONT_SIZE_SCALE } from "@/lib/settingsStore";
+import { useSettingsStore, FONT_SIZE_SCALE, selectManualConditionsActiveSource } from "@/lib/settingsStore";
 import { getBoundKey } from "@/lib/keyBindings";
 import { formatKeyCode } from "@/lib/keyLabel";
 import { useDriftStore } from "@/lib/driftStore";
@@ -160,7 +160,7 @@ export const HUD: React.FC = () => {
   // source selected, regardless of whether conditions are already stored.
   // This matches the "MANUAL CONDITIONS ACTIVE" acceptance criterion: the badge
   // signals the user's mode preference, not the presence of specific values.
-  const _manualActiveSource = useSettingsStore((s) => s.manualConditionsActiveSource);
+  const _manualActiveSource = useSettingsStore(selectManualConditionsActiveSource);
   const manualConditionsActiveDid = (() => {
     const did = terrain?.datasetId;
     if (!did) return false;

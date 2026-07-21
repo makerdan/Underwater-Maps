@@ -11,7 +11,11 @@
 import React from "react";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
-import { useSettingsStore } from "@/lib/settingsStore";
+import {
+  useSettingsStore,
+  selectDatasetManualConditions,
+  selectManualConditionsActiveSource,
+} from "@/lib/settingsStore";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 // ── Styles ───────────────────────────────────────────────────────────────────
@@ -101,9 +105,11 @@ export const ManualConditionsChip: React.FC = () => {
   const lakeName = typeof terrain?.name === "string" ? terrain.name.trim() : "";
 
   const sessionConditions = useUiStore((s) => s.sessionManualConditions[datasetId]);
-  const persistedConditions = useSettingsStore((s) => s.datasetManualConditions[datasetId]);
+  const persistedConditions = useSettingsStore(
+    (s) => selectDatasetManualConditions(s)[datasetId],
+  );
   const activeSource = useSettingsStore(
-    (s) => s.manualConditionsActiveSource[datasetId] ?? "manual",
+    (s) => selectManualConditionsActiveSource(s)[datasetId] ?? "manual",
   );
 
   const setSidebarMode = useUiStore((s) => s.setSidebarMode);

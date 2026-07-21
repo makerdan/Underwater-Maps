@@ -12,7 +12,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import type { ManualConditions } from "@/lib/settingsStore";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, selectDatasetManualConditions } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { formatSpeedFromKnots } from "@/lib/units";
 import { computeBlendedDrift, KM_PER_DEG_LAT } from "@/lib/boatPhysics";
@@ -273,7 +273,9 @@ export const ManualConditionsForm: React.FC<ManualConditionsFormProps> = ({
   onApply,
 }) => {
   const units = useSettingsStore((s) => s.units);
-  const persistedConditions = useSettingsStore((s) => s.datasetManualConditions[datasetId]);
+  const persistedConditions = useSettingsStore(
+    (s) => selectDatasetManualConditions(s)[datasetId],
+  );
   const setDatasetManualConditions = useSettingsStore((s) => s.setDatasetManualConditions);
   const sessionConditions = useUiStore((s) => s.sessionManualConditions[datasetId]);
   const setSessionManualConditions = useUiStore((s) => s.setSessionManualConditions);

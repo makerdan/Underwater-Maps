@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, selectManualConditionsActiveSource } from "@/lib/settingsStore";
 import { ManualConditionsForm } from "@/components/ManualConditionsForm";
 import { DataSourceBadge } from "@/components/DataSourceBadge";
 import type { DataSource } from "@/components/DataSourceBadge";
@@ -99,7 +99,9 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   const units = useSettingsStore((s) => s.units);
   const waterType = useSettingsStore((s) => s.waterType);
   const isFreshwater = waterType === "freshwater";
-  const rawManualActiveSource = useSettingsStore((s) => s.manualConditionsActiveSource[datasetId]);
+  const rawManualActiveSource = useSettingsStore(
+    (s) => selectManualConditionsActiveSource(s)[datasetId],
+  );
   const setManualConditionsActiveSource = useSettingsStore((s) => s.setManualConditionsActiveSource);
   const { schedule, isError: scheduleError } = useTidalSchedule(lat, lon, 7);
 
