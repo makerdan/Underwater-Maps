@@ -45,7 +45,13 @@ import {
 } from "../lib/terrain.js";
 import { parseUploadedFile } from "../lib/uploadParsers.js";
 import { parsePdfContourFile, PdfStageError, PdfRasterOnlyError, type PdfDepthUnit } from "../lib/pdfContour.js";
-import { parseRasterPdfContourFile, parseRasterImageContourFile } from "../lib/pdfContourRaster.js";
+import {
+  parseRasterPdfContourFile,
+  parseRasterImageContourFile,
+  extractRasterImageContoursOnly,
+  commitCachedExtraction,
+  type RasterExtractionResult,
+} from "../lib/pdfContourRaster.js";
 import { routeTarEntries } from "../lib/noaaTarRouter.js";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
 import { isTarBuffer, extractTarBuffer, isTarFile, extractTarFile, isGzipFile } from "../lib/tarDetect.js";
@@ -2420,6 +2426,214 @@ router.post(
     }),
   );
 }));
+
+// ── POST /datasets/raster-extract ────────────────────────────────────────────
+// Step 1 of the two-step raster contour pipeline.
+// Accepts a PNG or JPEG contour-map image, runs OCR + line tracing, caches
+// the polylines in memory, and returns a short-lived token plus the detected
+// depth labels for the client to review/correct.
+//
+// The token expires in 5 minutes.  Pass it to /datasets/raster-commit to
+// complete the pipeline with (optionally corrected) labels.
+
+router.post(
+  "/datasets/raster-extract",
+  datasetUploadRateLimit,
+  requireAuth,
+  upload.single("file"),
+  multerErrorHandler,
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "missing_file", details: "No image file uploaded. Send a PNG or JPEG as the 'file' field." });
+      return;
+    }
+
+    const ext = (file.originalname.toLowerCase().split(".").pop() ?? "");
+    if (ext !== "png" && ext !== "jpg" && ext !== "jpeg") {
+      res.status(415).json({
+        error: "unsupported_file_type",
+        details: "raster-extract only accepts PNG and JPEG images.",
+      });
+      return;
+    }
+
+    let result: RasterExtractionResult;
+    try {
+      result = await extractRasterImageContoursOnly(file.buffer);
+    } catch (err) {
+      if (err instanceof PdfStageError) {
+        res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
+        return;
+      }
+      throw err;
+    }
+
+    res.json({
+      token: result.token,
+      labels: result.labels,
+      polylineCount: result.polylineCount,
+      width: result.width,
+      height: result.height,
+    });
+  }),
+);
+
+// ── POST /datasets/raster-commit ──────────────────────────────────────────────
+// Step 2 of the two-step raster contour pipeline.
+// Accepts a cached extraction token (from /datasets/raster-extract), the
+// user-reviewed depth labels, and the geographic bounding box. Applies the
+// corrected labels, runs georeference + interpolation, grids the result, saves
+// it to the user's library, and returns the same UploadResult shape as
+// /datasets/upload.
+
+const RasterCommitBodySchema = z.object({
+  token: z.string().min(1),
+  correctedLabels: z
+    .array(z.object({
+      x: z.number(),
+      y: z.number(),
+      value: z.number().positive("depth value must be positive"),
+      text: z.string(),
+    }))
+    .min(1, "At least one depth label is required"),
+  pdfBbox: z.string().min(1),
+  pdfDepthUnit: z.enum(["feet", "meters"]).default("feet"),
+  resolution: z.coerce.number().int().min(32).max(512).default(256),
+  fileName: z.string().min(1),
+});
+
+const RasterCommitBboxSchema = z.object({
+  minLon: z.coerce.number().gte(-180).lte(180),
+  minLat: z.coerce.number().gte(-90).lte(90),
+  maxLon: z.coerce.number().gte(-180).lte(180),
+  maxLat: z.coerce.number().gte(-90).lte(90),
+}).refine((b) => b.minLon < b.maxLon && b.minLat < b.maxLat, {
+  message: "min longitude/latitude must be strictly less than max",
+});
+
+router.post(
+  "/datasets/raster-commit",
+  datasetUploadRateLimit,
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const parsed = RasterCommitBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "invalid_param",
+        details: parsed.error.issues.map((i) => i.message).join("; "),
+      });
+      return;
+    }
+
+    const { token, correctedLabels, pdfBbox, pdfDepthUnit, resolution, fileName } = parsed.data;
+
+    let bboxJson: unknown;
+    try {
+      bboxJson = JSON.parse(pdfBbox);
+    } catch {
+      res.status(400).json({ error: "invalid_param", details: "pdfBbox is not valid JSON." });
+      return;
+    }
+    const bboxParsed = RasterCommitBboxSchema.safeParse(bboxJson);
+    if (!bboxParsed.success) {
+      res.status(400).json({
+        error: "invalid_param",
+        details: "pdfBbox: " + (bboxParsed.error.issues[0]?.message ?? "invalid bounding box"),
+      });
+      return;
+    }
+
+    let points;
+    try {
+      points = commitCachedExtraction(token, correctedLabels, bboxParsed.data, pdfDepthUnit);
+    } catch (err) {
+      if (err instanceof PdfStageError) {
+        res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
+        return;
+      }
+      throw err;
+    }
+
+    if (points.length < 10) {
+      res.status(400).json({
+        error: "insufficient_data",
+        details: "File must contain at least 10 valid (lon, lat, depth) rows. Check that your depth labels and bounding box are correct.",
+      });
+      return;
+    }
+
+    const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
+    const smoothing = await getSmoothingPreference(req);
+    const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
+    const gridId = crypto.randomUUID();
+    const coveragePercent = 100;
+
+    const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
+    const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
+
+    let savedDatasetId: string | undefined;
+    let savedDatasetMeta:
+      | { id: string; name: string; minDepth: number; maxDepth: number; createdAt: string }
+      | undefined;
+    let saveError: string | undefined;
+
+    try {
+      const [saved] = await db
+        .insert(customDatasetsTable)
+        .values({
+          id: gridId,
+          userId: effectiveUserId,
+          name: datasetName,
+          minDepth: terrain.minDepth,
+          maxDepth: terrain.maxDepth,
+          terrainJson: terrain as unknown as StoredTerrainJson,
+          overviewJson: overview as unknown as StoredTerrainJson,
+          tideStationJson: await resolveTideStationForTerrain(terrain),
+        })
+        .returning({
+          id: customDatasetsTable.id,
+          name: customDatasetsTable.name,
+          minDepth: customDatasetsTable.minDepth,
+          maxDepth: customDatasetsTable.maxDepth,
+          createdAt: customDatasetsTable.createdAt,
+        });
+      if (saved) {
+        savedDatasetId = saved.id;
+        savedDatasetMeta = {
+          id: saved.id,
+          name: saved.name,
+          minDepth: saved.minDepth,
+          maxDepth: saved.maxDepth,
+          createdAt: saved.createdAt.toISOString(),
+        };
+      } else {
+        saveError = "Database insert returned no row";
+        logger.warn(
+          { userId: effectiveUserId, datasetName },
+          `[raster-commit] upload returned without savedDatasetId (userId=${effectiveUserId}, name=${datasetName})`,
+        );
+      }
+    } catch (err) {
+      saveError = err instanceof Error ? err.message : "Failed to save upload to account";
+      logger.error(
+        { err, userId: effectiveUserId, datasetName },
+        `[raster-commit] failed to persist (userId=${effectiveUserId}, name=${datasetName})`,
+      );
+    }
+
+    res.json(
+      PostDatasetsUploadResponse.parse({
+        terrain,
+        overview,
+        coveragePercent,
+        savedDatasetId,
+        savedDatasetMeta,
+        saveError,
+      }),
+    );
+  }),
+);
 
 // ── POST /datasets/upload/chunk ───────────────────────────────────────────────
 // Receives one 5 MB slice of a large file. Fields (all required):

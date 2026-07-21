@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { registerCache } from "./cacheRegistry.js";
 
 import type { RawPoint } from "./uploadParsers.js";
 import {
@@ -158,6 +159,48 @@ function scriptOutputToExtraction(out: RasterContourOutput): PdfContourExtractio
 }
 
 // ---------------------------------------------------------------------------
+// Extraction cache (in-memory, 5-minute TTL)
+// ---------------------------------------------------------------------------
+
+interface CachedExtraction {
+  extraction: PdfContourExtraction;
+  expiresAt: number;
+}
+
+const extractionCache = new Map<string, CachedExtraction>();
+registerCache(() => extractionCache.clear());
+
+const EXTRACTION_TTL_MS = 5 * 60 * 1000;
+
+function pruneExtractionCache(): void {
+  const now = Date.now();
+  for (const [k, v] of extractionCache) {
+    if (v.expiresAt < now) extractionCache.delete(k);
+  }
+}
+
+function storeExtraction(extraction: PdfContourExtraction): string {
+  pruneExtractionCache();
+  const token = randomBytes(16).toString("hex");
+  extractionCache.set(token, { extraction, expiresAt: Date.now() + EXTRACTION_TTL_MS });
+  return token;
+}
+
+/**
+ * Retrieves a cached extraction by token (single-use: consumed on first call).
+ * Returns null when the token is missing or has expired.
+ */
+export function retrieveCachedExtraction(token: string): PdfContourExtraction | null {
+  const entry = extractionCache.get(token);
+  if (!entry || entry.expiresAt < Date.now()) {
+    extractionCache.delete(token);
+    return null;
+  }
+  extractionCache.delete(token);
+  return entry.extraction;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -197,4 +240,60 @@ export async function parseRasterImageContourFile(
 ): Promise<RawPoint[]> {
   const extraction = await extractRasterContours(imageBuffer);
   return pdfContoursToPoints(extraction, bbox, unit);
+}
+
+// ---------------------------------------------------------------------------
+// Two-step API: extract-only (returns token) + commit (applies corrections)
+// ---------------------------------------------------------------------------
+
+export interface RasterExtractionResult {
+  token: string;
+  labels: PdfDepthLabel[];
+  polylineCount: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Stage 1 of the two-step raster pipeline for PNG/JPEG images.
+ * Runs OCR + contour tracing, caches the result, and returns a token
+ * the client can use in the commit step after reviewing/correcting labels.
+ */
+export async function extractRasterImageContoursOnly(
+  imageBuffer: Buffer,
+): Promise<RasterExtractionResult> {
+  const out = await callRasterContourScript(imageBuffer);
+  const extraction = scriptOutputToExtraction(out);
+  const token = storeExtraction(extraction);
+  return {
+    token,
+    labels: extraction.labels,
+    polylineCount: extraction.polylines.length,
+    width: out.width,
+    height: out.height,
+  };
+}
+
+/**
+ * Stage 2 of the two-step raster pipeline.
+ * Retrieves the cached extraction (consuming the token), substitutes the
+ * user-corrected labels, and runs georeference + interpolation.
+ *
+ * Throws PdfStageError("extract") when the token is expired or unknown.
+ */
+export function commitCachedExtraction(
+  token: string,
+  correctedLabels: PdfDepthLabel[],
+  bbox: GeoBbox,
+  unit: PdfDepthUnit,
+): RawPoint[] {
+  const extraction = retrieveCachedExtraction(token);
+  if (!extraction) {
+    throw new PdfStageError(
+      "extract",
+      "Extraction session has expired — please re-upload the file and try again.",
+    );
+  }
+  const modified: PdfContourExtraction = { ...extraction, labels: correctedLabels };
+  return pdfContoursToPoints(modified, bbox, unit);
 }

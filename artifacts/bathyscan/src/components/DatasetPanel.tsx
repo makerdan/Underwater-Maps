@@ -1497,15 +1497,26 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     };
   }, [postDatasetsUpload.isPending, postDatasetsUpload.isSuccess]);
 
-  // ─── PDF contour-map georeferencing ────────────────────────────────────────
-  // PDFs need a user-supplied bounding box + depth unit before upload. The
-  // last-confirmed metadata is kept in a ref so auto-retry / "Retry save"
-  // paths re-send it without re-prompting.
+  // ─── PDF / raster contour-map georeferencing ──────────────────────────────
+  // PDFs and PNG/JPEG contour maps need a user-supplied bounding box + depth
+  // unit before the upload/extraction step.  PNG/JPEG images additionally go
+  // through a two-step flow: extract (OCR + line trace) → review labels →
+  // commit. The last-confirmed metadata is kept in a ref so auto-retry /
+  // "Retry save" paths re-send it without re-prompting.
   const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null);
   const [pdfBboxFields, setPdfBboxFields] = useState({ minLon: "", minLat: "", maxLon: "", maxLat: "" });
   const [pdfDepthUnit, setPdfDepthUnit] = useState<"feet" | "meters">("feet");
   const [pdfDialogError, setPdfDialogError] = useState<string | null>(null);
   const lastPdfMetaRef = useRef<{ pdfBbox: string; pdfDepthUnit: "feet" | "meters" } | null>(null);
+
+  // ─── Raster OCR two-step state (PNG/JPEG contour maps only) ───────────────
+  type RasterExtractPhase = "idle" | "extracting" | "review" | "committing";
+  const [rasterExtractPhase, setRasterExtractPhase] = useState<RasterExtractPhase>("idle");
+  const [rasterToken, setRasterToken] = useState<string | null>(null);
+  const [rasterPolylineCount, setRasterPolylineCount] = useState(0);
+  type RasterLabel = { x: number; y: number; value: string; text: string };
+  const [rasterEditLabels, setRasterEditLabels] = useState<RasterLabel[]>([]);
+  const [rasterExtractError, setRasterExtractError] = useState<string | null>(null);
 
   // When the user finishes drawing a bbox on the OverviewMap, pull it into the
   // PDF georef fields and clear the store so the effect doesn't re-trigger.
@@ -2254,9 +2265,20 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       }
       setSavingToAccount(false);
 
-      // PDF contour maps: collect georeferencing (bbox + depth unit) first.
-      if (file.name.toLowerCase().endsWith(".pdf")) {
+      // PDF / PNG / JPEG contour maps: collect georeferencing first.
+      // PNG/JPEG additionally go through OCR review before ingestion.
+      const lowerName = file.name.toLowerCase();
+      if (
+        lowerName.endsWith(".pdf") ||
+        lowerName.endsWith(".png") ||
+        lowerName.endsWith(".jpg") ||
+        lowerName.endsWith(".jpeg")
+      ) {
         setPdfDialogError(null);
+        setRasterExtractPhase("idle");
+        setRasterToken(null);
+        setRasterEditLabels([]);
+        setRasterExtractError(null);
         setPendingPdfFile(file);
         return;
       }
@@ -2288,35 +2310,199 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     [uploadFile, chunkedUploadFile, gcsUploadFile, interruptedSession, doResumeChunkedUpload, postDatasetsUpload.isPending, chunkedPhase, gcsPhase],
   );
 
-  // Validates the georeferencing fields and starts the PDF upload.
-  const confirmPdfUpload = useCallback(() => {
-    if (!pendingPdfFile) return;
+  // Validates the georeferencing fields.  Returns the validated bbox JSON
+  // string + depth unit, or null if validation fails (error is set via
+  // setPdfDialogError).
+  const validateGeoref = useCallback((): { pdfBbox: string; pdfDepthUnit: "feet" | "meters" } | null => {
     const minLon = parseFloat(pdfBboxFields.minLon);
     const minLat = parseFloat(pdfBboxFields.minLat);
     const maxLon = parseFloat(pdfBboxFields.maxLon);
     const maxLat = parseFloat(pdfBboxFields.maxLat);
     if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite)) {
       setPdfDialogError("All four corner coordinates are required (decimal degrees).");
-      return;
+      return null;
     }
     if (minLon < -180 || maxLon > 180 || minLat < -90 || maxLat > 90) {
       setPdfDialogError("Coordinates out of range: longitude ±180, latitude ±90.");
-      return;
+      return null;
     }
     if (!(minLon < maxLon) || !(minLat < maxLat)) {
       setPdfDialogError("West/south values must be less than east/north values.");
+      return null;
+    }
+    return { pdfBbox: JSON.stringify({ minLon, minLat, maxLon, maxLat }), pdfDepthUnit };
+  }, [pdfBboxFields, pdfDepthUnit]);
+
+  // Validates the georeferencing fields and starts the PDF upload (PDF only).
+  // For PNG/JPEG, calls the raster-extract endpoint to start OCR and show the
+  // label-review step instead.
+  const confirmPdfUpload = useCallback(async () => {
+    if (!pendingPdfFile) return;
+    const meta = validateGeoref();
+    if (!meta) return;
+
+    const isRasterImage = /\.(png|jpe?g)$/i.test(pendingPdfFile.name);
+
+    if (!isRasterImage) {
+      // PDF: one-step flow via the standard upload route.
+      lastPdfMetaRef.current = meta;
+      const file = pendingPdfFile;
+      setPendingPdfFile(null);
+      setPdfDialogError(null);
+      uploadFile(file, { pdfMeta: meta });
       return;
     }
-    const meta = {
-      pdfBbox: JSON.stringify({ minLon, minLat, maxLon, maxLat }),
-      pdfDepthUnit,
-    };
-    lastPdfMetaRef.current = meta;
-    const file = pendingPdfFile;
-    setPendingPdfFile(null);
+
+    // PNG / JPEG: two-step flow — extract first, review labels, then commit.
     setPdfDialogError(null);
-    uploadFile(file, { pdfMeta: meta });
-  }, [pendingPdfFile, pdfBboxFields, pdfDepthUnit, uploadFile]);
+    setRasterExtractError(null);
+    setRasterExtractPhase("extracting");
+
+    try {
+      const fd = new FormData();
+      fd.append("file", pendingPdfFile, pendingPdfFile.name);
+      fd.append("pdfDepthUnit", meta.pdfDepthUnit);
+      const resp = await authorizedFetch(`${API_BASE}/api/datasets/raster-extract`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!resp.ok) {
+        let detail = "Extraction failed — please try again.";
+        try {
+          const errBody = await resp.json() as { details?: string; error?: string };
+          detail = errBody.details ?? errBody.error ?? detail;
+        } catch { /* ignore */ }
+        setRasterExtractError(detail);
+        setRasterExtractPhase("idle");
+        return;
+      }
+      const result = await resp.json() as {
+        token: string;
+        labels: Array<{ x: number; y: number; value: number; text: string }>;
+        polylineCount: number;
+      };
+      lastPdfMetaRef.current = meta;
+      setRasterToken(result.token);
+      setRasterPolylineCount(result.polylineCount);
+      setRasterEditLabels(
+        result.labels.map((l) => ({ x: l.x, y: l.y, value: String(l.value), text: l.text })),
+      );
+      setRasterExtractPhase("review");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Network error during extraction.";
+      setRasterExtractError(msg);
+      setRasterExtractPhase("idle");
+    }
+  }, [pendingPdfFile, validateGeoref, uploadFile]);
+
+  // Step 2 of the raster two-step flow: commit the cached extraction with the
+  // user-reviewed (and optionally corrected) depth labels.
+  const confirmRasterCommit = useCallback(async () => {
+    if (!pendingPdfFile || !rasterToken || rasterEditLabels.length === 0) return;
+    const meta = lastPdfMetaRef.current;
+    if (!meta) return;
+
+    const validLabels = rasterEditLabels.filter((l) => {
+      const v = parseFloat(l.value);
+      return Number.isFinite(v) && v > 0;
+    });
+    if (validLabels.length === 0) {
+      setRasterExtractError("At least one valid depth label (positive number) is required.");
+      return;
+    }
+
+    setRasterExtractError(null);
+    setRasterExtractPhase("committing");
+
+    try {
+      const body = JSON.stringify({
+        token: rasterToken,
+        correctedLabels: validLabels.map((l) => ({
+          x: l.x,
+          y: l.y,
+          value: parseFloat(l.value),
+          text: l.text,
+        })),
+        pdfBbox: meta.pdfBbox,
+        pdfDepthUnit: meta.pdfDepthUnit,
+        resolution: 256,
+        fileName: pendingPdfFile.name,
+      });
+      const resp = await authorizedFetch(`${API_BASE}/api/datasets/raster-commit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (!resp.ok) {
+        let detail = "Ingestion failed — please try again.";
+        try {
+          const errBody = await resp.json() as { details?: string; error?: string };
+          detail = errBody.details ?? errBody.error ?? detail;
+        } catch { /* ignore */ }
+        setRasterExtractError(detail);
+        setRasterExtractPhase("review");
+        return;
+      }
+      type RasterCommitResponseData = Awaited<ReturnType<typeof postDatasetsUpload.mutateAsync>>;
+      const data = await resp.json() as RasterCommitResponseData;
+
+      // Success — apply terrain and close dialog (same as uploadFile.onSuccess).
+      setDatasetId(null);
+      setTerrain(data.terrain);
+      if (!useTerrainStore.getState().multiDatasetMode) {
+        const uploadedId = data.terrain.datasetId ?? data.savedDatasetId ?? "__upload__";
+        useTerrainStore.getState().setSinglePrimary(uploadedId, "user");
+      }
+      useTerrainStore.getState().setGrids({
+        activeGrid: data.terrain,
+        overviewGrid: data.overview,
+      });
+      useClassificationStore.getState().clearZoneMap();
+      void useClassificationStore.getState().classify(data.terrain);
+
+      if (data.savedDatasetId) {
+        setActiveUserDatasetId(data.savedDatasetId);
+        if (data.savedDatasetMeta) {
+          const meta2 = data.savedDatasetMeta;
+          qc.setQueryData<UserDatasetMeta[]>(
+            getGetUserDatasetsQueryKey(),
+            (prev) => {
+              const list = prev ?? [];
+              if (list.some((r) => r.id === meta2.id)) return list;
+              return [meta2, ...list];
+            },
+          );
+        }
+        void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+        void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(data.savedDatasetId) });
+        void qc.invalidateQueries({ queryKey: getGetMarkersQueryKey({ datasetId: data.savedDatasetId }) });
+        void qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+        setSaveError(null);
+        setLastUploadedFile(null);
+        setSavingToAccount(false);
+      } else if (data.saveError) {
+        setSaveError(data.saveError);
+        setLastUploadedFile(pendingPdfFile);
+      }
+
+      // Close the georef dialog and reset all raster state.
+      setPendingPdfFile(null);
+      setPdfDialogError(null);
+      setRasterExtractPhase("idle");
+      setRasterToken(null);
+      setRasterEditLabels([]);
+      setRasterExtractError(null);
+      setUploadOpen(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Network error during ingestion.";
+      setRasterExtractError(msg);
+      setRasterExtractPhase("review");
+    }
+  }, [
+    pendingPdfFile, rasterToken, rasterEditLabels,
+    setDatasetId, setTerrain, qc, setUploadOpen,
+    postDatasetsUpload,
+  ]);
 
   const handleRetrySave = useCallback(() => {
     if (!lastUploadedFile || postDatasetsUpload.isPending) return;
@@ -2457,7 +2643,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     return unsubscribe;
   }, [chunkedPhase, lastChunkedFile, doSendChunks, doFinalizeChunks, toast]);
 
-  const isAnyUploadBusy = postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing" || gcsPhase === "uploading" || gcsPhase === "processing";
+  const isAnyUploadBusy = postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing" || gcsPhase === "uploading" || gcsPhase === "processing" || rasterExtractPhase === "extracting" || rasterExtractPhase === "committing";
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -2472,6 +2658,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       "application/gpx+xml": [".gpx"],
       "text/xml": [".gpx"],
       "application/pdf": [".pdf"],
+      "image/png": [".png"],
+      "image/jpeg": [".jpg", ".jpeg"],
     },
     maxFiles: 1,
     // No maxSize — large files (> 10 MB) route to the chunked path automatically.
@@ -3820,148 +4008,336 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         }}
                       >
                         <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#7dd3fc", marginBottom: 4 }}>
-                          Georeference “{pendingPdfFile.name}”
+                          {(rasterExtractPhase === "review" || rasterExtractPhase === "committing")
+                            ? <>“Review labels — {pendingPdfFile.name}”</>
+                            : <>“Georeference {pendingPdfFile.name}”</>}
                         </div>
-                        <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 6 }}>
-                          PDF contour maps have no coordinates — enter the map's corner
-                          coordinates (decimal degrees) and the depth unit printed on the map.
-                        </div>
-                        {/* Pick on map button */}
-                        <div style={{ marginBottom: 8 }}>
-                          {georefPickMode ? (
-                            <div style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              padding: "5px 10px",
-                              background: "rgba(109,40,217,0.12)",
-                              border: "1px solid rgba(167,139,250,0.4)",
-                              borderRadius: 4,
-                            }}>
-                              <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#c4b5fd" }}>
-                                Draw a rectangle on the map…
-                              </span>
+
+                        {/* ── Step 2: label review (review or committing) ── */}
+                        {(rasterExtractPhase === "review" || rasterExtractPhase === "committing") && (<>
+                          <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8 }}>
+                            Found <strong style={{ color: "#e2e8f0" }}>{rasterPolylineCount}</strong> contour line{rasterPolylineCount !== 1 ? "s" : ""} and{" "}
+                            <strong style={{ color: "#e2e8f0" }}>{rasterEditLabels.length}</strong> depth label{rasterEditLabels.length !== 1 ? "s" : ""}.{" "}
+                            Edit any incorrect values below, then click <em>Confirm &amp; ingest</em>.
+                          </div>
+
+                          {rasterEditLabels.length === 0 ? (
+                            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171", marginBottom: 8 }}>
+                              ⚠ No depth labels were detected. Try uploading a clearer image.
+                            </div>
+                          ) : (
+                            <div
+                              data-testid="raster-label-review"
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr auto auto",
+                                gap: "4px 8px",
+                                alignItems: "center",
+                                marginBottom: 8,
+                                maxHeight: 160,
+                                overflowY: "auto",
+                              }}
+                            >
+                              <span style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b", fontWeight: 600 }}>OCR text</span>
+                              <span style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b", fontWeight: 600 }}>Depth value</span>
+                              <span />
+                              {rasterEditLabels.map((lbl, idx) => (
+                                <>
+                                  <span
+                                    key={`t-${idx}`}
+                                    style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8", fontFamily: "monospace" }}
+                                  >
+                                    {lbl.text}
+                                  </span>
+                                  <input
+                                    key={`v-${idx}`}
+                                    data-testid={`raster-label-value-${idx}`}
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    value={lbl.value}
+                                    onChange={(e) => setRasterEditLabels((prev) =>
+                                      prev.map((l, i) => i === idx ? { ...l, value: e.target.value } : l),
+                                    )}
+                                    style={{
+                                      background: "rgba(2,6,23,0.7)",
+                                      border: "1px solid rgba(148,163,184,0.3)",
+                                      borderRadius: 3,
+                                      color: "#e2e8f0",
+                                      padding: "2px 4px",
+                                      fontSize: "calc(13px * var(--bs-font-scale, 1))",
+                                      width: 72,
+                                    }}
+                                  />
+                                  <button
+                                    key={`d-${idx}`}
+                                    type="button"
+                                    aria-label={`Remove label ${lbl.text}`}
+                                    onClick={() => setRasterEditLabels((prev) => prev.filter((_, i) => i !== idx))}
+                                    style={{
+                                      background: "transparent",
+                                      border: "none",
+                                      color: "#64748b",
+                                      cursor: "pointer",
+                                      fontSize: "calc(13px * var(--bs-font-scale, 1))",
+                                      padding: "0 2px",
+                                    }}
+                                  >
+                                    ✕
+                                  </button>
+                                </>
+                              ))}
+                            </div>
+                          )}
+
+                          {rasterExtractPhase === "committing" && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, color: "#7dd3fc", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>
+                              <span className="animate-pulse">◌</span>
+                              <span>Ingesting depth data…</span>
+                            </div>
+                          )}
+                          {rasterExtractError && (
+                            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171", marginBottom: 6 }}>
+                              ⚠ {rasterExtractError}
+                            </div>
+                          )}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRasterExtractPhase("idle");
+                                setRasterToken(null);
+                                setRasterEditLabels([]);
+                                setRasterExtractError(null);
+                              }}
+                              disabled={rasterExtractPhase === "committing"}
+                              style={{
+                                fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
+                                color: "#94a3b8",
+                                background: "transparent",
+                                border: "none",
+                                padding: 0,
+                                cursor: rasterExtractPhase === "committing" ? "not-allowed" : "pointer",
+                                textDecoration: "underline",
+                                opacity: rasterExtractPhase === "committing" ? 0.5 : 1,
+                              }}
+                            >
+                              ← Re-extract
+                            </button>
+                            <div style={{ display: "flex", gap: 6 }}>
                               <button
-                                type="button"
-                                onClick={() => useUiStore.getState().setGeorefPickMode(false)}
+                                data-testid="pdf-georef-cancel"
+                                onClick={() => {
+                                  setPendingPdfFile(null);
+                                  setPdfDialogError(null);
+                                  setRasterExtractPhase("idle");
+                                  setRasterToken(null);
+                                  setRasterEditLabels([]);
+                                  setRasterExtractError(null);
+                                }}
+                                disabled={rasterExtractPhase === "committing"}
                                 style={{
-                                  fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
-                                  color: "#a78bfa",
+                                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                                  color: "#94a3b8",
                                   background: "transparent",
-                                  border: "none",
-                                  padding: 0,
-                                  cursor: "pointer",
-                                  marginLeft: "auto",
-                                  textDecoration: "underline",
+                                  border: "1px solid rgba(148,163,184,0.3)",
+                                  borderRadius: 3,
+                                  padding: "2px 8px",
+                                  cursor: rasterExtractPhase === "committing" ? "not-allowed" : "pointer",
+                                  opacity: rasterExtractPhase === "committing" ? 0.5 : 1,
                                 }}
                               >
                                 Cancel
                               </button>
+                              <button
+                                data-testid="raster-commit-confirm"
+                                onClick={() => { void confirmRasterCommit(); }}
+                                disabled={rasterExtractPhase === "committing" || rasterEditLabels.length === 0}
+                                style={{
+                                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                                  color: "#00e5ff",
+                                  background: "transparent",
+                                  border: "1px solid rgba(0,229,255,0.35)",
+                                  borderRadius: 3,
+                                  padding: "2px 8px",
+                                  cursor: (rasterExtractPhase === "committing" || rasterEditLabels.length === 0) ? "not-allowed" : "pointer",
+                                  opacity: (rasterExtractPhase === "committing" || rasterEditLabels.length === 0) ? 0.5 : 1,
+                                }}
+                              >
+                                Confirm &amp; ingest
+                              </button>
                             </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                useUiStore.getState().setGeorefPickMode(true);
-                                useUiStore.getState().setOverviewOpen(true);
-                              }}
-                              style={{
-                                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                                color: "#a78bfa",
-                                background: "rgba(109,40,217,0.08)",
-                                border: "1px solid rgba(167,139,250,0.35)",
-                                borderRadius: 4,
-                                padding: "4px 10px",
-                                cursor: "pointer",
+                          </div>
+                        </>)}
+
+                        {/* ── Step 1: georef form (idle or extracting) ── */}
+                        {(rasterExtractPhase === "idle" || rasterExtractPhase === "extracting") && (<>
+                          <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 6 }}>
+                            {/\.(png|jpe?g)$/i.test(pendingPdfFile.name)
+                              ? "Raster contour images have no coordinates — enter the map’s corner coordinates and depth unit, then click “Extract depth labels” to run OCR."
+                              : "PDF contour maps have no coordinates — enter the map’s corner coordinates (decimal degrees) and the depth unit printed on the map."}
+                          </div>
+                          {/* Pick on map button */}
+                          <div style={{ marginBottom: 8 }}>
+                            {georefPickMode ? (
+                              <div style={{
                                 display: "flex",
                                 alignItems: "center",
-                                gap: 5,
+                                gap: 8,
+                                padding: "5px 10px",
+                                background: "rgba(109,40,217,0.12)",
+                                border: "1px solid rgba(167,139,250,0.4)",
+                                borderRadius: 4,
+                              }}>
+                                <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#c4b5fd" }}>
+                                  Draw a rectangle on the map…
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => useUiStore.getState().setGeorefPickMode(false)}
+                                  style={{
+                                    fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
+                                    color: "#a78bfa",
+                                    background: "transparent",
+                                    border: "none",
+                                    padding: 0,
+                                    cursor: "pointer",
+                                    marginLeft: "auto",
+                                    textDecoration: "underline",
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  useUiStore.getState().setGeorefPickMode(true);
+                                  useUiStore.getState().setOverviewOpen(true);
+                                }}
+                                style={{
+                                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                                  color: "#a78bfa",
+                                  background: "rgba(109,40,217,0.08)",
+                                  border: "1px solid rgba(167,139,250,0.35)",
+                                  borderRadius: 4,
+                                  padding: "4px 10px",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                }}
+                              >
+                                <span>⬛</span> Pick on map
+                              </button>
+                            )}
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 6 }}>
+                            {([
+                              ["minLon", "West longitude"],
+                              ["maxLon", "East longitude"],
+                              ["minLat", "South latitude"],
+                              ["maxLat", "North latitude"],
+                            ] as const).map(([key, label]) => (
+                              <label key={key} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
+                                {label}
+                                <input
+                                  data-testid={`pdf-georef-${key}`}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={pdfBboxFields[key]}
+                                  onChange={(e) => setPdfBboxFields((prev) => ({ ...prev, [key]: e.target.value }))}
+                                  placeholder={key.endsWith("Lon") ? "-93.45" : "45.12"}
+                                  style={{
+                                    background: "rgba(2,6,23,0.7)",
+                                    border: "1px solid rgba(148,163,184,0.3)",
+                                    borderRadius: 3,
+                                    color: "#e2e8f0",
+                                    padding: "3px 6px",
+                                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                                  }}
+                                />
+                              </label>
+                            ))}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                            <span style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>Depth unit:</span>
+                            {(["feet", "meters"] as const).map((u) => (
+                              <label key={u} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", cursor: "pointer" }}>
+                                <input
+                                  data-testid={`pdf-georef-unit-${u}`}
+                                  type="radio"
+                                  name="pdfDepthUnit"
+                                  checked={pdfDepthUnit === u}
+                                  onChange={() => setPdfDepthUnit(u)}
+                                />
+                                {u}
+                              </label>
+                            ))}
+                          </div>
+                          {rasterExtractPhase === "extracting" && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, color: "#7dd3fc", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>
+                              <span className="animate-pulse">◌</span>
+                              <span>Scanning image with OCR — this may take 10–30 seconds…</span>
+                            </div>
+                          )}
+                          {pdfDialogError && (
+                            <div data-testid="pdf-georef-error" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171", marginBottom: 6 }}>
+                              ⚠ {pdfDialogError}
+                            </div>
+                          )}
+                          {rasterExtractError && rasterExtractPhase === "idle" && (
+                            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171", marginBottom: 6 }}>
+                              ⚠ {rasterExtractError}
+                            </div>
+                          )}
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                            <button
+                              data-testid="pdf-georef-cancel"
+                              onClick={() => {
+                                setPendingPdfFile(null);
+                                setPdfDialogError(null);
+                                setRasterExtractPhase("idle");
+                                setRasterToken(null);
+                                setRasterEditLabels([]);
+                                setRasterExtractError(null);
+                              }}
+                              disabled={rasterExtractPhase === "extracting"}
+                              style={{
+                                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                                color: "#94a3b8",
+                                background: "transparent",
+                                border: "1px solid rgba(148,163,184,0.3)",
+                                borderRadius: 3,
+                                padding: "2px 8px",
+                                cursor: rasterExtractPhase === "extracting" ? "not-allowed" : "pointer",
+                                opacity: rasterExtractPhase === "extracting" ? 0.5 : 1,
                               }}
                             >
-                              <span>⬛</span> Pick on map
+                              Cancel
                             </button>
-                          )}
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 6 }}>
-                          {([
-                            ["minLon", "West longitude"],
-                            ["maxLon", "East longitude"],
-                            ["minLat", "South latitude"],
-                            ["maxLat", "North latitude"],
-                          ] as const).map(([key, label]) => (
-                            <label key={key} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
-                              {label}
-                              <input
-                                data-testid={`pdf-georef-${key}`}
-                                type="text"
-                                inputMode="decimal"
-                                value={pdfBboxFields[key]}
-                                onChange={(e) => setPdfBboxFields((prev) => ({ ...prev, [key]: e.target.value }))}
-                                placeholder={key.endsWith("Lon") ? "-93.45" : "45.12"}
-                                style={{
-                                  background: "rgba(2,6,23,0.7)",
-                                  border: "1px solid rgba(148,163,184,0.3)",
-                                  borderRadius: 3,
-                                  color: "#e2e8f0",
-                                  padding: "3px 6px",
-                                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                                }}
-                              />
-                            </label>
-                          ))}
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                          <span style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>Depth unit:</span>
-                          {(["feet", "meters"] as const).map((u) => (
-                            <label key={u} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", cursor: "pointer" }}>
-                              <input
-                                data-testid={`pdf-georef-unit-${u}`}
-                                type="radio"
-                                name="pdfDepthUnit"
-                                checked={pdfDepthUnit === u}
-                                onChange={() => setPdfDepthUnit(u)}
-                              />
-                              {u}
-                            </label>
-                          ))}
-                        </div>
-                        {pdfDialogError && (
-                          <div data-testid="pdf-georef-error" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171", marginBottom: 6 }}>
-                            ⚠ {pdfDialogError}
+                            <button
+                              data-testid="pdf-georef-confirm"
+                              onClick={() => { void confirmPdfUpload(); }}
+                              disabled={rasterExtractPhase === "extracting"}
+                              style={{
+                                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                                color: "#00e5ff",
+                                background: "transparent",
+                                border: "1px solid rgba(0,229,255,0.35)",
+                                borderRadius: 3,
+                                padding: "2px 8px",
+                                cursor: rasterExtractPhase === "extracting" ? "not-allowed" : "pointer",
+                                opacity: rasterExtractPhase === "extracting" ? 0.5 : 1,
+                              }}
+                            >
+                              {/\.(png|jpe?g)$/i.test(pendingPdfFile.name)
+                                ? "Extract depth labels"
+                                : "Upload contour map"}
+                            </button>
                           </div>
-                        )}
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-                          <button
-                            data-testid="pdf-georef-cancel"
-                            onClick={() => { setPendingPdfFile(null); setPdfDialogError(null); }}
-                            style={{
-                              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                              color: "#94a3b8",
-                              background: "transparent",
-                              border: "1px solid rgba(148,163,184,0.3)",
-                              borderRadius: 3,
-                              padding: "2px 8px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            data-testid="pdf-georef-confirm"
-                            onClick={confirmPdfUpload}
-                            style={{
-                              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                              color: "#00e5ff",
-                              background: "transparent",
-                              border: "1px solid rgba(0,229,255,0.35)",
-                              borderRadius: 3,
-                              padding: "2px 8px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Upload contour map
-                          </button>
-                        </div>
+                        </>)}
                       </div>
                     )}
                     {chunkedPhase === "error" && lastChunkedFile && (
