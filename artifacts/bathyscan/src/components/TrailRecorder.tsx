@@ -17,7 +17,7 @@ import { authorizedFetch } from "@/lib/authorizedFetch";
 
 const FONT: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', monospace",
-  fontSize: 15,
+  fontSize: "calc(15px * var(--bs-font-scale, 1))",
   letterSpacing: "0.08em",
 };
 
@@ -192,7 +192,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
   return (
     <div data-testid="trail-recorder" style={{ ...FONT, ...PANEL }}>
-      <div style={{ color: "#00e5ff", fontSize: 13.5, letterSpacing: "0.2em", marginBottom: 6, fontWeight: 700 }}>
+      <div style={{ color: "#00e5ff", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.2em", marginBottom: 6, fontWeight: 700 }}>
         ⏺ GPS TRAIL
       </div>
 
@@ -210,7 +210,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
               border: "1px solid rgba(0,229,255,0.15)",
               borderRadius: 3,
               color: "#e2e8f0",
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               padding: "4px 6px",
               fontFamily: "inherit",
               boxSizing: "border-box",
@@ -221,7 +221,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
           {/* Trail colour picker */}
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
-            <span style={{ color: "#94a3b8", fontSize: 13.5 }}>COLOUR</span>
+            <span style={{ color: "#94a3b8", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>COLOUR</span>
             <div style={{ display: "flex", gap: 4, marginLeft: 4 }}>
               {TRAIL_COLOURS.map((col) => (
                 <ViewscreenTooltip key={col} label={`Use ${col} for this trail`} side="top">
@@ -247,7 +247,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
           {/* Sampling interval selector */}
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
-            <span style={{ color: "#94a3b8", fontSize: 13.5 }}>INTERVAL</span>
+            <span style={{ color: "#94a3b8", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>INTERVAL</span>
             <div style={{ display: "flex", gap: 3, marginLeft: 4 }}>
               {INTERVALS.map((iv) => (
                 <ViewscreenTooltip key={iv.ms} label={`Sample a GPS point every ${iv.label}`} side="top">
@@ -258,7 +258,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
                     border: `1px solid ${gpsRecordingInterval === iv.ms ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.1)"}`,
                     borderRadius: 2,
                     color: gpsRecordingInterval === iv.ms ? "#00e5ff" : "#94a3b8",
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     padding: "1px 5px",
                     cursor: "pointer",
                     fontFamily: "inherit",
@@ -280,7 +280,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
               border: "1px solid rgba(239,68,68,0.5)",
               borderRadius: 3,
               color: "#ef4444",
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               padding: "5px 10px",
               cursor: "pointer",
               fontFamily: "inherit",
@@ -298,7 +298,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
             <span data-testid="trail-elapsed"><span style={{ color: "#ef4444" }}>⏺ </span>{fmtElapsed(elapsed)}</span>
             <span data-testid="trail-point-count">{currentPoints.length} pts</span>
           </div>
-          <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 6 }}>
+          <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 6 }}>
             every {selectedInterval.label}
           </div>
           <ViewscreenTooltip label="Stop recording and save this trail" side="top">
@@ -311,7 +311,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
               border: "1px solid rgba(0,229,255,0.35)",
               borderRadius: 3,
               color: saving ? "#94a3b8" : "#00e5ff",
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               padding: "5px 10px",
               cursor: saving ? "not-allowed" : "pointer",
               fontFamily: "inherit",
@@ -328,14 +328,14 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
       {isOverflowing && (
         <div
           data-testid="trail-overflow-notice"
-          style={{ color: "#f59e0b", fontSize: 13.5, marginTop: 4 }}
+          style={{ color: "#f59e0b", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", marginTop: 4 }}
         >
           ⚠ Recording exceeded {MAX_TRAIL_POINTS.toLocaleString()} pts — oldest points are being trimmed
         </div>
       )}
 
       {!navigator.onLine && (
-        <div style={{ color: "#f97316", fontSize: 13.5, marginTop: 4 }}>
+        <div style={{ color: "#f97316", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", marginTop: 4 }}>
           ⚠ Offline — points buffered locally
         </div>
       )}

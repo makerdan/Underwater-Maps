@@ -79,7 +79,7 @@ const STEPS: Step[] = [
 function ArrowIndicator({ region }: { region: Step["region"] }) {
   const arrowStyle: React.CSSProperties = {
     position: "absolute",
-    fontSize: 33,
+    fontSize: "calc(33px * var(--bs-font-scale, 1))",
     color: "#00e5ff",
     textShadow: "0 0 10px rgba(0,229,255,0.8)",
     animation: "bs-onboard-pulse 1.4s ease-in-out infinite",
@@ -275,7 +275,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
         >
           <span
             style={{
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.28em",
               color: "#00e5ff",
               fontWeight: 700,
@@ -292,7 +292,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
               background: "none",
               border: "none",
               color: "#64748b",
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               cursor: "pointer",
               fontFamily: FONT,
@@ -329,7 +329,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
           <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 14 }}>
             <span
               style={{
-                fontSize: 42,
+                fontSize: "calc(42px * var(--bs-font-scale, 1))",
                 lineHeight: 1,
                 color: "#00e5ff",
                 textShadow: "0 0 12px rgba(0,229,255,0.5)",
@@ -342,7 +342,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
             <div>
               <div
                 style={{
-                  fontSize: 19.5,
+                  fontSize: "calc(19.5px * var(--bs-font-scale, 1))",
                   fontWeight: 700,
                   letterSpacing: "0.1em",
                   color: "#ffffff",
@@ -354,7 +354,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
               </div>
               <div
                 style={{
-                  fontSize: 16.5,
+                  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
                   lineHeight: 1.65,
                   color: "#cbd5e1",
                   letterSpacing: "0.02em",
@@ -378,7 +378,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
                   border: "1px solid rgba(0,229,255,0.45)",
                   borderRadius: 5,
                   color: "#00e5ff",
-                  fontSize: 14,
+                  fontSize: "calc(14px * var(--bs-font-scale, 1))",
                   fontWeight: 700,
                   letterSpacing: "0.18em",
                   padding: "10px 0",
@@ -399,7 +399,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
                   border: "1px solid rgba(255,255,255,0.1)",
                   borderRadius: 5,
                   color: "#94a3b8",
-                  fontSize: 13,
+                  fontSize: "calc(13px * var(--bs-font-scale, 1))",
                   letterSpacing: "0.12em",
                   padding: "8px 0",
                   cursor: "pointer",
@@ -454,7 +454,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
                 border: "1px solid rgba(0,229,255,0.15)",
                 borderRadius: 4,
                 color: step === 0 ? "#334155" : "#94a3b8",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.2em",
                 padding: "9px 0",
                 cursor: step === 0 ? "default" : "pointer",
@@ -474,7 +474,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
                 border: "1px solid rgba(0,229,255,0.35)",
                 borderRadius: 4,
                 color: "#00e5ff",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.2em",
                 padding: "9px 0",
                 cursor: "pointer",

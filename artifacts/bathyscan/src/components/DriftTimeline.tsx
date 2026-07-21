@@ -27,7 +27,7 @@ const PANEL_STYLE: React.CSSProperties = {
   borderRadius: 8,
   padding: "10px 14px 8px",
   fontFamily: "'JetBrains Mono', monospace",
-  fontSize: 15,
+  fontSize: "calc(15px * var(--bs-font-scale, 1))",
   color: "#e2e8f0",
   letterSpacing: "0.06em",
   backdropFilter: "blur(8px)",
@@ -42,7 +42,7 @@ const CHIP_BASE: React.CSSProperties = {
   padding: "3px 5px",
   borderRadius: 4,
   cursor: "pointer",
-  fontSize: 16.5,
+  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
   letterSpacing: "0.08em",
   border: "1px solid rgba(0,229,255,0.1)",
   minWidth: 28,
@@ -104,7 +104,7 @@ export const DriftTimeline: React.FC = () => {
         <span
           data-testid="timeline-drift-mode-badge"
           style={{
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             letterSpacing: "0.2em",
             padding: "2px 8px",
             borderRadius: 3,
@@ -129,7 +129,7 @@ export const DriftTimeline: React.FC = () => {
             data-testid="active-leg"
             style={{
               marginLeft: 8,
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.18em",
               padding: "2px 8px",
               borderRadius: 3,
@@ -199,7 +199,7 @@ export const DriftTimeline: React.FC = () => {
               {contact && (
                 <span
                   title="Sinker drags seafloor"
-                  style={{ fontSize: 10.5, color: "#fb7185", marginTop: 1, letterSpacing: 0 }}
+                  style={{ fontSize: "calc(10.5px * var(--bs-font-scale, 1))", color: "#fb7185", marginTop: 1, letterSpacing: 0 }}
                 >
                   ⚠ DRAG
                 </span>
@@ -207,20 +207,20 @@ export const DriftTimeline: React.FC = () => {
               {stalled && (
                 <span
                   title="Backtroll hold — near-zero SOG at this hour"
-                  style={{ fontSize: 10.5, color: "#fbbf24", marginTop: 1, letterSpacing: 0 }}
+                  style={{ fontSize: "calc(10.5px * var(--bs-font-scale, 1))", color: "#fbbf24", marginTop: 1, letterSpacing: 0 }}
                 >
                   ⚓ HOLD
                 </span>
               )}
               {!contact && !stalled && (
-                <span style={{ fontSize: 10.5, color: bottom ? "#4ade80" : "#ef4444", marginTop: 1 }}>
+                <span style={{ fontSize: "calc(10.5px * var(--bs-font-scale, 1))", color: bottom ? "#4ade80" : "#ef4444", marginTop: 1 }}>
                   {bottom ? "●" : "○"}
                 </span>
               )}
               {w.isSlack && (
                 <span
                   title="Slack tide"
-                  style={{ fontSize: 10.5, color: "#c084fc", marginTop: 1, letterSpacing: 0 }}
+                  style={{ fontSize: "calc(10.5px * var(--bs-font-scale, 1))", color: "#c084fc", marginTop: 1, letterSpacing: 0 }}
                 >
                   ◐ SLK
                 </span>
@@ -234,7 +234,7 @@ export const DriftTimeline: React.FC = () => {
       {wp && (
         <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
           <div>
-            <div style={{ color: "#94a3b8", fontSize: 12, letterSpacing: "0.18em" }}>
+            <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>
               {isTrolling ? "TOTAL SPEED" : "DRIFT SPEED"}
             </div>
             <div data-testid="drift-speed-value" style={{ color: wp.isStalled ? "#fbbf24" : "#00e5ff", fontWeight: 700 }}>
@@ -244,7 +244,7 @@ export const DriftTimeline: React.FC = () => {
               <div
                 data-testid="drift-breakdown"
                 title="Boat propulsion and wind+tide drift are vectors; the total combines their directions, so it may be less than the sum."
-                style={{ fontSize: 12, color: "#e2e8f0", marginTop: 2, letterSpacing: "0.04em", cursor: "help" }}
+                style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#e2e8f0", marginTop: 2, letterSpacing: "0.04em", cursor: "help" }}
               >
                 <span style={{ color: "#fbbf24" }}>boat: {formatSpeedFromKnots(wp.boatContributionKnots, { units })}</span>
                 <span style={{ color: "#94a3b8" }}> + </span>
@@ -254,7 +254,7 @@ export const DriftTimeline: React.FC = () => {
           </div>
           {isBacktrolling && typeof wp.stallSpeedKnots === "number" && (
             <div>
-              <div style={{ color: "#94a3b8", fontSize: 12, letterSpacing: "0.18em" }}>STALL SPEED</div>
+              <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>STALL SPEED</div>
               <div
                 data-testid="stall-speed-value"
                 title="Effective reverse speed needed to hold station against this hour's current"
@@ -265,7 +265,7 @@ export const DriftTimeline: React.FC = () => {
             </div>
           )}
           <div>
-            <div style={{ color: "#94a3b8", fontSize: 12, letterSpacing: "0.18em" }}>LINE ANGLE</div>
+            <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>LINE ANGLE</div>
             {wp.isSlack ? (
               <div style={{ color: "#c084fc", fontWeight: 700 }}>
                 Line vertical — slack tide
@@ -277,17 +277,17 @@ export const DriftTimeline: React.FC = () => {
             )}
           </div>
           <div>
-            <div style={{ color: "#94a3b8", fontSize: 12, letterSpacing: "0.18em" }}>HOOK DEPTH</div>
+            <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>HOOK DEPTH</div>
             <div style={{ color: "#7dd3fc", fontWeight: 700 }}>{wp.hookDepthM.toFixed(0)} m</div>
           </div>
           <div>
-            <div style={{ color: "#94a3b8", fontSize: 12, letterSpacing: "0.18em" }}>LINE SCOPE</div>
+            <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>LINE SCOPE</div>
             <div style={{ color: "#a78bfa", fontWeight: 700 }} data-testid="line-scope-value">
               {wp.lineScopeM.toFixed(0)} m
             </div>
           </div>
           <div>
-            <div style={{ color: "#94a3b8", fontSize: 12, letterSpacing: "0.18em" }}>BOTTOM {lineLengthM}m LINE</div>
+            <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>BOTTOM {lineLengthM}m LINE</div>
             <div style={{ fontWeight: 700, color: wp.bottomReached ? "#4ade80" : "#ef4444" }}>
               {wp.bottomReached ? "✓ IN REACH" : "✗ TOO DEEP"}
             </div>
@@ -303,7 +303,7 @@ export const DriftTimeline: React.FC = () => {
                 background: "rgba(251,113,133,0.12)",
                 color: "#fb7185",
                 fontWeight: 700,
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.12em",
                 whiteSpace: "nowrap",
               }}
@@ -313,13 +313,13 @@ export const DriftTimeline: React.FC = () => {
           )}
           {cond && (
             <div>
-              <div style={{ color: "#94a3b8", fontSize: 12, letterSpacing: "0.18em" }}>WIND</div>
+              <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>WIND</div>
               <div style={{ color: "#93c5fd", fontWeight: 700 }}>{formatSpeedFromKnots(cond.windSpeedKnots, { units })}</div>
             </div>
           )}
           {cond && typeof cond.tideHeightM === "number" && (
             <div>
-              <div style={{ color: "#94a3b8", fontSize: 12, letterSpacing: "0.18em" }}>TIDE HT</div>
+              <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>TIDE HT</div>
               <div
                 data-testid="tide-height-value"
                 title="Predicted water level above chart datum (MLLW) — used to compute effective depth for tidal scaling"
@@ -344,7 +344,7 @@ export const DriftTimeline: React.FC = () => {
             marginTop: 8,
             paddingTop: 6,
             borderTop: "1px solid rgba(0,229,255,0.08)",
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             letterSpacing: "0.06em",
           }}
         >
@@ -380,7 +380,7 @@ export const DriftTimeline: React.FC = () => {
           justifyContent: "center",
           gap: 12,
           marginTop: 6,
-          fontSize: 12,
+          fontSize: "calc(12px * var(--bs-font-scale, 1))",
           color: "#64748b",
           letterSpacing: "0.1em",
         }}

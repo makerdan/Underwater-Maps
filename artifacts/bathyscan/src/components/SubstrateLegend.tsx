@@ -40,7 +40,7 @@ export const SubstrateLegend: React.FC = () => {
         padding: "6px 10px",
         maxWidth: 260,
         fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 13.5,
+        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
         color: "#e2e8f0",
         letterSpacing: "0.04em",
         pointerEvents: "auto",
@@ -53,7 +53,7 @@ export const SubstrateLegend: React.FC = () => {
           color: "#e2d5a0",
           letterSpacing: "0.2em",
           marginBottom: 4,
-          fontSize: 13.5,
+          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
         }}
       >
         SUBSTRATE LEGEND
@@ -84,7 +84,7 @@ export const SubstrateLegend: React.FC = () => {
           paddingTop: 4,
           borderTop: "1px solid rgba(148,163,184,0.2)",
           color: "#cbd5e1",
-          fontSize: 13.5,
+          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
           lineHeight: 1.4,
         }}
       >

@@ -434,7 +434,7 @@ export const DepthProfilePanel: React.FC = () => {
     border: "1px solid rgba(0,229,255,0.35)",
     color: "#cbd5e1",
     cursor: "pointer",
-    fontSize: 13.5,
+    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
     letterSpacing: "0.12em",
     padding: "3px 8px",
     borderRadius: 3,
@@ -505,8 +505,8 @@ export const DepthProfilePanel: React.FC = () => {
           touchAction: "none",
         }}
       >
-        <div style={{ fontSize: 15, letterSpacing: "0.22em", color: "#00e5ff", display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 18, color: "rgba(0,229,255,0.45)", letterSpacing: 0 }}>⠿</span>
+        <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", letterSpacing: "0.22em", color: "#00e5ff", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: "calc(18px * var(--bs-font-scale, 1))", color: "rgba(0,229,255,0.45)", letterSpacing: 0 }}>⠿</span>
           {isPathProfile ? "▼ PATH PROFILE" : "▼ DEPTH PROFILE"}
           <HelpIcon articleId="depth-profile" label="Depth profile" />
         </div>
@@ -538,7 +538,7 @@ export const DepthProfilePanel: React.FC = () => {
               border: "none",
               color: "#e2e8f0",
               cursor: "pointer",
-              fontSize: 24,
+              fontSize: "calc(24px * var(--bs-font-scale, 1))",
               lineHeight: 1,
               padding: "0 4px",
             }}
@@ -572,7 +572,7 @@ export const DepthProfilePanel: React.FC = () => {
                 aria-pressed={isActive}
                 onClick={() => selectProfile(i)}
                 style={{
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   padding: "3px 7px",
                   borderRadius: 3,
                   border: isActive
@@ -595,7 +595,7 @@ export const DepthProfilePanel: React.FC = () => {
                 }}
               >
                 <span style={{ fontWeight: isActive ? 700 : 400 }}>{label}</span>
-                <span style={{ fontSize: 12, color: isActive ? "#e2e8f0" : "#94a3b8" }}>
+                <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: isActive ? "#e2e8f0" : "#94a3b8" }}>
                   {p.mode === "path" ? "⬡ " : ""}Δ{depthLabel} · {distLabel}
                 </span>
               </button>
@@ -605,7 +605,7 @@ export const DepthProfilePanel: React.FC = () => {
       )}
 
       {/* Stats row */}
-      <div style={{ fontSize: 15, color: "#e2e8f0", marginBottom: 6, display: "flex", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", marginBottom: 6, display: "flex", gap: 14, flexWrap: "wrap" }}>
         <span>LEN <span style={{ color: "#e2e8f0" }}>{formatDistance(totalDistanceM, { units })}</span></span>
         <span>MIN <span style={{ color: "#e2e8f0" }}>{formatDepth(minDepthM, { units, decimals: 1 })}</span></span>
         <span>MAX <span style={{ color: "#e2e8f0" }}>{formatDepth(maxDepthM, { units, decimals: 1 })}</span></span>
@@ -629,14 +629,14 @@ export const DepthProfilePanel: React.FC = () => {
         >
           {guestSignInPrompt ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
-              <span style={{ fontSize: 13.5, color: "#94a3b8" }}>
+              <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
                 Sign in to save routes.
               </span>
               <button
                 type="button"
                 aria-label="Dismiss sign-in prompt"
                 onClick={cancelSave}
-                style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 16.5, lineHeight: 1, padding: "0 2px" }}
+                style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "calc(16.5px * var(--bs-font-scale, 1))", lineHeight: 1, padding: "0 2px" }}
               >
                 ✕
               </button>
@@ -667,14 +667,14 @@ export const DepthProfilePanel: React.FC = () => {
                   border: "1px solid rgba(0,229,255,0.5)",
                   color: "#e2e8f0",
                   fontFamily: "inherit",
-                  fontSize: 15,
+                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
                   padding: "3px 7px",
                   borderRadius: 3,
                   width: "100%",
                 }}
               />
               {saveError && (
-                <div style={{ fontSize: 13.5, color: "#f87171" }}>{saveError}</div>
+                <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171" }}>{saveError}</div>
               )}
               <div style={{ display: "flex", gap: 4 }}>
                 <button
@@ -925,7 +925,7 @@ export const DepthProfilePanel: React.FC = () => {
       </svg>
 
       {/* Endpoint coords */}
-      <div style={{ fontSize: 13.5, color: "#cbd5e1", marginTop: 6, display: "flex", justifyContent: "space-between", gap: 12 }}>
+      <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginTop: 6, display: "flex", justifyContent: "space-between", gap: 12 }}>
         <span>A {start.lat.toFixed(4)},{start.lon.toFixed(4)}</span>
         <span>B {end.lat.toFixed(4)},{end.lon.toFixed(4)}</span>
       </div>
@@ -948,7 +948,7 @@ export const DepthProfilePanel: React.FC = () => {
               marginBottom: 5,
             }}
           >
-            <div style={{ fontSize: 13.5, letterSpacing: "0.18em", color: "#e2e8f0" }}>
+            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.18em", color: "#e2e8f0" }}>
               SUGGESTED ({features.length})
             </div>
             <button
@@ -987,7 +987,7 @@ export const DepthProfilePanel: React.FC = () => {
                   onMouseEnter={() => setHoverIndex(f.index)}
                   onMouseLeave={() => setHoverIndex(null)}
                   style={{
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     padding: "3px 6px",
                     borderRadius: 3,
                     border: `1px solid ${fs.color}55`,
@@ -1012,7 +1012,7 @@ export const DepthProfilePanel: React.FC = () => {
       )}
 
       {anyClassified ? (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, fontSize: 13.5, color: "#e2e8f0" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#e2e8f0" }}>
           {presentSlots.map((slot) => (
             <span key={slot} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               <span
@@ -1029,7 +1029,7 @@ export const DepthProfilePanel: React.FC = () => {
           ))}
         </div>
       ) : (
-        <div style={{ marginTop: 6, fontSize: 13.5, color: "#94a3b8" }}>
+        <div style={{ marginTop: 6, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
           Zone classification not yet available — strip shows neutral grey.
         </div>
       )}

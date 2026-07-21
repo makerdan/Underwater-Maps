@@ -112,7 +112,7 @@ export function Settings() {
               border: "none",
               color: shouldGuard ? "#fbbf24" : "#94a3b8",
               cursor: "pointer",
-              fontSize: 11,
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               padding: 0,
               fontFamily: FONT,
@@ -125,7 +125,7 @@ export function Settings() {
             {shouldGuard && (
               <span
                 data-testid="settings-back-unsaved-hint"
-                style={{ fontSize: 9, letterSpacing: "0.15em", color: "#fbbf24", opacity: 0.8 }}
+                style={{ fontSize: "calc(9px * var(--bs-font-scale, 1))", letterSpacing: "0.15em", color: "#fbbf24", opacity: 0.8 }}
               >
                 • UNSAVED
               </span>
@@ -133,7 +133,7 @@ export function Settings() {
           </button>
           <span
             style={{
-              fontSize: 10,
+              fontSize: "calc(10px * var(--bs-font-scale, 1))",
               letterSpacing: "0.3em",
               color: "#00e5ff",
               fontWeight: 700,
@@ -143,7 +143,7 @@ export function Settings() {
           >
             SETTINGS
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 9 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: "calc(9px * var(--bs-font-scale, 1))" }}>
             <label
               style={{
                 display: "flex",

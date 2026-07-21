@@ -156,7 +156,7 @@ const HEADER: React.CSSProperties = {
 };
 
 const TITLE: React.CSSProperties = {
-  fontSize: 15,
+  fontSize: "calc(15px * var(--bs-font-scale, 1))",
   letterSpacing: "0.2em",
   color: "#00e5ff",
   textTransform: "uppercase",
@@ -172,7 +172,7 @@ function tabStyle(active: boolean): React.CSSProperties {
   return {
     flex: 1,
     padding: "8px 0",
-    fontSize: 13.5,
+    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
     letterSpacing: "0.15em",
     textTransform: "uppercase",
     background: "none",
@@ -190,7 +190,7 @@ const INPUT_STYLE: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.2)",
   borderRadius: 4,
   padding: "8px 10px",
-  fontSize: 16.5,
+  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
   color: "#e2e8f0",
   fontFamily: "'JetBrains Mono', monospace",
   outline: "none",
@@ -278,11 +278,11 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
 }) => (
   <div style={CARD}>
     <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
-      <span style={{ fontSize: 21 }}>🌊</span>
+      <span style={{ fontSize: "calc(21px * var(--bs-font-scale, 1))" }}>🌊</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             fontWeight: 700,
             color: "#e2e8f0",
             marginBottom: 2,
@@ -293,7 +293,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
         </div>
         <div
           style={{
-            fontSize: 12,
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
             color: "#00e5ff",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -307,7 +307,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
           label="No NCEI WCS coverage — cannot be materialized in BathyScan yet"
           side="left"
         >
-          <span style={{ fontSize: 12, color: "#f59e0b", letterSpacing: "0.06em" }}>
+          <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f59e0b", letterSpacing: "0.06em" }}>
             N/A
           </span>
         </ViewscreenTooltip>
@@ -316,7 +316,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
 
     {result.description && (
       <div
-        style={{ fontSize: 13.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 6 }}
+        style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", lineHeight: 1.5, marginBottom: 6 }}
       >
         {result.description.length > 120
           ? result.description.slice(0, 120) + "…"
@@ -327,13 +327,13 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
     <BboxPreviewMap bbox={result.coverageBbox} />
 
     <div
-      style={{ fontSize: 12, color: "#64748b", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}
+      style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}
     >
       {result.coverageBbox.minLon.toFixed(1)}°,{result.coverageBbox.minLat.toFixed(1)}° →{" "}
       {result.coverageBbox.maxLon.toFixed(1)}°,{result.coverageBbox.maxLat.toFixed(1)}°
     </div>
 
-    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>
+    <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 6 }}>
       {result.resolutionMMin != null
         ? result.resolutionMMax != null && result.resolutionMMax !== result.resolutionMMin
           ? `${result.resolutionMMin}–${result.resolutionMMax} m res`
@@ -348,7 +348,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            fontSize: 12,
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
             padding: "3px 10px",
             background: "transparent",
             border: "1px solid rgba(255,255,255,0.1)",
@@ -380,7 +380,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
           }
           disabled={!result.wcsAvailable || !canSave || saved || saving}
           style={{
-            fontSize: 12,
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
             padding: "3px 10px",
             background: saved
               ? "rgba(74,222,128,0.1)"
@@ -432,19 +432,19 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
   return (
     <div style={CARD}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 21 }}>{isIntertidal ? "🏖️" : icon}</span>
+        <span style={{ fontSize: "calc(21px * var(--bs-font-scale, 1))" }}>{isIntertidal ? "🏖️" : icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#e2e8f0", marginBottom: 2, lineHeight: 1.3 }}>
+          <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", fontWeight: 700, color: "#e2e8f0", marginBottom: 2, lineHeight: 1.3 }}>
             {entry.name}
           </div>
-          <div style={{ fontSize: 12, color, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color, letterSpacing: "0.1em", textTransform: "uppercase" }}>
             {entry.dataType} · {entry.sourceAgency}
           </div>
           {isIntertidal && (
             <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>
               <span
                 style={{
-                  fontSize: 12,
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   color: "#fbbf24",
@@ -461,7 +461,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
         </div>
         <span
           style={{
-            fontSize: 12,
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
             letterSpacing: "0.08em",
             color: color,
             border: `1px solid ${color}40`,
@@ -477,7 +477,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
       {isIntertidal && (
         <div
           style={{
-            fontSize: 12,
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
             color: "#94a3b8",
             fontStyle: "italic",
             marginBottom: 6,
@@ -492,13 +492,13 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
       )}
 
       {entry.description && (
-        <div style={{ fontSize: 13.5, color: "#cbd5e1", lineHeight: 1.5, marginBottom: 6 }}>
+        <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", lineHeight: 1.5, marginBottom: 6 }}>
           {entry.description.slice(0, 120)}
           {entry.description.length > 120 && "…"}
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 4, fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>
+      <div style={{ display: "flex", gap: 4, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 6 }}>
         {entry.resolutionMMin != null && (
           <span>{entry.resolutionMMin}–{entry.resolutionMMax ?? "?"}m res</span>
         )}
@@ -507,7 +507,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
         )}
       </div>
       {formatFreshness(entry.createdAt) && (
-        <div style={{ fontSize: 11, color: "#475569", letterSpacing: "0.06em", marginBottom: 4 }}>
+        <div style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#475569", letterSpacing: "0.06em", marginBottom: 4 }}>
           Sourced {formatFreshness(entry.createdAt)}
         </div>
       )}
@@ -518,7 +518,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
             <button
               onClick={() => onLoad(presetId)}
               style={{
-                fontSize: 12,
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
                 padding: "3px 10px",
                 background: "rgba(0,229,255,0.1)",
                 border: "1px solid rgba(0,229,255,0.3)",
@@ -547,7 +547,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
             onClick={() => canSave && !saved && !saving && onSave(entry.id)}
             disabled={!canSave || saved || saving}
             style={{
-              fontSize: 12,
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
               padding: "3px 10px",
               background: saved ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.04)",
               border: `1px solid ${saved ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"}`,
@@ -567,7 +567,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
             <button
               onClick={() => setOfflineModalOpen(true)}
               style={{
-                fontSize: 12,
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
                 padding: "3px 8px",
                 background: "rgba(251,191,36,0.08)",
                 border: "1px solid rgba(251,191,36,0.3)",
@@ -668,7 +668,7 @@ const SaveCard: React.FC<{
       aria-busy={deleting || renaming || undefined}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 18 }}>{icon}</span>
+        <span style={{ fontSize: "calc(18px * var(--bs-font-scale, 1))" }}>{icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           {editing ? (
             <input
@@ -685,7 +685,7 @@ const SaveCard: React.FC<{
               style={{
                 width: "100%",
                 boxSizing: "border-box",
-                fontSize: 14,
+                fontSize: "calc(14px * var(--bs-font-scale, 1))",
                 fontFamily: "inherit",
                 color: "#e2e8f0",
                 background: "rgba(0,229,255,0.06)",
@@ -700,7 +700,7 @@ const SaveCard: React.FC<{
               title={displayName}
               data-testid={`text-save-name-${save.id}`}
               style={{
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 color: "#e2e8f0",
                 fontWeight: 600,
                 marginBottom: 1,
@@ -712,13 +712,13 @@ const SaveCard: React.FC<{
               {displayName}
             </div>
           )}
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>
+          <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
             {save.displayLabel ? (save.catalog?.name ?? save.catalogId) : (save.catalog?.sourceAgency ?? "—")}
           </div>
         </div>
         <span
           style={{
-            fontSize: 12,
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
             color: statusColor,
@@ -739,7 +739,7 @@ const SaveCard: React.FC<{
                 border: "none",
                 color: "#cbd5e1",
                 cursor: deleting ? "wait" : "pointer",
-                fontSize: 14,
+                fontSize: "calc(14px * var(--bs-font-scale, 1))",
                 lineHeight: 1,
                 padding: "0 2px",
                 flexShrink: 0,
@@ -761,7 +761,7 @@ const SaveCard: React.FC<{
               border: "none",
               color: "#cbd5e1",
               cursor: deleting ? "wait" : "pointer",
-              fontSize: 18,
+              fontSize: "calc(18px * var(--bs-font-scale, 1))",
               lineHeight: 1,
               padding: "0 2px",
               flexShrink: 0,
@@ -779,7 +779,7 @@ const SaveCard: React.FC<{
             disabled={renaming}
             data-testid={`btn-rename-save-commit-${save.id}`}
             style={{
-              fontSize: 11,
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
               padding: "2px 10px",
               background: "rgba(0,229,255,0.1)",
               border: "1px solid rgba(0,229,255,0.3)",
@@ -798,7 +798,7 @@ const SaveCard: React.FC<{
             disabled={renaming}
             data-testid={`btn-rename-save-cancel-${save.id}`}
             style={{
-              fontSize: 11,
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
               padding: "2px 10px",
               background: "transparent",
               border: "1px solid rgba(255,255,255,0.15)",
@@ -816,7 +816,7 @@ const SaveCard: React.FC<{
       {renameError && (
         <div
           data-testid={`rename-save-error-${save.id}`}
-          style={{ marginTop: 6, fontSize: 12, color: "#fca5a5" }}
+          style={{ marginTop: 6, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fca5a5" }}
         >
           ⚠ {renameError}
         </div>
@@ -827,7 +827,7 @@ const SaveCard: React.FC<{
             onClick={() => onLoadUserDataset(save.datasetId!, save.catalog?.createdAt)}
             style={{
               marginTop: 8,
-              fontSize: 12,
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
               padding: "3px 12px",
               background: "rgba(0,229,255,0.1)",
               border: "1px solid rgba(0,229,255,0.3)",
@@ -845,7 +845,7 @@ const SaveCard: React.FC<{
       {save.status === "failed" && (
         <>
           {save.errorMessage && (
-            <div style={{ marginTop: 6, fontSize: 12, color: "#f87171", lineHeight: 1.4 }}>
+            <div style={{ marginTop: 6, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", lineHeight: 1.4 }}>
               {save.errorMessage}
             </div>
           )}
@@ -856,7 +856,7 @@ const SaveCard: React.FC<{
               data-testid={`save-retry-${save.id}`}
               style={{
                 marginTop: 8,
-                fontSize: 12,
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
                 padding: "3px 12px",
                 background: "rgba(248,113,113,0.1)",
                 border: "1px solid rgba(248,113,113,0.3)",
@@ -950,10 +950,10 @@ const SaveMoveDialog: React.FC<{
           maxWidth: "90vw",
           color: "#cbd5e1",
           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-          fontSize: 14,
+          fontSize: "calc(14px * var(--bs-font-scale, 1))",
         }}
       >
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, letterSpacing: "0.05em" }}>
+        <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", fontWeight: 700, marginBottom: 12, letterSpacing: "0.05em" }}>
           Move &quot;{displayName}&quot;
         </div>
         <div
@@ -981,7 +981,7 @@ const SaveMoveDialog: React.FC<{
                 cursor: "pointer",
                 background: idx === selectedIdx ? "rgba(0,229,255,0.12)" : "transparent",
                 color: idx === selectedIdx ? "#00e5ff" : "#cbd5e1",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 opacity: isPending ? 0.6 : 1,
                 borderBottom: "1px solid rgba(255,255,255,0.04)",
               }}
@@ -995,7 +995,7 @@ const SaveMoveDialog: React.FC<{
             onClick={onCancel}
             disabled={isPending}
             style={{
-              fontSize: 12,
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
               padding: "4px 14px",
               background: "transparent",
               border: "1px solid rgba(255,255,255,0.15)",
@@ -1012,7 +1012,7 @@ const SaveMoveDialog: React.FC<{
             onClick={() => selected && onConfirm(selected.id)}
             disabled={isPending || !selected}
             style={{
-              fontSize: 12,
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
               padding: "4px 14px",
               background: "rgba(0,229,255,0.1)",
               border: "1px solid rgba(0,229,255,0.3)",
@@ -1068,7 +1068,7 @@ const DraggableSaveCard: React.FC<{
           border: "none",
           color: "#475569",
           cursor: "grab",
-          fontSize: 13,
+          fontSize: "calc(13px * var(--bs-font-scale, 1))",
           padding: "2px 4px",
           zIndex: 1,
           lineHeight: 1,
@@ -1088,7 +1088,7 @@ const DraggableSaveCard: React.FC<{
           border: "none",
           color: "#475569",
           cursor: "pointer",
-          fontSize: 12,
+          fontSize: "calc(12px * var(--bs-font-scale, 1))",
           padding: "2px 4px",
           zIndex: 1,
           lineHeight: 1,
@@ -1171,8 +1171,8 @@ const SaveFolderSection: React.FC<{
         aria-expanded={isExpanded}
         aria-label={`Folder: ${node.folder.name}`}
       >
-        <span style={{ fontSize: 13, color: "#94a3b8" }}>{isExpanded ? "▾" : "▸"}</span>
-        <span style={{ fontSize: 14 }}>📁</span>
+        <span style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>{isExpanded ? "▾" : "▸"}</span>
+        <span style={{ fontSize: "calc(14px * var(--bs-font-scale, 1))" }}>📁</span>
         {isRenaming ? (
           <input
             ref={renameInputRef}
@@ -1187,7 +1187,7 @@ const SaveFolderSection: React.FC<{
             data-testid={`save-folder-rename-input-${node.folder.id}`}
             style={{
               flex: 1,
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               fontWeight: 600,
               color: "#e2e8f0",
               background: "rgba(0,229,255,0.07)",
@@ -1203,7 +1203,7 @@ const SaveFolderSection: React.FC<{
           <span
             style={{
               flex: 1,
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               fontWeight: 600,
               color: "#cbd5e1",
               overflow: "hidden",
@@ -1215,7 +1215,7 @@ const SaveFolderSection: React.FC<{
           </span>
         )}
         {!isRenaming && totalCount > 0 && (
-          <span style={{ fontSize: 11, color: "#64748b" }}>{totalCount}</span>
+          <span style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b" }}>{totalCount}</span>
         )}
         {onShowMenu && !isRenaming && (
           <button
@@ -1227,7 +1227,7 @@ const SaveFolderSection: React.FC<{
               border: "none",
               color: "#64748b",
               cursor: "pointer",
-              fontSize: 14,
+              fontSize: "calc(14px * var(--bs-font-scale, 1))",
               padding: "0 2px",
               lineHeight: 1,
               flexShrink: 0,
@@ -1242,7 +1242,7 @@ const SaveFolderSection: React.FC<{
           {node.children.map((child) => renderSubFolder(child))}
           {node.saves.map((s) => renderSave(s))}
           {node.children.length === 0 && node.saves.length === 0 && (
-            <div style={{ fontSize: 12, color: "#475569", padding: "4px 8px" }}>
+            <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#475569", padding: "4px 8px" }}>
               No saves in this folder
             </div>
           )}
@@ -1325,7 +1325,7 @@ const UploadCard: React.FC<{
       aria-busy={deleting || renaming || undefined}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 18 }}>📤</span>
+        <span style={{ fontSize: "calc(18px * var(--bs-font-scale, 1))" }}>📤</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           {editing ? (
             <input
@@ -1342,7 +1342,7 @@ const UploadCard: React.FC<{
               style={{
                 width: "100%",
                 boxSizing: "border-box",
-                fontSize: 14,
+                fontSize: "calc(14px * var(--bs-font-scale, 1))",
                 fontFamily: "inherit",
                 color: "#e2e8f0",
                 background: "rgba(0,229,255,0.06)",
@@ -1357,7 +1357,7 @@ const UploadCard: React.FC<{
               title={dataset.name}
               data-testid={`text-upload-name-${dataset.id}`}
               style={{
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 color: "#e2e8f0",
                 fontWeight: 600,
                 marginBottom: 1,
@@ -1369,7 +1369,7 @@ const UploadCard: React.FC<{
               {dataset.name}
             </div>
           )}
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>{createdDate}</div>
+          <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>{createdDate}</div>
         </div>
         {!editing && (
           <ViewscreenTooltip label="Rename this uploaded dataset" side="left">
@@ -1384,7 +1384,7 @@ const UploadCard: React.FC<{
                 border: "none",
                 color: "#cbd5e1",
                 cursor: deleting ? "wait" : "pointer",
-                fontSize: 14,
+                fontSize: "calc(14px * var(--bs-font-scale, 1))",
                 lineHeight: 1,
                 padding: "0 2px",
                 flexShrink: 0,
@@ -1406,7 +1406,7 @@ const UploadCard: React.FC<{
               border: "none",
               color: "#cbd5e1",
               cursor: deleting ? "wait" : "pointer",
-              fontSize: 18,
+              fontSize: "calc(18px * var(--bs-font-scale, 1))",
               lineHeight: 1,
               padding: "0 2px",
               flexShrink: 0,
@@ -1424,7 +1424,7 @@ const UploadCard: React.FC<{
             disabled={renaming}
             data-testid={`btn-rename-save-${dataset.id}`}
             style={{
-              fontSize: 11,
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
               padding: "2px 10px",
               background: "rgba(0,229,255,0.1)",
               border: "1px solid rgba(0,229,255,0.3)",
@@ -1443,7 +1443,7 @@ const UploadCard: React.FC<{
             disabled={renaming}
             data-testid={`btn-rename-cancel-${dataset.id}`}
             style={{
-              fontSize: 11,
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
               padding: "2px 10px",
               background: "transparent",
               border: "1px solid rgba(255,255,255,0.15)",
@@ -1461,7 +1461,7 @@ const UploadCard: React.FC<{
       {renameError && (
         <div
           data-testid={`rename-upload-error-${dataset.id}`}
-          style={{ marginTop: 6, fontSize: 12, color: "#fca5a5" }}
+          style={{ marginTop: 6, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fca5a5" }}
         >
           ⚠ {renameError}
         </div>
@@ -1472,7 +1472,7 @@ const UploadCard: React.FC<{
           data-testid={`btn-load-upload-${dataset.id}`}
           style={{
             marginTop: 8,
-            fontSize: 12,
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
             padding: "3px 12px",
             background: "rgba(0,229,255,0.1)",
             border: "1px solid rgba(0,229,255,0.3)",
@@ -2139,7 +2139,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               border: "none",
               color: "#94a3b8",
               cursor: "pointer",
-              fontSize: 21,
+              fontSize: "calc(21px * var(--bs-font-scale, 1))",
               lineHeight: 1,
             }}
           >
@@ -2194,7 +2194,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 <button
                   onClick={() => setDataTypeFilter(dt)}
                   style={{
-                    fontSize: 12,
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
                     padding: "2px 8px",
                     borderRadius: 3,
                     border: `1px solid ${dataTypeFilter === dt ? "rgba(0,229,255,0.4)" : "rgba(255,255,255,0.08)"}`,
@@ -2213,7 +2213,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               ))}
             </div>
             {isSearching && (
-              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>Searching…</div>
+              <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 4 }}>Searching…</div>
             )}
 
             {/* Manual coordinate + radius search */}
@@ -2231,7 +2231,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 style={{
                   cursor: "pointer",
                   padding: "7px 10px",
-                  fontSize: 12,
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
                   letterSpacing: "0.15em",
                   textTransform: "uppercase",
                   color: "#7dd3fc",
@@ -2252,7 +2252,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             data-testid="find-data-results"
           >
             {searchResults.length === 0 && !isSearching && (
-              <div style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
+              <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
                 {debouncedQuery
                   ? "No results found — try different keywords"
                   : "Type a query to discover datasets"}
@@ -2261,7 +2261,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             {!isSignedIn && (
               <div
                 style={{
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   color: "#f59e0b",
                   textAlign: "center",
                   padding: "8px 0 12px",
@@ -2287,7 +2287,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               );
             })}
             {searchResults.length > 0 && catalogDataUpdatedAt > 0 && !isSearching && (
-              <div style={{ fontSize: 11, color: "#475569", letterSpacing: "0.06em", textAlign: "right", paddingTop: 6, paddingBottom: 2 }}>
+              <div style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#475569", letterSpacing: "0.06em", textAlign: "right", paddingTop: 6, paddingBottom: 2 }}>
                 Results as of {formatFreshness(catalogDataUpdatedAt)}
               </div>
             )}
@@ -2299,12 +2299,12 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       {tab === "saves" && (
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
           {!isSignedIn && (
-            <div style={{ fontSize: 13.5, color: "#f59e0b", textAlign: "center", paddingTop: 32 }}>
+            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f59e0b", textAlign: "center", paddingTop: 32 }}>
               Sign in to see saved datasets.
             </div>
           )}
           {isSignedIn && isSavePending && (
-            <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
+            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
           )}
 
           {/* ── My Saved Uploads section ── */}
@@ -2312,7 +2312,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             <>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: "calc(11px * var(--bs-font-scale, 1))",
                   letterSpacing: "0.15em",
                   textTransform: "uppercase",
                   color: "#64748b",
@@ -2331,7 +2331,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                     border: "1px solid rgba(248,113,113,0.4)",
                     background: "rgba(248,113,113,0.08)",
                     borderRadius: 4,
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     color: "#fca5a5",
                     display: "flex",
                     justifyContent: "space-between",
@@ -2348,7 +2348,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                       border: "none",
                       color: "#cbd5e1",
                       cursor: "pointer",
-                      fontSize: 15,
+                      fontSize: "calc(15px * var(--bs-font-scale, 1))",
                     }}
                   >
                     ×
@@ -2356,12 +2356,12 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 </div>
               )}
               {isUploadPending && (
-                <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
+                <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
               )}
               {!isUploadPending && uploadOnlyDatasets.length === 0 && (
                 <div
                   style={{
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     color: "#94a3b8",
                     textAlign: "center",
                     padding: "12px 0 16px",
@@ -2431,7 +2431,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   {/* Header row with section title and New Folder button */}
                   <div
                     style={{
-                      fontSize: 11,
+                      fontSize: "calc(11px * var(--bs-font-scale, 1))",
                       letterSpacing: "0.15em",
                       textTransform: "uppercase",
                       color: "#64748b",
@@ -2457,7 +2457,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                         background: "transparent",
                         border: "1px solid rgba(0,229,255,0.3)",
                         color: "#00e5ff",
-                        fontSize: 12,
+                        fontSize: "calc(12px * var(--bs-font-scale, 1))",
                         padding: "1px 6px",
                         borderRadius: 2,
                         cursor: postFolderMutation.isPending ? "not-allowed" : "pointer",
@@ -2478,7 +2478,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                         border: "1px solid rgba(248,113,113,0.4)",
                         background: "rgba(248,113,113,0.08)",
                         borderRadius: 4,
-                        fontSize: 13.5,
+                        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                         color: "#fca5a5",
                         display: "flex",
                         justifyContent: "space-between",
@@ -2495,7 +2495,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                           border: "none",
                           color: "#cbd5e1",
                           cursor: "pointer",
-                          fontSize: 15,
+                          fontSize: "calc(15px * var(--bs-font-scale, 1))",
                         }}
                       >
                         ×
@@ -2506,7 +2506,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   {!isSavePending && visibleSaves.length === 0 && (
                     <div
                       style={{
-                        fontSize: 13.5,
+                        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                         color: "#94a3b8",
                         textAlign: "center",
                         padding: "12px 0 16px",
@@ -2533,7 +2533,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                         borderRadius: 4,
                         padding: "6px 12px",
                         color: "#e2e8f0",
-                        fontSize: 13.5,
+                        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                         fontFamily: "'JetBrains Mono', monospace",
                         pointerEvents: "none",
                       }}
@@ -2591,7 +2591,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               >
                 <div
                   style={{
-                    fontSize: 16.5,
+                    fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
                     color: "#e2e8f0",
                     fontWeight: 700,
                     marginBottom: 8,
@@ -2600,13 +2600,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 >
                   Delete &ldquo;{confirmDeleteSaveFolder.name}&rdquo;?
                 </div>
-                <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.5, marginBottom: 14 }}>
+                <div style={{ fontSize: "calc(14px * var(--bs-font-scale, 1))", color: "#94a3b8", lineHeight: 1.5, marginBottom: 14 }}>
                   {confirmDeleteSaveFolder.hasSaves
                     ? "Saves inside this folder will be moved to the root level. The folder itself will be removed."
                     : "This empty folder will be removed."}
                 </div>
                 {saveFolderDeleteError && (
-                  <div style={{ fontSize: 13, color: "#fca5a5", marginBottom: 10 }}>
+                  <div style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#fca5a5", marginBottom: 10 }}>
                     {saveFolderDeleteError}
                   </div>
                 )}
@@ -2615,7 +2615,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                     onClick={() => setConfirmDeleteSaveFolder(null)}
                     data-testid="confirm-delete-save-folder-cancel"
                     style={{
-                      fontSize: 13.5,
+                      fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                       padding: "5px 12px",
                       background: "transparent",
                       border: "1px solid rgba(255,255,255,0.15)",
@@ -2633,7 +2633,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                     data-testid="confirm-delete-save-folder-confirm"
                     disabled={deleteFolderMutation.isPending}
                     style={{
-                      fontSize: 13.5,
+                      fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                       padding: "5px 12px",
                       background: "rgba(248,113,113,0.12)",
                       border: "1px solid rgba(248,113,113,0.5)",
@@ -2669,7 +2669,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             />
             <div
               style={{
-                fontSize: 12,
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
                 color: "#64748b",
                 marginTop: 6,
                 lineHeight: 1.5,
@@ -2687,10 +2687,10 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               . Datasets with WCS coverage can be saved to your library.
             </div>
             {isNceiSearching && (
-              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>Searching…</div>
+              <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 4 }}>Searching…</div>
             )}
             {nceiError && (
-              <div style={{ fontSize: 12, color: "#f87171", marginTop: 4 }}>
+              <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 4 }}>
                 ⚠ Could not reach the NCEI Geoportal — try again in a moment.
               </div>
             )}
@@ -2704,7 +2704,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             {!isSignedIn && (
               <div
                 style={{
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   color: "#f59e0b",
                   textAlign: "center",
                   padding: "8px 0 12px",
@@ -2716,7 +2716,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             )}
             {nceiAccumulated.length === 0 && !isNceiSearching && !nceiError && (
               <div
-                style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", paddingTop: 32 }}
+                style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", paddingTop: 32 }}
               >
                 {debouncedNceiQuery
                   ? "No NCEI datasets matched — try different keywords"
@@ -2734,12 +2734,12 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               />
             ))}
             {nceiAccumulated.length > 0 && nceiDataUpdatedAt > 0 && !isNceiSearching && (
-              <div style={{ fontSize: 11, color: "#475569", letterSpacing: "0.06em", textAlign: "right", paddingTop: 6, paddingBottom: 2 }}>
+              <div style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#475569", letterSpacing: "0.06em", textAlign: "right", paddingTop: 6, paddingBottom: 2 }}>
                 Results as of {formatFreshness(nceiDataUpdatedAt)}
               </div>
             )}
             {isNceiSearching && nceiFrom > 1 && (
-              <div style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
+              <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
                 Loading more…
               </div>
             )}
@@ -2756,7 +2756,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   border: "1px solid rgba(0,229,255,0.2)",
                   borderRadius: 4,
                   color: "#00e5ff",
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   letterSpacing: "0.15em",
                   textTransform: "uppercase",
                   cursor: isNceiSearching ? "not-allowed" : "pointer",
@@ -2802,7 +2802,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
           >
             <div
               style={{
-                fontSize: 16.5,
+                fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
                 color: "#e2e8f0",
                 fontWeight: 700,
                 marginBottom: 8,
@@ -2811,7 +2811,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             >
               Delete &ldquo;{confirmDelete.catalog?.name ?? confirmDelete.catalogId}&rdquo;?
             </div>
-            <div style={{ fontSize: 15, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 14 }}>
+            <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", lineHeight: 1.5, marginBottom: 14 }}>
               This will remove the saved dataset and its terrain grids from your library.
               You can re-save it from the catalog later.
             </div>
@@ -2820,7 +2820,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 onClick={() => setConfirmDelete(null)}
                 data-testid="confirm-delete-cancel"
                 style={{
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   padding: "5px 12px",
                   background: "transparent",
                   border: "1px solid rgba(255,255,255,0.15)",
@@ -2837,7 +2837,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 onClick={() => void handleConfirmDelete()}
                 data-testid="confirm-delete-confirm"
                 style={{
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   padding: "5px 12px",
                   background: "rgba(248,113,113,0.12)",
                   border: "1px solid rgba(248,113,113,0.5)",
@@ -2886,7 +2886,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
           >
             <div
               style={{
-                fontSize: 16.5,
+                fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
                 color: "#e2e8f0",
                 fontWeight: 700,
                 marginBottom: 8,
@@ -2895,7 +2895,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             >
               Delete &ldquo;{confirmDeleteUpload.name}&rdquo;?
             </div>
-            <div style={{ fontSize: 15, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 14 }}>
+            <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", lineHeight: 1.5, marginBottom: 14 }}>
               This will permanently remove the uploaded dataset and its terrain data. This cannot be undone.
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
@@ -2903,7 +2903,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 onClick={() => setConfirmDeleteUpload(null)}
                 data-testid="confirm-delete-upload-cancel"
                 style={{
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   padding: "5px 12px",
                   background: "transparent",
                   border: "1px solid rgba(255,255,255,0.15)",
@@ -2920,7 +2920,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 onClick={() => void handleConfirmDeleteUpload()}
                 data-testid="confirm-delete-upload-confirm"
                 style={{
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   padding: "5px 12px",
                   background: "rgba(248,113,113,0.12)",
                   border: "1px solid rgba(248,113,113,0.5)",
@@ -2943,7 +2943,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         style={{
           padding: "8px 14px",
           borderTop: "1px solid rgba(0,229,255,0.08)",
-          fontSize: 10.5,
+          fontSize: "calc(10.5px * var(--bs-font-scale, 1))",
           color: "#64748b",
           letterSpacing: "0.05em",
         }}

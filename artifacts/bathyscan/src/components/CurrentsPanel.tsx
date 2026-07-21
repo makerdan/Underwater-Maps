@@ -54,12 +54,12 @@ const card: React.CSSProperties = {
   padding: 10,
   color: "#e2e8f0",
   fontFamily: FONT,
-  fontSize: 16.5,
+  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
   backdropFilter: "blur(6px)",
 };
 
 const header: React.CSSProperties = {
-  fontSize: 15,
+  fontSize: "calc(15px * var(--bs-font-scale, 1))",
   letterSpacing: "0.22em",
   color: "#00e5ff",
   textShadow: "0 0 8px rgba(0,229,255,0.45)",
@@ -67,7 +67,7 @@ const header: React.CSSProperties = {
 };
 
 const label: React.CSSProperties = {
-  fontSize: 13.5,
+  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
   letterSpacing: "0.15em",
   color: "#cbd5e1",
   textTransform: "uppercase",
@@ -78,7 +78,7 @@ const input: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.18)",
   color: "#e2e8f0",
   fontFamily: FONT,
-  fontSize: 16.5,
+  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
   padding: "3px 6px",
   borderRadius: 3,
   width: "100%",
@@ -89,7 +89,7 @@ const toggleBtn = (active: boolean): React.CSSProperties => ({
   border: `1px solid ${active ? "rgba(0,229,255,0.45)" : "rgba(0,229,255,0.12)"}`,
   color: active ? "#00e5ff" : "#94a3b8",
   fontFamily: FONT,
-  fontSize: 13.5,
+  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
   letterSpacing: "0.18em",
   padding: "4px 8px",
   borderRadius: 3,
@@ -119,7 +119,7 @@ function Legend({ units }: { units: UnitsSystem }): React.ReactElement {
           border: "1px solid rgba(0,229,255,0.18)",
         }}
       />
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, color: "#cbd5e1", marginTop: 2 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginTop: 2 }}>
         <span>0</span>
         <span>slow</span>
         <span>fast</span>
@@ -179,7 +179,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
   }, [timelineVisible, timelineCurrentTime, currentsSource]);
 
   const wrapStyle: React.CSSProperties = embedded
-    ? { width: "100%", minWidth: 0, color: "#e2e8f0", fontFamily: FONT, fontSize: 16.5 }
+    ? { width: "100%", minWidth: 0, color: "#e2e8f0", fontFamily: FONT, fontSize: "calc(16.5px * var(--bs-font-scale, 1))" }
     : card;
 
   if (!currentsEnabled) {
@@ -316,7 +316,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
               borderRadius: 3,
               background: "rgba(0,229,255,0.07)",
               border: "1px solid rgba(0,229,255,0.22)",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.1em",
               color: "#00e5ff",
               display: "flex",
@@ -336,7 +336,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
               const nearestHour = new Date(nearestHourMs);
               const hh = String(nearestHour.getUTCHours()).padStart(2, "0");
               return (
-                <div style={{ fontSize: 12, color: "#7dd3fc", letterSpacing: "0.08em" }}>
+                <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#7dd3fc", letterSpacing: "0.08em" }}>
                   NOAA data: {hh}:00 UTC
                   {deltaMin !== 0 && ` (${deltaMin > 0 ? "+" : ""}${deltaMin} min from timeline)`}
                 </div>
@@ -394,7 +394,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
         <Legend units={units} />
 
         {field && (
-          <div style={{ marginTop: 6, fontSize: 13.5, color: "#94a3b8" }} data-testid="currents-field-stats">
+          <div style={{ marginTop: 6, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }} data-testid="currents-field-stats">
             Field: {field.resolution}² · max {formatSpeedFromKnots(maxKt, { units, decimals: 2 })}
           </div>
         )}
@@ -434,7 +434,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
     border: "1px solid rgba(0,229,255,0.3)",
     color: "#00e5ff",
     fontFamily: FONT,
-    fontSize: 13.5,
+    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
     letterSpacing: "0.15em",
     padding: "3px 8px",
     borderRadius: 3,
@@ -448,11 +448,11 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
     if (noaaAmbient) {
       const realSrc = isRealSource(noaaAmbient.source);
       return (
-        <div style={{ marginBottom: 8, fontSize: 15, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
+        <div style={{ marginBottom: 8, fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0" }} data-testid="currents-noaa-readout">
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: "1 1 0" }}>
               {isFresh && !realSrc ? (
-                <span style={{ color: "#94a3b8", fontSize: 13.5 }} data-testid="currents-freshwater-unavailable">
+                <span style={{ color: "#94a3b8", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }} data-testid="currents-freshwater-unavailable">
                   No currents station for this lake
                 </span>
               ) : (
@@ -467,7 +467,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
             <span
               data-testid="currents-noaa-refreshing"
               style={{
-                fontSize: 12,
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.15em",
                 color: "#94a3b8",
                 border: "1px solid rgba(148,163,184,0.3)",
@@ -480,13 +480,13 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
           </div>
           {isRealSource(noaaAmbient.source) &&
           (noaaAmbient.stationName || noaaAmbient.stationId) ? (
-            <div style={{ fontSize: 13.5, color: "#cbd5e1", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} data-testid="currents-noaa-station">
+            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} data-testid="currents-noaa-station">
               Station:{" "}
               {noaaAmbient.stationName ?? "—"}
               {noaaAmbient.stationId ? ` (${noaaAmbient.stationId})` : ""}
             </div>
           ) : !isFresh && noaaAmbient.source === "estimated" ? (
-            <div style={{ fontSize: 13.5, color: "#fbbf24", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} data-testid="currents-noaa-estimated">
+            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#fbbf24", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} data-testid="currents-noaa-estimated">
               No NOAA station in range — using tide-derived estimate.
             </div>
           ) : null}
@@ -494,7 +494,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
       );
     }
     return (
-      <div style={{ marginBottom: 8, fontSize: 15, color: "#94a3b8" }} data-testid="currents-noaa-readout">
+      <div style={{ marginBottom: 8, fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#94a3b8" }} data-testid="currents-noaa-readout">
         <span data-testid="currents-noaa-loading">⟳ Fetching NOAA data…</span>
       </div>
     );
@@ -504,7 +504,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
     if (isFresh) {
       return (
         <div style={{ marginBottom: 8 }} data-testid="currents-noaa-readout">
-          <div style={{ color: "#94a3b8", fontSize: 13.5, marginBottom: 6, letterSpacing: "0.08em" }} data-testid="currents-freshwater-unavailable">
+          <div style={{ color: "#94a3b8", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", marginBottom: 6, letterSpacing: "0.08em" }} data-testid="currents-freshwater-unavailable">
             No currents station for this lake — enter observed conditions:
           </div>
           <ManualConditionsForm
@@ -518,7 +518,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
       );
     }
     return (
-      <div style={{ marginBottom: 8, fontSize: 15, color: "#e2e8f0" }} data-testid="currents-noaa-readout">
+      <div style={{ marginBottom: 8, fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0" }} data-testid="currents-noaa-readout">
         <div style={{ color: "#fbbf24", marginBottom: 4 }} data-testid="currents-noaa-unavailable">
           No NOAA tidal station found within 100 km of this location.
         </div>
@@ -539,7 +539,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
     if (isFresh && !realSrc) {
       return (
         <div style={{ marginBottom: 8 }} data-testid="currents-noaa-readout">
-          <div style={{ color: "#94a3b8", fontSize: 13.5, marginBottom: 6, letterSpacing: "0.08em" }} data-testid="currents-freshwater-unavailable">
+          <div style={{ color: "#94a3b8", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", marginBottom: 6, letterSpacing: "0.08em" }} data-testid="currents-freshwater-unavailable">
             No currents station for this lake — enter observed conditions:
           </div>
           <ManualConditionsForm
@@ -553,7 +553,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
       );
     }
     return (
-      <div style={{ marginBottom: 8, fontSize: 15, color: "#e2e8f0", minWidth: 0 }} data-testid="currents-noaa-readout">
+      <div style={{ marginBottom: 8, fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", minWidth: 0 }} data-testid="currents-noaa-readout">
         <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {sourceLabel(noaaAmbient.source)}:{" "}
           {noaaAmbient.directionDeg.toFixed(0)}°{" "}
@@ -562,7 +562,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
         </div>
         {realSrc && (noaaAmbient.stationName || noaaAmbient.stationId) ? (
           <div
-            style={{ fontSize: 13.5, color: "#cbd5e1", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
             data-testid="currents-noaa-station"
           >
             Station:{" "}
@@ -571,7 +571,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
           </div>
         ) : !isFresh && noaaAmbient.source === "estimated" ? (
           <div
-            style={{ fontSize: 13.5, color: "#fbbf24", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#fbbf24", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
             data-testid="currents-noaa-estimated"
           >
             No NOAA station in range — using tide-derived estimate.
@@ -583,7 +583,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
 
   if (tidalStatus === "ok" && !noaaAmbient) {
     return (
-      <div style={{ marginBottom: 8, fontSize: 15, color: "#94a3b8" }} data-testid="currents-noaa-readout">
+      <div style={{ marginBottom: 8, fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#94a3b8" }} data-testid="currents-noaa-readout">
         <span>Processing…</span>
       </div>
     );
@@ -593,7 +593,7 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
   // Render a visible standby message so e2e tests can assert the element is
   // present and visible immediately after the source toggle (currents.spec.ts).
   return (
-    <div style={{ marginBottom: 8, fontSize: 15, color: "#94a3b8" }} data-testid="currents-noaa-readout">
+    <div style={{ marginBottom: 8, fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#94a3b8" }} data-testid="currents-noaa-readout">
       <span data-testid="currents-noaa-idle">⟳ Connecting to NOAA…</span>
     </div>
   );

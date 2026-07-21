@@ -91,7 +91,7 @@ export function bundleToTerrainData(raw: unknown, ds: DatasetMeta): TerrainData 
 }
 
 const BTN_STYLE: React.CSSProperties = {
-  fontSize: 13.5,
+  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
   padding: "3px 8px",
   background: "rgba(0,229,255,0.06)",
   border: "1px solid rgba(0,229,255,0.35)",
@@ -213,7 +213,7 @@ export const BundleDownloadButton: React.FC<{
       {phase === "done" ? (
         <span
           data-testid={`bundle-complete-${dataset.id}`}
-          style={{ fontSize: 13.5, color: "#4ade80", letterSpacing: "0.08em" }}
+          style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#4ade80", letterSpacing: "0.08em" }}
         >
           ✓ BATHYMETRY LOADED
         </span>
@@ -221,7 +221,7 @@ export const BundleDownloadButton: React.FC<{
         <span
           data-testid={`bundle-status-${dataset.id}`}
           role="status"
-          style={{ fontSize: 13.5, color: "#7dd3fc", letterSpacing: "0.06em" }}
+          style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#7dd3fc", letterSpacing: "0.06em" }}
         >
           <span
             style={{
@@ -249,7 +249,7 @@ export const BundleDownloadButton: React.FC<{
       {phase === "error" && errorMsg && (
         <span
           data-testid={`bundle-error-${dataset.id}`}
-          style={{ fontSize: 13, color: "#ef4444", overflowWrap: "anywhere" }}
+          style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#ef4444", overflowWrap: "anywhere" }}
         >
           {errorMsg}
         </span>

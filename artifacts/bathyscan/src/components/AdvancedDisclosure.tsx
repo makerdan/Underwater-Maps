@@ -48,7 +48,7 @@ export const AdvancedDisclosure: React.FC<Props> = ({
           border: "none",
           color: "#cbd5e1",
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 13.5,
+          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
           letterSpacing: "0.2em",
           padding: "8px 14px",
           cursor: "pointer",
@@ -64,7 +64,7 @@ export const AdvancedDisclosure: React.FC<Props> = ({
             transform: open ? "rotate(90deg)" : "rotate(0deg)",
             transition: "transform 0.15s",
             color: "#00e5ff",
-            fontSize: 30,
+            fontSize: "calc(30px * var(--bs-font-scale, 1))",
             lineHeight: 1,
           }}
         >

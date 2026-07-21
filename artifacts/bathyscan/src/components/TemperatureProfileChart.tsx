@@ -123,7 +123,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
         backdropFilter: "blur(8px)",
         color: "#cbd5e1",
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fontSize: 15,
+        fontSize: "calc(15px * var(--bs-font-scale, 1))",
         letterSpacing: "0.05em",
         minWidth: WIDTH + 20,
         pointerEvents: "auto",
@@ -144,7 +144,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
               padding: "0 6px",
               borderRadius: 2,
               cursor: "pointer",
-              fontSize: 16.5,
+              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
               fontFamily: "inherit",
             }}
           >
@@ -241,7 +241,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
           marginTop: 4,
           paddingTop: 4,
           borderTop: "1px solid rgba(51,65,85,0.4)",
-          fontSize: 13.5,
+          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
           color: "#e2e8f0",
           lineHeight: 1.4,
         }}
@@ -250,7 +250,7 @@ export const TemperatureProfileChart: React.FC<TemperatureProfileChartProps> = (
           <span
             data-testid="hud-temp-profile-badge"
             style={{
-              fontSize: 12,
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               color: measured ? "#34d399" : live ? "#22d3ee" : "#f59e0b",
               background: measured

@@ -151,10 +151,10 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 21, fontWeight: 700, color: "#e2e8f0", letterSpacing: "0.01em" }}>
+            <div style={{ fontSize: "calc(21px * var(--bs-font-scale, 1))", fontWeight: 700, color: "#e2e8f0", letterSpacing: "0.01em" }}>
               Georeference Raster
             </div>
-            <div style={{ fontSize: 16.5, color: "#64748b", marginTop: 2 }}>
+            <div style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#64748b", marginTop: 2 }}>
               {dataset.name}
             </div>
           </div>
@@ -166,7 +166,7 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
               background: "transparent",
               border: "none",
               color: "#64748b",
-              fontSize: 27,
+              fontSize: "calc(27px * var(--bs-font-scale, 1))",
               cursor: "pointer",
               lineHeight: 1,
               padding: "2px 6px",
@@ -179,7 +179,7 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
 
         {/* Instruction */}
         <div style={{
-          fontSize: 16.5,
+          fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
           color: "#94a3b8",
           padding: "8px 10px",
           background: "rgba(245,158,11,0.06)",
@@ -209,15 +209,15 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
           }}
         >
           {imgLoading && (
-            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: 18 }}>
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "calc(18px * var(--bs-font-scale, 1))" }}>
               Loading raster image…
             </div>
           )}
           {imgError && (
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-              <span style={{ fontSize: 42 }}>⚠️</span>
-              <span style={{ fontSize: 18, color: "#f87171", textAlign: "center", maxWidth: 320 }}>{imgError}</span>
-              <span style={{ fontSize: 16.5, color: "#64748b" }}>
+              <span style={{ fontSize: "calc(42px * var(--bs-font-scale, 1))" }}>⚠️</span>
+              <span style={{ fontSize: "calc(18px * var(--bs-font-scale, 1))", color: "#f87171", textAlign: "center", maxWidth: 320 }}>{imgError}</span>
+              <span style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#64748b" }}>
                 The raster image may have exceeded the 20 MB storage cap, or was not captured during upload.
               </span>
             </div>
@@ -270,7 +270,7 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: 15,
+                      fontSize: "calc(15px * var(--bs-font-scale, 1))",
                       fontWeight: 700,
                       color: "#000",
                       boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
@@ -287,18 +287,18 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
         {/* Control points table */}
         {points.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontSize: 16.5, color: "#94a3b8", marginBottom: 2 }}>Control points</div>
+            <div style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 2 }}>Control points</div>
             {points.map((p, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{
                   width: 20, height: 20, borderRadius: "50%",
                   background: "rgba(245,158,11,0.85)", border: "2px solid #fff",
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 15, fontWeight: 700, color: "#000", flexShrink: 0,
+                  fontSize: "calc(15px * var(--bs-font-scale, 1))", fontWeight: 700, color: "#000", flexShrink: 0,
                 }}>
                   {i + 1}
                 </span>
-                <span style={{ fontSize: 15, color: "#64748b", flexShrink: 0, minWidth: 90 }}>
+                <span style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#64748b", flexShrink: 0, minWidth: 90 }}>
                   px ({Math.round(p.px)}, {Math.round(p.py)})
                 </span>
                 <input
@@ -326,7 +326,7 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
                     border: "none",
                     color: "#64748b",
                     cursor: "pointer",
-                    fontSize: 21,
+                    fontSize: "calc(21px * var(--bs-font-scale, 1))",
                     lineHeight: 1,
                     padding: "0 4px",
                     flexShrink: 0,
@@ -340,19 +340,19 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
         )}
 
         {points.length === 0 && !imgLoading && !imgError && (
-          <div style={{ fontSize: 16.5, color: "#475569", textAlign: "center" }}>
+          <div style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#475569", textAlign: "center" }}>
             Click on the chart image above to place your first control point.
           </div>
         )}
 
         {points.length >= MAX_POINTS && (
-          <div style={{ fontSize: 16.5, color: "#64748b" }}>
+          <div style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#64748b" }}>
             Maximum of {MAX_POINTS} control points reached.
           </div>
         )}
 
         {submitError && (
-          <div style={{ fontSize: 16.5, color: "#f87171", padding: "6px 8px", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 4 }}>
+          <div style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#f87171", padding: "6px 8px", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 4 }}>
             {submitError}
           </div>
         )}
@@ -365,7 +365,7 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
             disabled={georefMutation.isPending}
             style={{
               padding: "6px 16px",
-              fontSize: 18,
+              fontSize: "calc(18px * var(--bs-font-scale, 1))",
               background: "transparent",
               border: "1px solid rgba(148,163,184,0.25)",
               borderRadius: 5,
@@ -381,7 +381,7 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
             disabled={!isValid || georefMutation.isPending}
             style={{
               padding: "6px 18px",
-              fontSize: 18,
+              fontSize: "calc(18px * var(--bs-font-scale, 1))",
               fontWeight: 600,
               background: isValid && !georefMutation.isPending
                 ? "rgba(245,158,11,0.85)"
@@ -405,7 +405,7 @@ const inputStyle: React.CSSProperties = {
   flex: 1,
   minWidth: 0,
   padding: "3px 8px",
-  fontSize: 16.5,
+  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
   background: "rgba(148,163,184,0.06)",
   border: "1px solid rgba(148,163,184,0.18)",
   borderRadius: 4,

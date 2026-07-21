@@ -161,7 +161,7 @@ export const FileUpload = () => {
               <p className="text-[15px] text-muted-foreground">
                 Drop file here — auto-saved to your account
               </p>
-              <p style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 4 }}>
+              <p style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 4 }}>
                 {SUPPORTED_EXTENSIONS}
               </p>
               {nearLimitWarning && (

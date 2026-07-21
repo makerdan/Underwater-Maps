@@ -32,7 +32,7 @@ export const ToolbarRelocationHint: React.FC = () => {
         borderRadius: 6,
         padding: "10px 12px",
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fontSize: 13.5,
+        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
         letterSpacing: "0.06em",
         color: "#cbd5e1",
         lineHeight: 1.55,
@@ -41,7 +41,7 @@ export const ToolbarRelocationHint: React.FC = () => {
         pointerEvents: "auto",
       }}
     >
-      <div style={{ color: "#00e5ff", fontWeight: 700, letterSpacing: "0.15em", marginBottom: 4, fontSize: 12.5 }}>
+      <div style={{ color: "#00e5ff", fontWeight: 700, letterSpacing: "0.15em", marginBottom: 4, fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>
         CONTROLS HAVE MOVED
       </div>
       <div>
@@ -57,7 +57,7 @@ export const ToolbarRelocationHint: React.FC = () => {
         style={{
           marginTop: 8,
           fontFamily: "inherit",
-          fontSize: 12.5,
+          fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
           letterSpacing: "0.15em",
           padding: "4px 10px",
           borderRadius: 3,

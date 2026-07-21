@@ -61,7 +61,7 @@ export function NavigationSection() {
               onChange={(e) => s.setDefaultSpeedTier(Number(e.target.value))}
               style={S.slider}
             />
-            <span style={{ color: "#00e5ff", fontSize: 10, minWidth: 24, textAlign: "center" }}>
+            <span style={{ color: "#00e5ff", fontSize: "calc(10px * var(--bs-font-scale, 1))", minWidth: 24, textAlign: "center" }}>
               {s.defaultSpeedTier}
             </span>
           </div>
@@ -147,7 +147,7 @@ export function NavigationSection() {
             }}
           >
             <span>TOUCH CONTROLS</span>
-            <span style={{ fontSize: 8, color: "#64748b", letterSpacing: "0.1em" }}>
+            <span style={{ fontSize: "calc(8px * var(--bs-font-scale, 1))", color: "#64748b", letterSpacing: "0.1em" }}>
               MOBILE / TOUCH ONLY
             </span>
           </div>
@@ -209,7 +209,7 @@ export function NavigationSection() {
             border: "1px solid rgba(0,229,255,0.2)",
             borderRadius: 3,
             color: allDefault ? "#64748b" : "#67e8f9",
-            fontSize: 9,
+            fontSize: "calc(9px * var(--bs-font-scale, 1))",
             letterSpacing: "0.15em",
             padding: "4px 12px",
             cursor: allDefault ? "default" : "pointer",
@@ -233,7 +233,7 @@ export function NavigationSection() {
                 alignItems: "center",
                 padding: "6px 0",
                 borderBottom: "1px solid rgba(0,229,255,0.05)",
-                fontSize: 11,
+                fontSize: "calc(11px * var(--bs-font-scale, 1))",
               }}
             >
               <span style={{ color: "#e2e8f0" }}>{sh.desc}</span>
@@ -244,7 +244,7 @@ export function NavigationSection() {
                   borderRadius: 3,
                   padding: "2px 8px",
                   fontFamily: FONT,
-                  fontSize: 10,
+                  fontSize: "calc(10px * var(--bs-font-scale, 1))",
                   color: "#67e8f9",
                 }}
               >

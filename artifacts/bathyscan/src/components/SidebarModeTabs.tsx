@@ -147,7 +147,7 @@ export const SidebarModeTabs: React.FC = () => {
                   : "2px solid transparent",
                 cursor: "pointer",
                 color: isActive ? "#00e5ff" : "#64748b",
-                fontSize: 11.5,
+                fontSize: "calc(11.5px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.06em",
                 textTransform: "uppercase",
                 fontWeight: isActive ? 700 : 400,

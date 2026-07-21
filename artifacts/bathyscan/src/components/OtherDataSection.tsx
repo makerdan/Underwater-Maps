@@ -51,13 +51,13 @@ export const OtherDataSection: React.FC<{
           color: "#7dd3fc",
           padding: "8px 12px",
           cursor: "pointer",
-          fontSize: 12.5,
+          fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
           letterSpacing: "0.12em",
           fontFamily: "'JetBrains Mono', monospace",
           textAlign: "left",
         }}
       >
-        <span style={{ fontSize: 11 }}>{expanded ? "▾" : "▸"}</span>
+        <span style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))" }}>{expanded ? "▾" : "▸"}</span>
         <span style={{ flex: 1 }}>OTHER DATA IN THIS AREA</span>
         {expanded && !isLoading && !isError && (
           <span style={{ color: "#64748b" }}>{others.length}</span>
@@ -66,15 +66,15 @@ export const OtherDataSection: React.FC<{
       {expanded && (
         <div style={{ padding: "0 12px 10px", maxHeight: 220, overflowY: "auto" }}>
           {isLoading && (
-            <div style={{ fontSize: 12.5, color: "#94a3b8", padding: "6px 0" }}>Searching NCEI…</div>
+            <div style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8", padding: "6px 0" }}>Searching NCEI…</div>
           )}
           {isError && (
-            <div style={{ fontSize: 12.5, color: "#fca5a5", padding: "6px 0" }}>
+            <div style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#fca5a5", padding: "6px 0" }}>
               ⚠ Could not load NCEI records for this area.
             </div>
           )}
           {!isLoading && !isError && others.length === 0 && (
-            <div style={{ fontSize: 12.5, color: "#94a3b8", padding: "6px 0" }}>
+            <div style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8", padding: "6px 0" }}>
               No non-bathymetry NCEI records found here.
             </div>
           )}
@@ -96,7 +96,7 @@ export const OtherDataSection: React.FC<{
                   <span
                     data-testid="overview-other-data-badge"
                     style={{
-                      fontSize: 10,
+                      fontSize: "calc(10px * var(--bs-font-scale, 1))",
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
                       color: badgeColor,
@@ -109,12 +109,12 @@ export const OtherDataSection: React.FC<{
                     {type}
                   </span>
                   {!r.wcsAvailable && (
-                    <span style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.06em" }}>
+                    <span style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#94a3b8", letterSpacing: "0.06em" }}>
                       REFERENCE ONLY
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 13, color: "#cbd5e1", marginTop: 3, lineHeight: 1.35 }}>
+                <div style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginTop: 3, lineHeight: 1.35 }}>
                   {r.metadataUrl ? (
                     <a
                       href={r.metadataUrl}

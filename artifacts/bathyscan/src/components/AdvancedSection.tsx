@@ -56,7 +56,7 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
           cursor: "pointer",
           padding: "5px 0",
           fontFamily: FONT,
-          fontSize: 13.5,
+          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
           color: collapsed ? "#64748b" : "#94a3b8",
@@ -65,7 +65,7 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
       >
         <span
           style={{
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             display: "inline-block",
             transition: "transform 0.2s ease",
             transform: collapsed ? "rotate(0deg)" : "rotate(90deg)",

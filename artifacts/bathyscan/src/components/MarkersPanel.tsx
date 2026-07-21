@@ -35,10 +35,10 @@ const MarkerRow: React.FC<MarkerRowProps> = ({ label, lat, lon, depth, type }) =
       gap: 2,
     }}
   >
-    <div style={{ color: "#e2e8f0", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+    <div style={{ color: "#e2e8f0", fontSize: "calc(14px * var(--bs-font-scale, 1))", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
       {label}
     </div>
-    <div style={{ color: "#64748b", fontSize: 12.5, letterSpacing: "0.04em" }}>
+    <div style={{ color: "#64748b", fontSize: "calc(12.5px * var(--bs-font-scale, 1))", letterSpacing: "0.04em" }}>
       {type} &bull; {lat.toFixed(4)}, {lon.toFixed(4)} &bull; {depth.toFixed(1)} m
     </div>
   </div>
@@ -101,7 +101,7 @@ export const MarkersPanel: React.FC = () => {
               color: "#00e5ff",
               letterSpacing: "0.18em",
               fontWeight: 700,
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             }}
           >
             📍 MARKERS
@@ -114,7 +114,7 @@ export const MarkersPanel: React.FC = () => {
               background: "none",
               border: "none",
               color: "#94a3b8",
-              fontSize: 20,
+              fontSize: "calc(20px * var(--bs-font-scale, 1))",
               cursor: "pointer",
               lineHeight: 1,
               padding: "0 2px",
@@ -128,7 +128,7 @@ export const MarkersPanel: React.FC = () => {
         <div
           style={{
             padding: "6px 12px",
-            fontSize: 12.5,
+            fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
             color: "#64748b",
             letterSpacing: "0.06em",
             borderBottom: "1px solid rgba(148,163,184,0.08)",
@@ -143,7 +143,7 @@ export const MarkersPanel: React.FC = () => {
           {isLoading && (
             <div
               data-testid="markers-panel-loading"
-              style={{ padding: "20px 12px", color: "#64748b", textAlign: "center", fontSize: 13.5 }}
+              style={{ padding: "20px 12px", color: "#64748b", textAlign: "center", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}
             >
               Loading markers…
             </div>
@@ -154,7 +154,7 @@ export const MarkersPanel: React.FC = () => {
               <div
                 style={{
                   color: "#f87171",
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   marginBottom: 10,
                   padding: "8px 10px",
                   background: "rgba(239,68,68,0.08)",
@@ -175,7 +175,7 @@ export const MarkersPanel: React.FC = () => {
                   color: "#e2e8f0",
                   cursor: "pointer",
                   fontFamily: "inherit",
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 }}
               >
                 Retry
@@ -190,7 +190,7 @@ export const MarkersPanel: React.FC = () => {
                 padding: "20px 12px",
                 color: "#64748b",
                 textAlign: "center",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 lineHeight: 1.6,
               }}
             >
@@ -237,7 +237,7 @@ export const MarkersPanel: React.FC = () => {
               color: "#00e5ff",
               cursor: "pointer",
               fontFamily: "inherit",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.1em",
             }}
           >

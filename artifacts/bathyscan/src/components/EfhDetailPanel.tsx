@@ -84,10 +84,10 @@ export const EfhDetailPanel: React.FC = () => {
           }}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 18, color: "#f8fafc", fontWeight: 600, letterSpacing: "0.04em" }}>
+          <div style={{ fontSize: "calc(18px * var(--bs-font-scale, 1))", color: "#f8fafc", fontWeight: 600, letterSpacing: "0.04em" }}>
             {p.commonName}
           </div>
-          <div style={{ fontSize: 13.5, color: "#cbd5e1", fontStyle: "italic", marginTop: 2 }}>
+          <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", fontStyle: "italic", marginTop: 2 }}>
             {p.species?.replace(/_/g, " ")}
           </div>
         </div>
@@ -100,7 +100,7 @@ export const EfhDetailPanel: React.FC = () => {
             border: "none",
             color: "#cbd5e1",
             cursor: "pointer",
-            fontSize: 24,
+            fontSize: "calc(24px * var(--bs-font-scale, 1))",
             lineHeight: 1,
             padding: 0,
             marginLeft: 4,
@@ -117,24 +117,24 @@ export const EfhDetailPanel: React.FC = () => {
 
       {p.habitatDescription && (
         <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 12, color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 4 }}>
+          <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 4 }}>
             HABITAT
           </div>
-          <div style={{ fontSize: 15, lineHeight: 1.5, color: "#cbd5e1" }}>
+          <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", lineHeight: 1.5, color: "#cbd5e1" }}>
             {p.habitatDescription}
           </div>
         </div>
       )}
 
       <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(0,229,255,0.1)" }}>
-        <div style={{ fontSize: 12, color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 4 }}>
+        <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 4 }}>
           SOURCE
         </div>
-        <div style={{ fontSize: 13.5, color: "#e2e8f0", marginBottom: 4 }}>{p.source}</div>
+        <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#e2e8f0", marginBottom: 4 }}>{p.source}</div>
         {p.source?.startsWith("TPWD") && (
           <div
             style={{
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               color: "#fb923c",
               marginBottom: 4,
               fontStyle: "italic",
@@ -149,7 +149,7 @@ export const EfhDetailPanel: React.FC = () => {
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               color: "#00e5ff",
               textDecoration: "none",
               wordBreak: "break-all",
@@ -164,8 +164,8 @@ export const EfhDetailPanel: React.FC = () => {
 };
 
 const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div style={{ display: "flex", gap: 8, fontSize: 15, marginTop: 4 }}>
-    <span style={{ color: "#cbd5e1", minWidth: 72, fontSize: 13.5, letterSpacing: "0.08em" }}>
+  <div style={{ display: "flex", gap: 8, fontSize: "calc(15px * var(--bs-font-scale, 1))", marginTop: 4 }}>
+    <span style={{ color: "#cbd5e1", minWidth: 72, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.08em" }}>
       {label.toUpperCase()}
     </span>
     <span style={{ color: "#e2e8f0", flex: 1 }}>{value}</span>

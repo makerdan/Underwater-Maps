@@ -39,7 +39,7 @@ export function GeneralSection() {
                   data-testid={`settings-water-type-${wt}`}
                   onClick={() => s.setWaterType(wt)}
                   style={{
-                    fontSize: 9,
+                    fontSize: "calc(9px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.15em",
                     padding: "4px 12px",
                     borderRadius: 4,
@@ -57,13 +57,13 @@ export function GeneralSection() {
             })}
           </div>
         </div>
-        <div style={{ padding: "10px 16px 12px", fontSize: 10, color: "#94a3b8", lineHeight: 1.6 }}>
+        <div style={{ padding: "10px 16px 12px", fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#94a3b8", lineHeight: 1.6 }}>
           {s.waterType === "freshwater" ? (
-            <span style={{ color: "#4ade80", fontSize: 9, letterSpacing: "0.08em" }}>
+            <span style={{ color: "#4ade80", fontSize: "calc(9px * var(--bs-font-scale, 1))", letterSpacing: "0.08em" }}>
               ~ Freshwater mode: lakes, reservoirs, freshwater species, limnology AI context.
             </span>
           ) : (
-            <span style={{ color: "#00e5ff", fontSize: 9, letterSpacing: "0.08em" }}>
+            <span style={{ color: "#00e5ff", fontSize: "calc(9px * var(--bs-font-scale, 1))", letterSpacing: "0.08em" }}>
               ≈ Saltwater mode: ocean datasets, marine species, marine geology AI context.
             </span>
           )}
@@ -146,7 +146,7 @@ export function GeneralSection() {
               border: "1px solid rgba(0,229,255,0.3)",
               borderRadius: 4,
               color: "#00e5ff",
-              fontSize: 9,
+              fontSize: "calc(9px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               padding: "6px 14px",
               cursor: "pointer",
@@ -167,7 +167,7 @@ export function GeneralSection() {
           </div>
           <span
             style={{
-              fontSize: 9,
+              fontSize: "calc(9px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               color: s.hasSeenOnboarding ? "#4ade80" : "#fbbf24",
               fontFamily: FONT,

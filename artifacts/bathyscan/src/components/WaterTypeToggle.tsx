@@ -61,7 +61,7 @@ export const WaterTypeToggle: React.FC<WaterTypeToggleProps> = ({ onChange }) =>
             onClick={() => handleSelect(opt.value)}
             style={{
               flex: 1,
-              fontSize: 12,
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               padding: "4px 8px",
               border: "none",
@@ -77,7 +77,7 @@ export const WaterTypeToggle: React.FC<WaterTypeToggleProps> = ({ onChange }) =>
               gap: 4,
             }}
           >
-            <span style={{ fontSize: 15 }}>{opt.icon}</span>
+            <span style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>{opt.icon}</span>
             <span>{opt.label}</span>
           </button>
           </ViewscreenTooltip>

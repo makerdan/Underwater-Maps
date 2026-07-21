@@ -26,7 +26,7 @@ export function SliderRow({
           onChange={(e) => onChange(Number(e.target.value))}
           style={S.slider}
         />
-        <span style={{ color: "#00e5ff", fontSize: 10, minWidth: 48, textAlign: "right" }}>
+        <span style={{ color: "#00e5ff", fontSize: "calc(10px * var(--bs-font-scale, 1))", minWidth: 48, textAlign: "right" }}>
           {fmt(value)}
         </span>
       </div>
@@ -87,7 +87,7 @@ export function ColorRow({
           }}
           aria-label={label}
         />
-        <span style={{ color: "#cbd5e1", fontSize: 10, minWidth: 64, textAlign: "right" }}>
+        <span style={{ color: "#cbd5e1", fontSize: "calc(10px * var(--bs-font-scale, 1))", minWidth: 64, textAlign: "right" }}>
           {value.toUpperCase()}
         </span>
       </div>
@@ -180,7 +180,7 @@ export function ColormapSelectRow({
           }}
         >
           <span style={{ color: "#e2e8f0" }}>{current.label}</span>
-          <span style={{ color: "#cbd5e1", fontSize: 16, lineHeight: 1 }}>{open ? "▲" : "▼"}</span>
+          <span style={{ color: "#cbd5e1", fontSize: "calc(16px * var(--bs-font-scale, 1))", lineHeight: 1 }}>{open ? "▲" : "▼"}</span>
         </button>
         {open && (
           <ul
@@ -220,7 +220,7 @@ export function ColormapSelectRow({
                     borderRadius: 3,
                     background: selected ? "rgba(0,229,255,0.10)" : "transparent",
                     color: selected ? "#00e5ff" : "#e2e8f0",
-                    fontSize: 11,
+                    fontSize: "calc(11px * var(--bs-font-scale, 1))",
                     fontFamily: FONT,
                   }}
                   onMouseEnter={(e) => {
@@ -232,7 +232,7 @@ export function ColormapSelectRow({
                 >
                   <ColormapSwatch theme={o.value} width={40} height={12} title={`${o.label} preview`} />
                   <span style={{ flex: 1 }}>{o.label}</span>
-                  {selected && <span style={{ fontSize: 9, color: "#00e5ff" }}>●</span>}
+                  {selected && <span style={{ fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#00e5ff" }}>●</span>}
                 </li>
               );
             })}

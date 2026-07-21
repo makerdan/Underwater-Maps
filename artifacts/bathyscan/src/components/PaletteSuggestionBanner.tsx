@@ -90,11 +90,11 @@ export function PaletteSuggestionBanner() {
             }}
           />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, letterSpacing: "0.12em", color: "#00e5ff", fontWeight: 700 }}>
+            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", color: "#00e5ff", fontWeight: 700 }}>
               SUGGESTED PALETTE
             </div>
             <div style={{
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               color: "#e2e8f0",
               marginTop: 2,
               whiteSpace: "nowrap",
@@ -103,7 +103,7 @@ export function PaletteSuggestionBanner() {
             }}>
               {THEME_LABELS[suggestion.theme]}
             </div>
-            <div style={{ fontSize: 13.5, color: "#94a3b8", marginTop: 2, letterSpacing: "0.05em" }}>
+            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 2, letterSpacing: "0.05em" }}>
               {suggestion.reason === "freshwater"
                 ? "Freshwater body detected — optimised for lake & river data"
                 : "Best match for loaded dataset depth range"}
@@ -117,7 +117,7 @@ export function PaletteSuggestionBanner() {
             onClick={handleApply}
             style={{
               fontFamily: FONT,
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               padding: "6px 14px",
               background: "rgba(0,229,255,0.12)",
@@ -135,7 +135,7 @@ export function PaletteSuggestionBanner() {
             onClick={dismiss}
             style={{
               fontFamily: FONT,
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               padding: "6px 10px",
               background: "transparent",

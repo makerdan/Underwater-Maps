@@ -27,14 +27,14 @@ const INPUT: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.2)",
   borderRadius: 4,
   padding: "7px 10px",
-  fontSize: 15,
+  fontSize: "calc(15px * var(--bs-font-scale, 1))",
   color: "#e2e8f0",
   fontFamily: "'JetBrains Mono', monospace",
   outline: "none",
 };
 
 const LABEL: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: "calc(11px * var(--bs-font-scale, 1))",
   letterSpacing: "0.15em",
   textTransform: "uppercase",
   color: "#64748b",
@@ -139,7 +139,7 @@ export const CoordinateSearchForm: React.FC<CoordinateSearchFormProps> = ({ onSu
             data-testid="coord-search-gps-fill"
             onClick={handleGpsFill}
             style={{
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               padding: "0 10px",
               background: "rgba(0,229,255,0.06)",
               border: "1px solid rgba(0,229,255,0.25)",
@@ -155,12 +155,12 @@ export const CoordinateSearchForm: React.FC<CoordinateSearchFormProps> = ({ onSu
         </ViewscreenTooltip>
       </div>
       {coordError && (
-        <div data-testid="coord-search-coord-error" style={{ fontSize: 12, color: "#f87171", marginTop: 4, lineHeight: 1.4 }}>
+        <div data-testid="coord-search-coord-error" style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 4, lineHeight: 1.4 }}>
           ⚠ {coordError}
         </div>
       )}
       {gpsMessage && (
-        <div data-testid="coord-search-gps-message" style={{ fontSize: 12, color: "#f59e0b", marginTop: 4, lineHeight: 1.4 }}>
+        <div data-testid="coord-search-gps-message" style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f59e0b", marginTop: 4, lineHeight: 1.4 }}>
           {gpsMessage}
         </div>
       )}
@@ -195,7 +195,7 @@ export const CoordinateSearchForm: React.FC<CoordinateSearchFormProps> = ({ onSu
               aria-pressed={coordSearchRadiusUnit === u}
               onClick={() => setCoordSearchRadiusUnit(u)}
               style={{
-                fontSize: 13,
+                fontSize: "calc(13px * var(--bs-font-scale, 1))",
                 padding: "8px 10px",
                 background: coordSearchRadiusUnit === u ? "rgba(0,229,255,0.14)" : "transparent",
                 border: "none",
@@ -214,7 +214,7 @@ export const CoordinateSearchForm: React.FC<CoordinateSearchFormProps> = ({ onSu
           type="submit"
           data-testid="coord-search-submit"
           style={{
-            fontSize: 13,
+            fontSize: "calc(13px * var(--bs-font-scale, 1))",
             padding: "8px 14px",
             background: "rgba(0,229,255,0.15)",
             border: "1px solid rgba(0,229,255,0.5)",
@@ -231,11 +231,11 @@ export const CoordinateSearchForm: React.FC<CoordinateSearchFormProps> = ({ onSu
         </button>
       </div>
       {radiusError && (
-        <div data-testid="coord-search-radius-error" style={{ fontSize: 12, color: "#f87171", marginTop: 4, lineHeight: 1.4 }}>
+        <div data-testid="coord-search-radius-error" style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 4, lineHeight: 1.4 }}>
           ⚠ {radiusError}
         </div>
       )}
-      <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 6, lineHeight: 1.5 }}>
+      <div style={{ fontSize: "calc(11.5px * var(--bs-font-scale, 1))", color: "#64748b", marginTop: 6, lineHeight: 1.5 }}>
         Accepts decimal degrees, degrees + decimal minutes, or DMS with N/S/E/W.
         Submitting opens the Overview Map at that point.
       </div>

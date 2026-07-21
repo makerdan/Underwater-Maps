@@ -57,7 +57,7 @@ export const S = {
       ? "2px solid var(--bs-s-accent, #00e5ff)"
       : "2px solid transparent",
     padding: "8px 16px",
-    fontSize: 9,
+    fontSize: "calc(9px * var(--bs-font-scale, 1))",
     letterSpacing: "0.2em",
     color: active
       ? "var(--bs-s-accent, #00e5ff)"
@@ -68,7 +68,7 @@ export const S = {
   }),
 
   sectionTitle: {
-    fontSize: 9,
+    fontSize: "calc(9px * var(--bs-font-scale, 1))",
     letterSpacing: "0.25em",
     color: "var(--bs-s-accent, #00e5ff)",
     fontWeight: 700,
@@ -88,7 +88,7 @@ export const S = {
   cardHeader: {
     padding: "10px 16px",
     borderBottom: "1px solid var(--bs-s-card-border, rgba(0,229,255,0.08))",
-    fontSize: 8,
+    fontSize: "calc(8px * var(--bs-font-scale, 1))",
     letterSpacing: "0.2em",
     color: "var(--bs-s-card-header-fg, #cbd5e1)",
     fontWeight: 700,
@@ -100,7 +100,7 @@ export const S = {
     justifyContent: "space-between",
     padding: "10px 16px",
     borderBottom: "1px solid var(--bs-s-row-border, rgba(0,229,255,0.05))",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     gap: 12,
   } as React.CSSProperties,
 
@@ -110,7 +110,7 @@ export const S = {
   } as React.CSSProperties,
 
   sublabel: {
-    fontSize: 9,
+    fontSize: "calc(9px * var(--bs-font-scale, 1))",
     color: "var(--bs-s-sublabel-fg, #94a3b8)",
     marginTop: 2,
     letterSpacing: "0.05em",
@@ -121,7 +121,7 @@ export const S = {
     border: "1px solid var(--bs-s-card-border, rgba(0,229,255,0.2))",
     borderRadius: 4,
     color: "var(--bs-s-page-fg, #e2e8f0)",
-    fontSize: 10,
+    fontSize: "calc(10px * var(--bs-font-scale, 1))",
     padding: "4px 8px",
     fontFamily: FONT,
     cursor: "pointer",
@@ -176,7 +176,7 @@ export const S = {
   dangerHeader: {
     padding: "10px 16px",
     borderBottom: "1px solid rgba(239,68,68,0.12)",
-    fontSize: 8,
+    fontSize: "calc(8px * var(--bs-font-scale, 1))",
     letterSpacing: "0.2em",
     color: "var(--bs-s-danger-fg, #f87171)",
     fontWeight: 700,
@@ -187,7 +187,7 @@ export const S = {
     border: "1px solid rgba(239,68,68,0.3)",
     borderRadius: 4,
     color: "var(--bs-s-danger-fg, #f87171)",
-    fontSize: 9,
+    fontSize: "calc(9px * var(--bs-font-scale, 1))",
     letterSpacing: "0.15em",
     padding: "6px 14px",
     cursor: "pointer",

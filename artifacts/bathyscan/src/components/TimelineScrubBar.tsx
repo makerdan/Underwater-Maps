@@ -186,7 +186,7 @@ export const TimelineScrubBar: React.FC = () => {
     borderRadius: 4,
     color: isPlaying ? "#00e5ff" : "#94a3b8",
     cursor: "pointer",
-    fontSize: 19.5,
+    fontSize: "calc(19.5px * var(--bs-font-scale, 1))",
     lineHeight: 1,
     transition: "background 0.15s, border-color 0.15s, color 0.15s",
   };
@@ -200,7 +200,7 @@ export const TimelineScrubBar: React.FC = () => {
 
   const timeLabel: React.CSSProperties = {
     flexShrink: 0,
-    fontSize: 16.5,
+    fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
     letterSpacing: "0.07em",
     color: "#00e5ff",
     textShadow: "0 0 6px rgba(0,229,255,0.4)",
@@ -210,7 +210,7 @@ export const TimelineScrubBar: React.FC = () => {
 
   const rangeLabel: React.CSSProperties = {
     flexShrink: 0,
-    fontSize: 13.5,
+    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
     letterSpacing: "0.1em",
     color: "#475569",
     minWidth: 60,

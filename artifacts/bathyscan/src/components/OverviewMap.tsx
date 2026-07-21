@@ -2005,7 +2005,7 @@ export const OverviewMap: React.FC = () => {
         <span
           style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 9,
+            fontSize: "calc(9px * var(--bs-font-scale, 1))",
             fontWeight: 700,
             color: "rgba(0,229,255,0.85)",
             lineHeight: 1,
@@ -2014,7 +2014,7 @@ export const OverviewMap: React.FC = () => {
         >
           N
         </span>
-        <span style={{ fontSize: 9, color: "rgba(0,229,255,0.85)", lineHeight: 1 }}>↑</span>
+        <span style={{ fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "rgba(0,229,255,0.85)", lineHeight: 1 }}>↑</span>
       </div>
 
       {/* SVG marker/pin overlay — positioned exactly over the canvas so SVG
@@ -2388,7 +2388,7 @@ export const OverviewMap: React.FC = () => {
             borderRadius: 3,
             padding: "6px 8px",
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             zIndex: 41,
             pointerEvents: "none",
           }}
@@ -2428,7 +2428,7 @@ export const OverviewMap: React.FC = () => {
         <span
           style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             letterSpacing: "0.25em",
             color: "#00e5ff",
             textShadow: "0 0 8px rgba(0,229,255,0.45)",
@@ -2439,7 +2439,7 @@ export const OverviewMap: React.FC = () => {
         <span
           style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             letterSpacing: "0.12em",
             color: "#64748b",
           }}
@@ -2450,7 +2450,7 @@ export const OverviewMap: React.FC = () => {
         {/* GPS controls */}
         <div style={{ display: "flex", gap: 6, alignItems: "center", pointerEvents: "auto" }}>
           {gpsError && (
-            <span style={{ color: "#ef4444", fontSize: 13.5, fontFamily: "'JetBrains Mono', monospace", maxWidth: 180 }}>
+            <span style={{ color: "#ef4444", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", fontFamily: "'JetBrains Mono', monospace", maxWidth: 180 }}>
               ⚠ {gpsError}
             </span>
           )}
@@ -2480,7 +2480,7 @@ export const OverviewMap: React.FC = () => {
                   borderRadius: 3,
                   color: "#60a5fa",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   padding: "2px 8px",
                   cursor: "pointer",
                   letterSpacing: "0.1em",
@@ -2507,7 +2507,7 @@ export const OverviewMap: React.FC = () => {
                 borderRadius: 3,
                 color: datasetsWithGrid.length === 0 ? "#475569" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 padding: "2px 10px",
                 cursor: datasetsWithGrid.length === 0 ? "not-allowed" : "pointer",
                 letterSpacing: "0.1em",
@@ -2545,7 +2545,7 @@ export const OverviewMap: React.FC = () => {
                   borderRadius: 3,
                   color: (selectMode || downloadMode || waypointMode) ? "#00e5ff" : toolsPopoverOpen ? "#7dd3fc" : "#94a3b8",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   padding: "2px 10px",
                   cursor: "pointer",
                   letterSpacing: "0.1em",
@@ -2580,7 +2580,7 @@ export const OverviewMap: React.FC = () => {
                   style={{
                     padding: "5px 10px 4px",
                     borderBottom: "1px solid rgba(0,229,255,0.1)",
-                    fontSize: 12,
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
                     color: "#64748b",
                     letterSpacing: "0.18em",
                   }}
@@ -2611,7 +2611,7 @@ export const OverviewMap: React.FC = () => {
                     borderBottom: "1px solid rgba(0,229,255,0.07)",
                     color: selectMode ? "#00e5ff" : "#cbd5e1",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.1em",
                     cursor: "pointer",
                     textAlign: "left",
@@ -2620,7 +2620,7 @@ export const OverviewMap: React.FC = () => {
                   <span style={{ width: 14, textAlign: "center", flexShrink: 0 }}>▭</span>
                   <span style={{ flex: 1 }}>BOX SELECT</span>
                   {selectMode && (
-                    <span style={{ fontSize: 12, color: "#00e5ff", opacity: 0.85 }}>● ON</span>
+                    <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#00e5ff", opacity: 0.85 }}>● ON</span>
                   )}
                 </button>
 
@@ -2647,7 +2647,7 @@ export const OverviewMap: React.FC = () => {
                     borderBottom: "1px solid rgba(0,229,255,0.07)",
                     color: downloadMode ? "#fbbf24" : "#cbd5e1",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.1em",
                     cursor: "pointer",
                     textAlign: "left",
@@ -2656,7 +2656,7 @@ export const OverviewMap: React.FC = () => {
                   <span style={{ width: 14, textAlign: "center", flexShrink: 0 }}>↓</span>
                   <span style={{ flex: 1 }}>DOWNLOAD</span>
                   {downloadMode && (
-                    <span style={{ fontSize: 12, color: "#fbbf24", opacity: 0.85 }}>● ON</span>
+                    <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fbbf24", opacity: 0.85 }}>● ON</span>
                   )}
                 </button>
 
@@ -2682,7 +2682,7 @@ export const OverviewMap: React.FC = () => {
                     border: "none",
                     color: waypointMode ? "#c084fc" : "#cbd5e1",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.1em",
                     cursor: "pointer",
                     textAlign: "left",
@@ -2691,7 +2691,7 @@ export const OverviewMap: React.FC = () => {
                   <span style={{ width: 14, textAlign: "center", flexShrink: 0 }}>📍</span>
                   <span style={{ flex: 1 }}>WAYPOINTS</span>
                   {waypointMode && (
-                    <span style={{ fontSize: 12, color: "#c084fc", opacity: 0.85 }}>● ON</span>
+                    <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#c084fc", opacity: 0.85 }}>● ON</span>
                   )}
                 </button>
 
@@ -2714,7 +2714,7 @@ export const OverviewMap: React.FC = () => {
                     borderTop: "1px solid rgba(0,229,255,0.07)",
                     color: "#cbd5e1",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.1em",
                     cursor: "pointer",
                     textAlign: "left",
@@ -2739,7 +2739,7 @@ export const OverviewMap: React.FC = () => {
                 borderRadius: 3,
                 color: showEfh ? "#4ade80" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 padding: "2px 10px",
                 cursor: "pointer",
                 letterSpacing: "0.1em",
@@ -2764,7 +2764,7 @@ export const OverviewMap: React.FC = () => {
                 borderRadius: 3,
                 color: showWaypointPanel ? "#c084fc" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 padding: "2px 10px",
                 cursor: "pointer",
                 letterSpacing: "0.1em",
@@ -2788,7 +2788,7 @@ export const OverviewMap: React.FC = () => {
                 borderRadius: 3,
                 color: showTrailList ? "#fb923c" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 padding: "2px 10px",
                 cursor: "pointer",
                 letterSpacing: "0.1em",
@@ -2812,7 +2812,7 @@ export const OverviewMap: React.FC = () => {
               borderRadius: 3,
               color: gpsActive ? "#60a5fa" : "#94a3b8",
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               padding: "2px 10px",
               cursor: "pointer",
               letterSpacing: "0.1em",
@@ -2833,7 +2833,7 @@ export const OverviewMap: React.FC = () => {
               border: "1px solid rgba(0,229,255,0.2)",
               color: "#94a3b8",
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 16.5,
+              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
               padding: "1px 10px",
               borderRadius: 3,
               cursor: "pointer",
@@ -2918,7 +2918,7 @@ export const OverviewMap: React.FC = () => {
             borderRadius: 4,
             padding: "5px 9px",
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             pointerEvents: "none",
             whiteSpace: "nowrap",
             zIndex: 42,
@@ -3037,7 +3037,7 @@ const WaypointListPanel: React.FC<WaypointListPanelProps> = ({
 
   const MONO: React.CSSProperties = {
     fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 15,
+    fontSize: "calc(15px * var(--bs-font-scale, 1))",
   };
 
   const handleDragStart = (i: number) => { dragIdxRef.current = i; };
@@ -3091,7 +3091,7 @@ const WaypointListPanel: React.FC<WaypointListPanelProps> = ({
             border: "none",
             color: "#94a3b8",
             cursor: "pointer",
-            fontSize: 19.5,
+            fontSize: "calc(19.5px * var(--bs-font-scale, 1))",
             lineHeight: 1,
             padding: "0 2px",
           }}
@@ -3106,7 +3106,7 @@ const WaypointListPanel: React.FC<WaypointListPanelProps> = ({
           style={{
             padding: "14px 12px",
             ...MONO,
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             color: "#64748b",
             textAlign: "center",
             lineHeight: 1.6,
@@ -3148,7 +3148,7 @@ const WaypointListPanel: React.FC<WaypointListPanelProps> = ({
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               fontWeight: "bold",
               color: "white",
               fontFamily: "sans-serif",
@@ -3159,13 +3159,13 @@ const WaypointListPanel: React.FC<WaypointListPanelProps> = ({
 
           {/* Coordinates */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ ...MONO, color: "#e2e8f0", fontSize: 13.5, lineHeight: 1.4 }}>
+            <div style={{ ...MONO, color: "#e2e8f0", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", lineHeight: 1.4 }}>
               {wp.lat.toFixed(4)}°, {wp.lon.toFixed(4)}°
             </div>
           </div>
 
           {/* Drag handle */}
-          <span style={{ color: "#475569", fontSize: 19.5, cursor: "grab" }}>⠿</span>
+          <span style={{ color: "#475569", fontSize: "calc(19.5px * var(--bs-font-scale, 1))", cursor: "grab" }}>⠿</span>
 
           {/* Delete button */}
           <button
@@ -3176,7 +3176,7 @@ const WaypointListPanel: React.FC<WaypointListPanelProps> = ({
               border: "none",
               color: "#64748b",
               cursor: "pointer",
-              fontSize: 18,
+              fontSize: "calc(18px * var(--bs-font-scale, 1))",
               lineHeight: 1,
               padding: "3px 4px",
               flexShrink: 0,
@@ -3203,7 +3203,7 @@ const WaypointListPanel: React.FC<WaypointListPanelProps> = ({
             color: waypoints.length >= 2 ? "#c084fc" : "#475569",
             padding: "5px 10px",
             cursor: waypoints.length < 2 ? "not-allowed" : "pointer",
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             fontFamily: "'JetBrains Mono', monospace",
             letterSpacing: "0.12em",
             opacity: waypoints.length < 2 ? 0.5 : 1,
@@ -3252,7 +3252,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
 
   const MONO: React.CSSProperties = {
     fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 15,
+    fontSize: "calc(15px * var(--bs-font-scale, 1))",
   };
 
   const selectedTrail = selectedId ? trails.find((t) => t.id === selectedId) : null;
@@ -3302,7 +3302,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
           {selectedTrail && (
             <button
               onClick={() => setSelectedId(null)}
-              style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18, padding: 0 }}
+              style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "calc(18px * var(--bs-font-scale, 1))", padding: 0 }}
             >
               ←
             </button>
@@ -3318,7 +3318,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
             border: "none",
             color: "#94a3b8",
             cursor: "pointer",
-            fontSize: 19.5,
+            fontSize: "calc(19.5px * var(--bs-font-scale, 1))",
             lineHeight: 1,
             padding: "0 2px",
           }}
@@ -3375,7 +3375,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
               },
             ].map(({ label, value }) => (
               <div key={label}>
-                <div style={{ ...MONO, fontSize: 13.5, color: "#94a3b8", marginBottom: 1 }}>{label}</div>
+                <div style={{ ...MONO, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 1 }}>{label}</div>
                 <div style={{ ...MONO, color: "#e2e8f0" }}>{value as React.ReactNode}</div>
               </div>
             ))}
@@ -3394,7 +3394,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
               borderRadius: 3,
               color: "#ef4444",
               cursor: "pointer",
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               padding: "5px 10px",
               fontFamily: "'JetBrains Mono', monospace",
               letterSpacing: "0.1em",
@@ -3453,7 +3453,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
                 >
                   {trail.name}
                 </div>
-                <div style={{ ...MONO, fontSize: 13.5, color: "#94a3b8", marginTop: 2 }}>
+                <div style={{ ...MONO, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 2 }}>
                   {trail.pointCount} pts
                   {durationMin > 0 ? ` · ${durationMin} min` : ""}
                   {distKm !== null
@@ -3463,7 +3463,7 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
               </div>
 
               {/* Arrow */}
-              <span style={{ color: "#64748b", fontSize: 16.5 }}>›</span>
+              <span style={{ color: "#64748b", fontSize: "calc(16.5px * var(--bs-font-scale, 1))" }}>›</span>
             </button>
           );
         })
@@ -3552,7 +3552,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
           alignItems: "center",
         }}
       >
-        <span style={{ color: "#00e5ff", fontSize: 15, letterSpacing: "0.15em" }}>
+        <span style={{ color: "#00e5ff", fontSize: "calc(15px * var(--bs-font-scale, 1))", letterSpacing: "0.15em" }}>
           SELECTED AREA
         </span>
         <button
@@ -3563,7 +3563,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
             border: "none",
             color: "#94a3b8",
             cursor: "pointer",
-            fontSize: 21,
+            fontSize: "calc(21px * var(--bs-font-scale, 1))",
             lineHeight: 1,
           }}
         >
@@ -3571,7 +3571,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
         </button>
       </div>
 
-      <div style={{ padding: "10px 12px", fontSize: 15, color: "#cbd5e1" }}>
+      <div style={{ padding: "10px 12px", fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#cbd5e1" }}>
         <div data-testid="overview-bbox-metrics" style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px" }}>
           <span style={{ color: "#94a3b8" }}>N</span>
           <span>{bbox.north.toFixed(5)}°</span>
@@ -3602,7 +3602,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
               color: "#00e5ff",
               padding: "4px 8px",
               cursor: loading ? "wait" : "pointer",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.1em",
               opacity: loading ? 0.6 : 1,
             }}
@@ -3619,7 +3619,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
               color: "#7dd3fc",
               padding: "4px 8px",
               cursor: "pointer",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.1em",
             }}
           >
@@ -3635,7 +3635,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
               color: "#fca5a5",
               padding: "4px 8px",
               cursor: "pointer",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.1em",
             }}
           >
@@ -3653,7 +3653,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
               border: "1px solid rgba(239,68,68,0.35)",
               borderRadius: 3,
               color: "#fca5a5",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               userSelect: "text",
             }}
           >
@@ -3667,12 +3667,12 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
         style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px", minHeight: 0 }}
       >
         {results === null && !loading && !error && (
-          <div style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
+          <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
             Click "Request bathymetry" to see matching datasets.
           </div>
         )}
         {results && results.length === 0 && (
-          <div style={{ fontSize: 13.5, color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
+          <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
             No datasets cover this area.
           </div>
         )}
@@ -3691,8 +3691,8 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
                 borderRadius: 3,
               }}
             >
-              <div style={{ fontSize: 15, color: "#e2e8f0", fontWeight: 600 }}>{entry.name}</div>
-              <div style={{ fontSize: 12, color: "#cbd5e1", marginTop: 2, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", fontWeight: 600 }}>{entry.name}</div>
+              <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginTop: 2, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 {entry.dataType} · {entry.sourceAgency}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
@@ -3708,7 +3708,7 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
                     color: saved ? "#4ade80" : "#7dd3fc",
                     padding: "3px 6px",
                     cursor: saved || saving ? "default" : "pointer",
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.08em",
                   }}
                 >

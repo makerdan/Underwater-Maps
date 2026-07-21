@@ -104,7 +104,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
         justifyContent: "center",
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
         color: "#cbd5e1",
-        fontSize: 16.5,
+        fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) handleCancel();
@@ -143,7 +143,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
               color: "#f59e0b",
               letterSpacing: "0.18em",
               fontWeight: 700,
-              fontSize: 16.5,
+              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
             }}
           >
             ⚠ SIMULATED DEPTH DATA
@@ -156,7 +156,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
               background: "none",
               border: "none",
               color: "#94a3b8",
-              fontSize: 24,
+              fontSize: "calc(24px * var(--bs-font-scale, 1))",
               cursor: "pointer",
             }}
           >
@@ -182,7 +182,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
               borderRadius: 4,
               color: "#fbbf24",
               marginBottom: 12,
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               lineHeight: 1.5,
             }}
           >
@@ -196,7 +196,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
               border: "1px solid rgba(0,229,255,0.15)",
               borderRadius: 4,
               marginBottom: 12,
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               display: "grid",
               gap: 4,
             }}
@@ -223,7 +223,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
               display: "flex",
               alignItems: "center",
               gap: 8,
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               color: "#e2e8f0",
               marginBottom: 12,
               cursor: "pointer",
@@ -281,7 +281,7 @@ function btnStyle(variant: "warning" | "ghost"): React.CSSProperties {
       color: "#f59e0b",
       cursor: "pointer",
       fontFamily: "inherit",
-      fontSize: 16.5,
+      fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
       letterSpacing: "0.1em",
     };
   }
@@ -293,7 +293,7 @@ function btnStyle(variant: "warning" | "ghost"): React.CSSProperties {
     color: "#e2e8f0",
     cursor: "pointer",
     fontFamily: "inherit",
-    fontSize: 16.5,
+    fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
     letterSpacing: "0.1em",
   };
 }

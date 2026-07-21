@@ -129,7 +129,7 @@ export function AccountSection() {
       {user && (
         <div style={S.card}>
           <div style={S.cardHeader}>PROFILE</div>
-          <div style={{ padding: "12px 16px", fontSize: 10, color: "#cbd5e1" }}>
+          <div style={{ padding: "12px 16px", fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#cbd5e1" }}>
             <div style={{ marginBottom: 4 }}>
               <span style={{ color: "#94a3b8" }}>Name: </span>
               {user.fullName ?? (user as { username?: string }).username ?? "(none)"}
@@ -154,7 +154,7 @@ export function AccountSection() {
                 border: "1px solid rgba(0,229,255,0.2)",
                 borderRadius: 3,
                 color: "#94a3b8",
-                fontSize: 9,
+                fontSize: "calc(9px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.15em",
                 padding: "4px 12px",
                 cursor: "pointer",
@@ -171,7 +171,7 @@ export function AccountSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>SETTINGS BACKUP</div>
         <div style={{ padding: "12px 16px" }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 12 }}>
+          <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 12 }}>
             Export your settings as a JSON file and restore them on another device.
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -184,7 +184,7 @@ export function AccountSection() {
                 border: "1px solid rgba(0,229,255,0.25)",
                 borderRadius: 3,
                 color: "#67e8f9",
-                fontSize: 9,
+                fontSize: "calc(9px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.15em",
                 padding: "4px 12px",
                 cursor: "pointer",
@@ -203,7 +203,7 @@ export function AccountSection() {
                   border: "1px solid rgba(0,229,255,0.25)",
                   borderRadius: 3,
                   color: "#67e8f9",
-                  fontSize: 9,
+                  fontSize: "calc(9px * var(--bs-font-scale, 1))",
                   letterSpacing: "0.15em",
                   padding: "4px 12px",
                   cursor: "pointer",
@@ -221,7 +221,7 @@ export function AccountSection() {
                 border: "1px solid rgba(0,229,255,0.25)",
                 borderRadius: 3,
                 color: "#67e8f9",
-                fontSize: 9,
+                fontSize: "calc(9px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.15em",
                 padding: "4px 12px",
                 cursor: "pointer",
@@ -243,7 +243,7 @@ export function AccountSection() {
           </div>
           {importMsg && (
             <div style={{
-              marginTop: 8, fontSize: 10,
+              marginTop: 8, fontSize: "calc(10px * var(--bs-font-scale, 1))",
               color: importMsg.startsWith("✓") ? "#4ade80" : "#f87171",
             }}>
               {importMsg}
@@ -258,12 +258,12 @@ export function AccountSection() {
 
         {/* Delete all markers */}
         <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(239,68,68,0.12)" }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8 }}>
+          <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8 }}>
             Permanently delete all your markers from BathyScan.
           </div>
           {deleteMarkersUndo ? (
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 10, color: "#fbbf24" }}>{deleteMarkersUndo.message}</span>
+              <span style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#fbbf24" }}>{deleteMarkersUndo.message}</span>
               <button
                 data-testid="undo-delete-markers"
                 onClick={handleUndoDelete}
@@ -272,7 +272,7 @@ export function AccountSection() {
                   border: "1px solid rgba(251,191,36,0.4)",
                   borderRadius: 3,
                   color: "#fbbf24",
-                  fontSize: 9,
+                  fontSize: "calc(9px * var(--bs-font-scale, 1))",
                   letterSpacing: "0.12em",
                   padding: "3px 10px",
                   cursor: "pointer",
@@ -287,7 +287,7 @@ export function AccountSection() {
               data-testid="delete-all-markers-btn"
               onClick={handleDeleteMarkers}
               disabled={deleteAllMarkers.isPending}
-              style={{ ...S.dangerBtn, padding: "4px 12px", fontSize: 9 }}
+              style={{ ...S.dangerBtn, padding: "4px 12px", fontSize: "calc(9px * var(--bs-font-scale, 1))" }}
             >
               {deleteAllMarkers.isPending ? "DELETING…" : "DELETE ALL MY MARKERS"}
             </button>
@@ -296,19 +296,19 @@ export function AccountSection() {
 
         {/* Delete account */}
         <div style={{ padding: "12px 16px" }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8 }}>
+          <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8 }}>
             Permanently delete your account, all markers, trails, and settings.
           </div>
           <button
             data-testid="delete-account-btn"
             onClick={() => void handleDeleteAccount()}
             disabled={deletingAccount}
-            style={{ ...S.dangerBtn, padding: "4px 12px", fontSize: 9 }}
+            style={{ ...S.dangerBtn, padding: "4px 12px", fontSize: "calc(9px * var(--bs-font-scale, 1))" }}
           >
             {deletingAccount ? "DELETING…" : "DELETE ACCOUNT"}
           </button>
           {accountDeleteMsg && (
-            <div style={{ marginTop: 8, fontSize: 10, color: "#f87171" }}>{accountDeleteMsg}</div>
+            <div style={{ marginTop: 8, fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#f87171" }}>{accountDeleteMsg}</div>
           )}
         </div>
       </div>

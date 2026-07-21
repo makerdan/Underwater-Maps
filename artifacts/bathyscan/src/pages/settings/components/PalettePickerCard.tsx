@@ -99,7 +99,7 @@ function DepthBandColorEditor({
   return (
     <div data-testid="depth-band-color-editor" style={{ padding: "8px 16px 4px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <div style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.15em" }}>
+        <div style={{ ...labelStyle, fontSize: "calc(9px * var(--bs-font-scale, 1))", letterSpacing: "0.15em" }}>
           DEPTH BAND COLOURS
         </div>
         <button
@@ -112,7 +112,7 @@ function DepthBandColorEditor({
             border: "1px solid rgba(0,229,255,0.2)",
             borderRadius: 3,
             color: allColorsDefault ? "#64748b" : "#67e8f9",
-            fontSize: 8,
+            fontSize: "calc(8px * var(--bs-font-scale, 1))",
             letterSpacing: "0.12em",
             padding: "2px 8px",
             cursor: allColorsDefault ? "not-allowed" : "pointer",
@@ -144,7 +144,7 @@ function DepthBandColorEditor({
                 borderBottom: "1px solid rgba(0,229,255,0.05)",
               }}
             >
-              <span style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.05em", color: "#cbd5e1", whiteSpace: "nowrap" }}>
+              <span style={{ ...labelStyle, fontSize: "calc(9px * var(--bs-font-scale, 1))", letterSpacing: "0.05em", color: "#cbd5e1", whiteSpace: "nowrap" }}>
                 {bandLabel}
               </span>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -206,7 +206,7 @@ function DepthBandColorEditor({
       {/* Band Boundaries */}
       <div style={{ marginTop: 14, borderTop: "1px solid rgba(0,229,255,0.08)", paddingTop: 10 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.15em" }}>
+          <div style={{ ...labelStyle, fontSize: "calc(9px * var(--bs-font-scale, 1))", letterSpacing: "0.15em" }}>
             BAND BOUNDARIES
           </div>
           <button
@@ -219,7 +219,7 @@ function DepthBandColorEditor({
               border: "1px solid rgba(0,229,255,0.2)",
               borderRadius: 3,
               color: allBoundariesDefault ? "#64748b" : "#67e8f9",
-              fontSize: 8,
+              fontSize: "calc(8px * var(--bs-font-scale, 1))",
               letterSpacing: "0.12em",
               padding: "2px 8px",
               cursor: allBoundariesDefault ? "not-allowed" : "pointer",
@@ -231,9 +231,9 @@ function DepthBandColorEditor({
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <div style={{ display: "grid", gridTemplateColumns: "90px 1fr auto", alignItems: "center", gap: 8, padding: "3px 0" }}>
-            <span style={{ ...labelStyle, fontSize: 9, color: "#64748b", whiteSpace: "nowrap" }}>START (FIXED)</span>
-            <span style={{ fontSize: 9, color: "#64748b", fontFamily: "inherit" }}>{formatDepth(0, { units })}</span>
-            <span style={{ fontSize: 9, color: "#475569", minWidth: 20 }} />
+            <span style={{ ...labelStyle, fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#64748b", whiteSpace: "nowrap" }}>START (FIXED)</span>
+            <span style={{ fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#64748b", fontFamily: "inherit" }}>{formatDepth(0, { units })}</span>
+            <span style={{ fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#475569", minWidth: 20 }} />
           </div>
           {Array.from({ length: 9 }, (_, idx) => {
             const bIdx = idx + 1;
@@ -251,7 +251,7 @@ function DepthBandColorEditor({
                 data-testid={`band-boundary-row-${bIdx}`}
                 style={{ display: "grid", gridTemplateColumns: "90px 1fr auto", alignItems: "center", gap: 8, padding: "3px 0", borderBottom: "1px solid rgba(0,229,255,0.04)" }}
               >
-                <span style={{ ...labelStyle, fontSize: 9, color: "#94a3b8", whiteSpace: "nowrap" }}>BOUNDARY {bIdx}</span>
+                <span style={{ ...labelStyle, fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#94a3b8", whiteSpace: "nowrap" }}>BOUNDARY {bIdx}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <input
                     type="range"
@@ -269,7 +269,7 @@ function DepthBandColorEditor({
                     style={{ ...hexStyle, width: 58, textAlign: "right", color: changed ? "#00e5ff" : "#cbd5e1" }}
                     aria-label={`Band boundary ${bIdx} value in ${inputUnit}`}
                   />
-                  <span style={{ ...labelStyle, fontSize: 9, color: "#475569", minWidth: 14 }}>{inputUnit}</span>
+                  <span style={{ ...labelStyle, fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#475569", minWidth: 14 }}>{inputUnit}</span>
                 </div>
                 <div
                   style={{ width: 6, height: 6, borderRadius: "50%", background: changed ? "#00e5ff" : "transparent", border: changed ? "none" : "1px solid rgba(0,229,255,0.15)", flexShrink: 0 }}
@@ -279,9 +279,9 @@ function DepthBandColorEditor({
             );
           })}
           <div style={{ display: "grid", gridTemplateColumns: "90px 1fr auto", alignItems: "center", gap: 8, padding: "3px 0" }}>
-            <span style={{ ...labelStyle, fontSize: 9, color: "#64748b", whiteSpace: "nowrap" }}>END (FIXED)</span>
-            <span style={{ fontSize: 9, color: "#64748b", fontFamily: "inherit" }}>{formatDepth(OCEAN_MAX_DEPTH_FT * FT_TO_M_SETTINGS, { units })}</span>
-            <span style={{ fontSize: 9, color: "#475569", minWidth: 20 }} />
+            <span style={{ ...labelStyle, fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#64748b", whiteSpace: "nowrap" }}>END (FIXED)</span>
+            <span style={{ fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#64748b", fontFamily: "inherit" }}>{formatDepth(OCEAN_MAX_DEPTH_FT * FT_TO_M_SETTINGS, { units })}</span>
+            <span style={{ fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#475569", minWidth: 20 }} />
           </div>
         </div>
       </div>
@@ -318,7 +318,7 @@ function CustomBandColorEditor({
               data-testid={`palette-custom-band-${i}`}
               style={{ display: "grid", gridTemplateColumns: "90px auto 1fr", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid rgba(0,229,255,0.05)" }}
             >
-              <span style={{ ...labelStyle, fontSize: 9, letterSpacing: "0.05em", color: "#cbd5e1", whiteSpace: "nowrap" }}>
+              <span style={{ ...labelStyle, fontSize: "calc(9px * var(--bs-font-scale, 1))", letterSpacing: "0.05em", color: "#cbd5e1", whiteSpace: "nowrap" }}>
                 {bandLabel}
               </span>
               <input
@@ -388,11 +388,11 @@ export function PalettePickerCard() {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "10px 16px",
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     borderBottom: "1px solid rgba(0,229,255,0.06)",
   };
   const labelStyle: React.CSSProperties = {
-    fontSize: 9,
+    fontSize: "calc(9px * var(--bs-font-scale, 1))",
     letterSpacing: "0.15em",
     color: "#94a3b8",
   };
@@ -407,7 +407,7 @@ export function PalettePickerCard() {
   };
   const hexStyle: React.CSSProperties = {
     fontFamily: "inherit",
-    fontSize: 10,
+    fontSize: "calc(10px * var(--bs-font-scale, 1))",
     color: "#cbd5e1",
     background: "rgba(0,0,0,0.3)",
     border: "1px solid rgba(0,229,255,0.12)",
@@ -453,7 +453,7 @@ export function PalettePickerCard() {
                   cursor: "pointer",
                   fontFamily: "inherit",
                   color: isActive ? "#67e8f9" : "#e2e8f0",
-                  fontSize: 9,
+                  fontSize: "calc(9px * var(--bs-font-scale, 1))",
                   letterSpacing: "0.12em",
                   textTransform: "uppercase",
                 }}
@@ -574,7 +574,7 @@ export function PalettePickerCard() {
             border: "1px solid rgba(0,229,255,0.25)",
             borderRadius: 3,
             color: (!isCustom && isDefault) ? "#64748b" : "#67e8f9",
-            fontSize: 9,
+            fontSize: "calc(9px * var(--bs-font-scale, 1))",
             letterSpacing: "0.15em",
             padding: "4px 12px",
             cursor: (!isCustom && isDefault) ? "not-allowed" : "pointer",

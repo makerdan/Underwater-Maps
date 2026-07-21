@@ -172,7 +172,7 @@ export const RawsStationPopover: React.FC<Props> = ({
         borderRadius: 6,
         zIndex: 50,
         ...MONO,
-        fontSize: 15,
+        fontSize: "calc(15px * var(--bs-font-scale, 1))",
         color: "#e2e8f0",
         pointerEvents: "auto",
       }}
@@ -190,7 +190,7 @@ export const RawsStationPopover: React.FC<Props> = ({
         <div>
           <div
             style={{
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.18em",
               color: "#34d399",
               textTransform: "uppercase",
@@ -200,7 +200,7 @@ export const RawsStationPopover: React.FC<Props> = ({
           </div>
           <div
             style={{
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               color: "#e2e8f0",
               fontWeight: 700,
               marginTop: 1,
@@ -221,7 +221,7 @@ export const RawsStationPopover: React.FC<Props> = ({
             border: "none",
             color: "#94a3b8",
             cursor: "pointer",
-            fontSize: 19.5,
+            fontSize: "calc(19.5px * var(--bs-font-scale, 1))",
             lineHeight: 1,
             padding: "0 2px",
             flexShrink: 0,
@@ -248,24 +248,24 @@ export const RawsStationPopover: React.FC<Props> = ({
               gap: 4,
             }}
           >
-            <span style={{ fontSize: 13.5, letterSpacing: "0.16em", color: "#00e5ff", textTransform: "uppercase" }}>
+            <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.16em", color: "#00e5ff", textTransform: "uppercase" }}>
               TIMELINE
             </span>
-            <span style={{ color: "#00e5ff", fontSize: 13.5 }}>{fmtTimelineTime(timelineTime)}</span>
+            <span style={{ color: "#00e5ff", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>{fmtTimelineTime(timelineTime)}</span>
           </div>
         )}
         {isLoading && (
-          <div style={{ color: "#64748b", fontSize: 13.5, letterSpacing: "0.1em" }}>
+          <div style={{ color: "#64748b", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em" }}>
             Fetching observation…
           </div>
         )}
         {isError && !isLoading && (
-          <div style={{ color: "#ef4444", fontSize: 13.5, letterSpacing: "0.1em" }}>
+          <div style={{ color: "#ef4444", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em" }}>
             Could not reach station
           </div>
         )}
         {!isLoading && !isError && observation === null && (
-          <div style={{ color: "#64748b", fontSize: 13.5, letterSpacing: "0.1em" }}>
+          <div style={{ color: "#64748b", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em" }}>
             No recent observation available
           </div>
         )}
@@ -283,7 +283,7 @@ export const RawsStationPopover: React.FC<Props> = ({
               >
                 <span
                   style={{
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.16em",
                     color: "#64748b",
                     textTransform: "uppercase",
@@ -303,7 +303,7 @@ export const RawsStationPopover: React.FC<Props> = ({
         style={{
           padding: "4px 10px 6px",
           borderTop: "1px solid rgba(52,211,153,0.1)",
-          fontSize: 12,
+          fontSize: "calc(12px * var(--bs-font-scale, 1))",
           letterSpacing: "0.08em",
           color: "#475569",
         }}

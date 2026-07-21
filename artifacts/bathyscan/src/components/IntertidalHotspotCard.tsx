@@ -24,7 +24,7 @@ const CARD: React.CSSProperties = {
   borderRadius: 8,
   fontFamily: "'JetBrains Mono','Fira Code',monospace",
   color: "#cbd5e1",
-  fontSize: 18,
+  fontSize: "calc(18px * var(--bs-font-scale, 1))",
   padding: "14px 16px 12px",
   backdropFilter: "blur(8px)",
   boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
@@ -75,11 +75,11 @@ const ScoreCircle: React.FC<ScoreCircleProps> = ({ score, color, label, active }
           {score}
         </text>
       </svg>
-      <span style={{ fontSize: 13.5, letterSpacing: "0.1em", color: color, textTransform: "uppercase" }}>
+      <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em", color: color, textTransform: "uppercase" }}>
         {label}
       </span>
       {active && (
-        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em" }}>
+        <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em" }}>
           ▲ active
         </span>
       )}
@@ -99,7 +99,7 @@ const SignalChip: React.FC<SignalChipProps> = ({ text, dim }) => (
       border: "1px solid rgba(255,255,255,0.1)",
       borderRadius: 3,
       padding: "1px 7px",
-      fontSize: 15,
+      fontSize: "calc(15px * var(--bs-font-scale, 1))",
       color: dim ? "#64748b" : "#94a3b8",
       whiteSpace: "nowrap",
     }}
@@ -135,13 +135,13 @@ export const IntertidalHotspotCard: React.FC = () => {
       {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 13.5, letterSpacing: "0.14em", color: "#00e5ff", textTransform: "uppercase", marginBottom: 2 }}>
+          <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.14em", color: "#00e5ff", textTransform: "uppercase", marginBottom: 2 }}>
             Intertidal Hotspot
           </div>
-          <div style={{ fontSize: 16.5, color: "#e2e8f0", fontWeight: "bold", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#e2e8f0", fontWeight: "bold", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {shoreZoneClass}
           </div>
-          <div style={{ fontSize: 15, color: "#64748b", marginTop: 1 }}>{sourceName}</div>
+          <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#64748b", marginTop: 1 }}>{sourceName}</div>
         </div>
         <button
           aria-label="Close hotspot card"
@@ -151,7 +151,7 @@ export const IntertidalHotspotCard: React.FC = () => {
             border: "none",
             color: "#64748b",
             cursor: "pointer",
-            fontSize: 24,
+            fontSize: "calc(24px * var(--bs-font-scale, 1))",
             padding: "0 0 0 8px",
             lineHeight: 1,
           }}
@@ -183,7 +183,7 @@ export const IntertidalHotspotCard: React.FC = () => {
           border: `1px solid ${modeBorderColor}`,
           borderRadius: 4,
           padding: "6px 9px",
-          fontSize: 16.5,
+          fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
           color: "#94a3b8",
           marginBottom: 8,
           lineHeight: 1.5,
@@ -202,12 +202,12 @@ export const IntertidalHotspotCard: React.FC = () => {
       )}
 
       {/* Substrate label */}
-      <div style={{ fontSize: 15, color: "#475569", marginTop: 2 }}>
+      <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#475569", marginTop: 2 }}>
         Substrate: {sig.substrate}
       </div>
 
       {/* Active mode label */}
-      <div style={{ fontSize: 13.5, color: modeColor, marginTop: 6, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+      <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: modeColor, marginTop: 6, letterSpacing: "0.1em", textTransform: "uppercase" }}>
         ● {intertidalScoreMode === "tidepool" ? "Tidepool" : "Beachcombing"} mode active
       </div>
     </div>

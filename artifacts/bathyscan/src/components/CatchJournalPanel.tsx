@@ -68,7 +68,7 @@ export const CatchSymbolPicker: React.FC<SymbolPickerProps> = ({ value, onPick }
           borderRadius: 3,
           color: "#e2e8f0",
           padding: "6px 8px",
-          fontSize: 14,
+          fontSize: "calc(14px * var(--bs-font-scale, 1))",
           marginBottom: 6,
           ...MONO,
         }}
@@ -84,7 +84,7 @@ export const CatchSymbolPicker: React.FC<SymbolPickerProps> = ({ value, onPick }
         }}
       >
         {results.length === 0 && (
-          <div style={{ color: "#94a3b8", fontSize: 13, padding: 6 }}>
+          <div style={{ color: "#94a3b8", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: 6 }}>
             No symbols match “{query}”
           </div>
         )}
@@ -93,7 +93,7 @@ export const CatchSymbolPicker: React.FC<SymbolPickerProps> = ({ value, onPick }
           if (inCat.length === 0) return null;
           return (
             <div key={cat} style={{ marginBottom: 6 }}>
-              <div style={{ color: "#64748b", fontSize: 11, letterSpacing: "0.12em", marginBottom: 3 }}>
+              <div style={{ color: "#64748b", fontSize: "calc(11px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", marginBottom: 3 }}>
                 {cat.toUpperCase()}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
@@ -105,7 +105,7 @@ export const CatchSymbolPicker: React.FC<SymbolPickerProps> = ({ value, onPick }
                     data-testid={`catch-symbol-${s.name.replace(/\s+/g, "-").toLowerCase()}`}
                     onClick={() => onPick(s)}
                     style={{
-                      fontSize: 20,
+                      fontSize: "calc(20px * var(--bs-font-scale, 1))",
                       lineHeight: "26px",
                       width: 32,
                       height: 32,
@@ -243,10 +243,10 @@ const CatchEntryForm: React.FC<EntryFormProps> = ({ initial, busy, onSubmit, onC
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 26, minWidth: 32, textAlign: "center" }}>
+        <span style={{ fontSize: "calc(26px * var(--bs-font-scale, 1))", minWidth: 32, textAlign: "center" }}>
           {symbol || "·"}
         </span>
-        <span style={{ color: symbol ? "#e2e8f0" : "#64748b", fontSize: 14 }}>
+        <span style={{ color: symbol ? "#e2e8f0" : "#64748b", fontSize: "calc(14px * var(--bs-font-scale, 1))" }}>
           {symbol ? symbolName || "Selected" : "Pick a symbol below"}
         </span>
       </div>
@@ -274,7 +274,7 @@ const CatchEntryForm: React.FC<EntryFormProps> = ({ initial, busy, onSubmit, onC
           borderRadius: 3,
           color: "#e2e8f0",
           padding: "6px 8px",
-          fontSize: 14,
+          fontSize: "calc(14px * var(--bs-font-scale, 1))",
           resize: "vertical",
           ...MONO,
         }}
@@ -304,7 +304,7 @@ const CatchEntryForm: React.FC<EntryFormProps> = ({ initial, busy, onSubmit, onC
                   border: "none",
                   background: "#dc2626",
                   color: "#fff",
-                  fontSize: 11,
+                  fontSize: "calc(11px * var(--bs-font-scale, 1))",
                   lineHeight: "18px",
                   cursor: "pointer",
                   padding: 0,
@@ -327,7 +327,7 @@ const CatchEntryForm: React.FC<EntryFormProps> = ({ initial, busy, onSubmit, onC
                 borderRadius: 3,
                 background: "transparent",
                 color: "#22d3ee",
-                fontSize: 22,
+                fontSize: "calc(22px * var(--bs-font-scale, 1))",
                 cursor: uploading ? "wait" : "pointer",
               }}
             >
@@ -347,7 +347,7 @@ const CatchEntryForm: React.FC<EntryFormProps> = ({ initial, busy, onSubmit, onC
       </div>
 
       {error && (
-        <div data-testid="catch-form-error" style={{ color: "#fca5a5", fontSize: 13, marginTop: 6 }}>
+        <div data-testid="catch-form-error" style={{ color: "#fca5a5", fontSize: "calc(13px * var(--bs-font-scale, 1))", marginTop: 6 }}>
           {error}
         </div>
       )}
@@ -373,7 +373,7 @@ const CatchEntryForm: React.FC<EntryFormProps> = ({ initial, busy, onSubmit, onC
             borderRadius: 3,
             padding: "6px 0",
             cursor: canSubmit ? "pointer" : "not-allowed",
-            fontSize: 14,
+            fontSize: "calc(14px * var(--bs-font-scale, 1))",
             ...MONO,
           }}
         >
@@ -390,7 +390,7 @@ const CatchEntryForm: React.FC<EntryFormProps> = ({ initial, busy, onSubmit, onC
             borderRadius: 3,
             padding: "6px 12px",
             cursor: "pointer",
-            fontSize: 14,
+            fontSize: "calc(14px * var(--bs-font-scale, 1))",
             ...MONO,
           }}
         >
@@ -486,7 +486,7 @@ export const CatchJournalPanel: React.FC = () => {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ color: "#22d3ee", fontSize: 17, fontWeight: 600 }}>
+        <span style={{ color: "#22d3ee", fontSize: "calc(17px * var(--bs-font-scale, 1))", fontWeight: 600 }}>
           🎣 Catch journal — {marker.label}
         </span>
         <button
@@ -499,7 +499,7 @@ export const CatchJournalPanel: React.FC = () => {
             padding: "0 6px",
             borderRadius: 2,
             cursor: "pointer",
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             ...MONO,
           }}
         >
@@ -520,7 +520,7 @@ export const CatchJournalPanel: React.FC = () => {
             borderRadius: 3,
             padding: "7px 0",
             cursor: "pointer",
-            fontSize: 14,
+            fontSize: "calc(14px * var(--bs-font-scale, 1))",
             marginBottom: 10,
             ...MONO,
           }}
@@ -537,9 +537,9 @@ export const CatchJournalPanel: React.FC = () => {
         />
       )}
 
-      {isLoading && <div style={{ color: "#94a3b8", fontSize: 13 }}>Loading…</div>}
+      {isLoading && <div style={{ color: "#94a3b8", fontSize: "calc(13px * var(--bs-font-scale, 1))" }}>Loading…</div>}
       {!isLoading && entries.length === 0 && !adding && (
-        <div data-testid="catch-empty" style={{ color: "#94a3b8", fontSize: 13, padding: "6px 0" }}>
+        <div data-testid="catch-empty" style={{ color: "#94a3b8", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "6px 0" }}>
           No catches logged at this spot yet.
         </div>
       )}
@@ -566,18 +566,18 @@ export const CatchJournalPanel: React.FC = () => {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 20 }}>
+              <span style={{ fontSize: "calc(20px * var(--bs-font-scale, 1))" }}>
                 {entry.symbol}{" "}
-                <span style={{ fontSize: 13, color: "#94a3b8" }}>
+                <span style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
                   {entry.symbolName}
                 </span>
               </span>
-              <span style={{ fontSize: 11, color: "#64748b" }}>
+              <span style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b" }}>
                 {new Date(entry.createdAt).toLocaleDateString()}
               </span>
             </div>
             {entry.notes && (
-              <div style={{ fontSize: 13, color: "#cbd5e1", marginTop: 4, whiteSpace: "pre-wrap" }}>
+              <div style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginTop: 4, whiteSpace: "pre-wrap" }}>
                 {entry.notes}
               </div>
             )}
@@ -611,7 +611,7 @@ export const CatchJournalPanel: React.FC = () => {
                   border: "none",
                   color: "#22d3ee",
                   cursor: "pointer",
-                  fontSize: 12,
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
                   padding: 0,
                   ...MONO,
                 }}
@@ -624,14 +624,14 @@ export const CatchJournalPanel: React.FC = () => {
                     type="button"
                     data-testid={`catch-delete-confirm-${entry.id}`}
                     onClick={() => deleteMutation.mutate({ id: entry.id })}
-                    style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 12, padding: 0, ...MONO }}
+                    style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: 0, ...MONO }}
                   >
                     Confirm delete
                   </button>
                   <button
                     type="button"
                     onClick={() => setConfirmDeleteId(null)}
-                    style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 12, padding: 0, ...MONO }}
+                    style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: 0, ...MONO }}
                   >
                     Keep
                   </button>
@@ -641,7 +641,7 @@ export const CatchJournalPanel: React.FC = () => {
                   type="button"
                   data-testid={`catch-delete-${entry.id}`}
                   onClick={() => setConfirmDeleteId(entry.id)}
-                  style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 12, padding: 0, ...MONO }}
+                  style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: 0, ...MONO }}
                 >
                   🗑️ Delete
                 </button>

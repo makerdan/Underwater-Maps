@@ -160,7 +160,7 @@ export const ContextMenu: React.FC = () => {
         listStyle: "none",
         zIndex: 9999,
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fontSize: 16.5,
+        fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
         color: "#cbd5e1",
         backdropFilter: "blur(6px)",
         boxShadow: "0 8px 24px rgba(0,0,0,0.5)",

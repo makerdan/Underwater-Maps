@@ -64,12 +64,12 @@ export const MarkerDetailCard: React.FC = () => {
         backdropFilter: "blur(8px)",
         boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
         ...MONO,
-        fontSize: 16.5,
+        fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
         letterSpacing: "0.05em",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ color, fontSize: 21, fontWeight: 600 }}>
+        <span style={{ color, fontSize: "calc(21px * var(--bs-font-scale, 1))", fontWeight: 600 }}>
           {icon} {marker.label}
         </span>
         <button
@@ -81,7 +81,7 @@ export const MarkerDetailCard: React.FC = () => {
             padding: "0 6px",
             borderRadius: 2,
             cursor: "pointer",
-            fontSize: 16.5,
+            fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
             ...MONO,
           }}
           aria-label="Close marker details"
@@ -89,7 +89,7 @@ export const MarkerDetailCard: React.FC = () => {
           ✕
         </button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", fontSize: 15 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>
         <span style={{ color: "#94a3b8" }}>TYPE</span>
         <span style={{ color: "#cbd5e1" }}>{marker.type}</span>
         <span style={{ color: "#94a3b8" }}>LON</span>
@@ -110,7 +110,7 @@ export const MarkerDetailCard: React.FC = () => {
               <span
                 style={{
                   marginLeft: 6,
-                  fontSize: 12,
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
                   letterSpacing: "0.15em",
                   color: sample.live ? "#22d3ee" : "#f59e0b",
                 }}
@@ -136,10 +136,10 @@ export const MarkerDetailCard: React.FC = () => {
             borderTop: `1px solid ${color}33`,
           }}
         >
-          <div style={{ color: "#94a3b8", fontSize: 13.5, letterSpacing: "0.12em", marginBottom: 5 }}>
+          <div style={{ color: "#94a3b8", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", marginBottom: 5 }}>
             CONDITIONS AT DROP
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 12px", fontSize: 13.5 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 12px", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>
             {(() => {
               const c = marker.conditions;
               const rows: [string, string][] = [];
@@ -187,7 +187,7 @@ export const MarkerDetailCard: React.FC = () => {
             borderTop: `1px solid ${color}33`,
           }}
         >
-          <div style={{ color: "#94a3b8", fontSize: 13.5, letterSpacing: "0.12em", marginBottom: 5 }}>NOTES</div>
+          <div style={{ color: "#94a3b8", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", marginBottom: 5 }}>NOTES</div>
           <div
             style={{
               background: "rgba(0,229,255,0.04)",
@@ -196,7 +196,7 @@ export const MarkerDetailCard: React.FC = () => {
               borderRadius: 3,
               padding: "6px 9px",
               color: "#cbd5e1",
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               fontStyle: "italic",
               lineHeight: 1.6,
               whiteSpace: "pre-wrap",

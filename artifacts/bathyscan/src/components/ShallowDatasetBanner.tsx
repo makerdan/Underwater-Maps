@@ -73,7 +73,7 @@ export function ShallowDatasetBanner() {
         <div style={{ flex: 1, minWidth: 200 }}>
           <div
             style={{
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.12em",
               color: "#00e5ff",
               fontWeight: 700,
@@ -81,7 +81,7 @@ export function ShallowDatasetBanner() {
           >
             SHALLOW DATASET DETECTED
           </div>
-          <div style={{ fontSize: 14.5, color: "#e2e8f0", marginTop: 3, lineHeight: 1.45 }}>
+          <div style={{ fontSize: "calc(14.5px * var(--bs-font-scale, 1))", color: "#e2e8f0", marginTop: 3, lineHeight: 1.45 }}>
             This is a shallow dataset. Consider increasing vertical
             exaggeration to {SHALLOW_SUGGESTED_EXAGGERATION}× and switching to{" "}
             {intervalLabel} contours for better detail.
@@ -94,7 +94,7 @@ export function ShallowDatasetBanner() {
             onClick={handleApply}
             style={{
               fontFamily: FONT,
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               padding: "6px 14px",
               background: "rgba(0,229,255,0.12)",
@@ -113,7 +113,7 @@ export function ShallowDatasetBanner() {
             aria-label="Dismiss shallow dataset suggestion"
             style={{
               fontFamily: FONT,
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               padding: "6px 10px",
               background: "transparent",

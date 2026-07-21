@@ -41,7 +41,7 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
-    fontSize: 12,
+    fontSize: "calc(12px * var(--bs-font-scale, 1))",
     letterSpacing: "0.12em",
     textTransform: "uppercase",
     padding: "2px 6px",

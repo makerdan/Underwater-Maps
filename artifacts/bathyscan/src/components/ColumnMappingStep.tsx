@@ -167,7 +167,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
     <div data-testid="column-mapping-step">
       <div
         style={{
-          fontSize: 13.5,
+          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
           color: "#94a3b8",
           letterSpacing: "0.12em",
           marginBottom: 10,
@@ -186,7 +186,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
             border: "1px solid rgba(251,191,36,0.3)",
             borderRadius: 4,
             color: "#fbbf24",
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             marginBottom: 10,
           }}
         >
@@ -200,7 +200,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
           width: "100%",
           borderCollapse: "collapse",
           marginBottom: 14,
-          fontSize: 15,
+          fontSize: "calc(15px * var(--bs-font-scale, 1))",
         }}
       >
         <thead>
@@ -209,7 +209,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
               style={{
                 textAlign: "left",
                 color: "#94a3b8",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.1em",
                 padding: "4px 6px 6px 0",
                 fontWeight: 600,
@@ -221,7 +221,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
               style={{
                 textAlign: "left",
                 color: "#94a3b8",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.1em",
                 padding: "4px 0 6px",
                 fontWeight: 600,
@@ -272,7 +272,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
                         borderRadius: 3,
                         color: "#cbd5e1",
                         fontFamily: "inherit",
-                        fontSize: 15,
+                        fontSize: "calc(15px * var(--bs-font-scale, 1))",
                       }}
                     >
                       {!required && (
@@ -296,7 +296,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
                     {duplicate && (
                       <div
                         data-testid={`col-map-duplicate-warning-${field}`}
-                        style={{ color: "#f87171", fontSize: 13, marginTop: 2 }}
+                        style={{ color: "#f87171", fontSize: "calc(13px * var(--bs-font-scale, 1))", marginTop: 2 }}
                       >
                         Same column assigned to another field.
                       </div>
@@ -315,7 +315,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
             style={{
               cursor: "pointer",
               color: "#e2e8f0",
-              fontSize: 14,
+              fontSize: "calc(14px * var(--bs-font-scale, 1))",
               letterSpacing: "0.1em",
               marginBottom: 6,
             }}
@@ -334,7 +334,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                fontSize: 14,
+                fontSize: "calc(14px * var(--bs-font-scale, 1))",
               }}
             >
               <thead>
@@ -347,7 +347,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
                         textAlign: "left",
                         color: "#94a3b8",
                         fontWeight: 600,
-                        fontSize: 13,
+                        fontSize: "calc(13px * var(--bs-font-scale, 1))",
                         letterSpacing: "0.08em",
                         whiteSpace: "nowrap",
                       }}
@@ -370,7 +370,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
                       textAlign: "left",
                       color: "#94a3b8",
                       fontWeight: 600,
-                      fontSize: 13,
+                      fontSize: "calc(13px * var(--bs-font-scale, 1))",
                       letterSpacing: "0.08em",
                     }}
                   >
@@ -405,7 +405,7 @@ export const ColumnMappingStep: React.FC<Props> = ({
                       <td style={{ padding: "3px 8px", color: "#cbd5e1", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {name ?? ""}
                       </td>
-                      <td style={{ padding: "3px 8px", color: "#475569", fontSize: 13, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <td style={{ padding: "3px 8px", color: "#475569", fontSize: "calc(13px * var(--bs-font-scale, 1))", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {otherFields || "—"}
                       </td>
                     </tr>
@@ -453,7 +453,7 @@ const primaryBtnStyle: React.CSSProperties = {
   color: "#00e5ff",
   cursor: "pointer",
   fontFamily: "inherit",
-  fontSize: 16.5,
+  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
   letterSpacing: "0.1em",
 };
 
@@ -474,6 +474,6 @@ const ghostBtnStyle: React.CSSProperties = {
   color: "#e2e8f0",
   cursor: "pointer",
   fontFamily: "inherit",
-  fontSize: 16.5,
+  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
   letterSpacing: "0.1em",
 };

@@ -51,7 +51,7 @@ export const SubstrateDetailPanel: React.FC = () => {
         maxWidth: 280,
         minWidth: 220,
         fontFamily: MONO,
-        fontSize: 15,
+        fontSize: "calc(15px * var(--bs-font-scale, 1))",
         color: "#e2e8f0",
         zIndex: 60,
         boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
@@ -65,7 +65,7 @@ export const SubstrateDetailPanel: React.FC = () => {
           marginBottom: 6,
         }}
       >
-        <span style={{ color: "#94a3b8", fontSize: 13.5, letterSpacing: "0.2em" }}>
+        <span style={{ color: "#94a3b8", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.2em" }}>
           SUBSTRATE FEATURE
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -78,7 +78,7 @@ export const SubstrateDetailPanel: React.FC = () => {
               border: "none",
               color: "#cbd5e1",
               cursor: "pointer",
-              fontSize: 21,
+              fontSize: "calc(21px * var(--bs-font-scale, 1))",
               lineHeight: 1,
               padding: 0,
             }}
@@ -108,7 +108,7 @@ export const SubstrateDetailPanel: React.FC = () => {
         <span style={{ color: "#cbd5e1" }}>{selectedSubstrate.unitId}</span>
       </div>
       {(selectedSubstrate.szMaterial || selectedSubstrate.szForm) && (
-        <div style={{ marginBottom: 4, color: "#e2e8f0", fontSize: 13.5 }}>
+        <div style={{ marginBottom: 4, color: "#e2e8f0", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>
           {selectedSubstrate.szMaterial ?? "—"}
           {" · "}
           {selectedSubstrate.szForm ?? "—"}
@@ -130,7 +130,7 @@ export const SubstrateDetailPanel: React.FC = () => {
             paddingTop: 6,
             borderTop: "1px solid rgba(148,163,184,0.2)",
             color: "#cbd5e1",
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             lineHeight: 1.45,
           }}
         >
@@ -145,7 +145,7 @@ export const SubstrateDetailPanel: React.FC = () => {
               href={selectedSubstrate.encChart}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: "#7dd3fc", textDecoration: "underline", fontSize: 13.5 }}
+              style={{ color: "#7dd3fc", textDecoration: "underline", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}
             >
               ↗ TPWD lake page
             </a>
@@ -157,7 +157,7 @@ export const SubstrateDetailPanel: React.FC = () => {
           paddingTop: 6,
           borderTop: "1px solid rgba(148,163,184,0.2)",
           color: "#cbd5e1",
-          fontSize: 13.5,
+          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
           lineHeight: 1.4,
         }}
       >
@@ -175,7 +175,7 @@ export const SubstrateDetailPanel: React.FC = () => {
         <div
           style={{
             marginTop: 5,
-            fontSize: 11,
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
             color: "#475569",
             letterSpacing: "0.06em",
           }}

@@ -24,7 +24,7 @@ const SHELL: React.CSSProperties = {
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#cbd5e1",
-  fontSize: 18,
+  fontSize: "calc(18px * var(--bs-font-scale, 1))",
   minWidth: 230,
   maxWidth: 260,
   backdropFilter: "blur(6px)",
@@ -32,7 +32,7 @@ const SHELL: React.CSSProperties = {
 };
 
 const HEADER_TITLE: React.CSSProperties = {
-  fontSize: 16.5,
+  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
   letterSpacing: "0.2em",
   textTransform: "uppercase",
   color: "#00e5ff",
@@ -121,7 +121,7 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
           </span>
           <span
             className="sidebar-section-chevron"
-            style={{ color: "#cbd5e1", fontSize: 33, lineHeight: 1 }}
+            style={{ color: "#cbd5e1", fontSize: "calc(33px * var(--bs-font-scale, 1))", lineHeight: 1 }}
           >
             {collapsed ? "▸" : "▾"}
           </span>

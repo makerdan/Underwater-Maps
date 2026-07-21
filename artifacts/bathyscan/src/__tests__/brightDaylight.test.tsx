@@ -233,8 +233,8 @@ describe("CSS source integrity — body.bs-daylight variable definitions", () =>
     expect(daylightBlock).toContain("font-weight: 500");
   });
 
-  it("sets font-size: 25.5px for outdoor legibility", () => {
-    expect(daylightBlock).toContain("font-size: 25.5px");
+  it("sets a 25.5px base font-size scaled by --bs-font-scale for outdoor legibility", () => {
+    expect(daylightBlock).toContain("font-size: calc(25.5px * var(--bs-font-scale, 1))");
   });
 
   it("daylight --primary (cobalt) differs from :root --primary (cyan)", () => {
@@ -414,13 +414,30 @@ describe("AccessibilityClassesEffect — globalFontSize applies --bs-font-scale"
     expect(document.body.style.fontSize).toBe("");
   });
 
-  it("sets a non-empty font-size for levels other than medium", () => {
+  it("never sets an inline body font-size — CSS derives it from --bs-font-scale", () => {
+    // Body font-size is now driven entirely by CSS calc() rules keyed off
+    // --bs-font-scale (see index.css), so daylight mode and Text Size
+    // compose instead of the inline px override clobbering the CSS rules.
     const nonMedium: FontSizeLevel[] = ["smallest", "small", "large", "x-large", "largest"];
+    render(<AccessibilityClassesEffect />);
     for (const level of nonMedium) {
       act(() => { useSettingsStore.getState().setGlobalFontSize(level); });
+      expect(document.body.style.fontSize).toBe("");
+      expect(Number(document.body.style.getPropertyValue("--bs-font-scale")))
+        .toBeCloseTo(FONT_SIZE_SCALE[level], 3);
     }
-    render(<AccessibilityClassesEffect />);
-    expect(document.body.style.fontSize).not.toBe("");
+  });
+
+  it("representative inline component styles use calc(--bs-font-scale) sizing", async () => {
+    // Settings shared styles are the canonical example of inline fontSize
+    // values that previously hardcoded px and ignored the Text Size setting.
+    const { S } = await import("@/pages/settings/styles");
+    const calcRe = /^calc\(\d+(\.\d+)?px \* var\(--bs-font-scale, 1\)\)$/;
+    expect(S.row.fontSize).toMatch(calcRe);
+    expect(S.sublabel.fontSize).toMatch(calcRe);
+    expect(S.sectionTitle.fontSize).toMatch(calcRe);
+    expect(S.select.fontSize).toMatch(calcRe);
+    expect(S.navItem(false).fontSize).toMatch(calcRe);
   });
 
   it("updates --bs-font-scale reactively when globalFontSize changes after mount", () => {

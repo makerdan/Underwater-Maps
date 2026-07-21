@@ -24,7 +24,7 @@ export const DataUnavailable: React.FC<DataUnavailableProps> = ({
       display: "inline-flex",
       alignItems: "center",
       gap: 6,
-      fontSize: 13.5,
+      fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
       fontFamily: FONT,
       letterSpacing: "0.13em",
       textTransform: "uppercase",

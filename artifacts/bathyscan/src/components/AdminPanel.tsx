@@ -30,7 +30,7 @@ const S = {
 
   title: {
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-    fontSize: 9,
+    fontSize: "calc(9px * var(--bs-font-scale, 1))",
     fontWeight: 700,
     letterSpacing: "0.12em",
     color: "rgba(0,229,255,0.55)",
@@ -47,7 +47,7 @@ const S = {
   } as React.CSSProperties,
 
   cardTitle: {
-    fontSize: 10,
+    fontSize: "calc(10px * var(--bs-font-scale, 1))",
     fontWeight: 700,
     letterSpacing: "0.1em",
     color: "rgba(0,229,255,0.8)",
@@ -63,14 +63,14 @@ const S = {
   } as React.CSSProperties,
 
   label: {
-    fontSize: 9,
+    fontSize: "calc(9px * var(--bs-font-scale, 1))",
     color: "rgba(226,232,240,0.55)",
     letterSpacing: "0.08em",
     textTransform: "uppercase" as const,
   } as React.CSSProperties,
 
   value: {
-    fontSize: 11,
+    fontSize: "calc(11px * var(--bs-font-scale, 1))",
     color: "#e2e8f0",
     fontWeight: 600,
   } as React.CSSProperties,
@@ -80,14 +80,14 @@ const S = {
   } as React.CSSProperties,
 
   note: {
-    fontSize: 8,
+    fontSize: "calc(8px * var(--bs-font-scale, 1))",
     color: "rgba(226,232,240,0.3)",
     marginTop: 10,
     letterSpacing: "0.06em",
   } as React.CSSProperties,
 
   error: {
-    fontSize: 9,
+    fontSize: "calc(9px * var(--bs-font-scale, 1))",
     color: "rgba(255,100,100,0.7)",
     letterSpacing: "0.06em",
   } as React.CSSProperties,

@@ -75,7 +75,7 @@ export const IntertidalBandLegend: React.FC<IntertidalBandLegendProps> = ({
       };
 
   const headerStyle: React.CSSProperties = {
-    fontSize: 9,
+    fontSize: "calc(9px * var(--bs-font-scale, 1))",
     color: "#00e5ff",
     letterSpacing: "0.18em",
     marginBottom: 5,
@@ -89,7 +89,7 @@ export const IntertidalBandLegend: React.FC<IntertidalBandLegendProps> = ({
     alignItems: "center",
     gap: 6,
     marginBottom: 3,
-    fontSize: 10,
+    fontSize: "calc(10px * var(--bs-font-scale, 1))",
     letterSpacing: "0.05em",
   };
 
@@ -138,7 +138,7 @@ export const IntertidalBandLegend: React.FC<IntertidalBandLegendProps> = ({
 
       <div style={{ ...rowStyle, marginBottom: 0 }}>
         <div style={{ width: 10, height: 10, flexShrink: 0 }} />
-        <span style={{ ...labelStyle, fontSize: 9, color: "#475569" }}>
+        <span style={{ ...labelStyle, fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#475569" }}>
           above MLLW
         </span>
       </div>

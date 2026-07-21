@@ -36,7 +36,7 @@ export const SeafloorClassificationPanel: React.FC = () => {
   const activePaintMode = zonePaintMode && zoneOverlayEnabled;
 
   return (
-    <div style={{ fontFamily: MONO, fontSize: 18 }}>
+    <div style={{ fontFamily: MONO, fontSize: "calc(18px * var(--bs-font-scale, 1))" }}>
       {/* ── Sub-mode indicator row ── */}
       <div
         style={{
@@ -49,7 +49,7 @@ export const SeafloorClassificationPanel: React.FC = () => {
       >
         <span
           style={{
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             letterSpacing: "0.15em",
             textTransform: "uppercase",
             color: !activePaintMode ? "#00e5ff" : "#475569",
@@ -60,10 +60,10 @@ export const SeafloorClassificationPanel: React.FC = () => {
         >
           VIEW
         </span>
-        <span style={{ fontSize: 13.5, color: "#334155", letterSpacing: "0.1em" }}>|</span>
+        <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#334155", letterSpacing: "0.1em" }}>|</span>
         <span
           style={{
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             letterSpacing: "0.15em",
             textTransform: "uppercase",
             color: activePaintMode ? "#fb923c" : "#475569",
@@ -78,7 +78,7 @@ export const SeafloorClassificationPanel: React.FC = () => {
           <span
             style={{
               marginLeft: "auto",
-              fontSize: 12,
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
               letterSpacing: "0.12em",
               color: "#fb923c",
               background: "rgba(251,146,60,0.1)",
@@ -96,7 +96,7 @@ export const SeafloorClassificationPanel: React.FC = () => {
       <div style={{ padding: "8px 12px", borderBottom: "1px dashed rgba(0,229,255,0.10)" }}>
         <div
           style={{
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             letterSpacing: "0.15em",
             color: "#94a3b8",
             textTransform: "uppercase",
@@ -134,7 +134,7 @@ export const SeafloorClassificationPanel: React.FC = () => {
                   display: "block",
                   textAlign: "center",
                   lineHeight: "10px",
-                  fontSize: 12,
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
                   color: "#00e5ff",
                 }}
               >
@@ -144,7 +144,7 @@ export const SeafloorClassificationPanel: React.FC = () => {
           </span>
           <span
             style={{
-              fontSize: 16.5,
+              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
               color: substrateEnabled ? "#00e5ff" : "#cbd5e1",
               transition: "color 0.15s",
             }}
@@ -155,7 +155,7 @@ export const SeafloorClassificationPanel: React.FC = () => {
         <div
           style={{
             marginTop: 4,
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             color: "#475569",
             letterSpacing: "0.04em",
             lineHeight: 1.45,
@@ -180,7 +180,7 @@ export const SeafloorClassificationPanel: React.FC = () => {
         >
           <div
             style={{
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               color: bothActive ? "#00e5ff" : "#64748b",
               letterSpacing: "0.06em",
               lineHeight: 1.5,

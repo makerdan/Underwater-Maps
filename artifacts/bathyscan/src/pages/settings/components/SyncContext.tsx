@@ -83,7 +83,7 @@ export function SectionSaveButton({
       {status === "error" && errMsg && (
         <span
           data-testid={`save-section-${sectionKey}-error`}
-          style={{ fontSize: 9, color: "#f87171", letterSpacing: "0.1em", userSelect: "text" }}
+          style={{ fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#f87171", letterSpacing: "0.1em", userSelect: "text" }}
         >
           {errMsg}
         </span>
@@ -109,7 +109,7 @@ export function SectionSaveButton({
           }`,
           borderRadius: 3,
           color: isErrorStyle ? "#f87171" : isSavedStyle ? "#4ade80" : "#67e8f9",
-          fontSize: 9,
+          fontSize: "calc(9px * var(--bs-font-scale, 1))",
           letterSpacing: "0.15em",
           padding: "3px 10px",
           cursor: disabled ? "default" : "pointer",
@@ -148,7 +148,7 @@ export function SectionActionsRow({
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
             color: "#cbd5e1",
-            fontSize: 9,
+            fontSize: "calc(9px * var(--bs-font-scale, 1))",
             letterSpacing: "0.15em",
             padding: "3px 10px",
             cursor: "pointer",

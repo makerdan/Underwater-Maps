@@ -51,7 +51,7 @@ const FORM_SECTION: React.CSSProperties = {
 
 const FIELD_LABEL: React.CSSProperties = {
   color: "#94a3b8",
-  fontSize: 12,
+  fontSize: "calc(12px * var(--bs-font-scale, 1))",
   letterSpacing: "0.15em",
   textTransform: "uppercase",
   fontWeight: 600,
@@ -63,7 +63,7 @@ const INPUT_STYLE: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.25)",
   borderRadius: 3,
   color: "#e2e8f0",
-  fontSize: 14,
+  fontSize: "calc(14px * var(--bs-font-scale, 1))",
   padding: "3px 7px",
   width: "100%",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -72,7 +72,7 @@ const INPUT_STYLE: React.CSSProperties = {
 
 const INPUT_UNIT: React.CSSProperties = {
   color: "#64748b",
-  fontSize: 12,
+  fontSize: "calc(12px * var(--bs-font-scale, 1))",
   marginLeft: 4,
   whiteSpace: "nowrap",
 };
@@ -90,7 +90,7 @@ const compassBtn = (active: boolean): React.CSSProperties => ({
   borderRadius: 3,
   color: active ? "#00e5ff" : "#94a3b8",
   cursor: "pointer",
-  fontSize: 11,
+  fontSize: "calc(11px * var(--bs-font-scale, 1))",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   fontWeight: active ? 700 : 400,
   padding: "3px 0",
@@ -116,7 +116,7 @@ const PREVIEW_BOX: React.CSSProperties = {
 
 const PREVIEW_LABEL: React.CSSProperties = {
   color: "#64748b",
-  fontSize: 11,
+  fontSize: "calc(11px * var(--bs-font-scale, 1))",
   letterSpacing: "0.12em",
   textTransform: "uppercase",
   fontWeight: 600,
@@ -125,7 +125,7 @@ const PREVIEW_LABEL: React.CSSProperties = {
 
 const PREVIEW_VALUE: React.CSSProperties = {
   color: "#7dd3fc",
-  fontSize: 12,
+  fontSize: "calc(12px * var(--bs-font-scale, 1))",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
 };
 
@@ -142,7 +142,7 @@ const APPLY_BTN: React.CSSProperties = {
   borderRadius: 3,
   color: "#00e5ff",
   cursor: "pointer",
-  fontSize: 12,
+  fontSize: "calc(12px * var(--bs-font-scale, 1))",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   letterSpacing: "0.1em",
   padding: "4px 10px",
@@ -162,7 +162,7 @@ const sourceBtn = (active: boolean): React.CSSProperties => ({
   borderRadius: 3,
   color: active ? "#00e5ff" : "#64748b",
   cursor: "pointer",
-  fontSize: 11,
+  fontSize: "calc(11px * var(--bs-font-scale, 1))",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   fontWeight: active ? 700 : 400,
   letterSpacing: "0.1em",
@@ -326,7 +326,7 @@ export const ManualConditionsForm: React.FC<ManualConditionsFormProps> = ({
   }
 
   return (
-    <div data-testid="manual-conditions-form" style={{ fontSize: 13 }}>
+    <div data-testid="manual-conditions-form" style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))" }}>
       {/* Source toggle — only shown when real data is also available */}
       {realDataAvailable && onSourceChange && (
         <div style={SOURCE_TOGGLE_ROW} data-testid="manual-conditions-source-toggle">
@@ -484,7 +484,7 @@ export const ManualConditionsForm: React.FC<ManualConditionsFormProps> = ({
             />
             <label
               htmlFor={`manual-remember-${datasetId}`}
-              style={{ color: "#94a3b8", fontSize: 12, cursor: "pointer" }}
+              style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", cursor: "pointer" }}
             >
               Remember for this lake
             </label>

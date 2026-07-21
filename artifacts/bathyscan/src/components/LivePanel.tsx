@@ -57,7 +57,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 12.5,
+  fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
   letterSpacing: "0.2em",
   color: "#475569",
   textTransform: "uppercase",
@@ -142,7 +142,7 @@ export const LivePanel: React.FC = () => {
     background: active ? "rgba(52,211,153,0.14)" : "rgba(0,229,255,0.07)",
     color: enabled ? (active ? "#34d399" : "#00e5ff") : "#475569",
     fontFamily: MONO,
-    fontSize: 15,
+    fontSize: "calc(15px * var(--bs-font-scale, 1))",
     fontWeight: 700,
     letterSpacing: "0.16em",
     textTransform: "uppercase",
@@ -175,7 +175,7 @@ export const LivePanel: React.FC = () => {
             background: realisticMode ? "rgba(34,211,238,0.14)" : "rgba(0,229,255,0.07)",
             color: realisticMode ? "#22d3ee" : "#00e5ff",
             fontFamily: MONO,
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             fontWeight: 700,
             letterSpacing: "0.16em",
             textTransform: "uppercase",
@@ -209,14 +209,14 @@ export const LivePanel: React.FC = () => {
           />
           <span
             data-testid="live-gps-status-text"
-            style={{ fontSize: 16.5, fontWeight: 700, letterSpacing: "0.14em", color: statusColor }}
+            style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", fontWeight: 700, letterSpacing: "0.14em", color: statusColor }}
           >
             {statusText}
           </span>
           {gpsActive && gpsPosition && (
             <span
               data-testid="live-gps-accuracy"
-              style={{ fontSize: 13.5, color: "#94a3b8", letterSpacing: "0.1em" }}
+              style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", letterSpacing: "0.1em" }}
             >
               ±{Math.round(gpsPosition.accuracy)} m
             </span>
@@ -225,7 +225,7 @@ export const LivePanel: React.FC = () => {
         {gpsError && (
           <div
             data-testid="live-gps-error"
-            style={{ fontSize: 13, color: "#f87171", lineHeight: 1.5, letterSpacing: "0.06em" }}
+            style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#f87171", lineHeight: 1.5, letterSpacing: "0.06em" }}
           >
             {gpsError}
           </div>
@@ -238,7 +238,7 @@ export const LivePanel: React.FC = () => {
         <div
           data-testid="live-depth-value"
           style={{
-            fontSize: 25,
+            fontSize: "calc(25px * var(--bs-font-scale, 1))",
             fontWeight: 700,
             letterSpacing: "0.08em",
             color: depthBelowM !== null ? "#00e5ff" : "#475569",
@@ -248,12 +248,12 @@ export const LivePanel: React.FC = () => {
           {depthBelowM !== null ? formatDepth(depthBelowM, { units }) : "—"}
         </div>
         {gpsActive && !gpsInBounds && (
-          <div style={{ fontSize: 12.5, color: "#64748b", letterSpacing: "0.1em" }}>
+          <div style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#64748b", letterSpacing: "0.1em" }}>
             Outside loaded dataset area
           </div>
         )}
         {!gpsActive && (
-          <div style={{ fontSize: 12.5, color: "#64748b", letterSpacing: "0.1em" }}>
+          <div style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#64748b", letterSpacing: "0.1em" }}>
             Waiting for GPS fix…
           </div>
         )}
@@ -277,7 +277,7 @@ export const LivePanel: React.FC = () => {
           <span
             data-testid="live-trail-status-text"
             style={{
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               fontWeight: 700,
               letterSpacing: "0.14em",
               color: recording ? "#ef4444" : "#64748b",
@@ -287,7 +287,7 @@ export const LivePanel: React.FC = () => {
           </span>
           <span
             data-testid="live-trail-point-count"
-            style={{ fontSize: 13.5, color: "#94a3b8", letterSpacing: "0.1em" }}
+            style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", letterSpacing: "0.1em" }}
           >
             {pointCount} pts
           </span>
@@ -311,7 +311,7 @@ export const LivePanel: React.FC = () => {
             background: recording ? "rgba(239,68,68,0.12)" : "rgba(52,211,153,0.10)",
             color: recording ? "#ef4444" : "#34d399",
             fontFamily: MONO,
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             fontWeight: 700,
             letterSpacing: "0.16em",
             textTransform: "uppercase",
@@ -324,7 +324,7 @@ export const LivePanel: React.FC = () => {
         </button>
         {/* Sampling interval control */}
         <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12.5, color: "#64748b", letterSpacing: "0.1em" }}>
+          <span style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#64748b", letterSpacing: "0.1em" }}>
             Interval
           </span>
           <div
@@ -345,7 +345,7 @@ export const LivePanel: React.FC = () => {
                     border: `1px solid ${selected ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.1)"}`,
                     borderRadius: 3,
                     color: selected ? "#00e5ff" : "#94a3b8",
-                    fontSize: 15,
+                    fontSize: "calc(15px * var(--bs-font-scale, 1))",
                     padding: "10px 12px",
                     minHeight: 44,
                     minWidth: 48,
@@ -380,7 +380,7 @@ export const LivePanel: React.FC = () => {
       {gpsFollowMode && followPausedByInteraction && (
         <div
           data-testid="live-follow-paused-hint"
-          style={{ fontSize: 12, color: "#94a3b8", fontFamily: MONO, marginTop: -4 }}
+          style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", fontFamily: MONO, marginTop: -4 }}
         >
           You have the camera — follow resumes after {followResumeDelaySec}s of
           inactivity.

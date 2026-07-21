@@ -149,7 +149,7 @@ export const WeatherStationPopover: React.FC<Props> = ({
         borderRadius: 6,
         zIndex: 50,
         ...MONO,
-        fontSize: 15,
+        fontSize: "calc(15px * var(--bs-font-scale, 1))",
         color: "#cbd5e1",
         backdropFilter: "blur(8px)",
         boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
@@ -168,7 +168,7 @@ export const WeatherStationPopover: React.FC<Props> = ({
       >
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ color: "#00e5ff", fontWeight: 700, fontSize: 16.5, letterSpacing: "0.1em" }}>
+            <span style={{ color: "#00e5ff", fontWeight: 700, fontSize: "calc(16.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em" }}>
               {station.id}
             </span>
             {stale && (
@@ -178,7 +178,7 @@ export const WeatherStationPopover: React.FC<Props> = ({
                   background: "rgba(251,191,36,0.15)",
                   border: "1px solid rgba(251,191,36,0.5)",
                   color: "#fbbf24",
-                  fontSize: 12,
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
                   fontWeight: 700,
                   letterSpacing: "0.12em",
                   padding: "1px 4px",
@@ -194,7 +194,7 @@ export const WeatherStationPopover: React.FC<Props> = ({
           <div
             style={{
               color: "#94a3b8",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               marginTop: 2,
               maxWidth: 170,
               overflow: "hidden",
@@ -213,7 +213,7 @@ export const WeatherStationPopover: React.FC<Props> = ({
             border: "none",
             color: "#64748b",
             cursor: "pointer",
-            fontSize: 21,
+            fontSize: "calc(21px * var(--bs-font-scale, 1))",
             lineHeight: 1,
             padding: "2px 4px",
             flexShrink: 0,
@@ -236,7 +236,7 @@ export const WeatherStationPopover: React.FC<Props> = ({
             justifyContent: "space-between",
             alignItems: "center",
             gap: 8,
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             letterSpacing: "0.08em",
           }}
         >
@@ -273,7 +273,7 @@ export const WeatherStationPopover: React.FC<Props> = ({
             rel="noopener noreferrer"
             style={{
               color: "#7dd3fc",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               textDecoration: "none",
               letterSpacing: "0.08em",
               display: "flex",

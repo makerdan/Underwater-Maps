@@ -52,7 +52,7 @@ const CrosshairKeyHint: React.FC = () => {
         borderRadius: 3,
         color: "#00e5ff",
         padding: "0 4px",
-        fontSize: 12,
+        fontSize: "calc(12px * var(--bs-font-scale, 1))",
       }}
       title={`Press ${label} to open the action menu at the crosshair`}
     >
@@ -95,7 +95,7 @@ export const HUD: React.FC = () => {
   // Follow toggle) so they stay tappable with wet or gloved hands.
   const gloveUi = sidebarMode === "live";
   const gloveButtonStyle: React.CSSProperties = gloveUi
-    ? { minWidth: 64, minHeight: 56, fontSize: 17, padding: "10px 16px" }
+    ? { minWidth: 64, minHeight: 56, fontSize: "calc(17px * var(--bs-font-scale, 1))", padding: "10px 16px" }
     : {};
 
   const showCrosshairGps = useSettingsStore((s) => s.showCrosshairGps);
@@ -241,7 +241,7 @@ export const HUD: React.FC = () => {
             border: "1px solid rgba(239,68,68,0.5)",
             borderRadius: 4,
             padding: "3px 9px",
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             letterSpacing: "0.2em",
             color: "#f87171",
             fontWeight: 700,
@@ -259,7 +259,7 @@ export const HUD: React.FC = () => {
             position: "absolute",
             top: 32,
             right: 8,
-            fontSize: 12,
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
             letterSpacing: "0.12em",
             color: "#cbd5e1",
           }}
@@ -285,7 +285,7 @@ export const HUD: React.FC = () => {
         }}
       >
         {showHeading && (
-          <div style={{ ...PANEL, fontSize: 16.5 }}>
+          <div style={{ ...PANEL, fontSize: "calc(16.5px * var(--bs-font-scale, 1))" }}>
             <span style={{ color: "#94a3b8" }}>HDG </span>
             <span style={CYAN}>{Math.round(heading).toString().padStart(3, "0")}°</span>
           </div>
@@ -328,7 +328,7 @@ export const HUD: React.FC = () => {
               color: "#00e5ff",
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
               letterSpacing: "0.08em",
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               padding: "3px 8px",
               cursor: "pointer",
             }}
@@ -347,7 +347,7 @@ export const HUD: React.FC = () => {
               data-testid="synthetic-data-badge"
               style={{
                 ...PANEL,
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 border: "1px solid rgba(245,158,11,0.5)",
                 background: "rgba(245,158,11,0.10)",
                 color: "#f59e0b",
@@ -370,7 +370,7 @@ export const HUD: React.FC = () => {
               data-testid="synthetic-data-badge"
               style={{
                 ...PANEL,
-                fontSize: 18,
+                fontSize: "calc(18px * var(--bs-font-scale, 1))",
                 border: "1px solid rgba(245,158,11,0.5)",
                 background: "rgba(245,158,11,0.10)",
                 color: "#f59e0b",
@@ -392,7 +392,7 @@ export const HUD: React.FC = () => {
               data-testid="raw-bathymetry-badge"
               style={{
                 ...PANEL,
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 border: "1px solid rgba(148,163,184,0.5)",
                 background: "rgba(148,163,184,0.10)",
                 color: "#cbd5e1",
@@ -413,7 +413,7 @@ export const HUD: React.FC = () => {
               data-testid="hud-manual-conditions-badge"
               style={{
                 ...PANEL,
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 border: "1px solid rgba(34,211,238,0.4)",
                 background: "rgba(34,211,238,0.07)",
                 color: "#22d3ee",
@@ -432,7 +432,7 @@ export const HUD: React.FC = () => {
             data-testid="hud-drift-mode-badge"
             style={{
               ...PANEL,
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               border: `1px solid ${driftMode === "trolling" ? "rgba(251,191,36,0.5)" : "rgba(0,229,255,0.3)"}`,
               background: driftMode === "trolling" ? "rgba(251,191,36,0.08)" : "rgba(0,229,255,0.06)",
               color: driftMode === "trolling" ? "#fbbf24" : "#00e5ff",
@@ -471,7 +471,7 @@ export const HUD: React.FC = () => {
                 border: "1px solid rgba(59,130,246,0.4)",
                 color: "#60a5fa",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 padding: "4px 10px",
                 borderRadius: 4,
                 cursor: "pointer",
@@ -513,7 +513,7 @@ export const HUD: React.FC = () => {
                   : "1px solid rgba(59,130,246,0.30)",
                 color: gpsInBounds ? (gpsFollowMode ? "#93c5fd" : "#60a5fa") : "#475569",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 padding: "4px 10px",
                 borderRadius: 4,
                 cursor: gpsInBounds ? "pointer" : "not-allowed",
@@ -583,7 +583,7 @@ export const HUD: React.FC = () => {
             <div
               style={{
                 color: "#94a3b8",
-                fontSize: 13.5,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.2em",
                 marginBottom: 2,
                 display: "flex",
@@ -639,7 +639,7 @@ export const HUD: React.FC = () => {
                 </div>
                 <div style={{ marginTop: 2 }}>
                   <span style={{ color: "#94a3b8" }}>▼ </span>
-                  <span style={{ ...CYAN, fontSize: 19.5, fontWeight: 700 }}>
+                  <span style={{ ...CYAN, fontSize: "calc(19.5px * var(--bs-font-scale, 1))", fontWeight: 700 }}>
                     {fmtDepth(crosshairGps.depth)}
                   </span>
                 </div>
@@ -659,7 +659,7 @@ export const HUD: React.FC = () => {
                     profileDepth,
                   );
                   return (
-                    <div style={{ marginTop: 2, fontSize: 15 }}>
+                    <div style={{ marginTop: 2, fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>
                       <button
                         data-testid="hud-water-temp"
                         type="button"
@@ -687,7 +687,7 @@ export const HUD: React.FC = () => {
                           data-testid="hud-water-temp-source"
                           style={{
                             marginLeft: 4,
-                            fontSize: 12,
+                            fontSize: "calc(12px * var(--bs-font-scale, 1))",
                             letterSpacing: "0.15em",
                             color: sample.live ? "#22d3ee" : "#f59e0b",
                             background: sample.live ? "rgba(0,229,255,0.08)" : "rgba(245,158,11,0.10)",
@@ -703,7 +703,7 @@ export const HUD: React.FC = () => {
                           style={{
                             marginLeft: 4,
                             color: "#cbd5e1",
-                            fontSize: 27,
+                            fontSize: "calc(27px * var(--bs-font-scale, 1))",
                             lineHeight: 1,
                           }}
                         >
@@ -763,7 +763,7 @@ export const HUD: React.FC = () => {
               transform: "translateX(-50%)",
               pointerEvents: "auto",
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               letterSpacing: "0.18em",
               padding: "4px 10px",
               borderRadius: 3,
@@ -789,7 +789,7 @@ export const HUD: React.FC = () => {
           readout was removed entirely. */}
       <div className="absolute bottom-3 left-3 space-y-1">
         {lastClickedGps && (
-          <div style={{ ...PANEL, fontSize: 15 }}>
+          <div style={{ ...PANEL, fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>
             <span style={{ color: "#94a3b8" }}>PIN </span>
             <span style={{ color: "#22d3ee" }}>
               {fmtCoord(lastClickedGps.lon)}, {fmtCoord(lastClickedGps.lat)}

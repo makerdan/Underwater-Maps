@@ -124,12 +124,12 @@ function DatumOverrideRow({
             border: "1px solid rgba(0,229,255,0.25)",
             borderRadius: 3,
             color: overrideValue !== null ? "#00e5ff" : "#e2e8f0",
-            fontSize: 11,
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
             padding: "4px 6px",
             textAlign: "right",
           }}
         />
-        <span style={{ color: "#64748b", fontSize: 10 }}>ft</span>
+        <span style={{ color: "#64748b", fontSize: "calc(10px * var(--bs-font-scale, 1))" }}>ft</span>
       </div>
     </div>
   );
@@ -194,10 +194,10 @@ export function VisualsSection() {
         }}
       >
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 9, letterSpacing: "0.2em", color: "var(--bs-s-card-header-fg, #cbd5e1)", fontWeight: 700, marginBottom: 2 }}>
+          <div style={{ fontSize: "calc(9px * var(--bs-font-scale, 1))", letterSpacing: "0.2em", color: "var(--bs-s-card-header-fg, #cbd5e1)", fontWeight: 700, marginBottom: 2 }}>
             QUALITY PRESET
           </div>
-          <div style={{ fontSize: 9, color: "#64748b", letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#64748b", letterSpacing: "0.05em" }}>
             Master override — adjusts all visual controls below at once
           </div>
         </div>
@@ -324,7 +324,7 @@ export function VisualsSection() {
               data-testid="antialiasing-reload-hint"
               style={{
                 display: "inline-block",
-                fontSize: 9,
+                fontSize: "calc(9px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.06em",
                 color: "#f59e0b",
                 background: "rgba(245,158,11,0.08)",

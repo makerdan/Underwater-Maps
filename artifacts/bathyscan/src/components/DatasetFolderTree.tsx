@@ -1338,7 +1338,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         {/* Header — "✕ Cancel" when items selected, "+ folder" otherwise */}
         <div
           className="px-3 py-1 flex items-center justify-end gap-2"
-          style={{ fontSize: 13.5, letterSpacing: "0.12em", color: "#64748b" }}
+          style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", color: "#64748b" }}
         >
           {selectionMode ? (
             <button
@@ -1349,7 +1349,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
                 background: "transparent",
                 border: "none",
                 color: "#94a3b8",
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 padding: "0 4px",
                 cursor: "pointer",
                 lineHeight: 1.6,
@@ -1368,7 +1368,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
                 background: "transparent",
                 border: "1px solid rgba(0,229,255,0.3)",
                 color: "#00e5ff",
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 padding: "0 6px",
                 borderRadius: 2,
                 cursor: postFolder.isPending ? "not-allowed" : "pointer",
@@ -1390,7 +1390,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
               background: "rgba(239,68,68,0.08)",
               border: "1px solid rgba(239,68,68,0.35)",
               borderRadius: 3,
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               color: "#fca5a5",
               display: "flex",
               justifyContent: "space-between",
@@ -1405,7 +1405,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
                 border: "none",
                 color: "#cbd5e1",
                 cursor: "pointer",
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
               }}
             >
               ×
@@ -1420,7 +1420,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
         {tree.rootDatasets.map((d) => renderDatasetRow(d, 0))}
 
         {tree.roots.length === 0 && tree.rootDatasets.length === 0 && (
-          <div style={{ fontSize: 13.5, color: "#64748b", padding: "4px 12px 8px" }}>
+          <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#64748b", padding: "4px 12px 8px" }}>
             No saved terrains yet
           </div>
         )}
@@ -1585,7 +1585,7 @@ const FolderRow: React.FC<FolderRowProps> = ({
         gap: 6,
         padding: `4px ${ROW_PADDING_X}px 4px ${ROW_PADDING_X + indent}px`,
         cursor: pendingDelete ? "default" : deleting ? "wait" : "pointer",
-        fontSize: 16.5,
+        fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
         color: "#cbd5e1",
         background: isSelected
           ? "rgba(0,229,255,0.08)"
@@ -1612,14 +1612,14 @@ const FolderRow: React.FC<FolderRowProps> = ({
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             color: "#00e5ff",
           }}
         >
           {isSelected ? "✓" : ""}
         </span>
       ) : (
-        <span style={{ color: "#cbd5e1", width: 20, textAlign: "center", fontSize: 30, lineHeight: 1 }}>
+        <span style={{ color: "#cbd5e1", width: 20, textAlign: "center", fontSize: "calc(30px * var(--bs-font-scale, 1))", lineHeight: 1 }}>
           {isExpanded ? "▾" : "▸"}
         </span>
       )}
@@ -1781,7 +1781,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             color: "#00e5ff",
             cursor: deleting ? "not-allowed" : "pointer",
           }}
@@ -1793,7 +1793,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
         ) : (
           <span
             style={{
-              fontSize: 16.5,
+              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
               fontWeight: active && !selectionMode ? 700 : 400,
               color: active && !selectionMode ? "#00e5ff" : "#e2e8f0",
               textShadow: active && !selectionMode ? "0 0 6px rgba(0,229,255,0.3)" : "none",
@@ -1821,7 +1821,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
       </div>
       <div
         style={{
-          fontSize: 13.5,
+          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
           color: "#64748b",
           marginTop: 1,
           letterSpacing: "0.05em",
@@ -1846,7 +1846,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
             alignItems: "center",
             gap: 4,
             padding: "2px 7px",
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             fontWeight: 700,
             letterSpacing: "0.08em",
             color: "#f59e0b",
@@ -1857,7 +1857,7 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
             textTransform: "uppercase",
           }}
         >
-          <span style={{ fontSize: 15 }}>⊕</span>
+          <span style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>⊕</span>
           Georeference
         </button>
       )}
@@ -1902,7 +1902,7 @@ const RowDeleteButton: React.FC<{
         border: "none",
         cursor: "pointer",
         color: hover ? "#f87171" : "#94a3b8",
-        fontSize: 18,
+        fontSize: "calc(18px * var(--bs-font-scale, 1))",
         lineHeight: 1,
         padding: 0,
         borderRadius: 2,
@@ -1927,7 +1927,7 @@ const RootDropZone: React.FC<{ enabled: boolean }> = ({ enabled }) => {
         border: `1px dashed ${isOver ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.2)"}`,
         borderRadius: 3,
         textAlign: "center",
-        fontSize: 13.5,
+        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
         color: isOver ? "#00e5ff" : "#94a3b8",
         background: isOver ? "rgba(0,229,255,0.06)" : "transparent",
       }}
@@ -2044,13 +2044,13 @@ const MoveToDialog: React.FC<{
           maxWidth: "90vw",
           color: "#cbd5e1",
           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-          fontSize: 18,
+          fontSize: "calc(18px * var(--bs-font-scale, 1))",
         }}
       >
         <div style={{ fontWeight: 700, marginBottom: 4, color: "#00e5ff" }}>
           {label ?? `Move "${target.name}" to…`}
         </div>
-        <div style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 10 }}>
+        <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginBottom: 10 }}>
           Choose a destination folder
         </div>
         <div
@@ -2091,7 +2091,7 @@ const MoveToDialog: React.FC<{
                 title={opt.disabledReason}
                 style={{
                   padding: `4px ${8 + opt.depth * 12}px`,
-                  fontSize: 16.5,
+                  fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
                   cursor: opt.disabled ? "not-allowed" : "pointer",
                   color: opt.disabled
                     ? "#94a3b8"
@@ -2120,7 +2120,7 @@ const MoveToDialog: React.FC<{
                   {opt.label}
                 </span>
                 {opt.disabled && opt.disabledReason && (
-                  <span style={{ fontSize: 13.5, color: "#94a3b8" }}>
+                  <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
                     {opt.disabledReason}
                   </span>
                 )}
@@ -2141,7 +2141,7 @@ const MoveToDialog: React.FC<{
               borderRadius: 3,
               cursor: isPending ? "not-allowed" : "pointer",
               opacity: isPending ? 0.5 : 1,
-              fontSize: 16.5,
+              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
             }}
           >
             Cancel
@@ -2166,7 +2166,7 @@ const MoveToDialog: React.FC<{
                   ? "pointer"
                   : "not-allowed",
               opacity: isPending ? 0.7 : 1,
-              fontSize: 16.5,
+              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
@@ -2248,7 +2248,7 @@ const ConfirmDialog: React.FC<{
           maxWidth: 340,
           color: "#cbd5e1",
           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-          fontSize: 18,
+          fontSize: "calc(18px * var(--bs-font-scale, 1))",
         }}
       >
         <div
@@ -2257,7 +2257,7 @@ const ConfirmDialog: React.FC<{
         >
           {title}
         </div>
-        <div style={{ fontSize: 16.5, color: "#e2e8f0", marginBottom: 14 }}>{message}</div>
+        <div style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#e2e8f0", marginBottom: 14 }}>{message}</div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button
             ref={cancelRef}
@@ -2272,7 +2272,7 @@ const ConfirmDialog: React.FC<{
               borderRadius: 3,
               cursor: isPending ? "not-allowed" : "pointer",
               opacity: isPending ? 0.5 : 1,
-              fontSize: 16.5,
+              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
             }}
           >
             Cancel
@@ -2291,7 +2291,7 @@ const ConfirmDialog: React.FC<{
               borderRadius: 3,
               cursor: isPending ? "wait" : "pointer",
               opacity: isPending ? 0.7 : 1,
-              fontSize: 16.5,
+              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
               display: "inline-flex",
               alignItems: "center",
               gap: 6,

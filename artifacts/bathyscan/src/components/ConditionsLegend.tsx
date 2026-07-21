@@ -27,7 +27,7 @@ const PANEL: React.CSSProperties = {
   borderRadius: 4,
   padding: "8px 10px",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-  fontSize: 15,
+  fontSize: "calc(15px * var(--bs-font-scale, 1))",
   color: "#e2e8f0",
   letterSpacing: "0.05em",
   minWidth: 210,
@@ -39,7 +39,7 @@ const PANEL: React.CSSProperties = {
 
 const LABEL: React.CSSProperties = {
   color: "#94a3b8",
-  fontSize: 12,
+  fontSize: "calc(12px * var(--bs-font-scale, 1))",
   letterSpacing: "0.2em",
   textTransform: "uppercase",
 };
@@ -71,7 +71,7 @@ const Row: React.FC<RowProps> = ({ swatch, label, value, detail }) => (
     />
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={LABEL}>{label}</div>
-      <div style={{ color: "#e2e8f0", fontSize: 15 }}>
+      <div style={{ color: "#e2e8f0", fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>
         {value}
         {detail && (
           <span style={{ color: "#cbd5e1", marginLeft: 4 }}>{detail}</span>
@@ -120,13 +120,13 @@ export const ConditionsLegend: React.FC = () => {
   return (
     <div style={PANEL} data-testid="conditions-legend">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ color: "#00e5ff", fontSize: 15, letterSpacing: "0.18em", textShadow: "0 0 6px rgba(0,229,255,0.5)" }}>
+        <span style={{ color: "#00e5ff", fontSize: "calc(15px * var(--bs-font-scale, 1))", letterSpacing: "0.18em", textShadow: "0 0 6px rgba(0,229,255,0.5)" }}>
           ◉ CONDITIONS
         </span>
         {estimated && (
           <span
             style={{
-              fontSize: 12, letterSpacing: "0.15em",
+              fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.15em",
               background: "rgba(251,191,36,0.12)",
               border: "1px solid rgba(251,191,36,0.4)",
               color: "#fbbf24",
@@ -212,7 +212,7 @@ export const ConditionsLegend: React.FC = () => {
                     flex: 1,
                     cursor: "pointer",
                     padding: "3px 4px",
-                    fontSize: 12,
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.15em",
                     textTransform: "uppercase",
                     fontFamily: "inherit",

@@ -1163,7 +1163,7 @@ function Main() {
             borderRadius: 4,
             padding: "2px 7px",
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            fontSize: 13.5,
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
             letterSpacing: "0.08em",
             color: healthResponseMs < 200 ? "#34d399" : healthResponseMs < 600 ? "#fbbf24" : "#f87171",
             pointerEvents: "none",
@@ -1250,7 +1250,7 @@ function Main() {
               className="absolute top-24 left-4 z-20"
               style={{
                 fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                fontSize: 36,
+                fontSize: "calc(36px * var(--bs-font-scale, 1))",
                 lineHeight: 1,
                 padding: "6px 10px",
                 borderRadius: 4,
@@ -1284,7 +1284,7 @@ function Main() {
                   aria-label="Hide side pane"
                   style={{
                     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                    fontSize: 16.5,
+                    fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
                     padding: "2px 8px",
                     borderRadius: 4,
                     border: "1px solid rgba(0,229,255,0.35)",
@@ -1295,7 +1295,7 @@ function Main() {
                     letterSpacing: "0.1em",
                   }}
                 >
-                  <span style={{ fontSize: 33, lineHeight: 1, verticalAlign: "middle" }}>◂</span> HIDE
+                  <span style={{ fontSize: "calc(33px * var(--bs-font-scale, 1))", lineHeight: 1, verticalAlign: "middle" }}>◂</span> HIDE
                 </button>
               </ViewscreenTooltip>
             </div>
@@ -1327,19 +1327,19 @@ function Main() {
                         textAlign: "center",
                         color: "#475569",
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 15,
+                        fontSize: "calc(15px * var(--bs-font-scale, 1))",
                         letterSpacing: "0.1em",
                         lineHeight: 1.6,
                       }}
                     >
-                      <div style={{ fontSize: 30, marginBottom: 6, opacity: 0.5 }}>🌊</div>
+                      <div style={{ fontSize: "calc(30px * var(--bs-font-scale, 1))", marginBottom: 6, opacity: 0.5 }}>🌊</div>
                       <div style={{ color: "#64748b", marginBottom: 8 }}>
                         Load a dataset to begin.
                       </div>
                       <button
                         onClick={() => useUiStore.getState().setFindDataPanelOpen(true)}
                         style={{
-                          fontSize: 13.5,
+                          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                           letterSpacing: "0.12em",
                           padding: "4px 10px",
                           background: "rgba(0,229,255,0.06)",
@@ -1374,7 +1374,7 @@ function Main() {
                     borderRadius: 6,
                     color: "#34d399",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.15em",
                     textTransform: "uppercase",
                     cursor: "pointer",
@@ -1390,7 +1390,7 @@ function Main() {
                   onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
                   onMouseLeave={e => (e.currentTarget.style.opacity = "0.85")}
                 >
-                  <span style={{ fontSize: 18 }}>⇄</span>
+                  <span style={{ fontSize: "calc(18px * var(--bs-font-scale, 1))" }}>⇄</span>
                   Switch to Plan to configure conditions
                 </button>
               )}
@@ -1445,7 +1445,7 @@ function Main() {
                     border: "1px dashed rgba(0,229,255,0.18)",
                     borderRadius: 4,
                     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                    fontSize: 13.5,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.13em",
                     color: "#64748b",
                     pointerEvents: "none",
@@ -1473,7 +1473,7 @@ function Main() {
                     >
                       <div style={{
                         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                        fontSize: 13.5,
+                        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                         letterSpacing: "0.13em",
                         color: "#64748b",
                         lineHeight: 1.55,
@@ -1485,7 +1485,7 @@ function Main() {
                         onClick={() => setDriftPlannerActive(true)}
                         style={{
                           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                          fontSize: 13.5,
+                          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                           letterSpacing: "0.18em",
                           padding: "5px 12px",
                           borderRadius: 3,
@@ -1532,7 +1532,7 @@ function Main() {
                   border: "none",
                   color: "#475569",
                   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   letterSpacing: "0.15em",
                   cursor: "pointer",
                   padding: "4px 0",
@@ -1557,7 +1557,7 @@ function Main() {
                     textAlign: "center",
                     color: "#475569",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 15,
+                    fontSize: "calc(15px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.1em",
                     lineHeight: 1.6,
                     background: "rgba(2,8,18,0.94)",
@@ -1566,14 +1566,14 @@ function Main() {
                     backdropFilter: "blur(6px)",
                   }}
                 >
-                  <div style={{ fontSize: 30, marginBottom: 6, opacity: 0.5 }}>◈</div>
+                  <div style={{ fontSize: "calc(30px * var(--bs-font-scale, 1))", marginBottom: 6, opacity: 0.5 }}>◈</div>
                   <div style={{ color: "#64748b", marginBottom: 8 }}>
                     Load a dataset to begin analysis.
                   </div>
                   <button
                     onClick={() => { setSidebarMode('explore'); useUiStore.getState().setFindDataPanelOpen(true); }}
                     style={{
-                      fontSize: 13.5,
+                      fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                       letterSpacing: "0.12em",
                       padding: "4px 10px",
                       background: "rgba(0,229,255,0.06)",
@@ -1618,7 +1618,7 @@ function Main() {
                       borderRadius: 6,
                       color: "#64748b",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 15,
+                      fontSize: "calc(15px * var(--bs-font-scale, 1))",
                       letterSpacing: "0.2em",
                       textTransform: "uppercase",
                       cursor: "pointer",
@@ -1628,7 +1628,7 @@ function Main() {
                   >
                     <span style={{ color: "#00e5ff", marginRight: 8 }}>⌕</span>
                     Ask AI
-                    <span style={{ float: "right", fontSize: 13.5, letterSpacing: "0.1em", color: "#475569" }}>
+                    <span style={{ float: "right", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em", color: "#475569" }}>
                       press /
                     </span>
                   </button>
@@ -1743,7 +1743,7 @@ function Main() {
               borderRadius: 8,
               padding: "12px 18px",
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 15,
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
               color: "#e2e8f0",
               letterSpacing: "0.08em",
               backdropFilter: "blur(12px)",
@@ -1752,7 +1752,7 @@ function Main() {
               pointerEvents: "auto",
             }}
           >
-            <div style={{ color: "#00e5ff", fontWeight: 700, marginBottom: 4, fontSize: 13.5, letterSpacing: "0.2em" }}>
+            <div style={{ color: "#00e5ff", fontWeight: 700, marginBottom: 4, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.2em" }}>
               INSTALL BATHYSCAN
             </div>
             <div>Tap <span style={{ color: "#38bdf8" }}>Share ↑</span> → <span style={{ color: "#38bdf8" }}>Add to Home Screen</span></div>
@@ -1765,7 +1765,7 @@ function Main() {
                 background: "none",
                 border: "none",
                 color: "#94a3b8",
-                fontSize: 21,
+                fontSize: "calc(21px * var(--bs-font-scale, 1))",
                 cursor: "pointer",
               }}
             >
@@ -1790,7 +1790,7 @@ function Main() {
             <div
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 16.5,
+                fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.25em",
                 color: "#00e5ff",
                 textShadow: "0 0 12px rgba(0,229,255,0.6)",
@@ -1870,7 +1870,7 @@ function Main() {
               borderRadius: 4,
               color: "#64748b",
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.2em",
               padding: "4px 14px",
               cursor: "pointer",
@@ -1956,7 +1956,7 @@ function MarkerSubsampleBadge() {
         border: "1px solid rgba(251,146,60,0.4)",
         borderRadius: 4,
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fontSize: 15,
+        fontSize: "calc(15px * var(--bs-font-scale, 1))",
         color: "#fb923c",
         padding: "5px 10px",
         backdropFilter: "blur(6px)",
@@ -1978,7 +1978,7 @@ function MarkerSubsampleBadge() {
           border: "none",
           color: "#cbd5e1",
           cursor: "pointer",
-          fontSize: 16.5,
+          fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
           lineHeight: 1,
           padding: 0,
         }}
@@ -2419,16 +2419,6 @@ const FONT_SCALE_VALUES: Record<import("@/lib/settingsStore").FontSizeLevel, num
   largest: 1.45,
 };
 
-/** Maps each FontSizeLevel to a body font-size in px (base 14 px). */
-const FONT_SIZE_PX: Record<import("@/lib/settingsStore").FontSizeLevel, string> = {
-  smallest: "11px",
-  small: "12px",
-  medium: "",
-  large: "16px",
-  "x-large": "18px",
-  largest: "20px",
-};
-
 export function AccessibilityClassesEffect() {
   const reducedMotion = useSettingsStore((st) => st.reducedMotion);
   const globalFontSize = useSettingsStore((st) => st.globalFontSize);
@@ -2442,9 +2432,11 @@ export function AccessibilityClassesEffect() {
     b.classList.toggle("bs-cb-palette", colorBlindSafePalette);
     b.classList.toggle("bs-daylight", brightDaylight);
     const scale = FONT_SCALE_VALUES[globalFontSize] ?? 1;
-    const sizePx = FONT_SIZE_PX[globalFontSize] ?? "";
+    // --bs-font-scale is the single source of truth for the Text Size
+    // setting. Body font-size, daylight-mode base sizes, and all inline
+    // component sizes derive from it via calc() — no inline px override.
     b.style.setProperty("--bs-font-scale", String(scale));
-    b.style.fontSize = sizePx;
+    b.style.fontSize = "";
   }, [reducedMotion, globalFontSize, highContrastHud, colorBlindSafePalette, brightDaylight]);
   return null;
 }

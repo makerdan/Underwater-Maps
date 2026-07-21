@@ -9,7 +9,7 @@ import {
 
 const LABEL: React.CSSProperties = {
   color: "#cbd5e1",
-  fontSize: 15,
+  fontSize: "calc(15px * var(--bs-font-scale, 1))",
   letterSpacing: "0.2em",
   textTransform: "uppercase",
   fontWeight: 600,
@@ -159,21 +159,21 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
       <div style={{ ...LABEL, marginBottom: 2 }}>Tide station</div>
 
       {stationStatus === "loading" && (
-        <div style={{ ...DIM, fontSize: 15 }}>Locating nearest station…</div>
+        <div style={{ ...DIM, fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>Locating nearest station…</div>
       )}
       {stationStatus === "unavailable" && (
-        <div data-testid="tide-station-unavailable" style={{ ...DIM, fontSize: 15 }}>
+        <div data-testid="tide-station-unavailable" style={{ ...DIM, fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>
           No NOAA tide station could be resolved for this area.
         </div>
       )}
 
       {station && (
         <>
-          <div data-testid="tide-station-name" style={{ color: "#7dd3fc", fontSize: 16.5 }}>
+          <div data-testid="tide-station-name" style={{ color: "#7dd3fc", fontSize: "calc(16.5px * var(--bs-font-scale, 1))" }}>
             {station.name}{" "}
-            <span style={{ ...DIM, fontSize: 13.5 }}>#{station.id}</span>
+            <span style={{ ...DIM, fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>#{station.id}</span>
           </div>
-          <div style={{ ...DIM, fontSize: 13.5 }}>
+          <div style={{ ...DIM, fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>
             {station.distanceMiles.toFixed(1)} mi from dataset center
           </div>
           {station.distanceMiles > STATION_DISTANCE_CAVEAT_MILES && (
@@ -186,7 +186,7 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
                 background: "rgba(251,191,36,0.1)",
                 border: "1px solid rgba(251,191,36,0.45)",
                 color: "#fbbf24",
-                fontSize: 13,
+                fontSize: "calc(13px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.08em",
               }}
             >
@@ -196,12 +196,12 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
           )}
 
           {predictionsStatus === "loading" && (
-            <div style={{ ...DIM, fontSize: 14, marginTop: 4 }}>
+            <div style={{ ...DIM, fontSize: "calc(14px * var(--bs-font-scale, 1))", marginTop: 4 }}>
               Loading 31-day predictions…
             </div>
           )}
           {predictionsStatus === "unavailable" && (
-            <div data-testid="tide-predictions-unavailable" style={{ ...DIM, fontSize: 14, marginTop: 4 }}>
+            <div data-testid="tide-predictions-unavailable" style={{ ...DIM, fontSize: "calc(14px * var(--bs-font-scale, 1))", marginTop: 4 }}>
               NOAA predictions are unavailable for this station right now.
             </div>
           )}
@@ -211,18 +211,18 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
               <div style={LABEL}>
                 {scrubDatetime ? "Planned tide" : "Tide now"}
               </div>
-              <span data-testid="tide-station-height" style={{ ...CYAN, fontSize: 21, fontWeight: 700 }}>
+              <span data-testid="tide-station-height" style={{ ...CYAN, fontSize: "calc(21px * var(--bs-font-scale, 1))", fontWeight: 700 }}>
                 {heightFt >= 0 ? "+" : ""}
                 {heightFt.toFixed(2)} ft
               </span>
-              <span style={{ ...DIM, fontSize: 14, marginLeft: 4 }}>MLLW</span>
+              <span style={{ ...DIM, fontSize: "calc(14px * var(--bs-font-scale, 1))", marginLeft: 4 }}>MLLW</span>
               {scrubDatetime && (
                 <button
                   data-testid="tide-station-back-to-now"
                   onClick={() => onScrubChange(null)}
                   style={{
                     marginLeft: 8,
-                    fontSize: 12.5,
+                    fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
                     padding: "1px 6px",
                     borderRadius: 2,
                     border: "1px solid rgba(0,229,255,0.4)",
@@ -247,7 +247,7 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
                   disabled={dayOffset <= 0}
                   onClick={() => setDayOffset(dayOffset - 1)}
                   style={{
-                    fontSize: 14,
+                    fontSize: "calc(14px * var(--bs-font-scale, 1))",
                     padding: "1px 6px",
                     border: "1px solid rgba(0,229,255,0.3)",
                     borderRadius: 2,
@@ -258,7 +258,7 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
                 >
                   ◀
                 </button>
-                <span data-testid="tide-day-label" style={{ ...DIM, fontSize: 13.5, flex: 1, textAlign: "center" }}>
+                <span data-testid="tide-day-label" style={{ ...DIM, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", flex: 1, textAlign: "center" }}>
                   {new Date(dayStartMs).toLocaleDateString("en-US", {
                     weekday: "short",
                     month: "short",
@@ -271,7 +271,7 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
                   disabled={dayOffset >= maxDayOffset}
                   onClick={() => setDayOffset(dayOffset + 1)}
                   style={{
-                    fontSize: 14,
+                    fontSize: "calc(14px * var(--bs-font-scale, 1))",
                     padding: "1px 6px",
                     border: "1px solid rgba(0,229,255,0.3)",
                     borderRadius: 2,
@@ -326,7 +326,7 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
                   );
                 })}
               </svg>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#64748b" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "calc(11.5px * var(--bs-font-scale, 1))", color: "#64748b" }}>
                 <span>{maxV.toFixed(1)} ft max</span>
                 <span>{minV.toFixed(1)} ft min</span>
               </div>
@@ -334,7 +334,7 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
               {/* High/low times for the selected day */}
               {dayExtremes.length > 0 && (
                 <div data-testid="tide-extremes-list" style={{ marginTop: 5 }}>
-                  <div style={{ ...LABEL, fontSize: 12.5 }}>High / Low</div>
+                  <div style={{ ...LABEL, fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>High / Low</div>
                   {dayExtremes.map((e) => (
                     <button
                       key={e.tMs}
@@ -350,7 +350,7 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
                         border: "none",
                         background: "transparent",
                         cursor: "pointer",
-                        fontSize: 13.5,
+                        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                         color: "#cbd5e1",
                         textAlign: "left",
                       }}

@@ -61,7 +61,7 @@ const CHIP_DOT: React.CSSProperties = {
 
 const CHIP_LABEL: React.CSSProperties = {
   color: "#00e5ff",
-  fontSize: 11,
+  fontSize: "calc(11px * var(--bs-font-scale, 1))",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   letterSpacing: "0.13em",
   fontWeight: 700,
@@ -75,7 +75,7 @@ const CHIP_CLEAR: React.CSSProperties = {
   background: "none",
   border: "none",
   color: "#475569",
-  fontSize: 12,
+  fontSize: "calc(12px * var(--bs-font-scale, 1))",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   cursor: "pointer",
   padding: "1px 4px",

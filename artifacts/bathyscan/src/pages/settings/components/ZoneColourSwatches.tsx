@@ -38,7 +38,7 @@ export function ZoneColourSwatches() {
           data-testid="settings-zone-colours-reset"
           onClick={resetToDefaults}
           style={{
-            fontSize: 9,
+            fontSize: "calc(9px * var(--bs-font-scale, 1))",
             color: "#64748b",
             background: "transparent",
             border: "1px solid rgba(100,116,139,0.3)",

@@ -54,7 +54,7 @@ export function KeyBindingCapture({
         {conflict && (
           <div
             data-testid={`shortcut-conflict-${action.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`}
-            style={{ fontSize: 10, color: "#fb923c", marginTop: 4, letterSpacing: "0.04em" }}
+            style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#fb923c", marginTop: 4, letterSpacing: "0.04em" }}
           >
             ⚠ Also bound to: {conflictWith.join(", ")}
           </div>
@@ -66,7 +66,7 @@ export function KeyBindingCapture({
             data-testid={`shortcut-${action.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}-arrow-alias`}
             title={`Arrow key alias: ${arrowSymbol}`}
             style={{
-              fontSize: 11,
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
               color: "#64748b",
               letterSpacing: "0.04em",
               userSelect: "none",
@@ -95,7 +95,7 @@ export function KeyBindingCapture({
             borderRadius: 3,
             color: capturing ? "#fb923c" : conflict ? "#fb923c" : "#67e8f9",
             fontFamily: FONT,
-            fontSize: 10,
+            fontSize: "calc(10px * var(--bs-font-scale, 1))",
             padding: "4px 12px",
             minWidth: 110,
             cursor: "pointer",
@@ -114,7 +114,7 @@ export function KeyBindingCapture({
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
             color: isDefault ? "#64748b" : "#cbd5e1",
-            fontSize: 9,
+            fontSize: "calc(9px * var(--bs-font-scale, 1))",
             letterSpacing: "0.15em",
             padding: "3px 8px",
             cursor: isDefault ? "default" : "pointer",
@@ -186,7 +186,7 @@ export function CrosshairMenuGamepadCapture() {
             borderRadius: 3,
             color: capturing ? "#fb923c" : "#67e8f9",
             fontFamily: FONT,
-            fontSize: 10,
+            fontSize: "calc(10px * var(--bs-font-scale, 1))",
             padding: "4px 12px",
             minWidth: 140,
             cursor: "pointer",
@@ -203,7 +203,7 @@ export function CrosshairMenuGamepadCapture() {
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
             color: "#cbd5e1",
-            fontSize: 9,
+            fontSize: "calc(9px * var(--bs-font-scale, 1))",
             letterSpacing: "0.15em",
             padding: "3px 8px",
             cursor: "pointer",
@@ -220,7 +220,7 @@ export function CrosshairMenuGamepadCapture() {
             border: "1px solid rgba(0,229,255,0.15)",
             borderRadius: 3,
             color: "#cbd5e1",
-            fontSize: 9,
+            fontSize: "calc(9px * var(--bs-font-scale, 1))",
             letterSpacing: "0.15em",
             padding: "3px 8px",
             cursor: "pointer",

@@ -11,7 +11,7 @@ const PANEL: React.CSSProperties = {
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#cbd5e1",
-  fontSize: 18,
+  fontSize: "calc(18px * var(--bs-font-scale, 1))",
   minWidth: 220,
   maxWidth: 260,
   backdropFilter: "blur(6px)",
@@ -64,11 +64,11 @@ export const KeyboardShortcutsPanel: React.FC = () => {
           >
             <span
               className="uppercase tracking-widest"
-              style={{ fontSize: 16.5, ...CYAN, fontWeight: 700 }}
+              style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", ...CYAN, fontWeight: 700 }}
             >
               Keyboard
             </span>
-            <span style={{ color: "#cbd5e1", fontSize: 36, lineHeight: 1 }}>
+            <span style={{ color: "#cbd5e1", fontSize: "calc(36px * var(--bs-font-scale, 1))", lineHeight: 1 }}>
               {collapsed ? "▸" : "▾"}
             </span>
           </button>
@@ -90,14 +90,14 @@ export const KeyboardShortcutsPanel: React.FC = () => {
                   border: "1px solid rgba(0,229,255,0.35)",
                   color: "#00e5ff",
                   minWidth: 64,
-                  fontSize: 15,
+                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
                   textAlign: "center",
                   fontWeight: 600,
                 }}
               >
                 {key}
               </span>
-              <span style={{ fontSize: 16.5, lineHeight: 1.4, color: "#cbd5e1" }}>{action}</span>
+              <span style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", lineHeight: 1.4, color: "#cbd5e1" }}>{action}</span>
             </div>
           ))}
         </div>

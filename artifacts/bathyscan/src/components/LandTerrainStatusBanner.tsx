@@ -62,7 +62,7 @@ export const LandTerrainStatusBanner: React.FC = () => {
         border: `1px solid ${isLoading ? "rgba(0,229,255,0.3)" : "rgba(251,191,36,0.4)"}`,
         borderRadius: 4,
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fontSize: 15,
+        fontSize: "calc(15px * var(--bs-font-scale, 1))",
         color: isLoading ? "#94a3b8" : "#fbbf24",
         letterSpacing: "0.08em",
         pointerEvents: isLoading ? "none" : "auto",
@@ -92,7 +92,7 @@ export const LandTerrainStatusBanner: React.FC = () => {
         </>
       ) : (
         <>
-          <span style={{ fontSize: 13.5 }}>⚠</span>
+          <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>⚠</span>
           {ERROR_TEXT}
           <button
             data-testid="land-terrain-retry-btn"
@@ -106,7 +106,7 @@ export const LandTerrainStatusBanner: React.FC = () => {
               borderRadius: 3,
               color: "#fbbf24",
               fontFamily: "inherit",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.08em",
               cursor: "pointer",
               lineHeight: "16px",

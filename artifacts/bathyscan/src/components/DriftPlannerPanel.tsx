@@ -55,7 +55,7 @@ const BADGE_DOT: React.CSSProperties = {
 
 const BADGE_LABEL: React.CSSProperties = {
   color: "#00e5ff",
-  fontSize: 11,
+  fontSize: "calc(11px * var(--bs-font-scale, 1))",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   letterSpacing: "0.14em",
   fontWeight: 700,
@@ -66,7 +66,7 @@ const CLEAR_BTN: React.CSSProperties = {
   background: "none",
   border: "none",
   color: "#475569",
-  fontSize: 11,
+  fontSize: "calc(11px * var(--bs-font-scale, 1))",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   cursor: "pointer",
   letterSpacing: "0.08em",
@@ -82,7 +82,7 @@ const INDICATOR_DETAILS: React.CSSProperties = {
 
 const DETAIL_CHIP: React.CSSProperties = {
   color: "#94a3b8",
-  fontSize: 11,
+  fontSize: "calc(11px * var(--bs-font-scale, 1))",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
 };
 
@@ -92,7 +92,7 @@ const DETAIL_VALUE: React.CSSProperties = {
 
 const DRIFT_ESTIMATE: React.CSSProperties = {
   color: "#64748b",
-  fontSize: 11,
+  fontSize: "calc(11px * var(--bs-font-scale, 1))",
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   letterSpacing: "0.06em",
 };

@@ -231,12 +231,12 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
           alignItems: "flex-start",
         }}>
           <div>
-            <div style={{ fontSize: 13.5, letterSpacing: "0.2em", color: "#00e5ff", textTransform: "uppercase", marginBottom: 2 }}>
+            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.2em", color: "#00e5ff", textTransform: "uppercase", marginBottom: 2 }}>
               ⬇ SAVE OFFLINE
             </div>
-            <div style={{ fontSize: 18, color: "#e2e8f0", fontWeight: 600 }}>{dataset.name}</div>
+            <div style={{ fontSize: "calc(18px * var(--bs-font-scale, 1))", color: "#e2e8f0", fontWeight: 600 }}>{dataset.name}</div>
             {dataset.bbox && (
-              <div style={{ fontSize: 13.5, color: "#64748b", marginTop: 2 }}>
+              <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#64748b", marginTop: 2 }}>
                 {dataset.bbox.minLat.toFixed(2)}°, {dataset.bbox.minLon.toFixed(2)}° →{" "}
                 {dataset.bbox.maxLat.toFixed(2)}°, {dataset.bbox.maxLon.toFixed(2)}°
               </div>
@@ -249,7 +249,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
               background: "none",
               border: "none",
               color: "#64748b",
-              fontSize: 27,
+              fontSize: "calc(27px * var(--bs-font-scale, 1))",
               cursor: "pointer",
               lineHeight: 1,
               padding: "0 2px",
@@ -265,7 +265,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
             padding: "8px 16px",
             background: "rgba(239,68,68,0.08)",
             borderBottom: "1px solid rgba(239,68,68,0.2)",
-            fontSize: 15,
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
             color: "#fca5a5",
           }}>
             ⚠ Could not load offline pack data — {loadError}
@@ -283,7 +283,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                 borderRadius: 6,
                 padding: "8px 12px",
                 marginBottom: 12,
-                fontSize: 16.5,
+                fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
                 color: "#fca5a5",
               }}
             >
@@ -300,7 +300,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
             <div style={{
               background: "rgba(0,229,255,0.04)",
               padding: "8px 12px",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               color: "#00e5ff",
               textTransform: "uppercase",
@@ -317,7 +317,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   borderRadius: 4,
                   padding: "7px 10px",
                   marginBottom: 10,
-                  fontSize: 15,
+                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
                   color: "#4ade80",
                   display: "flex",
                   justifyContent: "space-between",
@@ -326,7 +326,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   <div>
                     <div>✓ Saved {formatDate(existingPack.savedAt)}</div>
                     {expLabel && (
-                      <div style={{ color: expLabel.amber ? "#fbbf24" : "#4ade80", marginTop: 2, fontSize: 13.5 }}>
+                      <div style={{ color: expLabel.amber ? "#fbbf24" : "#4ade80", marginTop: 2, fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>
                         Tide data valid until: {expLabel.text}
                       </div>
                     )}
@@ -339,7 +339,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       border: "1px solid rgba(74,222,128,0.4)",
                       borderRadius: 3,
                       color: "#4ade80",
-                      fontSize: 12,
+                      fontSize: "calc(12px * var(--bs-font-scale, 1))",
                       padding: "2px 8px",
                       cursor: areaDownloading ? "not-allowed" : "pointer",
                       letterSpacing: "0.1em",
@@ -360,7 +360,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   borderRadius: 4,
                   padding: "7px 10px",
                   marginBottom: 10,
-                  fontSize: 15,
+                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
                   color: "#4ade80",
                 }}>
                   ✓ Saved — tide data valid until {formatExpiry(savedPack.tidePack.tidalExpiresAt)}
@@ -372,10 +372,10 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                 <>
                   <div style={{ marginBottom: 8 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ fontSize: 13.5, color: "#94a3b8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                      <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                         TIDE PREDICTIONS WINDOW
                       </span>
-                      <span style={{ fontSize: 15, color: "#00e5ff" }}>{days} days</span>
+                      <span style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#00e5ff" }}>{days} days</span>
                     </div>
                     <input
                       type="range"
@@ -386,14 +386,14 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       style={{ width: "100%", accentColor: "#00e5ff" }}
                       aria-label="Days of tide predictions"
                     />
-                    <div style={{ fontSize: 13.5, color: "#64748b", marginTop: 2 }}>
+                    <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#64748b", marginTop: 2 }}>
                       Valid through {expiryStr}
                     </div>
                   </div>
 
                   {/* Storage estimate */}
                   {storageQuota && (
-                    <div style={{ fontSize: 13.5, color: "#64748b", marginBottom: 8 }}>
+                    <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 8 }}>
                       ~2–5 MB per pack · {formatBytes(storageQuota.used)} used of {formatBytes(storageQuota.total)} available
                     </div>
                   )}
@@ -404,7 +404,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       border: "1px solid rgba(239,68,68,0.3)",
                       borderRadius: 3,
                       padding: "6px 8px",
-                      fontSize: 13.5,
+                      fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                       color: "#fca5a5",
                       marginBottom: 8,
                     }}>
@@ -422,7 +422,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       border: "1px solid rgba(0,229,255,0.35)",
                       borderRadius: 4,
                       color: "#00e5ff",
-                      fontSize: 15,
+                      fontSize: "calc(15px * var(--bs-font-scale, 1))",
                       letterSpacing: "0.12em",
                       textTransform: "uppercase",
                       cursor: areaDownloading ? "not-allowed" : "pointer",
@@ -448,14 +448,14 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                         alignItems: "center",
                         gap: 8,
                         padding: "4px 0",
-                        fontSize: 15,
+                        fontSize: "calc(15px * var(--bs-font-scale, 1))",
                       }}>
                         <span style={{ width: 14, textAlign: "center", color: isErr ? "#ef4444" : isDone ? "#4ade80" : isActive ? "#00e5ff" : "#475569" }}>
                           {isErr ? "✗" : isDone ? "✓" : isActive ? "◌" : "○"}
                         </span>
                         <span style={{ color: isPending ? "#475569" : isErr ? "#fca5a5" : isDone ? "#4ade80" : "#e2e8f0" }}>
                           {STEP_LABELS[step]}
-                          {isErr && <span style={{ fontSize: 13.5, marginLeft: 6, color: "#fca5a5" }}>— {prog.error}</span>}
+                          {isErr && <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", marginLeft: 6, color: "#fca5a5" }}>— {prog.error}</span>}
                         </span>
                       </div>
                     );
@@ -474,7 +474,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
             <div style={{
               background: "rgba(0,229,255,0.04)",
               padding: "8px 12px",
-              fontSize: 13.5,
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
               letterSpacing: "0.15em",
               color: "#00e5ff",
               textTransform: "uppercase",
@@ -483,7 +483,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
               HELP CONTENT
             </div>
             <div style={{ padding: "10px 12px" }}>
-              <div style={{ fontSize: 13.5, color: "#94a3b8", marginBottom: 8, lineHeight: 1.5 }}>
+              <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8, lineHeight: 1.5 }}>
                 Caches {HELP_ASSETS.length} media assets (~3–8 MB) so walkthroughs and screenshots are visible offline.
               </div>
 
@@ -494,7 +494,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   borderRadius: 4,
                   padding: "7px 10px",
                   marginBottom: 8,
-                  fontSize: 15,
+                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
                   color: "#4ade80",
                   display: "flex",
                   justifyContent: "space-between",
@@ -503,7 +503,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   <div>
                     <div>✓ Downloaded {helpStatus.savedAt ? formatDate(helpStatus.savedAt) : ""}</div>
                     {helpStatus.totalBytes && (
-                      <div style={{ fontSize: 13.5, color: "#64748b", marginTop: 2 }}>
+                      <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#64748b", marginTop: 2 }}>
                         {formatBytes(helpStatus.totalBytes)}
                       </div>
                     )}
@@ -516,7 +516,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       border: "1px solid rgba(74,222,128,0.4)",
                       borderRadius: 3,
                       color: "#4ade80",
-                      fontSize: 12,
+                      fontSize: "calc(12px * var(--bs-font-scale, 1))",
                       padding: "2px 8px",
                       cursor: helpDownloading ? "not-allowed" : "pointer",
                       letterSpacing: "0.1em",
@@ -536,7 +536,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   borderRadius: 4,
                   padding: "7px 10px",
                   marginBottom: 8,
-                  fontSize: 15,
+                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
                   color: "#4ade80",
                 }}>
                   ✓ Help content cached
@@ -551,7 +551,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       alignItems: "center",
                       gap: 8,
                       padding: "3px 0",
-                      fontSize: 13.5,
+                      fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     }}>
                       <span style={{ width: 14, textAlign: "center", color: p.error ? "#ef4444" : p.done ? "#4ade80" : "#00e5ff" }}>
                         {p.error ? "✗" : p.done ? "✓" : "◌"}
@@ -570,7 +570,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   border: "1px solid rgba(239,68,68,0.3)",
                   borderRadius: 3,
                   padding: "6px 8px",
-                  fontSize: 13.5,
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                   color: "#fca5a5",
                   marginBottom: 8,
                 }}>
@@ -589,7 +589,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                     border: "1px solid rgba(0,229,255,0.25)",
                     borderRadius: 4,
                     color: "#67e8f9",
-                    fontSize: 15,
+                    fontSize: "calc(15px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.12em",
                     textTransform: "uppercase",
                     cursor: "pointer",
@@ -618,7 +618,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                 border: "1px solid rgba(0,229,255,0.3)",
                 borderRadius: 4,
                 color: "#00e5ff",
-                fontSize: 15,
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.12em",
                 textTransform: "uppercase",
                 cursor: "pointer",

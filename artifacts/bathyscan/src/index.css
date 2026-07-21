@@ -80,6 +80,10 @@
   }
   body {
     @apply font-mono antialiased bg-background text-foreground;
+    /* Text Size setting: scale the body base font (1rem = 16px browser
+       default) by the user's chosen --bs-font-scale. At the default
+       "medium" level the scale is 1 so this is a no-op. */
+    font-size: calc(1rem * var(--bs-font-scale, 1));
   }
 }
 
@@ -144,15 +148,17 @@ body.bs-daylight {
   --input: 210 15% 88%;
   --ring: 224 75% 40%;
 
-  /* ── Typography — step up one weight level for outdoor legibility ── */
+  /* ── Typography — step up one weight level for outdoor legibility.
+     The larger daylight base composes with the Text Size setting via
+     --bs-font-scale instead of overriding it. ── */
   font-weight: 500;
-  font-size: 25.5px;
+  font-size: calc(25.5px * var(--bs-font-scale, 1));
 }
 
 /* Bump an extra pixel on touch / tablet devices */
 @media (pointer: coarse) {
   body.bs-daylight {
-    font-size: 27px;
+    font-size: calc(27px * var(--bs-font-scale, 1));
   }
 
   /* Expand touch hit targets to 52px minimum */
@@ -314,11 +320,11 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
     padding: 6px 10px;
   }
   .sidebar-section-title {
-    font-size: 15px !important;
+    font-size: calc(15px * var(--bs-font-scale, 1)) !important;
     letter-spacing: 0.18em !important;
   }
   .sidebar-section-chevron {
-    font-size: 27px !important;
+    font-size: calc(27px * var(--bs-font-scale, 1)) !important;
   }
   .sidebar-section-body {
     padding: 2px 0;
@@ -367,7 +373,7 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
   /* HUD elements: stack vertically, larger font */
   .hud-top-left,
   .hud-top-right {
-    font-size: 19.5px !important;
+    font-size: calc(19.5px * var(--bs-font-scale, 1)) !important;
   }
 
   /* Overview map: fill screen, allow scrolling header */

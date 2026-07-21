@@ -134,7 +134,7 @@ export function DisplayOverlaysSection() {
               onChange={(e) => s.setDefaultHabitatSpecies(e.target.value)}
               placeholder="(none)"
               style={{
-                ...S.select, width: 160, fontFamily: FONT, fontSize: 10,
+                ...S.select, width: 160, fontFamily: FONT, fontSize: "calc(10px * var(--bs-font-scale, 1))",
               }}
             />
           </div>
