@@ -109,10 +109,6 @@ vi.mock("@/pages/settings/components/PalettePickerCard", () => ({
   PalettePickerCard: () => <div data-testid="palette-picker-card" />,
 }));
 
-vi.mock("@/pages/settings/components/ZoneColourSwatches", () => ({
-  ZoneColourSwatches: () => <div data-testid="zone-colour-swatches" />,
-}));
-
 vi.mock("@/pages/settings/components/SectionTitle", () => ({
   SectionTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
@@ -164,6 +160,12 @@ describe("VisualsSection", () => {
   it("renders Show Contour Lines label", () => {
     render(<VisualsSection />);
     expect(screen.getByText("Show Contour Lines")).toBeInTheDocument();
+  });
+
+  it("does NOT render the Zone Colours card (it lives in Display & Overlays)", () => {
+    render(<VisualsSection />);
+    expect(screen.queryByText("ZONE COLOURS")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("settings-zone-colours-reset")).not.toBeInTheDocument();
   });
 
   it("renders the save button for visuals section", () => {

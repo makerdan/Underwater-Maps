@@ -14,3 +14,5 @@ As of 2026-07-20 the full playwright run (e2e-repro) fails deterministically (bo
 **Why:** these all depend on the dataset-load → terrain-ready pipeline; browser console shows repeated "State loaded from storage couldn't be migrated since no migrate function was provided" (panelCollapseStore has `version: 1` with no `migrate`) and settings PUT "Failed to fetch" bursts. Suspected upstream regression (vite 8 bump or lake-catalog/sidebar merges), not chip/settings work — confirmed unrelated by diff surface.
 
 **How to apply:** if e2e-repro fails on exactly these specs, don't burn time re-running; investigate the dataset-load pipeline and the persisted-store migrate warning as a dedicated task. Remove this file once fixed.
+
+**Env skip note (2026-07-21):** zone-colour-watertype.spec skips at the "Zone Analysis panel not visible" gate (headless env — UI shell not rendered), so its Settings-page section never executes locally. Verify Settings-page zone-colour behavior via the unit suites (ZoneColoursCard, zoneSettingsTerrainSync) instead.

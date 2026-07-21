@@ -10,7 +10,6 @@ import { SectionActionsRow } from "./components/SyncContext";
 import { SliderRow, ToggleRow, SelectRow, ColorRow, ColormapSelectRow } from "./components/RowWidgets";
 import { Select } from "./components/Toggle";
 import { PalettePickerCard } from "./components/PalettePickerCard";
-import { ZoneColourSwatches } from "./components/ZoneColourSwatches";
 import { defaultContourInterval } from "./constants";
 
 function ContourIntervalRow() {
@@ -311,7 +310,6 @@ export function VisualsSection() {
 
       <PaletteSuggestionBanner />
       <PalettePickerCard />
-      <ZoneColourSwatches />
       <IntertidalDatumsCard />
       <AdvancedDisclosure testId="visuals-advanced">
         <div style={S.card}>

@@ -1,5 +1,6 @@
 /**
- * Tests for the ZoneColourSwatches component in the Map & Overlays tab (Settings page).
+ * Tests for the ZoneColourSwatches component in the Display & Overlays tab (Settings page).
+ * The Visuals tab must NOT render the card (single canonical home).
  *
  * Covers:
  *   - All four slot swatches render with colour inputs
@@ -118,8 +119,14 @@ beforeEach(() => {
 });
 
 describe("ZoneColourSwatches — rendering", () => {
-  it("renders the ZONE COLOURS heading in the Visuals tab (shortcut card)", () => {
+  it("does NOT render the ZONE COLOURS heading in the default Visuals tab", () => {
     render(<Settings />);
+    expect(screen.queryByText("ZONE COLOURS")).not.toBeInTheDocument();
+  });
+
+  it("renders the ZONE COLOURS heading in the DISPLAY & OVERLAYS tab", () => {
+    render(<Settings />);
+    navigateToMapOverlays();
     expect(screen.getByText("ZONE COLOURS")).toBeInTheDocument();
   });
 

@@ -344,7 +344,12 @@ test.describe("Zone colour water-type isolation", () => {
         await page.waitForLoadState("domcontentloaded");
       }
 
-      // Ensure the VISUALS tab is active (Zone Colours lives there).
+      // Switch to the DISPLAY & OVERLAYS tab (Zone Colours lives there).
+      const displayTab = page
+        .locator("nav button", { hasText: /display/i })
+        .first();
+      await expect(displayTab).toBeVisible({ timeout: 10_000 });
+      await displayTab.dispatchEvent("click");
       const zoneColoursHeading = page.locator("text=ZONE COLOURS").first();
       await expect(zoneColoursHeading).toBeVisible({ timeout: 10_000 });
 
