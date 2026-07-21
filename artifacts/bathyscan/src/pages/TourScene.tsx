@@ -842,6 +842,12 @@ export const TourScene: React.FC<TourSceneProps> = ({
       query: {
         enabled: !!datasetId,
         queryKey: getGetDatasetsIdTerrainQueryKey(datasetId ?? ""),
+        // Terrain is always loaded intentionally via DatasetPanel's pendingId
+        // mechanism and via seedTerrain in e2e tests. A background refetch
+        // here would race against seeded data or in-progress loads and
+        // silently overwrite terrain.hasTopography. Treat the cached result
+        // as permanently fresh — only a manual invalidation should refetch.
+        staleTime: Infinity,
       },
     },
   );

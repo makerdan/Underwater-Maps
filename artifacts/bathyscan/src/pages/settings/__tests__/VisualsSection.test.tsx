@@ -9,7 +9,7 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 
 const h = vi.hoisted(() => {
   const resetSection = vi.fn();
@@ -187,6 +187,35 @@ describe("VisualsSection", () => {
   it("renders nested TERRAIN SHADING card header", () => {
     render(<VisualsSection />);
     expect(screen.getByText("TERRAIN SHADING")).toBeInTheDocument();
+  });
+
+  it("renders TERRAIN SHADING card header inside the AdvancedDisclosure wrapper", () => {
+    render(<VisualsSection />);
+    const advanced = screen.getByTestId("advanced-disclosure");
+    expect(advanced).toBeInTheDocument();
+    const { getByText } = within(advanced);
+    expect(getByText("TERRAIN SHADING")).toBeInTheDocument();
+  });
+
+  it("renders Show water surface toggle inside the AdvancedDisclosure wrapper", () => {
+    render(<VisualsSection />);
+    const advanced = screen.getByTestId("advanced-disclosure");
+    const { getByText } = within(advanced);
+    expect(getByText("Show water surface")).toBeInTheDocument();
+  });
+
+  it("renders Show landmass toggle inside the AdvancedDisclosure wrapper", () => {
+    render(<VisualsSection />);
+    const advanced = screen.getByTestId("advanced-disclosure");
+    const { getByText } = within(advanced);
+    expect(getByText("Show landmass")).toBeInTheDocument();
+  });
+
+  it("renders Smooth terrain spikes toggle inside the AdvancedDisclosure wrapper", () => {
+    render(<VisualsSection />);
+    const advanced = screen.getByTestId("advanced-disclosure");
+    const { getByText } = within(advanced);
+    expect(getByText("Smooth terrain spikes")).toBeInTheDocument();
   });
 
   it("renders nested EFFECTS card header", () => {

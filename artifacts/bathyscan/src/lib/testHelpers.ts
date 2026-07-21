@@ -1227,7 +1227,13 @@ export function installTestHelpers(): void {
       // TourScene's `useGetDatasetsIdTerrain(datasetId)` query (which calls
       // setTerrain(data) on settle) hands back OUR seeded terrain instead of
       // re-fetching from the API and overwriting our seed.
+      // Also cancel any in-flight queries for this key so a racing network
+      // response doesn't land after our seed and overwrite hasTopography.
       if (base.datasetId) {
+        void queryClient.cancelQueries({
+          queryKey: getGetDatasetsIdTerrainQueryKey(base.datasetId),
+          exact: true,
+        });
         queryClient.setQueryData(
           getGetDatasetsIdTerrainQueryKey(base.datasetId),
           base,

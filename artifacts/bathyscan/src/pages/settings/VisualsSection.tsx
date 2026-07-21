@@ -179,57 +179,6 @@ export function VisualsSection() {
         />
       </div>
 
-      {/* Terrain shading */}
-      <div style={S.card}>
-        <div style={S.cardHeader}>TERRAIN SHADING</div>
-        <SliderRow
-          label="Vertical Exaggeration"
-          value={s.terrainExaggeration}
-          min={1} max={20} step={0.5}
-          format={(v) => `${v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)}× vertical exaggeration`}
-          onChange={s.setTerrainExaggeration}
-          sublabel={
-            s.terrainExaggeration > 1
-              ? "Scale is exaggerated — not true-to-life"
-              : "Vertical stretch applied to terrain"
-          }
-        />
-        <ToggleRow
-          label="Smooth terrain spikes"
-          value={s.smoothTerrainSpikes}
-          onChange={s.setSmoothTerrainSpikes}
-          sublabel="Server-side post-process that blends slopes steeper than 70°. Disable to inspect raw bathymetric artifacts."
-        />
-        <ToggleRow
-          label="Show water surface"
-          value={s.showWaterSurface}
-          onChange={s.setShowWaterSurface}
-          sublabel="Translucent sea-level plane over the bathymetry. Colour tracks the active water type. Turn off for dry cross-section views."
-        />
-        <ToggleRow
-          label="Show landmass"
-          value={s.showLandmass}
-          onChange={s.setShowLandmass}
-          sublabel="Render above-water terrain (islands, shorelines) when the dataset includes topography. No effect on open-ocean datasets."
-        />
-        <ToggleRow
-          label="Satellite imagery"
-          value={s.satelliteImagery}
-          onChange={s.setSatelliteImagery}
-          sublabel="Drape ESRI World Imagery photo over the land mesh. Turn off to use the stylised green→brown→grey colour ramp — clearer in dark scenes."
-        />
-        <SelectRow
-          label="Landmass style"
-          value={s.landmassStyle}
-          onChange={s.setLandmassStyle}
-          options={[
-            { value: "realistic", label: "Realistic (sand → grass → rock → snow)" },
-            { value: "flat", label: "Flat (neutral grey)" },
-          ]}
-          sublabel="Use flat shading when overlaying your own data so terrain colour doesn't compete for attention."
-        />
-      </div>
-
       {/* Effects */}
       <div style={S.card}>
         <div style={S.cardHeader}>EFFECTS</div>
@@ -266,6 +215,56 @@ export function VisualsSection() {
       <DepthColorsCard />
       <IntertidalDatumsCard />
       <AdvancedDisclosure testId="visuals-advanced">
+        {/* Terrain shading — water surface, landmass, and exaggeration controls */}
+        <div style={S.card}>
+          <div style={S.cardHeader}>TERRAIN SHADING</div>
+          <SliderRow
+            label="Vertical Exaggeration"
+            value={s.terrainExaggeration}
+            min={1} max={20} step={0.5}
+            format={(v) => `${v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)}× vertical exaggeration`}
+            onChange={s.setTerrainExaggeration}
+            sublabel={
+              s.terrainExaggeration > 1
+                ? "Scale is exaggerated — not true-to-life"
+                : "Vertical stretch applied to terrain"
+            }
+          />
+          <ToggleRow
+            label="Smooth terrain spikes"
+            value={s.smoothTerrainSpikes}
+            onChange={s.setSmoothTerrainSpikes}
+            sublabel="Server-side post-process that blends slopes steeper than 70°. Disable to inspect raw bathymetric artifacts."
+          />
+          <ToggleRow
+            label="Show water surface"
+            value={s.showWaterSurface}
+            onChange={s.setShowWaterSurface}
+            sublabel="Translucent sea-level plane over the bathymetry. Colour tracks the active water type. Turn off for dry cross-section views."
+          />
+          <ToggleRow
+            label="Show landmass"
+            value={s.showLandmass}
+            onChange={s.setShowLandmass}
+            sublabel="Render above-water terrain (islands, shorelines) when the dataset includes topography. No effect on open-ocean datasets."
+          />
+          <ToggleRow
+            label="Satellite imagery"
+            value={s.satelliteImagery}
+            onChange={s.setSatelliteImagery}
+            sublabel="Drape ESRI World Imagery photo over the land mesh. Turn off to use the stylised green→brown→grey colour ramp — clearer in dark scenes."
+          />
+          <SelectRow
+            label="Landmass style"
+            value={s.landmassStyle}
+            onChange={s.setLandmassStyle}
+            options={[
+              { value: "realistic", label: "Realistic (sand → grass → rock → snow)" },
+              { value: "flat", label: "Flat (neutral grey)" },
+            ]}
+            sublabel="Use flat shading when overlaying your own data so terrain colour doesn't compete for attention."
+          />
+        </div>
         <div style={S.card}>
           <div style={S.cardHeader}>PARTICLES &amp; TEXTURES</div>
           <SelectRow
