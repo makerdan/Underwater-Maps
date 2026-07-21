@@ -206,3 +206,21 @@ export async function inputWrap(input: RequestInfo | URL) {
   assert.ok(detected.has("exprWrap"));
   assert.ok(detected.has("inputWrap"));
 });
+
+test("detectFetchWrappersInSource detects a line-wrapped concise arrow wrapper", () => {
+  const src = `
+export const wrappedArrow = (url: string) =>
+  fetch(url);
+export const wrappedAnnotated = (endpoint: string): Promise<Response> =>
+  fetch(endpoint, { credentials: "include" });
+`;
+  const detected = detectFetchWrappersInSource(src, FETCH_WRAPPERS);
+  assert.ok(
+    detected.has("wrappedArrow"),
+    "concise arrow with body wrapped onto the next line must be detected",
+  );
+  assert.ok(
+    detected.has("wrappedAnnotated"),
+    "line-wrapped concise arrow with return-type annotation must be detected",
+  );
+});

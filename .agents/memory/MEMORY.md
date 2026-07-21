@@ -84,6 +84,7 @@
 - [Global catalog entries defeat "nothing nearby" tests](catalog-global-coverage-e2e.md) — seeded catalog has world-spanning bboxes (GEBCO); empty-result branches need point-radius-query mocked to [].
 - [terrain-land-clamp baseline breakage](terrain-land-clamp-baseline.md) — 6/7 tests fail in baseline as of 2026-07-21 (land clamp sign); pre-existing, don't blame unrelated diffs or escalate tiers.
 - [ESLint flat config core rules off](eslint-flat-config-no-core-rules.md) — root config extends no recommended preset; core rules like no-dupe-keys are inactive unless explicitly listed.
+- [API-guard body extraction ordering](api-guard-body-extraction.md) — try concise-arrow extraction before braces-body; object literals in concise bodies fool the braces extractor, and concise bodies must span newlines.
 - [Toolchain pinned exactly](vite8-vitest-env-pitfalls.md) — vite/@vitejs/plugin-react/vitest are exact-pinned in pnpm-workspace.yaml catalog + bathyscan package.json; bump deliberately and re-run jsx tests + bundle guard.
 - [Skip-count ratchet guard](skip-count-guard.md) — check:skip-count (fast tier) pins unit static skips at 0 and e2e test.skip sites to tests/skip-baseline.json; update baseline in the same commit as any new gated skip.
 - [Font scale convention](font-scale-convention.md) — inline fontSize must be calc(Npx * var(--bs-font-scale,1)); never set inline body px (clobbers daylight CSS). drei/SVG fontSize attrs exempt.

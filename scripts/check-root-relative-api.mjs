@@ -269,11 +269,13 @@ function extractConciseArrowBody(src, parenIdx) {
   const bodyStart = closeParen + 1 + arrow[0].length;
   if (src[bodyStart] === "{") return null; // braces body — extractBody's job
 
+  // Capture the expression up to the terminating `;`, spanning newlines
+  // (Prettier wraps long concise bodies onto the next line). Cap the scan so
+  // a missing semicolon can't swallow the rest of the file.
+  const CAP = 500;
+  const capEnd = Math.min(src.length, bodyStart + CAP);
   const semi = src.indexOf(";", bodyStart);
-  const nl = src.indexOf("\n", bodyStart);
-  let end = src.length;
-  if (semi !== -1) end = Math.min(end, semi);
-  if (nl !== -1) end = Math.min(end, nl);
+  const end = semi !== -1 && semi < capEnd ? semi : capEnd;
   return src.slice(bodyStart, end);
 }
 
@@ -311,8 +313,12 @@ export function detectFetchWrappersInSource(src, wrappers = FETCH_WRAPPERS) {
     if (!URL_PARAM_NAMES.has(param)) continue;
 
     // Extract the function body and check for a bare fetch()/wrapper call.
+    // Try the concise-arrow form first: a concise body may contain an object
+    // literal (e.g. `fetch(url, { credentials: "include" })`) that extractBody
+    // would mistake for a braces body. extractConciseArrowBody returns null
+    // for braces-body arrows and plain functions, so this ordering is safe.
     const body =
-      extractBody(src, afterMatch) ?? extractConciseArrowBody(src, parenIdx);
+      extractConciseArrowBody(src, parenIdx) ?? extractBody(src, afterMatch);
     if (body && (BARE_FETCH_CALL_RE.test(body) || wrapperCallRe.test(body))) {
       found.add(name);
     }
