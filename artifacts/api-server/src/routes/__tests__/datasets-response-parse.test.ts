@@ -38,9 +38,6 @@ const terrainState = vi.hoisted<{ presets: PresetDataset[] }>(() => ({ presets: 
 // Mock path is "../../lib/terrain.js" — two levels up from __tests__, reaching
 // src/lib/terrain.js which is the same resolved path that datasets.ts imports.
 vi.mock("../../lib/terrain.js", () => ({
-  BUNDLED_TERRAIN: {},
-  NYSDEC_BATHY_FEATURE_SERVICE: "https://example.test/nysdec",
-  MN_DNR_BATHY_FEATURE_SERVICE: "https://example.test/mndnr",
   get ALL_PRESET_DATASETS() { return terrainState.presets; },
   buildTerrainGrid: vi.fn(async () => null),
   parseXyzCsv: vi.fn(() => ({ points: [], errors: [] })),

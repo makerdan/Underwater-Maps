@@ -5,7 +5,6 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
 import {
-  GetPoeModelsResponse,
   PoeClassifyResponse,
   PoeQueryResponse,
   PoeHelpResponse,
@@ -290,18 +289,41 @@ async function classifyOneTileWithOpenAi(
 
 let modelsCache: { data: unknown; expiresAt: number } | null = null;
 
+/** Test-only: clear the 1-hour models cache between tests. Never called in production. */
+export function __resetPoeModelsCacheForTests(): void {
+  modelsCache = null;
+}
+
+// Validation policy for GET /models (proxy route):
+//
+// This endpoint forwards Poe's model catalog verbatim. A strict schema
+// (`GetPoeModelsResponse`) would start 500-ing the moment Poe adds new
+// catalog fields the spec doesn't know about, so instead we validate a
+// LENIENT schema covering only the fields consumers actually rely on:
+// `data` must be an array (when present) and every entry must carry a
+// string `id` (the model identifier — the only field clients key off).
+// Zod objects strip-but-accept unknown keys, so benign upstream additions
+// (new top-level fields, new per-model metadata, new models) always pass,
+// and the raw upstream payload — unknown fields included — is what we
+// forward and cache.
+//
+// If even the lenient schema fails, the upstream catalog is genuinely
+// broken for our consumers (e.g. `data` is not an array, or models lost
+// their `id`s); we respond 502 (upstream fault, not a server bug) and do
+// NOT cache the bad payload, so a transient upstream glitch heals on the
+// next request instead of being pinned for an hour.
+const PoeModelsLenientResponse = z.object({
+  data: z.array(z.object({ id: z.string() })).optional(),
+});
+
 router.get("/models", asyncHandler(async (_req, res) => {
   if (modelsCache && Date.now() < modelsCache.expiresAt) {
-    // Proxy route: validate shape and warn on mismatch, but still send the cached response.
-    const cached = modelsCache.data;
-    const parsed = GetPoeModelsResponse.safeParse(cached);
-    if (!parsed.success) {
-      logger.warn({ err: parsed.error }, "GET /api/poe/models — cached response shape mismatch");
-    }
-    res.json(cached);
+    // Cache only ever holds payloads that passed the lenient schema.
+    res.json(modelsCache.data);
     return;
   }
 
+  let data: unknown;
   try {
     const response = await fetch("https://api.poe.com/v1/models", {
       headers: { Authorization: `Bearer ${process.env["POE_API_KEY"] ?? ""}` },
@@ -309,17 +331,21 @@ router.get("/models", asyncHandler(async (_req, res) => {
       // would block the worker indefinitely.
       signal: AbortSignal.timeout(POE_MODELS_TIMEOUT_MS),
     });
-    const data = await response.json();
-    // Proxy route: validate shape and warn on mismatch, but still forward the upstream response.
-    const parsed = GetPoeModelsResponse.safeParse(data);
-    if (!parsed.success) {
-      logger.warn({ err: parsed.error }, "GET /api/poe/models — upstream response shape mismatch");
-    }
-    modelsCache = { data, expiresAt: Date.now() + 60 * 60 * 1000 };
-    res.json(data);
+    data = await response.json();
   } catch {
     res.status(502).json({ error: "models_unavailable", details: "Could not fetch Poe models list" });
+    return;
   }
+
+  const parsed = PoeModelsLenientResponse.safeParse(data);
+  if (!parsed.success) {
+    logger.error({ err: parsed.error }, "GET /api/poe/models — upstream response missing consumed fields");
+    res.status(502).json({ error: "models_unavailable", details: "Poe models response had an unexpected shape" });
+    return;
+  }
+
+  modelsCache = { data, expiresAt: Date.now() + 60 * 60 * 1000 };
+  res.json(data);
 }));
 
 // ---------------------------------------------------------------------------
