@@ -87,6 +87,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:catalog-coverage", resource: null, cmd: "pnpm run check:catalog-coverage", tiers: STANDARD },
     // no resource: pure schema-vs-snapshot diff, no DB connection, sub-second
     { name: "check:schema-stale", resource: null, cmd: "pnpm run check:schema-stale", tiers: STANDARD },
+    // no resource: pure source-file scan for bare numeric fontSize: values, sub-second
+    { name: "check:font-scale", resource: null, cmd: "pnpm run check:font-scale", tiers: STANDARD },
     { name: "check:e2e-user-ids", resource: null, cmd: "pnpm run check:e2e-user-ids", tiers: FULL },
     { name: "check:e2e-cjs-globals", resource: null, cmd: "pnpm run check:e2e-cjs-globals", tiers: FULL },
     // no resource: grep-based panel-collapse localStorage guard, sub-second
