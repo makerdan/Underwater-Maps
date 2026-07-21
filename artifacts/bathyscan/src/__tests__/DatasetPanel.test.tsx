@@ -140,9 +140,26 @@ vi.mock("@/lib/terrainStore", () => {
   return { useTerrainStore, VISIBLE_DATASETS_CAP: 3, MAX_ACTIVE_DATASETS: 3 };
 });
 
-vi.mock("@/lib/uiStore", () => ({
-  useUiStore: { getState: () => ({ setPendingDropIn: vi.fn() }) },
-}));
+vi.mock("@/lib/uiStore", () => {
+  const uiState = {
+    setPendingDropIn: vi.fn(),
+    georefPickBbox: null as null | {
+      minLon: number;
+      minLat: number;
+      maxLon: number;
+      maxLat: number;
+    },
+    georefPickMode: false,
+    setGeorefPickBbox: vi.fn(),
+    setGeorefPickMode: vi.fn(),
+  };
+  const useUiStore = ((sel: (s: typeof uiState) => unknown) =>
+    sel(uiState)) as ((sel: (s: typeof uiState) => unknown) => unknown) & {
+    getState: () => typeof uiState;
+  };
+  useUiStore.getState = () => uiState;
+  return { useUiStore };
+});
 
 vi.mock("@/lib/classificationStore", () => ({
   useClassificationStore: {
