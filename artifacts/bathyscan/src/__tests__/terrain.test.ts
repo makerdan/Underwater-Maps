@@ -465,7 +465,8 @@ describe("applyColormapToVertexColors — band-boundary live repaint", () => {
   it("applyColormapToVertexColors: null cells in a mixed grid are exactly NO_DATA_COLOR after pre-fill", () => {
     // Simulate the full pipeline: buildTerrainGeometry pre-fills null cells with
     // NO_DATA_COLOR, then applyColormapToVertexColors must leave them untouched.
-    const depths: (number | null)[] = [0, null, 500, null, 1000];
+    // First depth is 100 (not 0) — depth ≤ 0 now paints as land/nodata.
+    const depths: (number | null)[] = [100, null, 500, null, 1000];
     const colors = new Float32Array(depths.length * 3);
     // Pre-fill all null-cell slots with NO_DATA_COLOR (as buildTerrainGeometry does)
     for (let i = 0; i < depths.length; i++) {
@@ -486,6 +487,80 @@ describe("applyColormapToVertexColors — band-boundary live repaint", () => {
     // Non-null cells (indices 0, 2, 4) must have been written by the colormap (non-zero).
     const idx0HasColor = colors[0] !== 0 || colors[1] !== 0 || colors[2] !== 0;
     expect(idx0HasColor).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Land cells (finite depth ≤ 0) — treated like survey gaps for colour
+// ---------------------------------------------------------------------------
+
+describe("applyColormapToVertexColors — land cells (depth ≤ 0) use the nodata colour", () => {
+  const NODATA = { r: 0.1, g: 0.2, b: 0.3 };
+
+  it("land (negative depth) and waterline (depth=0) receive the nodata colour, underwater follows the palette", () => {
+    const depths: (number | null)[] = [-25, 0, 500, null];
+    const colors = new Float32Array(depths.length * 3);
+    applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean"), NODATA);
+    // Land cell (index 0) and waterline cell (index 1) → nodata colour.
+    for (const idx of [0, 1, 3]) {
+      expect(colors[idx * 3]).toBeCloseTo(NODATA.r, 5);
+      expect(colors[idx * 3 + 1]).toBeCloseTo(NODATA.g, 5);
+      expect(colors[idx * 3 + 2]).toBeCloseTo(NODATA.b, 5);
+    }
+    // Underwater cell (index 2) must NOT be the nodata colour.
+    const isNodata =
+      Math.abs(colors[6]! - NODATA.r) < 1e-5 &&
+      Math.abs(colors[7]! - NODATA.g) < 1e-5 &&
+      Math.abs(colors[8]! - NODATA.b) < 1e-5;
+    expect(isNodata).toBe(false);
+  });
+
+  it("palette switch leaves land and gap vertices untouched", () => {
+    const depths: (number | null)[] = [-10, null, 800];
+    const colors = new Float32Array(depths.length * 3);
+    applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean"), NODATA);
+    const landBefore = [colors[0], colors[1], colors[2]];
+    const gapBefore = [colors[3], colors[4], colors[5]];
+    const seaBefore = [colors[6], colors[7], colors[8]];
+    // Simulate a palette switch (thermal is a fixed preset — clearly different).
+    applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("thermal"), NODATA);
+    expect([colors[0], colors[1], colors[2]]).toEqual(landBefore);
+    expect([colors[3], colors[4], colors[5]]).toEqual(gapBefore);
+    // The underwater vertex DOES change with the palette.
+    expect([colors[6], colors[7], colors[8]]).not.toEqual(seaBefore);
+  });
+
+  it("without a nodataColor, land cells preserve the existing buffer colour (skip behaviour)", () => {
+    const depths: (number | null)[] = [-5, 500];
+    const colors = new Float32Array(6);
+    colors[0] = NO_DATA_COLOR.r;
+    colors[1] = NO_DATA_COLOR.g;
+    colors[2] = NO_DATA_COLOR.b;
+    applyColormapToVertexColors(depths, 0, 1000, colors, getColormap("ocean"));
+    expect(colors[0]).toBeCloseTo(NO_DATA_COLOR.r, 5);
+    expect(colors[1]).toBeCloseTo(NO_DATA_COLOR.g, 5);
+    expect(colors[2]).toBeCloseTo(NO_DATA_COLOR.b, 5);
+  });
+});
+
+describe("buildTerrainGeometry — land cells painted with NO_DATA_COLOR on first build", () => {
+  it("finite depth ≤ 0 cells get NO_DATA_COLOR, underwater cells get the mid-grey placeholder", () => {
+    const N = 2;
+    const grid = makeGrid(N, { depths: [-5, 0, 500, 1000], minDepth: 0, maxDepth: 1000 });
+    const geo = buildTerrainGeometry(grid);
+    const colors = (geo as unknown as { attributes: { color: { array: Float32Array } } })
+      .attributes?.color?.array;
+    if (!colors) return; // mock geometry may not expose this — structure OK
+    // Land (index 0) and waterline (index 1) → NO_DATA_COLOR.
+    for (const idx of [0, 1]) {
+      expect(colors[idx * 3]).toBeCloseTo(NO_DATA_COLOR.r, 5);
+      expect(colors[idx * 3 + 1]).toBeCloseTo(NO_DATA_COLOR.g, 5);
+      expect(colors[idx * 3 + 2]).toBeCloseTo(NO_DATA_COLOR.b, 5);
+    }
+    // Underwater cells → 0.5 placeholder.
+    for (const idx of [2, 3]) {
+      expect(colors[idx * 3]).toBeCloseTo(0.5, 5);
+    }
   });
 });
 

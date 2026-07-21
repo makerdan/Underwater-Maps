@@ -1,31 +1,38 @@
 /**
  * terrainShader-land-gray.test.ts
  *
- * Regression tests for the land-cell gray override branch in the terrain
+ * Regression tests for the land-cell override branch in the terrain
  * fragment shader (terrainShader.ts).
  *
  * Full GLSL execution is not feasible in a Node unit-test environment.
  * Instead we test the TypeScript equivalent of the GLSL depth-reconstruction
- * and branch-condition logic that drives the gray override, confirming:
+ * and branch-condition logic that drives the land override, confirming:
  *
  *   1. The formula that reconstructs depthM from world-Y, gridMinDepth, and
  *      gridMaxDepth matches the shader's computation.
- *   2. The branch fires (gray override) for cells at or above the waterline
+ *   2. The branch fires (land override) for cells at or above the waterline
  *      (depthM ≤ 0).
  *   3. The branch does NOT fire for cells below the waterline (depthM > 0).
- *   4. The gray color constant (vec3(0.82, 0.82, 0.82)) is documented and
- *      stable.
+ *   4. The material factory exposes a uLandColor uniform (defaulting to the
+ *      historical 0.82 light gray) that TerrainMesh syncs to the user's
+ *      nodata color setting, and the fragment shader uses it in the land
+ *      branch — which stays LAST before gl_FragColor so no overlay bleeds
+ *      onto land.
  *
  * GLSL shader lines being mirrored (from terrainShader.ts):
  *   float t_land = clamp(-vWorldPos.y / 50.0, 0.0, 1.0);
  *   float depthM_land = uGridMinDepth + t_land * (uGridMaxDepth - uGridMinDepth);
- *   if (depthM_land <= 0.0) { finalColor = vec3(0.82, 0.82, 0.82); }
+ *   if (depthM_land <= 0.0) { finalColor = uLandColor; }
  */
 import { describe, it, expect } from "vitest";
+import * as THREE from "three";
 
 import { MAX_DEPTH_WORLD } from "../lib/terrain";
-
-const LAND_GRAY = 0.82;
+import {
+  createTerrainShaderMaterial,
+  DEFAULT_LAND_COLOR_GRAY,
+} from "../lib/terrainShader";
+import type { TerrainTextures } from "../lib/textures";
 
 function reconstructDepthM(
   worldY: number,
@@ -36,7 +43,7 @@ function reconstructDepthM(
   return gridMinDepth + t * (gridMaxDepth - gridMinDepth);
 }
 
-function landGrayBranchFires(
+function landBranchFires(
   worldY: number,
   gridMinDepth: number,
   gridMaxDepth: number,
@@ -44,56 +51,53 @@ function landGrayBranchFires(
   return reconstructDepthM(worldY, gridMinDepth, gridMaxDepth) <= 0;
 }
 
-describe("terrainShader — land-gray branch condition (TS mirror of GLSL)", () => {
-  describe("branch fires (depthM ≤ 0) → gray override applied", () => {
+function makeFakeTextures(): TerrainTextures {
+  const tex = () => new THREE.Texture() as unknown as THREE.CanvasTexture;
+  return {
+    colorTextures: [tex(), tex(), tex(), tex()],
+    normalMaps: [tex(), tex(), tex(), tex()],
+  } as TerrainTextures;
+}
+
+describe("terrainShader — land override branch condition (TS mirror of GLSL)", () => {
+  describe("branch fires (depthM ≤ 0) → land override applied", () => {
     it("Y=0 (waterline vertex, land-clamped cell) fires when gridMinDepth=0", () => {
-      expect(landGrayBranchFires(0, 0, 1000)).toBe(true);
+      expect(landBranchFires(0, 0, 1000)).toBe(true);
     });
 
     it("Y=0 in a coastal grid that straddles 0 (minDepth negative) fires", () => {
       // Coastal dataset: minDepth=-50 (some underwater), maxDepth=5 (some land).
       // Land cells are clamped to Y=0 in geometry, reconstructed depthM=minDepth (-50) → ≤ 0.
-      expect(landGrayBranchFires(0, -50, 5)).toBe(true);
+      expect(landBranchFires(0, -50, 5)).toBe(true);
     });
 
     it("Y=0 with all-positive depth range still fires (depthM = gridMinDepth = 0)", () => {
-      // Pure underwater grid: minDepth=0, maxDepth=500.
-      // A waterline cell at Y=0 should show gray.
-      expect(landGrayBranchFires(0, 0, 500)).toBe(true);
+      expect(landBranchFires(0, 0, 500)).toBe(true);
     });
 
     it("slightly positive Y (above waterline — would not appear in geometry) fires", () => {
-      // Geometry builder pins land to Y=0, but a hypothetical positive Y
-      // (above surface, t=-worldY/50 = clamp(negative) = 0) also gives depthM=minDepth ≤ 0.
-      expect(landGrayBranchFires(1, 0, 1000)).toBe(true);
+      expect(landBranchFires(1, 0, 1000)).toBe(true);
     });
   });
 
   describe("branch does NOT fire (depthM > 0) → normal underwater coloring", () => {
     it("mid-depth cell in an all-positive range does not fire", () => {
       // worldY = -25 → t=0.5 → depthM = 0 + 0.5 * 1000 = 500 > 0
-      expect(landGrayBranchFires(-25, 0, 1000)).toBe(false);
+      expect(landBranchFires(-25, 0, 1000)).toBe(false);
     });
 
     it("deepest cell does not fire", () => {
-      // worldY = -MAX_DEPTH_WORLD → t=1 → depthM = maxDepth > 0
-      expect(landGrayBranchFires(-MAX_DEPTH_WORLD, 0, 1000)).toBe(false);
+      expect(landBranchFires(-MAX_DEPTH_WORLD, 0, 1000)).toBe(false);
     });
 
     it("shallow underwater cell with negative minDepth does not fire", () => {
-      // minDepth=-50, maxDepth=500, worldY=-5 → t=0.1
-      // depthM = -50 + 0.1 * 550 = -50 + 55 = 5 > 0
-      expect(landGrayBranchFires(-5, -50, 500)).toBe(false);
+      // minDepth=-50, maxDepth=500, worldY=-5 → t=0.1 → depthM = 5 > 0
+      expect(landBranchFires(-5, -50, 500)).toBe(false);
     });
 
-    it("deep cell in a coastal grid does not fire", () => {
-      // minDepth=-50, maxDepth=5, worldY=-30
-      // t = 30/50 = 0.6 → depthM = -50 + 0.6 * 55 = -50 + 33 = -17
-      // Wait — this is actually ≤ 0, so it WOULD fire (it's near-surface).
-      // Use a deeper cell: worldY=-40 → t=0.8 → depthM = -50 + 0.8*55 = -50+44 = -6 — still ≤ 0.
-      // Need a grid where the underwater portion is clearly positive:
-      // minDepth=10 (no land), maxDepth=500, worldY=-10 → t=0.2 → depthM=10+0.2*490=108 > 0
-      expect(landGrayBranchFires(-10, 10, 500)).toBe(false);
+    it("deep cell in an all-underwater grid does not fire", () => {
+      // minDepth=10 (no land), maxDepth=500, worldY=-10 → t=0.2 → depthM=108 > 0
+      expect(landBranchFires(-10, 10, 500)).toBe(false);
     });
   });
 
@@ -118,14 +122,55 @@ describe("terrainShader — land-gray branch condition (TS mirror of GLSL)", () 
     });
   });
 
-  describe("gray color constant", () => {
-    it("LAND_GRAY constant is 0.82 (matches vec3(0.82, 0.82, 0.82) in shader)", () => {
-      expect(LAND_GRAY).toBeCloseTo(0.82, 5);
+  describe("uLandColor uniform", () => {
+    it("material factory exposes uLandColor defaulting to the historical light gray", () => {
+      const mat = createTerrainShaderMaterial(makeFakeTextures(), 10);
+      const u = mat.uniforms["uLandColor"];
+      expect(u).toBeDefined();
+      const c = u!.value as THREE.Color;
+      expect(c.r).toBeCloseTo(DEFAULT_LAND_COLOR_GRAY, 5);
+      expect(c.g).toBeCloseTo(DEFAULT_LAND_COLOR_GRAY, 5);
+      expect(c.b).toBeCloseTo(DEFAULT_LAND_COLOR_GRAY, 5);
+      mat.dispose();
     });
 
-    it("gray is lighter than the no-data color (0.75) — land is visually distinct from gaps", () => {
-      const NO_DATA_GRAY = 0.75;
-      expect(LAND_GRAY).toBeGreaterThan(NO_DATA_GRAY);
+    it("uLandColor uniform can be live-updated (TerrainMesh sync path)", () => {
+      const mat = createTerrainShaderMaterial(makeFakeTextures(), 10);
+      const c = mat.uniforms["uLandColor"]!.value as THREE.Color;
+      c.setRGB(0.1, 0.2, 0.3);
+      const after = mat.uniforms["uLandColor"]!.value as THREE.Color;
+      expect(after.r).toBeCloseTo(0.1, 5);
+      expect(after.g).toBeCloseTo(0.2, 5);
+      expect(after.b).toBeCloseTo(0.3, 5);
+      mat.dispose();
+    });
+
+    it("fragment shader declares uLandColor and assigns it in the land branch", () => {
+      const mat = createTerrainShaderMaterial(makeFakeTextures(), 10);
+      const src = mat.fragmentShader;
+      expect(src).toContain("uniform vec3 uLandColor;");
+      expect(src).toContain("finalColor = uLandColor;");
+      // No hardcoded land gray remains in the shader source.
+      expect(src).not.toContain("vec3(0.82");
+      mat.dispose();
+    });
+
+    it("land override stays LAST — no overlay code runs after the land branch", () => {
+      const mat = createTerrainShaderMaterial(makeFakeTextures(), 10);
+      const src = mat.fragmentShader;
+      const landIdx = src.indexOf("finalColor = uLandColor;");
+      const fragIdx = src.indexOf("gl_FragColor =");
+      expect(landIdx).toBeGreaterThan(-1);
+      expect(fragIdx).toBeGreaterThan(landIdx);
+      // Every other assignment/mix into finalColor happens before the land branch.
+      const between = src.slice(landIdx + "finalColor = uLandColor;".length, fragIdx);
+      expect(between).not.toMatch(/finalColor\s*[*+\-]?=/);
+      mat.dispose();
+    });
+
+    it("DEFAULT_LAND_COLOR_GRAY is 0.82 and lighter than the default no-data gray (0.75)", () => {
+      expect(DEFAULT_LAND_COLOR_GRAY).toBeCloseTo(0.82, 5);
+      expect(DEFAULT_LAND_COLOR_GRAY).toBeGreaterThan(0.75);
     });
   });
 });

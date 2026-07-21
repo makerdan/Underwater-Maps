@@ -118,6 +118,16 @@ export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
     // −0 × MAX_DEPTH_WORLD yields −0.0, which stringifies as "−0" in the HUD.
     positions[i * 3 + 1] = clampedT === 0 ? 0 : -clampedT * MAX_DEPTH_WORLD;
 
+    // Land cells (finite depth ≤ 0) are treated like survey gaps for colour:
+    // paint the nodata colour so the first frame matches what
+    // applyColormapToVertexColors will keep on every repaint.
+    if (depth <= 0) {
+      colors[i * 3]     = NO_DATA_COLOR.r;
+      colors[i * 3 + 1] = NO_DATA_COLOR.g;
+      colors[i * 3 + 2] = NO_DATA_COLOR.b;
+      continue;
+    }
+
     // Neutral mid-grey placeholder — overwritten by the TerrainMesh colour effect.
     colors[i * 3]     = 0.5;
     colors[i * 3 + 1] = 0.5;
@@ -654,7 +664,10 @@ export function applyColormapToVertexColors(
     // provided, overwrite the vertex with it (live re-paint on settings change).
     // When no nodataColor is given, preserve whatever colour is already in the
     // buffer (backward-compatible skip behaviour for callers that don't supply one).
-    if (depth === null || depth === undefined || !Number.isFinite(depth)) {
+    // Land cells (finite depth ≤ 0) get the same treatment — they must track
+    // the user's nodata colour instead of the palette so palette switches
+    // never repaint land.
+    if (depth === null || depth === undefined || !Number.isFinite(depth) || depth <= 0) {
       if (nodataColor) {
         colors[i * 3]     = nodataColor.r;
         colors[i * 3 + 1] = nodataColor.g;

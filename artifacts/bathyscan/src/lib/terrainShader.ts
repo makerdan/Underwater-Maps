@@ -26,6 +26,13 @@ export const ZONE_TINT_COLORS = [
   new THREE.Color(0xb06060), // basalt    — muted terracotta
 ] as const;
 
+/**
+ * Default gray component for the land-cell override uniform (uLandColor).
+ * Kept as a named export so tests can assert the factory default; at runtime
+ * TerrainMesh immediately overwrites the uniform with the user's nodata color.
+ */
+export const DEFAULT_LAND_COLOR_GRAY = 0.82;
+
 // ---------------------------------------------------------------------------
 // GLSL source
 // ---------------------------------------------------------------------------
@@ -103,6 +110,10 @@ const fragmentShader = /* glsl */ `
   // Simulated (synthetic) terrain — rainbow banding override
   uniform float uSynthetic; // 0=real data 1=synthetic
   uniform float uTime;      // seconds, drives slow band animation
+
+  // Land-cell override colour — tracks the user's nodata color setting so
+  // land and survey gaps render identically regardless of palette.
+  uniform vec3 uLandColor;
 
   varying vec2  vUv;
   varying vec4  vZoneWeight;
@@ -278,17 +289,19 @@ const fragmentShader = /* glsl */ `
       }
     }
 
-    // ── Land-cell gray override ─────────────────────────────────────────────
+    // ── Land-cell override ──────────────────────────────────────────────────
     // Above-water cells are clamped to Y=0 in the geometry builder so their
     // reconstructed depthM equals uGridMinDepth (which is ≤ 0 for any grid
-    // that contains land cells).  Force those fragments to a flat light-gray
-    // unconditionally — this overrides all substrate / biome / zone / highlight
-    // blending applied above so land never inherits seafloor coloring.
+    // that contains land cells).  Force those fragments to the user's nodata
+    // colour (uLandColor) unconditionally — this overrides all substrate /
+    // biome / zone / highlight blending applied above so land never inherits
+    // seafloor coloring, and stays stable across palette switches.
+    // This block must remain LAST before gl_FragColor.
     {
       float t_land = clamp(-vWorldPos.y / 50.0, 0.0, 1.0);
       float depthM_land = uGridMinDepth + t_land * (uGridMaxDepth - uGridMinDepth);
       if (depthM_land <= 0.0) {
-        finalColor = vec3(0.82, 0.82, 0.82);
+        finalColor = uLandColor;
       }
     }
 
@@ -383,6 +396,9 @@ export function createTerrainShaderMaterial(
       // it only when the loaded grid reports a synthetic data source.
       uSynthetic: { value: 0 },
       uTime:      { value: 0 },
+      // Land-cell override colour — defaults to the historical light gray;
+      // TerrainMesh syncs it to the user's nodata color setting.
+      uLandColor: { value: new THREE.Color(DEFAULT_LAND_COLOR_GRAY, DEFAULT_LAND_COLOR_GRAY, DEFAULT_LAND_COLOR_GRAY) },
       // Intertidal band overlay — 0.0 = disabled (no datums resolved yet).
       // Values are elevations in metres above MLLW; set by TerrainMesh from
       // useIntertidal() whenever the effective MHW/MHHW datums change.

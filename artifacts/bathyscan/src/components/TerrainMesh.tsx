@@ -255,6 +255,16 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       colorAttr.needsUpdate = true;
     }, [paletteShallow, paletteDeep, customStops, effectiveColormapTheme, grid, geometry, bandColors, bandBoundaries, nodataColorRgb]);
 
+    // Sync the land-cell override colour in the fragment shader to the user's
+    // nodata colour so land tracks the same setting as survey gaps and stays
+    // stable across palette switches.
+    useEffect(() => {
+      const u = material.uniforms["uLandColor"];
+      if (u) {
+        (u.value as THREE.Color).setRGB(nodataColorRgb.r, nodataColorRgb.g, nodataColorRgb.b);
+      }
+    }, [nodataColorRgb, material]);
+
     // Substrate colour mode no longer recolours the mesh from slope-derived
     // heuristics. The real ShoreZone polygons are drawn as a draped overlay
     // by <SubstrateLayer> instead; the terrain mesh keeps its depth colormap.
