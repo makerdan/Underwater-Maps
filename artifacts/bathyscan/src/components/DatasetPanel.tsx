@@ -2477,7 +2477,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           text: l.text,
         })),
         pdfBbox: meta.pdfBbox,
-        pdfDepthUnit: meta.pdfDepthUnit,
+        pdfDepthUnit,
         resolution: 256,
         fileName: pendingPdfFile.name,
       });
@@ -2552,7 +2552,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       setRasterExtractPhase("review");
     }
   }, [
-    pendingPdfFile, rasterToken, rasterEditLabels,
+    pendingPdfFile, rasterToken, rasterEditLabels, pdfDepthUnit,
     setDatasetId, setTerrain, qc, setUploadOpen,
     postDatasetsUpload,
   ]);
@@ -4142,6 +4142,23 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                               ))}
                             </div>
                           )}
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                            <span style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>Depth unit:</span>
+                            {(["feet", "meters"] as const).map((u) => (
+                              <label key={u} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", cursor: rasterExtractPhase === "committing" ? "not-allowed" : "pointer", opacity: rasterExtractPhase === "committing" ? 0.5 : 1 }}>
+                                <input
+                                  data-testid={`raster-review-unit-${u}`}
+                                  type="radio"
+                                  name="rasterReviewDepthUnit"
+                                  checked={pdfDepthUnit === u}
+                                  disabled={rasterExtractPhase === "committing"}
+                                  onChange={() => setPdfDepthUnit(u)}
+                                />
+                                {u}
+                              </label>
+                            ))}
+                          </div>
 
                           {rasterExtractPhase === "committing" && (
                             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, color: "#7dd3fc", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>
