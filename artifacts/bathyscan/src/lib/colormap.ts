@@ -19,6 +19,60 @@ export const DEPTH_BAND_BOUNDARIES_FT = [
 /** Maximum depth of the ocean colormap scale in feet. */
 export const OCEAN_MAX_DEPTH_FT = 2000;
 
+const FT_TO_M = 0.3048;
+
+/** Maximum depth of the ocean colormap scale in metres (~609.6 m). */
+export const OCEAN_MAX_DEPTH_M = OCEAN_MAX_DEPTH_FT * FT_TO_M;
+
+/**
+ * True when the theme's colour stops are positioned on the absolute
+ * 0–2000 ft depth scale (band boundaries carry labelled depths). Fixed
+ * preset themes have no labelled depths and remain grid-relative.
+ */
+export function isAbsoluteDepthTheme(theme: ColormapTheme): boolean {
+  return theme === "ocean" || theme === "custom";
+}
+
+/**
+ * Depth domain (in metres) that vertex colouring must normalise against for
+ * a given theme and grid depth range.
+ *
+ * - Ocean/Custom themes: absolute [0, OCEAN_MAX_DEPTH_M] so a vertex at a
+ *   band's labelled depth always renders that band's colour, and shallow
+ *   lakes only use the shallow bands (never the near-black deep endpoint).
+ * - Fixed themes: the grid's own [minDepth, maxDepth] (relative stretch).
+ */
+export function getColormapDepthDomain(
+  theme: ColormapTheme,
+  gridMinDepth: number,
+  gridMaxDepth: number,
+): { min: number; max: number } {
+  if (isAbsoluteDepthTheme(theme)) {
+    return { min: 0, max: OCEAN_MAX_DEPTH_M };
+  }
+  return { min: gridMinDepth, max: gridMaxDepth };
+}
+
+/**
+ * The [tMin, tMax] slice of the colormap that a dataset's depth range
+ * occupies. Legends crop their gradient to this range so grid-relative
+ * tick positions line up with the colours actually painted on the terrain.
+ *
+ * For fixed (grid-relative) themes the dataset always spans the full ramp.
+ */
+export function getColormapTRange(
+  theme: ColormapTheme,
+  gridMinDepth: number,
+  gridMaxDepth: number,
+): { tMin: number; tMax: number } {
+  if (!isAbsoluteDepthTheme(theme)) return { tMin: 0, tMax: 1 };
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+  const tMin = clamp01(gridMinDepth / OCEAN_MAX_DEPTH_M);
+  const tMax = clamp01(gridMaxDepth / OCEAN_MAX_DEPTH_M);
+  if (!(tMax > tMin)) return { tMin: 0, tMax: 1 };
+  return { tMin, tMax };
+}
+
 const OCEAN_HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 /**
@@ -153,19 +207,26 @@ function colorToSrgbBytes(c: THREE.Color): { r: number; g: number; b: number } {
  * @param theme   Colormap theme to sample.
  * @param direction CSS direction (e.g. "to right", "to bottom"). Defaults to "to right".
  * @param samples Number of colour stops; clamped to >= 2. Defaults to 12.
+ * @param tRange  Optional slice of the colormap to sample (e.g. from
+ *                getColormapTRange) so a legend can show only the dataset's
+ *                portion of an absolute depth scale. Defaults to [0, 1].
  */
 export function colormapCssGradient(
   theme: ColormapTheme,
   direction: string = "to right",
   samples: number = 12,
+  tRange?: { tMin: number; tMax: number },
 ): string {
   const n = Math.max(2, samples);
   const toColor = getColormap(theme);
+  const tMin = tRange?.tMin ?? 0;
+  const tMax = tRange?.tMax ?? 1;
   const stops: string[] = [];
   for (let i = 0; i < n; i++) {
-    const t = i / (n - 1);
+    const f = i / (n - 1);
+    const t = tMin + f * (tMax - tMin);
     const { r, g, b } = colorToSrgbBytes(toColor(t));
-    stops.push(`rgb(${r},${g},${b}) ${(t * 100).toFixed(2)}%`);
+    stops.push(`rgb(${r},${g},${b}) ${(f * 100).toFixed(2)}%`);
   }
   return `linear-gradient(${direction}, ${stops.join(", ")})`;
 }
@@ -178,15 +239,18 @@ export function colormapCanvas(
   width: number,
   height: number,
   theme: ColormapTheme = "ocean",
+  tRange?: { tMin: number; tMax: number },
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
   const toColor = getColormap(theme);
+  const tMin = tRange?.tMin ?? 0;
+  const tMax = tRange?.tMax ?? 1;
 
   for (let y = 0; y < height; y++) {
-    const t = y / (height - 1);
+    const t = tMin + (y / (height - 1)) * (tMax - tMin);
     const { r, g, b } = colorToSrgbBytes(toColor(t));
     ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.fillRect(0, y, width, 1);

@@ -774,3 +774,116 @@ describe("getSeaSurfaceY", () => {
     expect(getSeaSurfaceY(grid)).toBeCloseTo(0, 5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Absolute-feet depth mapping convention (ocean/custom themes)
+//
+// Terrain vertex colours for ocean/custom themes must normalise against the
+// absolute 0–2000 ft scale (getColormapDepthDomain), NOT the grid's own
+// min/max range. This guarantees:
+//   1. A vertex at a band's labelled depth renders that band's colour.
+//   2. Shallow lakes never sample the near-black deep endpoint at t=1.
+// ---------------------------------------------------------------------------
+
+import {
+  getColormapDepthDomain,
+  getColormapTRange,
+  OCEAN_MAX_DEPTH_M,
+  OCEAN_MAX_DEPTH_FT,
+} from "../lib/colormap";
+import { DEFAULT_BAND_COLORS } from "../lib/paletteStore";
+
+const FT_TO_M_TEST = 0.3048;
+
+function hexToRgb01(hex: string): { r: number; g: number; b: number } {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return {
+    r: ((n >> 16) & 0xff) / 255,
+    g: ((n >> 8) & 0xff) / 255,
+    b: (n & 0xff) / 255,
+  };
+}
+
+describe("absolute-feet depth mapping — ocean/custom vertex colouring", () => {
+  beforeEach(() => {
+    usePaletteStore.getState().reset();
+  });
+
+  it("getColormapDepthDomain returns [0, OCEAN_MAX_DEPTH_M] for ocean/custom", () => {
+    expect(getColormapDepthDomain("ocean", 3, 12)).toEqual({ min: 0, max: OCEAN_MAX_DEPTH_M });
+    expect(getColormapDepthDomain("custom", 3, 12)).toEqual({ min: 0, max: OCEAN_MAX_DEPTH_M });
+    expect(OCEAN_MAX_DEPTH_M).toBeCloseTo(OCEAN_MAX_DEPTH_FT * FT_TO_M_TEST, 6);
+  });
+
+  it("getColormapDepthDomain returns the grid range for fixed themes", () => {
+    expect(getColormapDepthDomain("thermal", 3, 12)).toEqual({ min: 3, max: 12 });
+    expect(getColormapDepthDomain("grayscale", 0, 100)).toEqual({ min: 0, max: 100 });
+    expect(getColormapDepthDomain("viridis", 5, 50)).toEqual({ min: 5, max: 50 });
+    expect(getColormapDepthDomain("freshwater", 1, 9)).toEqual({ min: 1, max: 9 });
+  });
+
+  it("a vertex at each band boundary depth renders that band's colour", () => {
+    const domain = getColormapDepthDomain("ocean", 0, 10);
+    // Band boundaries 0..9 in feet → metres; each must land on its band stop.
+    const depthsM = DEFAULT_BAND_BOUNDARIES.slice(0, 10).map((ft) => ft * FT_TO_M_TEST);
+    const colors = new Float32Array(depthsM.length * 3);
+    applyColormapToVertexColors(depthsM, domain.min, domain.max, colors, getColormap("ocean"));
+    for (let i = 0; i < depthsM.length; i++) {
+      const expected = hexToRgb01(DEFAULT_BAND_COLORS[i]!);
+      expect(colors[i * 3]).toBeCloseTo(expected.r, 2);
+      expect(colors[i * 3 + 1]).toBeCloseTo(expected.g, 2);
+      expect(colors[i * 3 + 2]).toBeCloseTo(expected.b, 2);
+    }
+  });
+
+  it("a shallow lake (max 12 m ≈ 40 ft) never samples the deep endpoint", () => {
+    const domain = getColormapDepthDomain("ocean", 0, 12);
+    const depths = [0, 3, 6, 9, 12]; // metres
+    const colors = new Float32Array(depths.length * 3);
+    applyColormapToVertexColors(depths, domain.min, domain.max, colors, getColormap("ocean"));
+
+    const deepEndpoint = getColormap("ocean")(1.0);
+    const band0 = hexToRgb01(DEFAULT_BAND_COLORS[0]!);
+    const band1 = hexToRgb01(DEFAULT_BAND_COLORS[1]!);
+    for (let i = 0; i < depths.length; i++) {
+      const c = { r: colors[i * 3]!, g: colors[i * 3 + 1]!, b: colors[i * 3 + 2]! };
+      // Must not be the near-black deep endpoint …
+      const dDeep =
+        Math.abs(c.r - deepEndpoint.r) + Math.abs(c.g - deepEndpoint.g) + Math.abs(c.b - deepEndpoint.b);
+      expect(dDeep).toBeGreaterThan(0.3);
+      // … and must sit within the first band span (between band 0 and band 1
+      // colours, since 12 m ≈ 40 ft < 50 ft first boundary).
+      const inSpan = (v: number, a: number, b: number) =>
+        v >= Math.min(a, b) - 0.02 && v <= Math.max(a, b) + 0.02;
+      expect(inSpan(c.r, band0.r, band1.r)).toBe(true);
+      expect(inSpan(c.g, band0.g, band1.g)).toBe(true);
+      expect(inSpan(c.b, band0.b, band1.b)).toBe(true);
+    }
+  });
+
+  it("a full-scale grid (0–2000 ft) still reaches the deep endpoint", () => {
+    const domain = getColormapDepthDomain("ocean", 0, OCEAN_MAX_DEPTH_M);
+    const depths = [OCEAN_MAX_DEPTH_M];
+    const colors = new Float32Array(3);
+    applyColormapToVertexColors(depths, domain.min, domain.max, colors, getColormap("ocean"));
+    const deepEndpoint = getColormap("ocean")(1.0);
+    expect(colors[0]).toBeCloseTo(deepEndpoint.r, 2);
+    expect(colors[1]).toBeCloseTo(deepEndpoint.g, 2);
+    expect(colors[2]).toBeCloseTo(deepEndpoint.b, 2);
+  });
+
+  it("getColormapTRange crops legends to the dataset's slice of the absolute scale", () => {
+    // 0–12 m lake → tMax = 12 / 609.6 ≈ 0.0197
+    const r = getColormapTRange("ocean", 0, 12);
+    expect(r.tMin).toBe(0);
+    expect(r.tMax).toBeCloseTo(12 / OCEAN_MAX_DEPTH_M, 5);
+    // Fixed themes always span the full ramp.
+    expect(getColormapTRange("thermal", 0, 12)).toEqual({ tMin: 0, tMax: 1 });
+    // Degenerate / flat range falls back to the full ramp.
+    expect(getColormapTRange("ocean", 5, 5)).toEqual({ tMin: 0, tMax: 1 });
+    // Negative minDepth (land) clamps to 0; deeper-than-scale clamps to 1.
+    const r2 = getColormapTRange("ocean", -3, 10000);
+    expect(r2.tMin).toBe(0);
+    expect(r2.tMax).toBe(1);
+  });
+});

@@ -92,6 +92,7 @@ vi.mock("@/lib/overviewRenderer", () => ({
 
 vi.mock("@/lib/colormap", () => ({
   getColormap: () => () => ({ r: 0, g: 0.5, b: 1 }),
+  getColormapDepthDomain: (_theme: string, min: number, max: number) => ({ min, max }),
 }));
 
 vi.mock("@/lib/terrain", () => ({

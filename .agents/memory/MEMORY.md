@@ -90,3 +90,4 @@
 - [Font scale convention](font-scale-convention.md) — inline fontSize must be calc(Npx * var(--bs-font-scale,1)); never set inline body px (clobbers daylight CSS). drei/SVG fontSize attrs exempt.
 - [Marker library sections](marker-library-sections.md) — edit-mode type check must use full MARKER_TYPES (legacy stays valid); partial markerConstants mocks need every section export.
 - [pdfjs v6 server parsing](pdfjs-v6-server-parsing.md) — destroy() is on the loading task not the doc proxy; isEvalSupported missing from typings (cast); constructPath arg format for vector extraction.
+- [Colormap depth-domain convention](colormap-depth-domain-convention.md) — ocean/custom themes normalise depth on absolute 0–2000 ft; fixed ramps stay grid-relative; legends crop via getColormapTRange.

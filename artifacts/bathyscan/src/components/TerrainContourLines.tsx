@@ -2,7 +2,7 @@ import React, { useMemo, useEffect, useRef } from "react";
 import * as THREE from "three";
 import type { TerrainData } from "@workspace/api-client-react";
 import { buildContourLines } from "@/lib/overviewRenderer";
-import { getColormap } from "@/lib/colormap";
+import { getColormap, getColormapDepthDomain } from "@/lib/colormap";
 import { useSettingsStore, deriveEffectiveColormapTheme } from "@/lib/settingsStore";
 import { WORLD_SIZE, MAX_DEPTH_WORLD } from "@/lib/terrain";
 
@@ -73,6 +73,10 @@ const TerrainContourLines: React.FC<TerrainContourLinesProps> = ({ grid }) => {
     const hSegs = Math.max(H - 1, 1);
 
     const toColor = getColormap(effectiveColormapTheme);
+    // Colour normalisation domain must match TerrainMesh: absolute 0–2000 ft
+    // scale for ocean/custom themes, grid-relative for fixed themes.
+    const colorDomain = getColormapDepthDomain(effectiveColormapTheme, minDepth, maxDepth);
+    const colorDomainRange = (colorDomain.max - colorDomain.min) || 1;
 
     const vertexCount = segments.length * 2;
     const positions = new Float32Array(vertexCount * 3);
@@ -89,7 +93,8 @@ const TerrainContourLines: React.FC<TerrainContourLinesProps> = ({ grid }) => {
       // rendered in linear-sRGB, matching how applyColormapToVertexColors
       // works for the terrain mesh. convertLinearToSRGB() must NOT be called
       // here (that is only for CSS/2D-canvas output).
-      const col = toColor(t01);
+      const tColor = Math.max(0, Math.min(1, (depth - colorDomain.min) / colorDomainRange));
+      const col = toColor(tColor);
 
       const base = i * 6;
 
