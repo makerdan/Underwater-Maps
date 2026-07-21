@@ -8,6 +8,7 @@ import { startOrphanedPhotosCleanupJob } from "./lib/orphanedPhotosCleanupJob.js
 import { startRateLimitPruneJob } from "./lib/rateLimitPruneJob.js";
 import { recoverStaleUploadJobs, cleanupStaleChunks, loadCalibrationFromDb } from "./routes/datasets.js";
 import { recoverStaleTerrainBundleJobs } from "./routes/terrain-bundles.js";
+import { checkRasterExtractorDeps } from "./lib/pdfContourRaster.js";
 import type * as http from "http";
 
 // ---------------------------------------------------------------------------
@@ -154,6 +155,22 @@ function startServer(port: number): void {
     // listen address to 127.0.0.1 and using http://127.0.0.1:PORT on the
     // caller side eliminates the ambiguity entirely.
     logger.info({ port: actualPort }, "Server listening on 127.0.0.1");
+
+    // Verify Python packages for raster contour extraction are available.
+    // Non-fatal: logs a clear error with install instructions if missing so
+    // the issue is immediately visible in server logs rather than surfacing
+    // only when a user attempts a raster upload.
+    void checkRasterExtractorDeps().then((ok) => {
+      if (ok) {
+        logger.info("[startup] raster extractor Python deps: ok");
+      } else {
+        logger.error(
+          "[startup] raster extractor Python deps: MISSING — " +
+            "raster contour map uploads will fail. " +
+            "Install: PYTHONUSERBASE=.pythonlibs pip install opencv-python-headless pytesseract Pillow numpy",
+        );
+      }
+    });
 
     // Load per-extension upload duration history so ETA estimates are seeded
     // from the very first job after a restart (non-critical; errors are caught).

@@ -20,9 +20,10 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { writeFile, readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { registerCache } from "./cacheRegistry.js";
 
 import type { RawPoint } from "./uploadParsers.js";
@@ -41,6 +42,101 @@ const execFileP = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const RASTER_CONTOUR_PY = join(__dirname, "raster_contour.py");
+
+// ---------------------------------------------------------------------------
+// Python environment helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Walks up the directory tree from `startDir` looking for a `.pythonlibs`
+ * directory (the Replit pip-wrapper install target).  Returns its absolute
+ * path when found, or undefined if none exists in the search range.
+ */
+function findPythonUserBase(startDir: string): string | undefined {
+  let dir = resolve(startDir);
+  for (let i = 0; i < 8; i++) {
+    const candidate = join(dir, ".pythonlibs");
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
+
+/**
+ * Returns an `env` object suitable for passing to `execFile` / `execFileP`
+ * when spawning the raster_contour.py subprocess.
+ *
+ * Includes PYTHONUSERBASE so the process sees packages installed via the
+ * Replit pip wrapper into `.pythonlibs/` even when the parent process does
+ * not inherit the variable (e.g. fresh vitest worker processes).
+ */
+function buildPythonEnv(): NodeJS.ProcessEnv {
+  const pythonUserBase = findPythonUserBase(__dirname) ?? process.env["PYTHONUSERBASE"];
+  if (!pythonUserBase) return process.env;
+
+  const existing = process.env["PYTHONPATH"] ?? "";
+  const userSite = join(pythonUserBase, "lib", "python3.11", "site-packages");
+  const pythonPath = existing ? `${userSite}:${existing}` : userSite;
+
+  return {
+    ...process.env,
+    PYTHONUSERBASE: pythonUserBase,
+    PYTHONPATH: pythonPath,
+  };
+}
+
+// Computed once at module load.
+const PYTHON_ENV = buildPythonEnv();
+
+// ---------------------------------------------------------------------------
+// Startup dependency check
+// ---------------------------------------------------------------------------
+
+/**
+ * Verifies that the Python packages required by raster_contour.py are
+ * importable in the current environment.
+ *
+ * Call this once at server startup.  If packages are missing it logs a clear
+ * warning with install instructions; it never throws so a missing cv2/
+ * pytesseract doesn't prevent the server from starting (other upload types
+ * remain functional).
+ *
+ * Returns `true` when all dependencies are present, `false` otherwise.
+ */
+export async function checkRasterExtractorDeps(): Promise<boolean> {
+  return new Promise((resolveP) => {
+    execFile(
+      "python3",
+      ["-c", "import numpy, cv2, pytesseract; from PIL import Image"],
+      { env: PYTHON_ENV, timeout: 15_000 },
+      (err, _stdout, stderr) => {
+        if (!err) {
+          resolveP(true);
+          return;
+        }
+        const detail = stderr.trim() || err.message;
+        // Parse the "missing Python dependency: …" lines emitted by
+        // raster_contour.py's dep guard, or fall back to the raw message.
+        const missingLines = detail
+          .split("\n")
+          .filter((l) => l.startsWith("missing Python dependency:"));
+        const hint =
+          missingLines.length > 0
+            ? missingLines.join("; ")
+            : `Python import check failed: ${detail}`;
+        // eslint-disable-next-line no-console
+        console.error(
+          `[raster-extractor] ${hint}. ` +
+            "Raster contour map uploads will fail until these packages are installed. " +
+            "Install with: PYTHONUSERBASE=.pythonlibs pip install opencv-python-headless pytesseract Pillow numpy",
+        );
+        resolveP(false);
+      },
+    );
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Stage 1: render PDF page to PNG
@@ -125,7 +221,7 @@ async function callRasterContourScript(imageBuffer: Buffer): Promise<RasterConto
     const child = execFile(
       "python3",
       [RASTER_CONTOUR_PY],
-      { maxBuffer: 20 * 1024 * 1024 },
+      { maxBuffer: 20 * 1024 * 1024, env: PYTHON_ENV },
       (err, stdout, stderr) => {
         if (err) {
           // The script may emit structured error JSON to stdout (e.g. blank_page)
@@ -135,7 +231,27 @@ async function callRasterContourScript(imageBuffer: Buffer): Promise<RasterConto
           if (scriptErr) {
             return reject(new PdfStageError("extract", scriptErr.message));
           }
-          const detail = stderr.trim() || err.message;
+          const stderrTrimmed = stderr.trim();
+          // Exit code 2 means the script detected missing Python packages.
+          // Surface a clear, actionable message instead of the generic stage error.
+          const exitCode = (err as NodeJS.ErrnoException & { code?: number }).code;
+          if (exitCode === 2 || stderrTrimmed.includes("missing Python dependency:")) {
+            const missingLines = stderrTrimmed
+              .split("\n")
+              .filter((l) => l.startsWith("missing Python dependency:"));
+            const deps =
+              missingLines.length > 0
+                ? missingLines.map((l) => l.replace("missing Python dependency:", "").trim()).join(", ")
+                : "cv2 / pytesseract / numpy / Pillow";
+            return reject(
+              new PdfStageError(
+                "extract",
+                `missing Python dependencies required for raster contour extraction: ${deps}. ` +
+                  "Install with: PYTHONUSERBASE=.pythonlibs pip install opencv-python-headless pytesseract Pillow numpy",
+              ),
+            );
+          }
+          const detail = stderrTrimmed || err.message;
           return reject(
             new PdfStageError("extract", `contour extraction script failed: ${detail}`),
           );

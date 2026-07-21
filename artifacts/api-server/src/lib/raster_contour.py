@@ -20,11 +20,43 @@ import sys
 import os
 import re
 import json
-import numpy as np
-import cv2
-import pytesseract
-from PIL import Image
-import io
+
+# ---------------------------------------------------------------------------
+# Dependency guard — must run before any other import so the caller receives
+# a clear, actionable message instead of a bare ModuleNotFoundError traceback.
+# Exits with code 2 (distinct from generic errors at code 1) so the TypeScript
+# caller can surface a "missing Python dependency" hint rather than a cryptic
+# PdfStageError.
+# ---------------------------------------------------------------------------
+_MISSING_DEPS: list[str] = []
+try:
+    import numpy as np
+except ImportError:
+    _MISSING_DEPS.append("numpy  →  pip install numpy")
+try:
+    import cv2  # noqa: F401 — checked here, used below
+except ImportError:
+    _MISSING_DEPS.append("cv2  →  pip install opencv-python-headless")
+try:
+    import pytesseract  # noqa: F401 — checked here, used below
+except ImportError:
+    _MISSING_DEPS.append("pytesseract  →  pip install pytesseract")
+try:
+    from PIL import Image  # noqa: F401 — checked here, used below
+except ImportError:
+    _MISSING_DEPS.append("PIL  →  pip install Pillow")
+
+if _MISSING_DEPS:
+    for _dep in _MISSING_DEPS:
+        print(f"missing Python dependency: {_dep}", file=sys.stderr)
+    sys.exit(2)
+
+# All dependencies are present — import for real.
+import numpy as np  # noqa: E402
+import cv2  # noqa: E402
+import pytesseract  # noqa: E402
+from PIL import Image  # noqa: E402
+import io  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
