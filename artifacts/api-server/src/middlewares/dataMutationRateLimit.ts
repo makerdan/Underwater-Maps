@@ -25,7 +25,15 @@ export const DATA_MUTATION_MAX = 120;
 
 export const SETTINGS_MUTATION_ROUTE = "settings-mutations";
 export const SETTINGS_MUTATION_WINDOW_MS = 60_000;
-export const SETTINGS_MUTATION_MAX = 30;
+// Default 30/min per user. Overridable via env for e2e runs: the whole e2e
+// suite shares one bypass user, and its many specs (plus the browser's own
+// debounced auto-sync) can legitimately exceed 30 settings PUTs/min — a 429
+// mid-spec then makes an unrelated test flake. Production never sets this.
+const settingsMaxFromEnv = Number(process.env["SETTINGS_MUTATION_MAX"]);
+export const SETTINGS_MUTATION_MAX =
+  Number.isFinite(settingsMaxFromEnv) && settingsMaxFromEnv > 0
+    ? Math.floor(settingsMaxFromEnv)
+    : 30;
 
 export const BULK_DELETE_MARKERS_ROUTE = "markers-bulk-delete";
 export const BULK_DELETE_MARKERS_WINDOW_MS = 60_000;

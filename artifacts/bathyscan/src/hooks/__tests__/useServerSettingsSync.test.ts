@@ -141,7 +141,12 @@ vi.mock("@/components/TidalCurrentArrows", () => ({}));
 
 // ── Import under test (must come after all vi.mock() calls) ──────────────────
 
-import { useServerSettingsSync, requestSettingsSync } from "@/hooks/useServerSettingsSync";
+import {
+  useServerSettingsSync,
+  requestSettingsSync,
+  flushServerSync,
+  hasUnackedSettingsEdits,
+} from "@/hooks/useServerSettingsSync";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -240,6 +245,105 @@ describe("useServerSettingsSync — consecutive flush failures", () => {
     // 2 more failures — counter is at 2, below the threshold again
     await triggerFlushCycles(2);
     expect(toastFn).toHaveBeenCalledTimes(1); // still only one toast
+
+    unmount();
+  });
+});
+
+// ── Tests — immediate flush (onboarding Skip) ordering ───────────────────────
+//
+// Covers the onboarding Skip flow: Skip sets hasSeenOnboarding:true locally
+// then calls flushServerSync() immediately. Two invariants:
+//   1. An immediate flush serializes strictly AFTER an already-in-flight
+//      debounced PUT that carries an OLDER snapshot — and because the payload
+//      is built fresh when its turn on the chain arrives, the final PUT (the
+//      one the server processes last) carries the NEW flag value. A queued
+//      old-snapshot PUT can never silently revert the Skip.
+//   2. A failed immediate flush rejects to the caller (so it can retry) and
+//      leaves hasUnackedSettingsEdits() true until a later flush succeeds —
+//      the signal waitForServerSettingsSync uses to avoid reporting a failed
+//      flush as "already synced".
+
+describe("useServerSettingsSync — immediate flush (Skip) ordering", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mutateAsyncFn.mockReset();
+    mutateAsyncFn.mockResolvedValue({ __updatedAt: "2026-07-01T00:00:00Z" });
+    toastFn.mockClear();
+    (settingsStoreState as Record<string, unknown>)["hasSeenOnboarding"] = false;
+  });
+
+  afterEach(() => {
+    delete (settingsStoreState as Record<string, unknown>)["hasSeenOnboarding"];
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it("serializes behind an in-flight old-snapshot PUT and sends the latest flag last", async () => {
+    // First PUT (debounced, old snapshot) stays in flight until we resolve it.
+    let resolveFirstPut: ((v: unknown) => void) | null = null;
+    mutateAsyncFn.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveFirstPut = resolve; }),
+    );
+
+    const { unmount } = renderHook(() => useServerSettingsSync());
+
+    // Debounced sync fires with hasSeenOnboarding:false in the store.
+    requestSettingsSync();
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await flushMicrotasks();
+    });
+    expect(mutateAsyncFn).toHaveBeenCalledTimes(1);
+    const firstPayload = (mutateAsyncFn.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    expect(firstPayload["hasSeenOnboarding"]).toBe(false);
+
+    // Skip: flip the flag locally, then flush immediately while PUT #1 is
+    // still in flight.
+    (settingsStoreState as Record<string, unknown>)["hasSeenOnboarding"] = true;
+    const skipFlush = flushServerSync();
+    await act(async () => { await flushMicrotasks(); });
+
+    // The immediate flush must NOT fire a concurrent PUT — it queues on the
+    // serialization chain behind the in-flight one.
+    expect(mutateAsyncFn).toHaveBeenCalledTimes(1);
+
+    // Let the old-snapshot PUT land; the Skip flush now runs and builds its
+    // payload fresh — carrying the new flag.
+    resolveFirstPut!({ __updatedAt: "2026-07-01T00:00:01Z" });
+    await act(async () => { await flushMicrotasks(); });
+    await act(async () => { await skipFlush; });
+
+    expect(mutateAsyncFn).toHaveBeenCalledTimes(2);
+    const secondPayload = (mutateAsyncFn.mock.calls[1]![0] as { data: Record<string, unknown> }).data;
+    expect(secondPayload["hasSeenOnboarding"]).toBe(true);
+
+    unmount();
+  });
+
+  it("rejects to the caller on PUT failure and reports unacked edits until a later success", async () => {
+    const { unmount } = renderHook(() => useServerSettingsSync());
+
+    mutateAsyncFn.mockRejectedValueOnce(new Error("429 rate_limit"));
+    (settingsStoreState as Record<string, unknown>)["hasSeenOnboarding"] = true;
+
+    let rejected = false;
+    await act(async () => {
+      await flushServerSync().catch(() => { rejected = true; });
+      await flushMicrotasks();
+    });
+    expect(rejected).toBe(true);
+    // The failed flush must remain visible as dirty state — this is what
+    // keeps waitForServerSettingsSync's fast path from resolving "synced".
+    expect(hasUnackedSettingsEdits()).toBe(true);
+
+    // A subsequent successful flush (the retry path) clears the signal.
+    mutateAsyncFn.mockResolvedValueOnce({ __updatedAt: "2026-07-01T00:00:02Z" });
+    await act(async () => {
+      await flushServerSync();
+      await flushMicrotasks();
+    });
+    expect(hasUnackedSettingsEdits()).toBe(false);
 
     unmount();
   });

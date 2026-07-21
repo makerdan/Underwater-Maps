@@ -18,7 +18,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { useAppState } from "@/lib/context";
-import { flushServerSync } from "@/hooks/useServerSettingsSync";
+import { flushServerSync, requestSettingsSync } from "@/hooks/useServerSettingsSync";
 
 /** Catalog ID for the built-in Lake Ray Roberts demo dataset. */
 const DEMO_DATASET_ID = "lake-ray-roberts";
@@ -132,7 +132,13 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
 
   const dismiss = useCallback(() => {
     setHasSeenOnboarding(true);
-    void flushServerSync();
+    // Flush hasSeenOnboarding:true to the server immediately. If the PUT
+    // fails (network hiccup, rate-limit 429, …) the edit must NOT be silently
+    // dropped — re-enqueue it through the canonical debounced sync path,
+    // which owns retry counting and exponential back-off.
+    flushServerSync().catch(() => {
+      requestSettingsSync();
+    });
   }, [setHasSeenOnboarding]);
 
   const handleSkip = useCallback(() => {

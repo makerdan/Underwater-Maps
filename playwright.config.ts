@@ -155,7 +155,7 @@ export default defineConfig({
       // connection setup can exceed 5 s, producing "Connection terminated due
       // to connection timeout" on the startup queries. A 30 s acquire window
       // rides out that transient contention instead of failing.
-      command: `node scripts/kill-port-holders.mjs ${E2E_API_PORT} && DIST_DIR=${E2E_DIST_DIR} pnpm --filter @workspace/api-server run build:e2e && PORT=${E2E_API_PORT} DIST_DIR=${E2E_DIST_DIR} E2E_AUTH_BYPASS=1 DB_CONNECTION_TIMEOUT_MS=30000 pnpm --filter @workspace/api-server run start:e2e`,
+      command: `node scripts/kill-port-holders.mjs ${E2E_API_PORT} && DIST_DIR=${E2E_DIST_DIR} pnpm --filter @workspace/api-server run build:e2e && PORT=${E2E_API_PORT} DIST_DIR=${E2E_DIST_DIR} E2E_AUTH_BYPASS=1 DB_CONNECTION_TIMEOUT_MS=30000 SETTINGS_MUTATION_MAX=600 pnpm --filter @workspace/api-server run start:e2e`,
       url: `${E2E_API_URL}/api/healthz`,
       reuseExistingServer: false,
       timeout: 60_000,

@@ -58,7 +58,11 @@ import { useShallowSuggestionStore } from "../hooks/useShallowSuggestion";
 import { worldXZToLonLat, buildTerrainGeometry } from "./terrain";
 import { callRegisteredResetCamera } from "./resetCameraRegistry";
 import { applyCameraSpawn } from "./cameraSpawn";
-import { hasPendingOrInFlightSettingsSync, isServerSettled } from "../hooks/useServerSettingsSync";
+import {
+  hasPendingOrInFlightSettingsSync,
+  hasUnackedSettingsEdits,
+  isServerSettled,
+} from "../hooks/useServerSettingsSync";
 import { processFlyWheel } from "./flyWheel";
 import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "./zoneOverlayStore";
 import { openCrosshairContextMenu } from "./terrainContextMenu";
@@ -1008,39 +1012,53 @@ export function installTestHelpers(): void {
       ),
     waitForServerSettingsSync: () => {
       return new Promise<void>((resolve, reject) => {
-        // Fast path: if nothing is pending/in-flight at call time the server
-        // is already up-to-date (either no mutation happened, or a prior sync
-        // already completed). Resolve immediately without polling.
-        if (!hasPendingOrInFlightSettingsSync()) {
+        // Fast path: if nothing is pending/in-flight AND every local edit has
+        // been acknowledged by the server, the server is already up-to-date
+        // (either no mutation happened, or a prior sync already completed).
+        // The hasUnackedSettingsEdits() guard is load-bearing: a fast PUT
+        // failure (e.g. a rate-limit 429) clears _flushInFlight before this
+        // helper runs, so "nothing in flight" alone would wrongly report a
+        // FAILED flush as "already synced" and callers would read a stale
+        // server value.
+        if (!hasPendingOrInFlightSettingsSync() && !hasUnackedSettingsEdits()) {
           resolve();
           return;
         }
-        // Slow path: a debounce timer is armed or a PUT is in flight. Poll
-        // until lastSyncedAt changes — that is the authoritative signal that
-        // markAllSaved() fired after the server acknowledged the PUT. We do
-        // NOT resolve on !hasPendingOrInFlightSettingsSync() alone here,
-        // because a silently-failed PUT would also clear _flushInFlight while
-        // leaving the server with the old value.
+        // Slow path: a sync is outstanding (debounce armed, PUT in flight, or
+        // a failed flush awaiting retry). Poll until lastSyncedAt changes —
+        // the authoritative signal that markAllSaved() fired after the server
+        // acknowledged the PUT — AND all edits are acked.
+        //
+        // Deadline note: flush() itself waits up to 10 s for _serverSettled
+        // before sending its PUT, so this helper's deadline must exceed that
+        // or a legitimate slow flush outlives the helper and its PUT lands
+        // AFTER the test (or its retry) has moved on — clobbering state the
+        // retry just reset.
         const before = useSettingsStore.getState().lastSyncedAt;
-        const deadline = Date.now() + 5_000;
+        const deadline = Date.now() + 15_000;
         const poll = () => {
           const current = useSettingsStore.getState().lastSyncedAt;
           // lastSyncedAt also changes when the initial GET hydration applies
           // the server row (hydrateFromServer stamps it with __updatedAt).
           // That change alone does NOT mean the pending PUT completed — so
           // only resolve once the timestamp moved AND nothing is still
-          // debounced or in flight. Otherwise a hydration landing during the
-          // debounce window resolves this promise early, the caller reloads
-          // the page, and the pending PUT is aborted by navigation.
-          if (current !== before && !hasPendingOrInFlightSettingsSync()) {
+          // debounced or in flight AND no unacked (or failed-flush) edits
+          // remain. Otherwise a hydration landing during the debounce window
+          // resolves this promise early, the caller reloads the page, and the
+          // pending PUT is aborted by navigation.
+          if (
+            current !== before &&
+            !hasPendingOrInFlightSettingsSync() &&
+            !hasUnackedSettingsEdits()
+          ) {
             resolve();
             return;
           }
           if (Date.now() >= deadline) {
             reject(
               new Error(
-                "waitForServerSettingsSync: timed out after 5 s — " +
-                  "lastSyncedAt did not change. " +
+                "waitForServerSettingsSync: timed out after 15 s — " +
+                  "server did not acknowledge the settings write. " +
                   "The debounce may not have fired or the PUT /api/settings failed.",
               ),
             );

@@ -213,9 +213,36 @@ let _ackedPanelRev = 0;
 let _zoneEditRev = 0;
 let _ackedZoneRev = 0;
 
+// True when the most recent flush attempt's PUT failed and no successful PUT
+// has landed since. Lets test helpers distinguish "nothing in flight because
+// everything synced" from "nothing in flight because the flush FAILED and was
+// silently dropped / is waiting on a retry".
+let _lastFlushFailed = false;
+
 /** True when a debounce timer is armed OR a PUT is currently in flight. */
 export function hasPendingOrInFlightSettingsSync(): boolean {
   return _pendingDebounce || _flushInFlight > 0;
+}
+
+/**
+ * True while there are local edits the server has not acknowledged — either
+ * an edit-rev counter is ahead of its acked counterpart, or the most recent
+ * flush attempt failed (so the server may still hold stale values even though
+ * nothing is currently pending or in flight).
+ *
+ * Used by waitForServerSettingsSync in testHelpers: without this, a fast 4xx
+ * on the PUT (e.g. a rate-limit 429) clears _flushInFlight before the helper
+ * runs, its fast path resolves "already synced", and the test reads a stale
+ * server value.
+ */
+export function hasUnackedSettingsEdits(): boolean {
+  return (
+    _lastFlushFailed ||
+    _settingsEditRev > _ackedSettingsRev ||
+    _panelEditRev > _ackedPanelRev ||
+    _zoneEditRev > _ackedZoneRev ||
+    usePaletteStore.getState().rev > _ackedPaletteRev
+  );
 }
 
 /**
@@ -568,6 +595,13 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       // escalated one.
       _consecutiveFlushFailures = 0;
       _backOffStep = 0;
+      _lastFlushFailed = false;
+      } catch (err) {
+        // Record the failure so hasUnackedSettingsEdits() reports dirty state
+        // even after _flushInFlight is cleared — a fast 4xx (e.g. 429) must
+        // not look identical to "already synced" from the outside.
+        _lastFlushFailed = true;
+        throw err;
       } finally {
         _flushInFlight--;
       }
