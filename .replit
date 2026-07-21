@@ -44,6 +44,10 @@ args = "test-fast"
 task = "workflow.run"
 args = "test-standard"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "e2e-repro"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -131,6 +135,17 @@ isValidation = true
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard"
+
+[[workflows.workflow]]
+name = "e2e-repro"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/validation-lock.mjs -- bash -c 'node scripts/kill-port-holders.mjs --e2e && node scripts/run-with-timeout.mjs e2e --label \"terrain-visibility repro\" -- playwright test tests/e2e/terrain-visibility.spec.ts'"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [agent]
 stack = "PNPM_WORKSPACE"

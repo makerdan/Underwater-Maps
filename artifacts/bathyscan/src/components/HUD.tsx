@@ -639,7 +639,10 @@ export const HUD: React.FC = () => {
                 </div>
                 <div style={{ marginTop: 2 }}>
                   <span style={{ color: "#94a3b8" }}>▼ </span>
-                  <span style={{ ...CYAN, fontSize: "calc(19.5px * var(--bs-font-scale, 1))", fontWeight: 700 }}>
+                  <span
+                    data-testid="hud-crosshair-depth"
+                    style={{ ...CYAN, fontSize: "calc(19.5px * var(--bs-font-scale, 1))", fontWeight: 700 }}
+                  >
                     {fmtDepth(crosshairGps.depth)}
                   </span>
                 </div>

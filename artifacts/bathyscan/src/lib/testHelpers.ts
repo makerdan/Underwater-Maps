@@ -55,7 +55,7 @@ import type { LastSession } from "./settingsStore";
 import { usePaletteStore } from "./paletteStore";
 import { usePaletteSuggestionStore } from "../hooks/usePaletteSuggestion";
 import { useShallowSuggestionStore } from "../hooks/useShallowSuggestion";
-import { worldXZToLonLat, buildTerrainGeometry } from "./terrain";
+import { worldXZToLonLat, buildTerrainGeometry, worldYToMetres } from "./terrain";
 import { callRegisteredResetCamera } from "./resetCameraRegistry";
 import { applyCameraSpawn } from "./cameraSpawn";
 import {
@@ -399,6 +399,30 @@ export interface BathyTestApi {
   /** Snapshot of the React-bound active terrain (datasetId + hasTopography). */
   getTerrainSummary: () =>
     | { datasetId: string | null | undefined; hasTopography: boolean | undefined }
+    | null;
+  /**
+   * Headless analog of the crosshair raycast. Builds the REAL terrain
+   * geometry (buildTerrainGeometry — the exact function TerrainMesh renders
+   * from) for the currently loaded terrain, inspects its vertical extent,
+   * and — only when the mesh has actual relief — publishes the deepest
+   * vertex's lon/lat/depth to the camera store's crosshairGps, exactly what
+   * a real raycast hit would do.
+   *
+   * If a depth→worldY regression flattens the mesh (e.g. the historical
+   * Math.min land clamp that collapsed every vertex to Y=0 — invisible
+   * terrain), `flat` is true, no crosshair is published, and the HUD keeps
+   * showing "— NO TERRAIN —": the e2e spec fails just like a user's raycast
+   * would miss. Returns null when no terrain is loaded.
+   */
+  probeTerrainGeometry: () =>
+    | {
+        datasetId: string | null | undefined;
+        minY: number;
+        maxY: number;
+        flat: boolean;
+        synced: boolean;
+        depthM: number | null;
+      }
     | null;
   seedZoneMap: (resolution: number, fillZone?: number) => void;
   paintZone: (
@@ -1222,6 +1246,47 @@ export function installTestHelpers(): void {
         datasetId: t.datasetId,
         hasTopography: (t as unknown as { hasTopography?: boolean }).hasTopography,
       };
+    },
+    probeTerrainGeometry: () => {
+      const t = appGetTerrainRef.current;
+      if (!t) return null;
+      // CPU-only: buildTerrainGeometry needs no WebGL context, so this runs
+      // in headless Chromium even when the R3F Canvas is the stub fallback.
+      const geometry = buildTerrainGeometry(t);
+      const pos = geometry.getAttribute("position") as THREE.BufferAttribute;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      let deepestIdx = -1;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        if (y > maxY) maxY = y;
+        if (y < minY) {
+          minY = y;
+          deepestIdx = i;
+        }
+      }
+      // The invisible-terrain failure mode is a mesh with no vertical relief
+      // (all vertices collapsed to a single Y, typically 0). A healthy grid
+      // with real depths always spans a measurable range.
+      const flat = !(pos.count > 0 && maxY - minY > 1e-3);
+      let synced = false;
+      let depthM: number | null = null;
+      if (!flat && deepestIdx >= 0) {
+        const y = pos.getY(deepestIdx);
+        depthM = worldYToMetres(y, t);
+        if (depthM !== null && depthM > 0) {
+          const { lon, lat } = worldXZToLonLat(
+            pos.getX(deepestIdx),
+            pos.getZ(deepestIdx),
+            t,
+          );
+          // Same store write a real raycast hit performs each frame.
+          useCameraStore.getState().setCrosshairGps({ lon, lat, depth: depthM });
+          synced = true;
+        }
+      }
+      geometry.dispose();
+      return { datasetId: t.datasetId, minY, maxY, flat, synced, depthM };
     },
     seedZoneMap: (resolution, fillZone = 0) => {
       const N = resolution * resolution;
