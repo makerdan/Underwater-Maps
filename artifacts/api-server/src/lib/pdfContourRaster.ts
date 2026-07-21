@@ -96,6 +96,30 @@ interface RasterContourOutput {
   height: number;
 }
 
+interface ScriptErrorJson {
+  error: string;
+  message: string;
+}
+
+function _tryParseScriptError(stdout: string): ScriptErrorJson | null {
+  if (!stdout.trim().startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(stdout) as unknown;
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "error" in parsed &&
+      "message" in parsed &&
+      typeof (parsed as Record<string, unknown>).message === "string"
+    ) {
+      return parsed as ScriptErrorJson;
+    }
+  } catch {
+    /* not JSON */
+  }
+  return null;
+}
+
 async function callRasterContourScript(imageBuffer: Buffer): Promise<RasterContourOutput> {
   return new Promise((resolve, reject) => {
     const child = execFile(
@@ -104,6 +128,13 @@ async function callRasterContourScript(imageBuffer: Buffer): Promise<RasterConto
       { maxBuffer: 20 * 1024 * 1024 },
       (err, stdout, stderr) => {
         if (err) {
+          // The script may emit structured error JSON to stdout (e.g. blank_page)
+          // instead of printing to stderr.  Check for that first so we can surface
+          // a clean user-readable message rather than a generic "script failed" wrap.
+          const scriptErr = _tryParseScriptError(stdout);
+          if (scriptErr) {
+            return reject(new PdfStageError("extract", scriptErr.message));
+          }
           const detail = stderr.trim() || err.message;
           return reject(
             new PdfStageError("extract", `contour extraction script failed: ${detail}`),

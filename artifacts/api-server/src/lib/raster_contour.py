@@ -38,6 +38,22 @@ DEPTH_RE = re.compile(
 MIN_OCR_CONFIDENCE = 20
 TEXT_REGION_PADDING = 8
 
+# A page whose greyscale mean is >= this value (out of 255) is considered blank.
+# Nearly-white renders (encrypted/corrupted PDFs, empty pages) typically have
+# mean > 250 with near-zero std-dev.
+BLANK_MEAN_THRESHOLD = 250
+# Additionally, if the std-dev is very low even on slightly-grey images we
+# also treat the page as blank (no meaningful content).
+BLANK_STDDEV_THRESHOLD = 4.0
+
+
+# ---------------------------------------------------------------------------
+# Blank-image sentinel exception
+# ---------------------------------------------------------------------------
+
+class BlankImageError(Exception):
+    """Raised when the input image has no detectable content (blank page)."""
+
 
 # ---------------------------------------------------------------------------
 # Zhang-Suen thinning (vectorized NumPy)
@@ -202,6 +218,24 @@ def _rdp_simplify(points, epsilon: float = 2.0):
 
 
 # ---------------------------------------------------------------------------
+# Blank-image detection
+# ---------------------------------------------------------------------------
+
+def _is_blank_image(img_bgr: np.ndarray) -> bool:
+    """
+    Returns True when the image has no meaningful content.
+
+    We convert to greyscale and check two criteria (either suffices):
+      1. Mean pixel brightness >= BLANK_MEAN_THRESHOLD  (near-white page)
+      2. Std-dev < BLANK_STDDEV_THRESHOLD               (uniform grey / no lines)
+    """
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    mean = float(gray.mean())
+    stddev = float(gray.std())
+    return mean >= BLANK_MEAN_THRESHOLD or stddev < BLANK_STDDEV_THRESHOLD
+
+
+# ---------------------------------------------------------------------------
 # Main extraction pipeline
 # ---------------------------------------------------------------------------
 
@@ -218,6 +252,15 @@ def extract_contours_from_image(img_bytes: bytes) -> dict:
     img_bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img_bgr is None:
         raise ValueError("Could not decode image bytes.")
+
+    # ── 0. Blank-page guard ────────────────────────────────────────────────
+    #
+    # Fast-fail before the expensive OCR / line-detection stages.  A blank
+    # render almost always means the PDF is encrypted, empty, or corrupt.
+    if _is_blank_image(img_bgr):
+        raise BlankImageError(
+            "PDF rendered as a blank page — check that the file is not encrypted or corrupt"
+        )
 
     h, w = img_bgr.shape[:2]
 
@@ -357,6 +400,12 @@ if __name__ == '__main__':
             sys.exit(1)
         result = extract_contours_from_image(img_bytes)
         json.dump(result, sys.stdout)
+    except BlankImageError as exc:
+        # Emit a structured error JSON so the TypeScript caller can surface a
+        # user-readable message without wrapping it in a generic "script failed"
+        # prefix.  Exit code 1 signals failure; stdout carries the JSON payload.
+        json.dump({"error": "blank_page", "message": str(exc)}, sys.stdout)
+        sys.exit(1)
     except Exception as exc:
         print(f"raster_contour error: {exc}", file=sys.stderr)
         sys.exit(1)
