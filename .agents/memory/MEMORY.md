@@ -76,3 +76,4 @@
 - [catalog-search waterType filter count](catalog-search-watertype-count.md) — test that filters SEEDED_PLUS_FRESHWATER by waterType must use dynamic count; stale comment said EXTRA_CATALOG_ENTRIES was saltwater-only.
 - [supertest requireAuth bypass header](supertest-requireauth-bypass-header.md) — test apps mounting requireAuth routers must inject x-e2e-user-id or getAuth() throws and every request 500s.
 - [terrain.js mock export sync](terrain-mock-export-sync.md) — new module-init exports from lib/terrain.js must be stubbed in every full vi.mock or app-loading tests crash with misleading errors.
+- [ESLint flat config core rules off](eslint-flat-config-no-core-rules.md) — root config extends no recommended preset; core rules like no-dupe-keys are inactive unless explicitly listed.

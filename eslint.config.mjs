@@ -350,6 +350,10 @@ export default [
       "react-hooks": reactHooks,
     },
     rules: {
+      // Duplicate keys in object literals (e.g. two merges adding the same
+      // stub export to a vi.mock factory) must fail lint immediately instead
+      // of surfacing later as TS1117 deep in the typecheck step.
+      "no-dupe-keys": "error",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-redeclare": "error",
