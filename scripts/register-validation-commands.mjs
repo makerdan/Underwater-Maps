@@ -2,7 +2,7 @@
 /**
  * register-validation-commands.mjs
  *
- * Canonical manifest of the three tiered validation commands.
+ * Canonical manifest of the four tiered validation commands.
  *
  * When run as a shell script it prints the manifest so post-merge.sh
  * can echo it to the log. The commands listed here are what must be
@@ -20,9 +20,10 @@
  * jump the queue ahead of heavy steps with priority 3.
  *
  * Budget keys live in tests/timeout-guard/budgets.json:
- *   tierFast.runBudgetMs     = 300 000 ms  (5 min)
- *   tierStandard.runBudgetMs = 1 200 000 ms (20 min)
- *   aggregate.totalBudgetMs  = 2 700 000 ms (45 min)
+ *   tierFast.runBudgetMs         = 300 000 ms   (5 min)
+ *   tierStandard.runBudgetMs     = 1 200 000 ms (20 min)
+ *   tierStandardPlus.runBudgetMs = 2 100 000 ms (35 min)
+ *   aggregate.totalBudgetMs      = 3 000 000 ms (50 min)
  */
 
 export const VALIDATION_COMMANDS = [
@@ -42,6 +43,16 @@ export const VALIDATION_COMMANDS = [
     description:
       "typecheck + lint + unit tests + docs/catalog checks (~20 min). " +
       "Pick for bug fixes, features touching existing endpoints, new settings keys.",
+  },
+  {
+    name: "test-standard-plus",
+    command:
+      "node scripts/run-with-timeout.mjs tierStandardPlus -- node scripts/run-tier.mjs full",
+    budgetKey: "tierStandardPlus",
+    description:
+      "all static + unit steps, no Playwright (~35 min). " +
+      "Pick for new API endpoints with no existing e2e coverage, or refactors spanning " +
+      "multiple packages with no auth/schema/e2e changes.",
   },
   {
     name: "test-heavy",

@@ -58,5 +58,9 @@
   },
   "tierStandard": {
     "runBudgetMs": 1200000
+  },
+  "tierStandardPlus": {
+    "$comment": "Covers the full static + unit tier (run-tier.mjs full): all fast + standard steps plus full-tier check:* guards (check:e2e-user-ids, check:e2e-cjs-globals, check:e2e-panel-collapse, check:fixture-freshness, check:ports, check:port-drift, check:audit, check:bare-pino-http-mock). No Playwright suites. ~35 min.",
+    "runBudgetMs": 2100000
   }
 }
