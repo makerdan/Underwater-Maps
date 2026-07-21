@@ -1,4 +1,11 @@
-import { test, expect, type Page } from "./fixtures";
+import {
+  test,
+  expect,
+  apiUrl,
+  DEFAULT_SETTINGS,
+  E2E_USER_ID,
+  type Page,
+} from "./fixtures";
 
 /**
  * Task #131 — End-to-end coverage for the water-surface / landmass toggles,
@@ -109,7 +116,28 @@ test.describe("Water surface & landmass toggles — Settings", () => {
 });
 
 test.describe("TOPO badge & download — ProvenancePanel", () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, request }) => {
+    // Lake Ray Roberts is the only built-in preset and it is FRESHWATER.
+    // The fixtures' resetSettings seed sets waterType "saltwater", whose
+    // preset list is now empty — with no dataset to auto-load, terrain stays
+    // null and the Explore tab shows the empty state instead of the
+    // DatasetPanel, so btn-dataset-lake-ray-roberts never appears. Override
+    // the water type to freshwater both server-side (source of truth after
+    // hydrate) and in the persisted local store (so the first datasets query
+    // already targets freshwater).
+    await request.put(apiUrl("/api/settings"), {
+      headers: { "x-e2e-user-id": E2E_USER_ID },
+      data: { ...DEFAULT_SETTINGS, waterType: "freshwater" },
+    });
+    await page.addInitScript(() => {
+      try {
+        const raw = localStorage.getItem("bathyscan:settings");
+        const parsed: { state?: Record<string, unknown>; version?: number } =
+          raw ? JSON.parse(raw) : {};
+        parsed.state = { ...(parsed.state ?? {}), waterType: "freshwater" };
+        localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+      } catch {}
+    });
     // Suppress SimulatedDataConfirmDialog so the dataset auto-load completes
     // without a blocking modal, letting the provenance panel mount and render
     // the TOPO badge once terrain is seeded via __bathyTest.seedTerrain.
