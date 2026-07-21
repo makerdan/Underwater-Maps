@@ -128,8 +128,13 @@ export interface TerrainGrid {
  *       Lake Minnetonka, and Mille Lacs now try state-agency contour
  *       sources before 3DEP; previously cached 3DEP grids for those AOIs
  *       must be rebuilt against the new priority chain.
+ *  11 — Catalog data-source repairs: NYSDEC `DEPTH` and MN DNR `depth`
+ *       contour fields are FEET, not metres (previously treated as metres →
+ *       depths 3.3x too deep). Lake George and Cayuga dropped `nysdec-bathy`
+ *       (no coverage in the successor Finger Lakes service). Previously
+ *       cached nysdec/mn-dnr grids must be rebuilt.
  */
-export const TERRAIN_CACHE_VERSION = 10;
+export const TERRAIN_CACHE_VERSION = 11;
 
 export interface DatasetMeta {
   id: string;
@@ -439,8 +444,9 @@ function matchGreatLakeCoverage(bbox: {
  * (services6.arcgis.com/v1XbFnus3vB7bnKv) was deleted upstream — the org
  * now publishes zero services (verified 2026-07). The remaining published
  * dataset is "Bathymetry of the Finger Lakes" (depth polygons with a DEPTH
- * field), which covers Seneca, Cayuga, and the other Finger Lakes but NOT
- * Lake George — Lake George requests now fall through to USGS 3DEP.
+ * field in FEET), which covers only Canadice, Canandaigua, Conesus, Hemlock,
+ * Honeoye, and Seneca — NOT Cayuga, Keuka, or Lake George. Those lakes now
+ * fall through to USGS 3DEP.
  */
 export const NYSDEC_BATHY_FEATURE_SERVICE =
   "https://services1.arcgis.com/4ZdJfkWE583IARCX/arcgis/rest/services/ENV_Finger_Lake_Bathymetry/FeatureServer/0";
@@ -457,37 +463,49 @@ export const MN_DNR_BATHY_FEATURE_SERVICE =
   "https://enterprise.gisdata.mn.gov/aghost/rest/services/us_mn_state_dnr/water_lake_bathymetry/MapServer/0";
 
 /**
- * Candidate depth-attribute field names across ArcGIS bathymetry schemas.
- * The query requests all of them via outFields; we use the first non-null value.
- * Convention: *_FT fields are feet (divided by 0.3048 to get metres); *_M fields
- * are already metres.
+ * Candidate depth-attribute field names across ArcGIS bathymetry schemas,
+ * each tagged with its measurement unit. The query requests all fields via
+ * outFields=* and we use the first non-null value in priority order.
+ *
+ * Units verified against published max depths (2026-07):
+ *  - NYSDEC Finger Lakes service `DEPTH` is FEET (Honeoye max contour 30 ≈
+ *    published 30 ft; Canandaigua 250 ≈ published 276 ft — metres would be
+ *    3.3x too deep).
+ *  - MN DNR `depth` / `abs_depth` are FEET (Minnetonka max contour 100 ≈
+ *    published 113 ft; `depth` is negative, `abs_depth` positive).
+ *  - Bare `CONTOUR` follows the same US state lake-map convention (feet).
  */
-const ARCGIS_DEPTH_FIELDS = [
-  "DEPTH_M",
-  "DEPTH_FT",
-  "DEPTH",
-  // MN DNR enterprise host returns lowercase field names; `depth` is the
-  // contour depth in feet (LakeFinder convention).
-  "depth",
-  "CONTOUR_M",
-  "CONTOUR_FT",
-  "CONTOUR",
-  "ELEV_M",
-  "ELEV_FT",
+const ARCGIS_DEPTH_FIELDS: readonly { name: string; unit: "m" | "ft" }[] = [
+  { name: "DEPTH_M", unit: "m" },
+  { name: "DEPTH_FT", unit: "ft" },
+  { name: "DEPTH", unit: "ft" },
+  // MN DNR enterprise host returns lowercase field names (LakeFinder
+  // convention); `depth` is negative feet, `abs_depth` positive feet.
+  { name: "depth", unit: "ft" },
+  { name: "abs_depth", unit: "ft" },
+  { name: "CONTOUR_M", unit: "m" },
+  { name: "CONTOUR_FT", unit: "ft" },
+  { name: "CONTOUR", unit: "ft" },
+  { name: "ELEV_M", unit: "m" },
+  { name: "ELEV_FT", unit: "ft" },
 ];
+
+const FEET_TO_METRES = 0.3048;
 
 /**
  * Extract a numeric depth value (metres) from an ArcGIS feature's attributes.
- * Tries each candidate field in priority order; converts feet → metres when the
- * winning field name ends in `_FT`.
+ * Tries each candidate field in priority order; converts feet → metres for
+ * fields tagged as feet. Exported for unit tests.
  */
-function extractArcGisDepthM(attrs: Record<string, unknown>): number | null {
-  for (const field of ARCGIS_DEPTH_FIELDS) {
-    const raw = attrs[field];
+export function extractArcGisDepthM(
+  attrs: Record<string, unknown>,
+): number | null {
+  for (const { name, unit } of ARCGIS_DEPTH_FIELDS) {
+    const raw = attrs[name];
     if (raw === null || raw === undefined || raw === "") continue;
     const v = Number(raw);
     if (!isFinite(v)) continue;
-    const depthM = field.endsWith("_FT") ? v * 0.3048 : v;
+    const depthM = unit === "ft" ? v * FEET_TO_METRES : v;
     return Math.abs(depthM);
   }
   return null;
@@ -846,7 +864,8 @@ export const BATHYMETRY_SOURCES = {
     label: "NYSDEC Lake Bathymetry",
     scope: "state" as BathymetrySourceScope,
     dataSource: "nysdec" as TerrainDataSource,
-    creditUrl: "https://data.gis.ny.gov/datasets/nysdec-lake-bathymetry",
+    creditUrl:
+      "https://data.gis.ny.gov/datasets/bff954401b5641a2a920482532b7a0ae_0/about",
     async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
       if (!isWithinConus(meta.bbox)) {
         throw new Error("NYSDEC Bathy: bbox outside continental US — skipping");
@@ -963,10 +982,20 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   // Northeast freshwater lakes — NYSDEC ArcGIS REST first for NY lakes with
   // documented surveys, USGS 3DEP fallback, GEBCO last.
   // ---------------------------------------------------------------------------
-  "fw-lake-george-ny": ["nysdec-bathy", "usgs-3dep", "gebco"],
+  // Lake George: the NYSDEC statewide bathymetry service was deleted
+  // upstream and its replacement ("Bathymetry of the Finger Lakes") covers
+  // only Canadice/Canandaigua/Conesus/Hemlock/Honeoye/Seneca (verified
+  // 2026-07: zero features intersect the Lake George bbox). No public
+  // machine-readable Lake George survey bathymetry exists (checked ArcGIS
+  // Online, the new NYSDEC org, NYS GIS clearinghouse, Warren County GIS,
+  // Lake George Park Commission, CUGIR, ScienceBase, HydroShare) — the DEC
+  // sonar map is PDF-only. 3DEP topobathy is the honest best available.
+  "fw-lake-george-ny": ["usgs-3dep", "gebco"],
   "fw-lake-champlain": ["usgs-3dep", "gebco"],
   "fw-seneca-lake-ny": ["nysdec-bathy", "usgs-3dep", "gebco"],
-  "fw-cayuga-lake-ny": ["nysdec-bathy", "usgs-3dep", "gebco"],
+  // Cayuga is NOT in the Finger Lakes bathymetry service (only 6 lakes are;
+  // verified 2026-07), so it routes straight to 3DEP like Lake George.
+  "fw-cayuga-lake-ny": ["usgs-3dep", "gebco"],
   "fw-oneida-lake-ny": ["usgs-3dep", "gebco"],
   "fw-lake-placid-ny": ["usgs-3dep", "gebco"],
   "fw-saranac-lake-ny": ["usgs-3dep", "gebco"],

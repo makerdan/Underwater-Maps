@@ -76,7 +76,7 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
       dataType: "bathymetry",
       coverageBbox: { minLon: -107.72, minLat: 36.8, maxLon: -107.3, maxLat: 37.1 },
       endpointUrl:
-        "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
+        "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
       waterType: "freshwater",
     },
   ],

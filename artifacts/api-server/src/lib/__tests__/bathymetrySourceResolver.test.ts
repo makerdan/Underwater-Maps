@@ -317,26 +317,28 @@ describe("nysdec-bathy source", () => {
     expect(typeof src.fetch).toBe("function");
   });
 
-  it("is the top-ranked source for fw-lake-george-ny", () => {
-    expect(DATASET_SOURCE_PRIORITY["fw-lake-george-ny"]?.[0]).toBe("nysdec-bathy");
-  });
-
   it("is the top-ranked source for fw-seneca-lake-ny", () => {
     expect(DATASET_SOURCE_PRIORITY["fw-seneca-lake-ny"]?.[0]).toBe("nysdec-bathy");
   });
 
-  it("is the top-ranked source for fw-cayuga-lake-ny", () => {
-    expect(DATASET_SOURCE_PRIORITY["fw-cayuga-lake-ny"]?.[0]).toBe("nysdec-bathy");
+  // The Finger Lakes successor service covers only Canadice, Canandaigua,
+  // Conesus, Hemlock, Honeoye, and Seneca — Lake George and Cayuga must NOT
+  // route through nysdec-bathy (verified zero coverage 2026-07).
+  it("does NOT appear in the fw-lake-george-ny priority list", () => {
+    const priority = DATASET_SOURCE_PRIORITY["fw-lake-george-ny"] ?? [];
+    expect(priority).not.toContain("nysdec-bathy");
   });
 
-  it("fw-lake-george-ny falls back to usgs-3dep then gebco", () => {
+  it("does NOT appear in the fw-cayuga-lake-ny priority list", () => {
+    const priority = DATASET_SOURCE_PRIORITY["fw-cayuga-lake-ny"] ?? [];
+    expect(priority).not.toContain("nysdec-bathy");
+  });
+
+  it("fw-lake-george-ny gracefully falls back to usgs-3dep then gebco", () => {
     const priority = DATASET_SOURCE_PRIORITY["fw-lake-george-ny"] ?? [];
-    expect(priority).toContain("usgs-3dep");
-    expect(priority).toContain("gebco");
-    const nysdecIdx = priority.indexOf("nysdec-bathy");
+    expect(priority[0]).toBe("usgs-3dep");
     const depIdx = priority.indexOf("usgs-3dep");
     const gebcoIdx = priority.indexOf("gebco");
-    expect(nysdecIdx).toBeLessThan(depIdx);
     expect(depIdx).toBeLessThan(gebcoIdx);
   });
 

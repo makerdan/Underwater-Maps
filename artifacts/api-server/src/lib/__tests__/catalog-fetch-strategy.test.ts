@@ -70,7 +70,11 @@ describe("catalog fetchStrategy rollout guard", () => {
     expect(kind("ncei-dem-global-mosaic")).toBe("ncei-wcs");
     expect(kind("ncei-crm-s-alaska")).toBe("ncei-wcs");
     expect(kind("fw-lake-superior")).toBe("great-lakes-wcs");
-    expect(kind("fw-lake-george-ny")).toBe("arcgis-rest");
+    // Lake George has no public bathymetry service (NYSDEC statewide service
+    // deleted upstream; Finger Lakes successor has no coverage) — it now
+    // falls back honestly to USGS 3DEP.
+    expect(kind("fw-lake-george-ny")).toBe("usgs-3dep");
+    expect(kind("fw-seneca-lake-ny")).toBe("arcgis-rest");
     expect(kind("fw-lake-minnetonka-mn")).toBe("arcgis-rest");
     expect(kind("fw-lake-mead-nv-az")).toBe("usgs-3dep");
     expect(kind("fw-kentucky-lake-ky-tn")).toBe("usgs-3dep");
@@ -81,7 +85,7 @@ describe("catalog fetchStrategy rollout guard", () => {
 
   it("NYSDEC and MN DNR strategies carry the arcgis-rest service params", () => {
     const byId = new Map(EXTRA_CATALOG_ENTRIES.map((e) => [e.id, e]));
-    const ny = deriveCatalogFetchStrategy(byId.get("fw-lake-george-ny")!);
+    const ny = deriveCatalogFetchStrategy(byId.get("fw-seneca-lake-ny")!);
     expect(ny).toMatchObject({ kind: "arcgis-rest", dataSource: "nysdec" });
     if (ny?.kind === "arcgis-rest") {
       expect(ny.serviceUrl).toContain("arcgis");

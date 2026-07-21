@@ -36,7 +36,8 @@ const NYSDEC_STRATEGY: FetchStrategy = {
   serviceUrl: NYSDEC_BATHY_FEATURE_SERVICE,
   sourceLabel: "NYSDEC Lake Bathymetry",
   dataSource: "nysdec",
-  creditUrl: "https://data.gis.ny.gov/datasets/nysdec-lake-bathymetry",
+  creditUrl:
+    "https://data.gis.ny.gov/datasets/bff954401b5641a2a920482532b7a0ae_0/about",
 };
 
 const MN_DNR_STRATEGY: FetchStrategy = {
@@ -46,6 +47,15 @@ const MN_DNR_STRATEGY: FetchStrategy = {
   dataSource: "mn-dnr",
   creditUrl: "https://www.dnr.state.mn.us/lakefind/index.html",
 };
+
+/** Entry ids for the five Great Lakes (see Great Lakes matching note below). */
+const GREAT_LAKE_ENTRY_IDS = new Set([
+  "fw-lake-superior",
+  "fw-lake-michigan",
+  "fw-lake-huron",
+  "fw-lake-erie",
+  "fw-lake-ontario",
+]);
 
 /**
  * True when a pre-built static bundle covers the centre of the given bbox
@@ -96,16 +106,34 @@ export function deriveCatalogFetchStrategy(
   const url = (entry.endpointUrl ?? "").toLowerCase();
   if (!url) return null;
 
+  // The five Great Lakes entries share the DEM_global_mosaic WCS URL since
+  // the dedicated NOAA_Great_Lakes_mosaics service was deleted upstream, so
+  // they must be matched by id BEFORE the generic dem_global_mosaic rule.
+  if (GREAT_LAKE_ENTRY_IDS.has(entry.id) || url.includes("great_lakes")) {
+    return { kind: "great-lakes-wcs" };
+  }
   if (url.includes("3depelevation")) return { kind: "usgs-3dep" };
-  if (url.includes("bag_mosaic")) return { kind: "ncei-wcs", coverageKey: "bagMosaic" };
-  if (url.includes("dem_global_mosaic")) return { kind: "ncei-wcs", coverageKey: "demGlobalMosaic" };
-  if (url.includes("coastal_relief_model_southern_alaska")) {
+  // bag_mosaic was deleted upstream; multibeam_mosaic is its successor.
+  if (url.includes("bag_mosaic") || url.includes("multibeam_mosaic")) {
+    return { kind: "ncei-wcs", coverageKey: "bagMosaic" };
+  }
+  // DEM_all is the successor to the deleted Southern Alaska CRM service.
+  if (
+    url.includes("dem_mosaics/dem_all") ||
+    url.includes("coastal_relief_model_southern_alaska")
+  ) {
     return { kind: "ncei-wcs", coverageKey: "southAlaskaCrm" };
   }
-  if (url.includes("great_lakes")) return { kind: "great-lakes-wcs" };
+  if (url.includes("dem_global_mosaic")) return { kind: "ncei-wcs", coverageKey: "demGlobalMosaic" };
   if (url.includes("gebco")) return { kind: "gebco-wcs" };
   if (url.includes("data.gis.ny.gov") || url.includes("nysdec")) return NYSDEC_STRATEGY;
-  if (url.includes("gis.mn.gov") || url.includes("dnr.state.mn.us")) return MN_DNR_STRATEGY;
+  if (
+    url.includes("gisdata.mn.gov") ||
+    url.includes("gis.mn.gov") ||
+    url.includes("dnr.state.mn.us")
+  ) {
+    return MN_DNR_STRATEGY;
+  }
   // USACE Geospatial Hub reservoirs (Kentucky Lake, Lake Barkley, Clarks
   // Hill) — no dedicated USACE fetcher exists; USGS 3DEP covers these CONUS
   // impoundments as topobathy fallback.

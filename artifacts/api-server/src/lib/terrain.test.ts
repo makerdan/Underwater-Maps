@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   resolveBathymetrySource,
   getDatasetSourcePriority,
+  extractArcGisDepthM,
   DATASET_SOURCE_PRIORITY,
   type DatasetMeta,
 } from "./terrain.js";
@@ -288,14 +289,19 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
   });
 
   it("DATASET_SOURCE_PRIORITY: NYSDEC-surveyed NY lakes lead with nysdec-bathy", () => {
-    const nysdecIds = [
-      "fw-lake-george-ny",
-      "fw-seneca-lake-ny",
-      "fw-cayuga-lake-ny",
-    ];
+    // Only lakes actually covered by the Finger Lakes successor service.
+    const nysdecIds = ["fw-seneca-lake-ny"];
     for (const id of nysdecIds) {
       const priority = getDatasetSourcePriority(id);
       expect(priority[0], `${id} should have nysdec-bathy first`).toBe("nysdec-bathy");
+    }
+  });
+
+  it("DATASET_SOURCE_PRIORITY: Lake George and Cayuga skip nysdec-bathy (no coverage)", () => {
+    for (const id of ["fw-lake-george-ny", "fw-cayuga-lake-ny"]) {
+      const priority = getDatasetSourcePriority(id);
+      expect(priority, `${id} must not include nysdec-bathy`).not.toContain("nysdec-bathy");
+      expect(priority[0], `${id} should fall back to usgs-3dep`).toBe("usgs-3dep");
     }
   });
 
@@ -391,5 +397,51 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
         `${id} must have gebco as the final fallback`,
       ).toBe("gebco");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractArcGisDepthM — depth-field unit conversion
+//
+// Recorded reference attributes from the live services (2026-07):
+//  - MN DNR Lake Bathymetric Contours: lowercase fields, `depth` is NEGATIVE
+//    feet (Minnetonka max contour -100 ft ≈ published 113 ft max depth).
+//  - NYSDEC "Bathymetry of the Finger Lakes": `DEPTH` is feet (Seneca max
+//    contour 700 would be absurd as metres — Seneca is ~188 m deep).
+// ---------------------------------------------------------------------------
+
+describe("extractArcGisDepthM unit handling", () => {
+  it("converts MN DNR negative-feet `depth` to positive metres", () => {
+    // Recorded Minnetonka attrs shape
+    const attrs = { objectid: 1, depth: -100, dowlknum: "27013300", abs_depth: 100, lake_name: "Minnetonka" };
+    const d = extractArcGisDepthM(attrs);
+    expect(d).toBeCloseTo(30.48, 2); // 100 ft → 30.48 m, not 100 m
+  });
+
+  it("falls back to `abs_depth` (feet) when `depth` is missing", () => {
+    const d = extractArcGisDepthM({ abs_depth: 50 });
+    expect(d).toBeCloseTo(15.24, 2);
+  });
+
+  it("converts NYSDEC Finger Lakes `DEPTH` from feet to metres", () => {
+    // Recorded Seneca Lake deep contour
+    const d = extractArcGisDepthM({ DEPTH: 700 });
+    expect(d).toBeCloseTo(213.36, 2); // 700 ft → ~213 m; treating as metres would triple it
+  });
+
+  it("passes `DEPTH_M` through unconverted", () => {
+    expect(extractArcGisDepthM({ DEPTH_M: 42.5 })).toBeCloseTo(42.5, 5);
+  });
+
+  it("converts `DEPTH_FT` from feet to metres", () => {
+    expect(extractArcGisDepthM({ DEPTH_FT: 10 })).toBeCloseTo(3.048, 3);
+  });
+
+  it("prefers DEPTH_M over feet fields when both present", () => {
+    expect(extractArcGisDepthM({ DEPTH_M: 12, DEPTH: 700 })).toBeCloseTo(12, 5);
+  });
+
+  it("returns null when no depth field is present", () => {
+    expect(extractArcGisDepthM({ objectid: 5 })).toBeNull();
   });
 });

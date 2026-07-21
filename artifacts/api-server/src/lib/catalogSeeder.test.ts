@@ -720,3 +720,65 @@ describe("findDuplicateCatalogEntries — duplicate-lake guard", () => {
     expect(findDuplicateCatalogEntries(entries)).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Dead-host regression guard (Task: catalog data-source repairs)
+//
+// These upstream services/hosts were verified deleted or unreachable in
+// 2026-07. No catalog entry may ever point at them again — each has a live
+// successor (see catalogSeeder.ts accessNotes for the mapping).
+// ---------------------------------------------------------------------------
+
+describe("catalog entries reference no dead upstream hosts", () => {
+  const DEAD_PATTERNS: { pattern: RegExp; reason: string }[] = [
+    {
+      pattern: /services6\.arcgis\.com\/v1XbFnus3vB7bnKv/i,
+      reason: "old NYSDEC AGO org — deleted upstream (org publishes zero services)",
+    },
+    {
+      pattern: /webgis\.dnr\.state\.mn\.us/i,
+      reason: "old MN DNR host — unreachable; use enterprise.gisdata.mn.gov",
+    },
+    {
+      pattern: /resources\.gis\.mn\.gov/i,
+      reason: "MN glo MapServer host — unreachable; use enterprise.gisdata.mn.gov",
+    },
+    {
+      pattern: /\/arcgis\/services\/bag_mosaic\//i,
+      reason: "NCEI bag_mosaic — deleted; use multibeam_mosaic",
+    },
+    {
+      pattern: /\/arcgis\/services\/DEM_global_mosaic\//i,
+      reason: "old DEM_global_mosaic path — moved under DEM_mosaics/",
+    },
+    {
+      pattern: /NOAA_Coastal_Relief_Model_Southern_Alaska/i,
+      reason: "CRM 703 service — deleted; use DEM_mosaics/DEM_all",
+    },
+    {
+      pattern: /NOAA_Great_Lakes_mosaics/i,
+      reason: "per-lake Great Lakes mosaics — deleted; use DEM_mosaics/DEM_global_mosaic",
+    },
+    {
+      pattern: /3DEPElevation\/ImageServer\/WCSServer/i,
+      reason: "3DEP WCSServer — retired; use the ImageServer exportImage REST endpoint",
+    },
+    {
+      pattern: /data\.gis\.ny\.gov\/datasets\/nysdec-lake-bathymetry/i,
+      reason: "statewide NYSDEC lake bathymetry dataset — deleted; use the Finger Lakes item",
+    },
+  ];
+
+  it("no seeded entry endpointUrl or accessNotes matches a dead-host pattern", () => {
+    const offenders: string[] = [];
+    for (const entry of EXTRA_CATALOG_ENTRIES) {
+      const haystacks = [entry.endpointUrl ?? "", entry.accessNotes ?? ""];
+      for (const { pattern, reason } of DEAD_PATTERNS) {
+        if (haystacks.some((h) => pattern.test(h))) {
+          offenders.push(`${entry.id}: matches ${pattern} (${reason})`);
+        }
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+});

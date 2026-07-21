@@ -15,8 +15,13 @@ import type {
 } from "./types.js";
 import { buildGreatLakesTerrainForBbox } from "../terrain.js";
 
+// The dedicated NOAA_Great_Lakes_mosaics service (per-lake *_lld coverages)
+// was deleted upstream; DEM_global_mosaic carries the same lake bathymetry.
+// Per-lake entries below are kept for bbox matching and labelling only.
 const GREAT_LAKES_WCS =
-  "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Great_Lakes_mosaics/ImageServer/WCSServer";
+  "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_global_mosaic/ImageServer/WCSServer";
+
+const GREAT_LAKES_COVERAGE_ID = "DEM_global_mosaic";
 
 interface LakeCoverage {
   coverage: string;
@@ -55,7 +60,7 @@ export const greatLakesFetcher: BathymetryFetcher = {
         service: "WCS",
         request: "GetCoverage",
         version: "1.0.0",
-        coverage: lake.coverage,
+        coverage: GREAT_LAKES_COVERAGE_ID,
         bbox: `${cx - tiny},${cy - tiny},${cx + tiny},${cy + tiny}`,
         crs: "EPSG:4326",
         format: "GeoTIFF",

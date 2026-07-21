@@ -17,23 +17,28 @@ import { buildNceiTerrainForBbox } from "../terrain.js";
 
 const NCEI_ENDPOINTS = {
   bagMosaic: {
-    url: "https://gis.ngdc.noaa.gov/arcgis/services/bag_mosaic/ImageServer/WCSServer",
-    coverage: "1",
-    label: "NCEI BAG Mosaic",
+    // The old bag_mosaic service was deleted upstream (2025/2026); the
+    // multibeam_mosaic successor carries the survey composite.
+    url: "https://gis.ngdc.noaa.gov/arcgis/services/multibeam_mosaic/ImageServer/WCSServer",
+    coverage: "multibeam_mosaic_combined",
+    label: "NCEI Multibeam Mosaic",
     resolution: "1–50 m multibeam survey composite",
     creditUrl: "https://www.ncei.noaa.gov/products/bathymetry",
   },
   demGlobalMosaic: {
-    url: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_global_mosaic/ImageServer/WCSServer",
-    coverage: "1",
+    // Moved under the DEM_mosaics/ folder; coverage id is the service name.
+    url: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_global_mosaic/ImageServer/WCSServer",
+    coverage: "DEM_global_mosaic",
     label: "NCEI DEM Global Mosaic",
     resolution: "8–90 m best-available DEM mosaic",
     creditUrl: "https://www.ncei.noaa.gov/products/coastal-elevation-models",
   },
   southAlaskaCrm: {
-    url: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
-    coverage: "1",
-    label: "NCEI Southern Alaska Coastal Relief Model",
+    // The dedicated CRM 703 service was deleted upstream; DEM_all (global
+    // best-available tiled mosaic) still includes the CRM 703 grids.
+    url: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_all/ImageServer/WCSServer",
+    coverage: "DEM_all",
+    label: "NCEI Southern Alaska Coastal Relief Model (DEM_all successor)",
     resolution: "~90 m coastal relief model",
     creditUrl:
       "https://www.ncei.noaa.gov/metadata/geoportal/rest/metadata/item/gov.noaa.ngdc.mgg.dem:703/html",
