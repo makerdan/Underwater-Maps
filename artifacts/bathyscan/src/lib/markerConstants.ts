@@ -87,6 +87,7 @@ export const NATURAL_WORLD_MARKER_TYPES = [
   { value: "clam_beach",     label: "Clam Beach",     color: "#fecdd3", icon: "◗", category: "natural" },
   { value: "cool_rocks",     label: "Cool Rocks",     color: "#c084fc", icon: "◮", category: "natural" },
   { value: "rock_beach",     label: "Rock Beach",     color: "#d6d3d1", icon: "◮", category: "natural" },
+  { value: "brushpile",     label: "Brushpile",     color: "#8B5E3C", icon: "⁂", category: "natural" },
 ] as const;
 
 /** Standard mariner symbols — always available in both exploration modes. */

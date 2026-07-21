@@ -327,6 +327,14 @@ const DEFS: Record<string, MarkerIconDef> = {
       { d: "M9.5 9.5q2.5-2 5 0" },
     ],
   },
+  brushpile: {
+    paths: [
+      { d: "M2 19.5h20" },
+      { d: "M5 19L9 11M15 19L10 11" },
+      { d: "M13 19L17 11M19 19L15 11" },
+      { d: "M7 14.5L17 12.5" },
+    ],
+  },
 
   /* ── Mariner ── */
   anchorage: {
