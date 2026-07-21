@@ -166,13 +166,21 @@ const fragmentShader = /* glsl */ `
     if (!gl_FrontFacing) normal = -normal;
 
     // ── Depth-colour tint ──────────────────────────────────────────────────
-    // Boost factor (1.6) compensates for the deep-blue tint being dark
-    vec3 finalColor = texColor * vColor * 1.6;
+    // The palette colour (vColor) is the base hue. Substrate textures act as
+    // subtle luminance detail centred around 1.0 rather than a darkening
+    // multiplier — the source textures are dark, so multiplying palette by
+    // raw texel RGB used to crush every palette into dark khaki/green.
+    float texLum = dot(texColor, vec3(0.299, 0.587, 0.114));
+    // Normalise around the textures' typical mid-luminance (~0.35) and keep
+    // the modulation gentle so hue always dominates.
+    float detail = clamp(0.85 + (texLum - 0.35) * 0.9, 0.7, 1.15);
+    vec3 finalColor = vColor * detail;
 
     // ── Blinn-Phong lighting ───────────────────────────────────────────────
-    float ambient = 0.30;
+    // High ambient floor preserves palette hue; diffuse + lamp add shape.
+    float ambient = 0.55;
     vec3  sunDir  = normalize(uSunDir);
-    float diffuse = max(0.0, dot(normal, sunDir)) * 0.65;
+    float diffuse = max(0.0, dot(normal, sunDir)) * 0.45;
 
     // Submersible lamp (camera position) — warm, attenuated point light
     vec3  lampDir  = normalize(uLampPos - vWorldPos);
@@ -180,7 +188,8 @@ const fragmentShader = /* glsl */ `
     float lampAtt  = 1.0 / (1.0 + 0.015 * lampDist * lampDist);
     float lampDiff = max(0.0, dot(normal, lampDir)) * lampAtt * 0.55;
 
-    float lighting = ambient + diffuse + lampDiff;
+    // Cap so combined sun+lamp cannot wash the palette hue toward white.
+    float lighting = min(ambient + diffuse + lampDiff, 1.2);
     finalColor *= lighting;
 
     // ── Simulated-data rainbow banding ─────────────────────────────────────

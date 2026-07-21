@@ -92,3 +92,5 @@
 - [Marker library sections](marker-library-sections.md) — edit-mode type check must use full MARKER_TYPES (legacy stays valid); partial markerConstants mocks need every section export.
 - [pdfjs v6 server parsing](pdfjs-v6-server-parsing.md) — destroy() is on the loading task not the doc proxy; isEvalSupported missing from typings (cast); constructPath arg format for vector extraction.
 - [Colormap depth-domain convention](colormap-depth-domain-convention.md) — ocean/custom themes normalise depth on absolute 0–2000 ft; fixed ramps stay grid-relative; legends crop via getColormapTRange.
+- [Terrain shader palette dominance](terrain-shader-palette-dominance.md) — palette hue is the base color; textures are clamped luminance detail, never a multiplier; guarded by a TS-mirror test.
+- [mark_task_complete validation window](mark-complete-validation-window.md) — completion workflow polls ~10.5 min but full suite takes 45+ min; never re-call immediately, drain orphaned lock waiters, verify run logs, then finalize with skip reason.
