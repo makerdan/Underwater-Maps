@@ -492,8 +492,8 @@ vi.mock("../../lib/terrain.js", () => {
     };
   }
   return {
-    NYSDEC_BATHY_FEATURE_SERVICE: "https://example.com/nysdec",
-    MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
+    NYSDEC_BATHY_FEATURE_SERVICE: "https://example.test/nysdec",
+    MN_DNR_BATHY_FEATURE_SERVICE: "https://example.test/mndnr",
     BUNDLED_TERRAIN: {},
     ALL_PRESET_DATASETS: [preset],
     PRESET_DATASETS: [preset],

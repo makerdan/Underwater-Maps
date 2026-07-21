@@ -6,9 +6,14 @@ import { fileURLToPath } from "node:url";
 import {
   findUncoveredChecks,
   findStaleAllowlistEntries,
+  findOrphanCheckFiles,
+  findStaleOrphanAllowlistEntries,
+  listCheckFiles,
+  buildReferenceText,
   CI_COVERAGE_ALLOWLIST,
+  ORPHAN_FILE_ALLOWLIST,
 } from "../check-runner-step-sync.mjs";
-import { getValidationSteps } from "../validation-steps.mjs";
+import { getValidationSteps, getStepsForTier, KNOWN_TIERS } from "../validation-steps.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "../..");
@@ -38,6 +43,68 @@ test("shared step list has valid entries and no duplicate names", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tier-tag selection — every step must declare explicit tier membership
+// ---------------------------------------------------------------------------
+
+test("every step declares a non-empty, known tiers array", () => {
+  const steps = getValidationSteps("test");
+  for (const s of steps) {
+    assert.ok(Array.isArray(s.tiers) && s.tiers.length > 0, `step ${s.name}: missing tiers`);
+    for (const t of s.tiers) {
+      assert.ok(KNOWN_TIERS.includes(t), `step ${s.name}: unknown tier ${t}`);
+    }
+  }
+});
+
+test("getStepsForTier throws on a step with no tier assignment", () => {
+  const steps = [{ name: "ok", tiers: ["fast"] }, { name: "untagged" }];
+  assert.throws(() => getStepsForTier(steps, "fast"), /untagged.*no tier assignment/s);
+});
+
+test("getStepsForTier throws on empty tiers array and unknown tier tag", () => {
+  assert.throws(
+    () => getStepsForTier([{ name: "empty", tiers: [] }], "fast"),
+    /no tier assignment/,
+  );
+  assert.throws(
+    () => getStepsForTier([{ name: "bad", tiers: ["turbo"] }], "fast"),
+    /unknown tier tag/,
+  );
+  assert.throws(() => getStepsForTier([], "nope"), /unknown tier/);
+});
+
+test("getStepsForTier selects by tag preserving list order", () => {
+  const steps = [
+    { name: "a", tiers: ["fast", "standard", "full"] },
+    { name: "b", tiers: ["standard", "full"] },
+    { name: "c", tiers: ["full"] },
+  ];
+  assert.deepEqual(getStepsForTier(steps, "fast").map((s) => s.name), ["a"]);
+  assert.deepEqual(getStepsForTier(steps, "standard").map((s) => s.name), ["a", "b"]);
+  assert.deepEqual(getStepsForTier(steps, "full").map((s) => s.name), ["a", "b", "c"]);
+});
+
+test("real tier contents match the historical fast/standard/full sets", () => {
+  // Frozen snapshot of the tier membership at the time positional slicing was
+  // replaced by explicit tags — changing tier membership must be deliberate.
+  const steps = getValidationSteps("test");
+  assert.deepEqual(getStepsForTier(steps, "fast").map((s) => s.name), [
+    "typecheck", "lint", "check:lock-skill-sync", "check:root-relative-api",
+    "check:deps-suppression", "check:runner-step-sync",
+  ]);
+  assert.deepEqual(getStepsForTier(steps, "standard").map((s) => s.name), [
+    "typecheck", "lint", "check:lock-skill-sync", "check:root-relative-api",
+    "check:deps-suppression", "check:runner-step-sync",
+    "test:unit", "check:docs-stale", "check:catalog-coverage", "check:schema-stale",
+  ]);
+  assert.deepEqual(
+    getStepsForTier(steps, "full").map((s) => s.name),
+    steps.map((s) => s.name),
+    "full tier must contain every step",
+  );
+});
+
+// ---------------------------------------------------------------------------
 // CI coverage meta-check
 // ---------------------------------------------------------------------------
 
@@ -63,6 +130,32 @@ test("stale allowlist entries are flagged (removed script or now in CI)", () => 
 });
 
 // ---------------------------------------------------------------------------
+// Orphaned check-file audit
+// ---------------------------------------------------------------------------
+
+test("a check file referenced nowhere is flagged as an orphan", () => {
+  const files = ["check-used.sh", "check-orphan.sh"];
+  const refText = 'scripts": "bash scripts/check-used.sh"';
+  assert.deepEqual(findOrphanCheckFiles(files, refText, {}), ["check-orphan.sh"]);
+});
+
+test("an allowlisted orphan check file is not flagged", () => {
+  const orphans = findOrphanCheckFiles(["check-manual.mjs"], "", {
+    "check-manual.mjs": "manual-only tooling",
+  });
+  assert.deepEqual(orphans, []);
+});
+
+test("stale orphan allowlist entries are flagged (deleted file or now referenced)", () => {
+  const stale = findStaleOrphanAllowlistEntries(
+    ["check-now-used.sh"],
+    "node scripts/check-now-used.sh",
+    { "check-now-used.sh": "was manual", "check-deleted.mjs": "gone" },
+  );
+  assert.deepEqual(stale.sort(), ["check-deleted.mjs", "check-now-used.sh"]);
+});
+
+// ---------------------------------------------------------------------------
 // Real-tree assertions — the actual repo files must currently pass
 // ---------------------------------------------------------------------------
 
@@ -73,4 +166,15 @@ test("all check:* scripts in package.json are covered by the shared step list or
   assert.deepEqual(findUncoveredChecks(pkg, ciSteps), []);
   assert.deepEqual(findStaleAllowlistEntries(pkg, ciSteps), []);
   assert.ok(Object.values(CI_COVERAGE_ALLOWLIST).every((r) => typeof r === "string" && r.length > 10));
+});
+
+test("all check-* files on disk are referenced somewhere or allowlisted", () => {
+  const scriptsDir = resolve(root, "scripts");
+  const checkFiles = listCheckFiles(scriptsDir);
+  assert.ok(checkFiles.length > 0, "expected check-* files in scripts/");
+  const refText = buildReferenceText(root, scriptsDir);
+
+  assert.deepEqual(findOrphanCheckFiles(checkFiles, refText), []);
+  assert.deepEqual(findStaleOrphanAllowlistEntries(checkFiles, refText), []);
+  assert.ok(Object.values(ORPHAN_FILE_ALLOWLIST).every((r) => typeof r === "string" && r.length > 10));
 });

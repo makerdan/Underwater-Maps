@@ -32,7 +32,7 @@
 import { spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getValidationSteps } from "./validation-steps.mjs";
+import { getValidationSteps, getStepsForTier } from "./validation-steps.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -80,12 +80,6 @@ for (let i = 0; i < args.length; i++) {
 // ---------------------------------------------------------------------------
 
 const ALL_STEPS = getValidationSteps("run-tier");
-
-const TIER_STEPS = {
-  fast:     ALL_STEPS.slice(0, 6),
-  standard: ALL_STEPS.slice(0, 10),
-  full:     ALL_STEPS,
-};
 
 // ---------------------------------------------------------------------------
 // Single-step mode: node run-tier.mjs --step <name>
@@ -161,7 +155,10 @@ function runStep(step, tierPriority) {
 // Tier runner
 // ---------------------------------------------------------------------------
 
-let steps = TIER_STEPS[tier];
+// Tier membership is declared explicitly per step (tiers array) in
+// scripts/validation-steps.mjs; getStepsForTier throws if any step lacks a
+// tier assignment, so a new step can never silently run in zero tiers.
+let steps = getStepsForTier(ALL_STEPS, tier);
 if (skippedSteps.length > 0) {
   for (const name of skippedSteps) {
     if (!ALL_STEPS.some((s) => s.name === name)) {

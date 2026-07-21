@@ -7,3 +7,6 @@ Rule: any test that fully mocks `lib/terrain.js` and loads the app must stub ALL
 **Why:** The on-demand bathymetry feature added module-init reads of these constants; 17 test files with full terrain mocks crashed with "No X export is defined on the mock", and the crash surfaced as misleading downstream errors (e.g. missing __resetRateLimitMemory) in neighboring files.
 
 **How to apply:** When adding a new module-init-consumed export to lib/terrain.js, grep for `vi.mock(".*lib/terrain.js"` and add a stub to every full-mock factory. A guard test to automate this is proposed as a follow-up.
+
+## Merge-duplicated mock keys (2026-07-20)
+Task merges can DUPLICATE terrain mock exports inside vi.mock factories (same key 2-3x, sometimes with conflicting values like `BUNDLED_TERRAIN: {}` vs `[]`), producing TS1117 across many api-server route test files. Fix by deduping to one set — keep `BUNDLED_TERRAIN: {}` (real export is a Record) and any getter forms. Caught by typecheck, so the fast tier fails loudly; just dedupe rather than debug the mocks.
