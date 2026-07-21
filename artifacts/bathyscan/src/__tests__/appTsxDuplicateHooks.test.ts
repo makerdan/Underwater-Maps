@@ -241,6 +241,63 @@ function countBraces(line: string): number {
 
 // ---------------------------------------------------------------------------
 
+describe("parseScopes wrapper patterns (forwardRef / memo)", () => {
+  it("opens a scope for a multi-line React.forwardRef component and finds its hooks", () => {
+    const src = [
+      "export const Comp = React.forwardRef<HTMLDivElement, Props>(",
+      "  ({ value }, ref) => {",
+      "    const a = useStore((s) => s.a);",
+      "    const b = useRef(null);",
+      "    const a = useStore((s) => s.a);",
+      "    return null;",
+      "  },",
+      ");",
+    ].join("\n");
+    const scopes = parseScopes(src);
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0].name).toBe("Comp");
+    expect(scopes[0].decls.map((d) => d.name)).toEqual(["a", "b", "a"]);
+  });
+
+  it("opens a scope for a single-line React.memo(function …) component", () => {
+    const src = [
+      "export const Memoed = React.memo(function Memoed({ x }: Props) {",
+      "  const foo = useCallback(() => {}, []);",
+      "  const bar = useState(0);",
+      "  return null;",
+      "});",
+    ].join("\n");
+    const scopes = parseScopes(src);
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0].decls.map((d) => d.name)).toEqual(["foo", "bar"]);
+  });
+
+  it("opens a scope for a multi-line memo(forwardRef(…)) component", () => {
+    const src = [
+      "const Wrapped = memo(",
+      "  forwardRef<HTMLSpanElement, Props>(({ y }, ref) => {",
+      "    const z = useMemo(() => y * 2, [y]);",
+      "    return null;",
+      "  }),",
+      ");",
+    ].join("\n");
+    const scopes = parseScopes(src);
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0].decls.map((d) => d.name)).toEqual(["z"]);
+  });
+
+  it("attributes TerrainMesh.tsx hooks to a component scope (forwardRef real file)", () => {
+    const src = fs.readFileSync(
+      path.join(SRC_DIR, "components/TerrainMesh.tsx"),
+      "utf-8",
+    );
+    const scopes = parseScopes(src);
+    const terrainScope = scopes.find((s) => s.name === "TerrainMesh");
+    expect(terrainScope, "expected a TerrainMesh scope").toBeDefined();
+    expect(terrainScope!.decls.length).toBeGreaterThanOrEqual(10);
+  });
+});
+
 describe("App.tsx lint suppressors", () => {
   it("App.tsx has no eslint-disable-next-line react-hooks/exhaustive-deps suppressors", () => {
     const filePath = path.join(SRC_DIR, "App.tsx");
@@ -318,14 +375,6 @@ describe("duplicate hook-variable declarations", () => {
     // If a file grows to qualify after a merge, this test will catch it.
     const scannedSet = new Set(SCANNED_FILES);
 
-    // Files that meet the line/hook threshold but use React.forwardRef() or
-    // React.memo() wrapper patterns where the component body is inside a callback
-    // argument — the scope parser can't attribute hook declarations to those files,
-    // so they're excluded from mandatory SCANNED_FILES membership.
-    const SENTINEL_EXCLUDED = new Set([
-      "components/TerrainMesh.tsx",
-    ]);
-
     const allTsx = collectTsxFiles(SRC_DIR);
     const missing: string[] = [];
 
@@ -341,7 +390,7 @@ describe("duplicate hook-variable declarations", () => {
       const relPath = path.relative(SRC_DIR, absPath);
       // Normalize to forward-slash so paths match on all platforms
       const relPathNorm = relPath.split(path.sep).join("/");
-      if (!scannedSet.has(relPathNorm) && !SENTINEL_EXCLUDED.has(relPathNorm)) {
+      if (!scannedSet.has(relPathNorm)) {
         missing.push(
           `  ${relPathNorm} (${lineCount} lines, ${hookCount} hook declarations)`,
         );
