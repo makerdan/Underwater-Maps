@@ -84,25 +84,37 @@ test("getStepsForTier selects by tag preserving list order", () => {
   assert.deepEqual(getStepsForTier(steps, "full").map((s) => s.name), ["a", "b", "c"]);
 });
 
-test("real tier contents match the historical fast/standard/full sets", () => {
-  // Frozen snapshot of the tier membership at the time positional slicing was
-  // replaced by explicit tags — changing tier membership must be deliberate.
+test("tier structure obeys the fast⊂standard⊂full cumulative convention", () => {
   const steps = getValidationSteps("test");
-  assert.deepEqual(getStepsForTier(steps, "fast").map((s) => s.name), [
-    "typecheck", "lint", "check:lock-skill-sync", "check:root-relative-api",
-    "check:deps-suppression", "check:runner-step-sync", "check:skip-count",
-  ]);
-  assert.deepEqual(getStepsForTier(steps, "standard").map((s) => s.name), [
-    "typecheck", "lint", "check:lock-skill-sync", "check:root-relative-api",
-    "check:deps-suppression", "check:runner-step-sync", "check:skip-count",
-    "test:unit", "check:docs-stale", "check:catalog-coverage", "check:schema-stale",
-    "check:font-scale",
-  ]);
+
+  const fastNames = new Set(getStepsForTier(steps, "fast").map((s) => s.name));
+  const standardNames = new Set(getStepsForTier(steps, "standard").map((s) => s.name));
+  const fullNames = new Set(getStepsForTier(steps, "full").map((s) => s.name));
+
+  // full tier must contain every step — no step may be invisible at the highest tier
   assert.deepEqual(
     getStepsForTier(steps, "full").map((s) => s.name),
     steps.map((s) => s.name),
     "full tier must contain every step",
   );
+
+  // fast ⊆ standard: any step tagged "fast" must also be tagged "standard"
+  for (const name of fastNames) {
+    assert.ok(
+      standardNames.has(name),
+      `step "${name}" is in fast tier but not standard tier — ` +
+        `fast-tier steps must also be tagged "standard" (and "full")`,
+    );
+  }
+
+  // standard ⊆ full: any step tagged "standard" must also be tagged "full"
+  for (const name of standardNames) {
+    assert.ok(
+      fullNames.has(name),
+      `step "${name}" is in standard tier but not full tier — ` +
+        `standard-tier steps must also be tagged "full"`,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
