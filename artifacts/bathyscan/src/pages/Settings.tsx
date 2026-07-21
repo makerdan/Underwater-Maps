@@ -28,6 +28,7 @@ import { VisualsSection } from "./settings/VisualsSection";
 import { NavigationSection } from "./settings/NavigationSection";
 import { DisplayOverlaysSection } from "./settings/DisplayOverlaysSection";
 import { MapLayersSection } from "./settings/MapLayersSection";
+import { MarkerSymbolsSection } from "./settings/MarkerSymbolsSection";
 import { DataStorageSection } from "./settings/DataStorageSection";
 import { AccessibilitySection } from "./settings/AccessibilitySection";
 import { AccountSection } from "./settings/AccountSection";
@@ -202,6 +203,7 @@ export function Settings() {
             {tab === "navigation" && <NavigationSection />}
             {tab === "display-overlays" && <DisplayOverlaysSection />}
             {tab === "map-layers" && <MapLayersSection />}
+            {tab === "marker-symbols" && <MarkerSymbolsSection />}
             {tab === "data-storage" && <DataStorageSection />}
             {tab === "accessibility" && <AccessibilitySection />}
             {tab === "account" && <AccountSection />}

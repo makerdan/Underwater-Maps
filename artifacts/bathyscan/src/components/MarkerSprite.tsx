@@ -11,6 +11,7 @@ import * as THREE from "three";
 import type { Marker, TerrainData } from "@workspace/api-client-react";
 import { lonLatToWorldXZ, getTerrainSurfaceY } from "@/lib/terrain";
 import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
+import { useMarkerIconTexture } from "@/hooks/useMarkerIconTexture";
 
 interface Props {
   marker: Marker;
@@ -46,6 +47,9 @@ export function layoutCatchSymbols(count: number): Array<[number, number]> {
 }
 
 export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = true, catchSymbols }) => {
+  // Hooks must run unconditionally; the depth_pole early-return happens below.
+  const iconTexture = useMarkerIconTexture(marker.type, "#02101c");
+
   if (marker.type === "depth_pole") return null;
 
   const { x, z } = lonLatToWorldXZ(marker.lon, marker.lat, terrain);
@@ -143,16 +147,29 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = tru
             opacity={0.85}
           />
         </mesh>
-        {/* Icon text */}
-        <Text
-          position={[0, 0, 0.01]}
-          fontSize={0.22}
-          color="#000"
-          anchorX="center"
-          anchorY="middle"
-        >
-          {icon}
-        </Text>
+        {/* Icon symbol — custom SVG texture once loaded; text glyph fallback
+            while loading or in environments without Image (headless tests) */}
+        {iconTexture ? (
+          <mesh position={[0, 0, 0.01]}>
+            <planeGeometry args={[0.44, 0.44]} />
+            <meshBasicMaterial
+              map={iconTexture}
+              transparent
+              side={THREE.DoubleSide}
+              depthWrite={false}
+            />
+          </mesh>
+        ) : (
+          <Text
+            position={[0, 0, 0.01]}
+            fontSize={0.22}
+            color="#000"
+            anchorX="center"
+            anchorY="middle"
+          >
+            {icon}
+          </Text>
+        )}
         {/* Label */}
         {showLabel && (
           <Text

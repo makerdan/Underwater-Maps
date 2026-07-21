@@ -2,7 +2,7 @@ import { pgTable, text, real, timestamp, uuid, index, integer, jsonb } from "dri
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const MARKER_TYPES = ["fish", "shipwreck", "coral", "vent", "custom", "depth_pole"] as const;
+export const MARKER_TYPES = ["fish", "shipwreck", "coral", "vent", "custom", "depth_pole", "log", "vegetation", "sample", "bass", "trout", "pike", "walleye", "crayfish", "salmon", "tuna", "halibut", "shark", "swordfish", "rockfish", "cod", "mahi_mahi", "grouper", "snapper", "crab", "lobster", "shrimp", "krill", "jellyfish", "octopus", "squid", "sea_urchin", "starfish", "sea_turtle", "school_herring", "school_sardine", "school_mackerel", "school_tuna", "school_anchovy", "catfish", "crappie", "bluegill", "sunfish", "carp", "yellow_perch", "muskie", "largemouth_bass", "smallmouth_bass", "channel_catfish", "freshwater_shrimp", "freshwater_crab", "snapping_turtle", "bullfrog", "beaver_dam", "lily_pad", "cattail", "reed_bed", "submerged_grass", "spring", "school_perch", "school_bluegill", "school_bass", "school_crappie", "school_carp", "sand_bass", "lake_trout", "perch", "rainbow_trout", "silver_salmon", "chinook_salmon", "pink_salmon", "turbot", "black_rockfish", "yelloweye_rockfish", "dog_shark", "dungeness_crab", "prawn_shrimp", "school_salmon", "school_rockfish", "lingcod", "sole", "multiple_logs", "multiple_fish", "submerged_rock", "land", "red_light", "green_light", "red_buoy", "green_buoy", "rock", "clam", "clam_beach", "cool_rocks", "rock_beach", "anchorage", "hazard_rock", "marina", "boat_ramp", "fuel_dock", "diver_down", "no_anchor", "channel_marker", "daymark"] as const;
 export type MarkerType = (typeof MARKER_TYPES)[number];
 
 export const markersTable = pgTable("markers", {

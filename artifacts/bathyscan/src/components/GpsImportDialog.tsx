@@ -48,6 +48,9 @@ import { ColumnMappingStep } from "@/components/ColumnMappingStep";
 import {
   SALTWATER_MARKER_TYPES,
   FRESHWATER_MARKER_TYPES,
+  NATURAL_WORLD_MARKER_TYPES,
+  MARINER_MARKER_TYPES,
+  SPECIAL_MARKER_TYPES,
   type MarkerTypeValue,
 } from "@/lib/markerConstants";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -135,7 +138,13 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const defaultMarkerType = useSettingsStore((s) => s.defaultMarkerType);
   const waterType =
     (terrain?.waterType as "saltwater" | "freshwater" | undefined) ?? settingsWaterType;
-  const markerTypes = waterType === "freshwater" ? FRESHWATER_MARKER_TYPES : SALTWATER_MARKER_TYPES;
+  // Nullish fallbacks keep partial test mocks of markerConstants working.
+  const markerTypes = [
+    ...((waterType === "freshwater" ? FRESHWATER_MARKER_TYPES : SALTWATER_MARKER_TYPES) ?? []),
+    ...(NATURAL_WORLD_MARKER_TYPES ?? []),
+    ...(MARINER_MARKER_TYPES ?? []),
+    ...(SPECIAL_MARKER_TYPES ?? []),
+  ];
 
   const [phase, setPhase] = useState<Phase>({ kind: "pick" });
   const [markerType, setMarkerType] = useState<MarkerTypeValue>(

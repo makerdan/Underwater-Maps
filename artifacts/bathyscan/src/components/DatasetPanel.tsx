@@ -39,7 +39,15 @@ import { useDatasetProximityStreaming } from "@/hooks/useDatasetProximityStreami
 import type { DatasetBbox } from "@/hooks/useDatasetProximityStreaming";
 import { useUiStore } from "@/lib/uiStore";
 import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
-import { MARKER_COLOR, MARKER_ICON, SALTWATER_MARKER_TYPES, FRESHWATER_MARKER_TYPES } from "@/lib/markerConstants";
+import {
+  MARKER_COLOR,
+  SALTWATER_MARKER_TYPES,
+  FRESHWATER_MARKER_TYPES,
+  NATURAL_WORLD_MARKER_TYPES,
+  MARINER_MARKER_TYPES,
+  SPECIAL_MARKER_TYPES,
+} from "@/lib/markerConstants";
+import { MarkerIcon } from "@/lib/markerIcons";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
@@ -3131,7 +3139,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               </button>
 
               {markersOpen && (() => {
-                const markerTypeOptions = waterType === "freshwater" ? FRESHWATER_MARKER_TYPES : SALTWATER_MARKER_TYPES;
+                // Nullish fallbacks keep partial test mocks of markerConstants working.
+                const markerTypeOptions = [
+                  ...((waterType === "freshwater" ? FRESHWATER_MARKER_TYPES : SALTWATER_MARKER_TYPES) ?? []),
+                  ...(NATURAL_WORLD_MARKER_TYPES ?? []),
+                  ...(MARINER_MARKER_TYPES ?? []),
+                  ...(SPECIAL_MARKER_TYPES ?? []),
+                ];
                 const q = markerSearch.trim().toLowerCase();
                 const visibleMarkers = (markers ?? []).filter((m) => {
                   if (markerTypeFilter && m.type !== markerTypeFilter) return false;
@@ -3233,7 +3247,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                                 aria-pressed={active}
                                 aria-label={t.label}
                               >
-                                {t.icon}
+                                <MarkerIcon type={t.value} size={15} color={active ? t.color : t.color + "cc"} />
                               </button>
                             </ViewscreenTooltip>
                           );
@@ -3273,7 +3287,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   ) : null}
                   {visibleMarkers.map((m) => {
                     const color = MARKER_COLOR[m.type] ?? "#e2e8f0";
-                    const icon = MARKER_ICON[m.type] ?? "●";
                     return (
                       <div
                         key={m.id}
@@ -3293,7 +3306,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         }}
                       >
                         <div className="flex items-center justify-between gap-1">
-                          <span style={{ color, fontSize: "calc(15px * var(--bs-font-scale, 1))", flexShrink: 0 }}>{icon}</span>
+                          <span style={{ color, fontSize: "calc(15px * var(--bs-font-scale, 1))", flexShrink: 0, display: "inline-flex" }}>
+                            <MarkerIcon type={m.type} size={15} color={color} />
+                          </span>
                           <span
                             style={{
                               flex: 1,

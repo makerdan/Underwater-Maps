@@ -1,5 +1,6 @@
 import { keys as idbKeys } from "idb-keyval";
 import type { MarkerType } from "@/lib/settingsStore";
+import { getSelectableMarkerTypes } from "@/lib/markerConstants";
 
 export const UNDO_DELETE_WINDOW_MS = 5000;
 
@@ -16,7 +17,7 @@ export const FIXED_SHORTCUTS: { keys: string; desc: string }[] = [
 
 export type Tab =
   | "general" | "visuals" | "navigation" | "display-overlays"
-  | "map-layers" | "data-storage" | "accessibility" | "account";
+  | "map-layers" | "marker-symbols" | "data-storage" | "accessibility" | "account";
 
 export const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "general", label: "GENERAL" },
@@ -24,34 +25,19 @@ export const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "navigation", label: "NAVIGATION" },
   { id: "display-overlays", label: "DISPLAY & OVERLAYS" },
   { id: "map-layers", label: "MAP LAYERS" },
+  { id: "marker-symbols", label: "MARKER SYMBOLS" },
   { id: "data-storage", label: "DATA & STORAGE" },
   { id: "accessibility", label: "ACCESSIBILITY" },
   { id: "account", label: "ACCOUNT & PRIVACY" },
 ];
 
-export const SALTWATER_MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] = [
-  { value: "fish", label: "🐟 Fish" },
-  { value: "shipwreck", label: "⚓ Shipwreck" },
-  { value: "coral", label: "🪸 Coral" },
-  { value: "vent", label: "🌋 Vent" },
-  { value: "custom", label: "📍 Custom" },
-  { value: "depth_pole", label: "📏 Depth Pole" },
-];
+// Derived from the marker symbol library so Settings always matches the
+// picker (species section + always-on Natural World / Mariner / Special).
+export const SALTWATER_MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] =
+  getSelectableMarkerTypes("saltwater").map((t) => ({ value: t.value as MarkerType, label: t.label }));
 
-export const FRESHWATER_MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] = [
-  { value: "fish", label: "🐟 Fish" },
-  { value: "bass", label: "🎣 Bass" },
-  { value: "trout", label: "🐠 Trout" },
-  { value: "pike", label: "🦈 Pike" },
-  { value: "walleye", label: "🐟 Walleye" },
-  { value: "crayfish", label: "🦞 Crayfish" },
-  { value: "vegetation", label: "🌿 Vegetation" },
-  { value: "log", label: "🪵 Submerged Log" },
-  { value: "sample", label: "🧪 Water Sample" },
-  { value: "shipwreck", label: "⚓ Shipwreck" },
-  { value: "custom", label: "📍 Custom" },
-  { value: "depth_pole", label: "📏 Depth Pole" },
-];
+export const FRESHWATER_MARKER_TYPE_OPTIONS: { value: MarkerType; label: string }[] =
+  getSelectableMarkerTypes("freshwater").map((t) => ({ value: t.value as MarkerType, label: t.label }));
 
 export function formatLastSynced(iso: string | null): string {
   if (!iso) return "—";

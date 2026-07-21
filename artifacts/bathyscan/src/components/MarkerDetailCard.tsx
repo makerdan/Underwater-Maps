@@ -4,7 +4,8 @@
  */
 import React, { useEffect } from "react";
 import { useMarkerDetailStore } from "@/lib/markerDetailStore";
-import { MARKER_COLOR, MARKER_ICON } from "@/lib/markerConstants";
+import { MARKER_COLOR } from "@/lib/markerConstants";
+import { MarkerIcon } from "@/lib/markerIcons";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDepth, formatTemperature } from "@/lib/units";
 import { estimateWaterTemperature } from "@/lib/waterTemp";
@@ -43,7 +44,6 @@ export const MarkerDetailCard: React.FC = () => {
   if (!marker) return null;
 
   const color = MARKER_COLOR[marker.type] ?? "#e2e8f0";
-  const icon = MARKER_ICON[marker.type] ?? "●";
   const createdAt = marker.createdAt ? new Date(marker.createdAt) : null;
 
   return (
@@ -69,8 +69,9 @@ export const MarkerDetailCard: React.FC = () => {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ color, fontSize: "calc(21px * var(--bs-font-scale, 1))", fontWeight: 600 }}>
-          {icon} {marker.label}
+        <span style={{ color, fontSize: "calc(21px * var(--bs-font-scale, 1))", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 7 }}>
+          <MarkerIcon type={marker.type} size={20} color={color} />
+          {marker.label}
         </span>
         <button
           onClick={hide}

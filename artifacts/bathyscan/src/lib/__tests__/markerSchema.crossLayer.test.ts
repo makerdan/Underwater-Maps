@@ -8,6 +8,7 @@ import {
 import {
   SALTWATER_MARKER_TYPES,
   FRESHWATER_MARKER_TYPES,
+  MARKER_TYPES,
 } from "../markerConstants";
 import {
   postMarkersBodyLabelMax,
@@ -21,10 +22,11 @@ import {
 // Derive the union type values from both layers for type-enum parity checks
 // ---------------------------------------------------------------------------
 
-const FRONTEND_MARKER_VALUES = new Set<string>([
-  ...SALTWATER_MARKER_TYPES.map((t) => t.value as string),
-  ...FRESHWATER_MARKER_TYPES.map((t) => t.value as string),
-]);
+// MARKER_TYPES spans every section (freshwater, saltwater, natural world,
+// mariner, special, legacy) — the full 103-value library.
+const FRONTEND_MARKER_VALUES = new Set<string>(
+  MARKER_TYPES.map((t) => t.value as string),
+);
 
 // PostMarkersBody.shape.type is ZodDefault<ZodEnum<[...]>> — drill into
 // _def.innerType to reach the ZodEnum, then read .options for the value list.
@@ -159,6 +161,20 @@ describe("cross-layer consistency: marker type enum parity", () => {
         FRONTEND_MARKER_VALUES.has(serverType),
         `server enum value "${serverType}" has no matching frontend marker type`,
       ).toBe(true);
+    }
+  });
+
+  it("every marker type across all library sections is accepted by PostMarkersBody.type", () => {
+    for (const t of MARKER_TYPES) {
+      const result = PostMarkersBody.safeParse({
+        datasetId: "ds-1",
+        lon: -136.0,
+        lat: 58.0,
+        depth: 50,
+        label: "Test",
+        type: t.value,
+      });
+      expect(result.success, `type "${t.value}" (${t.category}) rejected by server schema`).toBe(true);
     }
   });
 

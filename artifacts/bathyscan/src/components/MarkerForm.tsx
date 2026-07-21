@@ -37,15 +37,13 @@ import {
   MarkerInputType,
 } from "@workspace/api-client-react";
 import {
-  SALTWATER_MARKER_TYPES,
-  FRESHWATER_MARKER_TYPES,
-  SALTWATER_CATEGORY_ORDER,
-  FRESHWATER_CATEGORY_ORDER,
-  MARKER_CATEGORY_LABELS,
+  getMarkerPickerSections,
+  getSelectableMarkerTypes,
+  MARKER_TYPES,
   DEPTH_POLE_DEFAULT_COLOUR,
   type MarkerTypeValue,
-  type MarkerCategory,
 } from "@/lib/markerConstants";
+import { MarkerIcon } from "@/lib/markerIcons";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { markerLabelSchema, markerNotesSchema, MARKER_LABEL_MAX, MARKER_NOTES_MAX } from "@/lib/markerFormSchema";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
@@ -77,8 +75,8 @@ export const MarkerForm: React.FC = () => {
   const qc = useQueryClient();
   const settingsWaterType = useSettingsStore((s) => s.waterType);
   const waterType = (terrain?.waterType as "saltwater" | "freshwater" | undefined) ?? settingsWaterType;
-  const visibleMarkerTypes = waterType === "freshwater" ? FRESHWATER_MARKER_TYPES : SALTWATER_MARKER_TYPES;
-  const categoryOrder = waterType === "freshwater" ? FRESHWATER_CATEGORY_ORDER : SALTWATER_CATEGORY_ORDER;
+  const pickerSections = getMarkerPickerSections(waterType);
+  const visibleMarkerTypes = getSelectableMarkerTypes(waterType);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const [markerType, setMarkerType] = useState<MarkerTypeValue>(MarkerInputType.custom);
@@ -100,10 +98,12 @@ export const MarkerForm: React.FC = () => {
       setNotes(existingNotes);
       setLabelError("");
       setNotesError("");
+      // Legacy types stay valid on existing markers: accept any known type
+      // from the full library, not just the ones in the current picker.
       const candidateType = editMarker.type as MarkerTypeValue | undefined;
       const isValidType =
         candidateType !== undefined &&
-        visibleMarkerTypes.some((t) => t.value === candidateType);
+        MARKER_TYPES.some((t) => t.value === candidateType);
       setMarkerType(isValidType ? candidateType! : (MarkerInputType.custom as MarkerTypeValue));
       if (editMarker.type === "depth_pole" && editMarker.notes) {
         try {
@@ -503,11 +503,11 @@ export const MarkerForm: React.FC = () => {
               scrollbarColor: "rgba(0,229,255,0.2) transparent",
             }}
           >
-            {categoryOrder.map((cat) => {
-              const typesInCat = (visibleMarkerTypes as ReadonlyArray<{ value: string; label: string; color: string; icon: string; category: MarkerCategory }>).filter((t) => t.category === cat);
+            {pickerSections.map((section) => {
+              const typesInCat = section.types;
               if (typesInCat.length === 0) return null;
               return (
-                <div key={cat} data-category={cat}>
+                <div key={section.category} data-category={section.category}>
                   <div
                     style={{
                       fontSize: "calc(10.5px * var(--bs-font-scale, 1))",
@@ -519,7 +519,7 @@ export const MarkerForm: React.FC = () => {
                       borderTop: "1px solid rgba(0,229,255,0.06)",
                     }}
                   >
-                    {MARKER_CATEGORY_LABELS[cat]}
+                    {section.label}
                   </div>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 3 }}>
                     {typesInCat.map((t) => {
@@ -540,9 +540,13 @@ export const MarkerForm: React.FC = () => {
                               letterSpacing: "0.08em",
                               transition: "all 0.1s",
                               fontFamily: "inherit",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
                             }}
                           >
-                            {t.icon} {t.label}
+                            <MarkerIcon type={t.value} size={14} color={active ? t.color : t.color + "cc"} />
+                            {t.label}
                           </button>
                         </ViewscreenTooltip>
                       );

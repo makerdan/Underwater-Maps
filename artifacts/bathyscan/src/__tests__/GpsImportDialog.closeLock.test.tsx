@@ -62,6 +62,9 @@ vi.mock("@/hooks/useFocusTrap", () => ({
 vi.mock("@/lib/markerConstants", () => ({
   SALTWATER_MARKER_TYPES: [{ value: "custom", label: "Custom" }],
   FRESHWATER_MARKER_TYPES: [{ value: "custom", label: "Custom" }],
+  NATURAL_WORLD_MARKER_TYPES: [],
+  MARINER_MARKER_TYPES: [],
+  SPECIAL_MARKER_TYPES: [],
 }));
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

@@ -66,6 +66,7 @@ import { appendWaypoint, planFlyThroughStops } from "@/lib/waypointHelpers";
 import type { Waypoint } from "@/lib/waypointHelpers";
 import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
 import { MARKER_COLOR } from "@/lib/markerConstants";
+import { MarkerIconPaths } from "@/lib/markerIcons";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
 import type { WeatherStation } from "@workspace/api-client-react";
 import { WeatherStationPopover } from "@/components/WeatherStationLayer";
@@ -2083,7 +2084,15 @@ export const OverviewMap: React.FC = () => {
               const r = Math.max(3.5, Math.min(9, svgTransform.scale * 1.8));
               return (
                 <g key={`mk-${m.id}`} pointerEvents="none" filter="url(#ov-marker-glow)">
-                  <circle cx={cx} cy={cy} r={r} fill={colour} opacity={0.92} />
+                  <circle cx={cx} cy={cy} r={r + 2.5} fill="#020818" stroke={colour} strokeWidth={1} opacity={0.85} />
+                  {/* Custom SVG symbol, scaled from its 24x24 viewBox to fit the disc */}
+                  <g
+                    color={colour}
+                    opacity={0.95}
+                    transform={`translate(${cx - r}, ${cy - r}) scale(${(r * 2) / 24})`}
+                  >
+                    <MarkerIconPaths type={m.type} />
+                  </g>
                   {svgTransform.scale >= 3 && (
                     <text
                       x={cx + r + 4} y={cy}

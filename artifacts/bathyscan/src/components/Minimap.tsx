@@ -11,6 +11,7 @@ import type { ColormapTheme } from "@/lib/settingsStore";
 import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
 import type { DepthsArray } from "@workspace/api-client-react";
 import { MARKER_COLOR } from "@/lib/markerConstants";
+import { loadMarkerIconImage, peekMarkerIconImage } from "@/lib/markerIcons";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
 
@@ -117,6 +118,10 @@ export function drawArrow(
   ctx.restore();
 }
 
+/** Rasterised marker-icon size used on the minimap (source px / drawn px). */
+const MARKER_ICON_SRC_PX = 32;
+const MARKER_ICON_DRAW_PX = 12;
+
 function drawMarkerDots(
   ctx: CanvasRenderingContext2D,
   markers: Marker[],
@@ -124,6 +129,7 @@ function drawMarkerDots(
   maxLon: number,
   minLat: number,
   maxLat: number,
+  onIconReady?: () => void,
 ) {
   const lonRange = maxLon - minLon || 1;
   const latRange = maxLat - minLat || 1;
@@ -135,14 +141,39 @@ function drawMarkerDots(
     if (px < 0 || px > W || py < 0 || py > H) continue;
 
     const color = MARKER_COLOR[m.type] ?? "#e2e8f0";
+    const icon = peekMarkerIconImage(m.type, color, MARKER_ICON_SRC_PX);
 
-    ctx.beginPath();
-    ctx.arc(px, py, 3, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 5;
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    if (icon) {
+      // Custom SVG symbol on a dark backing disc for contrast.
+      ctx.beginPath();
+      ctx.arc(px, py, MARKER_ICON_DRAW_PX / 2 + 2, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(2,8,24,0.8)";
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 5;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.drawImage(
+        icon,
+        px - MARKER_ICON_DRAW_PX / 2,
+        py - MARKER_ICON_DRAW_PX / 2,
+        MARKER_ICON_DRAW_PX,
+        MARKER_ICON_DRAW_PX,
+      );
+    } else {
+      // Fallback dot until the icon image finishes loading.
+      ctx.beginPath();
+      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 5;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      if (onIconReady) {
+        void loadMarkerIconImage(m.type, color, MARKER_ICON_SRC_PX).then((img) => {
+          if (img) onIconReady();
+        });
+      }
+    }
   }
 }
 
@@ -151,6 +182,8 @@ const tileImageCache = new Map<string, HTMLImageElement>();
 export const Minimap: React.FC = () => {
   const { terrain } = useAppState();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Coalesces marker-icon load completions into a single static-layer rebuild.
+  const iconRebuildScheduledRef = useRef(false);
   // Stored as an offscreen canvas so we can drawImage with globalAlpha for
   // satellite compositing (putImageData ignores globalAlpha).
   const heatmapCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -282,7 +315,8 @@ export const Minimap: React.FC = () => {
       sCtx.globalAlpha = 1.0;
     }
 
-    // 4. Marker dots
+    // 4. Marker symbols (fallback dots until icon rasters finish loading —
+    //    onIconReady schedules exactly one rebuild+repaint once they do)
     drawMarkerDots(
       sCtx,
       markersRef.current,
@@ -290,7 +324,25 @@ export const Minimap: React.FC = () => {
       currentTerrain.maxLon,
       currentTerrain.minLat,
       currentTerrain.maxLat,
+      handleMarkerIconReady,
     );
+  };
+
+  // Coalesce many icon-load completions into a single static-layer rebuild.
+  const handleMarkerIconReady = () => {
+    if (iconRebuildScheduledRef.current) return;
+    iconRebuildScheduledRef.current = true;
+    setTimeout(() => {
+      iconRebuildScheduledRef.current = false;
+      const currentTerrain = terrain;
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (!currentTerrain || !ctx) return;
+      rebuildStaticLayer(currentTerrain);
+      const camState = useCameraStore.getState();
+      const cpos = camState.cameraPosition;
+      compositeFrame(ctx, cpos.known ? cpos.lon : null, cpos.known ? cpos.lat : null, camState.heading, currentTerrain);
+    }, 50);
   };
 
   // Composite the minimap onto the visible canvas: static layer + camera arrow.

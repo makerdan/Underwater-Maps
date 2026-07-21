@@ -53,6 +53,7 @@ import {
   type ShortcutActionId,
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
+import type { MarkerTypeValue } from "./markerConstants";
 import {
   toValidJoystickMode,
   toValidColormapTheme,
@@ -155,7 +156,8 @@ export type UnitsSystem = "metric" | "imperial" | "nautical";
  */
 export type TemperatureUnit = "auto" | "celsius" | "fahrenheit";
 export type CameraSpawnBehaviour = "deepest" | "home" | "last" | "center";
-export type MarkerType = "fish" | "shipwreck" | "coral" | "vent" | "custom" | "depth_pole" | "log" | "vegetation" | "sample" | "bass" | "trout" | "pike" | "walleye" | "crayfish";
+/** Every marker type value across all symbol-library sections (incl. legacy). */
+export type MarkerType = MarkerTypeValue;
 export type JoystickMode = "auto" | "always" | "off";
 
 export type FontSizeLevel = "smallest" | "small" | "medium" | "large" | "x-large" | "largest";
@@ -950,7 +952,9 @@ export const DEFAULT_SETTINGS: SettingsState = {
   defaultMarkerType: "fish",
   defaultDepthPoleColor: "#22d3ee",
   showMarkerLabels: true,
-  visibleMarkerTypes: ["fish", "shipwreck", "coral", "vent", "custom", "depth_pole"],
+  // Must match the server default in api-server routes/settings.ts exactly
+  // (same values, same order) so settings sync sees them as equal.
+  visibleMarkerTypes: ["fish", "shipwreck", "coral", "vent", "custom", "depth_pole", "log", "vegetation", "sample", "bass", "trout", "pike", "walleye", "crayfish", "salmon", "tuna", "halibut", "shark", "swordfish", "rockfish", "cod", "mahi_mahi", "grouper", "snapper", "crab", "lobster", "shrimp", "krill", "jellyfish", "octopus", "squid", "sea_urchin", "starfish", "sea_turtle", "school_herring", "school_sardine", "school_mackerel", "school_tuna", "school_anchovy", "catfish", "crappie", "bluegill", "sunfish", "carp", "yellow_perch", "muskie", "largemouth_bass", "smallmouth_bass", "channel_catfish", "freshwater_shrimp", "freshwater_crab", "snapping_turtle", "bullfrog", "beaver_dam", "lily_pad", "cattail", "reed_bed", "submerged_grass", "spring", "school_perch", "school_bluegill", "school_bass", "school_crappie", "school_carp", "sand_bass", "lake_trout", "perch", "rainbow_trout", "silver_salmon", "chinook_salmon", "pink_salmon", "turbot", "black_rockfish", "yelloweye_rockfish", "dog_shark", "dungeness_crab", "prawn_shrimp", "school_salmon", "school_rockfish", "lingcod", "sole", "multiple_logs", "multiple_fish", "submerged_rock", "land", "red_light", "green_light", "red_buoy", "green_buoy", "rock", "clam", "clam_beach", "cool_rocks", "rock_beach", "anchorage", "hazard_rock", "marina", "boat_ramp", "fuel_dock", "diver_down", "no_anchor", "channel_marker", "daymark"],
   privateMarkers: false,
   markerClusterThreshold: 25,
 
