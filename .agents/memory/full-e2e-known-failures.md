@@ -15,4 +15,4 @@ As of 2026-07-20 the full playwright run (e2e-repro) fails deterministically (bo
 
 **How to apply:** if e2e-repro fails on exactly these specs, don't burn time re-running; investigate the dataset-load pipeline and the persisted-store migrate warning as a dedicated task. Remove this file once fixed.
 
-**Env skip note (2026-07-21):** zone-colour-watertype.spec skips at the "Zone Analysis panel not visible" gate (headless env — UI shell not rendered), so its Settings-page section never executes locally. Verify Settings-page zone-colour behavior via the unit suites (ZoneColoursCard, zoneSettingsTerrainSync) instead.
+**Env skip note (2026-07-21):** zone-colour-watertype.spec skips at the "Zone Analysis panel not visible" gate (headless env — UI shell not rendered), so its Settings-page section never executes locally. RESOLVED: the Settings-page zone-colour flow is now covered headlessly (no skip gates) by tests/e2e/zone-colour-settings.spec.ts, which drives ZoneColourSwatches' useEffect([waterType]) wiring on /settings directly and passes solo (~4 s).
