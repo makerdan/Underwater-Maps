@@ -315,6 +315,15 @@ export const OverviewMap: React.FC = () => {
   const [toolsPopoverOpen, setToolsPopoverOpen] = useState(false);
   const toolsWrapperRef = useRef<HTMLDivElement>(null);
 
+  // --- Georef pick mode ---------------------------------------------------
+  // When DatasetPanel's PDF georef dialog triggers "Pick on map", this mode
+  // activates. The user draws a rubber-band rectangle; on mouse-up the bbox
+  // is committed to uiStore.georefPickBbox for DatasetPanel to consume.
+  // Mutually exclusive with selectMode and downloadMode.
+  const georefPickModeStore = useUiStore((s) => s.georefPickMode);
+  const georefPickModeRef = useRef(false);
+  useEffect(() => { georefPickModeRef.current = georefPickModeStore; }, [georefPickModeStore]);
+
   // --- Download tool state --------------------------------------------------
   // `downloadMode` is mutually exclusive with `selectMode`. When active, the
   // rubber-band rectangle commits to a download bbox that triggers the
@@ -1416,10 +1425,12 @@ export const OverviewMap: React.FC = () => {
         const dl = canvasToLonLat(drag.x0, drag.y0, worldGrid, t);
         const dr = canvasToLonLat(drag.x1, drag.y1, worldGrid, t);
         const isDownload = downloadModeRef.current;
+        const isGeoref = georefPickModeRef.current;
         drawSelectionRect(ctx, drag.x0, drag.y0, drag.x1, drag.y1, {
           width: Math.abs(dr.lon - dl.lon),
           height: Math.abs(dr.lat - dl.lat),
           ...(isDownload ? { strokeColor: "rgba(251,191,36,0.85)", fillColor: "rgba(251,191,36,0.06)" } : {}),
+          ...(isGeoref ? { strokeColor: "rgba(167,139,250,0.9)", fillColor: "rgba(167,139,250,0.08)" } : {}),
         });
       } else if (coordSearchAreaRef.current) {
         // Manual coordinate search — draw a circle (not a rectangle) centred
@@ -1538,9 +1549,9 @@ export const OverviewMap: React.FC = () => {
     if (!canvas) return;
 
     const handleMouseDown = (e: MouseEvent) => {
-      // Select-area / Download tool: capture rectangle start in canvas coords
-      // and suppress pan; left-button only.
-      if ((selectModeRef.current || downloadModeRef.current) && e.button === 0) {
+      // Select-area / Download / Georef-pick tool: capture rectangle start in
+      // canvas coords and suppress pan; left-button only.
+      if ((selectModeRef.current || downloadModeRef.current || georefPickModeRef.current) && e.button === 0) {
         const rect = canvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
@@ -1587,8 +1598,8 @@ export const OverviewMap: React.FC = () => {
       const my = e.clientY - rect.top;
       mousePosRef.current = { x: mx, y: my };
 
-      // Select-area / Download tool: extend the drag rectangle, suppress tooltip/pan.
-      if (selectModeRef.current || downloadModeRef.current) {
+      // Select-area / Download / Georef-pick tool: extend the drag rectangle, suppress tooltip/pan.
+      if (selectModeRef.current || downloadModeRef.current || georefPickModeRef.current) {
         if (dragRectRef.current) {
           dragRectRef.current.x1 = Math.max(0, Math.min(canvas.width, mx));
           dragRectRef.current.y1 = Math.max(0, Math.min(canvas.height, my));
@@ -1628,7 +1639,7 @@ export const OverviewMap: React.FC = () => {
 
     const handleMouseUp = () => {
       // Commit the drawn rectangle as a bbox (if it has meaningful area).
-      if ((selectModeRef.current || downloadModeRef.current) && dragRectRef.current) {
+      if ((selectModeRef.current || downloadModeRef.current || georefPickModeRef.current) && dragRectRef.current) {
         const r = dragRectRef.current;
         const t = transformRef.current;
         dragRectRef.current = null;
@@ -1640,12 +1651,22 @@ export const OverviewMap: React.FC = () => {
           const south = Math.min(a.lat, b.lat);
           const east = Math.max(a.lon, b.lon);
           const west = Math.min(a.lon, b.lon);
-          const bbox = { north, south, east, west };
-          if (downloadModeRef.current) {
-            setDownloadBbox(bbox);
+          if (georefPickModeRef.current) {
+            useUiStore.getState().setGeorefPickBbox({
+              minLon: west,
+              minLat: south,
+              maxLon: east,
+              maxLat: north,
+            });
+            useUiStore.getState().setGeorefPickMode(false);
+          } else if (downloadModeRef.current) {
+            setDownloadBbox({ north, south, east, west });
           } else {
-            setSelectedBbox(bbox);
+            setSelectedBbox({ north, south, east, west });
           }
+        } else if (georefPickModeRef.current) {
+          // Too small a drag — stay in pick mode so user can try again.
+          dirtyRef.current = true;
         }
         return;
       }
@@ -2955,6 +2976,50 @@ export const OverviewMap: React.FC = () => {
           savedIds={savedCatalogIds}
           savingIds={bboxSavingIds}
         />
+      )}
+
+      {/* Georef pick mode banner — full-width instruction bar at the top */}
+      {georefPickModeStore && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 55,
+            padding: "8px 16px",
+            background: "rgba(109,40,217,0.88)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: "calc(20px * var(--bs-font-scale,1))" }}>⬛</span>
+            <span style={{ fontSize: "calc(15px * var(--bs-font-scale,1))", color: "#ede9fe", fontWeight: 600 }}>
+              Drag a rectangle on the map to set the PDF bounding box
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => useUiStore.getState().setGeorefPickMode(false)}
+            style={{
+              background: "rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.3)",
+              borderRadius: 4,
+              color: "#ede9fe",
+              fontSize: "calc(13.5px * var(--bs-font-scale,1))",
+              padding: "2px 10px",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            Cancel
+          </button>
+        </div>
       )}
 
       {/* Download mode confirmation popover — appears after the user commits a download bbox */}

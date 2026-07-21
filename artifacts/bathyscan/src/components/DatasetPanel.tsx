@@ -1507,6 +1507,31 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [pdfDialogError, setPdfDialogError] = useState<string | null>(null);
   const lastPdfMetaRef = useRef<{ pdfBbox: string; pdfDepthUnit: "feet" | "meters" } | null>(null);
 
+  // When the user finishes drawing a bbox on the OverviewMap, pull it into the
+  // PDF georef fields and clear the store so the effect doesn't re-trigger.
+  const georefPickBbox = useUiStore((s) => s.georefPickBbox);
+  const georefPickMode = useUiStore((s) => s.georefPickMode);
+  useEffect(() => {
+    if (!georefPickBbox) return;
+    setPdfBboxFields({
+      minLon: String(georefPickBbox.minLon),
+      minLat: String(georefPickBbox.minLat),
+      maxLon: String(georefPickBbox.maxLon),
+      maxLat: String(georefPickBbox.maxLat),
+    });
+    setPdfDialogError(null);
+    useUiStore.getState().setGeorefPickBbox(null);
+  }, [georefPickBbox]);
+
+  // If the PDF dialog is dismissed while georef-pick mode is active (e.g. the
+  // user clicks Cancel), clear pick mode so the OverviewMap doesn't stay stuck
+  // in rubber-band draw mode with no dialog to receive the result.
+  useEffect(() => {
+    if (!pendingPdfFile && georefPickMode) {
+      useUiStore.getState().setGeorefPickMode(false);
+    }
+  }, [pendingPdfFile, georefPickMode]);
+
   const uploadFile = useCallback(
     (
       file: File,
@@ -3800,6 +3825,62 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 6 }}>
                           PDF contour maps have no coordinates — enter the map's corner
                           coordinates (decimal degrees) and the depth unit printed on the map.
+                        </div>
+                        {/* Pick on map button */}
+                        <div style={{ marginBottom: 8 }}>
+                          {georefPickMode ? (
+                            <div style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              padding: "5px 10px",
+                              background: "rgba(109,40,217,0.12)",
+                              border: "1px solid rgba(167,139,250,0.4)",
+                              borderRadius: 4,
+                            }}>
+                              <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#c4b5fd" }}>
+                                Draw a rectangle on the map…
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => useUiStore.getState().setGeorefPickMode(false)}
+                                style={{
+                                  fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
+                                  color: "#a78bfa",
+                                  background: "transparent",
+                                  border: "none",
+                                  padding: 0,
+                                  cursor: "pointer",
+                                  marginLeft: "auto",
+                                  textDecoration: "underline",
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                useUiStore.getState().setGeorefPickMode(true);
+                                useUiStore.getState().setOverviewOpen(true);
+                              }}
+                              style={{
+                                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                                color: "#a78bfa",
+                                background: "rgba(109,40,217,0.08)",
+                                border: "1px solid rgba(167,139,250,0.35)",
+                                borderRadius: 4,
+                                padding: "4px 10px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 5,
+                              }}
+                            >
+                              <span>⬛</span> Pick on map
+                            </button>
+                          )}
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 6 }}>
                           {([

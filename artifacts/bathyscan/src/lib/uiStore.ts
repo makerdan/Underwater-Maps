@@ -297,6 +297,21 @@ interface UiStore {
   hasSeenOrbitTouchHint: boolean;
   setHasSeenOrbitTouchHint: (seen: boolean) => void;
   /**
+   * When true, the OverviewMap enters "pick a bounding box for PDF georef"
+   * mode — a rubber-band rectangle draw that commits into `georefPickBbox`.
+   * DatasetPanel sets this true when the user clicks "Pick on map";
+   * OverviewMap clears it once a bbox is committed or the user cancels.
+   */
+  georefPickMode: boolean;
+  setGeorefPickMode: (enabled: boolean) => void;
+  /**
+   * The last bbox drawn in georef-pick mode. DatasetPanel watches this and
+   * populates its coordinate fields when it becomes non-null, then clears it.
+   * Shape matches `pdfBboxFields` in DatasetPanel for direct assignment.
+   */
+  georefPickBbox: { minLon: number; minLat: number; maxLon: number; maxLat: number } | null;
+  setGeorefPickBbox: (bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number } | null) => void;
+  /**
    * Depth in metres currently under the pointer in the 3D scene when the
    * TEMP LAYER is active. null = pointer is off-canvas or temp layer is off.
    * Updated by ThermalCursorTracker (lives inside the R3F Canvas).
@@ -773,6 +788,12 @@ export const useUiStore = create<UiStore>((set, get) => {
       // transitions into/out of 'live'. Runs after the local commit.
       onSidebarModeChange(prev, mode);
     },
+
+    // ── Georef bbox pick mode ────────────────────────────────────────────────
+    georefPickMode: false,
+    setGeorefPickMode: (enabled) => set({ georefPickMode: enabled }),
+    georefPickBbox: null,
+    setGeorefPickBbox: (bbox) => set({ georefPickBbox: bbox }),
   };
 });
 
