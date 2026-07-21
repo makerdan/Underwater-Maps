@@ -6,8 +6,9 @@
  *  - Seafloor depth directly below the current GPS position (when in bounds
  *    of the loaded dataset).
  *  - Trail recording card with Start/Stop button, point count, and sampling
- *    interval selector. Trail recording is user-initiated — it does NOT start
- *    automatically when entering Live mode.
+ *    interval selector. Entering Live mode auto-starts (or resumes) trail
+ *    recording via lib/liveMode.ts; exiting Live pauses recordings that Live
+ *    started. The Start/Stop button lets the user override either way.
  *  - Two big touch-friendly action buttons: Follow Me (camera follow toggle)
  *    and Dive to GPS (drop the first-person camera at the GPS location).
  *

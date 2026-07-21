@@ -2,12 +2,16 @@
  * Unit tests for lib/liveMode.ts — Live sidebar-mode orchestration.
  *
  * Covers:
- * - Entering Live starts the GPS watch but does NOT auto-start trail recording.
+ * - Entering Live starts the GPS watch AND auto-starts trail recording at
+ *   the user's configured sampling interval.
+ * - Re-entering Live with points from a paused session resumes (preserves
+ *   points) instead of starting a fresh recording.
  * - Follow Me is enabled only after the first GPS fix arrives.
  * - Follow Me is enabled immediately when GPS is already active.
  * - GPS errors surface a toast and never enable follow.
- * - Exiting Live disables follow but does NOT touch an in-progress trail.
- * - Leaving and re-entering Live has no effect on user-controlled recording.
+ * - Exiting Live disables follow and pauses a Live-started recording while
+ *   preserving its points.
+ * - A recording the user started BEFORE entering Live survives Live exit.
  * - onSidebarModeChange only orchestrates on live transitions.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -77,10 +81,36 @@ describe("liveMode — entering", () => {
     expect(isLiveModeActive()).toBe(true);
   });
 
-  it("does NOT auto-start trail recording", () => {
+  it("auto-starts trail recording at the configured interval", () => {
     useSettingsStore.setState({ gpsRecordingInterval: 5000 });
     enterLiveMode();
-    expect(useTrailStore.getState().recording).toBe(false);
+    expect(useTrailStore.getState().recording).toBe(true);
+  });
+
+  it("resumes (preserves points) when a paused session has points", () => {
+    // Simulate a previously paused session with one point.
+    useTrailStore.getState().startRecording(1000);
+    useTrailStore.getState().addPoint({
+      longitude: 142, latitude: 11, accuracy: 5, timestamp: Date.now(),
+    });
+    useTrailStore.getState().stopRecording();
+    const count = useTrailStore.getState().currentPoints.length;
+    expect(count).toBeGreaterThan(0);
+
+    enterLiveMode();
+    expect(useTrailStore.getState().recording).toBe(true);
+    expect(useTrailStore.getState().currentPoints.length).toBeGreaterThanOrEqual(count);
+  });
+
+  it("does not restart a recording session that is already running", () => {
+    useTrailStore.getState().startRecording(1000);
+    useTrailStore.getState().addPoint({
+      longitude: 142, latitude: 11, accuracy: 5, timestamp: Date.now(),
+    });
+    const count = useTrailStore.getState().currentPoints.length;
+    enterLiveMode();
+    expect(useTrailStore.getState().recording).toBe(true);
+    expect(useTrailStore.getState().currentPoints.length).toBeGreaterThanOrEqual(count);
   });
 
   it("does NOT enable follow mode before the first GPS fix", () => {
@@ -144,45 +174,41 @@ describe("liveMode — exiting", () => {
     expect(isLiveModeActive()).toBe(false);
   });
 
+  it("pauses a Live-started recording on exit, preserving points", () => {
+    enterLiveMode();
+    expect(useTrailStore.getState().recording).toBe(true);
+    useTrailStore.getState().addPoint({
+      longitude: 142, latitude: 11, accuracy: 5, timestamp: Date.now(),
+    });
+    const count = useTrailStore.getState().currentPoints.length;
+    expect(count).toBeGreaterThan(0);
+
+    exitLiveMode();
+    expect(useTrailStore.getState().recording).toBe(false);
+    expect(useTrailStore.getState().currentPoints.length).toBe(count);
+  });
+
+  it("re-entering Live resumes the paused session without losing points", () => {
+    enterLiveMode();
+    useTrailStore.getState().addPoint({
+      longitude: 142, latitude: 11, accuracy: 5, timestamp: Date.now(),
+    });
+    const count = useTrailStore.getState().currentPoints.length;
+
+    exitLiveMode();
+    expect(useTrailStore.getState().recording).toBe(false);
+
+    enterLiveMode();
+    expect(useTrailStore.getState().recording).toBe(true);
+    expect(useTrailStore.getState().currentPoints.length).toBeGreaterThanOrEqual(count);
+  });
+
   it("does NOT stop a user-started recording session on exit", () => {
     useTrailStore.getState().startRecording(1000);
     expect(useTrailStore.getState().recording).toBe(true);
     enterLiveMode();
     exitLiveMode();
     expect(useTrailStore.getState().recording).toBe(true);
-  });
-
-  it("preserves recorded trail points after live-mode exit", () => {
-    useTrailStore.getState().startRecording(1000);
-    fireFix();
-    useTrailStore.getState().addPoint(useGpsStore.getState().position ?? {
-      longitude: 142, latitude: 11, accuracy: 5, timestamp: Date.now(),
-    });
-    const count = useTrailStore.getState().currentPoints.length;
-    expect(count).toBeGreaterThan(0);
-
-    enterLiveMode();
-    exitLiveMode();
-    expect(useTrailStore.getState().currentPoints.length).toBe(count);
-  });
-
-  it("user-started recording survives leaving and re-entering Live", () => {
-    useTrailStore.getState().startRecording(1000);
-    fireFix();
-    useTrailStore.getState().addPoint(useGpsStore.getState().position ?? {
-      longitude: 142, latitude: 11, accuracy: 5, timestamp: Date.now(),
-    });
-    const count = useTrailStore.getState().currentPoints.length;
-    expect(count).toBeGreaterThan(0);
-
-    enterLiveMode();
-    exitLiveMode();
-    expect(useTrailStore.getState().recording).toBe(true);
-    expect(useTrailStore.getState().currentPoints.length).toBe(count);
-
-    enterLiveMode();
-    expect(useTrailStore.getState().recording).toBe(true);
-    expect(useTrailStore.getState().currentPoints.length).toBeGreaterThanOrEqual(count);
   });
 
   it("keeps the GPS watch running after exit", () => {
@@ -212,8 +238,6 @@ describe("trailStore — setSamplingInterval", () => {
     try {
       enterLiveMode();
       fireFix();
-      // User explicitly starts recording (no auto-start any more).
-      useTrailStore.getState().startRecording(1000);
       const before = useTrailStore.getState().currentPoints.length;
 
       // Switch to a 5 s interval and advance the clock: samples arrive at
@@ -232,12 +256,14 @@ describe("liveMode — onSidebarModeChange routing", () => {
   it("explore → live enters live mode", () => {
     onSidebarModeChange("explore", "live");
     expect(isLiveModeActive()).toBe(true);
+    expect(useTrailStore.getState().recording).toBe(true);
   });
 
   it("live → explore exits live mode", () => {
     onSidebarModeChange("explore", "live");
     onSidebarModeChange("live", "explore");
     expect(isLiveModeActive()).toBe(false);
+    expect(useTrailStore.getState().recording).toBe(false);
   });
 
   it("non-live transitions do nothing", () => {

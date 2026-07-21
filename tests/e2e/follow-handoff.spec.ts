@@ -372,6 +372,28 @@ test("walking out of bounds falls back to the pause toast when nothing is nearby
   // dataset auto-load from replacing the seeded terrain), then only
   // datasets that do NOT cover/approach the OOB point, so the suggestion
   // search finds nothing (guards against global-coverage presets).
+  //
+  // The seeded discovery catalog contains global-coverage entries (e.g.
+  // GEBCO 2024, NCEI DEM Global Mosaic), so the real point-radius search
+  // would always find "something nearby" and show the Download & follow
+  // toast instead. Return an empty result so the plain pause-toast
+  // fallback path is exercised.
+  await page.route(
+    (url) => isPointRadiusRequest(url.toString()),
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          center: { lat: OUT_LAT, lon: OUT_LON },
+          radiusKm: 25,
+          bbox: { north: 0, south: 0, east: 0, west: 0 },
+          datasets: [],
+        }),
+      });
+    },
+  );
+
   let serveDatasets = false;
   await page.route(
     (url) => isDatasetListRequest(url.toString()),

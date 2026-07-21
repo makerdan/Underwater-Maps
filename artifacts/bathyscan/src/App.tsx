@@ -69,6 +69,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useTrailStore } from "@/lib/trailStore";
+import { useGpsStore } from "@/lib/gpsStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { toValidDepthLayer } from "@/lib/depthLayerGuard";
@@ -314,6 +315,7 @@ function Main() {
   const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
   const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
   const trailRecording = useTrailStore((s) => s.recording);
+  const gpsActiveForTrail = useGpsStore((s) => s.active);
   const defaultMapLoad = useSettingsStore((st) => st.defaultMapLoad);
   const { isSignedIn, isLoaded } = useUser();
   // Always-mounted sync: debounce-flush lastSession to server when signed in,
@@ -1804,8 +1806,11 @@ function Main() {
           </div>
         )}
 
-        {/* GPS Trail Recorder — bottom-right above minimap */}
-        {trailRecording && (
+        {/* GPS Trail Recorder — bottom-right above minimap. Shown whenever
+            GPS is active (or a recording is in progress) OUTSIDE Live mode;
+            the Live panel has its own trail-recording card, so the popup is
+            suppressed there to avoid duplicate recording surfaces. */}
+        {(gpsActiveForTrail || trailRecording) && sidebarMode !== "live" && (
           <div className="absolute z-20" style={{ bottom: 60, right: 16 }}>
             <TrailRecorder />
           </div>

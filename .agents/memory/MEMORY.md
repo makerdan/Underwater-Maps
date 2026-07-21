@@ -80,5 +80,6 @@
 - [survey.laz fixture nondeterminism](laz-fixture-nondeterminism.md) — check:fixture-freshness can flag survey.laz with no code change; regen via fixtures:regen, commit only the .laz, restore the .bag files.
 - [supertest requireAuth bypass header](supertest-requireauth-bypass-header.md) — test apps mounting requireAuth routers must inject x-e2e-user-id or getAuth() throws and every request 500s.
 - [terrain.js mock export sync](terrain-mock-export-sync.md) — all full terrain mocks now go through shared createTerrainMock(); add new exports to the factory (guard test enforces both missing and stale keys).
-- [ESLint flat config core rules off](eslint-flat-config-no-core-rules.md) — no recommended preset; only no-dupe-keys is on workspace-wide, other core rules off unless listed.
+- [Global catalog entries defeat "nothing nearby" tests](catalog-global-coverage-e2e.md) — seeded catalog has world-spanning bboxes (GEBCO); empty-result branches need point-radius-query mocked to [].
+- [ESLint flat config core rules off](eslint-flat-config-no-core-rules.md) — root config extends no recommended preset; core rules like no-dupe-keys are inactive unless explicitly listed.
 - [Toolchain pinned exactly](vite8-vitest-env-pitfalls.md) — vite/@vitejs/plugin-react/vitest are exact-pinned in pnpm-workspace.yaml catalog + bathyscan package.json; bump deliberately and re-run jsx tests + bundle guard.
