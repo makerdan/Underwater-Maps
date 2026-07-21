@@ -60,7 +60,6 @@ function hmrKeepalivePlugin(): Plugin {
       server.httpServer?.once("close", () => clearInterval(broadcastId));
 
       // ── 2. Server-side native WS ping (belt-and-suspenders) ──────────────
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (server.ws.on as any)("connection", (socket: any) => {
         if (!socket || typeof socket.ping !== "function") return;
         const id = setInterval(() => {

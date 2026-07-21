@@ -306,11 +306,47 @@ export default [
   {
     ignores: [
       "**/dist/**",
+      "**/dist-*/**",
+      "**/build/**",
+      "**/coverage/**",
+      "**/playwright-report/**",
+      "**/test-results/**",
+      "**/.pythonlibs/**",
       "**/node_modules/**",
       "**/generated/**",
       "**/.vite/**",
       "**/*.d.ts",
     ],
+  },
+  // Workspace-wide duplicate-key guard: duplicated property blocks (e.g. the
+  // same stub export added twice to a vi.mock factory by overlapping merges)
+  // must fail lint in EVERY package — app code, libs, scripts, and tests —
+  // instead of surfacing later as TS1117 deep in a typecheck step.
+  {
+    files: ["**/*.{ts,tsx,mts,cts}"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: "module",
+      },
+    },
+    plugins: {
+      "@typescript-eslint": tsPlugin,
+    },
+    rules: {
+      "no-dupe-keys": "error",
+    },
+  },
+  {
+    files: ["**/*.{js,jsx,mjs,cjs}"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+    },
+    rules: {
+      "no-dupe-keys": "error",
+    },
   },
   {
     files: ["tests/e2e/**/*.spec.ts"],

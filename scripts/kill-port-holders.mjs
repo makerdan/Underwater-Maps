@@ -331,7 +331,6 @@ async function freePort(port) {
 let ok = true;
 for (const port of ports) {
   // Sequential on purpose: overlapping tree-kills could race on shared parents.
-  // eslint-disable-next-line no-await-in-loop
   ok = (await freePort(port)) && ok;
 }
 process.exit(ok ? 0 : 1);

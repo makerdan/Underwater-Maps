@@ -11,7 +11,7 @@
     "check:codegen": "pnpm --filter @workspace/api-spec run check:codegen",
     "check:codegen-stale": "node scripts/check-codegen-stale.mjs",
     "typecheck": "pnpm --filter @workspace/api-spec run codegen:generate && pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "lint": "eslint artifacts/bathyscan/src artifacts/api-server/src tests/e2e",
+    "lint": "eslint artifacts lib scripts tests eslint.config.mjs playwright.config.ts",
     "test:unit": "pnpm -r --if-present run test:unit",
     "test:validation": "pnpm --filter @workspace/api-server run test:validation && pnpm --filter @workspace/bathyscan run test:validation",
     "test:e2e": "node scripts/validation-lock.mjs -- pnpm run test:e2e:run",
