@@ -14,43 +14,12 @@ import { vi } from "vitest";
 import { db, datasetCatalogTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { ALL_PRESET_DATASETS } from "../terrain.js";
+import { EXTRA_CATALOG_ENTRIES } from "../catalogSeeder.js";
 
-/** Catalog ids declared statically in EXTRA_CATALOG_ENTRIES — kept in sync
- *  with `catalogSeeder.ts`. If the static list changes, update this list. */
-const EXTRA_IDS = [
-  "gebco-2024-global",
-  "ncei-bag-mosaic-alaska",
-  "ncei-dem-global-mosaic",
-  "noaa-efh-alaska-pcod",
-  "noaa-efh-alaska-halibut",
-  "noaa-efh-alaska-rockfish",
-  "noaa-efh-alaska-pollock",
-  "noaa-efh-alaska-sablefish",
-  "noaa-efh-alaska-arrowtooth",
-  "alaska-shorezone-substrate",
-  "usgs-coned-lidar-alaska",
-  "noaa-enc-se-alaska",
-  // New EFH species added in task-854
-  "noaa-efh-alaska-spotted-prawn",
-  "noaa-efh-alaska-turbot",
-  "noaa-efh-alaska-rex-sole",
-  "noaa-efh-alaska-tomcod",
-  "noaa-efh-alaska-juvenile-rockfish",
-  // EFH salmon, crab, and rockfish entries (auto-sync coverage)
-  "noaa-efh-alaska-chinook-salmon",
-  "noaa-efh-alaska-pink-salmon",
-  "noaa-efh-alaska-chum-salmon",
-  "noaa-efh-alaska-sockeye-salmon",
-  "noaa-efh-alaska-coho-salmon",
-  "noaa-efh-alaska-dungeness-crab",
-  "noaa-efh-alaska-tanner-crab",
-  "noaa-efh-alaska-black-rockfish",
-  "noaa-efh-alaska-quillback-rockfish",
-  // Intertidal / shoreline catalog entries (catalog-only, not 3D overlay)
-  "adfg-intertidal-clam-habitat-se-alaska",
-  "noaa-shorezone-tidal-pools-se-alaska",
-  "noaa-shorezone-beachcombing-se-alaska",
-];
+/** Catalog ids derived live from EXTRA_CATALOG_ENTRIES so this test can never
+ *  drift out of sync with `catalogSeeder.ts` when static entries are added
+ *  or retired. */
+const EXTRA_IDS = EXTRA_CATALOG_ENTRIES.map((e) => e.id);
 
 const STUB_BBOX = { minLon: -1, minLat: -1, maxLon: 1, maxLat: 1 };
 
@@ -88,7 +57,7 @@ afterAll(async () => {
 });
 
 describe("seedDatasetCatalog", () => {
-  it.skip("seeds a fresh DB with one row per preset plus the static EXTRA entries", async () => {
+  it("seeds a fresh DB with one row per preset plus the static EXTRA entries", async () => {
     await boot();
 
     const rows = await fetchAll();
@@ -124,7 +93,7 @@ describe("seedDatasetCatalog", () => {
     expect(new Set(secondIds).size).toBe(secondIds.length);
   });
 
-  it.skip("backfills newly-added preset and EXTRA entries on a partially populated table", async () => {
+  it("backfills newly-added preset and EXTRA entries on a partially populated table", async () => {
     // Simulate an old install: only a couple of entries present, with stale
     // `name` values to verify the upsert refreshes mutable columns. Use the
     // real schema (every required column populated).
@@ -181,7 +150,7 @@ describe("seedDatasetCatalog", () => {
     expect(rows).toHaveLength(ALL_PRESET_DATASETS.length + EXTRA_IDS.length);
   });
 
-  it.skip("removes preset-* rows no longer present in ALL_PRESET_DATASETS", async () => {
+  it("removes preset-* rows no longer present in ALL_PRESET_DATASETS", async () => {
     await db.insert(datasetCatalogTable).values([
       {
         id: "preset-zzz-retired-dataset",

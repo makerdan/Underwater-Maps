@@ -1,11 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   sampleSubstrateGrid,
-  substrateFingerprintForDataset,
   substrateToZone,
   SUBSTRATE_TO_SALTWATER_ZONE,
   SUBSTRATE_TO_FRESHWATER_ZONE,
-  _clearSubstrateFingerprintMemo,
 } from "../substrateGrid.js";
 
 describe("sampleSubstrateGrid", () => {
@@ -27,49 +25,6 @@ describe("sampleSubstrateGrid", () => {
     expect(s.fingerprint).toBe("00000000");
   });
 
-  it.skip("samples real substrate polygons for a preset Alaska dataset (skipped: preset datasets retired in Task #403)", () => {
-    // glacier-bay sits inside the bundled ShoreZone footprint, so the sample
-    // must report at least some covered cells from one of the four classes.
-    const s = sampleSubstrateGrid("glacier-bay");
-    expect(s.labels).toHaveLength(1024);
-    expect(s.mask).toHaveLength(1024);
-    expect(s.hasCoverage).toBe(true);
-    expect(s.coveredCount).toBeGreaterThan(0);
-    expect(s.coveredCount).toBeLessThanOrEqual(1024);
-    expect(s.coverageFraction).toBeCloseTo(s.coveredCount / 1024, 6);
-    // Every covered cell maps to one of the four CMECS broad classes.
-    for (let i = 0; i < 1024; i++) {
-      if (s.mask[i]) {
-        expect(s.labels[i]).not.toBeNull();
-        expect(["bedrock", "gravel", "sand", "mud"]).toContain(s.labels[i]);
-      } else {
-        expect(s.labels[i]).toBeNull();
-      }
-    }
-    // Class counts must sum to the covered-cell count.
-    const totalCounts = s.counts.bedrock + s.counts.gravel + s.counts.sand + s.counts.mud;
-    expect(totalCounts).toBe(s.coveredCount);
-    // Fingerprint is a non-zero 8-char hex string.
-    expect(s.fingerprint).toMatch(/^[a-f0-9]{8}$/);
-    expect(s.fingerprint).not.toBe("00000000");
-  });
-
-  it.skip("produces a stable, deterministic fingerprint per dataset (skipped: preset datasets retired in Task #403)", () => {
-    _clearSubstrateFingerprintMemo();
-    const a = sampleSubstrateGrid("glacier-bay").fingerprint;
-    const b = sampleSubstrateGrid("glacier-bay").fingerprint;
-    expect(a).toBe(b);
-    expect(substrateFingerprintForDataset("glacier-bay")).toBe(a);
-  });
-
-  it.skip("produces a different fingerprint for two distinct covered datasets (skipped: preset datasets retired in Task #403)", () => {
-    _clearSubstrateFingerprintMemo();
-    const a = substrateFingerprintForDataset("glacier-bay");
-    const b = substrateFingerprintForDataset("sitka-sound");
-    expect(a).not.toBe(b);
-    expect(a).not.toBe("00000000");
-    expect(b).not.toBe("00000000");
-  });
 });
 
 describe("substrateToZone mappings", () => {

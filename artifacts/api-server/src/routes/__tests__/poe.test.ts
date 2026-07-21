@@ -320,44 +320,6 @@ describe("POST /api/poe/classify", () => {
     expect(freshRes.body.zones[0]).toBe("aquatic_vegetation");
   });
 
-  it.skip("reconciles AI output against surveyed substrate for covered datasets (skipped: preset datasets retired in Task #403)", async () => {
-    // thorne-bay is bundled with real ShoreZone substrate coverage. The AI
-    // mock returns the freshwater label "aquatic_vegetation" everywhere — a
-    // value that's not even in the saltwater enum — so any cell that comes
-    // back as a valid saltwater substrate label MUST have been overwritten by
-    // server-side reconciliation against the surveyed substrate polygons.
-    fakeCreate.mockReset();
-    fakeCreate.mockResolvedValue({
-      id: "resp_reconcile",
-      output_text: JSON.stringify({ zones: Array(1024).fill("aquatic_vegetation") }),
-      usage: { input_tokens: 10, output_tokens: 10 },
-    });
-
-    const res = await request(app)
-      .post("/api/poe/classify")
-      .set("x-e2e-user-id", "user-reconcile")
-      .send({
-        gridBase64: GRID_BASE64,
-        waterType: "saltwater",
-        datasetId: "thorne-bay",
-      });
-
-    expect(res.status).toBe(200);
-    expect(res.body.zones).toHaveLength(1024);
-    expect(typeof res.body.substrateFp).toBe("string");
-    expect(res.body.substrateFp).not.toBe("00000000");
-
-    const saltwaterLabels = new Set([
-      "sandy_shelf", "coarse_sediment", "silt_plain", "basalt_rock",
-      "volcanic_vent_field", "trench_wall", "seamount_flank", "coral_reef_potential",
-    ]);
-    const reconciledCount = (res.body.zones as string[])
-      .filter((z) => saltwaterLabels.has(z)).length;
-    // Covered cells must have been overwritten with surveyed labels — at
-    // least one such cell is expected for the glacier-bay preset.
-    expect(reconciledCount).toBeGreaterThan(0);
-  });
-
   it("leaves AI output untouched for datasets with no substrate coverage", async () => {
     // Uploads (and datasets outside the bundled ShoreZone/ENC footprint) have
     // fingerprint "00000000" and must NOT be reconciled — the AI response

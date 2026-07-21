@@ -90,11 +90,11 @@ test("real tier contents match the historical fast/standard/full sets", () => {
   const steps = getValidationSteps("test");
   assert.deepEqual(getStepsForTier(steps, "fast").map((s) => s.name), [
     "typecheck", "lint", "check:lock-skill-sync", "check:root-relative-api",
-    "check:deps-suppression", "check:runner-step-sync",
+    "check:deps-suppression", "check:runner-step-sync", "check:skip-count",
   ]);
   assert.deepEqual(getStepsForTier(steps, "standard").map((s) => s.name), [
     "typecheck", "lint", "check:lock-skill-sync", "check:root-relative-api",
-    "check:deps-suppression", "check:runner-step-sync",
+    "check:deps-suppression", "check:runner-step-sync", "check:skip-count",
     "test:unit", "check:docs-stale", "check:catalog-coverage", "check:schema-stale",
   ]);
   assert.deepEqual(

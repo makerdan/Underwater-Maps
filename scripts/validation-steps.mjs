@@ -78,6 +78,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:deps-suppression", resource: null, cmd: "pnpm run check:deps-suppression", tiers: FAST },
     // no resource: CI coverage meta-check for check:* scripts, sub-second
     { name: "check:runner-step-sync", resource: null, cmd: "pnpm run check:runner-step-sync", tiers: FAST },
+    // no resource: skip-count ratchet guard (static file scan), sub-second
+    { name: "check:skip-count", resource: null, cmd: "pnpm run check:skip-count", tiers: FAST },
     // unit-cpu resource: prevents CPU saturation / budget breach
     { name: "test:unit", resource: "unit-cpu", cmd: "pnpm run test:unit", tiers: STANDARD },
     // all check:* steps are lightweight; no resource needed
