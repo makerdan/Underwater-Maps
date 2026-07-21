@@ -15,7 +15,12 @@ catalog:
   '@types/node': ^25.3.3
   '@types/react': 19.2.14
   '@types/react-dom': ^19.2.0
-  '@vitejs/plugin-react': ^5.0.4
+  # Build-critical toolchain: pinned exactly (no caret) because floating minor
+  # bumps have silently broken the build before — @vitejs/plugin-react 5.2.0
+  # stopped applying the JSX transform under vitest (297 "React is not defined"
+  # failures). Bump vite / @vitejs/plugin-react / vitest deliberately, together,
+  # and re-run the jsx-sensitive unit tests + testHelpers.bundle.test.ts.
+  '@vitejs/plugin-react': 5.2.0
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   drizzle-orm: ^0.45.2
@@ -26,7 +31,12 @@ catalog:
   tailwind-merge: ^3.3.1
   tailwindcss: ^4.1.14
   tsx: 4.21.0
-  vite: ^7.3.6
+  # vite pinned (see toolchain note above); bathyscan pins vite 8.x directly
+  # in its own package.json.
+  vite: 7.3.6
+  # vitest pinned (see toolchain note above); consumed via catalog: by all
+  # test-bearing packages.
+  vitest: 3.2.7
   wouter: ^3.10.0
   zod: 3.25.76
 

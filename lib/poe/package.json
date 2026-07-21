@@ -17,6 +17,6 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "vitest": "^3.2.6"
+    "vitest": "catalog:"
   }
 }
