@@ -5300,9 +5300,9 @@ components:
             - { position: 1.0,  hex: '#283593' }
         bandColors:
           type: array
-          minItems: 10
-          maxItems: 10
-          description: Per-band hex colours for the Ocean theme. Exactly 10 entries, one per depth band lower boundary (0, 50, 100, 150, 200, 250, 300, 350, 450, 600 ft). Persisted server-side so the palette is consistent across devices.
+          minItems: 2
+          maxItems: 16
+          description: Per-band hex colours for the Ocean/Custom depth palette. Variable length (2-16 bands), one entry per depth band. Must always be exactly one entry shorter than bandBoundaries. Persisted server-side so the palette is consistent across devices.
           items:
             type: string
             pattern: '^#[0-9a-fA-F]{6}$'
@@ -5319,13 +5319,13 @@ components:
             - '#1e2b6e'
         bandBoundaries:
           type: array
-          minItems: 11
-          maxItems: 11
-          description: Depth band boundaries in feet. Exactly 11 integers, strictly increasing, first must be 0, last must be 2000. The 9 interior values are user-editable. Persisted server-side so customised boundaries survive across devices.
+          minItems: 3
+          maxItems: 17
+          description: Depth band boundaries in feet. Variable length (bandColors.length + 1 entries, 3-17), strictly increasing integers, first must be 0. Every other value including the last is user-editable up to 36000 ft. Persisted server-side so customised boundaries survive across devices.
           items:
             type: integer
             minimum: 0
-            maximum: 2000
+            maximum: 36000
           default:
             - 0
             - 50
@@ -5338,6 +5338,10 @@ components:
             - 450
             - 600
             - 2000
+        blendDepthBands:
+          type: boolean
+          default: true
+          description: When true (default), depth band colours blend smoothly into each other; when false, each band renders as a crisp discrete colour step.
         lampIntensity:
           type: number
           minimum: 0

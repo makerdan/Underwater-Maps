@@ -224,10 +224,19 @@ describe("PUT /api/settings — palette round-trip", () => {
     expect(getRes.body.bandBoundaries).toEqual([0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000]);
   });
 
-  it("rejects bandBoundaries with wrong count (not 11 elements) with 400", async () => {
+  it("accepts a 10-element bandBoundaries array (variable band count)", async () => {
+    const ten = [0, 50, 100, 150, 200, 250, 300, 350, 450, 2000];
     const res = await request(app)
       .put("/api/settings")
-      .send({ bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 2000] });
+      .send({ bandBoundaries: ten });
+    expect(res.status).toBe(200);
+    expect(res.body.bandBoundaries).toEqual(ten);
+  });
+
+  it("rejects bandBoundaries with fewer than 3 elements with 400", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ bandBoundaries: [0, 2000] });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid_request");
   });
@@ -246,10 +255,19 @@ describe("PUT /api/settings — palette round-trip", () => {
     expect(res.status).toBe(400);
   });
 
-  it("rejects bandBoundaries that do not end at 2000 with 400", async () => {
+  it("accepts bandBoundaries that end at a value other than 2000 (editable last boundary)", async () => {
+    const custom = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
     const res = await request(app)
       .put("/api/settings")
-      .send({ bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999] });
+      .send({ bandBoundaries: custom });
+    expect(res.status).toBe(200);
+    expect(res.body.bandBoundaries).toEqual(custom);
+  });
+
+  it("rejects bandBoundaries whose last value exceeds 36000 with 400", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ bandBoundaries: [0, 100, 36001] });
     expect(res.status).toBe(400);
   });
 });

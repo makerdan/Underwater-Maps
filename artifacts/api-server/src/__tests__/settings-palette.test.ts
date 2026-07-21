@@ -127,20 +127,36 @@ describe("PUT /api/settings — bandColors", () => {
     expect(res.body.bandColors).toHaveLength(10);
   });
 
-  it("returns 400 when fewer than 10 band colours are supplied", async () => {
-    const res = await request(app)
+  it("accepts variable band counts within 2–16 (9 and 11 colours)", async () => {
+    const nine = await request(app)
       .put("/api/settings")
       .set(AUTH)
       .send({ bandColors: validBandColors.slice(0, 9) });
+    expect(nine.status).toBe(200);
+    expect(nine.body.bandColors).toHaveLength(9);
+
+    const eleven = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandColors: [...validBandColors, "#ffffff"] });
+    expect(eleven.status).toBe(200);
+    expect(eleven.body.bandColors).toHaveLength(11);
+  });
+
+  it("returns 400 when fewer than 2 band colours are supplied", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandColors: validBandColors.slice(0, 1) });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
   });
 
-  it("returns 400 when more than 10 band colours are supplied", async () => {
+  it("returns 400 when more than 16 band colours are supplied", async () => {
     const res = await request(app)
       .put("/api/settings")
       .set(AUTH)
-      .send({ bandColors: [...validBandColors, "#ffffff"] });
+      .send({ bandColors: Array(17).fill("#001122") });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
   });
@@ -179,12 +195,21 @@ describe("PUT /api/settings — bandBoundaries", () => {
     expect(res.body).toHaveProperty("error");
   });
 
-  it("returns 400 when bandBoundaries does not end with 2000", async () => {
-    const bad = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
+  it("accepts a bandBoundaries array ending at a value other than 2000 (last boundary editable)", async () => {
+    const custom = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
     const res = await request(app)
       .put("/api/settings")
       .set(AUTH)
-      .send({ bandBoundaries: bad });
+      .send({ bandBoundaries: custom });
+    expect(res.status).toBe(200);
+    expect(res.body.bandBoundaries).toEqual(custom);
+  });
+
+  it("returns 400 when the last boundary exceeds 36000", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: [0, 100, 36001] });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
   });
@@ -199,13 +224,76 @@ describe("PUT /api/settings — bandBoundaries", () => {
     expect(res.body).toHaveProperty("error");
   });
 
-  it("returns 400 when bandBoundaries has fewer than 11 entries", async () => {
+  it("accepts a shorter bandBoundaries array (variable band count)", async () => {
+    const ten = [0, 50, 100, 200, 300, 400, 500, 600, 700, 2000];
     const res = await request(app)
       .put("/api/settings")
       .set(AUTH)
-      .send({ bandBoundaries: [0, 50, 100, 200, 300, 400, 500, 600, 700, 2000] });
+      .send({ bandBoundaries: ten });
+    expect(res.status).toBe(200);
+    expect(res.body.bandBoundaries).toEqual(ten);
+  });
+
+  it("returns 400 when bandBoundaries has fewer than 3 entries", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: [0, 2000] });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
+  });
+
+  it("returns 400 when bandColors and bandBoundaries are sent together with mismatched lengths", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({
+        bandColors: ["#001122", "#334455", "#667788"],
+        bandBoundaries: [0, 100, 200, 300, 400],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("accepts bandColors and bandBoundaries sent together with consistent lengths", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({
+        bandColors: ["#001122", "#334455", "#667788"],
+        bandBoundaries: [0, 100, 200, 300],
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.bandColors).toHaveLength(3);
+    expect(res.body.bandBoundaries).toHaveLength(4);
+  });
+});
+
+describe("PUT /api/settings — blendDepthBands", () => {
+  it("accepts blendDepthBands true and false", async () => {
+    for (const v of [false, true]) {
+      const res = await request(app)
+        .put("/api/settings")
+        .set(AUTH)
+        .send({ blendDepthBands: v });
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("blendDepthBands", v);
+    }
+  });
+
+  it("returns 400 for a non-boolean blendDepthBands", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ blendDepthBands: "yes" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("defaults blendDepthBands to true on GET for a fresh user", async () => {
+    const res = await request(app).get("/api/settings").set(AUTH);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("blendDepthBands", true);
   });
 });
 

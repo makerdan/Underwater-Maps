@@ -66,7 +66,7 @@ const SCANNED_FILES: string[] = [
   "App.tsx",
   "pages/Settings.tsx",
   "pages/TourScene.tsx",
-  "pages/settings/components/PalettePickerCard.tsx",
+  "pages/settings/components/DepthColorsCard.tsx",
   "components/CurrentsPanel.tsx",
   "components/DatasetPanel.tsx",
   "components/DatasetFolderTree.tsx",

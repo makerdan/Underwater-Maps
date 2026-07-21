@@ -77,11 +77,15 @@ test.describe("Depth palette picker — end-to-end", () => {
       });
     }
 
-    const deepHex = page.locator('[data-testid="palette-deep-hex"]');
+    // The Depth Colors card exposes one hex input per band; the deepest
+    // band is the last row. Default ocean palette has 10 bands (index 9).
+    const bandHexInputs = page.locator('[data-testid^="band-color-hex-"]');
+    await expect(bandHexInputs.first()).toBeVisible({ timeout: 10_000 });
+    const deepHex = bandHexInputs.last();
     await expect(deepHex).toBeVisible();
 
     // 3. Pick a deep colour that is visibly different from the default
-    //    (#283593 indigo) — bright red guarantees the gradient changes.
+    //    (#1e2b6e indigo) — bright red guarantees the gradient changes.
     const newDeep = "#ff0000";
     await deepHex.fill(newDeep);
     // The hex input commits to paletteStore only when the value matches

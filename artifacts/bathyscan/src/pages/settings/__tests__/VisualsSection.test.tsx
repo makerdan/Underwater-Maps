@@ -184,14 +184,14 @@ describe("VisualsSection", () => {
     expect(h.resetSection).toHaveBeenCalledWith("visuals");
   });
 
-  it("renders nested BASICS card header", () => {
+  it("renders nested TERRAIN SHADING card header", () => {
     render(<VisualsSection />);
-    expect(screen.getByText("BASICS")).toBeInTheDocument();
+    expect(screen.getByText("TERRAIN SHADING")).toBeInTheDocument();
   });
 
-  it("renders nested DEPTH DISPLAY card header", () => {
+  it("renders nested EFFECTS card header", () => {
     render(<VisualsSection />);
-    expect(screen.getByText("DEPTH DISPLAY")).toBeInTheDocument();
+    expect(screen.getByText("EFFECTS")).toBeInTheDocument();
   });
 
   it("renders the Antialiasing label", () => {

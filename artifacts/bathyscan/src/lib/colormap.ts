@@ -8,15 +8,15 @@ interface ColorStop {
 }
 
 /**
- * Canonical depth band boundaries in feet. These define 10 visually distinct
- * bands from near-surface through deep water (0–2000 ft total range).
- * Used by DepthScaleBar and DepthLegend to position tick labels.
+ * Canonical default depth band boundaries in feet (the default 10-band
+ * scale). Retained for consumers that need the historical default layout;
+ * the live user-configured boundaries come from paletteStore.
  */
 export const DEPTH_BAND_BOUNDARIES_FT = [
   0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000,
 ] as const;
 
-/** Maximum depth of the ocean colormap scale in feet. */
+/** Default maximum depth of the ocean colormap scale in feet. */
 export const OCEAN_MAX_DEPTH_FT = 2000;
 
 const FT_TO_M = 0.3048;
@@ -73,50 +73,79 @@ export function getColormapTRange(
   return { tMin, tMax };
 }
 
+/**
+ * Optional dataset depth range (metres, positive-down) used to anchor the
+ * user's depth bands to real depths. When supplied, a band whose boundaries
+ * are 0–5 ft colours exactly the 0–5 ft slice of the dataset rather than a
+ * normalised fraction of a fixed scale.
+ */
+export interface DepthRangeM {
+  /** Shallowest depth of the dataset in metres. */
+  min: number;
+  /** Deepest depth of the dataset in metres. */
+  max: number;
+}
+
 const OCEAN_HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
-/**
- * Build the ocean theme stops using the user-customised band colours and band
- * boundaries from paletteStore. Ten band stops come from `bandColors` at the
- * positions defined by `bandBoundaries[0..9]`, plus the deep endpoint at
- * t=1.0 from `deep`.
- *
- * Falls back to DEFAULT_BAND_COLORS per-entry and DEFAULT_BAND_BOUNDARIES
- * when stored values are missing or malformed.
- */
-function getOceanStops(): ColorStop[] {
-  const { bandColors, deep, bandBoundaries } = usePaletteStore.getState();
-  const bc = Array.isArray(bandColors) && bandColors.length === 10
-    ? bandColors
-    : DEFAULT_BAND_COLORS;
-  const bb = Array.isArray(bandBoundaries) && bandBoundaries.length === 11
-    ? bandBoundaries
-    : DEFAULT_BAND_BOUNDARIES;
-  const stops: ColorStop[] = (bb.slice(0, 10) as number[]).map((ft, i) => {
-    const raw = bc[i];
-    const hex =
-      typeof raw === "string" && OCEAN_HEX_RE.test(raw)
-        ? raw
-        : DEFAULT_BAND_COLORS[i]!;
-    return { t: ft / OCEAN_MAX_DEPTH_FT, color: new THREE.Color(hex) };
-  });
-  stops.push({ t: 1.0, color: new THREE.Color(deep) });
-  return stops;
+/** Read + validate the live band arrays from paletteStore (variable length). */
+function getValidatedBands(): { colors: string[]; boundariesFt: number[]; blend: boolean } {
+  const { bandColors, bandBoundaries, blendBands } = usePaletteStore.getState();
+  let colors =
+    Array.isArray(bandColors) && bandColors.length >= 2
+      ? bandColors
+      : [...DEFAULT_BAND_COLORS];
+  let boundariesFt =
+    Array.isArray(bandBoundaries) && bandBoundaries.length === colors.length + 1
+      ? bandBoundaries
+      : null;
+  if (!boundariesFt) {
+    colors = [...DEFAULT_BAND_COLORS];
+    boundariesFt = [...DEFAULT_BAND_BOUNDARIES];
+  }
+  const safeColors = colors.map((hex, i) =>
+    typeof hex === "string" && OCEAN_HEX_RE.test(hex)
+      ? hex
+      : DEFAULT_BAND_COLORS[Math.min(i, DEFAULT_BAND_COLORS.length - 1)]!,
+  );
+  return { colors: safeColors, boundariesFt, blend: blendBands !== false };
 }
 
 /**
- * Build the Custom theme colour stops from paletteStore. The Custom theme
- * now shares the same `bandColors` and `bandBoundaries` data as the Ocean
- * theme, so this function delegates directly to `getOceanStops()`. Both
- * themes therefore render the same per-band colour gradient; the only
- * difference is which UI controls the user sees in Settings.
+ * Normalise each band boundary (feet) to a t ∈ [0, 1] position.
  *
- * Old `customStops`-based rendering has been removed. Persisted `customStops`
- * in localStorage are retained in the store's merge guard to avoid hydration
- * crashes on upgrade, but they no longer affect the rendered output.
+ * With a dataset `range` (metres): t is the boundary's real position within
+ * the dataset's depth span, clamped to [0, 1] — bands map to actual depths
+ * with no fixed 2000 ft cap.
+ *
+ * Without a range: boundaries are normalised by the deepest boundary, so the
+ * full band scale is shown edge-to-edge (settings preview, generic swatches).
  */
-function getCustomStops(): ColorStop[] {
-  return getOceanStops();
+function boundaryPositions(boundariesFt: number[], range?: DepthRangeM): number[] {
+  if (range && range.max > range.min) {
+    const span = range.max - range.min;
+    return boundariesFt.map((ft) =>
+      Math.max(0, Math.min(1, (ft * FT_TO_M - range.min) / span)),
+    );
+  }
+  const maxFt = boundariesFt[boundariesFt.length - 1] || 1;
+  return boundariesFt.map((ft) => ft / maxFt);
+}
+
+/**
+ * Build the user-band colour stops (used by both the "ocean" and "custom"
+ * themes). Colours sit at each band's lower boundary; the deepest band's
+ * colour also holds at t=1 so depths beyond the last boundary stay stable.
+ */
+function getBandStops(range?: DepthRangeM): ColorStop[] {
+  const { colors, boundariesFt } = getValidatedBands();
+  const pos = boundaryPositions(boundariesFt, range);
+  const stops: ColorStop[] = colors.map((hex, i) => ({
+    t: pos[i]!,
+    color: new THREE.Color(hex),
+  }));
+  stops.push({ t: 1.0, color: new THREE.Color(colors[colors.length - 1]!) });
+  return stops;
 }
 
 const FIXED_THEME_STOPS: Record<Exclude<ColormapTheme, "ocean" | "custom">, ColorStop[]> = {
@@ -147,12 +176,6 @@ const FIXED_THEME_STOPS: Record<Exclude<ColormapTheme, "ocean" | "custom">, Colo
   ],
 };
 
-function stopsForTheme(theme: ColormapTheme): ColorStop[] {
-  if (theme === "ocean") return getOceanStops();
-  if (theme === "custom") return getCustomStops();
-  return FIXED_THEME_STOPS[theme];
-}
-
 function interpolateStops(stops: ColorStop[], t: number): THREE.Color {
   const clamped = Math.max(0, Math.min(1, t));
   for (let i = 0; i < stops.length - 1; i++) {
@@ -168,18 +191,50 @@ function interpolateStops(stops: ColorStop[], t: number): THREE.Color {
 }
 
 /**
+ * Build a discrete (step-function) colour lookup for the user bands: every
+ * t inside band i returns exactly bandColors[i] with no blending.
+ */
+function makeDiscreteBandLookup(range?: DepthRangeM): (t: number) => THREE.Color {
+  const { colors, boundariesFt } = getValidatedBands();
+  const pos = boundaryPositions(boundariesFt, range);
+  const threeColors = colors.map((hex) => new THREE.Color(hex));
+  return (t: number) => {
+    const clamped = Math.max(0, Math.min(1, t));
+    // Band i covers [pos[i], pos[i+1]). The final band is closed at the top
+    // so t=1 (and anything past the last boundary) takes the deepest colour.
+    for (let i = 0; i < threeColors.length - 1; i++) {
+      if (clamped < pos[i + 1]!) return threeColors[i]!.clone();
+    }
+    return threeColors[threeColors.length - 1]!.clone();
+  };
+}
+
+/**
  * Returns a colour function for the given colormap theme.
- * The returned function maps t ∈ [0, 1] to a THREE.Color.
+ * The returned function maps t ∈ [0, 1] to a THREE.Color, where t is the
+ * normalised position within the dataset's [minDepth, maxDepth] span.
  *
- * The "ocean" theme reflects the user's customised band colours
- * (paletteStore); other themes are fixed presets.
+ * The "ocean" and "custom" themes reflect the user's configured depth bands
+ * (paletteStore): variable band count, editable boundaries, and either
+ * smooth blending or crisp discrete steps (blendBands). When `range` (the
+ * dataset's depth range in metres) is provided, band boundaries anchor to
+ * real depths; other themes are fixed presets and ignore `range`.
  *
  * @example
- *   const toColor = getColormap('thermal');
+ *   const toColor = getColormap('ocean', { min: grid.minDepth, max: grid.maxDepth });
  *   mesh.material.color = toColor(normalizedDepth);
  */
-export function getColormap(theme: ColormapTheme): (t: number) => THREE.Color {
-  const stops = stopsForTheme(theme);
+export function getColormap(
+  theme: ColormapTheme,
+  range?: DepthRangeM,
+): (t: number) => THREE.Color {
+  if (theme === "ocean" || theme === "custom") {
+    const { blend } = getValidatedBands();
+    if (!blend) return makeDiscreteBandLookup(range);
+    const stops = getBandStops(range);
+    return (t: number) => interpolateStops(stops, t);
+  }
+  const stops = FIXED_THEME_STOPS[theme];
   return (t: number) => interpolateStops(stops, t);
 }
 
@@ -207,24 +262,20 @@ function colorToSrgbBytes(c: THREE.Color): { r: number; g: number; b: number } {
  * @param theme   Colormap theme to sample.
  * @param direction CSS direction (e.g. "to right", "to bottom"). Defaults to "to right".
  * @param samples Number of colour stops; clamped to >= 2. Defaults to 12.
- * @param tRange  Optional slice of the colormap to sample (e.g. from
- *                getColormapTRange) so a legend can show only the dataset's
- *                portion of an absolute depth scale. Defaults to [0, 1].
+ * @param range   Optional dataset depth range (metres) to anchor user bands.
  */
 export function colormapCssGradient(
   theme: ColormapTheme,
   direction: string = "to right",
   samples: number = 12,
-  tRange?: { tMin: number; tMax: number },
+  range?: DepthRangeM,
 ): string {
   const n = Math.max(2, samples);
-  const toColor = getColormap(theme);
-  const tMin = tRange?.tMin ?? 0;
-  const tMax = tRange?.tMax ?? 1;
+  const toColor = getColormap(theme, range);
   const stops: string[] = [];
   for (let i = 0; i < n; i++) {
     const f = i / (n - 1);
-    const t = tMin + f * (tMax - tMin);
+    const t = f;
     const { r, g, b } = colorToSrgbBytes(toColor(t));
     stops.push(`rgb(${r},${g},${b}) ${(f * 100).toFixed(2)}%`);
   }
@@ -233,24 +284,24 @@ export function colormapCssGradient(
 
 /**
  * Render the depth-to-colour gradient into an HTMLCanvasElement.
- * Used by the HUD scale bar.
+ * Used by the HUD scale bar and the Settings preview strip.
+ *
+ * @param range Optional dataset depth range (metres) to anchor user bands.
  */
 export function colormapCanvas(
   width: number,
   height: number,
   theme: ColormapTheme = "ocean",
-  tRange?: { tMin: number; tMax: number },
+  range?: DepthRangeM,
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
-  const toColor = getColormap(theme);
-  const tMin = tRange?.tMin ?? 0;
-  const tMax = tRange?.tMax ?? 1;
+  const toColor = getColormap(theme, range);
 
   for (let y = 0; y < height; y++) {
-    const t = tMin + (y / (height - 1)) * (tMax - tMin);
+    const t = y / (height - 1);
     const { r, g, b } = colorToSrgbBytes(toColor(t));
     ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.fillRect(0, y, width, 1);

@@ -202,9 +202,27 @@ describe("PutSettingsBody", () => {
     expect(PutSettingsBody.safeParse({ bandBoundaries: bad }).success).toBe(false);
   });
 
-  it("rejects bandBoundaries that don't end with 2000", () => {
-    const bad = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
-    expect(PutSettingsBody.safeParse({ bandBoundaries: bad }).success).toBe(false);
+  it("accepts bandBoundaries ending at a value other than 2000 (editable last boundary)", () => {
+    const custom = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
+    expect(PutSettingsBody.safeParse({ bandBoundaries: custom }).success).toBe(true);
+  });
+
+  it("rejects bandBoundaries whose last value exceeds 36000", () => {
+    expect(PutSettingsBody.safeParse({ bandBoundaries: [0, 100, 36001] }).success).toBe(false);
+  });
+
+  it("rejects bandBoundaries with fewer than 3 entries", () => {
+    expect(PutSettingsBody.safeParse({ bandBoundaries: [0, 2000] }).success).toBe(false);
+  });
+
+  it("rejects bandBoundaries with more than 17 entries", () => {
+    const tooMany = Array.from({ length: 18 }, (_, i) => i * 100);
+    expect(PutSettingsBody.safeParse({ bandBoundaries: tooMany }).success).toBe(false);
+  });
+
+  it("accepts blendDepthBands boolean and rejects non-boolean", () => {
+    expect(PutSettingsBody.safeParse({ blendDepthBands: false }).success).toBe(true);
+    expect(PutSettingsBody.safeParse({ blendDepthBands: "no" }).success).toBe(false);
   });
 
   it("rejects non-strictly-increasing bandBoundaries", () => {

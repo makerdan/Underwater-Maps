@@ -278,6 +278,7 @@ function buildPayload(): Record<string, unknown> {
   dataOnly.customStops = palette.customStops;
   dataOnly.bandColors = palette.bandColors;
   dataOnly.bandBoundaries = palette.bandBoundaries;
+  dataOnly.blendDepthBands = palette.blendBands;
   dataOnly.panelCollapse = usePanelCollapseStore.getState().collapsed;
   const zoneState = useZoneOverlayStore.getState();
   dataOnly.zoneOverlaySlots = {
@@ -467,6 +468,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
           customStops: serverRec.customStops,
           bandColors: serverRec.bandColors,
           bandBoundaries: serverRec.bandBoundaries,
+          blendDepthBands: serverRec.blendDepthBands,
         });
       }
 

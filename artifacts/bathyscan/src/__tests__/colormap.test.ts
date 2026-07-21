@@ -9,7 +9,6 @@ import { getColormap } from "../lib/colormap";
 import {
   usePaletteStore,
   DEFAULT_SHALLOW,
-  DEFAULT_DEEP,
   DEFAULT_BAND_COLORS,
   DEFAULT_BAND_BOUNDARIES,
   sanitizeBandColors,
@@ -35,9 +34,9 @@ describe("getColormap('ocean') — endpoint and boundary colours", () => {
     expect(c.b).toBeCloseTo(expected.b, 2);
   });
 
-  it("t=1 returns the deepest stop colour (#283593)", () => {
+  it("t=1 returns the deepest band colour (#1e2b6e — last band holds to the top)", () => {
     const c = getColormap("ocean")(1);
-    const expected = hexToRgb("#283593");
+    const expected = hexToRgb("#1e2b6e");
     expect(c.r).toBeCloseTo(expected.r, 2);
     expect(c.g).toBeCloseTo(expected.g, 2);
     expect(c.b).toBeCloseTo(expected.b, 2);
@@ -245,7 +244,8 @@ describe("getColormap('ocean') / palette sync", () => {
     const c0 = fn(0);
     const c1 = fn(1);
     const expShallow = hexToRgb(DEFAULT_SHALLOW);
-    const expDeep = hexToRgb(DEFAULT_DEEP);
+    // t=1 holds the deepest band's colour (last entry of DEFAULT_BAND_COLORS).
+    const expDeep = hexToRgb(DEFAULT_BAND_COLORS[DEFAULT_BAND_COLORS.length - 1]!);
     expect(c0.r).toBeCloseTo(expShallow.r, 2);
     expect(c0.b).toBeCloseTo(expShallow.b, 2);
     expect(c1.r).toBeCloseTo(expDeep.r, 2);
@@ -342,8 +342,10 @@ describe("sanitizeBandColors", () => {
     expect(sanitizeBandColors(["#ffffff"])).toBeNull();
   });
 
-  it("returns null when the array has more than 10 entries", () => {
-    const tooMany = Array(11).fill("#001122");
+  it("accepts arrays up to 16 entries and rejects longer ones", () => {
+    const sixteen = Array(16).fill("#001122");
+    expect(sanitizeBandColors(sixteen)).not.toBeNull();
+    const tooMany = Array(17).fill("#001122");
     expect(sanitizeBandColors(tooMany)).toBeNull();
   });
 
@@ -354,13 +356,10 @@ describe("sanitizeBandColors", () => {
     expect(result!.every((c) => c === "#aabbcc")).toBe(true);
   });
 
-  it("falls back to the default colour for invalid hex entries", () => {
+  it("returns null when any entry is an invalid hex string", () => {
     const input = Array(10).fill("#001122");
     input[3] = "notahex";
-    const result = sanitizeBandColors(input);
-    expect(result).not.toBeNull();
-    expect(result![3]).toBe(DEFAULT_BAND_COLORS[3]);
-    expect(result![0]).toBe("#001122");
+    expect(sanitizeBandColors(input)).toBeNull();
   });
 });
 
@@ -486,8 +485,10 @@ describe("DEPTH_BAND_BOUNDARIES_FT", () => {
     // Directly compare the colour at each consecutive pair of boundaries.
     // Adjacent stops must differ in at least one RGB channel so no two
     // neighbouring bands collapse to the same hue.
+    // Skip the final boundary pair: the deepest band's colour now holds flat
+    // from its lower boundary to t=1 (there is no separate deep endpoint).
     const bands = DEPTH_BAND_BOUNDARIES_FT;
-    for (let i = 0; i < bands.length - 1; i++) {
+    for (let i = 0; i < bands.length - 2; i++) {
       const tA = bands[i]! / OCEAN_MAX_DEPTH_FT;
       const tB = bands[i + 1]! / OCEAN_MAX_DEPTH_FT;
       const cA = fn(tA);

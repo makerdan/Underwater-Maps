@@ -15,7 +15,7 @@ import { useHabitatStore } from "@/lib/habitatStore";
 import { useSettingsStore, deriveEffectiveColormapTheme } from "@/lib/settingsStore";
 import { useIntertidal } from "@/lib/useIntertidal";
 import { usePaletteStore } from "@/lib/paletteStore";
-import { getColormap, getColormapDepthDomain } from "@/lib/colormap";
+import { getColormap } from "@/lib/colormap";
 import { useWebglContextStore } from "@/lib/webglContextStore";
 import { toast } from "@/hooks/use-toast";
 
@@ -241,6 +241,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     const customStops = usePaletteStore((s) => s.customStops);
     const bandColors = usePaletteStore((s) => s.bandColors);
     const bandBoundaries = usePaletteStore((s) => s.bandBoundaries);
+    const blendBands = usePaletteStore((s) => s.blendBands);
     const nodataColorRgb = React.useMemo(() => {
       const c = new THREE.Color(nodataColorHex);
       return { r: c.r, g: c.g, b: c.b };
@@ -250,14 +251,10 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       const { depths, minDepth, maxDepth } = grid;
       const colorAttr = geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
       if (!colorAttr) return;
-      const toColor = getColormap(effectiveColormapTheme);
-      // Ocean/Custom themes normalise against the absolute 0–2000 ft scale so
-      // band colours land at their labelled depths (shallow lakes stay in the
-      // shallow bands); fixed themes stretch across the grid's own range.
-      const domain = getColormapDepthDomain(effectiveColormapTheme, minDepth, maxDepth);
-      applyColormapToVertexColors(depths, domain.min, domain.max, colorAttr.array as Float32Array, toColor, nodataColorRgb);
+      const toColor = getColormap(effectiveColormapTheme, { min: minDepth, max: maxDepth });
+      applyColormapToVertexColors(depths, minDepth, maxDepth, colorAttr.array as Float32Array, toColor, nodataColorRgb);
       colorAttr.needsUpdate = true;
-    }, [paletteShallow, paletteDeep, customStops, effectiveColormapTheme, grid, geometry, bandColors, bandBoundaries, nodataColorRgb]);
+    }, [paletteShallow, paletteDeep, customStops, effectiveColormapTheme, grid, geometry, bandColors, bandBoundaries, blendBands, nodataColorRgb]);
 
     // Sync the land-cell override colour in the fragment shader to the user's
     // nodata colour so land tracks the same setting as survey gaps and stays

@@ -105,6 +105,7 @@ export const DEFAULT_SETTINGS = {
     "#1e2b6e",
   ],
   bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000],
+  blendDepthBands: true,
 
   // ── Newly promoted from extras path (previously validated client-side only) ──
   schemaVersion: 19,
@@ -258,6 +259,19 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
     merged.bandBoundaries = [...DEFAULT_SETTINGS.bandBoundaries];
   }
 
+  // Migration / consistency repair: bands became variable-length (2–16). If a
+  // stored row somehow holds a mismatched pair (boundaries length must be
+  // colors length + 1), reset both to defaults so GET always returns a
+  // schema-valid, mutually consistent pair.
+  {
+    const bc = merged.bandColors;
+    const bb = merged.bandBoundaries;
+    if (!Array.isArray(bc) || !Array.isArray(bb) || bb.length !== bc.length + 1) {
+      merged.bandColors = [...(DEFAULT_SETTINGS.bandColors as string[])];
+      merged.bandBoundaries = [...DEFAULT_SETTINGS.bandBoundaries];
+    }
+  }
+
   // Migration for legacy rows: stored settings from before zoneOverlaySlots
   // was split into per-water-type palettes. If the stored value is a flat
   // 4-element array, promote it to the new object format (saltwater = stored
@@ -330,6 +344,26 @@ router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(asy
   const sentValidated: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(parsed.data as Record<string, unknown>)) {
     if (sentKeys.has(k)) sentValidated[k] = v;
+  }
+
+  // Cross-field guard: when the client sends BOTH band arrays, they must be
+  // consistent — bandBoundaries always has exactly one more entry than
+  // bandColors (N bands need N+1 boundaries). Sending only one of the two is
+  // allowed (partial update); the client resamples on hydrate if the stored
+  // pair ever disagrees in length.
+  if (sentKeys.has("bandColors") && sentKeys.has("bandBoundaries")) {
+    const bc = sentValidated.bandColors as unknown[] | undefined;
+    const bb = sentValidated.bandBoundaries as unknown[] | undefined;
+    if (Array.isArray(bc) && Array.isArray(bb) && bb.length !== bc.length + 1) {
+      process.stderr.write(`[settings] PUT /api/settings 400 — bandLengthMismatch userId=${userId} colors=${bc.length} boundaries=${bb.length}\n`);
+      logger.warn({ userId, bandColorsLen: bc.length, bandBoundariesLen: bb.length }, "PUT /api/settings — bandColors/bandBoundaries length mismatch");
+      res.status(400).json({
+        error: "invalid_request",
+        details: "bandBoundaries: bandBoundaries must contain exactly bandColors.length + 1 entries",
+        issues: [{ path: ["bandBoundaries"], code: "custom" }],
+      });
+      return;
+    }
   }
 
   // Preserve fields that the client sent but that aren't part of the validated

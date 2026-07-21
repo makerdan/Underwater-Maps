@@ -99,7 +99,7 @@ export function ColormapSwatch({
   theme, width, height, title,
 }: { theme: ColormapTheme; width: number; height: number; title?: string }) {
   const paletteVersion = usePaletteStore(
-    (s) => `${s.shallow}|${s.deep}|${s.bandColors.join(",")}|${s.bandBoundaries.join(",")}`,
+    (s) => `${s.shallow}|${s.deep}|${s.bandColors.join(",")}|${s.bandBoundaries.join(",")}|${s.blendBands}`,
   );
   const background = React.useMemo(
     () => colormapCssGradient(theme, "to right", 16),

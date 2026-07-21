@@ -1,25 +1,25 @@
 /**
  * paletteStore — persisted user-customised depth colour palette.
  *
- * The Ocean theme uses a four-stop gradient (shallow → mid1 → mid2 → deep).
- * Users can customise the shallow and deep endpoints from the Settings page;
- * the two interior stops stay fixed so the gradient keeps its characteristic
- * blue-to-indigo shape.
+ * The depth palette is a variable-length list of contiguous depth bands.
+ * `bandColors` holds one hex colour per band (2–16 bands) and
+ * `bandBoundaries` holds the band edges in feet (always exactly
+ * bandColors.length + 1 entries). The first boundary is fixed at 0 ft;
+ * every other boundary — including the last — is user-editable, so the
+ * scale is no longer capped at 2000 ft.
  *
- * Users can also pick the "Custom" theme, which exposes a fully editable
- * ordered list of `{ position, hex }` stops (min 2). The 3D terrain re-tints
- * live as the stops change.
- *
- * Users can also edit per-band colours for the Ocean theme via the
- * `bandColors` array (10 entries indexed to DEPTH_BAND_BOUNDARIES_FT[0..9]).
+ * `blendBands` selects between smooth gradient interpolation between band
+ * colours (true, the historical look) and crisp discrete bands (false).
  *
  * Persisted to localStorage under "bathyscan:palette".
  *
  * Schema history (for the localStorage merge guard below):
  *   v0 (pre-bandColors): only shallow / deep / customStops were persisted.
- *   v1 (current): added bandColors; the merge guard seeds bandColors[0]
- *      from the persisted shallow when upgrading from v0 state.
- *      bandColors is also now persisted server-side via PUT /api/settings.
+ *   v1: added bandColors (fixed 10 entries) + bandBoundaries (fixed 11,
+ *      0 → 2000 ft).
+ *   v2 (current): variable-length bands (2–16) with an editable last
+ *      boundary, plus `blendBands`. Old fixed-length arrays are valid
+ *      variable-length arrays, so they migrate without transformation.
  */
 
 import { create } from "zustand";
@@ -28,63 +28,54 @@ import { persist } from "zustand/middleware";
 /** Identifies the current palette schema version for documentation purposes.
  *  Increment this whenever a new field is added and a migration guard is
  *  added to the persist `merge` function below. */
-export const PALETTE_SCHEMA_VERSION = 1;
+export const PALETTE_SCHEMA_VERSION = 2;
 
 export const DEFAULT_SHALLOW = "#00e5ff";
 export const DEFAULT_DEEP = "#283593";
 
-/** Fixed interior gradient stops for the Ocean theme. Not user-editable. */
+/** Fixed interior gradient stops used when seeding presets. */
 export const MID1_HEX = "#0d47a1";
 export const MID2_HEX = "#1a237e";
 
+/** Minimum number of depth bands. */
+export const MIN_BANDS = 2;
+/** Maximum number of depth bands. */
+export const MAX_BANDS = 16;
+/** Maximum value (feet) allowed for the deepest band boundary. */
+export const MAX_BOUNDARY_FT = 36000;
+
 /**
- * Default depth band boundaries in feet. 11 values define 10 bands spanning
- * 0 → 2000 ft. The first (0) and last (2000) are always fixed; the 9 interior
- * values are user-editable from the Settings page.
+ * Default depth band boundaries in feet. N+1 values define N bands. The
+ * first (0) is always fixed; every other value — including the last — is
+ * user-editable.
  */
 export const DEFAULT_BAND_BOUNDARIES: readonly number[] = [
   0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000,
 ];
 
-/** Maximum depth of the ocean colormap scale in feet (mirrors colormap.ts). */
-const OCEAN_MAX_DEPTH_FT_PALETTE = 2000;
-
 /** Minimum gap in feet that must be maintained between adjacent band boundaries. */
-export const MIN_BOUNDARY_GAP_FT = 5;
+export const MIN_BOUNDARY_GAP_FT = 1;
 
 /**
- * Default per-band colours for the Ocean theme, one entry per depth band.
- * Index i corresponds to the color at DEFAULT_BAND_BOUNDARIES[i] (the
- * lower boundary of band i). There are 10 bands (11 boundaries), so the
- * final boundary at 2000 ft uses `deep` from the palette store.
- *
- * Boundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600] ft
+ * Default per-band colours, one entry per depth band. Index i corresponds
+ * to the band between DEFAULT_BAND_BOUNDARIES[i] and [i+1].
  */
 export const DEFAULT_BAND_COLORS: readonly string[] = [
-  "#00e5ff", //   0 ft — cyan (matches DEFAULT_SHALLOW)
-  "#00c8de", //  50 ft — cyan-teal
-  "#00a8d0", // 100 ft — sky blue
-  "#0288d1", // 150 ft — ocean blue
-  "#0277bd", // 200 ft — medium blue
-  "#1565c0", // 250 ft — cobalt blue
-  "#0d47a1", // 300 ft — royal blue
-  "#1a237e", // 350 ft — indigo navy
-  "#283593", // 450 ft — deep navy
-  "#1e2b6e", // 600 ft — dark navy
+  "#00e5ff", //    0– 50 ft — cyan (matches DEFAULT_SHALLOW)
+  "#00c8de", //   50–100 ft — cyan-teal
+  "#00a8d0", //  100–150 ft — sky blue
+  "#0288d1", //  150–200 ft — ocean blue
+  "#0277bd", //  200–250 ft — medium blue
+  "#1565c0", //  250–300 ft — cobalt blue
+  "#0d47a1", //  300–350 ft — royal blue
+  "#1a237e", //  350–450 ft — indigo navy
+  "#283593", //  450–600 ft — deep navy
+  "#1e2b6e", //  600–2000 ft — dark navy
 ];
 
 /**
- * Normalised t positions for the 10 band lower boundaries (ft / 2000).
- * Kept here to avoid a circular import with colormap.ts.
- */
-const BAND_T_VALUES = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600].map(
-  (ft) => ft / 2000,
-);
-
-/**
  * Curated preset palettes for one-click selection. Each preset defines a
- * shallow and deep endpoint; the fixed interior stops keep the gradient
- * cohesive with the rest of the app.
+ * shallow and deep endpoint; band colours are interpolated between them.
  */
 export interface PalettePreset {
   id: string;
@@ -99,7 +90,7 @@ export const PALETTE_PRESETS: PalettePreset[] = [
   { id: "warm", label: "Warm Shallows", shallow: "#ffd54f", deep: "#4a148c" },
 ];
 
-/** A single colour stop on the Custom palette. */
+/** A single colour stop on the (deprecated) Custom palette. */
 export interface CustomStop {
   /** Position along the depth axis, 0 (shallow) → 1 (deep). */
   position: number;
@@ -108,8 +99,8 @@ export interface CustomStop {
 }
 
 /**
- * Default custom stops mirror the Default Ocean preset so picking the Custom
- * theme without any further edits looks the same as Ocean.
+ * Default custom stops mirror the Default Ocean preset. Retained only for
+ * localStorage hydration safety of pre-band clients.
  */
 export const DEFAULT_CUSTOM_STOPS: CustomStop[] = [
   { position: 0.0, hex: DEFAULT_SHALLOW },
@@ -122,8 +113,7 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 /**
  * Build a 4-stop custom palette for a preset (Default / High-Contrast / Warm).
- * Used when the user is in Custom mode and clicks a preset chip — we seed the
- * editable stops with the preset's shape so they can fine-tune from there.
+ * @deprecated retained for localStorage hydration paths only.
  */
 export function customStopsFromPreset(preset: PalettePreset): CustomStop[] {
   return [
@@ -135,28 +125,35 @@ export function customStopsFromPreset(preset: PalettePreset): CustomStop[] {
 }
 
 /**
- * Build a 10-entry bandColors array for a preset by linearly interpolating
- * from the preset's shallow to deep across the band lower-boundary positions.
- * Used when the user clicks a preset chip so the per-band editor looks correct.
+ * Build a bandColors array for a preset by linearly interpolating from the
+ * preset's shallow to deep across `count` bands (defaults to the current
+ * default band count). Used when the user clicks a preset chip.
  */
-export function bandColorsFromPreset(preset: PalettePreset): string[] {
-  return BAND_T_VALUES.map((t) => mixHex(preset.shallow, preset.deep, t));
+export function bandColorsFromPreset(
+  preset: PalettePreset,
+  count: number = DEFAULT_BAND_COLORS.length,
+): string[] {
+  const n = Math.max(MIN_BANDS, Math.min(MAX_BANDS, Math.round(count)));
+  return Array.from({ length: n }, (_, i) =>
+    mixHex(preset.shallow, preset.deep, n === 1 ? 0 : i / (n - 1)),
+  );
 }
 
 /**
- * Sanitise a raw bandBoundaries value. Must be an array of exactly 11
- * finite integers, strictly increasing, starting at 0 and ending at
- * OCEAN_MAX_DEPTH_FT. Returns null if the input fails any check so callers
- * can fall back to DEFAULT_BAND_BOUNDARIES.
+ * Sanitise a raw bandBoundaries value. Must be an array of 3–17 finite
+ * numbers (rounded to integers), strictly increasing, starting at 0 and
+ * with the last value ≤ MAX_BOUNDARY_FT. Returns null if the input fails
+ * any check so callers can fall back to DEFAULT_BAND_BOUNDARIES.
  */
 export function sanitizeBandBoundaries(raw: unknown): number[] | null {
   if (!Array.isArray(raw)) return null;
-  if (raw.length !== 11) return null;
+  if (raw.length < MIN_BANDS + 1 || raw.length > MAX_BANDS + 1) return null;
   const parsed = (raw as unknown[]).map((v) =>
     typeof v === "number" && Number.isFinite(v) ? Math.round(v) : NaN,
   );
   if (parsed.some((v) => isNaN(v))) return null;
-  if (parsed[0] !== 0 || parsed[10] !== OCEAN_MAX_DEPTH_FT_PALETTE) return null;
+  if (parsed[0] !== 0) return null;
+  if (parsed[parsed.length - 1]! > MAX_BOUNDARY_FT) return null;
   for (let i = 1; i < parsed.length; i++) {
     if (parsed[i]! <= parsed[i - 1]!) return null;
   }
@@ -164,18 +161,35 @@ export function sanitizeBandBoundaries(raw: unknown): number[] | null {
 }
 
 /**
- * Sanitise a raw bandColors value: must be an array of exactly 10 valid hex
- * strings. Invalid entries are replaced with the corresponding default colour.
- * Returns null if the input is not an array at all.
+ * Sanitise a raw bandColors value: must be an array of 2–16 valid hex
+ * strings. Returns null when the input is not an array, has an invalid
+ * length, or contains any malformed entry.
  */
 export function sanitizeBandColors(raw: unknown): string[] | null {
   if (!Array.isArray(raw)) return null;
-  if (raw.length !== 10) return null;
-  return raw.map((entry, i) =>
-    typeof entry === "string" && HEX_RE.test(entry)
-      ? entry.toLowerCase()
-      : DEFAULT_BAND_COLORS[i]!,
-  );
+  if (raw.length < MIN_BANDS || raw.length > MAX_BANDS) return null;
+  const out: string[] = [];
+  for (const entry of raw as unknown[]) {
+    if (typeof entry !== "string" || !HEX_RE.test(entry)) return null;
+    out.push(entry.toLowerCase());
+  }
+  return out;
+}
+
+/**
+ * Sanitise a colors + boundaries pair together: both must individually
+ * sanitise AND boundaries must have exactly colors.length + 1 entries.
+ * Returns null when the pair is inconsistent.
+ */
+export function sanitizeBandArrays(
+  rawColors: unknown,
+  rawBoundaries: unknown,
+): { bandColors: string[]; bandBoundaries: number[] } | null {
+  const colors = sanitizeBandColors(rawColors);
+  const boundaries = sanitizeBandBoundaries(rawBoundaries);
+  if (!colors || !boundaries) return null;
+  if (boundaries.length !== colors.length + 1) return null;
+  return { bandColors: colors, bandBoundaries: boundaries };
 }
 
 /**
@@ -204,6 +218,35 @@ export function sanitizeCustomStops(raw: unknown): CustomStop[] | null {
   return cleaned;
 }
 
+/**
+ * Resample band colours when the band count changes (e.g. a suggestion
+ * applies an 11-boundary array while the user currently has 3 bands).
+ * Colours are sampled from the existing gradient — old colours placed at
+ * their normalised lower-boundary positions — at each new band's
+ * normalised lower-boundary position, so the overall look is preserved.
+ */
+export function resampleBandColors(
+  oldColors: readonly string[],
+  oldBoundaries: readonly number[],
+  newBoundaries: readonly number[],
+): string[] {
+  const oldMax = oldBoundaries[oldBoundaries.length - 1] || 1;
+  const newMax = newBoundaries[newBoundaries.length - 1] || 1;
+  const oldPos = oldBoundaries.slice(0, -1).map((ft) => ft / oldMax);
+  const sample = (t: number): string => {
+    if (t <= oldPos[0]!) return oldColors[0]!;
+    for (let i = 0; i < oldPos.length - 1; i++) {
+      if (t <= oldPos[i + 1]!) {
+        const span = oldPos[i + 1]! - oldPos[i]!;
+        const alpha = span === 0 ? 0 : (t - oldPos[i]!) / span;
+        return mixHex(oldColors[i]!, oldColors[i + 1]!, alpha);
+      }
+    }
+    return oldColors[oldColors.length - 1]!;
+  };
+  return newBoundaries.slice(0, -1).map((ft) => sample(ft / newMax));
+}
+
 interface PaletteStore {
   /**
    * Monotonic edit counter bumped on every *user-initiated* mutation (never
@@ -214,28 +257,28 @@ interface PaletteStore {
    * echoes a spurious PUT.
    */
   rev: number;
+  /** Mirror of bandColors[0] (kept for legacy preset/e2e surfaces). */
   shallow: string;
+  /** Mirror of the last band colour (kept for legacy preset/e2e surfaces). */
   deep: string;
-  /** Ordered custom-theme stops (min 2). Always sanitised on read. */
+  /** @deprecated Ordered custom-theme stops. Retained for hydration safety. */
   customStops: CustomStop[];
-  /**
-   * Per-band colours for the Ocean theme. 10 entries indexed to
-   * bandBoundaries[0..9] (the lower boundary of each band).
-   * bandColors[0] is kept in sync with `shallow`.
-   */
+  /** Per-band colours (2–16 entries, one per depth band). */
   bandColors: string[];
   /**
-   * Depth band boundaries in feet. 11 values: first is always 0, last is
-   * always OCEAN_MAX_DEPTH_FT (2000). Interior 9 values are user-editable.
-   * Persisted alongside bandColors.
+   * Depth band boundaries in feet. Always bandColors.length + 1 entries.
+   * The first is always 0; every other value (including the last) is
+   * user-editable up to MAX_BOUNDARY_FT.
    */
   bandBoundaries: number[];
+  /**
+   * true  → smooth gradient interpolation between band colours (default);
+   * false → crisp discrete bands (each band a single flat colour).
+   */
+  blendBands: boolean;
   setShallow: (hex: string) => void;
   setDeep: (hex: string) => void;
-  /**
-   * @deprecated Custom theme now renders from `bandColors`/`bandBoundaries`.
-   * These actions are retained for localStorage hydration safety only.
-   */
+  /** @deprecated Custom theme now renders from bandColors/bandBoundaries. */
   setCustomStops: (stops: CustomStop[]) => void;
   /** @deprecated See `setCustomStops`. */
   addCustomStop: () => void;
@@ -245,28 +288,44 @@ interface PaletteStore {
   updateCustomStop: (index: number, patch: Partial<CustomStop>) => void;
   /** @deprecated See `setCustomStops`. */
   resetCustomStops: () => void;
-  /** Set a single band colour by index (0–9). Syncs index 0 → shallow. */
+  /** Set a single band colour by index. Syncs index 0 → shallow, last → deep. */
   setBandColor: (index: number, hex: string) => void;
-  /** Replace the full bandColors array; falls back to defaults on bad input. */
+  /**
+   * Replace the full bandColors array. When the new length differs from the
+   * current band count, boundaries are re-spread evenly across the current
+   * total depth span. Falls back to defaults on bad input.
+   */
   setBandColors: (colors: string[]) => void;
-  /** Restore all band colours to DEFAULT_BAND_COLORS. */
+  /** Restore all band colours to DEFAULT_BAND_COLORS (and default count). */
   resetBandColors: () => void;
   /**
-   * Set a single interior boundary by index (1–9) in feet. Clamps the value
-   * to [prev + MIN_BOUNDARY_GAP_FT, next - MIN_BOUNDARY_GAP_FT]. No-ops if
-   * index is 0 or 10 (the fixed endpoints).
+   * Set a boundary by index (1 … bandCount) in feet. Interior boundaries
+   * clamp to [prev + MIN_BOUNDARY_GAP_FT, next - MIN_BOUNDARY_GAP_FT]; the
+   * last boundary clamps to [prev + MIN_BOUNDARY_GAP_FT, MAX_BOUNDARY_FT].
+   * No-ops for index 0 (fixed at 0 ft).
    */
   setBandBoundary: (index: number, ft: number) => void;
-  /** Replace the full bandBoundaries array; falls back to defaults on bad input. */
+  /**
+   * Replace the full bandBoundaries array. When the new length differs from
+   * the current band count + 1, bandColors are resampled from the existing
+   * gradient so the palette keeps its look. Falls back to defaults on bad
+   * input.
+   */
   setBandBoundaries: (boundaries: number[]) => void;
-  /** Restore all band boundaries to DEFAULT_BAND_BOUNDARIES. */
+  /** Restore all band boundaries to DEFAULT_BAND_BOUNDARIES (and default count). */
   resetBandBoundaries: () => void;
+  /** Insert a new band by splitting the widest existing band. */
+  addBand: () => void;
+  /** Remove the band at `index` (merges its span into a neighbour). */
+  removeBand: (index: number) => void;
+  /** Toggle smooth blending vs crisp discrete bands. */
+  setBlendBands: (blend: boolean) => void;
   reset: () => void;
   /**
-   * Apply server-side palette values (shallow / deep / customStops / bandColors
-   * / bandBoundaries) to the store. Values that are missing or malformed are
-   * left untouched. Used by the Settings page after a successful GET
-   * /api/settings hydration.
+   * Apply server-side palette values to the store. Values that are missing
+   * or malformed are left untouched. bandColors/bandBoundaries are only
+   * applied when the resulting pair stays consistent
+   * (boundaries.length === colors.length + 1).
    */
   hydrateFromServer: (partial: {
     paletteShallow?: unknown;
@@ -274,6 +333,7 @@ interface PaletteStore {
     customStops?: unknown;
     bandColors?: unknown;
     bandBoundaries?: unknown;
+    blendDepthBands?: unknown;
   }) => void;
 }
 
@@ -294,12 +354,28 @@ function normalizeStops(stops: CustomStop[]): CustomStop[] {
   return cleaned;
 }
 
+/** Spread `count`+1 boundaries evenly from 0 to `maxFt` (integers, strictly increasing). */
+function evenBoundaries(count: number, maxFt: number): number[] {
+  const max = Math.max(count * MIN_BOUNDARY_GAP_FT, Math.round(maxFt));
+  const bb: number[] = [0];
+  for (let i = 1; i <= count; i++) {
+    const raw = Math.round((i / count) * max);
+    bb.push(Math.max(raw, bb[i - 1]! + MIN_BOUNDARY_GAP_FT));
+  }
+  return bb;
+}
+
 export const usePaletteStore = create<PaletteStore>()(
   persist(
     (set, get) => {
       /** Merge a patch and bump the user-edit revision counter atomically. */
       const setEdit = (patch: Partial<PaletteStore>) =>
         set({ ...patch, rev: get().rev + 1 });
+      /** Build the shallow/deep mirror fields for a colours array. */
+      const mirrors = (colors: string[]) => ({
+        shallow: colors[0]!,
+        deep: colors[colors.length - 1]!,
+      });
       return {
       rev: 0,
       shallow: DEFAULT_SHALLOW,
@@ -307,13 +383,20 @@ export const usePaletteStore = create<PaletteStore>()(
       customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
       bandColors: [...DEFAULT_BAND_COLORS],
       bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
+      blendBands: true,
 
       setShallow: (hex) => {
+        if (!HEX_RE.test(hex)) return;
         const bc = [...get().bandColors];
-        bc[0] = hex;
-        setEdit({ shallow: hex, bandColors: bc });
+        bc[0] = hex.toLowerCase();
+        setEdit({ shallow: hex.toLowerCase(), bandColors: bc });
       },
-      setDeep: (hex) => setEdit({ deep: hex }),
+      setDeep: (hex) => {
+        if (!HEX_RE.test(hex)) return;
+        const bc = [...get().bandColors];
+        bc[bc.length - 1] = hex.toLowerCase();
+        setEdit({ deep: hex.toLowerCase(), bandColors: bc });
+      },
       setCustomStops: (stops) => setEdit({ customStops: normalizeStops(stops) }),
       addCustomStop: () => {
         const stops = get().customStops;
@@ -349,39 +432,135 @@ export const usePaletteStore = create<PaletteStore>()(
         setEdit({ customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })) }),
 
       setBandColor: (index, hex) => {
-        if (index < 0 || index >= 10) return;
+        const cur = get().bandColors;
+        if (index < 0 || index >= cur.length) return;
         if (!HEX_RE.test(hex)) return;
-        const bc = [...get().bandColors];
+        const bc = [...cur];
         bc[index] = hex.toLowerCase();
-        const patch: Partial<PaletteStore> = { bandColors: bc };
-        if (index === 0) patch.shallow = hex.toLowerCase();
-        setEdit(patch);
+        setEdit({ bandColors: bc, ...mirrors(bc) });
       },
       setBandColors: (colors) => {
-        const sanitized = sanitizeBandColors(colors) ?? [...DEFAULT_BAND_COLORS];
-        setEdit({ bandColors: sanitized, shallow: sanitized[0]! });
+        const sanitized = sanitizeBandColors(colors);
+        if (!sanitized) {
+          const bc = [...DEFAULT_BAND_COLORS];
+          setEdit({
+            bandColors: bc,
+            bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
+            ...mirrors(bc),
+          });
+          return;
+        }
+        const bb = get().bandBoundaries;
+        const patch: Partial<PaletteStore> = {
+          bandColors: sanitized,
+          ...mirrors(sanitized),
+        };
+        if (bb.length !== sanitized.length + 1) {
+          patch.bandBoundaries = evenBoundaries(
+            sanitized.length,
+            bb[bb.length - 1] ?? DEFAULT_BAND_BOUNDARIES[DEFAULT_BAND_BOUNDARIES.length - 1]!,
+          );
+        }
+        setEdit(patch);
       },
-      resetBandColors: () =>
-        setEdit({ bandColors: [...DEFAULT_BAND_COLORS], shallow: DEFAULT_BAND_COLORS[0]! }),
+      resetBandColors: () => {
+        const bc = [...DEFAULT_BAND_COLORS];
+        const patch: Partial<PaletteStore> = { bandColors: bc, ...mirrors(bc) };
+        if (get().bandBoundaries.length !== bc.length + 1) {
+          patch.bandBoundaries = [...DEFAULT_BAND_BOUNDARIES];
+        }
+        setEdit(patch);
+      },
 
       setBandBoundary: (index, ft) => {
-        if (index < 1 || index > 9) return;
         const bb = [...get().bandBoundaries];
+        const last = bb.length - 1;
+        if (index < 1 || index > last) return;
+        if (!Number.isFinite(ft)) return;
         const prev = bb[index - 1]!;
-        const next = bb[index + 1]!;
+        const upper =
+          index === last
+            ? MAX_BOUNDARY_FT
+            : bb[index + 1]! - MIN_BOUNDARY_GAP_FT;
         const clamped = Math.max(
           prev + MIN_BOUNDARY_GAP_FT,
-          Math.min(next - MIN_BOUNDARY_GAP_FT, Math.round(ft)),
+          Math.min(upper, Math.round(ft)),
         );
         bb[index] = clamped;
         setEdit({ bandBoundaries: bb });
       },
       setBandBoundaries: (boundaries) => {
-        const sanitized = sanitizeBandBoundaries(boundaries) ?? [...DEFAULT_BAND_BOUNDARIES];
-        setEdit({ bandBoundaries: sanitized });
+        const sanitized = sanitizeBandBoundaries(boundaries);
+        if (!sanitized) {
+          const bc = [...DEFAULT_BAND_COLORS];
+          setEdit({
+            bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
+            bandColors: bc,
+            ...mirrors(bc),
+          });
+          return;
+        }
+        const { bandColors, bandBoundaries } = get();
+        const patch: Partial<PaletteStore> = { bandBoundaries: sanitized };
+        if (sanitized.length !== bandColors.length + 1) {
+          const bc = resampleBandColors(bandColors, bandBoundaries, sanitized);
+          patch.bandColors = bc;
+          Object.assign(patch, mirrors(bc));
+        }
+        setEdit(patch);
       },
-      resetBandBoundaries: () =>
-        setEdit({ bandBoundaries: [...DEFAULT_BAND_BOUNDARIES] }),
+      resetBandBoundaries: () => {
+        const patch: Partial<PaletteStore> = {
+          bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
+        };
+        if (get().bandColors.length + 1 !== DEFAULT_BAND_BOUNDARIES.length) {
+          const bc = [...DEFAULT_BAND_COLORS];
+          patch.bandColors = bc;
+          Object.assign(patch, mirrors(bc));
+        }
+        setEdit(patch);
+      },
+
+      addBand: () => {
+        const { bandColors, bandBoundaries } = get();
+        if (bandColors.length >= MAX_BANDS) return;
+        // Find the widest band and split it in half.
+        let bestIdx = 0;
+        let bestGap = -1;
+        for (let i = 0; i < bandBoundaries.length - 1; i++) {
+          const gap = bandBoundaries[i + 1]! - bandBoundaries[i]!;
+          if (gap > bestGap) {
+            bestGap = gap;
+            bestIdx = i;
+          }
+        }
+        if (bestGap < MIN_BOUNDARY_GAP_FT * 2) return; // nothing splittable
+        const mid = Math.round(
+          (bandBoundaries[bestIdx]! + bandBoundaries[bestIdx + 1]!) / 2,
+        );
+        const bb = [...bandBoundaries];
+        bb.splice(bestIdx + 1, 0, mid);
+        const bc = [...bandColors];
+        const nextHex = bandColors[bestIdx + 1] ?? bandColors[bestIdx]!;
+        bc.splice(bestIdx + 1, 0, mixHex(bandColors[bestIdx]!, nextHex, 0.5));
+        setEdit({ bandColors: bc, bandBoundaries: bb, ...mirrors(bc) });
+      },
+      removeBand: (index) => {
+        const { bandColors, bandBoundaries } = get();
+        if (bandColors.length <= MIN_BANDS) return;
+        if (index < 0 || index >= bandColors.length) return;
+        const bc = bandColors.filter((_, i) => i !== index);
+        const bb = [...bandBoundaries];
+        // Removing a band merges its span into the next band; removing the
+        // last band merges it into the previous one (drop its lower edge).
+        if (index === bandColors.length - 1) {
+          bb.splice(index, 1);
+        } else {
+          bb.splice(index + 1, 1);
+        }
+        setEdit({ bandColors: bc, bandBoundaries: bb, ...mirrors(bc) });
+      },
+      setBlendBands: (blend) => setEdit({ blendBands: !!blend }),
 
       reset: () =>
         setEdit({
@@ -390,6 +569,7 @@ export const usePaletteStore = create<PaletteStore>()(
           customStops: DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
           bandColors: [...DEFAULT_BAND_COLORS],
           bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
+          blendBands: true,
         }),
       hydrateFromServer: (partial) => {
         const patch: Partial<PaletteStore> = {};
@@ -403,27 +583,41 @@ export const usePaletteStore = create<PaletteStore>()(
           const cleaned = sanitizeCustomStops(partial.customStops);
           if (cleaned) patch.customStops = cleaned;
         }
-        if (partial.bandColors !== undefined) {
-          const cleaned = sanitizeBandColors(partial.bandColors);
-          if (cleaned) {
-            const bc = [...cleaned];
+        const cur = get();
+        // bandColors/bandBoundaries only apply when the *resulting* pair is
+        // consistent (boundaries.length === colors.length + 1). Server GETs
+        // always carry both; partial payloads only apply when compatible
+        // with the untouched half.
+        const nextColors =
+          partial.bandColors !== undefined
+            ? sanitizeBandColors(partial.bandColors)
+            : cur.bandColors;
+        const nextBoundaries =
+          partial.bandBoundaries !== undefined
+            ? sanitizeBandBoundaries(partial.bandBoundaries)
+            : cur.bandBoundaries;
+        if (
+          nextColors &&
+          nextBoundaries &&
+          nextBoundaries.length === nextColors.length + 1
+        ) {
+          if (partial.bandColors !== undefined) {
+            const bc = [...nextColors];
             // paletteShallow is the authoritative source for the top-band
-            // colour. When both paletteShallow and bandColors arrive together
-            // (e.g. from a legacy-row migration on the server), keep them
-            // consistent by forcing bc[0] to match the incoming shallow.
-            // For payloads that have bandColors but no paletteShallow, sync
-            // shallow from bc[0] so the store stays internally consistent.
-            if (patch.shallow) {
+            // colour when both arrive together (legacy-row migrations).
+            if (patch.shallow && bc.length === DEFAULT_BAND_COLORS.length) {
               bc[0] = patch.shallow;
-            } else {
-              patch.shallow = bc[0]!;
             }
             patch.bandColors = bc;
+            patch.shallow = bc[0]!;
+            patch.deep = bc[bc.length - 1]!;
+          }
+          if (partial.bandBoundaries !== undefined) {
+            patch.bandBoundaries = nextBoundaries;
           }
         }
-        if (partial.bandBoundaries !== undefined) {
-          const cleaned = sanitizeBandBoundaries(partial.bandBoundaries);
-          if (cleaned) patch.bandBoundaries = cleaned;
+        if (typeof partial.blendDepthBands === "boolean") {
+          patch.blendBands = partial.blendDepthBands;
         }
         if (Object.keys(patch).length > 0) set(patch);
       },
@@ -442,23 +636,53 @@ export const usePaletteStore = create<PaletteStore>()(
         const ps = persistedState as Record<string, unknown> | undefined;
         const merged = { ...currentState, ...(ps as object) };
         const cleanedStops = sanitizeCustomStops(ps?.customStops);
-        let cleanedBands = sanitizeBandColors(ps?.bandColors);
-        // Migration guard: old persisted state has shallow/deep but no bandColors
-        // (written before this feature landed). Seed bandColors[0] from the
-        // persisted shallow so the rendered top stop immediately matches the
-        // value the user previously configured, rather than defaulting.
-        if (!cleanedBands) {
+        // v2 migration: the pair must be consistent; old v1 state (10 colors
+        // + 11 boundaries, 0→2000) passes the variable-length sanitisers
+        // unchanged. Anything inconsistent falls back to defaults.
+        const pair = sanitizeBandArrays(ps?.bandColors, ps?.bandBoundaries);
+        const soloBoundaries = pair ? null : sanitizeBandBoundaries(ps?.bandBoundaries);
+        const soloColors = pair ? null : sanitizeBandColors(ps?.bandColors);
+        let cleanedBands: string[];
+        let cleanedBoundaries: number[];
+        if (pair) {
+          cleanedBands = pair.bandColors;
+          cleanedBoundaries = pair.bandBoundaries;
+        } else if (soloBoundaries) {
+          // Boundaries alone are well-formed (colors missing or mismatched):
+          // keep the boundaries and resample colors to fit their band count.
+          cleanedBoundaries = soloBoundaries;
+          cleanedBands = soloColors
+            ? resampleBandColors(
+                soloColors,
+                Array.from({ length: soloColors.length + 1 }, (_, i) => i),
+                soloBoundaries,
+              )
+            : resampleBandColors(DEFAULT_BAND_COLORS, DEFAULT_BAND_BOUNDARIES, soloBoundaries);
+        } else if (soloColors) {
+          // Colors alone are well-formed: keep them and derive evenly-spread
+          // boundaries across the default depth range.
+          cleanedBands = soloColors;
+          const maxFt = DEFAULT_BAND_BOUNDARIES[DEFAULT_BAND_BOUNDARIES.length - 1]!;
+          cleanedBoundaries = Array.from({ length: soloColors.length + 1 }, (_, i) =>
+            Math.round((i / soloColors.length) * maxFt),
+          );
+        } else {
           cleanedBands = [...DEFAULT_BAND_COLORS];
+          cleanedBoundaries = [...DEFAULT_BAND_BOUNDARIES];
+          // v0 migration: persisted shallow but no band arrays — seed the
+          // top band from the persisted shallow.
           if (typeof ps?.shallow === "string" && HEX_RE.test(ps.shallow)) {
             cleanedBands[0] = ps.shallow.toLowerCase();
           }
         }
-        const cleanedBoundaries = sanitizeBandBoundaries(ps?.bandBoundaries) ?? [...DEFAULT_BAND_BOUNDARIES];
         return {
           ...merged,
           customStops: cleanedStops ?? DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
           bandColors: cleanedBands,
           bandBoundaries: cleanedBoundaries,
+          shallow: cleanedBands[0]!,
+          deep: cleanedBands[cleanedBands.length - 1]!,
+          blendBands: typeof ps?.blendBands === "boolean" ? ps.blendBands : true,
         } as PaletteStore;
       },
     },
@@ -466,7 +690,7 @@ export const usePaletteStore = create<PaletteStore>()(
 );
 
 /** Mix two hex colours in RGB space and return a "#rrggbb" string. */
-function mixHex(a: string, b: string, alpha: number): string {
+export function mixHex(a: string, b: string, alpha: number): string {
   const pa = parseInt(a.replace("#", ""), 16);
   const pb = parseInt(b.replace("#", ""), 16);
   const ar = (pa >> 16) & 0xff, ag = (pa >> 8) & 0xff, ab = pa & 0xff;

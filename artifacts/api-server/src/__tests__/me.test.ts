@@ -692,20 +692,29 @@ describe("PUT /api/settings — bandColors", () => {
     expect(res.body.bandColors[0]).toBe("#00e5ff");
   });
 
-  it("returns 400 when bandColors has only 9 entries (below min of 10)", async () => {
+  it("accepts 9 bandColors entries (variable band count, min 2)", async () => {
     const res = await request(app)
       .put("/api/settings")
       .set(AUTH)
       .send({ bandColors: TEN_COLORS.slice(0, 9) });
-    expect(res.status).toBe(400);
-    expect(res.body).toHaveProperty("error");
+    expect(res.status).toBe(200);
+    expect(res.body.bandColors).toHaveLength(9);
   });
 
-  it("returns 400 when bandColors has 11 entries (above max of 10)", async () => {
+  it("accepts 11 bandColors entries (variable band count, max 16)", async () => {
     const res = await request(app)
       .put("/api/settings")
       .set(AUTH)
       .send({ bandColors: [...TEN_COLORS, "#ffffff"] });
+    expect(res.status).toBe(200);
+    expect(res.body.bandColors).toHaveLength(11);
+  });
+
+  it("returns 400 when bandColors has more than 16 entries", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandColors: Array(17).fill("#001122") });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
   });
@@ -764,20 +773,31 @@ describe("PUT /api/settings — bandBoundaries", () => {
     expect(res.body.bandBoundaries).toEqual(custom);
   });
 
-  it("returns 400 when bandBoundaries has only 10 elements (below min of 11)", async () => {
+  it("accepts a 10-element bandBoundaries array (variable band count)", async () => {
+    const ten = VALID_BOUNDARIES.slice(0, 10);
     const res = await request(app)
       .put("/api/settings")
       .set(AUTH)
-      .send({ bandBoundaries: VALID_BOUNDARIES.slice(0, 10) });
-    expect(res.status).toBe(400);
-    expect(res.body).toHaveProperty("error");
+      .send({ bandBoundaries: ten });
+    expect(res.status).toBe(200);
+    expect(res.body.bandBoundaries).toEqual(ten);
   });
 
-  it("returns 400 when bandBoundaries has 12 elements (above max of 11)", async () => {
+  it("accepts a 12-element bandBoundaries array (variable band count)", async () => {
+    const twelve = [...VALID_BOUNDARIES, 3000];
     const res = await request(app)
       .put("/api/settings")
       .set(AUTH)
-      .send({ bandBoundaries: [...VALID_BOUNDARIES, 3000] });
+      .send({ bandBoundaries: twelve });
+    expect(res.status).toBe(200);
+    expect(res.body.bandBoundaries).toEqual(twelve);
+  });
+
+  it("returns 400 when bandBoundaries has fewer than 3 elements", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ bandBoundaries: [0, 2000] });
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
   });
@@ -792,14 +812,14 @@ describe("PUT /api/settings — bandBoundaries", () => {
     expect(res.body).toHaveProperty("error");
   });
 
-  it("returns 400 when the last element is not 2000", async () => {
-    const bad = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
+  it("accepts a last element other than 2000 (editable last boundary)", async () => {
+    const custom = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
     const res = await request(app)
       .put("/api/settings")
       .set(AUTH)
-      .send({ bandBoundaries: bad });
-    expect(res.status).toBe(400);
-    expect(res.body).toHaveProperty("error");
+      .send({ bandBoundaries: custom });
+    expect(res.status).toBe(200);
+    expect(res.body.bandBoundaries).toEqual(custom);
   });
 
   it("returns 400 when interior values are not strictly increasing (duplicate)", async () => {
@@ -822,8 +842,8 @@ describe("PUT /api/settings — bandBoundaries", () => {
     expect(res.body).toHaveProperty("error");
   });
 
-  it("returns 400 when an element is above the item max of 2000", async () => {
-    const bad = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2001];
+  it("returns 400 when an element is above the item max of 36000", async () => {
+    const bad = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 36001];
     const res = await request(app)
       .put("/api/settings")
       .set(AUTH)

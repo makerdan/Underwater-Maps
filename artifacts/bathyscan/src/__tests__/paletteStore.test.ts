@@ -494,17 +494,18 @@ describe("paletteStore.hydrateFromServer", () => {
     expect(usePaletteStore.getState().bandBoundaries).toEqual(before);
   });
 
-  it("leaves bandBoundaries untouched when the payload does not start at 0 or end at 2000", () => {
+  it("leaves bandBoundaries untouched when the payload does not start at 0", () => {
     const before = [...usePaletteStore.getState().bandBoundaries];
     usePaletteStore.getState().hydrateFromServer({
       bandBoundaries: [10, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000],
     });
     expect(usePaletteStore.getState().bandBoundaries).toEqual(before);
+  });
 
-    usePaletteStore.getState().hydrateFromServer({
-      bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999],
-    });
-    expect(usePaletteStore.getState().bandBoundaries).toEqual(before);
+  it("accepts a payload ending at a value other than 2000 (last boundary is editable)", () => {
+    const custom = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
+    usePaletteStore.getState().hydrateFromServer({ bandBoundaries: custom });
+    expect(usePaletteStore.getState().bandBoundaries).toEqual(custom);
   });
 
   it("applies only bandBoundaries when it is the sole field present; other fields survive", () => {
@@ -545,15 +546,22 @@ describe("sanitizeBandBoundaries", () => {
     expect(sanitizeBandBoundaries({})).toBeNull();
   });
 
-  it("returns null when the array has fewer than 11 entries", () => {
-    const short = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600];
-    expect(short).toHaveLength(10);
-    expect(sanitizeBandBoundaries(short)).toBeNull();
+  it("returns null when the array has fewer than 3 entries (min 2 bands)", () => {
+    expect(sanitizeBandBoundaries([0, 2000])).toBeNull();
+    expect(sanitizeBandBoundaries([0])).toBeNull();
+    expect(sanitizeBandBoundaries([])).toBeNull();
   });
 
-  it("returns null when the array has more than 11 entries", () => {
-    const long = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000, 3000];
+  it("returns null when the array has more than 17 entries (max 16 bands)", () => {
+    const long = Array.from({ length: 18 }, (_, i) => i * 100);
+    expect(long).toHaveLength(18);
     expect(sanitizeBandBoundaries(long)).toBeNull();
+  });
+
+  it("accepts variable-length arrays between 3 and 17 entries", () => {
+    expect(sanitizeBandBoundaries([0, 100, 500])).toEqual([0, 100, 500]);
+    const seventeen = Array.from({ length: 17 }, (_, i) => i * 50);
+    expect(sanitizeBandBoundaries(seventeen)).toEqual(seventeen);
   });
 
   it("returns null when the first value is not 0", () => {
@@ -561,9 +569,15 @@ describe("sanitizeBandBoundaries", () => {
     expect(sanitizeBandBoundaries(wrong)).toBeNull();
   });
 
-  it("returns null when the last value is not 2000", () => {
-    const wrong = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
-    expect(sanitizeBandBoundaries(wrong)).toBeNull();
+  it("accepts a last value other than 2000 (editable up to 36000)", () => {
+    const custom = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
+    expect(sanitizeBandBoundaries(custom)).toEqual(custom);
+    const deepScale = [0, 5000, 36000];
+    expect(sanitizeBandBoundaries(deepScale)).toEqual(deepScale);
+  });
+
+  it("returns null when the last value exceeds 36000", () => {
+    expect(sanitizeBandBoundaries([0, 100, 36001])).toBeNull();
   });
 
   it("returns null when the array contains a non-number entry", () => {
@@ -621,10 +635,14 @@ describe("paletteStore.setBandBoundary", () => {
     expect(usePaletteStore.getState().bandBoundaries[0]).toBe(before[0]);
   });
 
-  it("ignores index 10 (fixed upper endpoint)", () => {
-    const before = [...usePaletteStore.getState().bandBoundaries];
+  it("updates index 10 (last boundary is now editable)", () => {
     usePaletteStore.getState().setBandBoundary(10, 1000);
-    expect(usePaletteStore.getState().bandBoundaries[10]).toBe(before[10]);
+    expect(usePaletteStore.getState().bandBoundaries[10]).toBe(1000);
+  });
+
+  it("clamps the last boundary to MAX_BOUNDARY_FT", () => {
+    usePaletteStore.getState().setBandBoundary(10, 99999);
+    expect(usePaletteStore.getState().bandBoundaries[10]).toBe(36000);
   });
 
   it("updates an interior boundary to a valid value", () => {

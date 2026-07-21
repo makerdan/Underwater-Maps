@@ -26,12 +26,24 @@ test.describe("Depth palette cross-device sync", () => {
     page,
   }) => {
     // ── Pre-flight: reset any previous test run's palette so the server
-    //    starts with the default deep colour (#283593). Without this, a prior
-    //    run that failed before cleanup could leave #ff00aa on the server,
-    //    making our nativeInputValueSetter a no-op (value unchanged → no dirty).
+    //    starts with the default band colours. Without this, a prior
+    //    run that failed before cleanup could leave #ff00aa on the server.
+    const DEFAULT_BAND_COLORS = [
+      "#00e5ff",
+      "#00c8de",
+      "#00a8d0",
+      "#0288d1",
+      "#0277bd",
+      "#1565c0",
+      "#0d47a1",
+      "#1a237e",
+      "#283593",
+      "#1e2b6e",
+    ];
+    const DEEP_INDEX = DEFAULT_BAND_COLORS.length - 1;
     await page.request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": E2E_USER_ID },
-      data: { paletteDeep: "#283593" },
+      data: { colormapTheme: "ocean", bandColors: DEFAULT_BAND_COLORS },
     });
 
     // ── Device A: change the deep hex and let auto-sync PUT it ──────────
@@ -56,25 +68,27 @@ test.describe("Depth palette cross-device sync", () => {
     // default value sneaking through.
     const newDeep = "#ff00aa";
 
-    // The palette-deep-hex input is a React controlled input whose onChange
+    // The band hex inputs are React controlled inputs whose onChange
     // only applies the value when the full "#rrggbb" pattern is valid.
     // Playwright's fill() sets the native DOM value but React 18's synthetic
     // event system does not reliably fire onChange for controlled inputs in
     // headless Chromium, so the "save" button never becomes dirty.
     // Instead, PUT the value directly to the API — the same server row that
-    // the UI writes via the Save button — then reload so the settings page
-    // hydrates from the server.  This correctly exercises the "Device A saved
-    // → Device B loads" cross-device-sync path the test is designed to cover.
+    // the UI writes — then reload so the settings page hydrates from the
+    // server.  This correctly exercises the "Device A saved → Device B
+    // loads" cross-device-sync path the test is designed to cover.
+    const newBandColors = [...DEFAULT_BAND_COLORS];
+    newBandColors[DEEP_INDEX] = newDeep;
     await page.request.put(`${API_URL}/api/settings`, {
       headers: { "x-e2e-user-id": E2E_USER_ID },
-      data: { paletteDeep: newDeep },
+      data: { bandColors: newBandColors },
     });
     // Reload (simulating a fresh page visit after saving) so the settings page
     // re-hydrates from the server and the deep hex input shows the new value.
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
 
-    const deepHex = page.locator('[data-testid="palette-deep-hex"]');
+    const deepHex = page.locator(`[data-testid="band-color-hex-${DEEP_INDEX}"]`);
     await expect(deepHex).toBeVisible({ timeout: 10_000 });
     await expect(deepHex).toHaveValue(newDeep, { timeout: 5_000 });
 
@@ -91,7 +105,7 @@ test.describe("Depth palette cross-device sync", () => {
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
 
-    const deepHexAfter = page.locator('[data-testid="palette-deep-hex"]');
+    const deepHexAfter = page.locator(`[data-testid="band-color-hex-${DEEP_INDEX}"]`);
     await expect(deepHexAfter).toBeVisible({ timeout: 10_000 });
     // hydrateFromServer applies the server-side deep colour because
     // lastSyncedAt is null on this "fresh device".
@@ -154,7 +168,7 @@ test.describe("Depth palette cross-device sync", () => {
     await page.waitForLoadState("domcontentloaded");
 
     // The Custom band-colour editor renders only when colormapTheme === "custom".
-    const customEditor = page.locator('[data-testid="palette-custom-editor"]');
+    const customEditor = page.locator('[data-testid="depth-band-color-editor"]');
     await expect(customEditor).toBeVisible({ timeout: 10_000 });
 
     // ── Intercept the next PUT /api/settings before triggering the change ─
@@ -220,7 +234,7 @@ test.describe("Depth palette cross-device sync", () => {
 
     // ── Also verify the UI reflects the change ───────────────────────────
     const bandHex = page.locator(
-      `[data-testid="palette-custom-band-${BAND_INDEX}-hex"]`,
+      `[data-testid="band-color-hex-${BAND_INDEX}"]`,
     );
     await expect(bandHex).toBeVisible({ timeout: 5_000 });
     await expect(bandHex).toHaveValue(NEW_COLOR, { timeout: 5_000 });
@@ -240,13 +254,13 @@ test.describe("Depth palette cross-device sync", () => {
     // The Custom editor must still be visible — the theme rehydrated from
     // the server, not from localStorage.
     const customEditorAfter = page.locator(
-      '[data-testid="palette-custom-editor"]',
+      '[data-testid="depth-band-color-editor"]',
     );
     await expect(customEditorAfter).toBeVisible({ timeout: 10_000 });
 
     // The band colour at BAND_INDEX must survive the "fresh device" round-trip.
     const bandHexAfter = page.locator(
-      `[data-testid="palette-custom-band-${BAND_INDEX}-hex"]`,
+      `[data-testid="band-color-hex-${BAND_INDEX}"]`,
     );
     await expect(bandHexAfter).toBeVisible({ timeout: 5_000 });
     await expect(bandHexAfter).toHaveValue(NEW_COLOR, { timeout: 10_000 });
@@ -373,12 +387,12 @@ test.describe("Depth palette cross-device sync", () => {
     await page.waitForLoadState("domcontentloaded");
 
     // The Custom editor must be visible (colormapTheme survived the round-trip).
-    const customEditorAfter = page.locator('[data-testid="palette-custom-editor"]');
+    const customEditorAfter = page.locator('[data-testid="depth-band-color-editor"]');
     await expect(customEditorAfter).toBeVisible({ timeout: 10_000 });
 
     // The modified band colour must survive the "fresh device" round-trip.
     const bandHexAfter = page.locator(
-      `[data-testid="palette-custom-band-${BAND_INDEX}-hex"]`,
+      `[data-testid="band-color-hex-${BAND_INDEX}"]`,
     );
     await expect(bandHexAfter).toBeVisible({ timeout: 5_000 });
     await expect(bandHexAfter).toHaveValue(NEW_COLOR, { timeout: 10_000 });

@@ -2,7 +2,7 @@ import React from "react";
 import { useAppState } from "@/lib/context";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
-import { colormapCssGradient, getColormapTRange } from "@/lib/colormap";
+import { colormapCssGradient } from "@/lib/colormap";
 import { formatDepth } from "@/lib/units";
 
 const FT_TO_M = 0.3048;
@@ -20,7 +20,7 @@ export const DepthLegend = () => {
 
   const rampHeightPx = 256; // h-64 = 16rem = 256px
 
-  const activeBoundaries = Array.isArray(bandBoundaries) && bandBoundaries.length === 11
+  const activeBoundaries = Array.isArray(bandBoundaries) && bandBoundaries.length >= 3
     ? bandBoundaries
     : [];
 
@@ -61,14 +61,14 @@ export const DepthLegend = () => {
       <div
         className="w-4 rounded-sm border border-border"
         style={{
-          // Sample the active colormap over the dataset's slice of the
-          // absolute depth scale so the ramp matches the terrain colours
-          // and the grid-relative tick positions line up with the bands.
+          // Sample the active colormap anchored to the dataset's depth range
+          // so the ramp matches the terrain colours and the grid-relative
+          // tick positions line up with the bands.
           background: colormapCssGradient(
             colormapTheme,
             "to bottom",
             24,
-            getColormapTRange(colormapTheme, terrain.minDepth, terrain.maxDepth),
+            { min: terrain.minDepth, max: terrain.maxDepth },
           ),
         }}
       />

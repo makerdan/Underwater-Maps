@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAppState } from "@/lib/context";
-import { colormapCanvas, getColormapTRange } from "@/lib/colormap";
+import { colormapCanvas } from "@/lib/colormap";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth } from "@/lib/units";
@@ -28,27 +28,25 @@ export const DepthScaleBar: React.FC = () => {
   const deep = usePaletteStore((s) => s.deep);
   const bandColorsKey = usePaletteStore((s) => s.bandColors.join(","));
   const bandBoundaries = usePaletteStore((s) => s.bandBoundaries);
+  const blendBands = usePaletteStore((s) => s.blendBands);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (!terrain) return;
-    // Crop the ramp to the dataset's slice of the absolute depth scale
-    // (ocean/custom themes) so the gradient matches the colours the terrain
-    // actually renders and the grid-relative tick positions line up.
-    const tRange = getColormapTRange(colormapTheme, terrain.minDepth, terrain.maxDepth);
     // Vertical ramp for the expanded view. Generated even while collapsed so
     // expanding the legend doesn't show a one-frame blank — and so the
     // colormap canvas is exercised with its canonical 200px height for tests.
-    const expandedCanvas = colormapCanvas(20, 200, colormapTheme, tRange);
+    const range = { min: terrain.minDepth, max: terrain.maxDepth };
+    const expandedCanvas = colormapCanvas(20, 200, colormapTheme, range);
     if (expandedImgRef.current) {
       expandedImgRef.current.src = expandedCanvas.toDataURL();
     }
     // Horizontal mini-swatch for the collapsed header (rotated via CSS).
     if (collapsedImgRef.current) {
-      const canvas = colormapCanvas(20, 80, colormapTheme, tRange);
+      const canvas = colormapCanvas(20, 80, colormapTheme, range);
       collapsedImgRef.current.src = canvas.toDataURL();
     }
-  }, [colormapTheme, shallow, deep, bandColorsKey, bandBoundaries, terrain, expanded]);
+  }, [colormapTheme, shallow, deep, bandColorsKey, bandBoundaries, blendBands, terrain, expanded]);
 
   if (!terrain) return null;
 
@@ -57,7 +55,7 @@ export const DepthScaleBar: React.FC = () => {
   // Build tick list: convert each band boundary from feet to metres,
   // compute its normalised position, and discard anything outside [0, 1].
   // Guard against a flat dataset (all points at the same depth).
-  const activeBoundaries = Array.isArray(bandBoundaries) && bandBoundaries.length === 11
+  const activeBoundaries = Array.isArray(bandBoundaries) && bandBoundaries.length >= 3
     ? bandBoundaries
     : [];
   const depthSpan = terrain.maxDepth - terrain.minDepth;

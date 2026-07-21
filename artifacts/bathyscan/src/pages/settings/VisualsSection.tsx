@@ -7,46 +7,9 @@ import { PaletteSuggestionBanner } from "@/components/PaletteSuggestionBanner";
 import { S } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
-import { SliderRow, ToggleRow, SelectRow, ColorRow, ColormapSelectRow } from "./components/RowWidgets";
+import { SliderRow, ToggleRow, SelectRow, ColorRow } from "./components/RowWidgets";
 import { Select } from "./components/Toggle";
-import { PalettePickerCard } from "./components/PalettePickerCard";
-import { defaultContourInterval } from "./constants";
-
-function ContourIntervalRow() {
-  const s = useSettingsStore(useShallow((s) => s));
-  const isMetric = s.units === "metric";
-  const isNautical = s.units === "nautical";
-  // Fine intervals (0.5 m / 0.5 fm / 1 ft) make shallow inshore surveys
-  // readable; buildContourLines has a MAX_CONTOUR_SEGMENTS guard so small
-  // intervals cannot generate unbounded geometry.
-  const sliderMin  = isMetric ? 0.5 : isNautical ? 0.5 : 1;
-  const sliderMax  = isMetric ? 50  : isNautical ? 50  : 200;
-  const sliderStep = isMetric ? 0.5 : isNautical ? 0.5 : 1;
-  const formatInterval = (v: number) => {
-    const n = v % 1 === 0 ? v.toFixed(0) : v.toFixed(1);
-    return isMetric ? `${n} m` : isNautical ? `${n} fm` : `${n} ft`;
-  };
-  const unitLabel = isMetric ? "metres" : isNautical ? "fathoms" : "feet";
-  const prevUnitsRef = useRef(s.units);
-  useEffect(() => {
-    const prev = prevUnitsRef.current;
-    prevUnitsRef.current = s.units;
-    if (prev === s.units) return;
-    s.setContourInterval(defaultContourInterval(s.units));
-  }, [s.units]); // eslint-disable-line react-hooks/exhaustive-deps -- s.setContourInterval is a Zustand setter (stable ref)
-  return (
-    <SliderRow
-      label="Contour Interval"
-      value={Math.min(sliderMax, Math.max(sliderMin, s.contourInterval))}
-      min={sliderMin}
-      max={sliderMax}
-      step={sliderStep}
-      format={formatInterval}
-      onChange={s.setContourInterval}
-      sublabel={`Depth spacing between lines (${unitLabel})`}
-    />
-  );
-}
+import { DepthColorsCard } from "./components/DepthColorsCard";
 
 function formatFt(v: number): string {
   return v % 1 === 0 ? v.toFixed(0) : v.toFixed(2);
@@ -216,9 +179,9 @@ export function VisualsSection() {
         />
       </div>
 
-      {/* Basics */}
+      {/* Terrain shading */}
       <div style={S.card}>
-        <div style={S.cardHeader}>BASICS</div>
+        <div style={S.cardHeader}>TERRAIN SHADING</div>
         <SliderRow
           label="Vertical Exaggeration"
           value={s.terrainExaggeration}
@@ -231,6 +194,45 @@ export function VisualsSection() {
               : "Vertical stretch applied to terrain"
           }
         />
+        <ToggleRow
+          label="Smooth terrain spikes"
+          value={s.smoothTerrainSpikes}
+          onChange={s.setSmoothTerrainSpikes}
+          sublabel="Server-side post-process that blends slopes steeper than 70°. Disable to inspect raw bathymetric artifacts."
+        />
+        <ToggleRow
+          label="Show water surface"
+          value={s.showWaterSurface}
+          onChange={s.setShowWaterSurface}
+          sublabel="Translucent sea-level plane over the bathymetry. Colour tracks the active water type. Turn off for dry cross-section views."
+        />
+        <ToggleRow
+          label="Show landmass"
+          value={s.showLandmass}
+          onChange={s.setShowLandmass}
+          sublabel="Render above-water terrain (islands, shorelines) when the dataset includes topography. No effect on open-ocean datasets."
+        />
+        <ToggleRow
+          label="Satellite imagery"
+          value={s.satelliteImagery}
+          onChange={s.setSatelliteImagery}
+          sublabel="Drape ESRI World Imagery photo over the land mesh. Turn off to use the stylised green→brown→grey colour ramp — clearer in dark scenes."
+        />
+        <SelectRow
+          label="Landmass style"
+          value={s.landmassStyle}
+          onChange={s.setLandmassStyle}
+          options={[
+            { value: "realistic", label: "Realistic (sand → grass → rock → snow)" },
+            { value: "flat", label: "Flat (neutral grey)" },
+          ]}
+          sublabel="Use flat shading when overlaying your own data so terrain colour doesn't compete for attention."
+        />
+      </div>
+
+      {/* Effects */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>EFFECTS</div>
         <ToggleRow
           label="Marine Snow Effect"
           value={s.enableMarineSnow}
@@ -260,56 +262,8 @@ export function VisualsSection() {
         />
       </div>
 
-      {/* Depth Display */}
-      <div style={S.card}>
-        <div style={S.cardHeader}>DEPTH DISPLAY</div>
-        <ColormapSelectRow
-          label="Depth Colormap"
-          value={s.colormapTheme}
-          onChange={s.setColormapThemeByUser}
-          options={[
-            { value: "ocean", label: "Ocean (blue)" },
-            { value: "freshwater", label: "Freshwater (green)" },
-            { value: "thermal", label: "Thermal (purple→white)" },
-            { value: "grayscale", label: "Grayscale" },
-            { value: "viridis", label: "Viridis (purple→yellow)" },
-            { value: "custom", label: "Custom (edit stops)" },
-          ]}
-          sublabel="Terrain surface colour gradient"
-        />
-        {s.brightDaylight && !s.colormapUserSet && (
-          <div
-            data-testid="bright-daylight-grayscale-note"
-            style={{
-              padding: "6px 12px 10px",
-              fontSize: "calc(11px * var(--bs-font-scale, 1))",
-              color: "rgba(255, 200, 80, 0.9)",
-              lineHeight: 1.4,
-            }}
-          >
-            Bright Daylight mode is showing the terrain in grayscale for maximum
-            sunlight contrast. Pick a colormap above to override this.
-          </div>
-        )}
-        <ColorRow
-          label="Land / No-data Color"
-          value={s.nodataColor}
-          onChange={s.setNodataColor}
-          sublabel="Color for land and survey gaps — match your basemap background"
-        />
-        <ToggleRow
-          label="Show Contour Lines"
-          value={s.contoursEnabled}
-          onChange={s.setContoursEnabled}
-          sublabel="Iso-depth lines on the 2D overview map"
-        />
-        <div style={{ opacity: s.contoursEnabled ? 1 : 0.4, pointerEvents: s.contoursEnabled ? "auto" : "none" }}>
-          <ContourIntervalRow />
-        </div>
-      </div>
-
       <PaletteSuggestionBanner />
-      <PalettePickerCard />
+      <DepthColorsCard />
       <IntertidalDatumsCard />
       <AdvancedDisclosure testId="visuals-advanced">
         <div style={S.card}>
@@ -399,43 +353,6 @@ export function VisualsSection() {
             format={(v) => `${v} m`}
             onChange={s.setLampRange}
             sublabel="Radius in metres of the camera-attached point light that illuminates nearby terrain."
-          />
-        </div>
-        <div style={S.card}>
-          <div style={S.cardHeader}>TERRAIN RENDERING</div>
-          <ToggleRow
-            label="Smooth terrain spikes"
-            value={s.smoothTerrainSpikes}
-            onChange={s.setSmoothTerrainSpikes}
-            sublabel="Server-side post-process that blends slopes steeper than 70°. Disable to inspect raw bathymetric artifacts."
-          />
-          <ToggleRow
-            label="Show water surface"
-            value={s.showWaterSurface}
-            onChange={s.setShowWaterSurface}
-            sublabel="Translucent sea-level plane over the bathymetry. Colour tracks the active water type. Turn off for dry cross-section views."
-          />
-          <ToggleRow
-            label="Show landmass"
-            value={s.showLandmass}
-            onChange={s.setShowLandmass}
-            sublabel="Render above-water terrain (islands, shorelines) when the dataset includes topography. No effect on open-ocean datasets."
-          />
-          <ToggleRow
-            label="Satellite imagery"
-            value={s.satelliteImagery}
-            onChange={s.setSatelliteImagery}
-            sublabel="Drape ESRI World Imagery photo over the land mesh. Turn off to use the stylised green→brown→grey colour ramp — clearer in dark scenes."
-          />
-          <SelectRow
-            label="Landmass style"
-            value={s.landmassStyle}
-            onChange={s.setLandmassStyle}
-            options={[
-              { value: "realistic", label: "Realistic (sand → grass → rock → snow)" },
-              { value: "flat", label: "Flat (neutral grey)" },
-            ]}
-            sublabel="Use flat shading when overlaying your own data so terrain colour doesn't compete for attention."
           />
         </div>
       </AdvancedDisclosure>

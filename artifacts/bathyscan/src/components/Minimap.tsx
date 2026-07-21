@@ -4,7 +4,7 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
-import { getColormap, getColormapDepthDomain, getColormapTRange, colormapCssGradient } from "@/lib/colormap";
+import { getColormap, colormapCssGradient } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ColormapTheme } from "@/lib/settingsStore";
@@ -39,11 +39,8 @@ function drawHeatmap(
   colormapTheme: ColormapTheme = "ocean",
   topography?: number[] | null,
 ) {
-  // Match the 3D terrain: ocean/custom themes normalise against the absolute
-  // 0–2000 ft scale; fixed themes stretch across the grid's own range.
-  const domain = getColormapDepthDomain(colormapTheme, minDepth, maxDepth);
-  const depthRange = domain.max - domain.min || 1;
-  const toColor = getColormap(colormapTheme);
+  const depthRange = maxDepth - minDepth || 1;
+  const toColor = getColormap(colormapTheme, { min: minDepth, max: maxDepth });
   const imageData = ctx.createImageData(W, H);
 
   for (let py = 0; py < H; py++) {
@@ -75,7 +72,7 @@ function drawHeatmap(
         continue;
       }
 
-      const t = (rawDepth - domain.min) / depthRange;
+      const t = (rawDepth - minDepth) / depthRange;
       // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
       // display-space sRGB bytes for 2D canvas, matching the legend overlay
       // and the colormapCanvas helper in colormap.ts.
@@ -203,6 +200,7 @@ export const Minimap: React.FC = () => {
   const bandColors = usePaletteStore((s) => s.bandColors);
   const customStops = usePaletteStore((s) => s.customStops);
   const bandBoundaries = usePaletteStore((s) => s.bandBoundaries);
+  const blendBands = usePaletteStore((s) => s.blendBands);
 
   // Build the CSS gradient for the legend strip.  Re-computed only when the
   // theme or palette changes — same dependencies that rebuild the heatmap.
@@ -212,14 +210,14 @@ export const Minimap: React.FC = () => {
         colormapTheme,
         "to bottom",
         16,
-        // Crop to the dataset's slice of the absolute depth scale so the strip
-        // matches the heatmap colours (ocean/custom themes).
+        // Anchor the strip to the dataset's depth range so it matches the
+        // heatmap colours (user depth bands are absolute depths).
         terrain
-          ? getColormapTRange(colormapTheme, terrain.minDepth, terrain.maxDepth)
+          ? { min: terrain.minDepth, max: terrain.maxDepth }
           : undefined,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- paletteVersion fingerprint covers all palette state; colormapCssGradient is a pure function
-    [colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries, terrain],
+    [colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries, blendBands],
   );
 
   // Depth labels for the legend (shallow top, deep bottom)
