@@ -201,6 +201,21 @@ export function retrieveCachedExtraction(token: string): PdfContourExtraction | 
 }
 
 // ---------------------------------------------------------------------------
+// Test helpers (prefix __ signals internal / not part of the public API)
+// ---------------------------------------------------------------------------
+
+/**
+ * Injects a PdfContourExtraction directly into the in-memory cache and
+ * returns its token.  Used by unit tests that need a valid token for
+ * commitCachedExtraction without shelling out to the Python subprocess.
+ *
+ * Do NOT call from production code.
+ */
+export function __storeExtractionForTest(extraction: PdfContourExtraction): string {
+  return storeExtraction(extraction);
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
