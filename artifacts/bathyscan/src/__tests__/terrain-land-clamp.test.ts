@@ -144,6 +144,37 @@ describe("buildTerrainGeometry — land-spike clamp (depth ≤ 0 → world-Y = 0
     expect(y).toBe(0);
   });
 
+  it("fully-underwater grid is never all-zero after clamping (wrong-sign clamp guard)", () => {
+    // The inverted Math.min(depth, 0) clamp would flatten every positive
+    // (below-water) depth to Y=0 — invisible terrain. A grid with genuine
+    // relief must keep at least one vertex below the waterline.
+    const grid = makeGrid([1, 10, 25, 50], 0, 50);
+    const geo = buildTerrainGeometry(grid);
+    const arr = getPositions(geo);
+    if (!arr) return;
+    const ys = [0, 1, 2, 3].map((i) => arr[i * 3 + 1]);
+    expect(ys.some((y) => y < 0)).toBe(true);
+    expect(Math.min(...ys)).toBeCloseTo(-MAX_DEPTH_WORLD, 5);
+  });
+
+  it("mixed land/water grid: land vertices at Y=0 AND water vertices retain non-flat relief", () => {
+    // Catches both failure modes at once: a missing clamp (land spikes,
+    // Y > 0) and the inverted clamp (everything flattened to Y=0).
+    const grid = makeGrid([-50, -10, 20, 40], 0, 40);
+    const geo = buildTerrainGeometry(grid);
+    const arr = getPositions(geo);
+    if (!arr) return;
+    // Land (negative depth) → exactly at the waterline, never above it.
+    expect(arr[0 * 3 + 1]).toBeCloseTo(0, 5);
+    expect(arr[1 * 3 + 1]).toBeCloseTo(0, 5);
+    // Water (positive depth) → below the waterline with distinct relief.
+    const y2 = arr[2 * 3 + 1];
+    const y3 = arr[3 * 3 + 1];
+    expect(y2).toBeLessThan(0);
+    expect(y3).toBeLessThan(y2);
+    expect(y3).toBeCloseTo(-MAX_DEPTH_WORLD, 5);
+  });
+
   it("MAX_DEPTH_WORLD constant is exported and positive", () => {
     // Regression: ensure consumers can read MAX_DEPTH_WORLD for inverse
     // worldYToMetres calculations without hard-coding 50.
