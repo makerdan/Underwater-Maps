@@ -1517,6 +1517,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   type RasterLabel = { x: number; y: number; value: string; text: string };
   const [rasterEditLabels, setRasterEditLabels] = useState<RasterLabel[]>([]);
   const [rasterExtractError, setRasterExtractError] = useState<string | null>(null);
+  const [rasterExtractStage, setRasterExtractStage] = useState<string>("");
+  const [rasterExtractPct, setRasterExtractPct] = useState<number>(0);
 
   // When the user finishes drawing a bbox on the OverviewMap, pull it into the
   // PDF georef fields and clear the store so the effect doesn't re-trigger.
@@ -2356,6 +2358,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     // PNG / JPEG: two-step flow — extract first, review labels, then commit.
     setPdfDialogError(null);
     setRasterExtractError(null);
+    setRasterExtractStage("Uploading image…");
+    setRasterExtractPct(0);
     setRasterExtractPhase("extracting");
 
     try {
@@ -2366,6 +2370,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         method: "POST",
         body: fd,
       });
+
+      // Pre-flight errors (400/415) arrive before SSE headers are set.
       if (!resp.ok) {
         let detail = "Extraction failed — please try again.";
         try {
@@ -2376,18 +2382,65 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         setRasterExtractPhase("idle");
         return;
       }
-      const result = await resp.json() as {
-        token: string;
-        labels: Array<{ x: number; y: number; value: number; text: string }>;
-        polylineCount: number;
-      };
-      lastPdfMetaRef.current = meta;
-      setRasterToken(result.token);
-      setRasterPolylineCount(result.polylineCount);
-      setRasterEditLabels(
-        result.labels.map((l) => ({ x: l.x, y: l.y, value: String(l.value), text: l.text })),
-      );
-      setRasterExtractPhase("review");
+
+      // Stream SSE events from the response body.
+      const reader = resp.body?.getReader();
+      if (!reader) {
+        setRasterExtractError("Extraction failed — no response stream.");
+        setRasterExtractPhase("idle");
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const blocks = buf.split("\n\n");
+        buf = blocks.pop() ?? "";
+
+        for (const block of blocks) {
+          const dataLine = block.split("\n").find((l) => l.startsWith("data: "));
+          if (!dataLine) continue;
+
+          let evt: Record<string, unknown>;
+          try {
+            evt = JSON.parse(dataLine.slice(6)) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+
+          if (evt.stage === "error") {
+            const detail = (evt.details as string | undefined) ?? (evt.error as string | undefined) ?? "Extraction failed.";
+            setRasterExtractError(detail);
+            setRasterExtractPhase("idle");
+            break outer;
+          }
+
+          if (evt.stage === "done") {
+            const res = evt.result as {
+              token: string;
+              labels: Array<{ x: number; y: number; value: number; text: string }>;
+              polylineCount: number;
+            };
+            lastPdfMetaRef.current = meta;
+            setRasterToken(res.token);
+            setRasterPolylineCount(res.polylineCount);
+            setRasterEditLabels(
+              res.labels.map((l) => ({ x: l.x, y: l.y, value: String(l.value), text: l.text })),
+            );
+            setRasterExtractPhase("review");
+            break outer;
+          }
+
+          // Progress event — update stage label and percent.
+          if (typeof evt.label === "string") setRasterExtractStage(evt.label);
+          if (typeof evt.pct === "number") setRasterExtractPct(evt.pct);
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Network error during extraction.";
       setRasterExtractError(msg);
@@ -4276,12 +4329,70 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                               </label>
                             ))}
                           </div>
-                          {rasterExtractPhase === "extracting" && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, color: "#7dd3fc", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>
-                              <span className="animate-pulse">◌</span>
-                              <span>Scanning image with OCR — this may take 10–30 seconds…</span>
-                            </div>
-                          )}
+                          {rasterExtractPhase === "extracting" && (() => {
+                            const STEPS: Array<{ stage: string; label: string; pct: number }> = [
+                              { stage: "upload", label: "Image received",           pct: 5  },
+                              { stage: "detect", label: "Detecting contour lines…", pct: 15 },
+                              { stage: "ocr",    label: "Reading depth labels…",    pct: 55 },
+                              { stage: "done",   label: "Done",                     pct: 100 },
+                            ];
+                            const activeIdx = (() => {
+                              for (let i = STEPS.length - 1; i >= 0; i--) {
+                                if (rasterExtractPct >= STEPS[i]!.pct) return i;
+                              }
+                              return 0;
+                            })();
+                            return (
+                              <div style={{ marginBottom: 8 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 6 }}>
+                                  {STEPS.slice(0, -1).map((step, i) => {
+                                    const done = i < activeIdx;
+                                    const active = i === activeIdx;
+                                    return (
+                                      <div
+                                        key={step.stage}
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 7,
+                                          fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
+                                          color: done ? "#4ade80" : active ? "#7dd3fc" : "#475569",
+                                          transition: "color 0.3s",
+                                        }}
+                                      >
+                                        <span style={{ width: 14, textAlign: "center", flexShrink: 0 }}>
+                                          {done ? "✓" : active ? <span className="animate-pulse">●</span> : "○"}
+                                        </span>
+                                        <span>{step.label}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div style={{
+                                  height: 4,
+                                  borderRadius: 2,
+                                  background: "rgba(148,163,184,0.15)",
+                                  overflow: "hidden",
+                                }}>
+                                  <div style={{
+                                    height: "100%",
+                                    width: `${Math.max(5, rasterExtractPct)}%`,
+                                    background: "linear-gradient(90deg,#3b82f6,#7dd3fc)",
+                                    borderRadius: 2,
+                                    transition: "width 0.6s ease",
+                                  }} />
+                                </div>
+                                <div style={{
+                                  marginTop: 3,
+                                  fontSize: "calc(11.5px * var(--bs-font-scale, 1))",
+                                  color: "#64748b",
+                                  textAlign: "right",
+                                }}>
+                                  {rasterExtractStage || "Starting…"}
+                                </div>
+                              </div>
+                            );
+                          })()}
                           {pdfDialogError && (
                             <div data-testid="pdf-georef-error" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171", marginBottom: 6 }}>
                               ⚠ {pdfDialogError}
