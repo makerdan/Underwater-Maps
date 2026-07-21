@@ -1519,6 +1519,30 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [rasterExtractError, setRasterExtractError] = useState<string | null>(null);
   const [rasterExtractStage, setRasterExtractStage] = useState<string>("");
   const [rasterExtractPct, setRasterExtractPct] = useState<number>(0);
+  const [depthUnitWarningDismissed, setDepthUnitWarningDismissed] = useState(false);
+
+  useEffect(() => { setDepthUnitWarningDismissed(false); }, [rasterToken]);
+
+  const rasterLabelMedian = useMemo((): number | null => {
+    const nums = rasterEditLabels
+      .map((l) => parseFloat(l.value))
+      .filter((n) => !isNaN(n) && n > 0)
+      .sort((a, b) => a - b);
+    if (nums.length === 0) return null;
+    const mid = Math.floor(nums.length / 2);
+    const lo = nums[mid - 1] ?? 0;
+    const hi = nums[mid] ?? 0;
+    return nums.length % 2 === 0 ? (lo + hi) / 2 : hi;
+  }, [rasterEditLabels]);
+
+  const depthUnitMismatch: string | null = useMemo(() => {
+    if (rasterLabelMedian === null) return null;
+    if (pdfDepthUnit === "meters" && rasterLabelMedian > 200)
+      return "These values look like feet — are you sure this map uses meters?";
+    if (pdfDepthUnit === "feet" && rasterLabelMedian < 20)
+      return "These values look like meters — are you sure this map uses feet?";
+    return null;
+  }, [rasterLabelMedian, pdfDepthUnit]);
 
   // When the user finishes drawing a bbox on the OverviewMap, pull it into the
   // PDF georef fields and clear the store so the effect doesn't re-trigger.
@@ -4143,6 +4167,43 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                             </div>
                           )}
 
+                          {depthUnitMismatch && !depthUnitWarningDismissed && (
+                            <div
+                              data-testid="depth-unit-mismatch-warning"
+                              style={{
+                                display: "flex",
+                                alignItems: "flex-start",
+                                justifyContent: "space-between",
+                                gap: 6,
+                                background: "rgba(202,138,4,0.12)",
+                                border: "1px solid rgba(202,138,4,0.45)",
+                                borderRadius: 4,
+                                padding: "5px 8px",
+                                marginBottom: 8,
+                                fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
+                                color: "#fde68a",
+                              }}
+                            >
+                              <span>⚠ {depthUnitMismatch}</span>
+                              <button
+                                type="button"
+                                aria-label="Dismiss depth unit warning"
+                                onClick={() => setDepthUnitWarningDismissed(true)}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "#92400e",
+                                  cursor: "pointer",
+                                  fontSize: "calc(13px * var(--bs-font-scale, 1))",
+                                  padding: "0 2px",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          )}
+
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                             <span style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>Depth unit:</span>
                             {(["feet", "meters"] as const).map((u) => (
@@ -4153,7 +4214,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                                   name="rasterReviewDepthUnit"
                                   checked={pdfDepthUnit === u}
                                   disabled={rasterExtractPhase === "committing"}
-                                  onChange={() => setPdfDepthUnit(u)}
+                                  onChange={() => { setPdfDepthUnit(u); setDepthUnitWarningDismissed(false); }}
                                 />
                                 {u}
                               </label>
