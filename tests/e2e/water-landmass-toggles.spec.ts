@@ -186,13 +186,10 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
         body: JSON.stringify(fixture),
       }),
     );
-    // Wait for the startup Lake Ray Roberts auto-load to settle before seeding
-    // so its in-flight pendingTerrain effect doesn't overwrite our seed.
-    await page
-      .locator('[data-testid="btn-dataset-lake-ray-roberts"]')
-      .waitFor({ state: "visible", timeout: 15_000 });
-    await page.waitForTimeout(1500);
-
+    // Seed terrain directly — terrain never auto-loads in the headless e2e
+    // environment (no pregenerated terrain for lake-ray-roberts), so waiting
+    // for the button first always times out. Seeding here makes the terrain
+    // store truthy, which causes DatasetPanel to render and show the button.
     await page.evaluate(
       ({ resolution, topo }) =>
         window.__bathyTest!.seedTerrain({
@@ -207,6 +204,11 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
         } as never),
       { resolution: RESOLUTION, topo: topography },
     );
+
+    // After seeding, the DatasetPanel renders and the button should appear quickly.
+    await page
+      .locator('[data-testid="btn-dataset-lake-ray-roberts"]')
+      .waitFor({ state: "visible", timeout: 5_000 });
 
     // Confirm the seed actually stuck (no late terrain effect raced past it)
     // before we wait for the badge — otherwise a flake here misleadingly
@@ -225,16 +227,9 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
   });
 
   test("TOPO badge appears for Lake Ray Roberts (dataset with topography)", async ({ page }) => {
-    // The app auto-loads the Lake Ray Roberts preset on startup. We must wait
-    // for its pending-fetch round-trip to complete (otherwise our seeded
-    // terrain is overwritten by the real API terrain, which may not include
-    // any above-water cells in synthetic-fallback mode).
-    await page
-      .locator('[data-testid="btn-dataset-lake-ray-roberts"]')
-      .waitFor({ state: "visible", timeout: 15_000 });
-    await page.waitForTimeout(1500);
-
     const topography = makeTopography();
+    // Seed terrain directly — terrain never auto-loads in the headless e2e
+    // environment, so waiting for the button before seeding always times out.
     await page.evaluate(
       ({ resolution, topo }) =>
         window.__bathyTest!.seedTerrain({
@@ -249,6 +244,11 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
         } as never),
       { resolution: RESOLUTION, topo: topography },
     );
+
+    // After seeding, DatasetPanel renders and the button should appear quickly.
+    await page
+      .locator('[data-testid="btn-dataset-lake-ray-roberts"]')
+      .waitFor({ state: "visible", timeout: 5_000 });
 
     await expect(page.locator('[data-testid="topo-badge"]').first()).toBeVisible({
       timeout: 10_000,
@@ -319,15 +319,17 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
       }),
     );
 
-    await page
-      .locator('[data-testid="btn-dataset-lake-ray-roberts"]')
-      .waitFor({ state: "visible", timeout: 15_000 });
-    await page.waitForTimeout(1500);
-
+    // Seed terrain directly — terrain never auto-loads in the headless e2e
+    // environment, so waiting for the button before seeding always times out.
     await page.evaluate(
       (f) => window.__bathyTest!.seedTerrain(f as never),
       fixture,
     );
+
+    // After seeding, DatasetPanel renders and the button should appear quickly.
+    await page
+      .locator('[data-testid="btn-dataset-lake-ray-roberts"]')
+      .waitFor({ state: "visible", timeout: 5_000 });
 
     await expect
       .poll(

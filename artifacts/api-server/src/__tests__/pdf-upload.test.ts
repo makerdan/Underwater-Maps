@@ -129,6 +129,7 @@ describe("POST /api/datasets/upload — PDF contour maps", () => {
     const res = await postPdf(makeRasterOnlyPdf()).field("pdfBbox", VALID_BBOX);
     expect(res.status).toBe(422);
     expect(res.body).toHaveProperty("error", "pdf_extract_error");
+    expect(String(res.body.details)).toMatch(/no contour lines/i);
   }, 30_000);
 
   it("returns 422 pdf_parse_error for corrupt PDF bytes", async () => {

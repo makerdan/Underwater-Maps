@@ -120,12 +120,11 @@ async function engageFollow(page: Parameters<typeof test.beforeEach>[0]["page"])
   await page.locator('[data-testid="sidebar-mode-tab-live"]').click();
   const followToggle = page.locator('[data-testid="live-follow-toggle"]');
   await expect(followToggle).toBeEnabled({ timeout: 15_000 });
-  // Depth card shows a number only once the grid is loaded and the GPS fix
-  // is inside its bounds.
-  await expect(page.locator('[data-testid="live-depth-value"]')).not.toHaveText(
-    "—",
-    { timeout: 30_000 },
-  );
+  // NOTE: do NOT wait for live-depth-value to leave "—" here.
+  // Depth computation runs inside useFrame which never fires in the headless
+  // e2e stub-canvas branch.  The follow toggle becoming enabled is the
+  // correct readiness signal; the bounds-check watcher (StubFollowBoundsWatcher)
+  // runs via a store subscription and does not need the depth value.
   await dismissOnboardingIfPresent(page);
   // Entering Live mode auto-engages follow when GPS is already active
   // (enterLiveMode), so only click the toggle if it isn't engaged yet —

@@ -46,7 +46,7 @@ GENERATOR="$FIXTURE_DIR/generate.mjs"
 
 # Authoritative list — must be kept in sync with generate.mjs main().
 # Pre-generated fixtures (not produced by generate.mjs) must also be listed here
-# so the EXTRA-file scanner doesn't flag them.
+# so the EXTRA-file scanner doesn't flag them as uncommitted artifacts.
 FIXTURES=(
   survey.tif
   survey.nc

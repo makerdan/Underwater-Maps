@@ -97,6 +97,23 @@ test.describe("Find Data — My Uploads browse and reload smoke test", () => {
       });
     });
 
+    // Intercept the dataset-preview endpoint so requestDatasetSwitch gets
+    // dataSource:"real" and calls onConfirm() immediately (no dialog).
+    // This is defensive: the sessionStorage suppress flag normally handles
+    // this, but an explicit mock is more robust across browser-cache states.
+    await page.route(`**/api/datasets/${UPLOAD_ID}/preview`, (route) =>
+      route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          datasetId: UPLOAD_ID,
+          name: UPLOAD_NAME,
+          bbox: { minLon: -135.5, minLat: 59.4, maxLon: -135.4, maxLat: 59.5 },
+          dataSource: "real",
+        }),
+      }),
+    );
+
     // Intercept the terrain/overview fetches so clicking Load doesn't fail
     // with a 404 for a non-existent user dataset.
     await page.route(`**/api/user/datasets/${UPLOAD_ID}/terrain`, (route) =>
