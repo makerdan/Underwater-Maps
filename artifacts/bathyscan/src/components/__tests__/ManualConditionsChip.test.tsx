@@ -28,10 +28,12 @@ const h = vi.hoisted(() => {
   const clearDatasetManualConditions = vi.fn();
   const setManualConditionsActiveSource = vi.fn();
   const setSidebarMode = vi.fn();
-  const terrainHolder: { value: { datasetId: string } | null } = {
+  const terrainHolder: { value: { datasetId: string; name?: unknown } | null } = {
     value: { datasetId: "fw-test-lake" },
   };
+  const mobileHolder = { value: false };
   return {
+    mobileHolder,
     sessionByDataset,
     persistedByDataset,
     activeSourceByDataset,
@@ -47,6 +49,13 @@ const h = vi.hoisted(() => {
 
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({ terrain: h.terrainHolder.value }),
+}));
+
+// ── Mock use-mobile ────────────────────────────────────────────────────────────
+
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => h.mobileHolder.value,
+  useIsNarrow: () => false,
 }));
 
 // ── Mock uiStore ───────────────────────────────────────────────────────────────
@@ -113,6 +122,7 @@ beforeEach(() => {
   h.setManualConditionsActiveSource.mockClear();
   h.setSidebarMode.mockClear();
   h.terrainHolder.value = { datasetId: DATASET };
+  h.mobileHolder.value = false;
 });
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -196,5 +206,86 @@ describe("ManualConditionsChip — persistent sidebar indicator", () => {
     expect(h.clearSessionManualConditions).toHaveBeenCalledWith(DATASET);
     expect(h.clearDatasetManualConditions).toHaveBeenCalledWith(DATASET);
     expect(h.setManualConditionsActiveSource).toHaveBeenCalledWith(DATASET, "real");
+  });
+
+  it("shows the active lake name in the label", async () => {
+    const { ManualConditionsChip } = await import("@/components/ManualConditionsChip");
+
+    h.terrainHolder.value = { datasetId: DATASET, name: "Lake Minnetonka" };
+    h.sessionByDataset[DATASET] = SAMPLE;
+
+    render(<ManualConditionsChip />);
+
+    expect(screen.getByTestId("manual-conditions-chip-label")).toHaveTextContent(
+      "Manual conditions · Lake Minnetonka",
+    );
+  });
+
+  it("falls back gracefully when the dataset has no display name", async () => {
+    const { ManualConditionsChip } = await import("@/components/ManualConditionsChip");
+
+    h.terrainHolder.value = { datasetId: DATASET };
+    h.sessionByDataset[DATASET] = SAMPLE;
+
+    render(<ManualConditionsChip />);
+
+    expect(screen.getByTestId("manual-conditions-chip-label")).toHaveTextContent(
+      "Manual conditions active",
+    );
+  });
+
+  it("does not crash and falls back when name is a non-string value", async () => {
+    const { ManualConditionsChip } = await import("@/components/ManualConditionsChip");
+
+    h.terrainHolder.value = { datasetId: DATASET, name: 42 };
+    h.sessionByDataset[DATASET] = SAMPLE;
+
+    render(<ManualConditionsChip />);
+
+    expect(screen.getByTestId("manual-conditions-chip-label")).toHaveTextContent(
+      "Manual conditions active",
+    );
+  });
+
+  it("uses a compact label on mobile", async () => {
+    const { ManualConditionsChip } = await import("@/components/ManualConditionsChip");
+
+    h.mobileHolder.value = true;
+    h.terrainHolder.value = { datasetId: DATASET, name: "Lake Minnetonka" };
+    h.sessionByDataset[DATASET] = SAMPLE;
+
+    render(<ManualConditionsChip />);
+
+    expect(screen.getByTestId("manual-conditions-chip-label")).toHaveTextContent(
+      "Manual · Lake Minnetonka",
+    );
+  });
+
+  it("mobile compact label without lake name", async () => {
+    const { ManualConditionsChip } = await import("@/components/ManualConditionsChip");
+
+    h.mobileHolder.value = true;
+    h.sessionByDataset[DATASET] = SAMPLE;
+
+    render(<ManualConditionsChip />);
+
+    expect(screen.getByTestId("manual-conditions-chip-label")).toHaveTextContent(
+      "Manual conditions",
+    );
+  });
+
+  it("tooltip includes lake name and wind/current summary", async () => {
+    const { ManualConditionsChip } = await import("@/components/ManualConditionsChip");
+
+    h.terrainHolder.value = { datasetId: DATASET, name: "Lake Minnetonka" };
+    h.sessionByDataset[DATASET] = SAMPLE;
+
+    render(<ManualConditionsChip />);
+
+    const jump = screen.getByTestId("manual-conditions-chip-jump");
+    const title = jump.getAttribute("title") ?? "";
+    expect(title).toContain("Lake Minnetonka");
+    expect(title).toContain("Wind 12 kn @ 270°");
+    expect(title).toContain("Current 0.5 kn @ 90°");
   });
 });

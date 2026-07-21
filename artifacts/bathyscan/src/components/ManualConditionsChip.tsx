@@ -12,6 +12,7 @@ import React from "react";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
@@ -28,6 +29,13 @@ const CHIP_WRAP: React.CSSProperties = {
   border: "1px solid rgba(0,229,255,0.30)",
   borderRadius: 5,
   backdropFilter: "blur(6px)",
+};
+
+const CHIP_WRAP_MOBILE: React.CSSProperties = {
+  ...CHIP_WRAP,
+  minWidth: 0,
+  maxWidth: "100%",
+  padding: "3px 6px",
 };
 
 const CHIP_BODY: React.CSSProperties = {
@@ -77,9 +85,20 @@ const CHIP_CLEAR: React.CSSProperties = {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+function formatConditionsSummary(c: {
+  windSpeedKnots: number;
+  windDirectionDeg: number;
+  currentSpeedKnots: number;
+  currentDirectionDeg: number;
+}): string {
+  return `Wind ${c.windSpeedKnots} kn @ ${c.windDirectionDeg}° · Current ${c.currentSpeedKnots} kn @ ${c.currentDirectionDeg}°`;
+}
+
 export const ManualConditionsChip: React.FC = () => {
   const { terrain } = useAppState();
+  const isMobile = useIsMobile();
   const datasetId = terrain?.datasetId ?? "";
+  const lakeName = typeof terrain?.name === "string" ? terrain.name.trim() : "";
 
   const sessionConditions = useUiStore((s) => s.sessionManualConditions[datasetId]);
   const persistedConditions = useSettingsStore((s) => s.datasetManualConditions[datasetId]);
@@ -107,17 +126,34 @@ export const ManualConditionsChip: React.FC = () => {
     setManualConditionsActiveSource(datasetId, "real");
   }
 
+  const summary = formatConditionsSummary(activeConditions);
+  const label = isMobile
+    ? lakeName
+      ? `Manual · ${lakeName}`
+      : "Manual conditions"
+    : lakeName
+      ? `Manual conditions · ${lakeName}`
+      : "Manual conditions active";
+  const tooltip = `Manual conditions are overriding live data${
+    lakeName ? ` for ${lakeName}` : ""
+  } — ${summary}. Click to view in Plan.`;
+
   return (
-    <div style={CHIP_WRAP} data-testid="manual-conditions-chip">
+    <div
+      style={isMobile ? CHIP_WRAP_MOBILE : CHIP_WRAP}
+      data-testid="manual-conditions-chip"
+    >
       <button
         type="button"
         style={CHIP_BODY}
         onClick={() => setSidebarMode("plan")}
         data-testid="manual-conditions-chip-jump"
-        title="Manual conditions are overriding live data — view in Plan"
+        title={tooltip}
       >
         <span style={CHIP_DOT} aria-hidden="true" />
-        <span style={CHIP_LABEL}>Manual conditions active</span>
+        <span style={CHIP_LABEL} data-testid="manual-conditions-chip-label">
+          {label}
+        </span>
       </button>
       <button
         type="button"

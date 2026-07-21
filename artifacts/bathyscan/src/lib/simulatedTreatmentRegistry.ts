@@ -2,7 +2,7 @@
  * Simulated-terrain treatment registry — TerrainMesh registers each mounted
  * grid's datasetId with whether the rainbow "SIMULATED" treatment is active
  * (i.e. the grid's data source is synthetic). Exposed to e2e tests through
- * window.__bathyTest.getSimulatedTreatment() (see testHelpers.ts) so headless
+ * the e2e test bridge's getSimulatedTreatment() (see testHelpers.ts) so headless
  * runs can assert the treatment activates only for synthetic grids without
  * pixel-level checks, which are unreliable in headless WebGL.
  *
