@@ -125,11 +125,10 @@ describe("POST /api/datasets/upload — PDF contour maps", () => {
     expect(res.body).toHaveProperty("error", "invalid_param");
   });
 
-  it("returns 422 pdf_extract_error with 'not supported yet' for a raster-only PDF", async () => {
+  it("returns 422 pdf_extract_error for a raster-only PDF with no detectable contours", async () => {
     const res = await postPdf(makeRasterOnlyPdf()).field("pdfBbox", VALID_BBOX);
     expect(res.status).toBe(422);
     expect(res.body).toHaveProperty("error", "pdf_extract_error");
-    expect(String(res.body.details)).toMatch(/not supported yet/i);
   }, 30_000);
 
   it("returns 422 pdf_parse_error for corrupt PDF bytes", async () => {

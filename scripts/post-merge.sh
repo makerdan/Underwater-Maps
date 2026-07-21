@@ -4,6 +4,10 @@ set -e
 # (which runs codegen) does not time out waiting on a lock left by a prior
 # interrupted run. Safe here because post-merge.sh runs serially.
 rm -f lib/api-zod/src/generated/.codegen.lock
+# Install Python image-processing packages required by raster_contour.py.
+# Uses bare `pip` + PYTHONUSERBASE=.pythonlibs per Nix pip convention (python3 -m pip
+# and uv both fail against the read-only Nix store).
+PYTHONUSERBASE=.pythonlibs pip install opencv-python-headless pytesseract Pillow --quiet
 pnpm install --no-frozen-lockfile
 # Regenerate the API client from openapi.yaml. `pnpm install` already triggers
 # the workspace `postinstall` hook which runs this, but we invoke it explicitly
