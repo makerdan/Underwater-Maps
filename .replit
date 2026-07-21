@@ -149,7 +149,7 @@ task = "shell.exec"
 args = "node scripts/validation-lock.mjs -- bash -c 'node scripts/kill-port-holders.mjs --e2e && node scripts/run-with-timeout.mjs e2e --label \"terrain-visibility repro\" -- playwright test tests/e2e/terrain-visibility.spec.ts'"
 
 [workflows.workflow.metadata]
-isValidation = true
+outputType = "console"
 
 [[workflows.workflow]]
 name = "test-standard-plus"

@@ -66,6 +66,7 @@ vi.mock("@workspace/db", () => ({
     select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }) }),
   },
   poeUsageLogTable: {},
+  userCatalogSavesTable: {},
 }));
 
 vi.mock("@clerk/express", () => ({

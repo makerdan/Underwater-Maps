@@ -172,6 +172,13 @@ vi.mock("@/lib/clerkCompat", async () => {
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueries: ({ queries }: { queries: unknown[] }) =>
+    queries.map(() => ({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      isSuccess: false,
+    })),
 }));
 
 vi.mock("@/lib/simulatedDataStore", () => ({

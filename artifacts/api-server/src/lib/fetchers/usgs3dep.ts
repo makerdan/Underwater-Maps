@@ -14,7 +14,7 @@ import type {
 } from "./types.js";
 import { buildUsgs3depTerrainForBbox } from "../terrain.js";
 
-const USGS_3DEP_URL =
+export const USGS_3DEP_URL =
   "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer";
 
 const CONUS = { minLon: -130, maxLon: -60, minLat: 24, maxLat: 50 };

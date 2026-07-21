@@ -2028,6 +2028,127 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /search/federated:
+    get:
+      operationId: getSearchFederated
+      tags: [datasets]
+      summary: Federated multi-source data search
+      description: |
+        Fans a Find Data search out concurrently to the local curated catalog
+        plus external connectors (NCEI Geoportal, USGS ScienceBase, USGS 3DEP
+        coverage, state ArcGIS portals, GitHub allowlist). Each source has its
+        own timeout; failures are non-fatal and reported in `sources`. Results
+        carry a source label plus an importable / link-only badge derived from
+        the catalog fetch-strategy derivation. Requires q and/or bbox.
+        Responses are cached for 5 minutes.
+      parameters:
+        - in: query
+          name: q
+          required: false
+          schema:
+            type: string
+          description: Free-text keyword query (e.g. "lake tahoe bathymetry")
+        - in: query
+          name: bbox
+          required: false
+          schema:
+            type: string
+          description: Spatial filter as "minLon,minLat,maxLon,maxLat"
+        - in: query
+          name: sources
+          required: false
+          schema:
+            type: string
+          description: |
+            Optional comma-separated connector ids to query (from
+            /search/federated/sources). When set, only those connectors run —
+            the client uses this to fan out one request per source so partial
+            results render as each source finishes. Empty = all sources.
+      responses:
+        "200":
+          description: Merged results plus per-source status summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederatedSearchResponse"
+        "400":
+          description: Missing/invalid parameters (q and/or bbox required)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /search/federated/sources:
+    get:
+      operationId: getSearchFederatedSources
+      tags: [datasets]
+      summary: List federated search connectors
+      description: |
+        Static registry of federated search connector ids + labels. The Find
+        Data panel fetches this once, then fans out one /search/federated
+        request per source id so results stream in progressively without one
+        slow upstream blocking the rest.
+      responses:
+        "200":
+          description: Connector registry
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sources]
+                properties:
+                  sources:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FederatedSourceInfo"
+
+  /search/federated/save:
+    post:
+      operationId: postSearchFederatedSave
+      tags: [datasets]
+      summary: Save an importable federated search result to the user's library
+      description: |
+        Saves any importable federated search result (state ArcGIS portals,
+        USGS 3DEP, NCEI, …) exactly like a curated catalog entry: upserts a
+        `fed-{id}` row into the dataset catalog and queues terrain
+        materialisation via the existing fetch-strategy pipeline.
+        Importability is re-derived server-side from the endpoint URL + bbox;
+        link-only results are rejected with 400. Requires authentication.
+        Idempotent — returns the existing save row if one already exists.
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FederatedSaveBody"
+      responses:
+        "200":
+          description: Existing save row returned (already saved)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserCatalogSave"
+        "201":
+          description: New save job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserCatalogSave"
+        "400":
+          description: Result is link-only (no fetcher) or has no coverage bbox
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /ncei/search:
     get:
       operationId: getNceiSearch
@@ -6982,6 +7103,103 @@ components:
         - type
         - features
 
+    FederatedSearchResult:
+      type: object
+      required:
+        [id, sourceId, sourceLabel, name, description, url, endpointUrl,
+         coverageBbox, resolutionMMin, resolutionMMax, importable, importKind]
+      properties:
+        id:
+          type: string
+          description: Globally unique id ("<sourceId>:<upstream id>")
+        sourceId:
+          type: string
+          description: Connector id this result came from
+        sourceLabel:
+          type: string
+          description: Human-readable source label
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        url:
+          type: string
+          nullable: true
+          description: Human landing page / metadata link
+        endpointUrl:
+          type: string
+          nullable: true
+          description: Machine endpoint used for import-strategy derivation
+        coverageBbox:
+          type: object
+          nullable: true
+          properties:
+            minLon: { type: number }
+            minLat: { type: number }
+            maxLon: { type: number }
+            maxLat: { type: number }
+          required: [minLon, minLat, maxLon, maxLat]
+        resolutionMMin:
+          type: number
+          nullable: true
+        resolutionMMax:
+          type: number
+          nullable: true
+        importable:
+          type: boolean
+          description: True when the catalog fetch-strategy derivation maps this result to a working fetcher
+        importKind:
+          type: string
+          nullable: true
+          description: Fetch-strategy kind when importable (e.g. "ncei-wcs")
+    FederatedSourceStatus:
+      type: object
+      required: [sourceId, label, status, resultCount, tookMs, error]
+      properties:
+        sourceId:
+          type: string
+        label:
+          type: string
+        status:
+          type: string
+          enum: [ok, error, timeout]
+        resultCount:
+          type: integer
+        tookMs:
+          type: number
+        error:
+          type: string
+          nullable: true
+    FederatedSourceInfo:
+      type: object
+      required: [id, label]
+      properties:
+        id:
+          type: string
+          description: Connector id (pass via the `sources` query param)
+        label:
+          type: string
+          description: Human-readable source label
+    FederatedSaveBody:
+      type: object
+      description: Request body for POST /search/federated/save
+      required: [result]
+      properties:
+        result:
+          $ref: "#/components/schemas/FederatedSearchResult"
+    FederatedSearchResponse:
+      type: object
+      required: [results, sources]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/FederatedSearchResult"
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/FederatedSourceStatus"
     NceiPortalResult:
       type: object
       description: A bathymetric survey dataset discovered via the NCEI Bathymetry Geoportal

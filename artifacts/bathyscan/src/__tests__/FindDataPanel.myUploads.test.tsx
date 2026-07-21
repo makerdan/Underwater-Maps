@@ -196,6 +196,13 @@ vi.mock("@/lib/simulatedDataStore", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueries: ({ queries }: { queries: unknown[] }) =>
+    queries.map(() => ({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      isSuccess: false,
+    })),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({

@@ -432,6 +432,93 @@ function setCachedResults(cacheKey: string, results: NceiPortalResult[]): void {
 // NceiSearchQuerySchema is imported from @workspace/api-zod above.
 
 // ---------------------------------------------------------------------------
+// Reusable NCEI Geoportal search helper (used by the /ncei/search route and
+// the federated-search NCEI connector)
+// ---------------------------------------------------------------------------
+
+/** Structured upstream failure thrown by searchNceiGeoportal. */
+export class NceiUpstreamError extends Error {
+  constructor(
+    message: string,
+    public readonly kind: "http" | "timeout" | "network",
+    public readonly httpStatus?: number,
+  ) {
+    super(message);
+    this.name = "NceiUpstreamError";
+  }
+}
+
+export interface NceiSearchOptions {
+  q: string;
+  bbox: string;
+  from: number;
+  max: number;
+  broad: boolean;
+}
+
+/**
+ * Query the NCEI Geoportal and normalise the hits. Throws NceiUpstreamError
+ * on HTTP / timeout / network failures. Does NOT consult or populate the
+ * route-level cache — callers manage their own caching.
+ */
+export async function searchNceiGeoportal(
+  opts: NceiSearchOptions,
+  externalSignal?: AbortSignal,
+): Promise<NceiPortalResult[]> {
+  const params = new URLSearchParams({
+    // `broad` skips the implicit "bathymetry" keyword so the reference
+    // listing ("Other data in this area") can surface all record types.
+    // NOTE: no `f` param — the geoportal returns the raw Elasticsearch wire
+    // format (hits.hits) by default, which is what we parse. `f=json` now
+    // yields an atom-style shape with a `results` array instead.
+    q: opts.q || (opts.broad ? "" : "bathymetry"),
+    max: String(opts.max),
+    from: String(opts.from),
+  });
+  if (opts.bbox) params.set("bbox", opts.bbox);
+
+  const url = `${NCEI_GEOPORTAL_URL}?${params.toString()}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), NCEI_REQUEST_TIMEOUT_MS);
+  const onExternalAbort = (): void => controller.abort();
+  externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
+
+  let raw: NceiGeoportalResponse;
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) {
+      throw new NceiUpstreamError(
+        `NCEI Geoportal returned HTTP ${resp.status}`,
+        "http",
+        resp.status,
+      );
+    }
+    raw = (await resp.json()) as NceiGeoportalResponse;
+  } catch (err) {
+    if (err instanceof NceiUpstreamError) throw err;
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    if (controller.signal.aborted) {
+      throw new NceiUpstreamError(
+        "NCEI Geoportal timed out — try again shortly",
+        "timeout",
+      );
+    }
+    throw new NceiUpstreamError(
+      `Could not reach NCEI Geoportal: ${msg}`,
+      "network",
+    );
+  } finally {
+    clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", onExternalAbort);
+  }
+
+  const hits: NceiGeoportalHit[] = raw.hits?.hits ?? [];
+  return hits
+    .map(normalizeNceiHit)
+    .filter((r): r is NceiPortalResult => r !== null);
+}
+
+// ---------------------------------------------------------------------------
 // GET /ncei/search  (public — no auth required)
 // ---------------------------------------------------------------------------
 
@@ -456,51 +543,19 @@ router.get("/ncei/search", asyncHandler(async (req, res): Promise<void> => {
     return;
   }
 
-  const params = new URLSearchParams({
-    // `broad` skips the implicit "bathymetry" keyword so the reference
-    // listing ("Other data in this area") can surface all record types.
-    // NOTE: no `f` param — the geoportal returns the raw Elasticsearch wire
-    // format (hits.hits) by default, which is what we parse. `f=json` now
-    // yields an atom-style shape with a `results` array instead.
-    q: q || (broad ? "" : "bathymetry"),
-    max: String(max),
-    from: String(from),
-  });
-  if (bbox) params.set("bbox", bbox);
-
-  const url = `${NCEI_GEOPORTAL_URL}?${params.toString()}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), NCEI_REQUEST_TIMEOUT_MS);
-
-  let raw: NceiGeoportalResponse;
+  let results: NceiPortalResult[];
   try {
-    const resp = await fetch(url, { signal: controller.signal });
-    if (!resp.ok) {
+    results = await searchNceiGeoportal({ q, bbox, from, max, broad });
+  } catch (err) {
+    if (err instanceof NceiUpstreamError) {
       res.status(503).json({
-        error: "ncei_upstream_error",
-        details: `NCEI Geoportal returned HTTP ${resp.status}`,
+        error: err.kind === "http" ? "ncei_upstream_error" : "ncei_unreachable",
+        details: err.message,
       });
       return;
     }
-    raw = (await resp.json()) as NceiGeoportalResponse;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    const isTimeout = controller.signal.aborted;
-    res.status(503).json({
-      error: "ncei_unreachable",
-      details: isTimeout
-        ? "NCEI Geoportal timed out — try again shortly"
-        : `Could not reach NCEI Geoportal: ${msg}`,
-    });
-    return;
-  } finally {
-    clearTimeout(timeout);
+    throw err;
   }
-
-  const hits: NceiGeoportalHit[] = raw.hits?.hits ?? [];
-  const results = hits
-    .map(normalizeNceiHit)
-    .filter((r): r is NceiPortalResult => r !== null);
 
   setCachedResults(cacheKey, results);
   const _rp = z.array(NceiPortalResultSchema).safeParse(results);

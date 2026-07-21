@@ -449,6 +449,9 @@ Authentication is handled by **Clerk** across all surfaces:
 | POST | `/catch-photos/upload-url` | Request a short-lived signed URL for uploading one catch photo |
 | GET | `/objects/:objectPath` | Download a private stored object (e.g. a catch photo) after an ACL check |
 | POST | `/datasets/point-radius-query` | Find catalog datasets whose coverage intersects a circle around a point |
+| GET | `/search/federated` | Federated multi-source data search |
+| GET | `/search/federated/sources` | List federated search connectors |
+| POST | `/search/federated/save` | Save an importable federated search result to the user's library |
 | GET | `/efh/:id` | Essential Fish Habitat zones for a specific dataset |
 | GET | `/terrain/land` | Fetch a land-elevation (DEM) grid for a bounding box |
 | GET | `/terrain/satellite-tile` | Proxy a satellite/aerial imagery PNG for a bounding box |

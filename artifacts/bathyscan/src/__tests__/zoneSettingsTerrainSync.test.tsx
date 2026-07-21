@@ -139,6 +139,9 @@ const mockMatHolder = vi.hoisted(() => {
         uShowHabitat: { value: 0 },
         uHabitatIntensity: { value: 0 },
         uHabitatColor: { value: { set: (_v: string) => {} } },
+        // TerrainMesh's land/nodata colour effect calls setRGB on this
+        // uniform's value; the proxy fallback ({ value: 0 }) would crash.
+        uLandColor: { value: { setRGB: (_r: number, _g: number, _b: number) => {} } },
         uHabitatTex: { value: null },
         uHabitatMix: { value: 0 },
       };

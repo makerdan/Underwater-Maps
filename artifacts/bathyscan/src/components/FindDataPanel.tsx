@@ -16,7 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatFreshness } from "@/lib/freshnessUtils";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQueries } from "@tanstack/react-query";
 import {
   useGetDatasetsCatalogSearch,
   useGetDatasetsMySaves,
@@ -34,6 +34,11 @@ import {
   useDeleteUserFoldersId,
   useGetNceiSearch,
   usePostNceiSave,
+  getSearchFederated,
+  getGetSearchFederatedQueryKey,
+  useGetSearchFederatedSources,
+  getGetSearchFederatedSourcesQueryKey,
+  usePostSearchFederatedSave,
   getGetNceiSearchQueryKey,
   getGetDatasetsCatalogSearchQueryKey,
   getGetDatasetsMySavesQueryKey,
@@ -45,6 +50,8 @@ import {
   type UserCatalogSave,
   type UserDatasetMeta,
   type NceiPortalResult,
+  type FederatedSearchResult,
+  type FederatedSourceStatus,
 } from "@workspace/api-client-react";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 import {
@@ -1491,6 +1498,172 @@ const UploadCard: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
+// Federated (multi-source) search — external result card + sources summary
+// ---------------------------------------------------------------------------
+
+/** Rebuild an NceiPortalResult from a federated NCEI item so the existing
+ *  NCEI save flow (POST /ncei/save) can be reused verbatim. */
+function federatedToNceiResult(item: FederatedSearchResult): NceiPortalResult | null {
+  if (item.sourceId !== "ncei-geoportal" || !item.coverageBbox) return null;
+  return {
+    id: item.id.replace(/^ncei-geoportal:/, ""),
+    name: item.name,
+    description: item.description ?? null,
+    sourceAgency: "NOAA NCEI",
+    resolutionMMin: item.resolutionMMin ?? null,
+    resolutionMMax: item.resolutionMMax ?? null,
+    coverageBbox: item.coverageBbox,
+    metadataUrl: item.url ?? null,
+    wcsAvailable: item.importable,
+  };
+}
+
+const FederatedResultCard: React.FC<{
+  item: FederatedSearchResult;
+  canSave: boolean;
+  saving: boolean;
+  onSaveNcei: (result: NceiPortalResult) => void;
+  onSaveFederated: (item: FederatedSearchResult) => void;
+}> = ({ item, canSave, saving, onSaveNcei, onSaveFederated }) => {
+  const nceiResult = item.importable ? federatedToNceiResult(item) : null;
+  // Every importable result gets a save action: NCEI results reuse the
+  // existing /ncei/save flow; all other sources go through the generic
+  // /search/federated/save endpoint (same catalog-save pipeline).
+  const canImport = item.importable && !!item.coverageBbox;
+  return (
+    <div
+      data-testid={`federated-result-${item.id}`}
+      style={{
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 6,
+        padding: "10px 12px",
+        marginTop: 8,
+        background: "rgba(255,255,255,0.02)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <span
+          data-testid="federated-source-chip"
+          style={{
+            fontSize: "calc(10px * var(--bs-font-scale, 1))",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            color: "#7dd3fc",
+            border: "1px solid rgba(125,211,252,0.3)",
+            borderRadius: 3,
+            padding: "1px 6px",
+          }}
+        >
+          {item.sourceLabel}
+        </span>
+        <span
+          data-testid={item.importable ? "badge-importable" : "badge-link-only"}
+          style={{
+            fontSize: "calc(10px * var(--bs-font-scale, 1))",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            borderRadius: 3,
+            padding: "1px 6px",
+            color: item.importable ? "#4ade80" : "#94a3b8",
+            border: `1px solid ${item.importable ? "rgba(74,222,128,0.35)" : "rgba(148,163,184,0.3)"}`,
+          }}
+        >
+          {item.importable ? "Importable" : "Link-only"}
+        </span>
+      </div>
+      <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#e2e8f0", marginTop: 5, fontWeight: 600 }}>
+        {item.name}
+      </div>
+      {item.description && (
+        <div
+          style={{
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+            color: "#94a3b8",
+            marginTop: 3,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {item.description}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, marginTop: 7, alignItems: "center" }}>
+        {canImport && (
+          <button
+            data-testid="federated-save-button"
+            disabled={!canSave || saving}
+            onClick={() => (nceiResult ? onSaveNcei(nceiResult) : onSaveFederated(item))}
+            style={{
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+              padding: "4px 10px",
+              borderRadius: 4,
+              border: "1px solid rgba(74,222,128,0.4)",
+              background: "rgba(74,222,128,0.1)",
+              color: "#4ade80",
+              cursor: canSave && !saving ? "pointer" : "default",
+              opacity: canSave ? 1 : 0.5,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            {saving ? "Saving…" : "Save & Import"}
+          </button>
+        )}
+        {item.url && (
+          <a
+            data-testid="federated-open-link"
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+              color: "#7dd3fc",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Open source page ↗
+          </a>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const FederatedSourcesSummary: React.FC<{
+  sources: FederatedSourceStatus[];
+  pendingCount?: number;
+}> = ({ sources, pendingCount = 0 }) => {
+  const ok = sources.filter((s) => s.status === "ok");
+  const failed = sources.filter((s) => s.status !== "ok");
+  return (
+    <div
+      data-testid="federated-sources-summary"
+      style={{
+        fontSize: "calc(11px * var(--bs-font-scale, 1))",
+        color: "#64748b",
+        letterSpacing: "0.05em",
+        marginTop: 6,
+      }}
+    >
+      Checked {sources.length} source{sources.length === 1 ? "" : "s"} — {ok.length} responded
+      {pendingCount > 0 && (
+        <span data-testid="federated-sources-pending" style={{ color: "#7dd3fc" }}>
+          {" "}· still checking {pendingCount}…
+        </span>
+      )}
+      {failed.length > 0 && (
+        <span style={{ color: "#f59e0b" }}>
+          {" "}· unavailable: {failed.map((s) => s.label).join(", ")}
+        </span>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
@@ -1740,6 +1913,101 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     },
     [isSignedIn, nceiSaveMutation, refetchSaves],
   );
+
+  // Generic save for importable non-NCEI federated results — goes through
+  // POST /search/federated/save (same catalog-save/materialize pipeline).
+  const federatedSaveMutation = usePostSearchFederatedSave();
+  const handleFederatedSave = useCallback(
+    async (item: FederatedSearchResult) => {
+      if (!isSignedIn) return;
+      setNceiSavingIds((s) => new Set(s).add(item.id));
+      try {
+        await federatedSaveMutation.mutateAsync({ data: { result: item } });
+        void refetchSaves();
+      } finally {
+        setNceiSavingIds((s) => {
+          const next = new Set(s);
+          next.delete(item.id);
+          return next;
+        });
+      }
+    },
+    [isSignedIn, federatedSaveMutation, refetchSaves],
+  );
+
+  // Federated multi-source search (Search tab, "External sources" section).
+  //
+  // Partial-results fan-out: the client fetches the static connector
+  // registry once, then issues ONE /search/federated request per source id.
+  // Each source's results render the moment its request resolves — a slow
+  // or dead upstream never blocks the rest (its per-source timeout on the
+  // server caps the worst case, and here it just stays "checking…" until
+  // then). Local catalog results already render above this section, so the
+  // local-catalog connector is excluded from the fan-out entirely.
+  const federatedActive = tab === "search" && debouncedQuery.trim().length > 0;
+  const { data: federatedSourceRegistry } = useGetSearchFederatedSources({
+    query: {
+      queryKey: getGetSearchFederatedSourcesQueryKey(),
+      enabled: federatedActive,
+      staleTime: Infinity,
+    },
+  });
+  const externalSourceInfos = useMemo(
+    () => (federatedSourceRegistry?.sources ?? []).filter((s) => s.id !== "local-catalog"),
+    [federatedSourceRegistry],
+  );
+
+  const federatedQueries = useQueries({
+    queries: externalSourceInfos.map((src) => {
+      const params = { q: debouncedQuery || undefined, sources: src.id };
+      return {
+        queryKey: getGetSearchFederatedQueryKey(params),
+        queryFn: ({ signal }: { signal?: AbortSignal }) =>
+          getSearchFederated(params, { signal }),
+        enabled: federatedActive,
+        staleTime: 5 * 60 * 1000,
+        retry: false,
+      };
+    }),
+  });
+
+  // True while the registry itself or ALL sources are still loading (the
+  // very first paint); once any source resolves we render partial results.
+  const isFederatedSearching =
+    federatedActive &&
+    (externalSourceInfos.length === 0 ||
+      federatedQueries.every((q) => q.isPending));
+  const federatedSettled =
+    federatedActive &&
+    externalSourceInfos.length > 0 &&
+    federatedQueries.some((s) => !s.isPending);
+  const federatedPendingCount = federatedQueries.filter((q) => q.isPending).length;
+
+  // Derived plainly (no useMemo): the source list length varies as the
+  // registry loads, so a spread dependency array would change size between
+  // renders — a React hooks violation. The arrays are tiny; recomputing per
+  // render is cheap.
+  const federatedExternalResults = federatedQueries.flatMap(
+    (q) => (q.data?.results ?? []).filter((r) => r.sourceId !== "local-catalog"),
+  );
+  // Per-source status merged from each query: server-reported status when
+  // the request resolved, a synthetic "error" row when the request itself
+  // failed, and nothing while still pending (counted separately).
+  const federatedSources = externalSourceInfos.flatMap((src, i) => {
+    const q = federatedQueries[i];
+    if (!q || q.isPending) return [];
+    if (q.error || !q.data) {
+      return [{
+        sourceId: src.id,
+        label: src.label,
+        status: "error" as const,
+        resultCount: 0,
+        tookMs: 0,
+        error: "Request failed",
+      }];
+    }
+    return q.data.sources;
+  });
 
   // My Uploads — raw list of user-uploaded datasets
   const { data: userDatasets = [], isPending: isUploadPending } = useGetUserDatasets({
@@ -2289,6 +2557,55 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             {searchResults.length > 0 && catalogDataUpdatedAt > 0 && !isSearching && (
               <div style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#475569", letterSpacing: "0.06em", textAlign: "right", paddingTop: 6, paddingBottom: 2 }}>
                 Results as of {formatFreshness(catalogDataUpdatedAt)}
+              </div>
+            )}
+
+            {/* External sources — federated multi-source search */}
+            {debouncedQuery.trim().length > 0 && (
+              <div data-testid="federated-section" style={{ marginTop: 14 }}>
+                <div
+                  style={{
+                    fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                    color: "#7dd3fc",
+                    borderTop: "1px solid rgba(0,229,255,0.12)",
+                    paddingTop: 10,
+                  }}
+                >
+                  🌐 External sources
+                </div>
+                {isFederatedSearching && (
+                  <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 4 }}>
+                    Checking external sources…
+                  </div>
+                )}
+                {federatedSettled && (
+                  <>
+                    <FederatedSourcesSummary
+                      sources={federatedSources}
+                      pendingCount={federatedPendingCount}
+                    />
+                    {federatedExternalResults.length === 0 && federatedPendingCount === 0 && (
+                      <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 6 }}>
+                        No external results for this query.
+                      </div>
+                    )}
+                    {federatedExternalResults.map((item) => (
+                      <FederatedResultCard
+                        key={item.id}
+                        item={item}
+                        canSave={!!isSignedIn}
+                        saving={
+                          nceiSavingIds.has(item.id.replace(/^ncei-geoportal:/, "")) ||
+                          nceiSavingIds.has(item.id)
+                        }
+                        onSaveNcei={handleNceiSave}
+                        onSaveFederated={handleFederatedSave}
+                      />
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>

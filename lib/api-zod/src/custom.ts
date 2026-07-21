@@ -63,6 +63,36 @@ export const PatchRouteBodySchema = zod.object({
 export const nceiDefaultMax = 20;
 export const nceiMaxResultsCap = 100;
 
+// ---------------------------------------------------------------------------
+// Federated multi-source search — shared query-param schema
+// ---------------------------------------------------------------------------
+
+export const FederatedSearchQuerySchema = zod.object({
+  q: zod.string().max(500).optional().default(""),
+  bbox: zod
+    .string()
+    .max(200)
+    .optional()
+    .default("")
+    .refine(
+      (v) => {
+        if (!v) return true;
+        const parts = v.split(",");
+        if (parts.length !== 4) return false;
+        return parts.every((p) => isFinite(parseFloat(p)));
+      },
+      { message: "bbox must be 'minLon,minLat,maxLon,maxLat' with four finite numbers" },
+    ),
+  sources: zod
+    .string()
+    .max(500)
+    .optional()
+    .default("")
+    .refine((v) => /^[a-z0-9,_-]*$/i.test(v), {
+      message: "sources must be a comma-separated list of connector ids",
+    }),
+});
+
 export const NceiSearchQuerySchema = zod.object({
   q: zod.string().max(500).optional().default(""),
   bbox: zod

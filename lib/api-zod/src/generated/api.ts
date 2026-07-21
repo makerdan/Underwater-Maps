@@ -3128,6 +3128,138 @@ export const PostDatasetsPointRadiusQueryResponse = zod.object({
 
 
 /**
+ * Fans a Find Data search out concurrently to the local curated catalog
+plus external connectors (NCEI Geoportal, USGS ScienceBase, USGS 3DEP
+coverage, state ArcGIS portals, GitHub allowlist). Each source has its
+own timeout; failures are non-fatal and reported in `sources`. Results
+carry a source label plus an importable / link-only badge derived from
+the catalog fetch-strategy derivation. Requires q and/or bbox.
+Responses are cached for 5 minutes.
+
+ * @summary Federated multi-source data search
+ */
+export const GetSearchFederatedQueryParams = zod.object({
+  "q": zod.coerce.string().optional().describe('Free-text keyword query (e.g. \"lake tahoe bathymetry\")'),
+  "bbox": zod.coerce.string().optional().describe('Spatial filter as \"minLon,minLat,maxLon,maxLat\"'),
+  "sources": zod.coerce.string().optional().describe('Optional comma-separated connector ids to query (from\n\/search\/federated\/sources). When set, only those connectors run —\nthe client uses this to fan out one request per source so partial\nresults render as each source finishes. Empty = all sources.\n')
+})
+
+export const GetSearchFederatedResponse = zod.object({
+  "results": zod.array(zod.object({
+  "id": zod.string().describe('Globally unique id (\"<sourceId>:<upstream id>\")'),
+  "sourceId": zod.string().describe('Connector id this result came from'),
+  "sourceLabel": zod.string().describe('Human-readable source label'),
+  "name": zod.string(),
+  "description": zod.string().nullable(),
+  "url": zod.string().nullable().describe('Human landing page \/ metadata link'),
+  "endpointUrl": zod.string().nullable().describe('Machine endpoint used for import-strategy derivation'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).nullable(),
+  "resolutionMMin": zod.number().nullable(),
+  "resolutionMMax": zod.number().nullable(),
+  "importable": zod.boolean().describe('True when the catalog fetch-strategy derivation maps this result to a working fetcher'),
+  "importKind": zod.string().nullable().describe('Fetch-strategy kind when importable (e.g. \"ncei-wcs\")')
+})),
+  "sources": zod.array(zod.object({
+  "sourceId": zod.string(),
+  "label": zod.string(),
+  "status": zod.enum(['ok', 'error', 'timeout']),
+  "resultCount": zod.number(),
+  "tookMs": zod.number(),
+  "error": zod.string().nullable()
+}))
+})
+
+
+/**
+ * Static registry of federated search connector ids + labels. The Find
+Data panel fetches this once, then fans out one /search/federated
+request per source id so results stream in progressively without one
+slow upstream blocking the rest.
+
+ * @summary List federated search connectors
+ */
+export const GetSearchFederatedSourcesResponse = zod.object({
+  "sources": zod.array(zod.object({
+  "id": zod.string().describe('Connector id (pass via the `sources` query param)'),
+  "label": zod.string().describe('Human-readable source label')
+}))
+})
+
+
+/**
+ * Saves any importable federated search result (state ArcGIS portals,
+USGS 3DEP, NCEI, …) exactly like a curated catalog entry: upserts a
+`fed-{id}` row into the dataset catalog and queues terrain
+materialisation via the existing fetch-strategy pipeline.
+Importability is re-derived server-side from the endpoint URL + bbox;
+link-only results are rejected with 400. Requires authentication.
+Idempotent — returns the existing save row if one already exists.
+
+ * @summary Save an importable federated search result to the user's library
+ */
+export const PostSearchFederatedSaveBody = zod.object({
+  "result": zod.object({
+  "id": zod.string().describe('Globally unique id (\"<sourceId>:<upstream id>\")'),
+  "sourceId": zod.string().describe('Connector id this result came from'),
+  "sourceLabel": zod.string().describe('Human-readable source label'),
+  "name": zod.string(),
+  "description": zod.string().nullable(),
+  "url": zod.string().nullable().describe('Human landing page \/ metadata link'),
+  "endpointUrl": zod.string().nullable().describe('Machine endpoint used for import-strategy derivation'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).nullable(),
+  "resolutionMMin": zod.number().nullable(),
+  "resolutionMMax": zod.number().nullable(),
+  "importable": zod.boolean().describe('True when the catalog fetch-strategy derivation maps this result to a working fetcher'),
+  "importKind": zod.string().nullable().describe('Fetch-strategy kind when importable (e.g. \"ncei-wcs\")')
+})
+}).describe('Request body for POST \/search\/federated\/save')
+
+export const PostSearchFederatedSaveResponse = zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "catalogId": zod.string().describe('References the dataset_catalog.id'),
+  "status": zod.enum(['queued', 'processing', 'ready', 'failed']),
+  "requestedAt": zod.coerce.date(),
+  "readyAt": zod.coerce.date().nullish(),
+  "cacheKey": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "displayLabel": zod.string().nullish().describe('User-defined display label overriding the catalog name in the My Saves list. Null means use the catalog name.'),
+  "folderId": zod.string().nullish().describe('UUID of the dataset_folders row this save belongs to, or null if the save is at the root level.'),
+  "datasetId": zod.string().nullish().describe('UUID of the materialized `custom_datasets` row for this save, or null if materialization has not completed (status `queued`, `processing`, or `failed`).'),
+  "catalog": zod.object({
+  "id": zod.string().describe('Stable slug identifier'),
+  "name": zod.string(),
+  "sourceAgency": zod.string().describe('Organisation that produced the data (e.g. NOAA\/NCEI, GEBCO, Alaska DNR)'),
+  "dataType": zod.enum(['bathymetry', 'substrate', 'habitat', 'lidar', 'chart']),
+  "resolutionMMin": zod.number().nullish().describe('Finest resolution in metres'),
+  "resolutionMMax": zod.number().nullish().describe('Coarsest resolution in metres'),
+  "coverageBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}),
+  "endpointUrl": zod.string().nullish(),
+  "accessNotes": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "keywords": zod.string().nullish().describe('Comma-separated keyword tags'),
+  "lastUpdated": zod.string().nullish(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "createdAt": zod.coerce.date()
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A user\'s saved reference to a catalog dataset')
+
+
+/**
  * Proxies a keyword + optional bounding-box search against the NCEI
 Bathymetry Geoportal (ncei.noaa.gov/maps/bathymetry/). Results are
 normalised, filtered to records with a valid bbox, and cached for

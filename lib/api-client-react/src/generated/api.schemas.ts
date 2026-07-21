@@ -2169,6 +2169,72 @@ export interface EfhFeatureCollection {
   metadata?: EfhFeatureCollectionMetadata;
 }
 
+export type FederatedSearchResultCoverageBbox = {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+} | null;
+
+export interface FederatedSearchResult {
+  /** Globally unique id ("<sourceId>:<upstream id>") */
+  id: string;
+  /** Connector id this result came from */
+  sourceId: string;
+  /** Human-readable source label */
+  sourceLabel: string;
+  name: string;
+  description: string | null;
+  /** Human landing page / metadata link */
+  url: string | null;
+  /** Machine endpoint used for import-strategy derivation */
+  endpointUrl: string | null;
+  coverageBbox: FederatedSearchResultCoverageBbox;
+  resolutionMMin: number | null;
+  resolutionMMax: number | null;
+  /** True when the catalog fetch-strategy derivation maps this result to a working fetcher */
+  importable: boolean;
+  /** Fetch-strategy kind when importable (e.g. "ncei-wcs") */
+  importKind: string | null;
+}
+
+export type FederatedSourceStatusStatus = typeof FederatedSourceStatusStatus[keyof typeof FederatedSourceStatusStatus];
+
+
+export const FederatedSourceStatusStatus = {
+  ok: 'ok',
+  error: 'error',
+  timeout: 'timeout',
+} as const;
+
+export interface FederatedSourceStatus {
+  sourceId: string;
+  label: string;
+  status: FederatedSourceStatusStatus;
+  resultCount: number;
+  tookMs: number;
+  error: string | null;
+}
+
+export interface FederatedSourceInfo {
+  /** Connector id (pass via the `sources` query param) */
+  id: string;
+  /** Human-readable source label */
+  label: string;
+}
+
+/**
+ * Request body for POST /search/federated/save
+ */
+export interface FederatedSaveBody {
+  result: FederatedSearchResult;
+}
+
+export interface FederatedSearchResponse {
+  results: FederatedSearchResult[];
+  sources: FederatedSourceStatus[];
+}
+
 export type NceiPortalResultCoverageBbox = {
   minLon: number;
   minLat: number;
@@ -3388,6 +3454,29 @@ export type PostDatasetsPointRadiusQuery200 = {
   radiusKm: number;
   bbox: PostDatasetsPointRadiusQuery200Bbox;
   datasets: DatasetCatalogSearchResult[];
+};
+
+export type GetSearchFederatedParams = {
+/**
+ * Free-text keyword query (e.g. "lake tahoe bathymetry")
+ */
+q?: string;
+/**
+ * Spatial filter as "minLon,minLat,maxLon,maxLat"
+ */
+bbox?: string;
+/**
+ * Optional comma-separated connector ids to query (from
+/search/federated/sources). When set, only those connectors run —
+the client uses this to fan out one request per source so partial
+results render as each source finishes. Empty = all sources.
+
+ */
+sources?: string;
+};
+
+export type GetSearchFederatedSources200 = {
+  sources: FederatedSourceInfo[];
 };
 
 export type GetNceiSearchParams = {

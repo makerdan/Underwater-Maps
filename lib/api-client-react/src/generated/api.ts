@@ -43,6 +43,8 @@ import type {
   DeleteMarkersMine200,
   EfhFeatureCollection,
   ExportUserData200,
+  FederatedSaveBody,
+  FederatedSearchResponse,
   FinalizeChunkedUpload200,
   FinalizeChunkedUploadBody,
   GeorefBody,
@@ -65,6 +67,8 @@ import type {
   GetRawsStationsParams,
   GetRawsWeatherParams,
   GetRoutesParams,
+  GetSearchFederatedParams,
+  GetSearchFederatedSources200,
   GetSurfaceConditionsParams,
   GetTemperatureProfileParams,
   GetTerrainBundlesPresetId200,
@@ -4578,6 +4582,259 @@ export const usePostDatasetsPointRadiusQuery = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getPostDatasetsPointRadiusQueryMutationOptions(options));
+    }
+
+export const getGetSearchFederatedUrl = (params?: GetSearchFederatedParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/search/federated?${stringifiedParams}` : `/api/search/federated`
+}
+
+/**
+ * Fans a Find Data search out concurrently to the local curated catalog
+plus external connectors (NCEI Geoportal, USGS ScienceBase, USGS 3DEP
+coverage, state ArcGIS portals, GitHub allowlist). Each source has its
+own timeout; failures are non-fatal and reported in `sources`. Results
+carry a source label plus an importable / link-only badge derived from
+the catalog fetch-strategy derivation. Requires q and/or bbox.
+Responses are cached for 5 minutes.
+
+ * @summary Federated multi-source data search
+ */
+export const getSearchFederated = async (params?: GetSearchFederatedParams, options?: RequestInit): Promise<FederatedSearchResponse> => {
+
+  return customFetch<FederatedSearchResponse>(getGetSearchFederatedUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSearchFederatedQueryKey = (params?: GetSearchFederatedParams,) => {
+    return [
+    `/api/search/federated`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSearchFederatedQueryOptions = <TData = Awaited<ReturnType<typeof getSearchFederated>>, TError = ErrorType<ApiError>>(params?: GetSearchFederatedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSearchFederated>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSearchFederatedQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSearchFederated>>> = ({ signal }) => getSearchFederated(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSearchFederated>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSearchFederatedQueryResult = NonNullable<Awaited<ReturnType<typeof getSearchFederated>>>
+export type GetSearchFederatedQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Federated multi-source data search
+ */
+
+export function useGetSearchFederated<TData = Awaited<ReturnType<typeof getSearchFederated>>, TError = ErrorType<ApiError>>(
+ params?: GetSearchFederatedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSearchFederated>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSearchFederatedQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetSearchFederatedSourcesUrl = () => {
+
+
+
+
+  return `/api/search/federated/sources`
+}
+
+/**
+ * Static registry of federated search connector ids + labels. The Find
+Data panel fetches this once, then fans out one /search/federated
+request per source id so results stream in progressively without one
+slow upstream blocking the rest.
+
+ * @summary List federated search connectors
+ */
+export const getSearchFederatedSources = async ( options?: RequestInit): Promise<GetSearchFederatedSources200> => {
+
+  return customFetch<GetSearchFederatedSources200>(getGetSearchFederatedSourcesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSearchFederatedSourcesQueryKey = () => {
+    return [
+    `/api/search/federated/sources`
+    ] as const;
+    }
+
+
+export const getGetSearchFederatedSourcesQueryOptions = <TData = Awaited<ReturnType<typeof getSearchFederatedSources>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSearchFederatedSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSearchFederatedSourcesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSearchFederatedSources>>> = ({ signal }) => getSearchFederatedSources({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSearchFederatedSources>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSearchFederatedSourcesQueryResult = NonNullable<Awaited<ReturnType<typeof getSearchFederatedSources>>>
+export type GetSearchFederatedSourcesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List federated search connectors
+ */
+
+export function useGetSearchFederatedSources<TData = Awaited<ReturnType<typeof getSearchFederatedSources>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSearchFederatedSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSearchFederatedSourcesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostSearchFederatedSaveUrl = () => {
+
+
+
+
+  return `/api/search/federated/save`
+}
+
+/**
+ * Saves any importable federated search result (state ArcGIS portals,
+USGS 3DEP, NCEI, …) exactly like a curated catalog entry: upserts a
+`fed-{id}` row into the dataset catalog and queues terrain
+materialisation via the existing fetch-strategy pipeline.
+Importability is re-derived server-side from the endpoint URL + bbox;
+link-only results are rejected with 400. Requires authentication.
+Idempotent — returns the existing save row if one already exists.
+
+ * @summary Save an importable federated search result to the user's library
+ */
+export const postSearchFederatedSave = async (federatedSaveBody: FederatedSaveBody, options?: RequestInit): Promise<UserCatalogSave> => {
+
+  return customFetch<UserCatalogSave>(getPostSearchFederatedSaveUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      federatedSaveBody,)
+  }
+);}
+
+
+
+
+export const getPostSearchFederatedSaveMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSearchFederatedSave>>, TError,{data: BodyType<FederatedSaveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postSearchFederatedSave>>, TError,{data: BodyType<FederatedSaveBody>}, TContext> => {
+
+const mutationKey = ['postSearchFederatedSave'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postSearchFederatedSave>>, {data: BodyType<FederatedSaveBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postSearchFederatedSave(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostSearchFederatedSaveMutationResult = NonNullable<Awaited<ReturnType<typeof postSearchFederatedSave>>>
+    export type PostSearchFederatedSaveMutationBody = BodyType<FederatedSaveBody>
+    export type PostSearchFederatedSaveMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Save an importable federated search result to the user's library
+ */
+export const usePostSearchFederatedSave = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postSearchFederatedSave>>, TError,{data: BodyType<FederatedSaveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postSearchFederatedSave>>,
+        TError,
+        {data: BodyType<FederatedSaveBody>},
+        TContext
+      > => {
+      return useMutation(getPostSearchFederatedSaveMutationOptions(options));
     }
 
 export const getGetNceiSearchUrl = (params?: GetNceiSearchParams,) => {
