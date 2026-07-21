@@ -15,10 +15,13 @@ import type {
 import { buildGebcoTerrainForBbox } from "../terrain.js";
 
 /**
- * GEBCO's own WCS no longer serves GetCoverage (MapServer config errors on
- * every coverage/format — verified 2026-07). The probe and fetch both go
- * through NCEI's DEM_global_mosaic, which bundles the GEBCO grid as its
- * global base layer — same endpoint `buildGebcoTerrainForBbox` uses.
+ * GEBCO's own WCS does not serve GetCoverage (re-verified 2026-07-21: WMS is
+ * back up and the 2025 mapserv answers WCS GetCapabilities, but every
+ * coverage errors — "Unable to determine the SRS for this layer"). This
+ * substitution is treated as permanent: probe and fetch both go through
+ * NCEI's DEM_global_mosaic, which bundles the GEBCO grid as its global base
+ * layer — same endpoint `buildGebcoTerrainForBbox` uses. See the GEBCO_WCS
+ * comment in ../terrain.ts for the full verification notes.
  */
 const GEBCO_WCS =
   "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_global_mosaic/ImageServer/WCSServer";
@@ -82,7 +85,7 @@ export const gebcoFetcher: BathymetryFetcher = {
       dataSource: "gebco",
       label: "GEBCO 2024 Global Bathymetric Grid",
       creditUrl:
-        "https://www.gebco.net/data_and_products/gridded_bathymetry_data/",
+        "https://www.gebco.net/data-products/gridded-bathymetry-data",
     };
   },
 };

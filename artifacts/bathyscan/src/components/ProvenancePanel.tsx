@@ -46,7 +46,7 @@ const SOURCE_META: Record<
     label: "GEBCO 2024",
     color: "#a78bfa",
     description: "General Bathymetric Chart of the Oceans (~400 m global grid, GEBCO/SRTM15+).",
-    creditUrl: "https://www.gebco.net/data_and_products/gridded_bathymetry_data/",
+    creditUrl: "https://www.gebco.net/data-products/gridded-bathymetry-data",
   },
   synthetic: {
     label: "Simulated",

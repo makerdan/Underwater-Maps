@@ -75,8 +75,9 @@ async function writeLandDiskCache(key: string, grid: LandGrid): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * GEBCO's own WCS no longer serves GetCoverage (MapServer config errors on
- * every coverage/format — verified 2026-07). NCEI's DEM_global_mosaic carries
+ * GEBCO's own WCS does not serve GetCoverage — substitution confirmed
+ * permanent 2026-07-21; see the GEBCO_WCS comment in ./terrain.ts for the
+ * verification notes. NCEI's DEM_global_mosaic carries
  * the same GEBCO-based grid (Copernicus land elevation included) and serves
  * GeoTIFF, so land elevation is fetched from it instead.
  */

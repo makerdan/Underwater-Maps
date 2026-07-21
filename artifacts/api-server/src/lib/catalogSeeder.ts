@@ -51,7 +51,7 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     resolutionMMin: 400,
     resolutionMMax: 400,
     coverageBbox: { minLon: -180, minLat: -90, maxLon: 180, maxLat: 90 },
-    endpointUrl: "https://www.gebco.net/data_and_products/gebco_web_services/web_map_service/",
+    endpointUrl: "https://www.gebco.net/data-products/gebco-web-services/web-map-service",
     accessNotes: "Freely available via WCS/WMS. Global coverage at ~400 m resolution.",
     description: "The General Bathymetric Chart of the Oceans (GEBCO) 2024 release — a continuous global terrain model compiled from multibeam surveys and satellite altimetry.",
     keywords: "global,ocean,bathymetry,GEBCO,seabed,depth,terrain",

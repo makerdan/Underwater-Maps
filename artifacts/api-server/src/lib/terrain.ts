@@ -892,7 +892,7 @@ export const BATHYMETRY_SOURCES = {
     label: "GEBCO 2024",
     scope: "global",
     dataSource: "gebco",
-    creditUrl: "https://www.gebco.net/data_and_products/gridded_bathymetry_data/",
+    creditUrl: "https://www.gebco.net/data-products/gridded-bathymetry-data",
     async fetch(meta: DatasetMeta, N: number): Promise<SourceFetchResult> {
       const r = await fetchGebcoGrid(meta.bbox, N);
       return { ...r };
@@ -1426,11 +1426,19 @@ async function fetchGreatLakesGrid(
 // ---------------------------------------------------------------------------
 
 /**
- * GEBCO's own WCS (www.gebco.net …/mapserv, later wms.gebco.net/mapserv) no
- * longer serves GetCoverage — every coverage/format combination returns a
- * MapServer configuration error (verified 2026-07). NCEI's DEM_global_mosaic
- * bundles the GEBCO grid as its global base layer, so the "gebco" source now
- * fetches from it. Restore a native GEBCO endpoint if/when it comes back.
+ * GEBCO's own WCS does not serve GetCoverage. Re-verified 2026-07-21:
+ * wms.gebco.net WMS endpoints are back up (2024 + 2025 grids), and
+ * wms.gebco.net/2025/mapserv even answers WCS GetCapabilities — but every
+ * coverage is misconfigured upstream ("problem with one of layers" in the
+ * capabilities, "Unable to determine the SRS for this layer" on GetCoverage),
+ * so no raster data can be pulled. GEBCO advertises WMS only; no WCS or
+ * OGC API coverage service is listed on gebco.net.
+ *
+ * The substitution below is therefore treated as permanent: NCEI's
+ * DEM_global_mosaic bundles the GEBCO grid as its global base layer, so the
+ * "gebco" source fetches from it. If GEBCO ever publishes a working
+ * WCS/OGC API coverage endpoint, swap it back here and in
+ * fetchers/gebco.ts + copernicusDem.ts.
  */
 const GEBCO_WCS =
   "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_global_mosaic/ImageServer/WCSServer";
@@ -1896,7 +1904,7 @@ export async function buildGebcoTerrainForBbox(
     bathymetrySource: "gebco",
     bathymetrySourceLabel: "GEBCO 2024",
     bathymetryCreditUrl:
-      "https://www.gebco.net/data_and_products/gridded_bathymetry_data/",
+      "https://www.gebco.net/data-products/gridded-bathymetry-data",
     version: TERRAIN_CACHE_VERSION,
     ...(hasTopography && topography
       ? {
@@ -1905,7 +1913,7 @@ export async function buildGebcoTerrainForBbox(
           topographySource: "gebco" as const,
           topographySourceLabel: "GEBCO 2024",
           topographyCreditUrl:
-            "https://www.gebco.net/data_and_products/gridded_bathymetry_data/",
+            "https://www.gebco.net/data-products/gridded-bathymetry-data",
         }
       : {}),
   };
