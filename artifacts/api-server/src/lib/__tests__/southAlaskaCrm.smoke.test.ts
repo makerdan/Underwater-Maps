@@ -32,6 +32,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { writeArrayBuffer } from "geotiff";
 import {
   DATASET_SOURCE_PRIORITY,
   PRESET_DATASETS,
@@ -100,7 +101,7 @@ const FORMER_S_ALASKA_META: Record<string, DatasetMeta> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Build a minimal ESRI ASCII Grid (AAIGRID) string whose elevation values
+ * Build a minimal float32 GeoTIFF buffer whose elevation values
  * span the requested range so that fetchNceiGrid's near-flat guard
  * (maxDepth - minDepth < 5) is satisfied.
  *
@@ -109,53 +110,42 @@ const FORMER_S_ALASKA_META: Record<string, DatasetMeta> = {
  * level), matching the NCEI sign convention (negative = water, positive = land).
  * A corner cell is set to a positive value (land) so hasTopography fires.
  */
-function makeAsciiGrid(
+function makeStubGeoTiff(
   n: number,
   shallowElev = -20,
   deepElev = -150,
-): string {
-  const header = [
-    `ncols ${n}`,
-    `nrows ${n}`,
-    `xllcorner -153.5`,
-    `yllcorner 57.0`,
-    `cellsize 0.01`,
-    `NODATA_value -9999`,
-  ].join("\n");
-
-  const rows: string[] = [];
+): ArrayBuffer {
+  const values = new Float32Array(n * n);
   for (let r = 0; r < n; r++) {
-    const cells: number[] = [];
     for (let c = 0; c < n; c++) {
       if (r === 0 && c === 0) {
-        cells.push(5); // land cell → topography
+        values[r * n + c] = 5; // land cell → topography
       } else {
-        cells.push((r * n + c) % 2 === 0 ? shallowElev : deepElev);
+        values[r * n + c] = (r * n + c) % 2 === 0 ? shallowElev : deepElev;
       }
     }
-    rows.push(cells.join(" "));
   }
-  return header + "\n" + rows.join("\n");
+  return writeArrayBuffer(values, {
+    width: n,
+    height: n,
+    ModelPixelScale: [0.01, 0.01, 0],
+    ModelTiepoint: [0, 0, 0, -153.5, 57.0, 0],
+  }) as ArrayBuffer;
 }
 
 /**
- * Build a truly flat AAIGRID where every cell has the same ocean elevation
+ * Build a truly flat GeoTIFF where every cell has the same ocean elevation
  * (`uniformElev`, negative). This produces minDepth === maxDepth, which
  * triggers fetchNceiGrid's near-flat guard (range < 5 m → throws).
  */
-function makeFlatAsciiGrid(n: number, uniformElev = -10): string {
-  const header = [
-    `ncols ${n}`,
-    `nrows ${n}`,
-    `xllcorner -150.5`,
-    `yllcorner 59.4`,
-    `cellsize 0.01`,
-    `NODATA_value -9999`,
-  ].join("\n");
-
-  const row = Array(n).fill(uniformElev).join(" ");
-  const rows = Array(n).fill(row);
-  return header + "\n" + rows.join("\n");
+function makeFlatGeoTiff(n: number, uniformElev = -10): ArrayBuffer {
+  const values = new Float32Array(n * n).fill(uniformElev);
+  return writeArrayBuffer(values, {
+    width: n,
+    height: n,
+    ModelPixelScale: [0.01, 0.01, 0],
+    ModelTiepoint: [0, 0, 0, -150.5, 59.4, 0],
+  }) as ArrayBuffer;
 }
 
 /**
@@ -182,7 +172,7 @@ const S_ALASKA_AOIS = [
 ] as const;
 
 const GRID_SIZE = 8; // small enough to be fast, large enough for the guard
-const STUB_GRID = makeAsciiGrid(GRID_SIZE);
+const STUB_GRID = makeStubGeoTiff(GRID_SIZE);
 
 describe("Southern Alaska CRM — unit tests (stubbed WCS fetch)", () => {
   afterEach(() => {
@@ -218,8 +208,8 @@ describe("Southern Alaska CRM — unit tests (stubbed WCS fetch)", () => {
         .spyOn(globalThis, "fetch")
         .mockImplementation(async (input) => {
           const url = typeof input === "string" ? input : (input as URL).toString();
-          if (url.includes("NOAA_Coastal_Relief_Model_Southern_Alaska")) {
-            return new Response(STUB_GRID, { status: 200 });
+          if (url.includes("DEM_mosaics/DEM_all")) {
+            return new Response(STUB_GRID.slice(0), { status: 200, headers: { "Content-Type": "image/tiff" } });
           }
           throw new Error(`Unexpected fetch call to: ${url}`);
         });
@@ -260,7 +250,7 @@ describe("Southern Alaska CRM — unit tests (stubbed WCS fetch)", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input) => {
         const url = typeof input === "string" ? input : (input as URL).toString();
-        if (url.includes("NOAA_Coastal_Relief_Model_Southern_Alaska")) {
+        if (url.includes("DEM_mosaics/DEM_all")) {
           return new Response(
             '<?xml version="1.0"?><ServiceExceptionReport><ServiceException>No data available</ServiceException></ServiceExceptionReport>',
             { status: 200 },
@@ -281,13 +271,13 @@ describe("Southern Alaska CRM — unit tests (stubbed WCS fetch)", () => {
 
   it("fetchNceiGrid throws and resolver falls through when CRM returns near-flat grid", async () => {
     // All cells at the same ocean elevation → minDepth === maxDepth → range = 0 < 5 → throws
-    const flatGrid = makeFlatAsciiGrid(GRID_SIZE);
+    const flatGrid = makeFlatGeoTiff(GRID_SIZE);
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input) => {
         const url = typeof input === "string" ? input : (input as URL).toString();
-        if (url.includes("NOAA_Coastal_Relief_Model_Southern_Alaska")) {
-          return new Response(flatGrid, { status: 200 });
+        if (url.includes("DEM_mosaics/DEM_all")) {
+          return new Response(flatGrid.slice(0), { status: 200, headers: { "Content-Type": "image/tiff" } });
         }
         throw new Error(`Stubbed out: ${url}`);
       });

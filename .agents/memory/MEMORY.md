@@ -76,6 +76,8 @@
 - [Vite 8 rolldown test breakage](vite8-rolldown-test-breakage.md) — vite 8 + vitest 3 mismatch: add esbuild jsx:"automatic" to vitest configs; rolldown keeps comments in unminified builds so never write "__bathyTest" literally in comments.
 - [Terrain mock must export catalog constants](terrain-mock-catalog-constants.md) — vi.mock of lib/terrain.js must include NYSDEC/MN_DNR feature-service consts + BUNDLED_TERRAIN or catalogFetchStrategy import crashes every route suite.
 - [catalog-search waterType filter count](catalog-search-watertype-count.md) — test that filters SEEDED_PLUS_FRESHWATER by waterType must use dynamic count; stale comment said EXTRA_CATALOG_ENTRIES was saltwater-only.
+- [ArcGIS/WCS upstream endpoint drift](arcgis-upstream-endpoint-drift.md) — bathymetry services get deleted/moved; use outFields=*, inSR/outSR=4326; curl base ?f=json first, then AGO search for the moved service.
+- [survey.laz fixture nondeterminism](laz-fixture-nondeterminism.md) — check:fixture-freshness can flag survey.laz with no code change; regen via fixtures:regen, commit only the .laz, restore the .bag files.
 - [supertest requireAuth bypass header](supertest-requireauth-bypass-header.md) — test apps mounting requireAuth routers must inject x-e2e-user-id or getAuth() throws and every request 500s.
 - [terrain.js mock export sync](terrain-mock-export-sync.md) — new module-init exports from lib/terrain.js must be stubbed in every full vi.mock or app-loading tests crash with misleading errors.
 - [ESLint flat config core rules off](eslint-flat-config-no-core-rules.md) — root config extends no recommended preset; core rules like no-dupe-keys are inactive unless explicitly listed.

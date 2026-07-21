@@ -2,6 +2,7 @@ import { promises as fsPromises, readFileSync } from "fs";
 import path from "path";
 import { dirname, resolve as resolvePath } from "path";
 import { fileURLToPath } from "url";
+import { fromArrayBuffer } from "geotiff";
 import { registerCache } from "./cacheRegistry.js";
 import { logger } from "./logger.js";
 
@@ -285,27 +286,39 @@ interface NceiCoverage {
   label: string;
 }
 
+/**
+ * NCEI WCS coverages (verified live 2026-07).
+ *
+ * NCEI retired several standalone ArcGIS services in 2025/2026 and dropped
+ * ASCII-grid (AAIGRID) output from all remaining WCS endpoints — GeoTIFF is
+ * now the only usable raster format. Mapping from the old services:
+ *   - bag_mosaic                → multibeam_mosaic (coverage
+ *     multibeam_mosaic_combined) — the successor multibeam-survey mosaic.
+ *   - DEM_global_mosaic         → moved under DEM_mosaics/ folder; the WCS
+ *     coverage identifier is now the service name, not "1".
+ *   - NOAA_Coastal_Relief_Model_Southern_Alaska → deleted; DEM_mosaics/DEM_all
+ *     (global best-available tiled DEM mosaic, includes the CRM 703 tiles)
+ *     covers the same southern-Alaska extent at comparable resolution.
+ */
 const NCEI_COVERAGES = {
   bagMosaic: {
-    url: "https://gis.ngdc.noaa.gov/arcgis/services/bag_mosaic/ImageServer/WCSServer",
-    coverage: "1",
-    label: "NCEI BAG Mosaic",
+    url: "https://gis.ngdc.noaa.gov/arcgis/services/multibeam_mosaic/ImageServer/WCSServer",
+    coverage: "multibeam_mosaic_combined",
+    label: "NCEI Multibeam Mosaic",
   },
   demGlobalMosaic: {
-    url: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_global_mosaic/ImageServer/WCSServer",
-    coverage: "1",
+    url: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_global_mosaic/ImageServer/WCSServer",
+    coverage: "DEM_global_mosaic",
     label: "NCEI DEM Global Mosaic",
   },
-  /** NOAA Southern Alaska Coastal Relief Model (DEM ID 703).
-   *  Purpose-built ~3 arc-second (~90 m) regional grid covering the Gulf of
-   *  Alaska, Kodiak Island, Cook Inlet / Kachemak Bay, Prince William Sound,
-   *  Resurrection Bay, and Yakutat Bay (~130 °W – 170 °W, 54 °N – 62 °N).
-   *  Verified endpoint: NCEI geoportal metadata item gov.noaa.ngdc.mgg.dem:703.
-   */
+  /** Southern Alaska coverage (Gulf of Alaska, Kodiak Island, Cook Inlet /
+   *  Kachemak Bay, Prince William Sound, Resurrection Bay, Yakutat Bay).
+   *  The dedicated CRM 703 service was deleted upstream; DEM_all is the
+   *  best-available tiled mosaic that still includes those grids. */
   southAlaskaCrm: {
-    url: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Coastal_Relief_Model_Southern_Alaska/ImageServer/WCSServer",
-    coverage: "1",
-    label: "NCEI Southern Alaska Coastal Relief Model",
+    url: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_all/ImageServer/WCSServer",
+    coverage: "DEM_all",
+    label: "NCEI Best-Available DEM Mosaic (Southern Alaska CRM successor)",
   },
 } as const satisfies Record<string, NceiCoverage>;
 
@@ -315,8 +328,8 @@ type NceiCoverageKey = keyof typeof NCEI_COVERAGES;
 // USGS 3DEP WCS — continental US freshwater elevation
 // ---------------------------------------------------------------------------
 
-const USGS_3DEP_WCS =
-  "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer";
+const USGS_3DEP_IMAGE_SERVER =
+  "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer";
 
 /** Approximate continental US bounding box for 3DEP guard. */
 const CONUS_BOUNDS = { minLon: -130, maxLon: -60, minLat: 24, maxLat: 50 };
@@ -342,8 +355,17 @@ function isWithinConus(bbox: {
 // NOAA Great Lakes DEMs — lake-specific high-resolution mosaics
 // ---------------------------------------------------------------------------
 
+/**
+ * The dedicated NOAA_Great_Lakes_mosaics service (per-lake *_lld coverages)
+ * was deleted upstream in 2025/2026. DEM_global_mosaic still carries the
+ * Great Lakes bathymetry (same sign convention: negative = below datum), so
+ * all Great Lakes requests now route to it. The per-lake entries below are
+ * kept for bbox matching and labelling only.
+ */
 const GREAT_LAKES_WCS =
-  "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/NOAA_Great_Lakes_mosaics/ImageServer/WCSServer";
+  "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_global_mosaic/ImageServer/WCSServer";
+
+const GREAT_LAKES_COVERAGE_ID = "DEM_global_mosaic";
 
 interface GreatLakeCoverage {
   coverage: string;
@@ -411,21 +433,28 @@ function matchGreatLakeCoverage(bbox: {
 // ---------------------------------------------------------------------------
 
 /**
- * ArcGIS REST FeatureServer endpoint for NYSDEC lake bathymetric contour lines.
- * Published by NYSDEC at:
- *   https://data.gis.ny.gov/datasets/nysdec-lake-bathymetry
- * Underlying REST service for querying contour features directly:
+ * ArcGIS REST endpoint for NYSDEC lake bathymetric depth contours.
+ *
+ * The original statewide DEC_Lake_Bathymetry FeatureServer
+ * (services6.arcgis.com/v1XbFnus3vB7bnKv) was deleted upstream — the org
+ * now publishes zero services (verified 2026-07). The remaining published
+ * dataset is "Bathymetry of the Finger Lakes" (depth polygons with a DEPTH
+ * field), which covers Seneca, Cayuga, and the other Finger Lakes but NOT
+ * Lake George — Lake George requests now fall through to USGS 3DEP.
  */
 export const NYSDEC_BATHY_FEATURE_SERVICE =
-  "https://services6.arcgis.com/v1XbFnus3vB7bnKv/arcgis/rest/services/DEC_Lake_Bathymetry/FeatureServer/0";
+  "https://services1.arcgis.com/4ZdJfkWE583IARCX/arcgis/rest/services/ENV_Finger_Lake_Bathymetry/FeatureServer/0";
 
 /**
- * ArcGIS REST FeatureServer endpoint for MN DNR lake bathymetric contour lines.
- * Published by MN DNR via the LakeFinder portal:
- *   https://www.dnr.state.mn.us/lakefind/index.html
+ * ArcGIS REST endpoint for MN DNR lake bathymetric contour lines.
+ *
+ * The old webgis.dnr.state.mn.us host is no longer reachable (verified
+ * 2026-07); the DNR now serves the same "Lake Bathymetric Contours" layer
+ * from the MN geospatial commons enterprise host. Layer 0 is the polyline
+ * contour layer with a lowercase `depth` attribute (feet).
  */
 export const MN_DNR_BATHY_FEATURE_SERVICE =
-  "https://webgis.dnr.state.mn.us/arcgis/rest/services/eng/Lakes_Bathy/FeatureServer/0";
+  "https://enterprise.gisdata.mn.gov/aghost/rest/services/us_mn_state_dnr/water_lake_bathymetry/MapServer/0";
 
 /**
  * Candidate depth-attribute field names across ArcGIS bathymetry schemas.
@@ -437,6 +466,9 @@ const ARCGIS_DEPTH_FIELDS = [
   "DEPTH_M",
   "DEPTH_FT",
   "DEPTH",
+  // MN DNR enterprise host returns lowercase field names; `depth` is the
+  // contour depth in feet (LakeFinder convention).
+  "depth",
   "CONTOUR_M",
   "CONTOUR_FT",
   "CONTOUR",
@@ -564,8 +596,15 @@ async function fetchArcGisRestBathy(
     where: "1=1",
     geometry: `${minLon},${minLat},${maxLon},${maxLat}`,
     geometryType: "esriGeometryEnvelope",
+    // Some services (e.g. MN DNR enterprise host) store data in a projected
+    // CRS — declare the envelope SR and request WGS-84 geometry back.
+    inSR: "4326",
+    outSR: "4326",
     spatialRel: "esriSpatialRelIntersects",
-    outFields: ARCGIS_DEPTH_FIELDS.join(","),
+    // Hosted ArcGIS services reject outFields naming columns that don't exist
+    // on the layer ("Cannot perform query. Invalid query parameters."), so
+    // request all fields and pick the depth attribute client-side.
+    outFields: "*",
     returnGeometry: "true",
     f: "json",
   });
@@ -1104,32 +1143,16 @@ async function fetchNceiGrid(
     COVERAGE: cov.coverage,
     CRS: "EPSG:4326",
     BBOX: `${minLon},${minLat},${maxLon},${maxLat}`,
-    FORMAT: "image/x-aaigrid",
+    FORMAT: "GeoTIFF",
     WIDTH: String(resolution),
     HEIGHT: String(resolution),
   });
 
   const url = `${cov.url}?${params.toString()}`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
-  let text: string;
-  try {
-    const resp = await fetch(url, { signal: controller.signal });
-    if (!resp.ok) throw new Error(`NCEI WCS returned HTTP ${resp.status}`);
-    text = await resp.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  // NCEI may return an XML error document when coverage is unavailable
-  if (text.trim().startsWith("<") || text.trim().startsWith("<?")) {
-    throw new Error("NCEI WCS returned an XML response (coverage unavailable)");
-  }
-
-  const { ncols, nrows, nodata, values } = parseAsciiGrid(text);
+  const { ncols, nrows, nodata, values } = await fetchWcsGeoTiffGrid(url, 20_000, "NCEI WCS");
   if (!ncols || !nrows || values.length === 0) {
-    throw new Error("NCEI WCS returned an empty or invalid ASCII grid");
+    throw new Error("NCEI WCS returned an empty or invalid grid");
   }
 
   // NCEI elevation is negative for ocean depth; convert to positive depth.
@@ -1216,38 +1239,23 @@ async function fetchUsgs3depGrid(
   }
 
   const { minLon, minLat, maxLon, maxLat } = bbox;
+  // The 3DEP WCS endpoint dropped ASCII-grid output; use the ArcGIS
+  // exportImage REST API with a float32 GeoTIFF instead (same raster).
   const params = new URLSearchParams({
-    SERVICE: "WCS",
-    VERSION: "1.0.0",
-    REQUEST: "GetCoverage",
-    COVERAGE: "DEP3Elevation",
-    CRS: "EPSG:4326",
-    BBOX: `${minLon},${minLat},${maxLon},${maxLat}`,
-    FORMAT: "image/x-aaigrid",
-    WIDTH: String(resolution),
-    HEIGHT: String(resolution),
+    bbox: `${minLon},${minLat},${maxLon},${maxLat}`,
+    bboxSR: "4326",
+    imageSR: "4326",
+    size: `${resolution},${resolution}`,
+    format: "tiff",
+    pixelType: "F32",
+    f: "image",
   });
 
-  const url = `${USGS_3DEP_WCS}?${params.toString()}`;
+  const url = `${USGS_3DEP_IMAGE_SERVER}/exportImage?${params.toString()}`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45_000);
-  let text: string;
-  try {
-    const resp = await fetch(url, { signal: controller.signal });
-    if (!resp.ok) throw new Error(`USGS 3DEP WCS returned HTTP ${resp.status}`);
-    text = await resp.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  if (text.trim().startsWith("<") || text.trim().startsWith("<?")) {
-    throw new Error("USGS 3DEP WCS returned an XML response (coverage unavailable)");
-  }
-
-  const { ncols, nrows, nodata, values } = parseAsciiGrid(text);
+  const { ncols, nrows, nodata, values } = await fetchWcsGeoTiffGrid(url, 45_000, "USGS 3DEP exportImage");
   if (!ncols || !nrows || values.length === 0) {
-    throw new Error("USGS 3DEP WCS returned an empty or invalid ASCII grid");
+    throw new Error("USGS 3DEP exportImage returned an empty or invalid grid");
   }
 
   // Filter out nodata values and verify this isn't an all-ocean tile.
@@ -1346,34 +1354,23 @@ async function fetchGreatLakesGrid(
     SERVICE: "WCS",
     VERSION: "1.0.0",
     REQUEST: "GetCoverage",
-    COVERAGE: lake.coverage,
+    COVERAGE: GREAT_LAKES_COVERAGE_ID,
     CRS: "EPSG:4326",
     BBOX: `${minLon},${minLat},${maxLon},${maxLat}`,
-    FORMAT: "image/x-aaigrid",
+    FORMAT: "GeoTIFF",
     WIDTH: String(resolution),
     HEIGHT: String(resolution),
   });
 
   const url = `${GREAT_LAKES_WCS}?${params.toString()}`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
-  let text: string;
-  try {
-    const resp = await fetch(url, { signal: controller.signal });
-    if (!resp.ok) throw new Error(`NOAA Great Lakes WCS returned HTTP ${resp.status}`);
-    text = await resp.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  if (text.trim().startsWith("<") || text.trim().startsWith("<?")) {
-    throw new Error(`NOAA Great Lakes WCS returned an XML response for ${lake.coverage} (coverage unavailable)`);
-  }
-
-  const { ncols, nrows, nodata, values } = parseAsciiGrid(text);
+  const { ncols, nrows, nodata, values } = await fetchWcsGeoTiffGrid(
+    url,
+    30_000,
+    `NOAA Great Lakes WCS (${lake.coverage})`,
+  );
   if (!ncols || !nrows || values.length === 0) {
-    throw new Error(`NOAA Great Lakes WCS returned an empty or invalid ASCII grid for ${lake.coverage}`);
+    throw new Error(`NOAA Great Lakes WCS returned an empty or invalid grid for ${lake.coverage}`);
   }
 
   // Great Lakes DEM uses the same sign convention as NCEI: negative = below
@@ -1428,50 +1425,80 @@ async function fetchGreatLakesGrid(
 // GEBCO WCS fetch
 // ---------------------------------------------------------------------------
 
+/**
+ * GEBCO's own WCS (www.gebco.net …/mapserv, later wms.gebco.net/mapserv) no
+ * longer serves GetCoverage — every coverage/format combination returns a
+ * MapServer configuration error (verified 2026-07). NCEI's DEM_global_mosaic
+ * bundles the GEBCO grid as its global base layer, so the "gebco" source now
+ * fetches from it. Restore a native GEBCO endpoint if/when it comes back.
+ */
 const GEBCO_WCS =
-  "https://www.gebco.net/data_and_products/gebco_web_services/web_map_service/mapserv";
+  "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_global_mosaic/ImageServer/WCSServer";
+
+const GEBCO_COVERAGE_ID = "DEM_global_mosaic";
+
+/** Canonical no-data sentinel used by `fetchWcsGeoTiffGrid`. */
+const GEOTIFF_NODATA = -999999;
 
 /**
- * Parse an ESRI Arc/Info ASCII Grid (AAIGRID) string.
- * Returns { ncols, nrows, nodata, values } where values is flat row-major array
- * of elevation values in metres (negative = below sea level).
+ * Fetch a WCS/exportImage GeoTIFF raster and decode it to
+ * { ncols, nrows, nodata, values } (flat row-major elevation array).
+ *
+ * All NCEI/USGS raster services dropped ASCII-grid output in 2025/2026 —
+ * GeoTIFF is the only remaining machine-readable format. Non-finite samples
+ * and samples equal to the file's GDAL no-data value are normalised to the
+ * `GEOTIFF_NODATA` sentinel so downstream `v !== nodata` checks keep working.
+ *
+ * Throws when the upstream returns an error document (XML/HTML) or an
+ * undecodable/empty raster.
  */
-function parseAsciiGrid(text: string): {
-  ncols: number;
-  nrows: number;
-  nodata: number;
-  values: number[];
-} {
-  const lines = text.split(/\r?\n/);
-  let ncols = 0;
-  let nrows = 0;
-  let nodata = -9999;
-  let dataStart = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!.trim().toLowerCase();
-    if (!line) continue;
-    if (line.startsWith("ncols")) {
-      ncols = parseInt(line.split(/\s+/)[1]!, 10);
-    } else if (line.startsWith("nrows")) {
-      nrows = parseInt(line.split(/\s+/)[1]!, 10);
-    } else if (line.startsWith("nodata_value") || line.startsWith("nodata")) {
-      nodata = parseFloat(line.split(/\s+/)[1]!);
-    } else if (!isNaN(parseFloat(line.split(/\s+/)[0]!))) {
-      dataStart = i;
-      break;
-    }
+export async function fetchWcsGeoTiffGrid(
+  url: string,
+  timeoutMs: number,
+  sourceLabel: string,
+): Promise<{ ncols: number; nrows: number; nodata: number; values: number[] }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let buf: ArrayBuffer;
+  let contentType: string;
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) throw new Error(`${sourceLabel} returned HTTP ${resp.status}`);
+    contentType = resp.headers.get("content-type") ?? "";
+    buf = await resp.arrayBuffer();
+  } finally {
+    clearTimeout(timeout);
   }
 
-  const values: number[] = [];
-  for (let i = dataStart; i < lines.length; i++) {
-    const tokens = lines[i]!.trim().split(/\s+/);
-    for (const tok of tokens) {
-      if (tok) values.push(parseFloat(tok));
-    }
+  const firstByte = new Uint8Array(buf, 0, Math.min(1, buf.byteLength))[0];
+  if (/xml|html/i.test(contentType) || firstByte === 0x3c /* '<' */) {
+    const snippet = Buffer.from(buf.slice(0, 300)).toString("utf8");
+    throw new Error(`${sourceLabel} returned an error document instead of GeoTIFF: ${snippet}`);
   }
 
-  return { ncols, nrows, nodata, values };
+  const tiff = await fromArrayBuffer(buf);
+  const image = await tiff.getImage();
+  const ncols = image.getWidth();
+  const nrows = image.getHeight();
+  if (!ncols || !nrows) throw new Error(`${sourceLabel} returned an empty GeoTIFF raster`);
+
+  const rasters = await image.readRasters();
+  const band = rasters[0];
+  if (!band || typeof band === "number") {
+    throw new Error(`${sourceLabel} GeoTIFF has no readable raster band`);
+  }
+
+  const gdalNoData = image.getGDALNoData?.();
+  const values: number[] = new Array(ncols * nrows);
+  for (let i = 0; i < values.length; i++) {
+    const v = Number((band as ArrayLike<number>)[i]);
+    values[i] =
+      !isFinite(v) || (gdalNoData !== null && gdalNoData !== undefined && v === gdalNoData)
+        ? GEOTIFF_NODATA
+        : v;
+  }
+
+  return { ncols, nrows, nodata: GEOTIFF_NODATA, values };
 }
 
 /**
@@ -1488,28 +1515,17 @@ async function fetchGebcoGrid(
     service: "WCS",
     version: "1.0.0",
     request: "GetCoverage",
-    coverage: "gebco_latest_2",
+    coverage: GEBCO_COVERAGE_ID,
     crs: "EPSG:4326",
     bbox: `${minLon},${minLat},${maxLon},${maxLat}`,
-    format: "image/x-aaigrid",
+    format: "GeoTIFF",
     width: String(resolution),
     height: String(resolution),
   });
 
   const url = `${GEBCO_WCS}?${params.toString()}`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
-  let text: string;
-  try {
-    const resp = await fetch(url, { signal: controller.signal });
-    if (!resp.ok) throw new Error(`GEBCO WCS returned HTTP ${resp.status}`);
-    text = await resp.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  const { ncols, nrows, nodata, values } = parseAsciiGrid(text);
+  const { ncols, nrows, nodata, values } = await fetchWcsGeoTiffGrid(url, 15_000, "GEBCO WCS");
 
   if (!ncols || !nrows || values.length === 0) {
     throw new Error("GEBCO WCS returned an empty or invalid grid");

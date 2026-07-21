@@ -12,33 +12,29 @@ import {
   DATASET_SOURCE_PRIORITY,
   type DatasetMeta,
 } from "./terrain.js";
+import { writeArrayBuffer } from "geotiff";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Build a minimal ESRI ASCII Grid response string.
+ * Build a minimal float32 GeoTIFF response body (the fetchers now consume
+ * GeoTIFF via fetchWcsGeoTiffGrid / exportImage, not ESRI ASCII grids).
  * ncols/nrows default to 4; values is a flat row-major array.
  */
-function makeAsciiGrid(values: number[], ncols = 4, nrows = 4): string {
-  const header = [
-    `ncols ${ncols}`,
-    `nrows ${nrows}`,
-    `xllcorner -73.0`,
-    `yllcorner 43.0`,
-    `cellsize 0.05`,
-    `NODATA_value -9999`,
-  ].join("\n");
-  const rows: string[] = [];
-  for (let r = 0; r < nrows; r++) {
-    rows.push(values.slice(r * ncols, (r + 1) * ncols).join(" "));
-  }
-  return header + "\n" + rows.join("\n");
+function makeGeoTiff(values: number[], ncols = 4, nrows = 4): ArrayBuffer {
+  const buf = writeArrayBuffer(new Float32Array(values), {
+    width: ncols,
+    height: nrows,
+    ModelPixelScale: [0.05, 0.05, 0],
+    ModelTiepoint: [0, 0, 0, -73.0, 43.0, 0],
+  }) as ArrayBuffer;
+  return buf;
 }
 
 /** A valid 3DEP response: mix of high land values (rim) and lower lake values. */
-const VALID_3DEP_GRID = makeAsciiGrid([
+const VALID_3DEP_GRID = makeGeoTiff([
   100, 100, 100, 100,
   100,  60,  50, 100,
   100,  55,  45, 100,
@@ -49,7 +45,7 @@ const VALID_3DEP_GRID = makeAsciiGrid([
  * A valid Great Lakes DEM response: negative values = below datum (lake floor).
  * minDepth = 80, maxDepth = 200, range = 120 m.
  */
-const VALID_GREAT_LAKES_GRID = makeAsciiGrid([
+const VALID_GREAT_LAKES_GRID = makeGeoTiff([
     0,    0,    0,    0,
     0, -100, -200,    0,
     0, -150,  -80,    0,
@@ -57,17 +53,17 @@ const VALID_GREAT_LAKES_GRID = makeAsciiGrid([
 ]);
 
 /** A valid GEBCO ocean response: negative values = below sea level. */
-const VALID_GEBCO_GRID = makeAsciiGrid([
+const VALID_GEBCO_GRID = makeGeoTiff([
    -50, -100, -200, -400,
   -300, -500, -800, -600,
   -700, -900, -100, -800,
   -400, -300, -200, -100,
 ]);
 
-function makeOkResponse(body: string): Response {
-  return new Response(body, {
+function makeOkResponse(body: ArrayBuffer): Response {
+  return new Response(body.slice(0), {
     status: 200,
-    headers: { "Content-Type": "text/plain" },
+    headers: { "Content-Type": "image/tiff" },
   });
 }
 
@@ -95,8 +91,10 @@ function makeMeta(
 // URL pattern constants — mirror what the fetchers build
 // ---------------------------------------------------------------------------
 const URL_3DEP = "elevation.nationalmap.gov";
-const URL_GREAT_LAKES = "NOAA_Great_Lakes_mosaics";
-const URL_GEBCO = "gebco.net";
+// Great Lakes and GEBCO both resolve via NCEI's DEM_global_mosaic WCS now
+// (the dedicated Great Lakes mosaics and GEBCO's own WCS were retired upstream).
+const URL_GREAT_LAKES = "DEM_mosaics/DEM_global_mosaic";
+const URL_GEBCO = "DEM_mosaics/DEM_global_mosaic";
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -165,7 +163,7 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     const calledUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
     const greatLakesUrl = calledUrls.find((u) => u.includes(URL_GREAT_LAKES));
     expect(greatLakesUrl).toBeDefined();
-    expect(greatLakesUrl).toContain("superior_lld");
+    expect(greatLakesUrl).toContain("DEM_global_mosaic");
   });
 
   // -------------------------------------------------------------------------
@@ -191,7 +189,7 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     const calledUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
     const greatLakesUrl = calledUrls.find((u) => u.includes(URL_GREAT_LAKES));
     expect(greatLakesUrl).toBeDefined();
-    expect(greatLakesUrl).toContain("erie_lld");
+    expect(greatLakesUrl).toContain("DEM_global_mosaic");
   });
 
   // -------------------------------------------------------------------------
@@ -228,9 +226,11 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     // Confirm GEBCO URL was called
     const calledUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
     expect(calledUrls.some((u) => u.includes(URL_GEBCO))).toBe(true);
-    // 3DEP and Great Lakes should NOT have been called (fast-failed without fetch)
+    // 3DEP should NOT have been called (fast-failed without fetch).
+    // (Great Lakes shares the DEM_global_mosaic URL with GEBCO now, so a
+    // URL-based "not called" check is no longer possible for it — its
+    // fast-fail is covered by the bbox guard, not the wire.)
     expect(calledUrls.some((u) => u.includes(URL_3DEP))).toBe(false);
-    expect(calledUrls.some((u) => u.includes(URL_GREAT_LAKES))).toBe(false);
   });
 
   // -------------------------------------------------------------------------

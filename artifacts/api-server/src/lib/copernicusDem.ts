@@ -3,6 +3,7 @@ import path from "path";
 import { createHash } from "crypto";
 import { registerCache } from "./cacheRegistry.js";
 import { logger } from "./logger.js";
+import { fetchWcsGeoTiffGrid } from "./terrain.js";
 
 /**
  * A flat land-elevation grid derived from Copernicus DEM 90 m data.
@@ -73,47 +74,16 @@ async function writeLandDiskCache(key: string, grid: LandGrid): Promise<void> {
 // terrain; water cells are zero (bathymetry is discarded here).
 // ---------------------------------------------------------------------------
 
+/**
+ * GEBCO's own WCS no longer serves GetCoverage (MapServer config errors on
+ * every coverage/format — verified 2026-07). NCEI's DEM_global_mosaic carries
+ * the same GEBCO-based grid (Copernicus land elevation included) and serves
+ * GeoTIFF, so land elevation is fetched from it instead.
+ */
 const GEBCO_WCS =
-  "https://www.gebco.net/data_and_products/gebco_web_services/web_map_service/mapserv";
+  "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_global_mosaic/ImageServer/WCSServer";
 
-/** Parse an ESRI ASCII grid header + values. */
-function parseAsciiGrid(text: string): {
-  ncols: number;
-  nrows: number;
-  nodata: number;
-  values: number[];
-} {
-  const lines = text.split(/\r?\n/);
-  let ncols = 0;
-  let nrows = 0;
-  let nodata = -9999;
-  let dataStart = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!.trim().toLowerCase();
-    if (!line) continue;
-    if (line.startsWith("ncols")) {
-      ncols = parseInt(line.split(/\s+/)[1]!, 10);
-    } else if (line.startsWith("nrows")) {
-      nrows = parseInt(line.split(/\s+/)[1]!, 10);
-    } else if (line.startsWith("nodata_value") || line.startsWith("nodata")) {
-      nodata = parseFloat(line.split(/\s+/)[1]!);
-    } else if (!isNaN(parseFloat(line.split(/\s+/)[0]!))) {
-      dataStart = i;
-      break;
-    }
-  }
-
-  const values: number[] = [];
-  for (let i = dataStart; i < lines.length; i++) {
-    const tokens = lines[i]!.trim().split(/\s+/);
-    for (const tok of tokens) {
-      if (tok) values.push(parseFloat(tok));
-    }
-  }
-
-  return { ncols, nrows, nodata, values };
-}
+const GEBCO_COVERAGE_ID = "DEM_global_mosaic";
 
 /**
  * Fetch land elevation for the given bounding box and grid size.
@@ -135,34 +105,19 @@ async function fetchLandElevationFromGebco(
     service: "WCS",
     version: "1.0.0",
     request: "GetCoverage",
-    coverage: "gebco_latest_2",
+    coverage: GEBCO_COVERAGE_ID,
     crs: "EPSG:4326",
     bbox: `${minLon},${minLat},${maxLon},${maxLat}`,
-    format: "image/x-aaigrid",
+    format: "GeoTIFF",
     width: String(gridSize),
     height: String(gridSize),
   });
 
   const url = `${GEBCO_WCS}?${params.toString()}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
 
-  let text: string;
-  try {
-    const resp = await fetch(url, { signal: controller.signal });
-    if (!resp.ok) throw new Error(`GEBCO WCS returned HTTP ${resp.status}`);
-    text = await resp.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  if (text.trim().startsWith("<") || text.trim().startsWith("<?")) {
-    throw new Error("GEBCO WCS returned an XML error response (coverage unavailable)");
-  }
-
-  const { ncols, nrows, nodata, values } = parseAsciiGrid(text);
+  const { ncols, nrows, nodata, values } = await fetchWcsGeoTiffGrid(url, 20_000, "GEBCO WCS (land elevation)");
   if (!ncols || !nrows || values.length === 0) {
-    throw new Error("GEBCO WCS returned an empty or invalid ASCII grid");
+    throw new Error("GEBCO WCS returned an empty or invalid grid");
   }
 
   const N = gridSize;

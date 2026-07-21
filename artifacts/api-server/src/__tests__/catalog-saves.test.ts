@@ -11,6 +11,27 @@ import { describe, it, expect, vi } from "vitest";
 import { buildCatalogGrids } from "../routes/catalog-saves.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import type { CatalogSeedEntry } from "../lib/catalogSeeder.js";
+import { writeArrayBuffer } from "geotiff";
+
+/**
+ * Build a minimal float32 GeoTIFF body — the fetchers now consume GeoTIFF
+ * via fetchWcsGeoTiffGrid, not ESRI ASCII grids.
+ */
+function makeGeoTiff(values: number[], ncols = 2, nrows = 2): ArrayBuffer {
+  return writeArrayBuffer(new Float32Array(values), {
+    width: ncols,
+    height: nrows,
+    ModelPixelScale: [0.05, 0.05, 0],
+    ModelTiepoint: [0, 0, 0, -135.0, 58.0, 0],
+  }) as ArrayBuffer;
+}
+
+function makeTiffResponse(body: ArrayBuffer): Response {
+  return new Response(body.slice(0), {
+    status: 200,
+    headers: { "content-type": "image/tiff" },
+  });
+}
 
 function makeEntry(overrides: Partial<CatalogSeedEntry> & { id: string }): CatalogSeedEntry {
   return {
@@ -204,29 +225,15 @@ describe("buildCatalogGrids", () => {
 
   it("materializes the GEBCO 2024 global bathymetry entry via the GEBCO WCS", async () => {
     // Stub fetch so the test doesn't touch the network. The fetcher decodes
-    // an AAIGRID-formatted response, so produce a tiny 2x2 grid (header +
-    // values) that exercises the depth/elevation conversion path.
-    const aaigrid = [
-      "ncols 2",
-      "nrows 2",
-      "xllcorner 0",
-      "yllcorner 0",
-      "cellsize 1",
-      "nodata_value -9999",
-      "-50 -100",
-      "-25 5",
-    ].join("\n");
+    // a GeoTIFF response, so produce a tiny 2x2 float32 grid that exercises
+    // the depth/elevation conversion path.
+    const tiff = makeGeoTiff([-50, -100, -25, 5]);
     // Return a fresh Response on each call — Response bodies are
     // single-use streams, so reusing one object across two fetches throws
     // "Body has already been read" on the second decode.
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
-      .mockImplementation(async () =>
-        new Response(aaigrid, {
-          status: 200,
-          headers: { "content-type": "text/plain" },
-        }),
-      );
+      .mockImplementation(async () => makeTiffResponse(tiff));
 
     try {
       const entry = makeEntry({
@@ -250,7 +257,7 @@ describe("buildCatalogGrids", () => {
       expect(result!.terrain.maxDepth).toBeGreaterThan(0);
       // Both terrain + overview should hit the WCS exactly once each.
       expect(fetchSpy).toHaveBeenCalledTimes(2);
-      expect(String(fetchSpy.mock.calls[0]![0])).toContain("gebco");
+      expect(String(fetchSpy.mock.calls[0]![0])).toContain("DEM_global_mosaic");
     } finally {
       fetchSpy.mockRestore();
     }
@@ -267,26 +274,12 @@ describe("buildCatalogGrids", () => {
   });
 
   it("materializes the NCEI BAG mosaic Alaska entry via the BAG mosaic WCS", async () => {
-    // Tiny AAIGRID with a usable depth range so fetchNceiGrid doesn't trip
+    // Tiny GeoTIFF with a usable depth range so fetchNceiGrid doesn't trip
     // the "near-flat grid" coverage check.
-    const aaigrid = [
-      "ncols 2",
-      "nrows 2",
-      "xllcorner 0",
-      "yllcorner 0",
-      "cellsize 1",
-      "nodata_value -9999",
-      "-50 -100",
-      "-25 5",
-    ].join("\n");
+    const tiff = makeGeoTiff([-50, -100, -25, 5]);
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
-      .mockImplementation(async () =>
-        new Response(aaigrid, {
-          status: 200,
-          headers: { "content-type": "text/plain" },
-        }),
-      );
+      .mockImplementation(async () => makeTiffResponse(tiff));
 
     try {
       const entry = makeEntry({
@@ -304,33 +297,19 @@ describe("buildCatalogGrids", () => {
       expect(result!.overview.resolution).toBe(64);
       expect(result!.terrain.dataSource).toBe("ncei");
       expect(result!.terrain.bathymetrySource).toBe("ncei");
-      expect(result!.terrain.bathymetrySourceLabel).toMatch(/BAG/i);
+      expect(result!.terrain.bathymetrySourceLabel).toMatch(/multibeam/i);
       expect(fetchSpy).toHaveBeenCalledTimes(2);
-      expect(String(fetchSpy.mock.calls[0]![0])).toContain("bag_mosaic");
+      expect(String(fetchSpy.mock.calls[0]![0])).toContain("multibeam_mosaic");
     } finally {
       fetchSpy.mockRestore();
     }
   });
 
   it("materializes an NCEI Community DEM entry via the DEM Global Mosaic WCS", async () => {
-    const aaigrid = [
-      "ncols 2",
-      "nrows 2",
-      "xllcorner 0",
-      "yllcorner 0",
-      "cellsize 1",
-      "nodata_value -9999",
-      "-20 -80",
-      "-40 10",
-    ].join("\n");
+    const tiff = makeGeoTiff([-20, -80, -40, 10]);
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
-      .mockImplementation(async () =>
-        new Response(aaigrid, {
-          status: 200,
-          headers: { "content-type": "text/plain" },
-        }),
-      );
+      .mockImplementation(async () => makeTiffResponse(tiff));
 
     try {
       const entry = makeEntry({
@@ -370,7 +349,9 @@ describe("buildCatalogGrids", () => {
         coverageBbox: { minLon: -135.2, minLat: 57.9, maxLon: -133.8, maxLat: 58.7 },
       });
 
-      await expect(buildCatalogGrids(entry)).rejects.toThrow(/coverage unavailable/i);
+      await expect(buildCatalogGrids(entry)).rejects.toThrow(
+        /error document|coverage unavailable/i,
+      );
     } finally {
       fetchSpy.mockRestore();
     }
@@ -378,24 +359,10 @@ describe("buildCatalogGrids", () => {
 
   it("surfaces a clear 'no coverage' error when NCEI returns a near-flat grid", async () => {
     // All zeros → range == 0, which trips the near-flat sanity check.
-    const aaigrid = [
-      "ncols 2",
-      "nrows 2",
-      "xllcorner 0",
-      "yllcorner 0",
-      "cellsize 1",
-      "nodata_value -9999",
-      "0 0",
-      "0 0",
-    ].join("\n");
+    const tiff = makeGeoTiff([0, 0, 0, 0]);
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
-      .mockImplementation(async () =>
-        new Response(aaigrid, {
-          status: 200,
-          headers: { "content-type": "text/plain" },
-        }),
-      );
+      .mockImplementation(async () => makeTiffResponse(tiff));
 
     try {
       const entry = makeEntry({

@@ -17,10 +17,6 @@ import type {
 } from "./types.js";
 import { BATHYMETRY_SOURCES } from "../terrain.js";
 
-const ARCGIS_DEPTH_FIELDS = [
-  "DEPTH_M", "DEPTH_FT", "DEPTH", "CONTOUR_M", "CONTOUR_FT", "CONTOUR", "ELEV_M", "ELEV_FT",
-];
-
 export const arcGisRestFetcher: BathymetryFetcher = {
   async probe(strategy: FetchStrategy, bbox: Bbox): Promise<ProbeResult> {
     if (strategy.kind !== "arcgis-rest") {
@@ -34,7 +30,10 @@ export const arcGisRestFetcher: BathymetryFetcher = {
         geometry: `${minLon},${minLat},${maxLon},${maxLat}`,
         geometryType: "esriGeometryEnvelope",
         spatialRel: "esriSpatialRelIntersects",
-        outFields: ARCGIS_DEPTH_FIELDS.join(","),
+        // Hosted ArcGIS services reject outFields naming absent columns —
+        // request all fields instead.
+        outFields: "*",
+        inSR: "4326",
         returnGeometry: "false",
         resultRecordCount: "1",
         f: "json",

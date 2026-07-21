@@ -14,8 +14,14 @@ import type {
 } from "./types.js";
 import { buildGebcoTerrainForBbox } from "../terrain.js";
 
+/**
+ * GEBCO's own WCS no longer serves GetCoverage (MapServer config errors on
+ * every coverage/format — verified 2026-07). The probe and fetch both go
+ * through NCEI's DEM_global_mosaic, which bundles the GEBCO grid as its
+ * global base layer — same endpoint `buildGebcoTerrainForBbox` uses.
+ */
 const GEBCO_WCS =
-  "https://www.gebco.net/data_and_products/gebco_web_services/web_map_service/mapserv";
+  "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_global_mosaic/ImageServer/WCSServer";
 
 export const gebcoFetcher: BathymetryFetcher = {
   async probe(_strategy: FetchStrategy, bbox: Bbox): Promise<ProbeResult> {
@@ -27,14 +33,12 @@ export const gebcoFetcher: BathymetryFetcher = {
         service: "WCS",
         request: "GetCoverage",
         version: "1.0.0",
-        coverage: "GEBCO_2024_Grid",
+        coverage: "DEM_global_mosaic",
         bbox: `${cx - tiny},${cy - tiny},${cx + tiny},${cy + tiny}`,
         crs: "EPSG:4326",
         format: "GeoTIFF",
         width: "4",
         height: "4",
-        resx: String(tiny * 2 / 4),
-        resy: String(tiny * 2 / 4),
       });
       const r = await fetch(`${GEBCO_WCS}?${params}`, { signal: AbortSignal.timeout(30_000) });
       if (!r.ok) return { available: false, title: "GEBCO 2024", error: `WCS HTTP ${r.status}` };
