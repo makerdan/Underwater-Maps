@@ -591,7 +591,9 @@ const TestCameraBridge: React.FC = () => {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     registerTestThreeCamera(camera);
-    return () => registerTestThreeCamera(null);
+    return () => {
+      registerTestThreeCamera(null);
+    };
   }, [camera]);
   return null;
 };

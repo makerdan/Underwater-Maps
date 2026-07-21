@@ -103,9 +103,13 @@ export function buildTerrainGeometry(grid: TerrainData): THREE.BufferGeometry {
       continue;
     }
 
-    // Clamp positive (above-water) depths to 0 so land cells sit flat at the
-    // waterline instead of displacing upward into tall spikes under exaggeration.
-    const clampedDepth = Math.min(depth, 0);
+    // Depths use the positive-down convention (0 = waterline, +N = N metres
+    // below the surface). Above-water land cells carry NEGATIVE depths —
+    // clamp them up to 0 so land sits flat at the waterline instead of
+    // displacing upward into tall spikes under exaggeration.
+    // (A previous Math.min(depth, 0) clamp assumed the opposite sign
+    // convention and flattened the ENTIRE mesh to Y=0 — invisible terrain.)
+    const clampedDepth = Math.max(depth, 0);
     const t = (clampedDepth - minDepth) / depthRange;
     const clampedT = Math.max(0, Math.min(1, t));
 
@@ -160,8 +164,9 @@ export function buildTerrainSkirtGeometry(grid: TerrainData): THREE.BufferGeomet
   // yields −0.0, which stringifies as "−0" in the HUD.
   const topY = (depth: number | null | undefined): number => {
     if (depth === null || depth === undefined || !Number.isFinite(depth)) return 0;
-    // Clamp positive (above-water) depths to 0 — same rule as buildTerrainGeometry.
-    const clampedDepth = Math.min(depth, 0);
+    // Clamp negative (above-water) depths up to 0 — same positive-down rule
+    // as buildTerrainGeometry.
+    const clampedDepth = Math.max(depth, 0);
     const t = Math.max(0, Math.min(1, (clampedDepth - minDepth) / depthRange));
     return t === 0 ? 0 : -t * MAX_DEPTH_WORLD;
   };
