@@ -538,6 +538,12 @@ formData.append(`file`, postDatasetsUploadBody.file);
 if(postDatasetsUploadBody.resolution !== undefined) {
  formData.append(`resolution`, postDatasetsUploadBody.resolution.toString())
  }
+if(postDatasetsUploadBody.pdfBbox !== undefined) {
+ formData.append(`pdfBbox`, postDatasetsUploadBody.pdfBbox);
+ }
+if(postDatasetsUploadBody.pdfDepthUnit !== undefined) {
+ formData.append(`pdfDepthUnit`, postDatasetsUploadBody.pdfDepthUnit);
+ }
 
   return customFetch<UploadResult>(getPostDatasetsUploadUrl(),
   {

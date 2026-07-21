@@ -205,6 +205,18 @@ paths:
                   minimum: 32
                   maximum: 512
                   description: Target grid resolution for the full terrain (overview is always 64)
+                pdfBbox:
+                  type: string
+                  description: |
+                    Required for .pdf contour-map uploads: JSON string with the
+                    map's geographic corner coordinates, e.g.
+                    {"minLon":-93.5,"minLat":45.1,"maxLon":-93.4,"maxLat":45.2}.
+                    Ignored for non-PDF uploads.
+                pdfDepthUnit:
+                  type: string
+                  enum: [feet, meters]
+                  default: feet
+                  description: Depth unit printed on the PDF contour map (PDF uploads only)
               required:
                 - file
       responses:

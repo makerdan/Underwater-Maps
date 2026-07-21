@@ -1497,15 +1497,33 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     };
   }, [postDatasetsUpload.isPending, postDatasetsUpload.isSuccess]);
 
+  // ─── PDF contour-map georeferencing ────────────────────────────────────────
+  // PDFs need a user-supplied bounding box + depth unit before upload. The
+  // last-confirmed metadata is kept in a ref so auto-retry / "Retry save"
+  // paths re-send it without re-prompting.
+  const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null);
+  const [pdfBboxFields, setPdfBboxFields] = useState({ minLon: "", minLat: "", maxLon: "", maxLat: "" });
+  const [pdfDepthUnit, setPdfDepthUnit] = useState<"feet" | "meters">("feet");
+  const [pdfDialogError, setPdfDialogError] = useState<string | null>(null);
+  const lastPdfMetaRef = useRef<{ pdfBbox: string; pdfDepthUnit: "feet" | "meters" } | null>(null);
+
   const uploadFile = useCallback(
     (
       file: File,
-      { isRetry, autoAttempt = 0 }: { isRetry?: boolean; autoAttempt?: number } = {},
+      { isRetry, autoAttempt = 0, pdfMeta }: {
+        isRetry?: boolean;
+        autoAttempt?: number;
+        pdfMeta?: { pdfBbox: string; pdfDepthUnit: "feet" | "meters" } | null;
+      } = {},
     ) => {
       uploadStartedAt.current = Date.now();
       uploadFileSizeBytesRef.current = file.size;
+      // Retry paths call uploadFile without pdfMeta — fall back to the last
+      // confirmed georeferencing for this session when the file is a PDF.
+      const effectivePdfMeta =
+        pdfMeta ?? (file.name.toLowerCase().endsWith(".pdf") ? lastPdfMetaRef.current : null);
       postDatasetsUpload.mutate(
-        { data: { file, resolution: 256 } },
+        { data: { file, resolution: 256, ...(effectivePdfMeta ?? {}) } },
         {
           onSuccess: (data) => {
             const isFirstTry = !isRetry && autoAttempt === 0;
@@ -2211,6 +2229,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       }
       setSavingToAccount(false);
 
+      // PDF contour maps: collect georeferencing (bbox + depth unit) first.
+      if (file.name.toLowerCase().endsWith(".pdf")) {
+        setPdfDialogError(null);
+        setPendingPdfFile(file);
+        return;
+      }
+
       // If this file matches a saved interrupted session, resume it.
       const saved = pendingResumeRef.current ?? interruptedSession;
       if (
@@ -2237,6 +2262,36 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     },
     [uploadFile, chunkedUploadFile, gcsUploadFile, interruptedSession, doResumeChunkedUpload, postDatasetsUpload.isPending, chunkedPhase, gcsPhase],
   );
+
+  // Validates the georeferencing fields and starts the PDF upload.
+  const confirmPdfUpload = useCallback(() => {
+    if (!pendingPdfFile) return;
+    const minLon = parseFloat(pdfBboxFields.minLon);
+    const minLat = parseFloat(pdfBboxFields.minLat);
+    const maxLon = parseFloat(pdfBboxFields.maxLon);
+    const maxLat = parseFloat(pdfBboxFields.maxLat);
+    if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite)) {
+      setPdfDialogError("All four corner coordinates are required (decimal degrees).");
+      return;
+    }
+    if (minLon < -180 || maxLon > 180 || minLat < -90 || maxLat > 90) {
+      setPdfDialogError("Coordinates out of range: longitude ±180, latitude ±90.");
+      return;
+    }
+    if (!(minLon < maxLon) || !(minLat < maxLat)) {
+      setPdfDialogError("West/south values must be less than east/north values.");
+      return;
+    }
+    const meta = {
+      pdfBbox: JSON.stringify({ minLon, minLat, maxLon, maxLat }),
+      pdfDepthUnit,
+    };
+    lastPdfMetaRef.current = meta;
+    const file = pendingPdfFile;
+    setPendingPdfFile(null);
+    setPdfDialogError(null);
+    uploadFile(file, { pdfMeta: meta });
+  }, [pendingPdfFile, pdfBboxFields, pdfDepthUnit, uploadFile]);
 
   const handleRetrySave = useCallback(() => {
     if (!lastUploadedFile || postDatasetsUpload.isPending) return;
@@ -2391,6 +2446,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       "application/x-netcdf": [".nc"],
       "application/gpx+xml": [".gpx"],
       "text/xml": [".gpx"],
+      "application/pdf": [".pdf"],
     },
     maxFiles: 1,
     // No maxSize — large files (> 10 MB) route to the chunked path automatically.
@@ -3726,6 +3782,107 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       )}
                     </div>
 
+                    {pendingPdfFile && (
+                      <div
+                        data-testid="pdf-georef-dialog"
+                        style={{
+                          marginTop: 6,
+                          padding: "8px 10px",
+                          border: "1px solid rgba(0,229,255,0.35)",
+                          background: "rgba(0,229,255,0.05)",
+                          borderRadius: 4,
+                          textAlign: "left",
+                        }}
+                      >
+                        <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#7dd3fc", marginBottom: 4 }}>
+                          Georeference “{pendingPdfFile.name}”
+                        </div>
+                        <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 6 }}>
+                          PDF contour maps have no coordinates — enter the map's corner
+                          coordinates (decimal degrees) and the depth unit printed on the map.
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 6 }}>
+                          {([
+                            ["minLon", "West longitude"],
+                            ["maxLon", "East longitude"],
+                            ["minLat", "South latitude"],
+                            ["maxLat", "North latitude"],
+                          ] as const).map(([key, label]) => (
+                            <label key={key} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
+                              {label}
+                              <input
+                                data-testid={`pdf-georef-${key}`}
+                                type="text"
+                                inputMode="decimal"
+                                value={pdfBboxFields[key]}
+                                onChange={(e) => setPdfBboxFields((prev) => ({ ...prev, [key]: e.target.value }))}
+                                placeholder={key.endsWith("Lon") ? "-93.45" : "45.12"}
+                                style={{
+                                  background: "rgba(2,6,23,0.7)",
+                                  border: "1px solid rgba(148,163,184,0.3)",
+                                  borderRadius: 3,
+                                  color: "#e2e8f0",
+                                  padding: "3px 6px",
+                                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                                }}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                          <span style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>Depth unit:</span>
+                          {(["feet", "meters"] as const).map((u) => (
+                            <label key={u} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", cursor: "pointer" }}>
+                              <input
+                                data-testid={`pdf-georef-unit-${u}`}
+                                type="radio"
+                                name="pdfDepthUnit"
+                                checked={pdfDepthUnit === u}
+                                onChange={() => setPdfDepthUnit(u)}
+                              />
+                              {u}
+                            </label>
+                          ))}
+                        </div>
+                        {pdfDialogError && (
+                          <div data-testid="pdf-georef-error" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171", marginBottom: 6 }}>
+                            ⚠ {pdfDialogError}
+                          </div>
+                        )}
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                          <button
+                            data-testid="pdf-georef-cancel"
+                            onClick={() => { setPendingPdfFile(null); setPdfDialogError(null); }}
+                            style={{
+                              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                              color: "#94a3b8",
+                              background: "transparent",
+                              border: "1px solid rgba(148,163,184,0.3)",
+                              borderRadius: 3,
+                              padding: "2px 8px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            data-testid="pdf-georef-confirm"
+                            onClick={confirmPdfUpload}
+                            style={{
+                              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                              color: "#00e5ff",
+                              background: "transparent",
+                              border: "1px solid rgba(0,229,255,0.35)",
+                              borderRadius: 3,
+                              padding: "2px 8px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Upload contour map
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {chunkedPhase === "error" && lastChunkedFile && (
                       <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
                         <button

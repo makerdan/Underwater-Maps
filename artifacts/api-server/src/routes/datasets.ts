@@ -44,6 +44,7 @@ import {
   type TerrainGrid,
 } from "../lib/terrain.js";
 import { parseUploadedFile } from "../lib/uploadParsers.js";
+import { parsePdfContourFile, PdfStageError, type PdfDepthUnit } from "../lib/pdfContour.js";
 import { routeTarEntries } from "../lib/noaaTarRouter.js";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
 import { isTarBuffer, extractTarBuffer, isTarFile, extractTarFile, isGzipFile } from "../lib/tarDetect.js";
@@ -1286,6 +1287,7 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set([
   ".gpx",          // GPS Exchange (track logs with elevation)
   ".nmea",         // NMEA-0183 depth sounder logs (primary extension)
   ".nme",          // NMEA-0183 depth sounder logs (alternate extension used by some devices)
+  ".pdf",          // Vector contour map (requires pdfBbox + pdfDepthUnit form fields)
 ]);
 
 const datasetUploadRateLimit = createRateLimit({
@@ -1320,7 +1322,7 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(
-        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea, .nme`), {
+        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea, .nme, .pdf`), {
           code: "LIMIT_UNEXPECTED_FILE",
         }) as unknown as null,
         false,
@@ -2134,7 +2136,63 @@ router.post(
   // rather than falling through to the 400 "resolution required" check below.
   let points;
   try {
-    if (TEXT_EXTENSIONS.has(fileExt)) {
+    if (fileExt === "pdf") {
+      // Vector contour map: requires user-supplied georeferencing metadata.
+      // pdfBbox is a JSON string {minLon,minLat,maxLon,maxLat}; pdfDepthUnit
+      // is "feet" (default — US lake maps are almost always feet) or "meters".
+      const PdfBboxSchema = z.object({
+        minLon: z.coerce.number().gte(-180).lte(180),
+        minLat: z.coerce.number().gte(-90).lte(90),
+        maxLon: z.coerce.number().gte(-180).lte(180),
+        maxLat: z.coerce.number().gte(-90).lte(90),
+      }).refine((b) => b.minLon < b.maxLon && b.minLat < b.maxLat, {
+        message: "min longitude/latitude must be strictly less than max",
+      });
+      const rawBbox = req.body["pdfBbox"];
+      if (typeof rawBbox !== "string" || rawBbox.length === 0) {
+        res.status(400).json({
+          error: "pdf_georeference_required",
+          details:
+            "PDF contour maps need georeferencing: include a 'pdfBbox' form field " +
+            "with the map's corner coordinates as JSON " +
+            '({"minLon":…,"minLat":…,"maxLon":…,"maxLat":…}).',
+        });
+        return;
+      }
+      let bboxJson: unknown;
+      try {
+        bboxJson = JSON.parse(rawBbox);
+      } catch {
+        res.status(400).json({ error: "invalid_param", details: "pdfBbox is not valid JSON." });
+        return;
+      }
+      const bboxParsed = PdfBboxSchema.safeParse(bboxJson);
+      if (!bboxParsed.success) {
+        res.status(400).json({
+          error: "invalid_param",
+          details: "pdfBbox: " + (bboxParsed.error.issues[0]?.message ?? "invalid bounding box"),
+        });
+        return;
+      }
+      const rawUnit = req.body["pdfDepthUnit"];
+      if (rawUnit !== undefined && rawUnit !== "feet" && rawUnit !== "meters") {
+        res.status(400).json({
+          error: "invalid_param",
+          details: 'pdfDepthUnit must be "feet" or "meters".',
+        });
+        return;
+      }
+      const depthUnit: PdfDepthUnit = (rawUnit as PdfDepthUnit | undefined) ?? "feet";
+      try {
+        points = await parsePdfContourFile(file.buffer, bboxParsed.data, depthUnit);
+      } catch (err) {
+        if (err instanceof PdfStageError) {
+          res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
+          return;
+        }
+        throw err;
+      }
+    } else if (TEXT_EXTENSIONS.has(fileExt)) {
       points = parseXyzCsv(fileContent, baseFileName);
     } else {
       // For .gz-wrapped binary formats (LAS, GeoTIFF, NetCDF, BAG), pass the
@@ -2211,7 +2269,10 @@ router.post(
   // bypass the check.  NMEA and GPX are real-area surveys and ARE included.
   const MAX_NODATA_PERCENT = 70;
   const coveragePercent = terrain.coveragePercent ?? 100;
-  const isTextPointSurvey = TEXT_EXTENSIONS.has(fileExt);
+  // PDF contour maps also bypass the guard: direct samples lie only along the
+  // contour lines, so grid "coverage" is inherently low even for a complete
+  // map — the IDW interpolation between contours is the whole point.
+  const isTextPointSurvey = TEXT_EXTENSIONS.has(fileExt) || fileExt === "pdf";
   if (!isTextPointSurvey && coveragePercent < (100 - MAX_NODATA_PERCENT)) {
     res.status(422).json({
       error: "sparse_survey",
@@ -2481,6 +2542,19 @@ router.post(
   validateBody(ChunkFinalizeBodySchema, "POST /api/datasets/upload/chunk/finalize"),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { uploadId, fileName, totalChunks, resolution } = res.locals.parsedBody;
+
+    // PDF contour maps carry georeferencing metadata (bbox + depth unit) that
+    // only the direct upload path accepts. PDFs are small (well under the
+    // 50 MB direct limit), so the chunked path simply refuses them.
+    if (String(fileName).toLowerCase().endsWith(".pdf")) {
+      res.status(400).json({
+        error: "pdf_direct_upload_required",
+        details:
+          "PDF contour maps must be uploaded via the standard upload (they need " +
+          "georeferencing fields). Use the regular upload path instead of chunked upload.",
+      });
+      return;
+    }
 
     // Verify that all chunks are present before queuing
     for (let i = 0; i < totalChunks; i++) {

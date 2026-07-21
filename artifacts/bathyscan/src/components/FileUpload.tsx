@@ -19,7 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
  */
 
 export const SUPPORTED_EXTENSIONS =
-  ".csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .gz";
+  ".csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .gz, .pdf";
 
 const GZ_WARNING_THRESHOLD_MB = 30;
 const UPLOAD_LIMIT_MB = 50;

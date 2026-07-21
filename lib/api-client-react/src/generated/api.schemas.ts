@@ -3087,6 +3087,17 @@ export type GetDatasetsIdTerrainParams = {
 resolution?: number;
 };
 
+/**
+ * Depth unit printed on the PDF contour map (PDF uploads only)
+ */
+export type PostDatasetsUploadBodyPdfDepthUnit = typeof PostDatasetsUploadBodyPdfDepthUnit[keyof typeof PostDatasetsUploadBodyPdfDepthUnit];
+
+
+export const PostDatasetsUploadBodyPdfDepthUnit = {
+  feet: 'feet',
+  meters: 'meters',
+} as const;
+
 export type PostDatasetsUploadBody = {
   /** XYZ or CSV file with lon,lat,depth columns */
   file: Blob;
@@ -3096,6 +3107,14 @@ export type PostDatasetsUploadBody = {
      * @maximum 512
      */
   resolution?: number;
+  /** Required for .pdf contour-map uploads: JSON string with the
+  map's geographic corner coordinates, e.g.
+  {"minLon":-93.5,"minLat":45.1,"maxLon":-93.4,"maxLat":45.2}.
+  Ignored for non-PDF uploads.
+   */
+  pdfBbox?: string;
+  /** Depth unit printed on the PDF contour map (PDF uploads only) */
+  pdfDepthUnit?: PostDatasetsUploadBodyPdfDepthUnit;
 };
 
 export type GetMarkersParams = {

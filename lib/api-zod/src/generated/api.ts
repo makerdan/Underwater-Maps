@@ -205,11 +205,13 @@ export const postDatasetsUploadBodyResolutionDefault = 256;
 export const postDatasetsUploadBodyResolutionMin = 32;
 export const postDatasetsUploadBodyResolutionMax = 512;
 
-
+export const postDatasetsUploadBodyPdfDepthUnitDefault = `feet`;
 
 export const PostDatasetsUploadBody = zod.object({
   "file": zod.instanceof(File).describe('XYZ or CSV file with lon,lat,depth columns'),
-  "resolution": zod.number().min(postDatasetsUploadBodyResolutionMin).max(postDatasetsUploadBodyResolutionMax).default(postDatasetsUploadBodyResolutionDefault).describe('Target grid resolution for the full terrain (overview is always 64)')
+  "resolution": zod.number().min(postDatasetsUploadBodyResolutionMin).max(postDatasetsUploadBodyResolutionMax).default(postDatasetsUploadBodyResolutionDefault).describe('Target grid resolution for the full terrain (overview is always 64)'),
+  "pdfBbox": zod.string().optional().describe('Required for .pdf contour-map uploads: JSON string with the\nmap\'s geographic corner coordinates, e.g.\n{\"minLon\":-93.5,\"minLat\":45.1,\"maxLon\":-93.4,\"maxLat\":45.2}.\nIgnored for non-PDF uploads.\n'),
+  "pdfDepthUnit": zod.enum(['feet', 'meters']).default(postDatasetsUploadBodyPdfDepthUnitDefault).describe('Depth unit printed on the PDF contour map (PDF uploads only)')
 })
 
 export const PostDatasetsUploadResponse = zod.object({

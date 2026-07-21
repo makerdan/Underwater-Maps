@@ -63,7 +63,7 @@ const DISALLOWED_EXTENSIONS = [
   ".tar",
   ".html",
   ".svg",
-  ".pdf",
+  // ".pdf" removed — vector contour-map PDFs are an accepted upload type now.
   ".docx",
 ];
 

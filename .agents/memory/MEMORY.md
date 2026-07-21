@@ -89,3 +89,4 @@
 - [Skip-count ratchet guard](skip-count-guard.md) — check:skip-count (fast tier) pins unit static skips at 0 and e2e test.skip sites to tests/skip-baseline.json; update baseline in the same commit as any new gated skip.
 - [Font scale convention](font-scale-convention.md) — inline fontSize must be calc(Npx * var(--bs-font-scale,1)); never set inline body px (clobbers daylight CSS). drei/SVG fontSize attrs exempt.
 - [Marker library sections](marker-library-sections.md) — edit-mode type check must use full MARKER_TYPES (legacy stays valid); partial markerConstants mocks need every section export.
+- [pdfjs v6 server parsing](pdfjs-v6-server-parsing.md) — destroy() is on the loading task not the doc proxy; isEvalSupported missing from typings (cast); constructPath arg format for vector extraction.
