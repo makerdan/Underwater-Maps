@@ -78,6 +78,7 @@ export const usePanelCollapseStore = create<PanelCollapseStore>()(
     {
       name: "bathyscan:panel-collapse",
       version: 1,
+      migrate: (persistedState) => persistedState as PanelCollapseStore,
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<PanelCollapseStore>;
         return {

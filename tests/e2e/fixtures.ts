@@ -80,6 +80,10 @@ export const DEFAULT_SETTINGS = {
   // Explore tab's DatasetPanel and breaking remove-dataset flows.
   sidebarMode: "explore",
   panelCollapse: {},
+  // sidePaneCollapsed persists server-side; a spec that collapses the sidebar
+  // would otherwise leave it collapsed for all subsequent specs, preventing
+  // sidebar-mode-tabs and dataset buttons from being visible.
+  sidePaneCollapsed: false,
 } as const;
 
 // ─── Layer 3: per-spec-file wall-clock budget guard ─────────────────────────

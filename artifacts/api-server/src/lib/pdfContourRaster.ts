@@ -43,6 +43,22 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const RASTER_CONTOUR_PY = join(__dirname, "raster_contour.py");
 
+// Build a Python env that can find packages installed to .pythonlibs
+// (the Replit/Nix pip install target). Workflow subprocesses may not
+// inherit PYTHONUSERBASE from the shell, so we forward it explicitly.
+const WORKSPACE_ROOT = join(__dirname, "..", "..", "..", "..");
+const _PYTHONUSERBASE =
+  process.env.PYTHONUSERBASE ?? join(WORKSPACE_ROOT, ".pythonlibs");
+const _PYTHON_SITE =
+  join(_PYTHONUSERBASE, "lib", "python3.11", "site-packages");
+const _PYTHON_ENV: NodeJS.ProcessEnv = {
+  ...process.env,
+  PYTHONUSERBASE: _PYTHONUSERBASE,
+  PYTHONPATH: process.env.PYTHONPATH
+    ? `${_PYTHON_SITE}:${process.env.PYTHONPATH}`
+    : _PYTHON_SITE,
+};
+
 // ---------------------------------------------------------------------------
 // Python environment helpers
 // ---------------------------------------------------------------------------
@@ -221,7 +237,7 @@ async function callRasterContourScript(imageBuffer: Buffer): Promise<RasterConto
     const child = execFile(
       "python3",
       [RASTER_CONTOUR_PY],
-      { maxBuffer: 20 * 1024 * 1024, env: PYTHON_ENV },
+      { maxBuffer: 20 * 1024 * 1024, env: _PYTHON_ENV },
       (err, stdout, stderr) => {
         if (err) {
           // The script may emit structured error JSON to stdout (e.g. blank_page)

@@ -156,23 +156,17 @@ vi.mock("@/lib/terrainStore", () => {
 });
 
 vi.mock("@/lib/uiStore", () => {
-  const uiState = {
+  const mockState = {
     setPendingDropIn: vi.fn(),
-    georefPickBbox: null as null | {
-      minLon: number;
-      minLat: number;
-      maxLon: number;
-      maxLat: number;
-    },
+    georefPickBbox: null as null | { minLon: number; minLat: number; maxLon: number; maxLat: number },
     georefPickMode: false,
-    setGeorefPickBbox: vi.fn(),
     setGeorefPickMode: vi.fn(),
+    setGeorefPickBbox: vi.fn(),
   };
-  const useUiStore = ((sel: (s: typeof uiState) => unknown) =>
-    sel(uiState)) as ((sel: (s: typeof uiState) => unknown) => unknown) & {
-    getState: () => typeof uiState;
-  };
-  useUiStore.getState = () => uiState;
+  const useUiStore = Object.assign(
+    (sel: (s: typeof mockState) => unknown) => sel(mockState),
+    { getState: () => mockState },
+  );
   return { useUiStore };
 });
 
