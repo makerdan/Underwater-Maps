@@ -94,3 +94,4 @@
 - [Colormap depth-domain convention](colormap-depth-domain-convention.md) — ocean/custom themes normalise depth on absolute 0–2000 ft; fixed ramps stay grid-relative; legends crop via getColormapTRange.
 - [Terrain shader palette dominance](terrain-shader-palette-dominance.md) — palette hue is the base color; textures are clamped luminance detail, never a multiplier; guarded by a TS-mirror test.
 - [mark_task_complete validation window](mark-complete-validation-window.md) — completion workflow polls ~10.5 min but full suite takes 45+ min; never re-call immediately, drain orphaned lock waiters, verify run logs, then finalize with skip reason.
+- [Tesseract OCR upscale requirement](tesseract-ocr-upscale.md) — LSTM silently returns empty on <1200 px images; upscale to 2400 px short-side; labels must sit ≥60 px clear of any drawn lines in test fixtures.

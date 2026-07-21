@@ -44,7 +44,8 @@ import {
   type TerrainGrid,
 } from "../lib/terrain.js";
 import { parseUploadedFile } from "../lib/uploadParsers.js";
-import { parsePdfContourFile, PdfStageError, type PdfDepthUnit } from "../lib/pdfContour.js";
+import { parsePdfContourFile, PdfStageError, PdfRasterOnlyError, type PdfDepthUnit } from "../lib/pdfContour.js";
+import { parseRasterPdfContourFile, parseRasterImageContourFile } from "../lib/pdfContourRaster.js";
 import { routeTarEntries } from "../lib/noaaTarRouter.js";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
 import { isTarBuffer, extractTarBuffer, isTarFile, extractTarFile, isGzipFile } from "../lib/tarDetect.js";
@@ -1287,7 +1288,9 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set([
   ".gpx",          // GPS Exchange (track logs with elevation)
   ".nmea",         // NMEA-0183 depth sounder logs (primary extension)
   ".nme",          // NMEA-0183 depth sounder logs (alternate extension used by some devices)
-  ".pdf",          // Vector contour map (requires pdfBbox + pdfDepthUnit form fields)
+  ".pdf",          // Vector or raster contour map (requires pdfBbox + pdfDepthUnit form fields)
+  ".png",          // Raster contour map image (requires pdfBbox + pdfDepthUnit form fields)
+  ".jpg", ".jpeg", // Raster contour map image (requires pdfBbox + pdfDepthUnit form fields)
 ]);
 
 const datasetUploadRateLimit = createRateLimit({
@@ -1322,7 +1325,7 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(
-        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea, .nme, .pdf`), {
+        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea, .nme, .pdf, .png, .jpg, .jpeg`), {
           code: "LIMIT_UNEXPECTED_FILE",
         }) as unknown as null,
         false,
@@ -2186,6 +2189,74 @@ router.post(
       try {
         points = await parsePdfContourFile(file.buffer, bboxParsed.data, depthUnit);
       } catch (err) {
+        if (err instanceof PdfRasterOnlyError) {
+          // The PDF is scanned/raster-only — re-run through the image-based
+          // contour pipeline (render PDF → OCR + line detection → georef).
+          try {
+            points = await parseRasterPdfContourFile(file.buffer, bboxParsed.data, depthUnit);
+          } catch (rasterErr) {
+            if (rasterErr instanceof PdfStageError) {
+              res.status(422).json({ error: `pdf_${rasterErr.stage}_error`, details: rasterErr.message });
+              return;
+            }
+            throw rasterErr;
+          }
+        } else if (err instanceof PdfStageError) {
+          res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
+          return;
+        } else {
+          throw err;
+        }
+      }
+    } else if (fileExt === "png" || fileExt === "jpg" || fileExt === "jpeg") {
+      // Raster contour map image uploaded directly — same georeferencing
+      // metadata required as for raster PDFs.
+      const PdfBboxSchema = z.object({
+        minLon: z.coerce.number().gte(-180).lte(180),
+        minLat: z.coerce.number().gte(-90).lte(90),
+        maxLon: z.coerce.number().gte(-180).lte(180),
+        maxLat: z.coerce.number().gte(-90).lte(90),
+      }).refine((b) => b.minLon < b.maxLon && b.minLat < b.maxLat, {
+        message: "min longitude/latitude must be strictly less than max",
+      });
+      const rawBbox = req.body["pdfBbox"];
+      if (typeof rawBbox !== "string" || rawBbox.length === 0) {
+        res.status(400).json({
+          error: "pdf_georeference_required",
+          details:
+            "Raster contour map images need georeferencing: include a 'pdfBbox' form field " +
+            "with the map's corner coordinates as JSON " +
+            '({"minLon":…,"minLat":…,"maxLon":…,"maxLat":…}).',
+        });
+        return;
+      }
+      let bboxJson: unknown;
+      try {
+        bboxJson = JSON.parse(rawBbox);
+      } catch {
+        res.status(400).json({ error: "invalid_param", details: "pdfBbox is not valid JSON." });
+        return;
+      }
+      const bboxParsed = PdfBboxSchema.safeParse(bboxJson);
+      if (!bboxParsed.success) {
+        res.status(400).json({
+          error: "invalid_param",
+          details: "pdfBbox: " + (bboxParsed.error.issues[0]?.message ?? "invalid bounding box"),
+        });
+        return;
+      }
+      const rawUnit = req.body["pdfDepthUnit"];
+      if (rawUnit !== undefined && rawUnit !== "feet" && rawUnit !== "meters") {
+        res.status(400).json({
+          error: "invalid_param",
+          details: 'pdfDepthUnit must be "feet" or "meters".',
+        });
+        return;
+      }
+      const depthUnit: PdfDepthUnit = (rawUnit as PdfDepthUnit | undefined) ?? "feet";
+      try {
+        points = await parseRasterImageContourFile(file.buffer, bboxParsed.data, depthUnit);
+      } catch (err) {
         if (err instanceof PdfStageError) {
           res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
           return;
@@ -2272,7 +2343,8 @@ router.post(
   // PDF contour maps also bypass the guard: direct samples lie only along the
   // contour lines, so grid "coverage" is inherently low even for a complete
   // map — the IDW interpolation between contours is the whole point.
-  const isTextPointSurvey = TEXT_EXTENSIONS.has(fileExt) || fileExt === "pdf";
+  const isTextPointSurvey = TEXT_EXTENSIONS.has(fileExt) || fileExt === "pdf" ||
+    fileExt === "png" || fileExt === "jpg" || fileExt === "jpeg";
   if (!isTextPointSurvey && coveragePercent < (100 - MAX_NODATA_PERCENT)) {
     res.status(422).json({
       error: "sparse_survey",

@@ -20,6 +20,7 @@ import {
   pdfContoursToPoints,
   parsePdfContourFile,
   PdfStageError,
+  PdfRasterOnlyError,
 } from "../lib/pdfContour.js";
 import {
   makeContourPdf,
@@ -42,15 +43,14 @@ describe("extractPdfContours", () => {
     expect(extraction.pageView).toEqual([0, 0, 300, 300]);
   });
 
-  it("rejects raster-only PDFs at the extract stage with a 'not supported yet' message", async () => {
+  it("throws PdfRasterOnlyError for raster-only PDFs (raster path now supported)", async () => {
     const err = await extractPdfContours(makeRasterOnlyPdf()).then(
       () => null,
       (e: unknown) => e,
     );
-    expect(err).toBeInstanceOf(PdfStageError);
-    expect((err as PdfStageError).stage).toBe("extract");
-    expect((err as PdfStageError).message).toMatch(/not supported yet/i);
-    expect((err as PdfStageError).message).toMatch(/raster|scanned/i);
+    expect(err).toBeInstanceOf(PdfRasterOnlyError);
+    // Should NOT be a PdfStageError — the raster pipeline handles it now
+    expect(err).not.toBeInstanceOf(PdfStageError);
   });
 
   it("rejects vector PDFs with no numeric depth labels at the extract stage", async () => {

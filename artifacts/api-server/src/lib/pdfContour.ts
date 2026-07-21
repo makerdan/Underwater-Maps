@@ -36,6 +36,20 @@ export class PdfStageError extends Error {
   }
 }
 
+/**
+ * Thrown by extractPdfContours() when the PDF contains only raster images
+ * and no vector paths. Callers should route this to the raster pipeline
+ * (pdfContourRaster.ts) instead of treating it as a terminal error.
+ */
+export class PdfRasterOnlyError extends Error {
+  constructor() {
+    super(
+      "this PDF contains only raster images (a scanned map) — routing to the raster contour pipeline.",
+    );
+    this.name = "PdfRasterOnlyError";
+  }
+}
+
 const STAGE_PREFIX: Record<PdfStage, string> = {
   parse: "PDF parsing failed",
   extract: "Contour extraction failed",
@@ -216,10 +230,9 @@ export async function extractPdfContours(buffer: Buffer): Promise<PdfContourExtr
 
     if (polylines.length === 0) {
       if (hasImages) {
-        throw stageError(
-          "extract",
-          "this PDF contains only raster images (a scanned map). Raster/scanned contour maps are not supported yet — please upload a vector PDF with drawn contour lines.",
-        );
+        // Throw PdfRasterOnlyError so the upload route can redirect to the
+        // image-based raster contour pipeline instead of failing outright.
+        throw new PdfRasterOnlyError();
       }
       throw stageError(
         "extract",

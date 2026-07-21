@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.tesseract
     pkgs.laszip
     pkgs.libgbm
     pkgs.xorg.libxcb
