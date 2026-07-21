@@ -230,6 +230,68 @@ describe("BUNDLED_TERRAIN — bundle file presence and resample integrity", () =
       ).toBe("bundled-survey");
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // Pinned depth-range checks — catches silent grid-regen regressions
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Expected maxDepth bracket per bundled dataset.
+   * Derived from the actual bundle JSON files (verified 2026-07-21).
+   * If a grid is regenerated and the maxDepth drifts outside the bracket,
+   * that test will fail immediately — update the bracket intentionally.
+   *
+   * Crater Lake:   surveyed max ~594 m (USGS ScienceBase); bundle grid = 542.5 m
+   * Lake Tahoe:    surveyed max ~501 m (USGS ScienceBase); bundle grid = 501.0 m
+   * Lake Ray Roberts: surveyed max ~28 m; smoothed bundle grid ≈ 21.9 m
+   */
+  const BUNDLED_DEPTH_EXPECTATIONS: Record<string, { maxDepthMin: number; maxDepthMax: number }> = {
+    "fw-crater-lake-or":    { maxDepthMin: 530, maxDepthMax: 555 },
+    "fw-lake-tahoe-ca-nv":  { maxDepthMin: 490, maxDepthMax: 515 },
+    "lake-ray-roberts":     { maxDepthMin: 18,  maxDepthMax: 28  },
+  };
+
+  it("every BUNDLED_TERRAIN key appears in BUNDLED_DEPTH_EXPECTATIONS (completeness guard)", () => {
+    for (const id of Object.keys(BUNDLED_TERRAIN)) {
+      expect(
+        BUNDLED_DEPTH_EXPECTATIONS[id],
+        `BUNDLED_DEPTH_EXPECTATIONS is missing an entry for "${id}" — ` +
+        `add a maxDepthMin/maxDepthMax bracket when adding a new bundle.`,
+      ).toBeDefined();
+    }
+  });
+
+  it("each bundle's maxDepth falls within its expected bracket and has water cells", () => {
+    for (const [id, expectation] of Object.entries(BUNDLED_DEPTH_EXPECTATIONS)) {
+      const bundle = BUNDLED_TERRAIN[id];
+      expect(
+        bundle,
+        `BUNDLED_DEPTH_EXPECTATIONS["${id}"] has no matching BUNDLED_TERRAIN entry — ` +
+        `fix the key name or remove the stale expectation.`,
+      ).toBeDefined();
+      if (!bundle) continue;
+
+      const { maxDepthMin, maxDepthMax } = expectation;
+
+      expect(
+        bundle.maxDepth,
+        `${id}: maxDepth ${bundle.maxDepth} is below expected minimum ${maxDepthMin} — ` +
+        `the bundle may have been regenerated with a flat or truncated grid.`,
+      ).toBeGreaterThanOrEqual(maxDepthMin);
+
+      expect(
+        bundle.maxDepth,
+        `${id}: maxDepth ${bundle.maxDepth} exceeds expected maximum ${maxDepthMax} — ` +
+        `verify the bundle scale and update the bracket if the survey data changed.`,
+      ).toBeLessThanOrEqual(maxDepthMax);
+
+      const waterCells = bundle.depths.filter((d) => d > 0).length;
+      expect(
+        waterCells,
+        `${id}: no grid cells have depth > 0 — the bundle appears to be empty or all-land.`,
+      ).toBeGreaterThan(0);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
