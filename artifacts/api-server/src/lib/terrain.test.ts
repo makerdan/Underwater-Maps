@@ -305,6 +305,16 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
     }
   });
 
+  it("DATASET_SOURCE_PRIORITY: Lake George chain is exactly usgs-3dep → gebco (Jefferson Project data not public; verified 2026-07-21)", () => {
+    // The Jefferson Project (RPI/IBM) multibeam survey was investigated as a
+    // primary source on 2026-07-21 and is NOT publicly available in any
+    // machine-readable form (dashboard exposes sensor data only; EDI,
+    // DataONE, HydroShare, ScienceBase, NYS GIS Gateway, NCEI, and NYSFOLA
+    // all lack Lake George bathymetry). Pin the confirmed-unchanged chain so
+    // a silent regression back to GEBCO-first or a dropped fallback fails.
+    expect(getDatasetSourcePriority("fw-lake-george-ny")).toEqual(["usgs-3dep", "gebco"]);
+  });
+
   it("DATASET_SOURCE_PRIORITY: Western freshwater reservoirs use usgs-3dep first (except surveyed lakes)", () => {
     const westernIds = [
       "fw-lake-mead-nv-az",

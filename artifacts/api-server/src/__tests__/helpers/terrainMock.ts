@@ -73,6 +73,7 @@ export function createTerrainMock(
     buildUsgs3depTerrainForBbox: vi.fn(),
     buildGreatLakesTerrainForBbox: vi.fn(),
     smoothSpikes: vi.fn(),
+    extractArcGisDepthM: vi.fn().mockReturnValue(null),
     parseXyzCsv: vi.fn(),
     gridPoints: vi.fn(),
     extractArcGisDepthM: vi.fn(),

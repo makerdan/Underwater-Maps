@@ -989,7 +989,10 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   // machine-readable Lake George survey bathymetry exists (checked ArcGIS
   // Online, the new NYSDEC org, NYS GIS clearinghouse, Warren County GIS,
   // Lake George Park Commission, CUGIR, ScienceBase, HydroShare) — the DEC
-  // sonar map is PDF-only. 3DEP topobathy is the honest best available.
+  // sonar map is PDF-only. Jefferson Project (RPI/IBM) multibeam re-checked
+  // 2026-07-21: never publicly released (dashboard = sensor data only; EDI,
+  // DataONE, HydroShare, ScienceBase, NYS GIS Gateway, NCEI, NYSFOLA all
+  // empty). 3DEP topobathy is the honest best available.
   "fw-lake-george-ny": ["usgs-3dep", "gebco"],
   "fw-lake-champlain": ["usgs-3dep", "gebco"],
   "fw-seneca-lake-ny": ["nysdec-bathy", "usgs-3dep", "gebco"],
