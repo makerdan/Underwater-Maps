@@ -825,11 +825,11 @@ describe("absolute-feet depth mapping — ocean/custom vertex colouring", () => 
   it("a vertex at each band boundary depth renders that band's colour", () => {
     const domain = getColormapDepthDomain("ocean", 0, 10);
     // Band boundaries 0..9 in feet → metres; each must land on its band stop.
-    // Depth 0 is treated as land/nodata by applyColormapToVertexColors (land
-    // clamp: depth <= 0 never samples the palette), so nudge the 0 ft boundary
-    // to an epsilon-positive depth that still lands on band 0's colour stop.
+    // Depth 0 is land (applyColormapToVertexColors clamps depth <= 0 to the
+    // nodata/land colour by design), so nudge the 0 ft boundary to a tiny
+    // positive depth — toColor(0+) still samples band 0's colour.
     const depthsM = DEFAULT_BAND_BOUNDARIES.slice(0, 10).map(
-      (ft) => Math.max(ft, 0.001) * FT_TO_M_TEST,
+      (ft) => Math.max(ft, 0.01) * FT_TO_M_TEST,
     );
     const colors = new Float32Array(depthsM.length * 3);
     applyColormapToVertexColors(depthsM, domain.min, domain.max, colors, getColormap("ocean"));
@@ -843,9 +843,9 @@ describe("absolute-feet depth mapping — ocean/custom vertex colouring", () => 
 
   it("a shallow lake (max 12 m ≈ 40 ft) never samples the deep endpoint", () => {
     const domain = getColormapDepthDomain("ocean", 0, 12);
-    // 0.01 m instead of 0: depth <= 0 is the land/nodata clamp and never
-    // samples the palette, so the shallowest wet vertex must be > 0.
-    const depths = [0.01, 3, 6, 9, 12]; // metres
+    // Depth must stay > 0: finite depth <= 0 is land and is intentionally
+    // left/painted as the nodata colour, not a palette colour.
+    const depths = [0.5, 3, 6, 9, 12]; // metres
     const colors = new Float32Array(depths.length * 3);
     applyColormapToVertexColors(depths, domain.min, domain.max, colors, getColormap("ocean"));
 

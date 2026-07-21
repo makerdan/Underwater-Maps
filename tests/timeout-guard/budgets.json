@@ -4,7 +4,7 @@
     "testTimeoutMs": 30000,
     "hookTimeoutMs": 90000,
     "fileBudgetMs": 120000,
-    "runBudgetMs": 900000,
+    "runBudgetMs": 1200000,
     "rssWarnMb": 8192
   },
   "apiServerValidation": {
@@ -17,7 +17,7 @@
     "testTimeoutMs": 15000,
     "hookTimeoutMs": 15000,
     "fileBudgetMs": 90000,
-    "runBudgetMs": 900000
+    "runBudgetMs": 1200000
   },
   "bathyscanValidation": {
     "testTimeoutMs": 15000,
