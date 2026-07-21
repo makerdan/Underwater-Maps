@@ -82,6 +82,7 @@ export const GetDatasetsIdTerrainResponse = zod.object({
   "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
   "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "noSurveyAvailable": zod.boolean().optional().describe('True when no dedicated bathymetric survey exists in any known public\ndatabase for this dataset. The terrain is derived entirely from coarse\nelevation fallback sources (USGS 3DEP or GEBCO). Clients should surface\nan explanatory note so users understand why depth detail may be coarser\nthan datasets backed by agency-specific multibeam or contour surveys\n(e.g. Lake George, Cayuga Lake).\n'),
   "habitatPolygons": zod.object({
   "type": zod.enum(['FeatureCollection']),
   "features": zod.array(zod.object({
@@ -167,6 +168,7 @@ export const GetDatasetsIdOverviewResponse = zod.object({
   "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
   "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "noSurveyAvailable": zod.boolean().optional().describe('True when no dedicated bathymetric survey exists in any known public\ndatabase for this dataset. The terrain is derived entirely from coarse\nelevation fallback sources (USGS 3DEP or GEBCO). Clients should surface\nan explanatory note so users understand why depth detail may be coarser\nthan datasets backed by agency-specific multibeam or contour surveys\n(e.g. Lake George, Cayuga Lake).\n'),
   "habitatPolygons": zod.object({
   "type": zod.enum(['FeatureCollection']),
   "features": zod.array(zod.object({
@@ -241,6 +243,7 @@ export const PostDatasetsUploadResponse = zod.object({
   "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
   "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "noSurveyAvailable": zod.boolean().optional().describe('True when no dedicated bathymetric survey exists in any known public\ndatabase for this dataset. The terrain is derived entirely from coarse\nelevation fallback sources (USGS 3DEP or GEBCO). Clients should surface\nan explanatory note so users understand why depth detail may be coarser\nthan datasets backed by agency-specific multibeam or contour surveys\n(e.g. Lake George, Cayuga Lake).\n'),
   "habitatPolygons": zod.object({
   "type": zod.enum(['FeatureCollection']),
   "features": zod.array(zod.object({
@@ -288,6 +291,7 @@ export const PostDatasetsUploadResponse = zod.object({
   "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
   "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "noSurveyAvailable": zod.boolean().optional().describe('True when no dedicated bathymetric survey exists in any known public\ndatabase for this dataset. The terrain is derived entirely from coarse\nelevation fallback sources (USGS 3DEP or GEBCO). Clients should surface\nan explanatory note so users understand why depth detail may be coarser\nthan datasets backed by agency-specific multibeam or contour surveys\n(e.g. Lake George, Cayuga Lake).\n'),
   "habitatPolygons": zod.object({
   "type": zod.enum(['FeatureCollection']),
   "features": zod.array(zod.object({
@@ -388,6 +392,7 @@ export const GetUserDatasetsIdTerrainResponse = zod.object({
   "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
   "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "noSurveyAvailable": zod.boolean().optional().describe('True when no dedicated bathymetric survey exists in any known public\ndatabase for this dataset. The terrain is derived entirely from coarse\nelevation fallback sources (USGS 3DEP or GEBCO). Clients should surface\nan explanatory note so users understand why depth detail may be coarser\nthan datasets backed by agency-specific multibeam or contour surveys\n(e.g. Lake George, Cayuga Lake).\n'),
   "habitatPolygons": zod.object({
   "type": zod.enum(['FeatureCollection']),
   "features": zod.array(zod.object({
@@ -444,6 +449,7 @@ export const GetUserDatasetsIdOverviewResponse = zod.object({
   "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
   "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
   "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "noSurveyAvailable": zod.boolean().optional().describe('True when no dedicated bathymetric survey exists in any known public\ndatabase for this dataset. The terrain is derived entirely from coarse\nelevation fallback sources (USGS 3DEP or GEBCO). Clients should surface\nan explanatory note so users understand why depth detail may be coarser\nthan datasets backed by agency-specific multibeam or contour surveys\n(e.g. Lake George, Cayuga Lake).\n'),
   "habitatPolygons": zod.object({
   "type": zod.enum(['FeatureCollection']),
   "features": zod.array(zod.object({

@@ -1522,6 +1522,14 @@ export interface TerrainData {
   bathymetryCreditUrl?: string;
   /** Credit URL surfaced next to the topography source badge. */
   topographyCreditUrl?: string;
+  /** True when no dedicated bathymetric survey exists in any known public
+  database for this dataset. The terrain is derived entirely from coarse
+  elevation fallback sources (USGS 3DEP or GEBCO). Clients should surface
+  an explanatory note so users understand why depth detail may be coarser
+  than datasets backed by agency-specific multibeam or contour surveys
+  (e.g. Lake George, Cayuga Lake).
+   */
+  noSurveyAvailable?: boolean;
   /** EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain
   response for user-saved noaa-efh-* catalog datasets. Present only when the
   dataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog

@@ -88,6 +88,14 @@ export interface TerrainGrid {
   bathymetryCreditUrl?: string;
   /** Credit URL for the topography source. */
   topographyCreditUrl?: string;
+  /**
+   * True when no dedicated bathymetric survey exists in any known public
+   * database for this dataset. The terrain is derived entirely from coarse
+   * elevation fallback sources (USGS 3DEP or GEBCO). Clients should surface
+   * an explanatory note so users understand why detail may be coarser than
+   * lakes backed by agency-specific multibeam or contour surveys.
+   */
+  noSurveyAvailable?: boolean;
   version?: number;
 }
 
@@ -1080,6 +1088,37 @@ export function getDatasetSourcePriority(
   datasetId: string,
 ): readonly BathymetrySourceId[] {
   return DATASET_SOURCE_PRIORITY[datasetId] ?? DEFAULT_SOURCE_PRIORITY;
+}
+
+/**
+ * Source IDs that represent dedicated bathymetric surveys or high-quality
+ * lake/ocean-specific DEMs. When a dataset's priority chain contains NONE of
+ * these, it has no public dedicated survey and `noSurveyAvailable` is set.
+ *
+ * Excluded (coarse elevation-only fallbacks that are NOT surveys):
+ *   usgs-3dep   — national land-elevation DEM repurposed for bathymetry
+ *   gebco       — global ~400 m ocean/lake grid
+ *   synthetic   — procedurally generated fallback
+ */
+const SURVEY_QUALITY_SOURCE_IDS = new Set<BathymetrySourceId>([
+  "ncei-bag-mosaic",
+  "ncei-dem-global-mosaic",
+  "ncei-crm-s-alaska",
+  "noaa-great-lakes-dem",
+  "nysdec-bathy",
+  "mn-dnr-bathy",
+  "bundled-survey",
+]);
+
+/**
+ * Returns true when the dataset's source priority chain contains at least one
+ * dedicated survey-quality source. Returns false when the chain is entirely
+ * composed of coarse elevation fallbacks (usgs-3dep / gebco / synthetic),
+ * which means no public bathymetric survey is known for this area.
+ */
+export function datasetHasSurveySource(datasetId: string): boolean {
+  const priority = getDatasetSourcePriority(datasetId);
+  return priority.some((id) => SURVEY_QUALITY_SOURCE_IDS.has(id));
 }
 
 /**
@@ -2321,6 +2360,11 @@ export async function buildTerrainGrid(
   const disk = await readDiskCache(cacheKey);
   if (disk) {
     logger.info({ cacheKey }, `[terrain] Disk cache hit: ${cacheKey}`);
+    // Inject noSurveyAvailable if absent (grids cached before this field was
+    // added won't have it; computing it is cheap — no cache version bump needed).
+    if (disk.noSurveyAvailable === undefined && !datasetHasSurveySource(datasetId)) {
+      disk.noSurveyAvailable = true;
+    }
     memoryCache.set(cacheKey, disk);
     return disk;
   }
@@ -2400,6 +2444,8 @@ export async function buildTerrainGrid(
     if (depths[i]! > maxDepth) maxDepth = depths[i]!;
   }
 
+  const noSurveyAvailable = !datasetHasSurveySource(datasetId) || undefined;
+
   const grid: TerrainGrid = {
     datasetId,
     name: meta.name,
@@ -2425,6 +2471,7 @@ export async function buildTerrainGrid(
     ...(topographySourceLabel ? { topographySourceLabel } : {}),
     ...(topographyCreditUrl ? { topographyCreditUrl } : {}),
     ...(hasTopography && topography ? { topography, hasTopography: true } : {}),
+    ...(noSurveyAvailable ? { noSurveyAvailable } : {}),
   };
 
   memoryCache.set(cacheKey, grid);

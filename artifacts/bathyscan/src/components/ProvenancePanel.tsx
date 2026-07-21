@@ -313,6 +313,33 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
       </div>
       </ViewscreenTooltip>
 
+      {/* No-survey notice — always visible when applicable */}
+      {terrain.noSurveyAvailable && (
+        <div
+          data-testid="no-survey-notice"
+          style={{
+            marginTop: 5,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 5,
+            background: "rgba(251,191,36,0.08)",
+            border: "1px solid rgba(251,191,36,0.3)",
+            borderRadius: 4,
+            padding: "4px 7px",
+            fontSize: "calc(13px * var(--bs-font-scale, 1))",
+            color: "#fbbf24",
+            lineHeight: 1.45,
+          }}
+        >
+          <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span>
+          <span>
+            No dedicated bathymetric survey is publicly available for this lake.
+            Depth is estimated from elevation data (USGS 3DEP / GEBCO) and may be
+            coarser than lakes with agency survey coverage.
+          </span>
+        </div>
+      )}
+
       {/* Expanded detail */}
       {expanded && (
         <div
