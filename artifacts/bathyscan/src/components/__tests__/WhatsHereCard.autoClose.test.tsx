@@ -51,8 +51,8 @@ vi.mock("@/lib/cameraStore", () => {
       _sub = cb;
       return () => { _sub = null; };
     }),
-    _triggerMove: (newState: object) => {
-      if (_sub) _sub(newState, {});
+    _emit: (newState: object, prevState: object) => {
+      if (_sub) _sub(newState, prevState);
     },
   };
   return { useCameraStore: store };
@@ -80,7 +80,8 @@ vi.mock("@/lib/uiStore", () => {
 
 // ── Imports under test ───────────────────────────────────────────────────────
 import { useUiStore } from "@/lib/uiStore";
-import { WhatsHereCard } from "@/components/WhatsHereCard";
+import { useCameraStore as useCameraStoreMock } from "@/lib/cameraStore";
+import { WhatsHereCard, cameraMovedMeaningfully } from "@/components/WhatsHereCard";
 import type { WhatsHereData } from "@/hooks/useWhatsHere";
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
@@ -177,6 +178,130 @@ describe("WhatsHereCard — pin suppresses auto-close", () => {
     });
 
     expect(setOpen).not.toHaveBeenCalledWith(false);
+  });
+});
+
+describe("WhatsHereCard — camera-move auto-close is value-based", () => {
+  const stationary = {
+    cameraPosition: { known: true, lon: -132.5, lat: 55.5 },
+    cameraDepth: 20,
+    heading: 90,
+  };
+
+  function emit(prev: object, next: object) {
+    (useCameraStoreMock as unknown as { _emit: (n: object, p: object) => void })
+      ._emit(next, prev);
+  }
+
+  it("stays open when identical camera values are re-published every frame (new object refs)", () => {
+    render(React.createElement(WhatsHereCard, { data: makeData() }));
+    const setOpen = getSetWhatsHereOpen();
+
+    // Simulate 10 per-frame store writes with identical values but fresh
+    // cameraPosition object identities (what setCameraGeo does each frame).
+    for (let i = 0; i < 10; i++) {
+      act(() => {
+        emit(
+          { ...stationary, cameraPosition: { ...stationary.cameraPosition } },
+          { ...stationary, cameraPosition: { ...stationary.cameraPosition } },
+        );
+      });
+    }
+
+    expect(setOpen).not.toHaveBeenCalledWith(false);
+  });
+
+  it("stays open on sub-epsilon float jitter", () => {
+    render(React.createElement(WhatsHereCard, { data: makeData() }));
+    const setOpen = getSetWhatsHereOpen();
+
+    act(() => {
+      emit(stationary, {
+        cameraPosition: { known: true, lon: -132.5 + 1e-9, lat: 55.5 - 1e-9 },
+        cameraDepth: 20.001,
+        heading: 90.0001,
+      });
+    });
+
+    expect(setOpen).not.toHaveBeenCalledWith(false);
+  });
+
+  it("closes when the camera genuinely moves (unpinned)", () => {
+    render(React.createElement(WhatsHereCard, { data: makeData() }));
+    const setOpen = getSetWhatsHereOpen();
+
+    act(() => {
+      emit(stationary, {
+        ...stationary,
+        cameraPosition: { known: true, lon: -132.5 + 0.001, lat: 55.5 },
+      });
+    });
+
+    expect(setOpen).toHaveBeenCalledWith(false);
+  });
+
+  it("closes on a meaningful heading change (unpinned)", () => {
+    render(React.createElement(WhatsHereCard, { data: makeData() }));
+    const setOpen = getSetWhatsHereOpen();
+
+    act(() => {
+      emit(stationary, { ...stationary, heading: 95 });
+    });
+
+    expect(setOpen).toHaveBeenCalledWith(false);
+  });
+
+  it("stays open on genuine camera movement when pinned", () => {
+    uiState.pinned = true;
+    render(React.createElement(WhatsHereCard, { data: makeData() }));
+    const setOpen = getSetWhatsHereOpen();
+
+    act(() => {
+      emit(stationary, {
+        ...stationary,
+        cameraPosition: { known: true, lon: -130, lat: 56 },
+      });
+    });
+
+    expect(setOpen).not.toHaveBeenCalledWith(false);
+  });
+});
+
+describe("cameraMovedMeaningfully — pure helper", () => {
+  const base = {
+    cameraPosition: { known: true as const, lon: 10, lat: 20 },
+    cameraDepth: 5,
+    heading: 180,
+  };
+
+  it("returns false for identical values with different object identities", () => {
+    expect(
+      cameraMovedMeaningfully(
+        { ...base, cameraPosition: { ...base.cameraPosition } },
+        { ...base, cameraPosition: { ...base.cameraPosition } },
+      ),
+    ).toBe(false);
+  });
+
+  it("detects known-state transition", () => {
+    expect(
+      cameraMovedMeaningfully({ ...base, cameraPosition: { known: false } }, base),
+    ).toBe(true);
+  });
+
+  it("detects depth null transition and meaningful depth change", () => {
+    expect(cameraMovedMeaningfully({ ...base, cameraDepth: null }, base)).toBe(true);
+    expect(cameraMovedMeaningfully(base, { ...base, cameraDepth: 5.2 })).toBe(true);
+    expect(cameraMovedMeaningfully(base, { ...base, cameraDepth: 5.01 })).toBe(false);
+  });
+
+  it("handles heading wrap-around at 360°", () => {
+    expect(
+      cameraMovedMeaningfully({ ...base, heading: 359.99 }, { ...base, heading: 0.01 }),
+    ).toBe(false);
+    expect(
+      cameraMovedMeaningfully({ ...base, heading: 350 }, { ...base, heading: 10 }),
+    ).toBe(true);
   });
 });
 

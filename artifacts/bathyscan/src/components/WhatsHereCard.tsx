@@ -19,6 +19,49 @@ import type { WhatsHereData } from "@/hooks/useWhatsHere";
 
 const AUTO_CLOSE_MS = 8_000;
 
+// Epsilon tolerances for "did the camera really move?" — sized to absorb
+// per-frame float jitter while still catching any human-perceptible motion.
+// ~1e-6 deg lat/lon ≈ 0.1 m; 0.05 m depth; 0.1° heading.
+const EPS_LATLON_DEG = 1e-6;
+const EPS_DEPTH_M = 0.05;
+const EPS_HEADING_DEG = 0.1;
+
+interface CameraSnapshot {
+  cameraPosition: { known: false } | { known: true; lon: number; lat: number };
+  cameraDepth: number | null;
+  heading: number;
+}
+
+/**
+ * Value-based camera-movement check (exported for tests). Returns true only
+ * when position, depth, or heading changed by more than a small epsilon —
+ * per-frame store writes with identical values must NOT count as movement.
+ */
+export function cameraMovedMeaningfully(
+  prev: CameraSnapshot,
+  next: CameraSnapshot,
+): boolean {
+  const p = prev.cameraPosition;
+  const n = next.cameraPosition;
+  if (p.known !== n.known) return true;
+  if (p.known && n.known) {
+    if (
+      Math.abs(p.lon - n.lon) > EPS_LATLON_DEG ||
+      Math.abs(p.lat - n.lat) > EPS_LATLON_DEG
+    ) {
+      return true;
+    }
+  }
+  const pd = prev.cameraDepth;
+  const nd = next.cameraDepth;
+  if ((pd === null) !== (nd === null)) return true;
+  if (pd !== null && nd !== null && Math.abs(pd - nd) > EPS_DEPTH_M) return true;
+  // Heading wraps at 360°; compare the shortest angular distance.
+  const dh = Math.abs(prev.heading - next.heading) % 360;
+  if (Math.min(dh, 360 - dh) > EPS_HEADING_DEG) return true;
+  return false;
+}
+
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
 const cardStyle: React.CSSProperties = {
@@ -128,11 +171,12 @@ export const WhatsHereCard: React.FC<WhatsHereCardProps> = ({ data }) => {
   useEffect(() => {
     const unsub = useCameraStore.subscribe((state, prevState) => {
       if (pinnedRef.current) return;
-      if (
-        state.cameraPosition !== prevState.cameraPosition ||
-        state.cameraDepth !== prevState.cameraDepth ||
-        state.heading !== prevState.heading
-      ) {
+      // Value-based comparison with epsilon tolerance: the per-frame camera
+      // publisher creates a fresh cameraPosition object every frame even when
+      // the camera is stationary, so reference inequality alone would close
+      // the card ~16 ms after it opens. Only treat a *meaningful* change in
+      // position/depth/heading as camera movement.
+      if (cameraMovedMeaningfully(prevState, state)) {
         if (timerRef.current !== null) clearTimeout(timerRef.current);
         setWhatsHereOpen(false);
       }
