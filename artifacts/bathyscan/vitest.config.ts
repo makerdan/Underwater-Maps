@@ -5,6 +5,13 @@ import budgets from "../../tests/timeout-guard/budgets.json";
 
 export default defineConfig({
   plugins: [react()],
+  // Explicit automatic JSX runtime: @vitejs/plugin-react >=5.2 stopped applying
+  // its transform under vitest, so files without `import React` crashed with
+  // "React is not defined". esbuild handles the transform independently.
+  esbuild: {
+    jsx: "automatic",
+    jsxImportSource: "react",
+  },
   test: {
     environment: "jsdom",
     globals: true,

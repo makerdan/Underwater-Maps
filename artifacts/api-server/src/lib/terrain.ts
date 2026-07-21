@@ -944,22 +944,22 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   "fw-mille-lacs-lake-mn": ["mn-dnr-bathy", "usgs-3dep", "gebco"],
   "fw-leech-lake-mn": ["usgs-3dep", "gebco"],
   "fw-red-lake-mn": ["usgs-3dep", "gebco"],
-  "fw-lake-of-the-woods": ["usgs-3dep", "gebco"],
+  "fw-lake-of-the-woods-mn": ["usgs-3dep", "gebco"],
   "fw-lake-winnebago-wi": ["usgs-3dep", "gebco"],
   "fw-gull-lake-mi": ["usgs-3dep", "gebco"],
   // ---------------------------------------------------------------------------
   // Western freshwater lakes — 3DEP for reservoirs; ScienceBase stubs noted.
   // ---------------------------------------------------------------------------
-  "fw-lake-tahoe": ["bundled-survey", "usgs-3dep", "gebco"],
-  "fw-lake-powell": ["usgs-3dep", "gebco"],
-  "fw-lake-mead": ["usgs-3dep", "gebco"],
+  "fw-lake-tahoe-ca-nv": ["bundled-survey", "usgs-3dep", "gebco"],
+  "fw-lake-powell-az-ut": ["usgs-3dep", "gebco"],
+  "fw-lake-mead-nv-az": ["usgs-3dep", "gebco"],
   "fw-crater-lake-or": ["bundled-survey", "usgs-3dep", "gebco"],
   "fw-flathead-lake-mt": ["usgs-3dep", "gebco"],
   "fw-shasta-lake-ca": ["usgs-3dep", "gebco"],
   "fw-lake-chelan-wa": ["usgs-3dep", "gebco"],
   "fw-upper-klamath-lake-or": ["usgs-3dep", "gebco"],
-  "fw-flaming-gorge": ["usgs-3dep", "gebco"],
-  "fw-lake-havasu": ["usgs-3dep", "gebco"],
+  "fw-flaming-gorge-ut-wy": ["usgs-3dep", "gebco"],
+  "fw-lake-havasu-az-ca": ["usgs-3dep", "gebco"],
   // ---------------------------------------------------------------------------
   // Southeast and TVA lakes — USACE district entries use 3DEP fallback.
   // ---------------------------------------------------------------------------
@@ -967,12 +967,12 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   "fw-lake-lanier-ga": ["usgs-3dep", "gebco"],
   "fw-lake-of-the-ozarks-mo": ["usgs-3dep", "gebco"],
   "fw-table-rock-lake-mo": ["usgs-3dep", "gebco"],
-  "fw-kentucky-lake": ["usgs-3dep", "gebco"],
-  "fw-lake-barkley": ["usgs-3dep", "gebco"],
+  "fw-kentucky-lake-ky-tn": ["usgs-3dep", "gebco"],
+  "fw-lake-barkley-ky-tn": ["usgs-3dep", "gebco"],
   "fw-norris-lake-tn": ["usgs-3dep", "gebco"],
   "fw-fontana-lake-nc": ["usgs-3dep", "gebco"],
   "fw-smith-mountain-lake-va": ["usgs-3dep", "gebco"],
-  "fw-clarks-hill-reservoir": ["usgs-3dep", "gebco"],
+  "fw-clarks-hill-lake-sc-ga": ["usgs-3dep", "gebco"],
   // ---------------------------------------------------------------------------
   // Southwest / Texas Highland Lakes — USACE + LCRA + 3DEP.
   // ---------------------------------------------------------------------------
@@ -983,7 +983,7 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   "fw-lake-buchanan-tx": ["usgs-3dep", "gebco"],
   "fw-elephant-butte-nm": ["usgs-3dep", "gebco"],
   "fw-cochiti-lake-nm": ["usgs-3dep", "gebco"],
-  "fw-navajo-lake-nm": ["usgs-3dep", "gebco"],
+  "fw-navajo-lake-nm-co": ["usgs-3dep", "gebco"],
 };
 
 /**
@@ -1622,7 +1622,7 @@ function loadBundledTerrain(fileName: string): BundledTerrain | null {
 export const BUNDLED_TERRAIN: Record<string, BundledTerrain | null> = {
   "lake-ray-roberts": loadBundledTerrain("demoTerrain.gen.json"),
   "fw-crater-lake-or": loadBundledTerrain("craterLakeTerrain.gen.json"),
-  "fw-lake-tahoe": loadBundledTerrain("lakeTahoeTerrain.gen.json"),
+  "fw-lake-tahoe-ca-nv": loadBundledTerrain("lakeTahoeTerrain.gen.json"),
 };
 
 /** Resample a bundled grid to the requested resolution by nearest neighbour. */

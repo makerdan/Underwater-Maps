@@ -699,7 +699,7 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     dataType: "bathymetry",
     resolutionMMin: 1,
     resolutionMMax: 10,
-    coverageBbox: { minLon: -111.6, minLat: 36.9, maxLon: -110.4, maxLat: 37.5 },
+    coverageBbox: { minLon: -111.6, minLat: 36.8, maxLon: -110.4, maxLat: 38.0 },
     endpointUrl:
       "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
     accessNotes:
@@ -723,7 +723,7 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     dataType: "bathymetry",
     resolutionMMin: 1,
     resolutionMMax: 10,
-    coverageBbox: { minLon: -114.85, minLat: 35.9, maxLon: -114.1, maxLat: 36.5 },
+    coverageBbox: { minLon: -114.85, minLat: 35.75, maxLon: -113.9, maxLat: 36.65 },
     endpointUrl:
       "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
     accessNotes:
@@ -747,7 +747,7 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     dataType: "bathymetry",
     resolutionMMin: 1,
     resolutionMMax: 10,
-    coverageBbox: { minLon: -109.95, minLat: 40.9, maxLon: -109.3, maxLat: 41.3 },
+    coverageBbox: { minLon: -110.05, minLat: 40.85, maxLon: -109.25, maxLat: 41.45 },
     endpointUrl:
       "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
     accessNotes:
@@ -772,7 +772,7 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     dataType: "bathymetry",
     resolutionMMin: 1,
     resolutionMMax: 10,
-    coverageBbox: { minLon: -114.65, minLat: 34.2, maxLon: -114.3, maxLat: 34.6 },
+    coverageBbox: { minLon: -114.65, minLat: 34.15, maxLon: -114.15, maxLat: 34.95 },
     endpointUrl:
       "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
     accessNotes:
@@ -800,7 +800,7 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     dataType: "bathymetry",
     resolutionMMin: 1,
     resolutionMMax: 10,
-    coverageBbox: { minLon: -88.35, minLat: 36.5, maxLon: -88.0, maxLat: 37.0 },
+    coverageBbox: { minLon: -88.35, minLat: 36.25, maxLon: -87.75, maxLat: 37.0 },
     endpointUrl:
       "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Nashville+District",
     accessNotes:
@@ -825,7 +825,7 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     dataType: "bathymetry",
     resolutionMMin: 1,
     resolutionMMax: 10,
-    coverageBbox: { minLon: -88.02, minLat: 36.6, maxLon: -87.7, maxLat: 37.0 },
+    coverageBbox: { minLon: -88.2, minLat: 36.55, maxLon: -87.7, maxLat: 37.15 },
     endpointUrl:
       "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Nashville+District",
     accessNotes:
@@ -850,7 +850,7 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     dataType: "bathymetry",
     resolutionMMin: 1,
     resolutionMMax: 10,
-    coverageBbox: { minLon: -82.5, minLat: 33.7, maxLon: -82.0, maxLat: 34.0 },
+    coverageBbox: { minLon: -82.55, minLat: 33.45, maxLon: -81.95, maxLat: 34.0 },
     endpointUrl:
       "https://geospatial-usace.opendata.arcgis.com/api/search/v1/collections/items?f=json&source_agency=USACE+Savannah+District",
     accessNotes:
@@ -878,7 +878,7 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     dataType: "bathymetry",
     resolutionMMin: 1,
     resolutionMMax: 10,
-    coverageBbox: { minLon: -107.72, minLat: 36.8, maxLon: -107.3, maxLat: 37.1 },
+    coverageBbox: { minLon: -107.75, minLat: 36.58, maxLon: -107.25, maxLat: 37.1 },
     endpointUrl:
       "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
     accessNotes:
@@ -1286,21 +1286,6 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     waterType: "freshwater",
   },
   {
-    id: "fw-lake-of-the-woods",
-    name: "Lake of the Woods, MN/ON",
-    sourceAgency: "USGS / MN DNR",
-    dataType: "bathymetry",
-    resolutionMMin: 30,
-    resolutionMMax: 90,
-    coverageBbox: { minLon: -95.4, minLat: 48.7, maxLon: -94.5, maxLat: 49.4 },
-    endpointUrl: "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
-    accessNotes: "USGS 3DEP WCS (coverage: DEP3Elevation) for US portion. Transboundary: US portion in MN (Angle Inlet); remainder in Ontario and Manitoba, Canada.",
-    description: "Lake of the Woods — a huge lake spanning Minnesota (US), Ontario, and Manitoba (Canada). Over 14,000 islands and 65,000 miles of shoreline. US portion (Angle Inlet) is accessible only through Canada. World-famous walleye and sauger fishery. The 49th parallel splits the US from Canada through the lake.",
-    keywords: "Lake of the Woods,Minnesota,MN,Ontario,Canada,Angle Inlet,Northwest Angle,Midwest,freshwater,bathymetry,USGS,3DEP,walleye,sauger,northern pike,Baudette,International Falls,transboundary",
-    lastUpdated: "2024-01-01",
-    waterType: "freshwater",
-  },
-  {
     id: "fw-lake-winnebago-wi",
     name: "Lake Winnebago, WI",
     sourceAgency: "USGS / Wisconsin DNR",
@@ -1334,51 +1319,6 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
   // ---------------------------------------------------------------------------
   // Western lakes
   // ---------------------------------------------------------------------------
-  {
-    id: "fw-lake-tahoe",
-    name: "Lake Tahoe, CA/NV",
-    sourceAgency: "USGS ScienceBase / USGS 3DEP",
-    dataType: "bathymetry",
-    resolutionMMin: 10,
-    resolutionMMax: 30,
-    coverageBbox: { minLon: -120.15, minLat: 38.9, maxLon: -119.9, maxLat: 39.25 },
-    endpointUrl: "https://www.sciencebase.gov/catalog/item/5a8ea03fe4b00583a4ddae3b",
-    accessNotes: "High-resolution USGS ScienceBase bathymetric survey (Schweitzer et al.); download-and-bundle path. Also available via USGS 3DEP WCS as fallback.",
-    description: "Lake Tahoe — a large alpine lake in the Sierra Nevada on the CA/NV border. Max depth 501 m; 1,645 ft above sea level. Famous for its cobalt-blue clarity (Secchi depth exceeding 20 m). Straddling El Dorado and Placer counties (CA) and Washoe and Douglas counties (NV). Premier trout, kokanee salmon, and mackinaw (lake trout) fishery.",
-    keywords: "Lake Tahoe,Tahoe,California,Nevada,CA,NV,Sierra Nevada,El Dorado,Placer,Washoe,Douglas,freshwater,bathymetry,USGS,ScienceBase,clarity,kokanee,mackinaw,lake trout,rainbow trout,alpine",
-    lastUpdated: "2024-01-01",
-    waterType: "freshwater",
-  },
-  {
-    id: "fw-lake-powell",
-    name: "Lake Powell, AZ/UT",
-    sourceAgency: "USGS / USBR",
-    dataType: "bathymetry",
-    resolutionMMin: 30,
-    resolutionMMax: 90,
-    coverageBbox: { minLon: -111.6, minLat: 36.8, maxLon: -110.4, maxLat: 38.0 },
-    endpointUrl: "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
-    accessNotes: "USGS 3DEP WCS (coverage: DEP3Elevation). Created by Glen Canyon Dam (USBR); water levels vary significantly by year.",
-    description: "Lake Powell — a reservoir on the Colorado River in Glen Canyon, straddling Arizona and Utah. Max depth 171 m at full pool. Created by Glen Canyon Dam (1966). Part of Glen Canyon National Recreation Area. Dramatic red-rock canyon scenery; striped bass, largemouth bass, walleye, and catfish. Colorado Plateau location.",
-    keywords: "Lake Powell,Powell,Arizona,Utah,AZ,UT,Colorado River,Glen Canyon,Colorado Plateau,Southwest,freshwater,bathymetry,USGS,3DEP,USBR,striped bass,largemouth bass,walleye,catfish,reservoir,dam",
-    lastUpdated: "2024-01-01",
-    waterType: "freshwater",
-  },
-  {
-    id: "fw-lake-mead",
-    name: "Lake Mead, NV/AZ",
-    sourceAgency: "USGS / USBR / NPS",
-    dataType: "bathymetry",
-    resolutionMMin: 30,
-    resolutionMMax: 90,
-    coverageBbox: { minLon: -114.85, minLat: 35.75, maxLon: -113.9, maxLat: 36.65 },
-    endpointUrl: "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
-    accessNotes: "USGS 3DEP WCS (coverage: DEP3Elevation). Created by Hoover Dam (USBR); water levels vary significantly.",
-    description: "Lake Mead — the largest reservoir by volume in the United States when full. Created by Hoover Dam on the Colorado River. Max depth 162 m. Straddles Nevada and Arizona; managed as Lake Mead National Recreation Area (NPS). Striped bass, largemouth bass, catfish, and carp fishery. Las Vegas water supply.",
-    keywords: "Lake Mead,Mead,Nevada,Arizona,NV,AZ,Colorado River,Hoover Dam,Las Vegas,Southwest,freshwater,bathymetry,USGS,3DEP,USBR,NPS,striped bass,largemouth bass,catfish,reservoir,largest reservoir US",
-    lastUpdated: "2024-01-01",
-    waterType: "freshwater",
-  },
   {
     id: "fw-crater-lake-or",
     name: "Crater Lake, OR",
@@ -1454,36 +1394,6 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     lastUpdated: "2024-01-01",
     waterType: "freshwater",
   },
-  {
-    id: "fw-flaming-gorge",
-    name: "Flaming Gorge Reservoir, UT/WY",
-    sourceAgency: "USGS / USBR",
-    dataType: "bathymetry",
-    resolutionMMin: 30,
-    resolutionMMax: 90,
-    coverageBbox: { minLon: -110.05, minLat: 40.85, maxLon: -109.25, maxLat: 41.45 },
-    endpointUrl: "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
-    accessNotes: "USGS 3DEP WCS (coverage: DEP3Elevation). Created by Flaming Gorge Dam (USBR) on the Green River.",
-    description: "Flaming Gorge Reservoir — a reservoir on the Green River straddling Utah and Wyoming. 151 km long, max depth 151 m. Located in Daggett County, UT and Sweetwater County, WY. Named for the brilliant red canyon walls. Excellent rainbow trout, lake trout (mackinaw), kokanee, and smallmouth bass fishery. Part of Flaming Gorge NRA.",
-    keywords: "Flaming Gorge,Flaming Gorge Reservoir,Utah,Wyoming,UT,WY,Green River,Colorado Plateau,Southwest,freshwater,bathymetry,USGS,3DEP,USBR,rainbow trout,lake trout,mackinaw,kokanee,smallmouth bass,NRA",
-    lastUpdated: "2024-01-01",
-    waterType: "freshwater",
-  },
-  {
-    id: "fw-lake-havasu",
-    name: "Lake Havasu, AZ/CA",
-    sourceAgency: "USGS / USBR",
-    dataType: "bathymetry",
-    resolutionMMin: 30,
-    resolutionMMax: 90,
-    coverageBbox: { minLon: -114.65, minLat: 34.15, maxLon: -114.15, maxLat: 34.95 },
-    endpointUrl: "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
-    accessNotes: "USGS 3DEP WCS (coverage: DEP3Elevation). Created by Parker Dam (USBR) on the Colorado River.",
-    description: "Lake Havasu — a reservoir on the Colorado River between Arizona and California. 62 km long, max depth 30 m. Created by Parker Dam (1938). Home to Lake Havasu City, AZ where the original London Bridge was reassembled. Popular for striped bass, largemouth bass, and catfish. Major boating and water sports destination.",
-    keywords: "Lake Havasu,Havasu,Arizona,California,AZ,CA,Colorado River,Parker Dam,Southwest,freshwater,bathymetry,USGS,3DEP,USBR,striped bass,largemouth bass,catfish,London Bridge,Lake Havasu City",
-    lastUpdated: "2024-01-01",
-    waterType: "freshwater",
-  },
 
   // ---------------------------------------------------------------------------
   // Southeast and TVA lakes
@@ -1549,36 +1459,6 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     waterType: "freshwater",
   },
   {
-    id: "fw-kentucky-lake",
-    name: "Kentucky Lake, KY/TN",
-    sourceAgency: "USGS / TVA",
-    dataType: "bathymetry",
-    resolutionMMin: 30,
-    resolutionMMax: 90,
-    coverageBbox: { minLon: -88.35, minLat: 36.25, maxLon: -87.75, maxLat: 36.85 },
-    endpointUrl: "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
-    accessNotes: "USGS 3DEP WCS (coverage: DEP3Elevation). TVA manages Kentucky Dam on the Tennessee River.",
-    description: "Kentucky Lake — the largest man-made lake in the eastern United States. Created by Kentucky Dam (TVA, 1944) on the Tennessee River. 160,000 acres, max depth 33 m. Straddles Marshall and Calloway counties (KY) and Stewart County (TN). Adjacent to Lake Barkley via the Land Between the Lakes National Recreation Area. Crappie, bass, and catfish.",
-    keywords: "Kentucky Lake,Kentucky,Tennessee,KY,TN,Tennessee River,TVA,Land Between the Lakes,Southeast,freshwater,bathymetry,USGS,3DEP,Kentucky Dam,crappie,bass,catfish,Murray,Paris Landing",
-    lastUpdated: "2024-01-01",
-    waterType: "freshwater",
-  },
-  {
-    id: "fw-lake-barkley",
-    name: "Lake Barkley, KY/TN",
-    sourceAgency: "USGS / USACE Nashville",
-    dataType: "bathymetry",
-    resolutionMMin: 30,
-    resolutionMMax: 90,
-    coverageBbox: { minLon: -88.2, minLat: 36.55, maxLon: -87.85, maxLat: 37.15 },
-    endpointUrl: "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
-    accessNotes: "USGS 3DEP WCS (coverage: DEP3Elevation). USACE Nashville District manages Barkley Dam on the Cumberland River.",
-    description: "Lake Barkley — a reservoir on the Cumberland River adjacent to Kentucky Lake, separated by the Land Between the Lakes NRA. 57,900 acres. Created by Barkley Dam (USACE Nashville, 1966). Located in Lyon and Trigg counties (KY) and Stewart County (TN). Excellent crappie, bass, catfish, and sauger fishery.",
-    keywords: "Lake Barkley,Barkley,Kentucky,Tennessee,KY,TN,Cumberland River,USACE,Nashville,Land Between the Lakes,Southeast,freshwater,bathymetry,USGS,3DEP,crappie,bass,catfish,sauger,Cadiz",
-    lastUpdated: "2024-01-01",
-    waterType: "freshwater",
-  },
-  {
     id: "fw-norris-lake-tn",
     name: "Norris Lake, TN",
     sourceAgency: "USGS / TVA",
@@ -1620,21 +1500,6 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     accessNotes: "USGS 3DEP WCS (coverage: DEP3Elevation). AEP Smith Mountain Dam on the Roanoke (Staunton) River.",
     description: "Smith Mountain Lake — Virginia's largest inland body of fresh water. 32,700 acres, max depth 67 m. Created by Smith Mountain Dam (AEP, 1966) on the Roanoke River. Located in Bedford, Franklin, and Pittsylvania counties. Striper (striped bass) capital of Virginia; also largemouth and smallmouth bass, crappie, and walleye.",
     keywords: "Smith Mountain Lake,Smith Mountain,Virginia,VA,Bedford,Franklin,Pittsylvania,Roanoke River,Southeast,freshwater,bathymetry,USGS,3DEP,striped bass,striper,largemouth bass,smallmouth bass,crappie,walleye,Moneta,Huddleston",
-    lastUpdated: "2024-01-01",
-    waterType: "freshwater",
-  },
-  {
-    id: "fw-clarks-hill-reservoir",
-    name: "Clarks Hill / Strom Thurmond Reservoir, SC/GA",
-    sourceAgency: "USGS / USACE Savannah",
-    dataType: "bathymetry",
-    resolutionMMin: 30,
-    resolutionMMax: 90,
-    coverageBbox: { minLon: -82.55, minLat: 33.45, maxLon: -81.95, maxLat: 33.8 },
-    endpointUrl: "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
-    accessNotes: "USGS 3DEP WCS (coverage: DEP3Elevation). USACE Savannah District manages J. Strom Thurmond Dam on the Savannah River.",
-    description: "J. Strom Thurmond Lake (Clarks Hill Reservoir) — the largest lake in Georgia and South Carolina. 71,000 acres, max depth 43 m. Created by Strom Thurmond Dam (USACE Savannah, 1954) on the Savannah River. Borders South Carolina and Georgia. Excellent striped bass, largemouth bass, crappie, catfish, and bream.",
-    keywords: "Clarks Hill,Strom Thurmond,Strom Thurmond Lake,Clarks Hill Reservoir,South Carolina,Georgia,SC,GA,Savannah River,USACE,Savannah,Southeast,freshwater,bathymetry,USGS,3DEP,striped bass,largemouth bass,crappie,catfish",
     lastUpdated: "2024-01-01",
     waterType: "freshwater",
   },
@@ -1747,22 +1612,87 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     lastUpdated: "2024-01-01",
     waterType: "freshwater",
   },
-  {
-    id: "fw-navajo-lake-nm",
-    name: "Navajo Lake, NM/CO",
-    sourceAgency: "USGS / USBR",
-    dataType: "bathymetry",
-    resolutionMMin: 30,
-    resolutionMMax: 90,
-    coverageBbox: { minLon: -107.75, minLat: 36.58, maxLon: -107.25, maxLat: 36.92 },
-    endpointUrl: "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/WCSServer",
-    accessNotes: "USGS 3DEP WCS (coverage: DEP3Elevation). USBR Navajo Dam on the San Juan River. Straddles New Mexico and Colorado.",
-    description: "Navajo Lake — a USBR reservoir on the San Juan River, straddling New Mexico and Colorado. 35 km long, max depth 105 m. Located in Rio Arriba and San Juan counties (NM) and Archuleta County (CO). Navajo State Park on the NM side; Navajo Lake State Park. Outstanding northern pike, largemouth bass, crappie, catfish, and smallmouth bass. Below dam world-class San Juan River tailwater trout fishery.",
-    keywords: "Navajo Lake,Navajo,New Mexico,Colorado,NM,CO,San Juan River,USBR,Rio Arriba,San Juan County,Archuleta,Southwest,freshwater,bathymetry,USGS,3DEP,northern pike,largemouth bass,crappie,catfish,smallmouth bass,trout,tailwater,San Juan River trout",
-    lastUpdated: "2024-01-01",
-    waterType: "freshwater",
-  },
 ];
+
+// ---------------------------------------------------------------------------
+// Duplicate-entry guard
+//
+// The catalog once shipped the same lake twice under two id styles
+// ("fw-lake-tahoe" vs "fw-lake-tahoe-ca-nv"), so search showed each lake
+// twice. This guard makes that unrepresentable: it detects exact id
+// duplicates, normalized-name collisions, and fw- ids that collide once
+// trailing state-abbreviation suffixes are stripped.
+// ---------------------------------------------------------------------------
+
+const US_STATE_ID_TOKENS = new Set([
+  "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi", "id",
+  "il", "in", "ia", "ks", "ky", "la", "me", "md", "ma", "mi", "mn", "ms",
+  "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc", "nd", "oh", "ok",
+  "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut", "vt", "va", "wa", "wv",
+  "wi", "wy",
+]);
+
+/** Strip trailing US-state tokens from a fw- lake id: "fw-lake-tahoe-ca-nv" → "fw-lake-tahoe". */
+export function normalizedLakeIdBase(id: string): string {
+  const parts = id.split("-");
+  while (parts.length > 1 && US_STATE_ID_TOKENS.has(parts[parts.length - 1]!)) {
+    parts.pop();
+  }
+  return parts.join("-");
+}
+
+/**
+ * Returns a human-readable problem string for every duplicate found:
+ *   • two entries with the same id
+ *   • two entries whose names normalize to the same string
+ *     ("Lake Tahoe (CA/NV)" vs "Lake Tahoe, CA/NV")
+ *   • two fw- entries whose ids collide after trailing state suffixes are
+ *     stripped ("fw-lake-mead" vs "fw-lake-mead-nv-az")
+ * An empty array means the catalog is duplicate-free.
+ */
+export function findDuplicateCatalogEntries(entries: readonly CatalogSeedEntry[]): string[] {
+  const problems: string[] = [];
+  const seenIds = new Set<string>();
+  const byName = new Map<string, string>();
+  const byIdBase = new Map<string, string>();
+  for (const e of entries) {
+    if (seenIds.has(e.id)) {
+      problems.push(`duplicate catalog id "${e.id}"`);
+    }
+    seenIds.add(e.id);
+
+    const normName = e.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const nameHolder = byName.get(normName);
+    if (nameHolder !== undefined) {
+      problems.push(`entries "${nameHolder}" and "${e.id}" share normalized name "${normName}"`);
+    } else {
+      byName.set(normName, e.id);
+    }
+
+    if (e.id.startsWith("fw-")) {
+      const base = normalizedLakeIdBase(e.id);
+      const baseHolder = byIdBase.get(base);
+      if (baseHolder !== undefined && baseHolder !== e.id) {
+        problems.push(
+          `entries "${baseHolder}" and "${e.id}" are the same lake under two id styles (base "${base}")`,
+        );
+      } else {
+        byIdBase.set(base, e.id);
+      }
+    }
+  }
+  return problems;
+}
+
+// Fail loudly at module load so a reintroduced duplicate can never be seeded.
+{
+  const duplicateProblems = findDuplicateCatalogEntries(EXTRA_CATALOG_ENTRIES);
+  if (duplicateProblems.length > 0) {
+    throw new Error(
+      `EXTRA_CATALOG_ENTRIES contains duplicate lake entries — ${duplicateProblems.join("; ")}`,
+    );
+  }
+}
 
 export function buildPresetCatalogEntries(): CatalogSeedEntry[] {
   const entries = ALL_PRESET_DATASETS.map((d) => {
@@ -1825,6 +1755,18 @@ const RETIRED_CATALOG_IDS: string[] = [
   "ncei-community-dem-craig",
   "ncei-community-dem-skagway",
   "ncei-community-dem-wrangell-petersburg",
+  // Old-style freshwater lake ids retired in favour of the state-suffixed
+  // canonical entries (e.g. "fw-lake-tahoe" → "fw-lake-tahoe-ca-nv").
+  "fw-lake-of-the-woods",
+  "fw-lake-tahoe",
+  "fw-lake-powell",
+  "fw-lake-mead",
+  "fw-flaming-gorge",
+  "fw-lake-havasu",
+  "fw-kentucky-lake",
+  "fw-lake-barkley",
+  "fw-clarks-hill-reservoir",
+  "fw-navajo-lake-nm",
 ];
 
 export async function seedDatasetCatalog(opts: { force?: boolean } = {}): Promise<void> {

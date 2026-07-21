@@ -72,10 +72,10 @@ describe("catalog fetchStrategy rollout guard", () => {
     expect(kind("fw-lake-superior")).toBe("great-lakes-wcs");
     expect(kind("fw-lake-george-ny")).toBe("arcgis-rest");
     expect(kind("fw-lake-minnetonka-mn")).toBe("arcgis-rest");
-    expect(kind("fw-lake-mead")).toBe("usgs-3dep");
+    expect(kind("fw-lake-mead-nv-az")).toBe("usgs-3dep");
     expect(kind("fw-kentucky-lake-ky-tn")).toBe("usgs-3dep");
     // Pre-built survey bundles win over their remote endpoints.
-    expect(kind("fw-lake-tahoe")).toBe("bundled");
+    expect(kind("fw-lake-tahoe-ca-nv")).toBe("bundled");
     expect(kind("fw-crater-lake-or")).toBe("bundled");
   });
 

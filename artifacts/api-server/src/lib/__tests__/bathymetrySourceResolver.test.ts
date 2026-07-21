@@ -166,7 +166,7 @@ describe("resolveBathymetrySource — ranked fallback", () => {
 describe("BUNDLED_TERRAIN — bundle file presence and resample integrity", () => {
   it("registers exactly the expected bundled dataset ids", () => {
     expect(Object.keys(BUNDLED_TERRAIN).sort()).toEqual(
-      ["fw-crater-lake-or", "fw-lake-tahoe", "lake-ray-roberts"].sort(),
+      ["fw-crater-lake-or", "fw-lake-tahoe-ca-nv", "lake-ray-roberts"].sort(),
     );
   });
 

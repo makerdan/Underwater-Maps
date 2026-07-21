@@ -4,6 +4,7 @@
 - [Express trust proxy required for XFF rate-limit tests](express-trust-proxy-xff.md) — Express ignores X-Forwarded-For unless `app.set("trust proxy", 1)` is set; rate-limit tests using supertest `.set("X-Forwarded-For", ip)` will see all requests as the same loopback IP without it.
 - [Disk cache regex must strip extension](disk-cache-regex-extension-strip.md) — readdir() returns .json filenames; hex-length regexes silently never match unless .json is stripped first.
 - [Zustand no-selector crash](zustand-no-selector-crash.md) — useDriftStore() without a selector causes "getSnapshot should be cached" in React 18 Concurrent Mode; always use per-field selectors.
+- [Vite 8 + vitest env pitfalls](vite8-vitest-env-pitfalls.md) — plugin-react ≥5.2 stops applying JSX under vitest (set esbuild jsx:"automatic"); NODE_ENV=test defeats mode:"production" in programmatic build() guards.
 - [Vite dedupe zustand](vite-dedupe-zustand.md) — tunnel-rat (via @react-three/drei) pulls in Zustand v4 alongside app's v5; dedupe "zustand" in vite.config.ts resolve.dedupe.
 - [TS project refs need rebuild after codegen](ts-project-refs-codegen.md) — running orval codegen alone is not enough; must also run typecheck:libs to emit .d.ts files before consuming packages see new types.
 - [vitest queryHook must use data:undefined](vitest-queryHook-data-undefined.md) — returning data:[] in queryHook causes infinite useEffect setState loop; act() never settles. Also: mock ViewscreenTooltip in FindDataPanel tests to avoid compose-refs@1.1.2+React19 ref loop.

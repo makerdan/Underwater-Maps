@@ -301,8 +301,8 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
 
   it("DATASET_SOURCE_PRIORITY: Western freshwater reservoirs use usgs-3dep first (except surveyed lakes)", () => {
     const westernIds = [
-      "fw-lake-mead",
-      "fw-lake-powell",
+      "fw-lake-mead-nv-az",
+      "fw-lake-powell-az-ut",
       "fw-flathead-lake-mt",
     ];
     for (const id of westernIds) {
@@ -314,7 +314,7 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
   it("DATASET_SOURCE_PRIORITY: USGS ScienceBase-surveyed western lakes lead with bundled-survey", () => {
     const surveyedIds = [
       "fw-crater-lake-or",
-      "fw-lake-tahoe",
+      "fw-lake-tahoe-ca-nv",
     ];
     for (const id of surveyedIds) {
       const priority = getDatasetSourcePriority(id);
@@ -366,7 +366,7 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
       "fw-mille-lacs-lake-mn",
       "fw-leech-lake-mn",
       "fw-red-lake-mn",
-      "fw-lake-of-the-woods",
+      "fw-lake-of-the-woods-mn",
     ];
     for (const id of mnLakeIds) {
       expect(
@@ -382,7 +382,7 @@ describe("resolveBathymetrySource — WCS fetcher routing", () => {
       "fw-mille-lacs-lake-mn",
       "fw-leech-lake-mn",
       "fw-red-lake-mn",
-      "fw-lake-of-the-woods",
+      "fw-lake-of-the-woods-mn",
     ];
     for (const id of mnLakeIds) {
       const priority = getDatasetSourcePriority(id);

@@ -27,20 +27,33 @@ describe("production bundle", () => {
     // This keeps the guard self-contained for unit-test runs.
     process.env.PORT ??= String(E2E_BUNDLE_TEST_PORT);
     process.env.BASE_PATH ??= "/";
+    // Vite prioritizes an existing process.env.NODE_ENV over `mode`, and
+    // vitest sets NODE_ENV=test — which made this a *non*-production build:
+    // `import.meta.env.DEV` stayed true, so the dev-only back door survived
+    // and the guard produced a false positive. Force a real production
+    // build for the duration of this test, then restore.
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
     const root = path.resolve(__dirname, "..", "..");
-    const result = (await build({
-      root,
-      configFile: path.resolve(root, "vite.config.ts"),
-      mode: "production",
-      logLevel: "error",
-      build: {
-        write: false,
-        minify: false,
-        sourcemap: false,
-        ssr: false,
-        emptyOutDir: false,
-      },
-    })) as RollupOutput | RollupOutput[];
+    let result: RollupOutput | RollupOutput[];
+    try {
+      result = (await build({
+        root,
+        configFile: path.resolve(root, "vite.config.ts"),
+        mode: "production",
+        logLevel: "error",
+        build: {
+          write: false,
+          minify: false,
+          sourcemap: false,
+          ssr: false,
+          emptyOutDir: false,
+        },
+      })) as RollupOutput | RollupOutput[];
+    } finally {
+      if (prevNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = prevNodeEnv;
+    }
 
     const outputs = Array.isArray(result) ? result : [result];
     const offenders: string[] = [];

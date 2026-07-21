@@ -42,7 +42,7 @@ const OUT_PATH = resolve(
 export const LAKE_TAHOE_TERRAIN_OUT_PATH = OUT_PATH;
 
 const SCIENCEBASE_ITEM_ID = "5a8ea03fe4b00583a4ddae3b";
-const DATASET_ID = "fw-lake-tahoe";
+const DATASET_ID = "fw-lake-tahoe-ca-nv";
 const RESOLUTION = 256;
 const POOL_ELEVATION_M = 1897.0;
 const MAX_DEPTH_M = 501;

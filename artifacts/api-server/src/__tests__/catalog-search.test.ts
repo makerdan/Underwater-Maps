@@ -21,7 +21,7 @@
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { describe, it, expect } from "vitest";
-import { scoreEntry, searchCatalog, EXTRA_CATALOG_ENTRIES } from "../lib/catalogSeeder.js";
+import { scoreEntry, searchCatalog, EXTRA_CATALOG_ENTRIES, findDuplicateCatalogEntries, normalizedLakeIdBase } from "../lib/catalogSeeder.js";
 import type { CatalogSeedEntry } from "../lib/catalogSeeder.js";
 
 // ---------------------------------------------------------------------------
@@ -627,12 +627,6 @@ describe("searchCatalog — additional entry coverage", () => {
     expect(ids).toContain("fw-red-lake-mn");
   });
 
-  it("returns fw-lake-of-the-woods for 'lake of the woods, mn/on' query", async () => {
-    const results = await searchCatalog({ q: "Lake of the Woods, MN/ON" }, EXTRA_CATALOG_ENTRIES);
-    const ids = results.map((r) => r.id);
-    expect(ids).toContain("fw-lake-of-the-woods");
-  });
-
   it("returns fw-lake-winnebago-wi for 'lake winnebago, wi' query", async () => {
     const results = await searchCatalog({ q: "Lake Winnebago, WI" }, EXTRA_CATALOG_ENTRIES);
     const ids = results.map((r) => r.id);
@@ -643,18 +637,6 @@ describe("searchCatalog — additional entry coverage", () => {
     const results = await searchCatalog({ q: "Gull Lake, MI" }, EXTRA_CATALOG_ENTRIES);
     const ids = results.map((r) => r.id);
     expect(ids).toContain("fw-gull-lake-mi");
-  });
-
-  it("returns fw-lake-powell for 'lake powell, az/ut' query", async () => {
-    const results = await searchCatalog({ q: "Lake Powell, AZ/UT" }, EXTRA_CATALOG_ENTRIES);
-    const ids = results.map((r) => r.id);
-    expect(ids).toContain("fw-lake-powell");
-  });
-
-  it("returns fw-lake-mead for 'lake mead, nv/az' query", async () => {
-    const results = await searchCatalog({ q: "Lake Mead, NV/AZ" }, EXTRA_CATALOG_ENTRIES);
-    const ids = results.map((r) => r.id);
-    expect(ids).toContain("fw-lake-mead");
   });
 
   it("returns fw-flathead-lake-mt for 'flathead lake, mt' query", async () => {
@@ -681,18 +663,6 @@ describe("searchCatalog — additional entry coverage", () => {
     expect(ids).toContain("fw-upper-klamath-lake-or");
   });
 
-  it("returns fw-flaming-gorge for 'flaming gorge reservoir, ut/wy' query", async () => {
-    const results = await searchCatalog({ q: "Flaming Gorge Reservoir, UT/WY" }, EXTRA_CATALOG_ENTRIES);
-    const ids = results.map((r) => r.id);
-    expect(ids).toContain("fw-flaming-gorge");
-  });
-
-  it("returns fw-lake-havasu for 'lake havasu, az/ca' query", async () => {
-    const results = await searchCatalog({ q: "Lake Havasu, AZ/CA" }, EXTRA_CATALOG_ENTRIES);
-    const ids = results.map((r) => r.id);
-    expect(ids).toContain("fw-lake-havasu");
-  });
-
   it("returns fw-lake-okeechobee-fl for 'lake okeechobee, fl' query", async () => {
     const results = await searchCatalog({ q: "Lake Okeechobee, FL" }, EXTRA_CATALOG_ENTRIES);
     const ids = results.map((r) => r.id);
@@ -717,18 +687,6 @@ describe("searchCatalog — additional entry coverage", () => {
     expect(ids).toContain("fw-table-rock-lake-mo");
   });
 
-  it("returns fw-kentucky-lake for 'kentucky lake, ky/tn' query", async () => {
-    const results = await searchCatalog({ q: "Kentucky Lake, KY/TN" }, EXTRA_CATALOG_ENTRIES);
-    const ids = results.map((r) => r.id);
-    expect(ids).toContain("fw-kentucky-lake");
-  });
-
-  it("returns fw-lake-barkley for 'lake barkley, ky/tn' query", async () => {
-    const results = await searchCatalog({ q: "Lake Barkley, KY/TN" }, EXTRA_CATALOG_ENTRIES);
-    const ids = results.map((r) => r.id);
-    expect(ids).toContain("fw-lake-barkley");
-  });
-
   it("returns fw-norris-lake-tn for 'norris lake, tn' query", async () => {
     const results = await searchCatalog({ q: "Norris Lake, TN" }, EXTRA_CATALOG_ENTRIES);
     const ids = results.map((r) => r.id);
@@ -745,12 +703,6 @@ describe("searchCatalog — additional entry coverage", () => {
     const results = await searchCatalog({ q: "Smith Mountain Lake, VA" }, EXTRA_CATALOG_ENTRIES);
     const ids = results.map((r) => r.id);
     expect(ids).toContain("fw-smith-mountain-lake-va");
-  });
-
-  it("returns fw-clarks-hill-reservoir for 'clarks hill / strom thurmond reservoir, sc/ga' query", async () => {
-    const results = await searchCatalog({ q: "Clarks Hill / Strom Thurmond Reservoir, SC/GA" }, EXTRA_CATALOG_ENTRIES);
-    const ids = results.map((r) => r.id);
-    expect(ids).toContain("fw-clarks-hill-reservoir");
   });
 
   it("returns fw-lake-travis-tx for 'lake travis, tx' query", async () => {
@@ -793,12 +745,6 @@ describe("searchCatalog — additional entry coverage", () => {
     const results = await searchCatalog({ q: "Cochiti Lake, NM" }, EXTRA_CATALOG_ENTRIES);
     const ids = results.map((r) => r.id);
     expect(ids).toContain("fw-cochiti-lake-nm");
-  });
-
-  it("returns fw-navajo-lake-nm for 'navajo lake, nm/co' query", async () => {
-    const results = await searchCatalog({ q: "Navajo Lake, NM/CO" }, EXTRA_CATALOG_ENTRIES);
-    const ids = results.map((r) => r.id);
-    expect(ids).toContain("fw-navajo-lake-nm");
   });
 
 });
@@ -896,29 +842,20 @@ const PRIMARY_KEYWORD_QUERIES: Record<string, string> = {
   "fw-mille-lacs-lake-mn":                  "Mille Lacs Lake Aitkin treaty fishing Ojibwe walleye",
   "fw-leech-lake-mn":                       "Leech Lake Walker Chippewa National Forest muskie",
   "fw-red-lake-mn":                         "Red Lake Nation Beltrami Upper Red Lake walleye",
-  "fw-lake-of-the-woods":                   "Lake of the Woods Northwest Angle Angle Inlet sauger",
   "fw-lake-winnebago-wi":                   "Lake Winnebago Oshkosh sturgeon spearing Wisconsin",
   "fw-gull-lake-mi":                        "Gull Lake Kalamazoo Kellogg Biological Station Michigan",
-  "fw-lake-tahoe":                          "Lake Tahoe Sierra Nevada mackinaw El Dorado clarity",
-  "fw-lake-powell":                         "Lake Powell Glen Canyon Colorado Plateau striped bass",
-  "fw-lake-mead":                           "Lake Mead Hoover Dam Las Vegas largest reservoir US",
   "fw-crater-lake-or":                      "Crater Lake caldera Mt. Mazama deepest lake US",
   "fw-flathead-lake-mt":                    "Flathead Lake Mission Mountains bull trout Montana",
   "fw-shasta-lake-ca":                      "Shasta Lake California USBR",
   "fw-lake-chelan-wa":                      "Lake Chelan Stehekin third deepest US Washington",
   "fw-upper-klamath-lake-or":               "Upper Klamath Lake Lost River sucker Klamath Falls",
-  "fw-flaming-gorge":                       "Flaming Gorge Green River kokanee mackinaw NRA",
-  "fw-lake-havasu":                         "Lake Havasu London Bridge Parker Dam Colorado River",
   "fw-lake-okeechobee-fl":                  "Lake Okeechobee Everglades Herbert Hoover Dike Florida speckled perch",
   "fw-lake-lanier-ga":                      "Lake Lanier Chattahoochee Gainesville Atlanta spotted bass",
   "fw-lake-of-the-ozarks-mo":               "Lake of the Ozarks Bagnell Dam Osage River Missouri",
   "fw-table-rock-lake-mo":                  "Table Rock Lake Branson White River Ozarks",
-  "fw-kentucky-lake":                       "Kentucky Lake Land Between the Lakes Paris Landing TVA",
-  "fw-lake-barkley":                        "Lake Barkley Cumberland River Cadiz sauger",
   "fw-norris-lake-tn":                      "Norris Lake Clinch River Norris Dam Tennessee TVA",
   "fw-fontana-lake-nc":                     "Fontana Lake Great Smoky Mountains highest dam eastern US",
   "fw-smith-mountain-lake-va":              "Smith Mountain Lake Roanoke River striper Moneta",
-  "fw-clarks-hill-reservoir":               "Clarks Hill Strom Thurmond Savannah River",
   "fw-lake-travis-tx":                      "Lake Travis Austin Mansfield Dam Highland Lakes",
   "fw-canyon-lake-tx":                      "Canyon Lake Guadalupe River New Braunfels Hill Country",
   "fw-lake-lbj-tx":                         "Lake LBJ Wirtz Dam Horseshoe Bay Marble Falls",
@@ -926,7 +863,6 @@ const PRIMARY_KEYWORD_QUERIES: Record<string, string> = {
   "fw-lake-buchanan-tx":                    "Lake Buchanan Buchanan Dam Llano County",
   "fw-elephant-butte-nm":                   "Elephant Butte Reservoir Rio Grande Truth or Consequences",
   "fw-cochiti-lake-nm":                     "Cochiti Lake Cochiti Pueblo Albuquerque earthen dam Sandoval",
-  "fw-navajo-lake-nm":                      "Navajo Lake San Juan River tailwater trout Archuleta",
 };
 
 describe("catalog keyword coverage — each entry findable by primary keyword", () => {
@@ -960,6 +896,53 @@ describe("catalog keyword coverage — each entry findable by primary keyword", 
 // adding at least one test that references its id. Add a test in the section
 // above before adding the entry to catalogSeeder.ts.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Duplicate-lake guard — each lake must appear exactly once in the catalog.
+//
+// Regression guard for the old-vs-new id-style duplication ("fw-lake-tahoe"
+// alongside "fw-lake-tahoe-ca-nv") that made every affected lake show up
+// twice in Find Data search results.
+// ---------------------------------------------------------------------------
+
+describe("catalog uniqueness — no lake is seeded twice", () => {
+  it("findDuplicateCatalogEntries reports no problems for EXTRA_CATALOG_ENTRIES", () => {
+    expect(findDuplicateCatalogEntries(EXTRA_CATALOG_ENTRIES)).toEqual([]);
+  });
+
+  it("no two fw- entries collide on their state-stripped id base", () => {
+    const byBase = new Map<string, string>();
+    for (const e of EXTRA_CATALOG_ENTRIES) {
+      if (!e.id.startsWith("fw-")) continue;
+      const base = normalizedLakeIdBase(e.id);
+      const holder = byBase.get(base);
+      expect(
+        holder,
+        `"${holder}" and "${e.id}" look like the same lake under two id styles (base "${base}")`,
+      ).toBeUndefined();
+      byBase.set(base, e.id);
+    }
+  });
+
+  it("retired old-style duplicate ids are gone from EXTRA_CATALOG_ENTRIES", () => {
+    const retired = [
+      "fw-lake-of-the-woods",
+      "fw-lake-tahoe",
+      "fw-lake-powell",
+      "fw-lake-mead",
+      "fw-flaming-gorge",
+      "fw-lake-havasu",
+      "fw-kentucky-lake",
+      "fw-lake-barkley",
+      "fw-clarks-hill-reservoir",
+      "fw-navajo-lake-nm",
+    ];
+    const ids = new Set(EXTRA_CATALOG_ENTRIES.map((e) => e.id));
+    for (const id of retired) {
+      expect(ids.has(id), `retired id "${id}" must not be re-seeded`).toBe(false);
+    }
+  });
+});
 
 describe("catalog fixture freshness", () => {
   it("every EXTRA_CATALOG_ENTRIES id is referenced at least once in this test file", () => {

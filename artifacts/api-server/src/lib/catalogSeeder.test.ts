@@ -10,6 +10,8 @@ import {
   invalidateMiniSearchIndex,
   EXTRA_CATALOG_ENTRIES,
   buildPresetCatalogEntries,
+  findDuplicateCatalogEntries,
+  normalizedLakeIdBase,
 } from "./catalogSeeder.js";
 import type { CatalogSeedEntry } from "./catalogSeeder.js";
 
@@ -644,5 +646,77 @@ describe("buildPresetCatalogEntries — duplicate-ID guard", () => {
       unique.size,
       "Duplicate IDs found across EXTRA_CATALOG_ENTRIES and buildPresetCatalogEntries()",
     ).toBe(allIds.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findDuplicateCatalogEntries — duplicate-lake guard
+// ---------------------------------------------------------------------------
+
+function makeEntry(overrides: Partial<CatalogSeedEntry> & { id: string; name: string }): CatalogSeedEntry {
+  return {
+    sourceAgency: "Test",
+    dataType: "bathymetry",
+    resolutionMMin: 1,
+    resolutionMMax: 10,
+    coverageBbox: { minLon: -1, minLat: -1, maxLon: 1, maxLat: 1 },
+    endpointUrl: null,
+    accessNotes: "test",
+    description: "test",
+    keywords: "test",
+    lastUpdated: "2024-01-01",
+    waterType: "freshwater",
+    ...overrides,
+  };
+}
+
+describe("findDuplicateCatalogEntries — duplicate-lake guard", () => {
+  it("normalizedLakeIdBase strips trailing state suffixes only", () => {
+    expect(normalizedLakeIdBase("fw-lake-tahoe-ca-nv")).toBe("fw-lake-tahoe");
+    expect(normalizedLakeIdBase("fw-lake-tahoe")).toBe("fw-lake-tahoe");
+    expect(normalizedLakeIdBase("fw-navajo-lake-nm-co")).toBe("fw-navajo-lake");
+    expect(normalizedLakeIdBase("fw-navajo-lake-nm")).toBe("fw-navajo-lake");
+    expect(normalizedLakeIdBase("fw-lake-of-the-woods")).toBe("fw-lake-of-the-woods");
+    expect(normalizedLakeIdBase("fw-lake-of-the-woods-mn")).toBe("fw-lake-of-the-woods");
+  });
+
+  it("the live EXTRA_CATALOG_ENTRIES catalog is duplicate-free", () => {
+    expect(findDuplicateCatalogEntries(EXTRA_CATALOG_ENTRIES)).toEqual([]);
+  });
+
+  it("detects exact duplicate ids", () => {
+    const entries = [
+      makeEntry({ id: "fw-test-lake-mn", name: "Test Lake A" }),
+      makeEntry({ id: "fw-test-lake-mn", name: "Test Lake B" }),
+    ];
+    const problems = findDuplicateCatalogEntries(entries);
+    expect(problems.some((p) => p.includes('duplicate catalog id "fw-test-lake-mn"'))).toBe(true);
+  });
+
+  it("detects the same lake seeded under two id styles (base vs state-suffixed)", () => {
+    const entries = [
+      makeEntry({ id: "fw-lake-mead", name: "Lake Mead" }),
+      makeEntry({ id: "fw-lake-mead-nv-az", name: "Lake Mead (NV/AZ)" }),
+    ];
+    const problems = findDuplicateCatalogEntries(entries);
+    expect(problems.some((p) => p.includes("two id styles"))).toBe(true);
+  });
+
+  it("detects normalized-name collisions across differently punctuated names", () => {
+    const entries = [
+      makeEntry({ id: "fw-example-one", name: "Lake Tahoe (CA/NV)" }),
+      makeEntry({ id: "fw-example-two-xy", name: "Lake Tahoe, CA/NV" }),
+    ];
+    const problems = findDuplicateCatalogEntries(entries);
+    expect(problems.some((p) => p.includes("share normalized name"))).toBe(true);
+  });
+
+  it("does not flag distinct lakes that merely share a word", () => {
+    const entries = [
+      makeEntry({ id: "fw-red-lake-mn", name: "Red Lake, MN" }),
+      makeEntry({ id: "fw-leech-lake-mn", name: "Leech Lake, MN" }),
+      makeEntry({ id: "fw-lake-placid-ny", name: "Lake Placid, NY" }),
+    ];
+    expect(findDuplicateCatalogEntries(entries)).toEqual([]);
   });
 });
