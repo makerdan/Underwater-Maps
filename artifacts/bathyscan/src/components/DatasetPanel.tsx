@@ -2699,8 +2699,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             borderTop: "1px solid rgba(0,229,255,0.08)",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            gap: 8,
           }}>
             <WaterTypeToggle />
           </div>
