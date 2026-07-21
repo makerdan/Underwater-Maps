@@ -148,6 +148,23 @@ describe("requestDatasetSwitch — retry on transient failure", () => {
     expect(fetchQueryMock).toHaveBeenCalledTimes(2);
   });
 
+  it("skips the preview fetch entirely and confirms immediately when suppressed", async () => {
+    // When "Don't ask again this session" is active the dialog can never
+    // open, so the preflight fetch (with its multi-second retry/backoff) must
+    // be skipped — onConfirm fires synchronously. This is what lets the Find
+    // Data panel close immediately after clicking Load with warnings
+    // suppressed (e2e find-data-my-uploads relies on this).
+    useSimulatedDataStore.setState({ suppressed: true });
+    fetchQueryMock.mockRejectedValue(new Error("should never be called"));
+
+    const onConfirm = vi.fn();
+    await requestDatasetSwitch({ datasetId: "ds-retry", onConfirm });
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(fetchQueryMock).not.toHaveBeenCalled();
+    expect(useSimulatedDataStore.getState().pending).toBeNull();
+  });
+
   it("uses staleTime:0 on the retry attempt to bypass cached errors", async () => {
     fetchQueryMock
       .mockRejectedValueOnce(new Error("first fail"))

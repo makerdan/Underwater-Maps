@@ -142,6 +142,16 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
 
   const { suppressed, setPending } = useSimulatedDataStore.getState();
 
+  if (suppressed) {
+    // "Don't ask again this session" is active: the dialog will never be
+    // shown regardless of what the preview preflight returns, and onConfirm
+    // fires unconditionally. Skip the preview fetch entirely so the switch
+    // (and any UI cleanup in onConfirm, e.g. closing the Find Data panel)
+    // happens immediately instead of after seconds of preflight retries.
+    onConfirm();
+    return;
+  }
+
   let preview: DatasetPreview;
   try {
     preview = await fetchPreviewWithRetry(datasetId);

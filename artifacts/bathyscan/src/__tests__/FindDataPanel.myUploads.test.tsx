@@ -467,6 +467,21 @@ describe("FindDataPanel — My Uploads Load button", () => {
       "upload-a",
     );
   });
+
+  it("closes the panel (calls onClose) once the switch is confirmed", () => {
+    // Regression guard for the load-then-close behavior: the onConfirm
+    // callback passed to requestDatasetSwitch must call onClose so the Find
+    // Data drawer dismisses after a successful Load. The requestDatasetSwitch
+    // mock invokes onConfirm synchronously, simulating a confirmed (or
+    // suppressed-dialog) switch.
+    renderPanel();
+    switchToSavesTab();
+
+    fireEvent.click(screen.getByTestId("btn-load-upload-upload-a"));
+
+    expect(mocks.requestDatasetSwitch).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("FindDataPanel — My Uploads delete button", () => {
