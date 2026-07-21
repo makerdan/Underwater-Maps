@@ -29,11 +29,10 @@ vi.mock("http-proxy-middleware", () => ({
   createProxyMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 
-vi.mock("../lib/bucketMonitor.js", () => ({
-  signDatasetUploadUrl: vi.fn(),
-  getJobByObjectKey: vi.fn(),
-  recoverGcsJobStatus: vi.fn(),
-}));
+vi.mock("../lib/bucketMonitor.js", async () => {
+  const { createBucketMonitorMock } = await import("./helpers/bucketMonitorMock.js");
+  return createBucketMonitorMock();
+});
 
 vi.mock("../lib/cacheRegistry.js", () => ({
   registerCache: vi.fn(),

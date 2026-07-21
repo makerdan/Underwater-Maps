@@ -87,11 +87,10 @@ vi.mock("worker_threads", async (importOriginal) => {
   return { ...actual };
 });
 
-vi.mock("../lib/bucketMonitor.js", () => ({
-  signDatasetUploadUrl: vi.fn(),
-  getJobByObjectKey: vi.fn(),
-  recoverGcsJobStatus: vi.fn(),
-}));
+vi.mock("../lib/bucketMonitor.js", async () => {
+  const { createBucketMonitorMock } = await import("./helpers/bucketMonitorMock.js");
+  return createBucketMonitorMock();
+});
 
 vi.mock("../lib/terrain.js", async () => {
   const { createTerrainMock } = await import("./helpers/terrainMock.js");

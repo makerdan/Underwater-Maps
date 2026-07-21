@@ -185,25 +185,24 @@ vi.mock("@workspace/poe", async () => {
 
 // ── bucketMonitor mock (for admin routes) ────────────────────────────────────
 // Return correct BucketStatusSummary shape: counts + item arrays
-vi.mock("../../lib/bucketMonitor.js", () => ({
-  getBucketStatus: vi.fn().mockResolvedValue({
-    counts: { pending: 0, processing: 0, done: 5, failed: 1 },
-    pending: [],
-    processing: [],
-    done: [],
-    failed: [],
-  }),
-  getLifecycleApplyStatus: vi.fn().mockReturnValue({ appliedAt: null, error: null }),
-  LIFECYCLE_TTLS: { processedDays: 30, failedDays: 14 },
-  getLargeDatasetsDiff: vi.fn().mockResolvedValue({
-    changedCount: 0, unimportedCount: 0, entries: [],
-  }),
-  startBucketMonitor: vi.fn(),
-  signDatasetUploadUrl: vi.fn(),
-  getJobByObjectKey: vi.fn(),
-  recoverGcsJobStatus: vi.fn(),
-  gcsClient: {},
-}));
+vi.mock("../../lib/bucketMonitor.js", async () => {
+  const { createBucketMonitorMock } = await import(
+    "../../__tests__/helpers/bucketMonitorMock.js"
+  );
+  const { vi } = await import("vitest");
+  return createBucketMonitorMock({
+    getBucketStatus: vi.fn().mockResolvedValue({
+      counts: { pending: 0, processing: 0, done: 5, failed: 1 },
+      pending: [],
+      processing: [],
+      done: [],
+      failed: [],
+    }),
+    getLargeDatasetsDiff: vi.fn().mockResolvedValue({
+      changedCount: 0, unimportedCount: 0, entries: [],
+    }),
+  });
+});
 
 import app from "../../app.js";
 

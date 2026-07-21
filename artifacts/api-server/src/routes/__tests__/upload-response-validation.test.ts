@@ -160,7 +160,12 @@ vi.mock("@workspace/poe", async () => {
 });
 
 // ── bucketMonitor mock (gcs-url / gcs-job-status routes) ─────────────────────
-vi.mock("../../lib/bucketMonitor.js", () => ({
+vi.mock("../../lib/bucketMonitor.js", async () => {
+  const { createBucketMonitorMock } = await import(
+    "../../__tests__/helpers/bucketMonitorMock.js"
+  );
+  const { vi } = await import("vitest");
+  return createBucketMonitorMock({
   getBucketStatus: vi.fn().mockResolvedValue({
     counts: { pending: 0, processing: 0, done: 0, failed: 0 },
     pending: [],
@@ -179,7 +184,8 @@ vi.mock("../../lib/bucketMonitor.js", () => ({
   getJobByObjectKey: vi.fn().mockReturnValue({ status: "done", datasetId: "ds-1" }),
   recoverGcsJobStatus: vi.fn().mockResolvedValue({ status: "unknown" }),
   gcsClient: {},
-}));
+  });
+});
 
 import app from "../../app.js";
 

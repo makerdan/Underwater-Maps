@@ -93,11 +93,10 @@ vi.mock("../middlewares/rateLimit.js", () => ({
   __resetRateLimitMemory: vi.fn(),
 }));
 
-vi.mock("../lib/bucketMonitor.js", () => ({
-  signDatasetUploadUrl: vi.fn(),
-  getJobByObjectKey: vi.fn(),
-  recoverGcsJobStatus: vi.fn(),
-}));
+vi.mock("../lib/bucketMonitor.js", async () => {
+  const { createBucketMonitorMock } = await import("./helpers/bucketMonitorMock.js");
+  return createBucketMonitorMock();
+});
 
 vi.mock("../lib/cacheRegistry.js", () => ({
   registerCache: vi.fn(),
@@ -122,17 +121,10 @@ vi.mock("../lib/gunzipBounded.js", () => ({
   gunzipBounded: vi.fn(),
 }));
 
-vi.mock("../lib/tileClassify.js", () => ({
-  MAX_TILES_PER_SIDE: 4,
-  TILE_CONCURRENCY: 2,
-  TILE_SIZE: 32,
-  planTiles: vi.fn(),
-  extractTileDepths32: vi.fn(),
-  tileFingerprint: vi.fn(),
-  stitchTileLabels: vi.fn(),
-  mapWithConcurrency: vi.fn(),
-  tileDepthsToPngDataUrl: vi.fn(),
-}));
+vi.mock("../lib/tileClassify.js", async () => {
+  const { createTileClassifyMock } = await import("./helpers/tileClassifyMock.js");
+  return createTileClassifyMock({ TILE_CONCURRENCY: 2 });
+});
 
 vi.mock("../lib/logger.js", () => loggerMockFactory());
 

@@ -104,10 +104,17 @@ const MOCK_SLICE_EMPTY = {
 
 const getSubstrateForDatasetMock = vi.fn();
 
-vi.mock("../../lib/shoreZoneData.js", () => ({
-  getSubstrateForDataset: (...args: unknown[]) => getSubstrateForDatasetMock(...args),
-  AOOS_INTERTIDAL_POW: { features: [], metadata: { sourceName: "AOOS stub", creditUrl: "" } },
-}));
+vi.mock("../../lib/shoreZoneData.js", async () => {
+  const { createShoreZoneDataMock, makeStubShoreZoneBundle } = await import(
+    "../../__tests__/helpers/shoreZoneDataMock.js"
+  );
+  return createShoreZoneDataMock({
+    getSubstrateForDataset: (...args: unknown[]) => getSubstrateForDatasetMock(...args),
+    AOOS_INTERTIDAL_POW: makeStubShoreZoneBundle({
+      metadata: { sourceName: "AOOS stub", creditUrl: "" },
+    }),
+  });
+});
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 

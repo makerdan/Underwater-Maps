@@ -8,5 +8,8 @@ Rule: any test that fully mocks `lib/terrain.js` and loads the app must stub ALL
 
 **How to apply:** When adding a new module-init-consumed export to lib/terrain.js, grep for `vi.mock(".*lib/terrain.js"` and add a stub to every full-mock factory. A guard test to automate this is proposed as a follow-up.
 
+## Generalized (2026-07-21)
+tileClassify, shoreZoneData and bucketMonitor now also have shared factories (`__tests__/helpers/{tileClassifyMock,shoreZoneDataMock,bucketMonitorMock}.ts`) guarded by `mock-factory-guards.test.ts` (both missing and stale keys). All wholesale mocks of these modules go through the factories with per-suite overrides. For any NEW wholesale-mocked module, copy this pattern and add a case to the guard's CASES array.
+
 ## Merge-duplicated mock keys (2026-07-20)
 Task merges can DUPLICATE terrain mock exports inside vi.mock factories (same key 2-3x, sometimes with conflicting values like `BUNDLED_TERRAIN: {}` vs `[]`), producing TS1117 across many api-server route test files. Fix by deduping to one set — keep `BUNDLED_TERRAIN: {}` (real export is a Record) and any getter forms. Caught by typecheck, so the fast tier fails loudly; just dedupe rather than debug the mocks.

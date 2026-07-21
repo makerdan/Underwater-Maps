@@ -17,7 +17,12 @@ const { mockGetLargeDatasetsDiff } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("../../lib/bucketMonitor.js", () => ({
+vi.mock("../../lib/bucketMonitor.js", async () => {
+  const { createBucketMonitorMock } = await import(
+    "../../__tests__/helpers/bucketMonitorMock.js"
+  );
+  const { vi } = await import("vitest");
+  return createBucketMonitorMock({
   getBucketStatus: vi.fn().mockResolvedValue({
     counts: { pending: 0, processing: 0, done: 5, failed: 1 },
     pending: [],
@@ -38,7 +43,8 @@ vi.mock("../../lib/bucketMonitor.js", () => ({
   getLifecycleApplyStatus: vi.fn().mockReturnValue({ appliedAt: null, error: null }),
   LIFECYCLE_TTLS: { processedDays: 30, failedDays: 14 },
   getLargeDatasetsDiff: mockGetLargeDatasetsDiff,
-}));
+  });
+});
 
 const { mockQueryRateLimitUsage } = vi.hoisted(() => ({
   mockQueryRateLimitUsage: vi.fn().mockResolvedValue([]),

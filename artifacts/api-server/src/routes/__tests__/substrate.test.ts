@@ -52,8 +52,11 @@ vi.mock("../../lib/terrain.js", async () => {
   });
 });
 
-vi.mock("../../lib/shoreZoneData.js", () => {
-  const bundle = {
+vi.mock("../../lib/shoreZoneData.js", async () => {
+  const { createShoreZoneDataMock, makeStubShoreZoneBundle } = await import(
+    "../../__tests__/helpers/shoreZoneDataMock.js"
+  );
+  const bundle = makeStubShoreZoneBundle({
     metadata: {
       sourceName: "Alaska ShoreZone",
       sourceLayer: "AK_SZ_ITZ_Polygons",
@@ -64,17 +67,15 @@ vi.mock("../../lib/shoreZoneData.js", () => {
       fetchedAt: "2024-01-01",
       source: "alaska-shorezone",
     },
-    type: "FeatureCollection",
-    features: [],
-  };
-  return {
+  });
+  return createShoreZoneDataMock({
     getSubstrateForDataset: (...args: unknown[]) => getSubstrateForDatasetMock(...args),
     ALASKA_SHOREZONE: bundle,
     ENC_SE_ALASKA_SUBSTRATE: bundle,
     ENC_CONUS_SUBSTRATE: bundle,
     TX_LAKE_SUBSTRATE: bundle,
     AOOS_INTERTIDAL_POW: bundle,
-  };
+  });
 });
 
 import substrateRouter from "../substrate.js";

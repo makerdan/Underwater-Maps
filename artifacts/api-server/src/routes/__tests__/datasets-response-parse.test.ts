@@ -82,11 +82,17 @@ vi.mock("@clerk/shared/keys", () => ({
   publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
 }));
 
-vi.mock("../../lib/bucketMonitor.js", () => ({
-  signDatasetUploadUrl: vi.fn(async () => ({ signedUrl: "https://example.com/upload" })),
-  getJobByObjectKey: vi.fn(async () => null),
-  recoverGcsJobStatus: vi.fn(async () => {}),
-}));
+vi.mock("../../lib/bucketMonitor.js", async () => {
+  const { createBucketMonitorMock } = await import(
+    "../../__tests__/helpers/bucketMonitorMock.js"
+  );
+  const { vi } = await import("vitest");
+  return createBucketMonitorMock({
+    signDatasetUploadUrl: vi.fn(async () => ({ signedUrl: "https://example.com/upload" })),
+    getJobByObjectKey: vi.fn(async () => null),
+    recoverGcsJobStatus: vi.fn(async () => {}),
+  });
+});
 
 vi.mock("../../lib/uploadParsers.js", () => ({
   parseUploadedFile: vi.fn(async () => ({ points: [], errors: [] })),

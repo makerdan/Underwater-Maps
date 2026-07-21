@@ -81,7 +81,7 @@
 - [ArcGIS/WCS upstream endpoint drift](arcgis-upstream-endpoint-drift.md) — bathymetry services get deleted/moved; use outFields=*, inSR/outSR=4326; curl base ?f=json first, then AGO search for the moved service.
 - [survey.laz fixture nondeterminism](laz-fixture-nondeterminism.md) — check:fixture-freshness can flag survey.laz with no code change; regen via fixtures:regen, commit only the .laz, restore the .bag files.
 - [supertest requireAuth bypass header](supertest-requireauth-bypass-header.md) — test apps mounting requireAuth routers must inject x-e2e-user-id or getAuth() throws and every request 500s.
-- [terrain.js mock export sync](terrain-mock-export-sync.md) — all full terrain mocks now go through shared createTerrainMock(); add new exports to the factory (guard test enforces both missing and stale keys).
+- [Shared mock factories + guards](terrain-mock-export-sync.md) — terrain, tileClassify, shoreZoneData, bucketMonitor wholesale mocks all use helpers/ factories; guard tests enforce missing+stale keys. Copy pattern for new modules.
 - [Global catalog entries defeat "nothing nearby" tests](catalog-global-coverage-e2e.md) — seeded catalog has world-spanning bboxes (GEBCO); empty-result branches need point-radius-query mocked to [].
 - [ESLint flat config core rules off](eslint-flat-config-no-core-rules.md) — root config extends no recommended preset; core rules like no-dupe-keys are inactive unless explicitly listed.
 - [API-guard body extraction ordering](api-guard-body-extraction.md) — try concise-arrow extraction before braces-body; object literals in concise bodies fool the braces extractor, and concise bodies must span newlines.

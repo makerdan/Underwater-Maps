@@ -17,16 +17,10 @@ import request from "supertest";
 // This prevents the GCS Storage client from being initialised and lets
 // individual tests override signDatasetUploadUrl / getBucketStatus behaviour.
 
-vi.mock("../lib/bucketMonitor.js", () => ({
-  signDatasetUploadUrl: vi.fn(),
-  getJobByObjectKey: vi.fn(),
-  recoverGcsJobStatus: vi.fn(),
-  getBucketStatus: vi.fn(),
-  getLifecycleApplyStatus: vi.fn(() => ({ appliedAt: null, error: null })),
-  LIFECYCLE_TTLS: { processedDays: 30, failedDays: 14 },
-  startBucketMonitor: vi.fn(),
-  gcsClient: {},
-}));
+vi.mock("../lib/bucketMonitor.js", async () => {
+  const { createBucketMonitorMock } = await import("./helpers/bucketMonitorMock.js");
+  return createBucketMonitorMock();
+});
 
 // ── Minimal DB stub (datasets route imports db for custom-dataset queries) ──
 
