@@ -87,7 +87,6 @@
 - [API-guard body extraction ordering](api-guard-body-extraction.md) — try concise-arrow extraction before braces-body; object literals in concise bodies fool the braces extractor, and concise bodies must span newlines.
 - [Toolchain pinned exactly](vite8-vitest-env-pitfalls.md) — vite/@vitejs/plugin-react/vitest are exact-pinned in pnpm-workspace.yaml catalog + bathyscan package.json; bump deliberately and re-run jsx tests + bundle guard.
 - [Skip-count ratchet guard](skip-count-guard.md) — check:skip-count (fast tier) pins unit static skips at 0 and e2e test.skip sites to tests/skip-baseline.json; update baseline in the same commit as any new gated skip.
-- [palette-cross-device e2e baseline failure](palette-cross-device-baseline.md) — spec at line 107 (custom-theme band colour rehydrate) fails deterministically in baseline as of 2026-07-21; pre-existing, don't blame test-only diffs.
 - [Font scale convention](font-scale-convention.md) — inline fontSize must be calc(Npx * var(--bs-font-scale,1)); never set inline body px (clobbers daylight CSS). drei/SVG fontSize attrs exempt.
 - [Marker library sections](marker-library-sections.md) — edit-mode type check must use full MARKER_TYPES (legacy stays valid); partial markerConstants mocks need every section export.
 - [pdfjs v6 server parsing](pdfjs-v6-server-parsing.md) — destroy() is on the loading task not the doc proxy; isEvalSupported missing from typings (cast); constructPath arg format for vector extraction.

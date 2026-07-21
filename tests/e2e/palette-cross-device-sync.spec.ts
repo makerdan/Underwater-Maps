@@ -218,7 +218,8 @@ test.describe("Depth palette cross-device sync", () => {
 
     // ── Assert the PUT payload contains bandColors ─────────────────────
     // Wait for the route handler to capture the PUT. The flush fires
-    // synchronously after setBandColor, so the PUT should arrive quickly.
+    // synchronously after setBandColor (via the immediate flushServerSync call
+    // added to __bathyTest.setBandColor), so the PUT should arrive quickly.
     const putBody = await Promise.race([
       capturedPutBody,
       page
@@ -231,6 +232,13 @@ test.describe("Depth palette cross-device sync", () => {
     const sentColors = putBody["bandColors"] as string[];
     expect(Array.isArray(sentColors)).toBe(true);
     expect(sentColors[BAND_INDEX]).toBe(NEW_COLOR);
+
+    // ── Wait for the server to acknowledge the PUT ─────────────────────
+    // capturedPutBody resolves as soon as the route interceptor captures the
+    // request body — before the server has processed and committed it.
+    // Without this wait, the Device B GET can race the PUT and return stale
+    // data if it arrives at the server before the PUT commits.
+    await page.evaluate(() => window.__bathyTest!.waitForServerSettingsSync());
 
     // ── Also verify the UI reflects the change ───────────────────────────
     const bandHex = page.locator(
@@ -374,6 +382,13 @@ test.describe("Depth palette cross-device sync", () => {
     const sentColors = putBody["bandColors"] as string[];
     expect(Array.isArray(sentColors)).toBe(true);
     expect(sentColors[BAND_INDEX]).toBe(NEW_COLOR);
+
+    // ── Wait for the server to acknowledge the PUT ─────────────────────
+    // capturedPutBody resolves as soon as the route interceptor captures the
+    // request body — before the server has processed and committed it.
+    // Without this wait, the Device B GET can race the PUT and return stale
+    // data if it arrives at the server before the PUT commits.
+    await page.evaluate(() => window.__bathyTest!.waitForServerSettingsSync());
 
     // ── Device B: wipe local persistence and reload via /settings ───────
     // Confirms the server row written above rehydrates correctly on a fresh

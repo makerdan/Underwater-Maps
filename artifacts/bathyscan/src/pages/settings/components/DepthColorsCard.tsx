@@ -253,7 +253,7 @@ function DepthBandEditor({
                 />
                 <DebouncedHexInput
                   value={color}
-                  onCommit={(hex) => setBandColor(i, hex)}
+                  onCommit={(hex) => { setBandColor(i, hex); void flushServerSync(); }}
                   style={{ ...hexStyle, width: 64 }}
                   testId={`band-color-hex-${i}`}
                 />
@@ -265,7 +265,7 @@ function DepthBandEditor({
                     type="button"
                     title={sw.label}
                     aria-label={`Set ${bandLabel} to ${sw.label}`}
-                    onClick={() => setBandColor(i, sw.hex)}
+                    onClick={() => { setBandColor(i, sw.hex); void flushServerSync(); }}
                     style={{
                       width: 14,
                       height: 14,

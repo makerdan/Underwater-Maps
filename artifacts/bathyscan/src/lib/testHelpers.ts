@@ -62,6 +62,7 @@ import {
   hasPendingOrInFlightSettingsSync,
   hasUnackedSettingsEdits,
   isServerSettled,
+  flushServerSync,
 } from "../hooks/useServerSettingsSync";
 import { processFlyWheel } from "./flyWheel";
 import { useZoneOverlayStore, ZONE_DEFAULT_COLORS } from "./zoneOverlayStore";
@@ -989,7 +990,10 @@ export function installTestHelpers(): void {
       (queryClient.getQueryState(getGetMarkersQueryKey({ datasetId }))
         ?.isInvalidated ?? false),
     getColormapTheme: () => useSettingsStore.getState().colormapTheme,
-    setBandColor: (index, hex) => usePaletteStore.getState().setBandColor(index, hex),
+    setBandColor: (index, hex) => {
+      usePaletteStore.getState().setBandColor(index, hex);
+      void flushServerSync();
+    },
     setPaletteSuggestion: (suggestion, datasetId) =>
       usePaletteSuggestionStore.getState().setSuggestion(
         {
