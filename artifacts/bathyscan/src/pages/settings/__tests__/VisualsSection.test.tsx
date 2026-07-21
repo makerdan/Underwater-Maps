@@ -15,7 +15,8 @@ const h = vi.hoisted(() => {
   const resetSection = vi.fn();
   const setIntertidalMhwOverrideFt = vi.fn();
   const setIntertidalMhhwOverrideFt = vi.fn();
-  return { resetSection, setIntertidalMhwOverrideFt, setIntertidalMhhwOverrideFt };
+  const stateOverrides: Record<string, unknown> = {};
+  return { resetSection, setIntertidalMhwOverrideFt, setIntertidalMhhwOverrideFt, stateOverrides };
 });
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
@@ -76,6 +77,9 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     intertidalMhhwOverrideFt: null,
     setIntertidalMhwOverrideFt: h.setIntertidalMhwOverrideFt,
     setIntertidalMhhwOverrideFt: h.setIntertidalMhhwOverrideFt,
+    brightDaylight: false,
+    colormapUserSet: false,
+    ...h.stateOverrides,
   });
 
   const useSettingsStore = Object.assign(
@@ -119,6 +123,7 @@ import { useTidalStore } from "@/lib/tidalStore";
 describe("VisualsSection", () => {
   beforeEach(() => {
     h.resetSection.mockClear();
+    for (const k of Object.keys(h.stateOverrides)) delete h.stateOverrides[k];
   });
 
   it("renders without crashing", () => {
@@ -197,6 +202,29 @@ describe("VisualsSection", () => {
     const hint = screen.getByTestId("antialiasing-reload-hint");
     expect(hint).toBeInTheDocument();
     expect(hint.textContent).toMatch(/takes effect after reload/i);
+  });
+
+  describe("Bright Daylight grayscale override note", () => {
+    it("is hidden when brightDaylight is off", () => {
+      render(<VisualsSection />);
+      expect(screen.queryByTestId("bright-daylight-grayscale-note")).toBeNull();
+    });
+
+    it("is shown when brightDaylight is on and the user has not set a palette", () => {
+      h.stateOverrides.brightDaylight = true;
+      h.stateOverrides.colormapUserSet = false;
+      render(<VisualsSection />);
+      const note = screen.getByTestId("bright-daylight-grayscale-note");
+      expect(note.textContent).toMatch(/grayscale/i);
+      expect(note.textContent).toMatch(/Bright Daylight/i);
+    });
+
+    it("is hidden when brightDaylight is on but the user has explicitly chosen a palette", () => {
+      h.stateOverrides.brightDaylight = true;
+      h.stateOverrides.colormapUserSet = true;
+      render(<VisualsSection />);
+      expect(screen.queryByTestId("bright-daylight-grayscale-note")).toBeNull();
+    });
   });
 
   describe("intertidal datums card", () => {

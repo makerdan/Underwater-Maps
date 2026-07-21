@@ -278,6 +278,20 @@ export function VisualsSection() {
           ]}
           sublabel="Terrain surface colour gradient"
         />
+        {s.brightDaylight && !s.colormapUserSet && (
+          <div
+            data-testid="bright-daylight-grayscale-note"
+            style={{
+              padding: "6px 12px 10px",
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+              color: "rgba(255, 200, 80, 0.9)",
+              lineHeight: 1.4,
+            }}
+          >
+            Bright Daylight mode is showing the terrain in grayscale for maximum
+            sunlight contrast. Pick a colormap above to override this.
+          </div>
+        )}
         <ColorRow
           label="Land / No-data Color"
           value={s.nodataColor}
