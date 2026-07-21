@@ -7,7 +7,7 @@
  * pattern below is built via string concatenation — a literal violation
  * written directly in this file would (correctly!) fail the guard.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -43,6 +43,14 @@ function withTempDir(fn: (dir: string) => void) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
+
+// The synthetic-violation test (below) writes to scripts/ to prove scan
+// coverage, and cleans up in a finally block.  If a previous run was killed
+// (SIGTERM/SIGKILL) before cleanup the file can survive; delete it here so
+// the "clean tree" test never sees a stale artifact from a dead run.
+const SYNTHETIC_FILE = path.join(repoRoot, "scripts", "__tmp-synthetic-port-violation.ts");
+beforeAll(() => { fs.rmSync(SYNTHETIC_FILE, { force: true }); });
+afterAll(() => { fs.rmSync(SYNTHETIC_FILE, { force: true }); });
 
 describe("hardcoded-port guard", () => {
   it("passes on the clean tree", () => {

@@ -141,6 +141,30 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+/**
+ * Parse raw SSE text into an array of JSON event payloads.
+ *
+ * raster-extract is an SSE endpoint that ALWAYS returns HTTP 200 with
+ * Content-Type: text/event-stream. Errors and results are communicated as
+ * data events (stage:"error" / stage:"done"), never as HTTP error status
+ * codes. This helper extracts every data line so tests can assert on the
+ * event payload instead of res.body (which supertest leaves as {} for
+ * non-JSON content types).
+ */
+function parseSseText(text: string): Array<Record<string, unknown>> {
+  return (text ?? "")
+    .split(/\n\n+/)
+    .filter((block) => block.trim().startsWith("data: "))
+    .map((block) => {
+      const line = block.trim().slice("data: ".length);
+      try {
+        return JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    });
+}
+
 // ── POST /api/datasets/raster-extract ────────────────────────────────────────
 
 describe("POST /api/datasets/raster-extract", () => {
@@ -170,7 +194,7 @@ describe("POST /api/datasets/raster-extract", () => {
     expect(res.body).toHaveProperty("error", "unsupported_file_type");
   });
 
-  it("returns 422 pdf_extract_error when OCR/tracing fails", async () => {
+  it("reports pdf_extract_error via SSE when OCR/tracing fails", async () => {
     mockExtractRasterImageContoursOnly.mockRejectedValue(
       new PdfStageError("extract", "no contour lines were detected"),
     );
@@ -178,19 +202,27 @@ describe("POST /api/datasets/raster-extract", () => {
       .post("/api/datasets/raster-extract")
       .set(AUTHED)
       .attach("file", FAKE_PNG, { filename: "blank.png", contentType: "image/png" });
-    expect(res.status).toBe(422);
-    expect(res.body).toHaveProperty("error", "pdf_extract_error");
-    expect(String(res.body.details)).toMatch(/contour/i);
+    // raster-extract is SSE — the HTTP status is always 200; errors arrive as
+    // data events with stage:"error".
+    expect(res.status).toBe(200);
+    const events = parseSseText(res.text);
+    const errEvent = events.find((e) => e["stage"] === "error");
+    expect(errEvent).toBeDefined();
+    expect(errEvent?.["error"]).toBe("pdf_extract_error");
+    expect(String(errEvent?.["details"])).toMatch(/contour/i);
   });
 
-  it("returns 200 with token, labels, polylineCount, width, height on success", async () => {
+  it("returns SSE done event with token, labels, polylineCount, width, height on success", async () => {
     mockExtractRasterImageContoursOnly.mockResolvedValue(FAKE_EXTRACT_RESULT);
     const res = await request(app)
       .post("/api/datasets/raster-extract")
       .set(AUTHED)
       .attach("file", FAKE_PNG, { filename: "lake-contours.png", contentType: "image/png" });
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
+    const events = parseSseText(res.text);
+    const doneEvent = events.find((e) => e["stage"] === "done");
+    expect(doneEvent).toBeDefined();
+    expect(doneEvent?.["result"]).toMatchObject({
       token: FAKE_EXTRACT_RESULT.token,
       labels: FAKE_EXTRACT_RESULT.labels,
       polylineCount: 3,
@@ -199,14 +231,17 @@ describe("POST /api/datasets/raster-extract", () => {
     });
   });
 
-  it("accepts .jpg extension", async () => {
+  it("accepts .jpg extension and returns SSE done event with token", async () => {
     mockExtractRasterImageContoursOnly.mockResolvedValue(FAKE_EXTRACT_RESULT);
     const res = await request(app)
       .post("/api/datasets/raster-extract")
       .set(AUTHED)
       .attach("file", FAKE_PNG, { filename: "scan.jpg", contentType: "image/jpeg" });
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("token");
+    const events = parseSseText(res.text);
+    const doneEvent = events.find((e) => e["stage"] === "done");
+    expect(doneEvent).toBeDefined();
+    expect((doneEvent?.["result"] as Record<string, unknown>)?.["token"]).toBeDefined();
   });
 });
 

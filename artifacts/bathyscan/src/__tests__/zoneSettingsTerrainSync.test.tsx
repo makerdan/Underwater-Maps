@@ -263,6 +263,10 @@ vi.mock("@/lib/paletteStore", async (importOriginal) => {
     shallow: "#0077be", deep: "#000033",
     customStops: null as null, bandColors: [] as never[], bandBoundaries: [] as never[],
     savedDepthThemes: [] as never[],
+    saveCurrentTheme: (_name: string) => {},
+    deleteTheme: (_id: string) => {},
+    renameTheme: (_id: string, _name: string) => {},
+    applyTheme: (_id: string) => {},
   };
   return {
     ...actual,

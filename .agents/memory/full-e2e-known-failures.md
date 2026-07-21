@@ -11,8 +11,8 @@ As of 2026-07-20 the full playwright run (e2e-repro) fails deterministically (bo
 - water-landmass-toggles (3 tests): TOPO badge / topography download never appears
 - onboarding-tour overlay is flaky (passes on retry)
 
-**Why:** these all depend on the dataset-load → terrain-ready pipeline; browser console shows repeated "State loaded from storage couldn't be migrated since no migrate function was provided" (panelCollapseStore has `version: 1` with no `migrate`) and settings PUT "Failed to fetch" bursts. Suspected upstream regression (vite 8 bump or lake-catalog/sidebar merges), not chip/settings work — confirmed unrelated by diff surface.
+**Why:** browser console showed "State loaded from storage couldn't be migrated since no migrate function was provided" (panelCollapseStore had `version: 1` with no `migrate`) and settings PUT "Failed to fetch" bursts.
 
-**How to apply:** if e2e-repro fails on exactly these specs, don't burn time re-running; investigate the dataset-load pipeline and the persisted-store migrate warning as a dedicated task. Remove this file once fixed.
+**Status (2026-07-21):** The panelCollapseStore now has a `migrate` function (see `artifacts/bathyscan/src/lib/panelCollapseStore.ts`). The 5 associated unit test failures (zoneSettingsTerrainSync, routes-documented, portsGuard, raster-routes, terrainMock) are all fixed and confirmed by test-standard passing (95/95 api-server, 3680/3680 bathyscan). The 4 dataset-load pipeline e2e specs need a full e2e run to confirm they now pass — see follow-up task #3120.
 
 **Env skip note (2026-07-21):** zone-colour-watertype.spec skips at the "Zone Analysis panel not visible" gate (headless env — UI shell not rendered), so its Settings-page section never executes locally. RESOLVED: the Settings-page zone-colour flow is now covered headlessly (no skip gates) by tests/e2e/zone-colour-settings.spec.ts, which drives ZoneColourSwatches' useEffect([waterType]) wiring on /settings directly and passes solo (~4 s).

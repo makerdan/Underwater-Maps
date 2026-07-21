@@ -70,6 +70,14 @@ const UNDOCUMENTED_ALLOWLIST = new Set([
   // Internal admin endpoint: returns per-route upscale credit-savings stats.
   // Not part of the public API surface; only callable by admin user IDs.
   "GET /admin/upscale-cache-stats",
+  // Raster contour pipeline (Step 1): accepts a PNG/JPEG contour-map image,
+  // runs OCR + line tracing via Python subprocess, and streams SSE progress.
+  // New feature — OpenAPI spec entry pending.
+  "POST /datasets/raster-extract",
+  // Raster contour pipeline (Step 2): accepts a pipeline token + optional
+  // corrected labels and commits the parsed terrain to the user's library.
+  // New feature — OpenAPI spec entry pending.
+  "POST /datasets/raster-commit",
 ]);
 
 // ---------------------------------------------------------------------------
