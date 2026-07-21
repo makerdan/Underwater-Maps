@@ -131,6 +131,9 @@ import type {
   PostDatasetsBboxQueryBody,
   PostDatasetsPointRadiusQuery200,
   PostDatasetsPointRadiusQueryBody,
+  PostDatasetsRasterCommitBody,
+  PostDatasetsRasterExtract200,
+  PostDatasetsRasterExtractBody,
   PostDatasetsUploadBody,
   PostGithubWorkflowDispatchBody,
   PostTerrainBundles200,
@@ -605,6 +608,162 @@ export const usePostDatasetsUpload = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getPostDatasetsUploadMutationOptions(options));
+    }
+
+export const getPostDatasetsRasterExtractUrl = () => {
+
+
+
+
+  return `/api/datasets/raster-extract`
+}
+
+/**
+ * Accepts a PNG or JPEG contour-map image via multipart upload. Runs OCR
+and line tracing to extract depth contours, caches the polylines in
+memory, and returns a short-lived token plus the auto-detected depth
+labels for the client to review and correct. The token expires in 5
+minutes; pass it to /datasets/raster-commit to complete the pipeline.
+
+ * @summary Step 1 of raster contour pipeline: extract polylines and depth labels from an image
+ */
+export const postDatasetsRasterExtract = async (postDatasetsRasterExtractBody: PostDatasetsRasterExtractBody, options?: RequestInit): Promise<PostDatasetsRasterExtract200> => {
+    const formData = new FormData();
+formData.append(`file`, postDatasetsRasterExtractBody.file);
+
+  return customFetch<PostDatasetsRasterExtract200>(getPostDatasetsRasterExtractUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getPostDatasetsRasterExtractMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsRasterExtract>>, TError,{data: BodyType<PostDatasetsRasterExtractBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsRasterExtract>>, TError,{data: BodyType<PostDatasetsRasterExtractBody>}, TContext> => {
+
+const mutationKey = ['postDatasetsRasterExtract'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsRasterExtract>>, {data: BodyType<PostDatasetsRasterExtractBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postDatasetsRasterExtract(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostDatasetsRasterExtractMutationResult = NonNullable<Awaited<ReturnType<typeof postDatasetsRasterExtract>>>
+    export type PostDatasetsRasterExtractMutationBody = BodyType<PostDatasetsRasterExtractBody>
+    export type PostDatasetsRasterExtractMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Step 1 of raster contour pipeline: extract polylines and depth labels from an image
+ */
+export const usePostDatasetsRasterExtract = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsRasterExtract>>, TError,{data: BodyType<PostDatasetsRasterExtractBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postDatasetsRasterExtract>>,
+        TError,
+        {data: BodyType<PostDatasetsRasterExtractBody>},
+        TContext
+      > => {
+      return useMutation(getPostDatasetsRasterExtractMutationOptions(options));
+    }
+
+export const getPostDatasetsRasterCommitUrl = () => {
+
+
+
+
+  return `/api/datasets/raster-commit`
+}
+
+/**
+ * Accepts a cached extraction token (from /datasets/raster-extract), the
+user-reviewed depth labels, and a geographic bounding box. Applies the
+corrected labels, runs georeferencing and interpolation, grids the
+result, and saves it to the user's dataset library. Returns the same
+UploadResult shape as /datasets/upload.
+
+ * @summary Step 2 of raster contour pipeline: georeference and persist the dataset
+ */
+export const postDatasetsRasterCommit = async (postDatasetsRasterCommitBody: PostDatasetsRasterCommitBody, options?: RequestInit): Promise<UploadResult> => {
+
+  return customFetch<UploadResult>(getPostDatasetsRasterCommitUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      postDatasetsRasterCommitBody,)
+  }
+);}
+
+
+
+
+export const getPostDatasetsRasterCommitMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsRasterCommit>>, TError,{data: BodyType<PostDatasetsRasterCommitBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsRasterCommit>>, TError,{data: BodyType<PostDatasetsRasterCommitBody>}, TContext> => {
+
+const mutationKey = ['postDatasetsRasterCommit'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsRasterCommit>>, {data: BodyType<PostDatasetsRasterCommitBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postDatasetsRasterCommit(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostDatasetsRasterCommitMutationResult = NonNullable<Awaited<ReturnType<typeof postDatasetsRasterCommit>>>
+    export type PostDatasetsRasterCommitMutationBody = BodyType<PostDatasetsRasterCommitBody>
+    export type PostDatasetsRasterCommitMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Step 2 of raster contour pipeline: georeference and persist the dataset
+ */
+export const usePostDatasetsRasterCommit = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsRasterCommit>>, TError,{data: BodyType<PostDatasetsRasterCommitBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postDatasetsRasterCommit>>,
+        TError,
+        {data: BodyType<PostDatasetsRasterCommitBody>},
+        TContext
+      > => {
+      return useMutation(getPostDatasetsRasterCommitMutationOptions(options));
     }
 
 export const getGetUserDatasetsUrl = () => {

@@ -245,6 +245,161 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /datasets/raster-extract:
+    post:
+      operationId: postDatasetsRasterExtract
+      tags: [datasets]
+      summary: "Step 1 of raster contour pipeline: extract polylines and depth labels from an image"
+      description: |
+        Accepts a PNG or JPEG contour-map image via multipart upload. Runs OCR
+        and line tracing to extract depth contours, caches the polylines in
+        memory, and returns a short-lived token plus the auto-detected depth
+        labels for the client to review and correct. The token expires in 5
+        minutes; pass it to /datasets/raster-commit to complete the pipeline.
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PNG or JPEG contour-map image
+      responses:
+        "200":
+          description: Extraction result with token and detected depth labels
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, labels, polylineCount, width, height]
+                properties:
+                  token:
+                    type: string
+                    description: Short-lived extraction token to pass to /datasets/raster-commit
+                  labels:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        x: { type: number }
+                        y: { type: number }
+                        value: { type: number }
+                        text: { type: string }
+                  polylineCount:
+                    type: integer
+                  width:
+                    type: integer
+                  height:
+                    type: integer
+        "400":
+          description: Missing or invalid file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "415":
+          description: Unsupported file type (only PNG and JPEG accepted)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: OCR or contour extraction failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /datasets/raster-commit:
+    post:
+      operationId: postDatasetsRasterCommit
+      tags: [datasets]
+      summary: "Step 2 of raster contour pipeline: georeference and persist the dataset"
+      description: |
+        Accepts a cached extraction token (from /datasets/raster-extract), the
+        user-reviewed depth labels, and a geographic bounding box. Applies the
+        corrected labels, runs georeferencing and interpolation, grids the
+        result, and saves it to the user's dataset library. Returns the same
+        UploadResult shape as /datasets/upload.
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, correctedLabels, pdfBbox, fileName]
+              properties:
+                token:
+                  type: string
+                  description: Extraction token returned by /datasets/raster-extract
+                correctedLabels:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [x, y, value, text]
+                    properties:
+                      x: { type: number }
+                      y: { type: number }
+                      value: { type: number }
+                      text: { type: string }
+                pdfBbox:
+                  type: string
+                  description: >
+                    JSON string with geographic bounding box, e.g.
+                    {"minLon":-93.5,"minLat":45.1,"maxLon":-93.4,"maxLat":45.2}
+                pdfDepthUnit:
+                  type: string
+                  enum: [feet, meters]
+                  default: feet
+                resolution:
+                  type: integer
+                  minimum: 32
+                  maximum: 512
+                  default: 256
+                fileName:
+                  type: string
+                  description: Output dataset file name (used to derive the dataset display name)
+      responses:
+        "200":
+          description: Parsed terrain and overview grids, persisted to the user's dataset library
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
+        "400":
+          description: Invalid parameters, invalid bounding box, or insufficient data points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: Extraction token expired, not found, or pipeline error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /user/datasets:
     get:
       operationId: getUserDatasets

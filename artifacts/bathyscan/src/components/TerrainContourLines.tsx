@@ -2,7 +2,7 @@ import React, { useMemo, useEffect, useRef } from "react";
 import * as THREE from "three";
 import type { TerrainData } from "@workspace/api-client-react";
 import { buildContourLines } from "@/lib/overviewRenderer";
-import { getColormap } from "@/lib/colormap";
+import { getColormap, getColormapDepthDomain } from "@/lib/colormap";
 import { useSettingsStore, deriveEffectiveColormapTheme } from "@/lib/settingsStore";
 import { WORLD_SIZE, MAX_DEPTH_WORLD } from "@/lib/terrain";
 
@@ -65,14 +65,17 @@ const TerrainContourLines: React.FC<TerrainContourLinesProps> = ({ grid }) => {
     if (segments.length === 0) return null;
 
     const { minDepth, maxDepth } = grid;
-    const depthRange = (maxDepth - minDepth) || 1;
 
     const W = (grid as { width?: number }).width ?? grid.resolution;
     const H = (grid as { height?: number }).height ?? grid.resolution;
     const wSegs = Math.max(W - 1, 1);
     const hSegs = Math.max(H - 1, 1);
 
-    const toColor = getColormap(effectiveColormapTheme, { min: minDepth, max: maxDepth });
+    // Match the absolute depth domain used by TerrainMesh vertex colours so
+    // contour lines land on the same colour as the underlying surface.
+    const domain = getColormapDepthDomain(effectiveColormapTheme, minDepth, maxDepth);
+    const domainRange = (domain.max - domain.min) || 1;
+    const toColor = getColormap(effectiveColormapTheme);
 
     const vertexCount = segments.length * 2;
     const positions = new Float32Array(vertexCount * 3);
@@ -82,7 +85,7 @@ const TerrainContourLines: React.FC<TerrainContourLinesProps> = ({ grid }) => {
       const seg = segments[i]!;
       const { depth, x0, y0, x1, y1 } = seg;
 
-      const t01 = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
+      const t01 = Math.max(0, Math.min(1, (depth - domain.min) / domainRange));
       const worldY = -t01 * MAX_DEPTH_WORLD + LINE_Y_OFFSET;
 
       // Keep colors in linear space — Three.js vertex colors are stored and

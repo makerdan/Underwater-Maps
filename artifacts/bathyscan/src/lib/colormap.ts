@@ -259,23 +259,31 @@ function colorToSrgbBytes(c: THREE.Color): { r: number; g: number; b: number } {
  * Samples the theme at `samples` evenly-spaced points so the gradient
  * approximates the same curve used by the renderer.
  *
- * @param theme   Colormap theme to sample.
+ * @param theme     Colormap theme to sample.
  * @param direction CSS direction (e.g. "to right", "to bottom"). Defaults to "to right".
- * @param samples Number of colour stops; clamped to >= 2. Defaults to 12.
- * @param range   Optional dataset depth range (metres) to anchor user bands.
+ * @param samples   Number of colour stops; clamped to >= 2. Defaults to 12.
+ * @param range     Optional dataset depth range (metres) to anchor user bands.
+ *                  Leave undefined when using `tRange` (absolute-domain cropping).
+ * @param tRange    Optional [tMin, tMax] slice of the absolute colormap to render.
+ *                  Obtain via `getColormapTRange(theme, gridMin, gridMax)` so that
+ *                  legends/scale-bars show only the dataset's colour slice and align
+ *                  with the terrain vertex colours which are normalised on the absolute
+ *                  0–OCEAN_MAX_DEPTH_M scale for ocean/custom themes.
  */
 export function colormapCssGradient(
   theme: ColormapTheme,
   direction: string = "to right",
   samples: number = 12,
   range?: DepthRangeM,
+  tRange?: { tMin: number; tMax: number },
 ): string {
   const n = Math.max(2, samples);
   const toColor = getColormap(theme, range);
+  const { tMin = 0, tMax = 1 } = tRange ?? {};
   const stops: string[] = [];
   for (let i = 0; i < n; i++) {
     const f = i / (n - 1);
-    const t = f;
+    const t = tMin + f * (tMax - tMin);
     const { r, g, b } = colorToSrgbBytes(toColor(t));
     stops.push(`rgb(${r},${g},${b}) ${(f * 100).toFixed(2)}%`);
   }
@@ -286,22 +294,29 @@ export function colormapCssGradient(
  * Render the depth-to-colour gradient into an HTMLCanvasElement.
  * Used by the HUD scale bar and the Settings preview strip.
  *
- * @param range Optional dataset depth range (metres) to anchor user bands.
+ * @param range  Optional dataset depth range (metres) to anchor user bands.
+ *               Leave undefined when using `tRange` (absolute-domain cropping).
+ * @param tRange Optional [tMin, tMax] slice of the absolute colormap to render.
+ *               Obtain via `getColormapTRange(theme, gridMin, gridMax)` so that
+ *               the canvas ramp matches the terrain vertex colours.
  */
 export function colormapCanvas(
   width: number,
   height: number,
   theme: ColormapTheme = "ocean",
   range?: DepthRangeM,
+  tRange?: { tMin: number; tMax: number },
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
   const toColor = getColormap(theme, range);
+  const { tMin = 0, tMax = 1 } = tRange ?? {};
 
   for (let y = 0; y < height; y++) {
-    const t = y / (height - 1);
+    const f = y / (height - 1);
+    const t = tMin + f * (tMax - tMin);
     const { r, g, b } = colorToSrgbBytes(toColor(t));
     ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.fillRect(0, y, width, 1);

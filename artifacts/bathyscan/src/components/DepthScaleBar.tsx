@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAppState } from "@/lib/context";
-import { colormapCanvas } from "@/lib/colormap";
+import { colormapCanvas, getColormapTRange } from "@/lib/colormap";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth } from "@/lib/units";
@@ -33,17 +33,20 @@ export const DepthScaleBar: React.FC = () => {
 
   useEffect(() => {
     if (!terrain) return;
+    // Crop the canvas ramp to the absolute depth slice the dataset occupies
+    // so the gradient matches the terrain vertex colours (ocean/custom use an
+    // absolute 0–2000 ft scale; fixed themes always span the full ramp).
+    const tRange = getColormapTRange(colormapTheme, terrain.minDepth, terrain.maxDepth);
     // Vertical ramp for the expanded view. Generated even while collapsed so
     // expanding the legend doesn't show a one-frame blank — and so the
     // colormap canvas is exercised with its canonical 200px height for tests.
-    const range = { min: terrain.minDepth, max: terrain.maxDepth };
-    const expandedCanvas = colormapCanvas(20, 200, colormapTheme, range);
+    const expandedCanvas = colormapCanvas(20, 200, colormapTheme, undefined, tRange);
     if (expandedImgRef.current) {
       expandedImgRef.current.src = expandedCanvas.toDataURL();
     }
     // Horizontal mini-swatch for the collapsed header (rotated via CSS).
     if (collapsedImgRef.current) {
-      const canvas = colormapCanvas(20, 80, colormapTheme, range);
+      const canvas = colormapCanvas(20, 80, colormapTheme, undefined, tRange);
       collapsedImgRef.current.src = canvas.toDataURL();
     }
   }, [colormapTheme, shallow, deep, bandColorsKey, bandBoundaries, blendBands, terrain, expanded]);

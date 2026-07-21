@@ -336,6 +336,183 @@ export const PostDatasetsUploadResponse = zod.object({
 
 
 /**
+ * Accepts a PNG or JPEG contour-map image via multipart upload. Runs OCR
+and line tracing to extract depth contours, caches the polylines in
+memory, and returns a short-lived token plus the auto-detected depth
+labels for the client to review and correct. The token expires in 5
+minutes; pass it to /datasets/raster-commit to complete the pipeline.
+
+ * @summary Step 1 of raster contour pipeline: extract polylines and depth labels from an image
+ */
+export const PostDatasetsRasterExtractBody = zod.object({
+  "file": zod.instanceof(File).describe('PNG or JPEG contour-map image')
+})
+
+export const PostDatasetsRasterExtractResponse = zod.object({
+  "token": zod.string().describe('Short-lived extraction token to pass to \/datasets\/raster-commit'),
+  "labels": zod.array(zod.object({
+  "x": zod.number().optional(),
+  "y": zod.number().optional(),
+  "value": zod.number().optional(),
+  "text": zod.string().optional()
+})),
+  "polylineCount": zod.number(),
+  "width": zod.number(),
+  "height": zod.number()
+})
+
+
+/**
+ * Accepts a cached extraction token (from /datasets/raster-extract), the
+user-reviewed depth labels, and a geographic bounding box. Applies the
+corrected labels, runs georeferencing and interpolation, grids the
+result, and saves it to the user's dataset library. Returns the same
+UploadResult shape as /datasets/upload.
+
+ * @summary Step 2 of raster contour pipeline: georeference and persist the dataset
+ */
+
+export const postDatasetsRasterCommitBodyPdfDepthUnitDefault = `feet`;
+export const postDatasetsRasterCommitBodyResolutionDefault = 256;
+export const postDatasetsRasterCommitBodyResolutionMin = 32;
+export const postDatasetsRasterCommitBodyResolutionMax = 512;
+
+
+
+export const PostDatasetsRasterCommitBody = zod.object({
+  "token": zod.string().describe('Extraction token returned by \/datasets\/raster-extract'),
+  "correctedLabels": zod.array(zod.object({
+  "x": zod.number(),
+  "y": zod.number(),
+  "value": zod.number(),
+  "text": zod.string()
+})).min(1),
+  "pdfBbox": zod.string().describe('JSON string with geographic bounding box, e.g. {\"minLon\":-93.5,\"minLat\":45.1,\"maxLon\":-93.4,\"maxLat\":45.2}\n'),
+  "pdfDepthUnit": zod.enum(['feet', 'meters']).default(postDatasetsRasterCommitBodyPdfDepthUnitDefault),
+  "resolution": zod.number().min(postDatasetsRasterCommitBodyResolutionMin).max(postDatasetsRasterCommitBodyResolutionMax).default(postDatasetsRasterCommitBodyResolutionDefault),
+  "fileName": zod.string().describe('Output dataset file name (used to derive the dataset display name)')
+})
+
+export const PostDatasetsRasterCommitResponse = zod.object({
+  "terrain": zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "resolution": zod.number().describe('Grid side length N (grid is NxN)'),
+  "width": zod.number(),
+  "height": zod.number(),
+  "depths": zod.array(zod.number().nullable()).describe('Row-major flat array of depth values (metres, positive = below surface). Null entries represent unfilled cells (survey gaps) that the IDW interpolation could not reach; clients should render them as flat no-data tiles at the water surface.'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number(),
+  "centerLon": zod.number(),
+  "centerLat": zod.number(),
+  "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
+  "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
+  "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Which upstream data service produced this grid (bathymetry primary).\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\ntwdb      — TWDB Reservoir Volumetric & Sedimentation Survey\nusace     — USACE hydrographic survey\nusgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)\n'),
+  "bathymetrySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).'),
+  "topographySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.'),
+  "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
+  "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
+  "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "noSurveyAvailable": zod.boolean().optional().describe('True when no dedicated bathymetric survey exists in any known public\ndatabase for this dataset. The terrain is derived entirely from coarse\nelevation fallback sources (USGS 3DEP or GEBCO). Clients should surface\nan explanatory note so users understand why depth detail may be coarser\nthan datasets backed by agency-specific multibeam or contour surveys\n(e.g. Lake George, Cayuga Lake).\n'),
+  "habitatPolygons": zod.object({
+  "type": zod.enum(['FeatureCollection']),
+  "features": zod.array(zod.object({
+  "type": zod.enum(['Feature']),
+  "properties": zod.object({
+  "species": zod.string().describe('Scientific species name (snake_case)'),
+  "commonName": zod.string(),
+  "fmp": zod.string().describe('Fishery Management Plan name'),
+  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
+  "habitatDescription": zod.string(),
+  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
+  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
+  "source": zod.string(),
+  "creditUrl": zod.string(),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}),
+  "geometry": zod.record(zod.string(), zod.unknown())
+})),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+}).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
+}),
+  "overview": zod.object({
+  "datasetId": zod.string(),
+  "name": zod.string(),
+  "waterType": zod.enum(['saltwater', 'freshwater']),
+  "resolution": zod.number().describe('Grid side length N (grid is NxN)'),
+  "width": zod.number(),
+  "height": zod.number(),
+  "depths": zod.array(zod.number().nullable()).describe('Row-major flat array of depth values (metres, positive = below surface). Null entries represent unfilled cells (survey gaps) that the IDW interpolation could not reach; clients should render them as flat no-data tiles at the water surface.'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number(),
+  "centerLon": zod.number(),
+  "centerLat": zod.number(),
+  "topography": zod.array(zod.number()).optional().describe('Row-major flat array of above-water elevation values (metres above sea level, 0 for water cells). Same NxN shape as `depths`. Omitted when the dataset has no above-water terrain.'),
+  "hasTopography": zod.boolean().optional().describe('True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable\/hide the landmass visualisation.'),
+  "synthetic": zod.boolean().optional().describe('Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback.'),
+  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Which upstream data service produced this grid (bathymetry primary).\nncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)\ngebco     — GEBCO 2024 WCS (~400 m global grid)\nsynthetic — fbm fallback used when all upstream services are unreachable\ntwdb      — TWDB Reservoir Volumetric & Sedimentation Survey\nusace     — USACE hydrographic survey\nusgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)\n'),
+  "bathymetrySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).'),
+  "topographySource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']).optional().describe('Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.'),
+  "bathymetrySourceLabel": zod.string().optional().describe('Display label for the bathymetry source (overrides the default per-source label in the UI).'),
+  "topographySourceLabel": zod.string().optional().describe('Display label for the topography source (overrides the default per-source label in the UI).'),
+  "bathymetryCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the bathymetry source badge.'),
+  "topographyCreditUrl": zod.string().optional().describe('Credit URL surfaced next to the topography source badge.'),
+  "noSurveyAvailable": zod.boolean().optional().describe('True when no dedicated bathymetric survey exists in any known public\ndatabase for this dataset. The terrain is derived entirely from coarse\nelevation fallback sources (USGS 3DEP or GEBCO). Clients should surface\nan explanatory note so users understand why depth detail may be coarser\nthan datasets backed by agency-specific multibeam or contour surveys\n(e.g. Lake George, Cayuga Lake).\n'),
+  "habitatPolygons": zod.object({
+  "type": zod.enum(['FeatureCollection']),
+  "features": zod.array(zod.object({
+  "type": zod.enum(['Feature']),
+  "properties": zod.object({
+  "species": zod.string().describe('Scientific species name (snake_case)'),
+  "commonName": zod.string(),
+  "fmp": zod.string().describe('Fishery Management Plan name'),
+  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
+  "habitatDescription": zod.string(),
+  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
+  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
+  "source": zod.string(),
+  "creditUrl": zod.string(),
+  "color": zod.string().describe('Suggested hex color for rendering')
+}),
+  "geometry": zod.record(zod.string(), zod.unknown())
+})),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional()
+}).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
+}),
+  "savedDatasetId": zod.string().optional().describe('UUID of the saved custom_datasets row. Present whenever persistence succeeded; omitted only if the database insert returned no row (see `saveError`).'),
+  "savedDatasetMeta": zod.object({
+  "id": zod.string().describe('UUID primary key'),
+  "name": zod.string().describe('Dataset name derived from the uploaded filename'),
+  "minDepth": zod.number(),
+  "maxDepth": zod.number(),
+  "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
+  "createdAt": zod.coerce.date(),
+  "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
+  "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
+  "tideStation": zod.object({
+  "stationId": zod.string().describe('7-digit NOAA station id'),
+  "stationName": zod.string(),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
+}).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch'),
+  "saveError": zod.string().optional().describe('Human-readable error string returned when the auto-save to the user\'s account failed. The terrain itself is still returned so the session is usable.')
+}).describe('Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller\'s dataset library; `savedDatasetId` carries the new row\'s UUID.')
+
+
+/**
  * Returns metadata for all terrain files the authenticated user has uploaded and saved
  * @summary List the current user's saved custom terrain datasets
  */

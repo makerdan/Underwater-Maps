@@ -2,7 +2,7 @@ import React from "react";
 import { useAppState } from "@/lib/context";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
-import { colormapCssGradient } from "@/lib/colormap";
+import { colormapCssGradient, getColormapTRange } from "@/lib/colormap";
 import { formatDepth } from "@/lib/units";
 
 const FT_TO_M = 0.3048;
@@ -36,6 +36,13 @@ export const DepthLegend = () => {
         return [{ label: formatDepth(boundaryM, { units }), pos }];
       });
 
+  // Crop the gradient to the slice of the absolute colormap the dataset
+  // actually occupies. For ocean/custom themes this ensures the top of the
+  // ramp matches the shallowest terrain vertex colour and the bottom matches
+  // the deepest — regardless of dataset depth range. Fixed preset themes
+  // always return tMin=0/tMax=1 (no crop needed).
+  const tRange = getColormapTRange(colormapTheme, terrain.minDepth, terrain.maxDepth);
+
   return (
     <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-stretch h-64 z-10 pointer-events-none">
       {/* Tick labels column */}
@@ -61,14 +68,17 @@ export const DepthLegend = () => {
       <div
         className="w-4 rounded-sm border border-border"
         style={{
-          // Sample the active colormap anchored to the dataset's depth range
-          // so the ramp matches the terrain colours and the grid-relative
-          // tick positions line up with the bands.
+          // Sample the colormap over the absolute [tMin, tMax] slice so the
+          // gradient matches the terrain vertex colours exactly. Tick positions
+          // (computed relative to the dataset span) align with this slice
+          // because pos = (boundaryM - minDepth) / span = (tBoundary - tMin)
+          // / (tMax - tMin) for both absolute and fixed themes.
           background: colormapCssGradient(
             colormapTheme,
             "to bottom",
             24,
-            { min: terrain.minDepth, max: terrain.maxDepth },
+            undefined,
+            tRange,
           ),
         }}
       />

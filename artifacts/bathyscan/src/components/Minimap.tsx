@@ -4,7 +4,7 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
-import { getColormap, colormapCssGradient } from "@/lib/colormap";
+import { getColormap, colormapCssGradient, getColormapTRange } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ColormapTheme } from "@/lib/settingsStore";
@@ -205,19 +205,18 @@ export const Minimap: React.FC = () => {
   // Build the CSS gradient for the legend strip.  Re-computed only when the
   // theme or palette changes — same dependencies that rebuild the heatmap.
   const legendGradient = useMemo(
-    () =>
-      colormapCssGradient(
-        colormapTheme,
-        "to bottom",
-        16,
-        // Anchor the strip to the dataset's depth range so it matches the
-        // heatmap colours (user depth bands are absolute depths).
-        terrain
-          ? { min: terrain.minDepth, max: terrain.maxDepth }
-          : undefined,
-      ),
+    () => {
+      // Crop the legend strip to the dataset's absolute depth slice so it
+      // matches the heatmap colours. For ocean/custom themes, band boundaries
+      // are on the absolute 0–2000 ft scale; fixed themes always return
+      // tMin=0/tMax=1 (full ramp — same as before).
+      const tRange = terrain
+        ? getColormapTRange(colormapTheme, terrain.minDepth, terrain.maxDepth)
+        : undefined;
+      return colormapCssGradient(colormapTheme, "to bottom", 16, undefined, tRange);
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- paletteVersion fingerprint covers all palette state; colormapCssGradient is a pure function
-    [colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries, blendBands],
+    [colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries, blendBands, terrain],
   );
 
   // Depth labels for the legend (shallow top, deep bottom)

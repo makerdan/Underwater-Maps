@@ -3228,6 +3228,60 @@ export type PostDatasetsUploadBody = {
   pdfDepthUnit?: PostDatasetsUploadBodyPdfDepthUnit;
 };
 
+export type PostDatasetsRasterExtractBody = {
+  /** PNG or JPEG contour-map image */
+  file: Blob;
+};
+
+export type PostDatasetsRasterExtract200LabelsItem = {
+  x?: number;
+  y?: number;
+  value?: number;
+  text?: string;
+};
+
+export type PostDatasetsRasterExtract200 = {
+  /** Short-lived extraction token to pass to /datasets/raster-commit */
+  token: string;
+  labels: PostDatasetsRasterExtract200LabelsItem[];
+  polylineCount: number;
+  width: number;
+  height: number;
+};
+
+export type PostDatasetsRasterCommitBodyCorrectedLabelsItem = {
+  x: number;
+  y: number;
+  value: number;
+  text: string;
+};
+
+export type PostDatasetsRasterCommitBodyPdfDepthUnit = typeof PostDatasetsRasterCommitBodyPdfDepthUnit[keyof typeof PostDatasetsRasterCommitBodyPdfDepthUnit];
+
+
+export const PostDatasetsRasterCommitBodyPdfDepthUnit = {
+  feet: 'feet',
+  meters: 'meters',
+} as const;
+
+export type PostDatasetsRasterCommitBody = {
+  /** Extraction token returned by /datasets/raster-extract */
+  token: string;
+  /** @minItems 1 */
+  correctedLabels: PostDatasetsRasterCommitBodyCorrectedLabelsItem[];
+  /** JSON string with geographic bounding box, e.g. {"minLon":-93.5,"minLat":45.1,"maxLon":-93.4,"maxLat":45.2}
+   */
+  pdfBbox: string;
+  pdfDepthUnit?: PostDatasetsRasterCommitBodyPdfDepthUnit;
+  /**
+     * @minimum 32
+     * @maximum 512
+     */
+  resolution?: number;
+  /** Output dataset file name (used to derive the dataset display name) */
+  fileName: string;
+};
+
 export type GetMarkersParams = {
 /**
  * Dataset slug to filter markers by. When omitted, returns unassigned markers (datasetId IS NULL) for the authenticated user within the supplied bounds.

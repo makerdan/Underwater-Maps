@@ -441,6 +441,8 @@ Authentication is handled by **Clerk** across all surfaces:
 
 | Method | Path | Purpose |
 |---|---|---|
+| POST | `/datasets/raster-extract` | "Step 1 of raster contour pipeline: extract polylines and depth labels from an image" |
+| POST | `/datasets/raster-commit` | "Step 2 of raster contour pipeline: georeference and persist the dataset" |
 | GET | `/catches` | List all catch entries for the caller's markers in a dataset |
 | GET | `/markers/:markerId/catches` | List catch entries for one marker |
 | POST | `/markers/:markerId/catches` | Create a catch entry on a marker |
