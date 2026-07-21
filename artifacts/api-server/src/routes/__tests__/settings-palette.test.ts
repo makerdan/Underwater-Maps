@@ -362,6 +362,54 @@ describe("PUT /api/settings — zoneOverlaySlots round-trip", () => {
   });
 });
 
+describe("PUT /api/settings — savedDepthThemes", () => {
+  it("round-trips a valid savedDepthThemes array", async () => {
+    const themes = [
+      {
+        id: "abc123",
+        name: "Shallow flats",
+        bandColors: ["#00e5ff", "#0288d1", "#283593"],
+        bandBoundaries: [0, 50, 150, 300],
+        blendBands: true,
+      },
+    ];
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ savedDepthThemes: themes });
+    expect(res.status).toBe(200);
+    const persisted = state.lastInsertedSettings?.["settings"] as Record<string, unknown>;
+    expect(Array.isArray(persisted.savedDepthThemes)).toBe(true);
+    const stored = persisted.savedDepthThemes as typeof themes;
+    expect(stored.length).toBe(1);
+    expect(stored[0]?.name).toBe("Shallow flats");
+    expect(stored[0]?.id).toBe("abc123");
+    expect(stored[0]?.blendBands).toBe(true);
+  });
+
+  it("rejects savedDepthThemes exceeding 20 entries", async () => {
+    const themes = Array.from({ length: 21 }, (_, i) => ({
+      id: `id-${i}`,
+      name: `Theme ${i}`,
+      bandColors: ["#00e5ff", "#283593"],
+      bandBoundaries: [0, 100, 500],
+      blendBands: false,
+    }));
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ savedDepthThemes: themes });
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts an empty savedDepthThemes array", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .send({ savedDepthThemes: [] });
+    expect(res.status).toBe(200);
+    const persisted = state.lastInsertedSettings?.["settings"] as Record<string, unknown>;
+    expect(persisted.savedDepthThemes).toEqual([]);
+  });
+});
+
 describe("PUT /api/settings — bandBoundaries (continued)", () => {
   it("partial PUT of just bandBoundaries preserves previously stored non-palette settings", async () => {
     state.userSettings = [

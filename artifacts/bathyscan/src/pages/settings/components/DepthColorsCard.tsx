@@ -11,6 +11,7 @@ import {
   MIN_BANDS,
   MAX_BANDS,
   MAX_BOUNDARY_FT,
+  MAX_SAVED_THEMES,
 } from "@/lib/paletteStore";
 import { colormapCanvas } from "@/lib/colormap";
 import { formatDepth } from "@/lib/units";
@@ -338,6 +339,214 @@ function DepthBandEditor({
   );
 }
 
+/** Inline "save current theme" form embedded in the card. */
+function SaveThemeRow({
+  onSave,
+  atLimit,
+  labelStyle,
+  hexStyle,
+}: {
+  onSave: (name: string) => void;
+  atLimit: boolean;
+  labelStyle: React.CSSProperties;
+  hexStyle: React.CSSProperties;
+}) {
+  const [name, setName] = React.useState("");
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const trimmed = name.trim();
+  const canSave = trimmed.length > 0 && !atLimit;
+
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave(trimmed);
+    setName("");
+    inputRef.current?.blur();
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+      <input
+        ref={inputRef}
+        type="text"
+        value={name}
+        maxLength={64}
+        placeholder={atLimit ? `Max ${MAX_SAVED_THEMES} themes reached` : "Theme name…"}
+        disabled={atLimit}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+        aria-label="New theme name"
+        style={{
+          ...hexStyle,
+          flex: 1,
+          textAlign: "left",
+          width: "auto",
+          minWidth: 0,
+          color: atLimit ? "#475569" : "#e2e8f0",
+        }}
+      />
+      <button
+        type="button"
+        data-testid="save-theme-btn"
+        disabled={!canSave}
+        onClick={handleSave}
+        style={{
+          background: canSave ? "rgba(0,229,255,0.12)" : "rgba(0,0,0,0.2)",
+          border: `1px solid ${canSave ? "rgba(0,229,255,0.45)" : "rgba(0,229,255,0.12)"}`,
+          borderRadius: 3,
+          color: canSave ? "#67e8f9" : "#475569",
+          cursor: canSave ? "pointer" : "not-allowed",
+          fontFamily: "inherit",
+          fontSize: "calc(9px * var(--bs-font-scale, 1))",
+          letterSpacing: "0.12em",
+          padding: "4px 10px",
+          whiteSpace: "nowrap",
+          ...labelStyle,
+        }}
+      >
+        SAVE
+      </button>
+    </div>
+  );
+}
+
+/** A single saved-theme chip with inline rename support. */
+function SavedThemeChip({
+  theme,
+  onApply,
+  onRename,
+  onDelete,
+  labelStyle,
+  hexStyle,
+}: {
+  theme: { id: string; name: string; bandColors: string[]; bandBoundaries: number[]; blendBands: boolean };
+  onApply: () => void;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+  labelStyle: React.CSSProperties;
+  hexStyle: React.CSSProperties;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [editName, setEditName] = React.useState(theme.name);
+
+  React.useEffect(() => { setEditName(theme.name); }, [theme.name]);
+
+  const commitRename = () => {
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== theme.name) onRename(trimmed);
+    setEditing(false);
+  };
+
+  const gradientStyle: React.CSSProperties = {
+    display: "inline-block",
+    width: 28,
+    height: 14,
+    borderRadius: 2,
+    border: "1px solid rgba(0,0,0,0.4)",
+    flexShrink: 0,
+    background: theme.bandColors.length >= 2
+      ? `linear-gradient(90deg, ${theme.bandColors[0]} 0%, ${theme.bandColors[theme.bandColors.length - 1]} 100%)`
+      : theme.bandColors[0] ?? "#888",
+  };
+
+  const iconBtn = (): React.CSSProperties => ({
+    background: "none",
+    border: "none",
+    color: "#64748b",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    fontSize: "calc(9px * var(--bs-font-scale, 1))",
+    letterSpacing: "0.1em",
+    padding: "2px 4px",
+    lineHeight: 1,
+    ...labelStyle,
+  });
+
+  return (
+    <div
+      data-testid={`saved-theme-chip-${theme.id}`}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "5px 8px",
+        background: "rgba(0,0,0,0.25)",
+        border: "1px solid rgba(0,229,255,0.12)",
+        borderRadius: 4,
+        minWidth: 0,
+      }}
+    >
+      <span aria-hidden style={gradientStyle} />
+
+      {editing ? (
+        <input
+          type="text"
+          value={editName}
+          maxLength={64}
+          autoFocus
+          onChange={(e) => setEditName(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitRename();
+            if (e.key === "Escape") { setEditName(theme.name); setEditing(false); }
+          }}
+          aria-label="Rename theme"
+          style={{ ...hexStyle, width: 0, flex: 1, textAlign: "left" }}
+        />
+      ) : (
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: "calc(10px * var(--bs-font-scale, 1))",
+            color: "#e2e8f0",
+          }}
+          title={theme.name}
+        >
+          {theme.name}
+        </span>
+      )}
+
+      <button
+        type="button"
+        data-testid={`apply-theme-${theme.id}`}
+        title="Apply this theme"
+        onClick={onApply}
+        style={{
+          ...iconBtn(),
+          background: "rgba(0,229,255,0.08)",
+          border: "1px solid rgba(0,229,255,0.2)",
+          borderRadius: 3,
+          color: "#67e8f9",
+          padding: "2px 7px",
+        }}
+      >
+        APPLY
+      </button>
+      <button
+        type="button"
+        data-testid={`rename-theme-${theme.id}`}
+        title="Rename this theme"
+        onClick={() => { setEditing(true); setEditName(theme.name); }}
+        style={iconBtn()}
+      >
+        ✎
+      </button>
+      <button
+        type="button"
+        data-testid={`delete-theme-${theme.id}`}
+        title="Delete this theme"
+        onClick={onDelete}
+        style={{ ...iconBtn(), color: "#ef4444" }}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 /**
  * Merged "Depth Colors" card: colormap theme, land/no-data colour, contour
  * lines, palette presets, live preview, and the variable-length depth band
@@ -350,6 +559,11 @@ export function DepthColorsCard() {
   const setBandColors = usePaletteStore((s) => s.setBandColors);
   const bandCount = usePaletteStore((s) => s.bandColors.length);
   const blendBands = usePaletteStore((s) => s.blendBands);
+  const savedDepthThemes = usePaletteStore((s) => s.savedDepthThemes);
+  const saveCurrentTheme = usePaletteStore((s) => s.saveCurrentTheme);
+  const deleteTheme = usePaletteStore((s) => s.deleteTheme);
+  const renameTheme = usePaletteStore((s) => s.renameTheme);
+  const applyTheme = usePaletteStore((s) => s.applyTheme);
 
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
   const setColormapThemeByUser = useSettingsStore((s) => s.setColormapThemeByUser);
@@ -512,6 +726,47 @@ export function DepthColorsCard() {
             );
           })}
         </div>
+      </div>
+
+      {/* Saved themes */}
+      <div style={{ padding: "10px 16px 4px" }}>
+        <div style={{ ...labelStyle, marginBottom: 6 }}>SAVED THEMES</div>
+        {savedDepthThemes.length === 0 ? (
+          <p
+            data-testid="saved-themes-empty"
+            style={{
+              margin: 0,
+              fontSize: "calc(10px * var(--bs-font-scale, 1))",
+              color: "#475569",
+              fontStyle: "italic",
+            }}
+          >
+            No saved themes yet. Enter a name below and click SAVE to bookmark the current palette.
+          </p>
+        ) : (
+          <div
+            data-testid="saved-themes-list"
+            style={{ display: "flex", flexDirection: "column", gap: 4 }}
+          >
+            {savedDepthThemes.map((theme) => (
+              <SavedThemeChip
+                key={theme.id}
+                theme={theme}
+                onApply={() => { applyTheme(theme.id); void flushServerSync(); }}
+                onRename={(name) => { renameTheme(theme.id, name); void flushServerSync(); }}
+                onDelete={() => { deleteTheme(theme.id); void flushServerSync(); }}
+                labelStyle={labelStyle}
+                hexStyle={hexStyle}
+              />
+            ))}
+          </div>
+        )}
+        <SaveThemeRow
+          atLimit={savedDepthThemes.length >= MAX_SAVED_THEMES}
+          onSave={(name) => { saveCurrentTheme(name); void flushServerSync(); }}
+          labelStyle={labelStyle}
+          hexStyle={hexStyle}
+        />
       </div>
 
       {/* Preview gradient */}

@@ -1144,6 +1144,23 @@ export const getSettingsResponseBandBoundariesMin = 3;
 export const getSettingsResponseBandBoundariesMax = 17;
 
 export const getSettingsResponseBlendDepthBandsDefault = true;
+export const getSettingsResponseSavedDepthThemesItemIdMax = 36;
+
+export const getSettingsResponseSavedDepthThemesItemNameMax = 64;
+
+export const getSettingsResponseSavedDepthThemesItemBandColorsItemRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const getSettingsResponseSavedDepthThemesItemBandColorsMin = 2;
+export const getSettingsResponseSavedDepthThemesItemBandColorsMax = 16;
+
+export const getSettingsResponseSavedDepthThemesItemBandBoundariesItemMin = 0;
+export const getSettingsResponseSavedDepthThemesItemBandBoundariesItemMax = 36000;
+
+export const getSettingsResponseSavedDepthThemesItemBandBoundariesMin = 3;
+export const getSettingsResponseSavedDepthThemesItemBandBoundariesMax = 17;
+
+export const getSettingsResponseSavedDepthThemesDefault = [];
+export const getSettingsResponseSavedDepthThemesMax = 20;
+
 export const getSettingsResponseLampIntensityDefault = 2;
 export const getSettingsResponseLampIntensityMin = 0;
 export const getSettingsResponseLampIntensityMax = 5;
@@ -1403,6 +1420,13 @@ export const GetSettingsResponse = zod.object({
   }
 }),
   "blendDepthBands": zod.boolean().default(getSettingsResponseBlendDepthBandsDefault).describe('When true (default), depth band colours blend smoothly into each other; when false, each band renders as a crisp discrete colour step.'),
+  "savedDepthThemes": zod.array(zod.object({
+  "id": zod.string().max(getSettingsResponseSavedDepthThemesItemIdMax).describe('Unique identifier for this saved theme.'),
+  "name": zod.string().min(1).max(getSettingsResponseSavedDepthThemesItemNameMax).describe('User-provided display name for this theme.'),
+  "bandColors": zod.array(zod.string().regex(getSettingsResponseSavedDepthThemesItemBandColorsItemRegExp)).min(getSettingsResponseSavedDepthThemesItemBandColorsMin).max(getSettingsResponseSavedDepthThemesItemBandColorsMax),
+  "bandBoundaries": zod.array(zod.number().min(getSettingsResponseSavedDepthThemesItemBandBoundariesItemMin).max(getSettingsResponseSavedDepthThemesItemBandBoundariesItemMax)).min(getSettingsResponseSavedDepthThemesItemBandBoundariesMin).max(getSettingsResponseSavedDepthThemesItemBandBoundariesMax),
+  "blendBands": zod.boolean()
+})).max(getSettingsResponseSavedDepthThemesMax).default(getSettingsResponseSavedDepthThemesDefault).describe('User-saved named depth colour themes. Each entry stores a full palette snapshot (band colours, boundaries, blend setting) under a user-provided name, enabling quick switching between configurations across devices.'),
   "lampIntensity": zod.number().min(getSettingsResponseLampIntensityMin).max(getSettingsResponseLampIntensityMax).default(getSettingsResponseLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).int().default(getSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(getSettingsResponseInvertMouseYDefault),
@@ -1615,6 +1639,23 @@ export const putSettingsBodyBandBoundariesMin = 3;
 export const putSettingsBodyBandBoundariesMax = 17;
 
 export const putSettingsBodyBlendDepthBandsDefault = true;
+export const putSettingsBodySavedDepthThemesItemIdMax = 36;
+
+export const putSettingsBodySavedDepthThemesItemNameMax = 64;
+
+export const putSettingsBodySavedDepthThemesItemBandColorsItemRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsBodySavedDepthThemesItemBandColorsMin = 2;
+export const putSettingsBodySavedDepthThemesItemBandColorsMax = 16;
+
+export const putSettingsBodySavedDepthThemesItemBandBoundariesItemMin = 0;
+export const putSettingsBodySavedDepthThemesItemBandBoundariesItemMax = 36000;
+
+export const putSettingsBodySavedDepthThemesItemBandBoundariesMin = 3;
+export const putSettingsBodySavedDepthThemesItemBandBoundariesMax = 17;
+
+export const putSettingsBodySavedDepthThemesDefault = [];
+export const putSettingsBodySavedDepthThemesMax = 20;
+
 export const putSettingsBodyLampIntensityDefault = 2;
 export const putSettingsBodyLampIntensityMin = 0;
 export const putSettingsBodyLampIntensityMax = 5;
@@ -1874,6 +1915,13 @@ export const PutSettingsBody = zod.object({
   }
 }),
   "blendDepthBands": zod.boolean().default(putSettingsBodyBlendDepthBandsDefault).describe('When true (default), depth band colours blend smoothly into each other; when false, each band renders as a crisp discrete colour step.'),
+  "savedDepthThemes": zod.array(zod.object({
+  "id": zod.string().max(putSettingsBodySavedDepthThemesItemIdMax).describe('Unique identifier for this saved theme.'),
+  "name": zod.string().min(1).max(putSettingsBodySavedDepthThemesItemNameMax).describe('User-provided display name for this theme.'),
+  "bandColors": zod.array(zod.string().regex(putSettingsBodySavedDepthThemesItemBandColorsItemRegExp)).min(putSettingsBodySavedDepthThemesItemBandColorsMin).max(putSettingsBodySavedDepthThemesItemBandColorsMax),
+  "bandBoundaries": zod.array(zod.number().min(putSettingsBodySavedDepthThemesItemBandBoundariesItemMin).max(putSettingsBodySavedDepthThemesItemBandBoundariesItemMax)).min(putSettingsBodySavedDepthThemesItemBandBoundariesMin).max(putSettingsBodySavedDepthThemesItemBandBoundariesMax),
+  "blendBands": zod.boolean()
+})).max(putSettingsBodySavedDepthThemesMax).default(putSettingsBodySavedDepthThemesDefault).describe('User-saved named depth colour themes. Each entry stores a full palette snapshot (band colours, boundaries, blend setting) under a user-provided name, enabling quick switching between configurations across devices.'),
   "lampIntensity": zod.number().min(putSettingsBodyLampIntensityMin).max(putSettingsBodyLampIntensityMax).default(putSettingsBodyLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).int().default(putSettingsBodyDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsBodyInvertMouseYDefault),
@@ -2081,6 +2129,23 @@ export const putSettingsResponseBandBoundariesMin = 3;
 export const putSettingsResponseBandBoundariesMax = 17;
 
 export const putSettingsResponseBlendDepthBandsDefault = true;
+export const putSettingsResponseSavedDepthThemesItemIdMax = 36;
+
+export const putSettingsResponseSavedDepthThemesItemNameMax = 64;
+
+export const putSettingsResponseSavedDepthThemesItemBandColorsItemRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+export const putSettingsResponseSavedDepthThemesItemBandColorsMin = 2;
+export const putSettingsResponseSavedDepthThemesItemBandColorsMax = 16;
+
+export const putSettingsResponseSavedDepthThemesItemBandBoundariesItemMin = 0;
+export const putSettingsResponseSavedDepthThemesItemBandBoundariesItemMax = 36000;
+
+export const putSettingsResponseSavedDepthThemesItemBandBoundariesMin = 3;
+export const putSettingsResponseSavedDepthThemesItemBandBoundariesMax = 17;
+
+export const putSettingsResponseSavedDepthThemesDefault = [];
+export const putSettingsResponseSavedDepthThemesMax = 20;
+
 export const putSettingsResponseLampIntensityDefault = 2;
 export const putSettingsResponseLampIntensityMin = 0;
 export const putSettingsResponseLampIntensityMax = 5;
@@ -2340,6 +2405,13 @@ export const PutSettingsResponse = zod.object({
   }
 }),
   "blendDepthBands": zod.boolean().default(putSettingsResponseBlendDepthBandsDefault).describe('When true (default), depth band colours blend smoothly into each other; when false, each band renders as a crisp discrete colour step.'),
+  "savedDepthThemes": zod.array(zod.object({
+  "id": zod.string().max(putSettingsResponseSavedDepthThemesItemIdMax).describe('Unique identifier for this saved theme.'),
+  "name": zod.string().min(1).max(putSettingsResponseSavedDepthThemesItemNameMax).describe('User-provided display name for this theme.'),
+  "bandColors": zod.array(zod.string().regex(putSettingsResponseSavedDepthThemesItemBandColorsItemRegExp)).min(putSettingsResponseSavedDepthThemesItemBandColorsMin).max(putSettingsResponseSavedDepthThemesItemBandColorsMax),
+  "bandBoundaries": zod.array(zod.number().min(putSettingsResponseSavedDepthThemesItemBandBoundariesItemMin).max(putSettingsResponseSavedDepthThemesItemBandBoundariesItemMax)).min(putSettingsResponseSavedDepthThemesItemBandBoundariesMin).max(putSettingsResponseSavedDepthThemesItemBandBoundariesMax),
+  "blendBands": zod.boolean()
+})).max(putSettingsResponseSavedDepthThemesMax).default(putSettingsResponseSavedDepthThemesDefault).describe('User-saved named depth colour themes. Each entry stores a full palette snapshot (band colours, boundaries, blend setting) under a user-provided name, enabling quick switching between configurations across devices.'),
   "lampIntensity": zod.number().min(putSettingsResponseLampIntensityMin).max(putSettingsResponseLampIntensityMax).default(putSettingsResponseLampIntensityDefault),
   "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).int().default(putSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsResponseInvertMouseYDefault),

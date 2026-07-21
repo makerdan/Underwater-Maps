@@ -5342,6 +5342,41 @@ components:
           type: boolean
           default: true
           description: When true (default), depth band colours blend smoothly into each other; when false, each band renders as a crisp discrete colour step.
+        savedDepthThemes:
+          type: array
+          maxItems: 20
+          default: []
+          description: User-saved named depth colour themes. Each entry stores a full palette snapshot (band colours, boundaries, blend setting) under a user-provided name, enabling quick switching between configurations across devices.
+          items:
+            type: object
+            required: [id, name, bandColors, bandBoundaries, blendBands]
+            properties:
+              id:
+                type: string
+                maxLength: 36
+                description: Unique identifier for this saved theme.
+              name:
+                type: string
+                minLength: 1
+                maxLength: 64
+                description: User-provided display name for this theme.
+              bandColors:
+                type: array
+                minItems: 2
+                maxItems: 16
+                items:
+                  type: string
+                  pattern: '^#[0-9a-fA-F]{6}$'
+              bandBoundaries:
+                type: array
+                minItems: 3
+                maxItems: 17
+                items:
+                  type: integer
+                  minimum: 0
+                  maximum: 36000
+              blendBands:
+                type: boolean
         lampIntensity:
           type: number
           minimum: 0

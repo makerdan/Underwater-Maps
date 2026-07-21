@@ -279,6 +279,7 @@ function buildPayload(): Record<string, unknown> {
   dataOnly.bandColors = palette.bandColors;
   dataOnly.bandBoundaries = palette.bandBoundaries;
   dataOnly.blendDepthBands = palette.blendBands;
+  dataOnly.savedDepthThemes = palette.savedDepthThemes;
   dataOnly.panelCollapse = usePanelCollapseStore.getState().collapsed;
   const zoneState = useZoneOverlayStore.getState();
   dataOnly.zoneOverlaySlots = {
@@ -469,6 +470,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
           bandColors: serverRec.bandColors,
           bandBoundaries: serverRec.bandBoundaries,
           blendDepthBands: serverRec.blendDepthBands,
+          savedDepthThemes: (serverRec as Record<string, unknown>).savedDepthThemes,
         });
       }
 

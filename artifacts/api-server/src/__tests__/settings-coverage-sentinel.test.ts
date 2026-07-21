@@ -50,6 +50,7 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   "bandColors",
   "bandBoundaries",       // also settings-validation.test.ts
   "blendDepthBands",
+  "savedDepthThemes",     // settings-palette.test.ts
   "hudOpacity",
 
   // ── Camera / controls (settings-validation.test.ts) ──────────────────────

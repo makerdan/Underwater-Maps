@@ -201,6 +201,31 @@ export type UserSettingsCustomStopsItem = {
   hex: string;
 };
 
+export type UserSettingsSavedDepthThemesItem = {
+  /**
+     * Unique identifier for this saved theme.
+     * @maxLength 36
+     */
+  id: string;
+  /**
+     * User-provided display name for this theme.
+     * @minLength 1
+     * @maxLength 64
+     */
+  name: string;
+  /**
+     * @minItems 2
+     * @maxItems 16
+     */
+  bandColors: string[];
+  /**
+     * @minItems 3
+     * @maxItems 17
+     */
+  bandBoundaries: number[];
+  blendBands: boolean;
+};
+
 export type UserSettingsCameraSpawnBehaviour = typeof UserSettingsCameraSpawnBehaviour[keyof typeof UserSettingsCameraSpawnBehaviour];
 
 
@@ -857,6 +882,11 @@ export interface UserSettings {
   bandBoundaries?: number[];
   /** When true (default), depth band colours blend smoothly into each other; when false, each band renders as a crisp discrete colour step. */
   blendDepthBands?: boolean;
+  /**
+     * User-saved named depth colour themes. Each entry stores a full palette snapshot (band colours, boundaries, blend setting) under a user-provided name, enabling quick switching between configurations across devices.
+     * @maxItems 20
+     */
+  savedDepthThemes?: UserSettingsSavedDepthThemesItem[];
   /**
      * @minimum 0
      * @maximum 5

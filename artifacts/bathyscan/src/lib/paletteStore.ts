@@ -28,7 +28,7 @@ import { persist } from "zustand/middleware";
 /** Identifies the current palette schema version for documentation purposes.
  *  Increment this whenever a new field is added and a migration guard is
  *  added to the persist `merge` function below. */
-export const PALETTE_SCHEMA_VERSION = 2;
+export const PALETTE_SCHEMA_VERSION = 3;
 
 export const DEFAULT_SHALLOW = "#00e5ff";
 export const DEFAULT_DEEP = "#283593";
@@ -41,6 +41,52 @@ export const MID2_HEX = "#1a237e";
 export const MIN_BANDS = 2;
 /** Maximum number of depth bands. */
 export const MAX_BANDS = 16;
+/** Maximum number of user-saved named depth themes. */
+export const MAX_SAVED_THEMES = 20;
+
+/** A user-saved named depth colour theme snapshot. */
+export interface SavedDepthTheme {
+  /** Unique identifier (stable across renames). */
+  id: string;
+  /** User-provided display name (1–64 characters). */
+  name: string;
+  /** Snapshot of bandColors at save time. */
+  bandColors: string[];
+  /** Snapshot of bandBoundaries at save time. */
+  bandBoundaries: number[];
+  /** Snapshot of blendBands at save time. */
+  blendBands: boolean;
+}
+
+/** Generate a compact unique id (no external deps). */
+function makeThemeId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+/** Validate and sanitize a raw `savedDepthThemes` value from server/storage.
+ *  Returns a clean array (possibly empty) — never throws. */
+function sanitizeSavedThemes(raw: unknown): SavedDepthTheme[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SavedDepthTheme[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.id !== "string" || rec.id.length === 0) continue;
+    if (typeof rec.name !== "string" || rec.name.length === 0) continue;
+    const colors = sanitizeBandColors(rec.bandColors);
+    const boundaries = sanitizeBandBoundaries(rec.bandBoundaries);
+    if (!colors || !boundaries || boundaries.length !== colors.length + 1) continue;
+    out.push({
+      id: rec.id.slice(0, 36),
+      name: rec.name.slice(0, 64),
+      bandColors: colors,
+      bandBoundaries: boundaries,
+      blendBands: typeof rec.blendBands === "boolean" ? rec.blendBands : true,
+    });
+    if (out.length >= MAX_SAVED_THEMES) break;
+  }
+  return out;
+}
 /** Maximum value (feet) allowed for the deepest band boundary. */
 export const MAX_BOUNDARY_FT = 36000;
 
@@ -320,6 +366,22 @@ interface PaletteStore {
   removeBand: (index: number) => void;
   /** Toggle smooth blending vs crisp discrete bands. */
   setBlendBands: (blend: boolean) => void;
+  /** User-saved named depth colour themes. */
+  savedDepthThemes: SavedDepthTheme[];
+  /**
+   * Save the current bandColors / bandBoundaries / blendBands as a new named
+   * theme. No-op when the maximum theme count is reached.
+   */
+  saveCurrentTheme: (name: string) => void;
+  /** Remove a saved theme by its id. No-op when id is not found. */
+  deleteTheme: (id: string) => void;
+  /** Rename a saved theme. No-op when id is not found or name is empty. */
+  renameTheme: (id: string, name: string) => void;
+  /**
+   * Apply a saved theme by id: restores bandColors, bandBoundaries, and
+   * blendBands from the saved snapshot. No-op when id is not found.
+   */
+  applyTheme: (id: string) => void;
   reset: () => void;
   /**
    * Apply server-side palette values to the store. Values that are missing
@@ -334,6 +396,7 @@ interface PaletteStore {
     bandColors?: unknown;
     bandBoundaries?: unknown;
     blendDepthBands?: unknown;
+    savedDepthThemes?: unknown;
   }) => void;
 }
 
@@ -384,6 +447,7 @@ export const usePaletteStore = create<PaletteStore>()(
       bandColors: [...DEFAULT_BAND_COLORS],
       bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
       blendBands: true,
+      savedDepthThemes: [],
 
       setShallow: (hex) => {
         if (!HEX_RE.test(hex)) return;
@@ -562,6 +626,51 @@ export const usePaletteStore = create<PaletteStore>()(
       },
       setBlendBands: (blend) => setEdit({ blendBands: !!blend }),
 
+      saveCurrentTheme: (name) => {
+        const trimmed = name.trim().slice(0, 64);
+        if (!trimmed) return;
+        const { bandColors, bandBoundaries, blendBands, savedDepthThemes } = get();
+        if (savedDepthThemes.length >= MAX_SAVED_THEMES) return;
+        const theme: SavedDepthTheme = {
+          id: makeThemeId(),
+          name: trimmed,
+          bandColors: [...bandColors],
+          bandBoundaries: [...bandBoundaries],
+          blendBands,
+        };
+        setEdit({ savedDepthThemes: [...savedDepthThemes, theme] });
+      },
+      deleteTheme: (id) => {
+        const { savedDepthThemes } = get();
+        const next = savedDepthThemes.filter((t) => t.id !== id);
+        if (next.length === savedDepthThemes.length) return;
+        setEdit({ savedDepthThemes: next });
+      },
+      renameTheme: (id, name) => {
+        const trimmed = name.trim().slice(0, 64);
+        if (!trimmed) return;
+        const { savedDepthThemes } = get();
+        const idx = savedDepthThemes.findIndex((t) => t.id === id);
+        if (idx === -1) return;
+        const next = savedDepthThemes.map((t) =>
+          t.id === id ? { ...t, name: trimmed } : t,
+        );
+        setEdit({ savedDepthThemes: next });
+      },
+      applyTheme: (id) => {
+        const { savedDepthThemes } = get();
+        const theme = savedDepthThemes.find((t) => t.id === id);
+        if (!theme) return;
+        const bc = [...theme.bandColors];
+        setEdit({
+          bandColors: bc,
+          bandBoundaries: [...theme.bandBoundaries],
+          blendBands: theme.blendBands,
+          shallow: bc[0]!,
+          deep: bc[bc.length - 1]!,
+        });
+      },
+
       reset: () =>
         setEdit({
           shallow: DEFAULT_SHALLOW,
@@ -618,6 +727,9 @@ export const usePaletteStore = create<PaletteStore>()(
         }
         if (typeof partial.blendDepthBands === "boolean") {
           patch.blendBands = partial.blendDepthBands;
+        }
+        if (partial.savedDepthThemes !== undefined) {
+          patch.savedDepthThemes = sanitizeSavedThemes(partial.savedDepthThemes);
         }
         if (Object.keys(patch).length > 0) set(patch);
       },

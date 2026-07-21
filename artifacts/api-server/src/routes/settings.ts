@@ -106,6 +106,13 @@ export const DEFAULT_SETTINGS = {
   ],
   bandBoundaries: [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000],
   blendDepthBands: true,
+  savedDepthThemes: [] as Array<{
+    id: string;
+    name: string;
+    bandColors: string[];
+    bandBoundaries: number[];
+    blendBands: boolean;
+  }>,
 
   // ── Newly promoted from extras path (previously validated client-side only) ──
   schemaVersion: 19,
