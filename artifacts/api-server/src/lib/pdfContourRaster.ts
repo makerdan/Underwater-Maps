@@ -142,7 +142,6 @@ export async function checkRasterExtractorDeps(): Promise<boolean> {
           missingLines.length > 0
             ? missingLines.join("; ")
             : `Python import check failed: ${detail}`;
-        // eslint-disable-next-line no-console
         console.error(
           `[raster-extractor] ${hint}. ` +
             "Raster contour map uploads will fail until these packages are installed. " +

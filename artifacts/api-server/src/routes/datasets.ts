@@ -2430,10 +2430,10 @@ router.post(
 // ── POST /datasets/raster-extract ────────────────────────────────────────────
 // Step 1 of the two-step raster contour pipeline.
 // Accepts a PNG or JPEG contour-map image, runs OCR + line tracing, caches
-// the polylines in memory, and streams SSE progress events to the client.
+// the polylines in memory, and returns a JSON response.
 //
-// SSE event shape: data: { stage, label, pct } or { stage:"done", result:{…} }
-// or { stage:"error", error:"…", details:"…" }
+// Response on success: { token, labels, polylineCount, width, height }
+// Response on extraction failure: 422 { error: "pdf_extract_error", details }
 //
 // The token expires in 5 minutes.  Pass it to /datasets/raster-commit to
 // complete the pipeline with (optionally corrected) labels.
@@ -2460,54 +2460,25 @@ router.post(
       return;
     }
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-    res.flushHeaders();
-
-    const sendEvent = (data: Record<string, unknown>): void => {
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    };
-
-    sendEvent({ stage: "upload", label: "Image received", pct: 5 });
-    sendEvent({ stage: "detect", label: "Detecting contour lines…", pct: 15 });
-
-    // Emit the OCR stage label roughly at the midpoint of the expected
-    // 10–30 s window (8 s covers most typical images).
-    const ocrTimer = setTimeout(() => {
-      sendEvent({ stage: "ocr", label: "Reading depth labels…", pct: 55 });
-    }, 8000);
-
     let result: RasterExtractionResult;
     try {
       result = await extractRasterImageContoursOnly(file.buffer);
     } catch (err) {
-      clearTimeout(ocrTimer);
       if (err instanceof PdfStageError) {
-        sendEvent({ stage: "error", error: `pdf_${err.stage}_error`, details: err.message });
-        res.end();
+        res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
         return;
       }
-      sendEvent({ stage: "error", error: "extraction_failed", details: "An unexpected error occurred during extraction." });
-      res.end();
+      res.status(422).json({ error: "extraction_failed", details: "An unexpected error occurred during extraction." });
       return;
     }
-    clearTimeout(ocrTimer);
 
-    sendEvent({
-      stage: "done",
-      label: "Done",
-      pct: 100,
-      result: {
-        token: result.token,
-        labels: result.labels,
-        polylineCount: result.polylineCount,
-        width: result.width,
-        height: result.height,
-      },
+    res.status(200).json({
+      token: result.token,
+      labels: result.labels,
+      polylineCount: result.polylineCount,
+      width: result.width,
+      height: result.height,
     });
-    res.end();
   }),
 );
 

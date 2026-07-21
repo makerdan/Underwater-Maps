@@ -76,6 +76,7 @@ export function createTerrainMock(
     extractArcGisDepthM: vi.fn().mockReturnValue(null),
     parseXyzCsv: vi.fn(),
     gridPoints: vi.fn(),
+    datasetHasSurveySource: vi.fn().mockReturnValue(false),
   };
   // Descriptor-based merge so getter overrides stay live (a plain spread
   // would snapshot the getter's value once at merge time).
