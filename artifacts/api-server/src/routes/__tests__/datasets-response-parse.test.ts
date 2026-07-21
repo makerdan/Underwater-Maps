@@ -37,18 +37,22 @@ const terrainState = vi.hoisted<{ presets: PresetDataset[] }>(() => ({ presets: 
 
 // Mock path is "../../lib/terrain.js" — two levels up from __tests__, reaching
 // src/lib/terrain.js which is the same resolved path that datasets.ts imports.
-vi.mock("../../lib/terrain.js", () => ({
-  get ALL_PRESET_DATASETS() { return terrainState.presets; },
-  NYSDEC_BATHY_FEATURE_SERVICE: "https://example.invalid/nysdec",
-  MN_DNR_BATHY_FEATURE_SERVICE: "https://example.invalid/mndnr",
-  BUNDLED_TERRAIN: {},
-  buildTerrainGrid: vi.fn(async () => null),
-  parseXyzCsv: vi.fn(() => ({ points: [], errors: [] })),
-  gridPoints: vi.fn(() => []),
-  previewDataset: vi.fn(async () => null),
-  previewBboxForDownload: vi.fn(() => null),
-  buildBboxCsvRows: vi.fn(() => []),
-}));
+vi.mock("../../lib/terrain.js", async () => {
+  const { createTerrainMock } = await import(
+    "../../__tests__/helpers/terrainMock.js"
+  );
+  return createTerrainMock({
+    // Live getter — createTerrainMock merges via property descriptors so
+    // this getter stays dynamic (re-reads terrainState.presets per access).
+    get ALL_PRESET_DATASETS() { return terrainState.presets; },
+    buildTerrainGrid: vi.fn(async () => null),
+    parseXyzCsv: vi.fn(() => ({ points: [], errors: [] })),
+    gridPoints: vi.fn(() => []),
+    previewDataset: vi.fn(async () => null),
+    previewBboxForDownload: vi.fn(() => null),
+    buildBboxCsvRows: vi.fn(() => []),
+  });
+});
 
 vi.mock("@workspace/db", () => ({
   db: {

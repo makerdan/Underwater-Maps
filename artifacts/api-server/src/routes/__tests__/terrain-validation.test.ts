@@ -58,15 +58,19 @@ vi.mock("@clerk/shared/keys", () => ({
   publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
 }));
 
-vi.mock("../../lib/terrain.js", () => ({
-  ALL_PRESET_DATASETS: [],
-  buildTerrainGrid: vi.fn().mockResolvedValue(null),
-  parseXyzCsv: vi.fn().mockReturnValue([]),
-  gridPoints: vi.fn().mockReturnValue({}),
-  previewDataset: vi.fn().mockResolvedValue(null),
-  previewBboxForDownload: vi.fn().mockResolvedValue(null),
-  buildBboxCsvRows: vi.fn().mockReturnValue([]),
-}));
+vi.mock("../../lib/terrain.js", async () => {
+  const { createTerrainMock } = await import(
+    "../../__tests__/helpers/terrainMock.js"
+  );
+  return createTerrainMock({
+    buildTerrainGrid: vi.fn().mockResolvedValue(null),
+    parseXyzCsv: vi.fn().mockReturnValue([]),
+    gridPoints: vi.fn().mockReturnValue({}),
+    previewDataset: vi.fn().mockResolvedValue(null),
+    previewBboxForDownload: vi.fn().mockResolvedValue(null),
+    buildBboxCsvRows: vi.fn().mockReturnValue([]),
+  });
+});
 
 import app from "../../app.js";
 

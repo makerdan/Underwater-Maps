@@ -51,20 +51,22 @@ vi.mock("../../lib/objectStorage.js", () => ({
 
 const TEST_BBOX = { minLon: -97.15, minLat: 33.3, maxLon: -96.92, maxLat: 33.52 };
 
-vi.mock("../../lib/terrain.js", () => ({
-  BUNDLED_TERRAIN: {},
-  NYSDEC_BATHY_FEATURE_SERVICE: "https://example.com/nysdec",
-  MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
-  ALL_PRESET_DATASETS: [
-    {
-      id: "itest-preset",
-      name: "Integration test preset",
-      waterType: "freshwater",
-      bbox: { minLon: -97.15, minLat: 33.3, maxLon: -96.92, maxLat: 33.52 },
-      fetchStrategy: { kind: "bundled" },
-    },
-  ],
-}));
+vi.mock("../../lib/terrain.js", async () => {
+  const { createTerrainMock } = await import(
+    "../../__tests__/helpers/terrainMock.js"
+  );
+  return createTerrainMock({
+    ALL_PRESET_DATASETS: [
+      {
+        id: "itest-preset",
+        name: "Integration test preset",
+        waterType: "freshwater",
+        bbox: { minLon: -97.15, minLat: 33.3, maxLon: -96.92, maxLat: 33.52 },
+        fetchStrategy: { kind: "bundled" },
+      },
+    ],
+  });
+});
 
 vi.mock("../../lib/catalogSeeder.js", () => ({
   getCatalogEntries: async () => [

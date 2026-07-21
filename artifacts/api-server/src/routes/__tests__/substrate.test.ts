@@ -36,19 +36,21 @@ vi.mock("drizzle-orm", () => ({
   lt: vi.fn(() => "lt-condition"),
 }));
 
-vi.mock("../../lib/terrain.js", () => ({
-  BUNDLED_TERRAIN: [],
-  NYSDEC_BATHY_FEATURE_SERVICE: "https://mock.invalid/nysdec",
-  MN_DNR_BATHY_FEATURE_SERVICE: "https://mock.invalid/mndnr",
-  ALL_PRESET_DATASETS: [
-    {
-      id: "glacier-bay",
-      name: "Glacier Bay, SE Alaska",
-      bbox: { minLon: -137.0, minLat: 58.2, maxLon: -135.0, maxLat: 59.2 },
-      waterType: "saltwater",
-    },
-  ],
-}));
+vi.mock("../../lib/terrain.js", async () => {
+  const { createTerrainMock } = await import(
+    "../../__tests__/helpers/terrainMock.js"
+  );
+  return createTerrainMock({
+    ALL_PRESET_DATASETS: [
+      {
+        id: "glacier-bay",
+        name: "Glacier Bay, SE Alaska",
+        bbox: { minLon: -137.0, minLat: 58.2, maxLon: -135.0, maxLat: 59.2 },
+        waterType: "saltwater",
+      },
+    ],
+  });
+});
 
 vi.mock("../../lib/shoreZoneData.js", () => {
   const bundle = {

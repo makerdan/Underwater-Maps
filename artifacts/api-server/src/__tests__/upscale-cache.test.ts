@@ -124,18 +124,10 @@ vi.mock("../lib/substrateGrid.js", () => ({
   substrateFingerprintForDataset: vi.fn(),
 }));
 
-vi.mock("../lib/terrain.js", () => ({
-  NYSDEC_BATHY_FEATURE_SERVICE: "https://example.com/nysdec",
-  MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
-  BUNDLED_TERRAIN: {},
-  ALL_PRESET_DATASETS: [],
-  buildTerrainGrid: vi.fn(),
-  parseXyzCsv: vi.fn(),
-  gridPoints: vi.fn(),
-  previewDataset: vi.fn(),
-  previewBboxForDownload: vi.fn(),
-  buildBboxCsvRows: vi.fn(),
-}));
+vi.mock("../lib/terrain.js", async () => {
+  const { createTerrainMock } = await import("./helpers/terrainMock.js");
+  return createTerrainMock();
+});
 
 vi.mock("../lib/tileClassify.js", () => ({
   MAX_TILES_PER_SIDE: 4,

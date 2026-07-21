@@ -379,7 +379,7 @@ vi.mock("@workspace/db", () => ({
 // Stub the terrain pipeline so tests don't hit NCEI or GEBCO WCS.
 // buildNceiTerrainForBbox is the function called by buildCatalogGrids for
 // ncei-portal-* entries (routed via nceiCoverageForEntry).
-vi.mock("../../lib/terrain.js", () => {
+vi.mock("../../lib/terrain.js", async () => {
   function makeGrid(id: string, resolution: number) {
     return {
       datasetId: id,
@@ -402,7 +402,10 @@ vi.mock("../../lib/terrain.js", () => {
       bathymetrySourceLabel: "NCEI BAG Mosaic",
     };
   }
-  return {
+  const { createTerrainMock } = await import(
+    "../../__tests__/helpers/terrainMock.js"
+  );
+  return createTerrainMock({
     NYSDEC_BATHY_FEATURE_SERVICE: "https://example.com/nysdec",
     MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
     BUNDLED_TERRAIN: {},
@@ -415,8 +418,7 @@ vi.mock("../../lib/terrain.js", () => {
       makeGrid(meta.datasetId, resolution),
     buildNceiTerrainForBbox: async (meta: { datasetId: string }, resolution: number) =>
       makeGrid(meta.datasetId, resolution),
-    TERRAIN_CACHE_VERSION: 1,
-  };
+  });
 });
 
 // Stub the catalog seeder — /ncei/save calls invalidateCatalogCache() directly,

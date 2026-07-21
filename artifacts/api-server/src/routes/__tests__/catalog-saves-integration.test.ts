@@ -470,7 +470,7 @@ vi.mock("@workspace/db", () => ({
 // fake preset so `buildCatalogGrids` has something to materialize. The
 // in-tree `ALL_PRESET_DATASETS` registry is currently empty, so without
 // this seed `preset-*` materialization would always throw.
-vi.mock("../../lib/terrain.js", () => {
+vi.mock("../../lib/terrain.js", async () => {
   const preset = H.FAKE_PRESET;
   function makeGrid(id: string, resolution: number) {
     return {
@@ -491,10 +491,10 @@ vi.mock("../../lib/terrain.js", () => {
       centerLat: 0,
     };
   }
-  return {
-    NYSDEC_BATHY_FEATURE_SERVICE: "https://example.com/nysdec",
-    MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
-    BUNDLED_TERRAIN: {},
+  const { createTerrainMock } = await import(
+    "../../__tests__/helpers/terrainMock.js"
+  );
+  return createTerrainMock({
     ALL_PRESET_DATASETS: [preset],
     PRESET_DATASETS: [preset],
     FRESHWATER_PRESET_DATASETS: [],
@@ -515,8 +515,7 @@ vi.mock("../../lib/terrain.js", () => {
       meta: { datasetId: string },
       resolution: number,
     ) => makeGrid(meta.datasetId, resolution),
-    TERRAIN_CACHE_VERSION: 1,
-  };
+  });
 });
 
 // Stub the catalog seeder so /datasets/catalog/:id/save can find our test

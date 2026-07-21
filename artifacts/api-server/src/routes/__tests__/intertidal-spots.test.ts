@@ -29,25 +29,27 @@ vi.mock("drizzle-orm", () => ({
   lt: vi.fn(() => "lt-condition"),
 }));
 
-vi.mock("../../lib/terrain.js", () => ({
-  BUNDLED_TERRAIN: [],
-  NYSDEC_BATHY_FEATURE_SERVICE: "https://mock.invalid/nysdec",
-  MN_DNR_BATHY_FEATURE_SERVICE: "https://mock.invalid/mndnr",
-  ALL_PRESET_DATASETS: [
-    {
-      id: "thorne-bay",
-      name: "Thorne Bay, SE Alaska",
-      bbox: { minLon: -133.1, minLat: 55.6, maxLon: -132.3, maxLat: 55.9 },
-      waterType: "saltwater",
-    },
-    {
-      id: "lake-texoma",
-      name: "Lake Texoma",
-      bbox: { minLon: -97.1, minLat: 33.7, maxLon: -96.5, maxLat: 34.2 },
-      waterType: "freshwater",
-    },
-  ],
-}));
+vi.mock("../../lib/terrain.js", async () => {
+  const { createTerrainMock } = await import(
+    "../../__tests__/helpers/terrainMock.js"
+  );
+  return createTerrainMock({
+    ALL_PRESET_DATASETS: [
+      {
+        id: "thorne-bay",
+        name: "Thorne Bay, SE Alaska",
+        bbox: { minLon: -133.1, minLat: 55.6, maxLon: -132.3, maxLat: 55.9 },
+        waterType: "saltwater",
+      },
+      {
+        id: "lake-texoma",
+        name: "Lake Texoma",
+        bbox: { minLon: -97.1, minLat: 33.7, maxLon: -96.5, maxLat: 34.2 },
+        waterType: "freshwater",
+      },
+    ],
+  });
+});
 
 const SE_ALASKA_MOCK_FEATURES = [
   {

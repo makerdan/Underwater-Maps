@@ -58,26 +58,28 @@ vi.mock("../../lib/objectStorage.js", () => ({
   },
 }));
 
-vi.mock("../../lib/terrain.js", () => ({
-  BUNDLED_TERRAIN: {},
-  NYSDEC_BATHY_FEATURE_SERVICE: "https://example.com/nysdec",
-  MN_DNR_BATHY_FEATURE_SERVICE: "https://example.com/mn-dnr",
-  ALL_PRESET_DATASETS: [
-    {
-      id: "lake-ray-roberts",
-      name: "Demo: Lake Ray Roberts (TX)",
-      waterType: "freshwater",
-      bbox: { minLon: -97.15, minLat: 33.3, maxLon: -96.92, maxLat: 33.52 },
-      fetchStrategy: { kind: "bundled" },
-    },
-    {
-      id: "no-strategy-preset",
-      name: "Preset without fetchStrategy",
-      waterType: "saltwater",
-      bbox: { minLon: -90, minLat: 25, maxLon: -80, maxLat: 30 },
-    },
-  ],
-}));
+vi.mock("../../lib/terrain.js", async () => {
+  const { createTerrainMock } = await import(
+    "../../__tests__/helpers/terrainMock.js"
+  );
+  return createTerrainMock({
+    ALL_PRESET_DATASETS: [
+      {
+        id: "lake-ray-roberts",
+        name: "Demo: Lake Ray Roberts (TX)",
+        waterType: "freshwater",
+        bbox: { minLon: -97.15, minLat: 33.3, maxLon: -96.92, maxLat: 33.52 },
+        fetchStrategy: { kind: "bundled" },
+      },
+      {
+        id: "no-strategy-preset",
+        name: "Preset without fetchStrategy",
+        waterType: "saltwater",
+        bbox: { minLon: -90, minLat: 25, maxLon: -80, maxLat: 30 },
+      },
+    ],
+  });
+});
 
 const mockFetch = vi.fn().mockResolvedValue({
   depths: new Array(256 * 256).fill(5),

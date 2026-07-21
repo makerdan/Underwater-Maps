@@ -36,25 +36,27 @@ vi.mock("drizzle-orm", () => ({
   lt: vi.fn(() => "lt-condition"),
 }));
 
-vi.mock("../../lib/terrain.js", () => ({
-  BUNDLED_TERRAIN: [],
-  NYSDEC_BATHY_FEATURE_SERVICE: "https://mock.invalid/nysdec",
-  MN_DNR_BATHY_FEATURE_SERVICE: "https://mock.invalid/mndnr",
-  ALL_PRESET_DATASETS: [
-    {
-      id: "glacier-bay",
-      name: "Glacier Bay, SE Alaska",
-      bbox: { minLon: -137.0, minLat: 58.0, maxLon: -135.0, maxLat: 59.5 },
-      waterType: "saltwater",
-    },
-    {
-      id: "lake-texoma",
-      name: "Lake Texoma",
-      bbox: { minLon: -97.1, minLat: 33.7, maxLon: -96.5, maxLat: 34.2 },
-      waterType: "freshwater",
-    },
-  ],
-}));
+vi.mock("../../lib/terrain.js", async () => {
+  const { createTerrainMock } = await import(
+    "../../__tests__/helpers/terrainMock.js"
+  );
+  return createTerrainMock({
+    ALL_PRESET_DATASETS: [
+      {
+        id: "glacier-bay",
+        name: "Glacier Bay, SE Alaska",
+        bbox: { minLon: -137.0, minLat: 58.0, maxLon: -135.0, maxLat: 59.5 },
+        waterType: "saltwater",
+      },
+      {
+        id: "lake-texoma",
+        name: "Lake Texoma",
+        bbox: { minLon: -97.1, minLat: 33.7, maxLon: -96.5, maxLat: 34.2 },
+        waterType: "freshwater",
+      },
+    ],
+  });
+});
 
 vi.mock("../../lib/efhData.js", () => ({
   SALTWATER_EFH_BY_DATASET: {
