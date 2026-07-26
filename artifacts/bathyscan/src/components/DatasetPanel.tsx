@@ -4214,7 +4214,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                                   name="rasterReviewDepthUnit"
                                   checked={pdfDepthUnit === u}
                                   disabled={rasterExtractPhase === "committing"}
-                                  onChange={() => { setPdfDepthUnit(u); setDepthUnitWarningDismissed(false); }}
+                                  onChange={() => { setPdfDepthUnit(u); setDepthUnitWarningDismissed(true); }}
                                 />
                                 {u}
                               </label>
@@ -4283,7 +4283,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                               <button
                                 data-testid="raster-commit-confirm"
                                 onClick={() => { void confirmRasterCommit(); }}
-                                disabled={rasterExtractPhase === "committing" || rasterEditLabels.length === 0}
+                                disabled={rasterExtractPhase === "committing" || rasterEditLabels.length === 0 || (depthUnitMismatch !== null && !depthUnitWarningDismissed)}
+                                title={(depthUnitMismatch !== null && !depthUnitWarningDismissed) ? "Dismiss the depth-unit warning before ingesting — select the correct unit or click ✕ to confirm you've reviewed it." : undefined}
                                 style={{
                                   fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                                   color: "#00e5ff",
@@ -4291,8 +4292,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                                   border: "1px solid rgba(0,229,255,0.35)",
                                   borderRadius: 3,
                                   padding: "2px 8px",
-                                  cursor: (rasterExtractPhase === "committing" || rasterEditLabels.length === 0) ? "not-allowed" : "pointer",
-                                  opacity: (rasterExtractPhase === "committing" || rasterEditLabels.length === 0) ? 0.5 : 1,
+                                  cursor: (rasterExtractPhase === "committing" || rasterEditLabels.length === 0 || (depthUnitMismatch !== null && !depthUnitWarningDismissed)) ? "not-allowed" : "pointer",
+                                  opacity: (rasterExtractPhase === "committing" || rasterEditLabels.length === 0 || (depthUnitMismatch !== null && !depthUnitWarningDismissed)) ? 0.5 : 1,
                                 }}
                               >
                                 Confirm &amp; ingest
