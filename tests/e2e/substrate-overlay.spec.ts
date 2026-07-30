@@ -89,8 +89,7 @@ async function uploadCsv(
     timeout: 90_000,
   });
   if (!res.ok()) return null;
-  const body = (await res.json()) as { savedDatasetId?: string; saveError?: string };
-  if (body.saveError) return null;
+  const body = (await res.json()) as { savedDatasetId?: string };
   return body.savedDatasetId ?? null;
 }
 

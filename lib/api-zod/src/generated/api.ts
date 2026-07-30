@@ -313,7 +313,7 @@ export const PostDatasetsUploadResponse = zod.object({
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
 }).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
 }),
-  "savedDatasetId": zod.string().optional().describe('UUID of the saved custom_datasets row. Present whenever persistence succeeded; omitted only if the database insert returned no row (see `saveError`).'),
+  "savedDatasetId": zod.string().optional().describe('UUID of the saved custom_datasets row. Present whenever persistence succeeded.'),
   "savedDatasetMeta": zod.object({
   "id": zod.string().describe('UUID primary key'),
   "name": zod.string().describe('Dataset name derived from the uploaded filename'),
@@ -330,8 +330,7 @@ export const PostDatasetsUploadResponse = zod.object({
   "lon": zod.number(),
   "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
 }).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
-}).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch'),
-  "saveError": zod.string().optional().describe('Human-readable error string returned when the auto-save to the user\'s account failed. The terrain itself is still returned so the session is usable.')
+}).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch')
 }).describe('Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller\'s dataset library; `savedDatasetId` carries the new row\'s UUID.')
 
 
@@ -490,7 +489,7 @@ export const PostDatasetsRasterCommitResponse = zod.object({
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
 }).optional().describe('EFH (Essential Fish Habitat) FeatureCollection embedded directly in the terrain\nresponse for user-saved noaa-efh-\* catalog datasets. Present only when the\ndataset carries polygon habitat data (i.e. was saved from a NOAA EFH catalog\nentry). Clients should render these polygons instead of (or in addition to)\nfetching from \/efh when this field is present.\n')
 }),
-  "savedDatasetId": zod.string().optional().describe('UUID of the saved custom_datasets row. Present whenever persistence succeeded; omitted only if the database insert returned no row (see `saveError`).'),
+  "savedDatasetId": zod.string().optional().describe('UUID of the saved custom_datasets row. Present whenever persistence succeeded.'),
   "savedDatasetMeta": zod.object({
   "id": zod.string().describe('UUID primary key'),
   "name": zod.string().describe('Dataset name derived from the uploaded filename'),
@@ -507,8 +506,7 @@ export const PostDatasetsRasterCommitResponse = zod.object({
   "lon": zod.number(),
   "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
 }).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
-}).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch'),
-  "saveError": zod.string().optional().describe('Human-readable error string returned when the auto-save to the user\'s account failed. The terrain itself is still returned so the session is usable.')
+}).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch')
 }).describe('Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller\'s dataset library; `savedDatasetId` carries the new row\'s UUID.')
 
 

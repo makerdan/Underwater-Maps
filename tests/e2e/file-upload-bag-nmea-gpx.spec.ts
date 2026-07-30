@@ -63,7 +63,6 @@ interface UploadResponseBody {
   overview?: TerrainGridMeta;
   savedDatasetId?: string;
   savedDatasetMeta?: { id: string; name: string };
-  saveError?: string;
 }
 
 async function listMyUploads(req: APIRequestContext): Promise<UserDatasetMeta[]> {
@@ -208,10 +207,6 @@ test.describe("BAG file-upload flow", () => {
     expect(uploadRes.status(), "POST /datasets/upload should succeed for survey.bag").toBe(200);
 
     const body = (await uploadRes.json()) as UploadResponseBody;
-    expect(
-      body.saveError,
-      `auto-save should not fail; got: ${JSON.stringify(body.saveError)}`,
-    ).toBeUndefined();
     expect(body.savedDatasetId, "savedDatasetId must be present after a successful BAG upload").toBeTruthy();
     expect(body.terrain, "terrain grid must be present in the upload response").toBeTruthy();
     expect(body.overview, "overview grid must be present in the upload response").toBeTruthy();

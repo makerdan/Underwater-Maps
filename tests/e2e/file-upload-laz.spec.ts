@@ -178,12 +178,7 @@ test.describe("LAZ file-upload flow", () => {
     const body = (await uploadRes.json()) as {
       savedDatasetId?: string;
       savedDatasetMeta?: { id: string; name: string };
-      saveError?: string;
     };
-    expect(
-      body.saveError,
-      `auto-save should not fail; got: ${JSON.stringify(body.saveError)}`,
-    ).toBeUndefined();
     expect(body.savedDatasetId, "savedDatasetId must be present after a successful LAZ upload").toBeTruthy();
 
     const savedId = body.savedDatasetId as string;

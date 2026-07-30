@@ -252,9 +252,9 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
 //
 // These tests exercise the full POST /api/datasets/upload route using real
 // binary fixtures (GeoTIFF, NetCDF, LAS 1.2, LAS 1.4).  The DB mock returns
-// an empty array from `returning()`, so `savedDatasetId` is absent and
-// `saveError` is set — but the route still returns 200 with populated `terrain`
-// and `overview` fields generated from the parsed point cloud.
+// an empty array from `returning()`, so `savedDatasetId` is absent — but
+// the route still returns 200 with populated `terrain` and `overview` fields
+// generated from the parsed point cloud.
 
 const FIXTURE_DIR = join(
   dirname(fileURLToPath(import.meta.url)),

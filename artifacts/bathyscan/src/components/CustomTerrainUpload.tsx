@@ -22,8 +22,6 @@ function formatEta(seconds: number | null): string | null {
   const mins = Math.round(seconds / 60);
   return `~${mins} min remaining`;
 }
-const AUTO_RETRY_DELAYS_MS = [500, 1500];
-
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
 const CYAN: React.CSSProperties = {
@@ -38,18 +36,10 @@ export const CustomTerrainUpload: React.FC = () => {
   const isOnline = useOfflineStore((s) => s.isOnline);
 
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
-  const [savingToAccount, setSavingToAccount] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [smallFileEta, setSmallFileEta] = useState<number | null>(null);
   const uploadStartedAt = useRef<number | null>(null);
   const uploadFileSizeBytesRef = useRef<number>(0);
-
-  const autoRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (autoRetryTimer.current) clearTimeout(autoRetryTimer.current);
-  }, []);
 
   const postDatasetsUpload = usePostDatasetsUpload();
 
@@ -87,27 +77,21 @@ export const CustomTerrainUpload: React.FC = () => {
   }, [postDatasetsUpload.isPending, postDatasetsUpload.isSuccess]);
 
   const uploadFile = useCallback(
-    (
-      file: File,
-      { isRetry, autoAttempt = 0 }: { isRetry?: boolean; autoAttempt?: number } = {},
-    ) => {
+    (file: File) => {
       uploadStartedAt.current = Date.now();
       uploadFileSizeBytesRef.current = file.size;
       postDatasetsUpload.mutate(
         { data: { file, resolution: 256 } },
         {
           onSuccess: (data) => {
-            const isFirstTry = !isRetry && autoAttempt === 0;
-            if (isFirstTry) {
-              setDatasetId(null);
-              setTerrain(data.terrain);
-              useTerrainStore.getState().setGrids({
-                activeGrid: data.terrain,
-                overviewGrid: data.overview,
-              });
-              useClassificationStore.getState().clearZoneMap();
-              void useClassificationStore.getState().classify(data.terrain);
-            }
+            setDatasetId(null);
+            setTerrain(data.terrain);
+            useTerrainStore.getState().setGrids({
+              activeGrid: data.terrain,
+              overviewGrid: data.overview,
+            });
+            useClassificationStore.getState().clearZoneMap();
+            void useClassificationStore.getState().classify(data.terrain);
             if (data.savedDatasetId) {
               if (data.savedDatasetMeta) {
                 const meta = data.savedDatasetMeta;
@@ -121,41 +105,13 @@ export const CustomTerrainUpload: React.FC = () => {
                 );
               }
               void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
-              setSaveError(null);
-              setLastUploadedFile(null);
-              setSavingToAccount(false);
-            } else if (data.saveError) {
-              if (autoAttempt < AUTO_RETRY_DELAYS_MS.length) {
-                setSavingToAccount(true);
-                setSaveError(null);
-                setLastUploadedFile(file);
-                const delay = AUTO_RETRY_DELAYS_MS[autoAttempt]!;
-                if (autoRetryTimer.current) clearTimeout(autoRetryTimer.current);
-                autoRetryTimer.current = setTimeout(() => {
-                  autoRetryTimer.current = null;
-                  uploadFile(file, { isRetry: true, autoAttempt: autoAttempt + 1 });
-                }, delay);
-              } else {
-                setSavingToAccount(false);
-                setSaveError(data.saveError);
-                setLastUploadedFile(file);
-              }
-            } else {
-              setSaveError(null);
-              setLastUploadedFile(null);
-              setSavingToAccount(false);
             }
           },
           onError: (err) => {
-            setSavingToAccount(false);
             const e = err as { data?: { detail?: string; details?: string; error?: string }; message?: string };
             const detail = e?.data?.detail ?? e?.data?.details;
             const msg = detail ?? (err instanceof Error ? err.message : "Parse failed");
-            if (isRetry) {
-              setSaveError(msg);
-            } else {
-              setUploadError(msg);
-            }
+            setUploadError(msg);
           },
         },
       );
@@ -166,7 +122,6 @@ export const CustomTerrainUpload: React.FC = () => {
   const onDrop = useCallback(
     (accepted: File[], rejected: FileRejection[]) => {
       setUploadError(null);
-      setSaveError(null);
       if (rejected.length) {
         const code = rejected[0]?.errors[0]?.code;
         if (code === "file-too-large") {
@@ -180,20 +135,10 @@ export const CustomTerrainUpload: React.FC = () => {
       }
       const file = accepted[0];
       if (!file) return;
-      if (autoRetryTimer.current) {
-        clearTimeout(autoRetryTimer.current);
-        autoRetryTimer.current = null;
-      }
-      setSavingToAccount(false);
       uploadFile(file);
     },
     [uploadFile],
   );
-
-  const handleRetrySave = useCallback(() => {
-    if (!lastUploadedFile || postDatasetsUpload.isPending) return;
-    uploadFile(lastUploadedFile, { isRetry: true });
-  }, [lastUploadedFile, postDatasetsUpload.isPending, uploadFile]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -294,65 +239,6 @@ export const CustomTerrainUpload: React.FC = () => {
               </>
             )}
           </div>
-          {savingToAccount && !saveError && (
-            <div
-              data-testid="upload-saving-to-account"
-              style={{
-                marginTop: 8,
-                padding: "6px 8px",
-                border: "1px solid rgba(0,229,255,0.25)",
-                background: "rgba(0,229,255,0.05)",
-                borderRadius: 4,
-                fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                color: "#7dd3fc",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <span className="animate-pulse">◌</span>
-              <span>Saving to account…</span>
-            </div>
-          )}
-          {saveError && lastUploadedFile && (
-            <div
-              data-testid="upload-save-error"
-              style={{
-                marginTop: 8,
-                padding: "6px 8px",
-                border: "1px solid rgba(248,113,113,0.4)",
-                background: "rgba(248,113,113,0.08)",
-                borderRadius: 4,
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 8,
-              }}
-            >
-              <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#fca5a5", flex: 1, lineHeight: 1.4 }}>
-                ⚠ Uploaded, but couldn&apos;t save to your account — {saveError}
-              </div>
-              <button
-                type="button"
-                data-testid="upload-retry-save"
-                onClick={handleRetrySave}
-                disabled={postDatasetsUpload.isPending}
-                style={{
-                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                  padding: "3px 8px",
-                  border: "1px solid rgba(0,229,255,0.4)",
-                  background: "rgba(0,229,255,0.08)",
-                  color: "#00e5ff",
-                  borderRadius: 3,
-                  cursor: postDatasetsUpload.isPending ? "wait" : "pointer",
-                  whiteSpace: "nowrap",
-                  letterSpacing: "0.08em",
-                  fontFamily: FONT,
-                }}
-              >
-                {postDatasetsUpload.isPending ? "…" : "Retry save"}
-              </button>
-            </div>
-          )}
         </>
       )}
     </div>

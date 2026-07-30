@@ -1,21 +1,17 @@
 /**
- * End-to-end coverage for the upload auto-save flow (Task #122).
+ * End-to-end coverage for the upload auto-save flow.
  *
- * Task #122 fixed the silent-failure bug in `POST /datasets/upload`: the
- * server now surfaces a structured `saveError` on the 200 response when the
- * authenticated insert into `customDatasets` fails, and the client (a)
- * optimistically inserts `savedDatasetMeta` into the MY UPLOADS React Query
- * cache and (b) shows an inline "Uploaded, but couldn't save to your
- * account — …" message when the save fails. These two paths are covered
- * here end-to-end against the real api-server + Postgres.
+ * POST /datasets/upload always persists the uploaded file into the caller's
+ * custom_datasets library.  On success, `savedDatasetId` and `savedDatasetMeta`
+ * are present in the 200 response.  On failure the route returns a hard 5xx.
+ * The client optimistically inserts `savedDatasetMeta` into the MY UPLOADS
+ * React Query cache so the new row appears immediately without a refetch.
  *
  * Auth: the Playwright webServers run with E2E_AUTH_BYPASS=1 (api-server)
  * and VITE_DEV_AUTH_BYPASS=1 (bathyscan). The frontend installs a fetch
  * patch that injects `x-e2e-user-id: dev-user-bypass` on every /api/*
  * request, which the api-server's bypass middleware accepts in lieu of a
- * Clerk session. The upload route itself also honors the bypass header
- * (added in Task #122) so the auto-save path against the real DB is
- * exercised without a Clerk JWT.
+ * Clerk session.
  */
 import { test, expect, type APIRequestContext, type Page, API_URL, E2E_USER_ID } from "./fixtures";
 
@@ -52,32 +48,6 @@ function makeTinyCsv(): string {
     }
   }
   return [header, ...rows].join("\n");
-}
-
-/**
- * Build a minimal `TerrainData`-shaped object that satisfies the
- * OpenAPI-generated type. The failure-path test stubs the upload response
- * client-side and the UI doesn't assert on grid contents in that branch,
- * so a flat 4-cell grid is sufficient.
- */
-function stubTerrain(datasetId: string): Record<string, unknown> {
-  return {
-    datasetId,
-    name: datasetId,
-    waterType: "salt",
-    resolution: 2,
-    width: 2,
-    height: 2,
-    depths: [100, 110, 120, 130],
-    minDepth: 100,
-    maxDepth: 130,
-    minLon: 142.4,
-    maxLon: 142.5,
-    minLat: 11.3,
-    maxLat: 11.4,
-    centerLon: 142.45,
-    centerLat: 11.35,
-  };
 }
 
 async function listMyUploads(req: APIRequestContext): Promise<UserDatasetMeta[]> {
@@ -271,12 +241,7 @@ test.describe("upload auto-save end-to-end", () => {
     const uploadBody = (await uploadRes.json()) as {
       savedDatasetId?: string;
       savedDatasetMeta?: { id: string; name: string };
-      saveError?: string;
     };
-    expect(
-      uploadBody.saveError,
-      `auto-save should not error in the happy path; got ${JSON.stringify(uploadBody.saveError)}`,
-    ).toBeUndefined();
     expect(uploadBody.savedDatasetId, "savedDatasetId must be present").toBeTruthy();
     const savedId = uploadBody.savedDatasetId as string;
     // Server derives the display name from the original filename.
@@ -368,9 +333,7 @@ test.describe("upload auto-save end-to-end", () => {
       .filter({ hasText: expectedName });
     await expect(persistedRow).toBeVisible({ timeout: 30_000 });
 
-    // And the auto-save failure banner must NOT have appeared — this was
-    // a happy-path upload, so `saveError` should be undefined and the
-    // inline "couldn't save to your account" element absent.
+    // The auto-save failure banner must NOT have appeared on a happy-path upload.
     await expect(page.getByTestId("upload-save-error")).toHaveCount(0);
 
     // Confirm the row really exists in the DB (not just in the React
@@ -379,57 +342,4 @@ test.describe("upload auto-save end-to-end", () => {
     expect(uploads.some((u) => u.name === expectedName)).toBe(true);
   });
 
-  test("failure path: server returns saveError → inline 'couldn't save to your account' message is shown", async ({
-    page,
-    request,
-  }) => {
-    await page.goto("/?noCanvas=1", { waitUntil: "domcontentloaded" });
-    if (!(await openUploadAccordion(page))) {
-      test.skip(true, "Upload accordion or dropzone not visible — upload UI not available in this environment");
-      return;
-    }
-
-    // Stub the upload response with a fully-synthetic 200-with-saveError
-    // payload — the exact shape the server returns when the Drizzle insert
-    // throws (e.g. duplicate id, connection failure). We do NOT call
-    // `route.fetch()` to forward upstream because (a) the real upload is
-    // slow under headless-Chromium's WebGL-storm load and frequently
-    // stalls the in-page mutation, and (b) we'd then have to clean up the
-    // persisted row. The terrain/overview grids only need to satisfy the
-    // OpenAPI-generated type; the UI does not assert on their contents in
-    // this path. The browser never sees a real upload — only this stub.
-    await page.route("**/api/datasets/upload", async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          terrain: stubTerrain("fail-terrain"),
-          overview: stubTerrain("fail-overview"),
-          saveError: "Database insert failed (simulated)",
-        }),
-      });
-    });
-
-    const filename = `e2e-autosave-fail-${Date.now()}.csv`;
-    await uploadCsvViaDropzone(page, filename);
-
-    // The upload panel stays open and shows the inline auto-save failure
-    // message (sourced from `data.saveError`), rendered as the dedicated
-    // `upload-save-error` element next to a retry button.
-    const saveErrorEl = page.getByTestId("upload-save-error");
-    await expect(saveErrorEl).toBeVisible({ timeout: 15_000 });
-    await expect(saveErrorEl).toContainText(/Uploaded, but couldn't save to your account/i);
-    await expect(saveErrorEl).toContainText(/Database insert failed \(simulated\)/);
-
-    // And MY UPLOADS does NOT gain a phantom row — neither in the DB nor
-    // in the React Query cache (because savedDatasetId was absent).
-    // Filter specifically for rows from this test (the stub never writes to DB,
-    // so no "autosave-fail" row should exist; rows from prior success-path
-    // tests have different name prefixes and are excluded by this filter).
-    const allUploads = await listMyUploads(request);
-    const failRows = allUploads.filter(
-      (u) => u.name?.includes("autosave-fail") || u.name?.includes("autosave fail"),
-    );
-    expect(failRows).toHaveLength(0);
-  });
 });

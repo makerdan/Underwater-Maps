@@ -1661,12 +1661,10 @@ export interface UserDatasetMeta {
 export interface UploadResult {
   terrain: TerrainData;
   overview: TerrainData;
-  /** UUID of the saved custom_datasets row. Present whenever persistence succeeded; omitted only if the database insert returned no row (see `saveError`). */
+  /** UUID of the saved custom_datasets row. Present whenever persistence succeeded. */
   savedDatasetId?: string;
   /** Metadata for the freshly-saved row, suitable for optimistically inserting into the "My Uploads" list without a refetch */
   savedDatasetMeta?: UserDatasetMeta;
-  /** Human-readable error string returned when the auto-save to the user's account failed. The terrain itself is still returned so the session is usable. */
-  saveError?: string;
 }
 
 /**

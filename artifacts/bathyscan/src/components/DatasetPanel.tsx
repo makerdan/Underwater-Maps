@@ -83,12 +83,6 @@ import {
 import type { TerrainData } from "@workspace/api-client-react";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-// Auto-retry backoff schedule for transient save-to-account failures.
-// Module-scope so reading it inside the upload callback doesn't require
-// a hook deps entry.
-const AUTO_RETRY_DELAYS_MS = [500, 1500];
-
 /**
  * Build a human-readable import summary for an archive upload result.
  *
@@ -762,14 +756,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     [setPanelCollapsed],
   );
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [savingToAccount, setSavingToAccount] = useState(false);
-  const autoRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (autoRetryTimer.current) clearTimeout(autoRetryTimer.current);
-  }, []);
 
   // GCS upload poll/watchdog refs — cleared on unmount to avoid state updates after destroy
   const gcsPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1582,42 +1569,35 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const uploadFile = useCallback(
     (
       file: File,
-      { isRetry, autoAttempt = 0, pdfMeta }: {
-        isRetry?: boolean;
-        autoAttempt?: number;
+      { pdfMeta }: {
         pdfMeta?: { pdfBbox: string; pdfDepthUnit: "feet" | "meters" } | null;
       } = {},
     ) => {
       uploadStartedAt.current = Date.now();
       uploadFileSizeBytesRef.current = file.size;
-      // Retry paths call uploadFile without pdfMeta — fall back to the last
-      // confirmed georeferencing for this session when the file is a PDF.
       const effectivePdfMeta =
         pdfMeta ?? (file.name.toLowerCase().endsWith(".pdf") ? lastPdfMetaRef.current : null);
       postDatasetsUpload.mutate(
         { data: { file, resolution: 256, ...(effectivePdfMeta ?? {}) } },
         {
           onSuccess: (data) => {
-            const isFirstTry = !isRetry && autoAttempt === 0;
-            if (isFirstTry) {
-              setDatasetId(null);
-              setTerrain(data.terrain);
-              if (!useTerrainStore.getState().multiDatasetMode) {
-                const uploadedId = data.terrain.datasetId ?? data.savedDatasetId ?? "__upload__";
-                useTerrainStore.getState().setSinglePrimary(uploadedId, "user");
-              }
-              useTerrainStore.getState().setGrids({
-                activeGrid: data.terrain,
-                overviewGrid: data.overview,
-              });
-              useClassificationStore.getState().clearZoneMap();
-              void useClassificationStore.getState().classify(data.terrain);
+            setDatasetId(null);
+            setTerrain(data.terrain);
+            if (!useTerrainStore.getState().multiDatasetMode) {
+              const uploadedId = data.terrain.datasetId ?? data.savedDatasetId ?? "__upload__";
+              useTerrainStore.getState().setSinglePrimary(uploadedId, "user");
             }
+            useTerrainStore.getState().setGrids({
+              activeGrid: data.terrain,
+              overviewGrid: data.overview,
+            });
+            useClassificationStore.getState().clearZoneMap();
+            void useClassificationStore.getState().classify(data.terrain);
             if (data.savedDatasetId) {
               setActiveUserDatasetId(data.savedDatasetId);
               // Optimistically insert the freshly-saved row into the
               // MY LIBRARY cache so it appears immediately, without
-              // waiting for a refetch round-trip (Task #133).
+              // waiting for a refetch round-trip.
               if (data.savedDatasetMeta) {
                 const meta = data.savedDatasetMeta;
                 qc.setQueryData<UserDatasetMeta[]>(
@@ -1639,47 +1619,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               // Invalidate settings so any server-side defaults for the new
               // dataset (e.g. waterType) are reflected without a manual reload.
               void qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
-              setSaveError(null);
-              setLastUploadedFile(null);
-              setSavingToAccount(false);
-              if (isFirstTry) setUploadOpen(false);
-            } else if (data.saveError) {
-              // Transparent retry-with-backoff before showing the warning.
-              if (autoAttempt < AUTO_RETRY_DELAYS_MS.length) {
-                if (isFirstTry) setActiveUserDatasetId(null);
-                setSavingToAccount(true);
-                setSaveError(null);
-                setLastUploadedFile(file);
-                const delay = AUTO_RETRY_DELAYS_MS[autoAttempt]!;
-                if (autoRetryTimer.current) clearTimeout(autoRetryTimer.current);
-                autoRetryTimer.current = setTimeout(() => {
-                  autoRetryTimer.current = null;
-                  uploadFile(file, { isRetry: true, autoAttempt: autoAttempt + 1 });
-                }, delay);
-              } else {
-                setSavingToAccount(false);
-                setSaveError(data.saveError);
-                setLastUploadedFile(file);
-                if (isFirstTry) setActiveUserDatasetId(null);
-              }
+              setUploadOpen(false);
             } else {
-              if (isFirstTry) setActiveUserDatasetId(null);
-              setSaveError(null);
-              setLastUploadedFile(null);
-              setSavingToAccount(false);
-              if (isFirstTry) setUploadOpen(false);
+              setActiveUserDatasetId(null);
+              setUploadOpen(false);
             }
           },
           onError: (err) => {
-            setSavingToAccount(false);
             const e = err as { data?: { detail?: string; details?: string; error?: string }; message?: string };
             const detail = e?.data?.detail ?? e?.data?.details;
             const msg = detail ?? (err instanceof Error ? err.message : "Parse failed");
-            if (isRetry) {
-              setSaveError(msg);
-            } else {
-              setUploadError(msg);
-            }
+            setUploadError(msg);
           },
         },
       );
@@ -2279,7 +2229,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       if (postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing" || gcsPhase === "uploading" || gcsPhase === "processing") return;
 
       setUploadError(null);
-      setSaveError(null);
       setChunkedPhase("idle");
       setChunkedError(null);
       setGcsPhase("idle");
@@ -2295,11 +2244,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       }
       const file = accepted[0];
       if (!file) return;
-      if (autoRetryTimer.current) {
-        clearTimeout(autoRetryTimer.current);
-        autoRetryTimer.current = null;
-      }
-      setSavingToAccount(false);
 
       // PDF / PNG / JPEG contour maps: collect georeferencing first.
       // PNG/JPEG additionally go through OCR review before ingestion.
@@ -2564,12 +2508,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(data.savedDatasetId) });
         void qc.invalidateQueries({ queryKey: getGetMarkersQueryKey({ datasetId: data.savedDatasetId }) });
         void qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
-        setSaveError(null);
-        setLastUploadedFile(null);
-        setSavingToAccount(false);
-      } else if (data.saveError) {
-        setSaveError(data.saveError);
-        setLastUploadedFile(pendingPdfFile);
       }
 
       // Close the georef dialog and reset all raster state.
@@ -2590,11 +2528,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setDatasetId, setTerrain, qc, setUploadOpen,
     postDatasetsUpload,
   ]);
-
-  const handleRetrySave = useCallback(() => {
-    if (!lastUploadedFile || postDatasetsUpload.isPending) return;
-    uploadFile(lastUploadedFile, { isRetry: true });
-  }, [lastUploadedFile, postDatasetsUpload.isPending, uploadFile]);
 
   // ─── Chunked upload retry — resumes from the failed chunk, same uploadId ──
   // If a chunk transfer failed: resend from that chunk index onwards.
@@ -4592,64 +4525,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                           }}
                         >
                           Retry upload
-                        </button>
-                      </div>
-                    )}
-                    {savingToAccount && !saveError && (
-                      <div
-                        data-testid="upload-saving-to-account"
-                        style={{
-                          marginTop: 6,
-                          padding: "6px 8px",
-                          border: "1px solid rgba(0,229,255,0.25)",
-                          background: "rgba(0,229,255,0.05)",
-                          borderRadius: 4,
-                          fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                          color: "#7dd3fc",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                      >
-                        <span className="animate-pulse">◌</span>
-                        <span>Saving to account…</span>
-                      </div>
-                    )}
-                    {saveError && lastUploadedFile && (
-                      <div
-                        data-testid="upload-save-error"
-                        style={{
-                          marginTop: 6,
-                          padding: "6px 8px",
-                          border: "1px solid rgba(248,113,113,0.4)",
-                          background: "rgba(248,113,113,0.08)",
-                          borderRadius: 4,
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#fca5a5", flex: 1, lineHeight: 1.4 }}>
-                          ⚠ Uploaded, but couldn&apos;t save to your account — {saveError}
-                        </div>
-                        <button
-                          type="button"
-                          data-testid="upload-retry-save"
-                          onClick={handleRetrySave}
-                          disabled={postDatasetsUpload.isPending}
-                          style={{
-                            fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                            padding: "3px 8px",
-                            border: "1px solid rgba(0,229,255,0.4)",
-                            background: "rgba(0,229,255,0.08)",
-                            color: "#00e5ff",
-                            borderRadius: 3,
-                            cursor: postDatasetsUpload.isPending ? "wait" : "pointer",
-                            whiteSpace: "nowrap",
-                            letterSpacing: "0.08em",
-                          }}
-                        >
-                          {postDatasetsUpload.isPending ? "…" : "Retry save"}
                         </button>
                       </div>
                     )}
