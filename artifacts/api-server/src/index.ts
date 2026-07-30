@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { pool } from "@workspace/db";
 import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 import { startBucketMonitor } from "./lib/bucketMonitor.js";
 import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
@@ -60,6 +61,8 @@ let activeServer: http.Server | null = null;
 let stopUploadCleanupJob: (() => void) | null = null;
 let stopOrphanedPhotosCleanupJob: (() => void) | null = null;
 let stopRateLimitPruneJob: (() => void) | null = null;
+let stopBucketMonitor: (() => Promise<void>) | null = null;
+let stopWeatherCacheRefresher: (() => Promise<void>) | null = null;
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown on SIGTERM
@@ -67,14 +70,29 @@ let stopRateLimitPruneJob: (() => void) | null = null;
 // Registered once at module load — uses `activeServer` which is set once the
 // server successfully binds its assigned port.
 
+// Idempotent guard: a second SIGTERM while shutdown is already in progress
+// is a no-op so the handler does not run concurrently with itself.
+let shuttingDown = false;
+
 process.on("SIGTERM", () => {
+  if (shuttingDown) {
+    logger.debug("SIGTERM received while shutdown already in progress — ignoring");
+    return;
+  }
+  shuttingDown = true;
+
   const server = activeServer;
   if (!server) {
     logger.warn("SIGTERM received but no active server — exiting immediately");
-    stopUploadCleanupJob?.();
-    stopOrphanedPhotosCleanupJob?.();
-    stopRateLimitPruneJob?.();
-    process.exit(0);
+    void (async () => {
+      try { stopUploadCleanupJob?.(); } catch { /* ignore */ }
+      try { stopOrphanedPhotosCleanupJob?.(); } catch { /* ignore */ }
+      try { stopRateLimitPruneJob?.(); } catch { /* ignore */ }
+      try { await stopBucketMonitor?.(); } catch { /* ignore */ }
+      try { await stopWeatherCacheRefresher?.(); } catch { /* ignore */ }
+      try { await pool.end(); } catch { /* ignore */ }
+      process.exit(0);
+    })();
     return;
   }
 
@@ -83,29 +101,42 @@ process.on("SIGTERM", () => {
     "SIGTERM received — draining in-flight requests",
   );
 
-  // Stop the periodic cleanup jobs so their intervals cannot fire after
-  // shutdown begins.  Must happen before server.close() to avoid a race
-  // where an interval fires after the DB connection pool starts tearing down.
-  stopUploadCleanupJob?.();
-  stopOrphanedPhotosCleanupJob?.();
-  stopRateLimitPruneJob?.();
+  void (async () => {
+    // 1. Stop all background job intervals so they cannot fire after the pool
+    //    tears down.  Jobs with async stop handles are awaited so any in-flight
+    //    cycle can finish before we proceed.
+    try { stopUploadCleanupJob?.(); } catch { /* ignore */ }
+    try { stopOrphanedPhotosCleanupJob?.(); } catch { /* ignore */ }
+    try { stopRateLimitPruneJob?.(); } catch { /* ignore */ }
+    try { await stopBucketMonitor?.(); } catch { /* ignore */ }
+    try { await stopWeatherCacheRefresher?.(); } catch { /* ignore */ }
 
-  // Stop accepting new connections. Close idle keep-alive sockets immediately
-  // so the drain window doesn't stall waiting for them to time out naturally.
-  // Active (in-flight) connections are intentionally left open until their
-  // requests finish — closeAllConnections() must NOT be called here, as it
-  // hard-drops requests that are still being processed.
-  server.close(() => {
-    logger.info("All connections closed — exiting cleanly");
+    // 2. Stop accepting new connections. Close idle keep-alive sockets
+    //    immediately so the drain window doesn't stall on them.  Active
+    //    (in-flight) connections are left open until their requests finish.
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      server.closeIdleConnections();
+    });
+
+    logger.info("All connections closed — draining pool");
+
+    // 3. Drain the connection pool so no background queries can be issued
+    //    against a half-torn-down DB after this point.
+    try {
+      await pool.end();
+    } catch (err) {
+      logger.warn({ err }, "pool.end() failed during shutdown (non-critical)");
+    }
+
+    logger.info("Graceful shutdown complete — exiting");
     logger.flush(() => {
       process.exit(0);
     });
-  });
-  server.closeIdleConnections();
+  })();
 
-  // Hard-kill fallback: if in-flight requests haven't drained within the
-  // configured window, force-close all remaining connections and exit rather
-  // than leaving the process stuck indefinitely.
+  // Hard-kill fallback: if the graceful sequence hasn't finished within the
+  // drain window, force-close all remaining connections and exit.
   setTimeout(() => {
     logger.warn("Drain timeout exceeded — forcing exit");
     server.closeAllConnections();
@@ -160,17 +191,21 @@ function startServer(port: number): void {
     // Non-fatal: logs a clear error with install instructions if missing so
     // the issue is immediately visible in server logs rather than surfacing
     // only when a user attempts a raster upload.
-    void checkRasterExtractorDeps().then((ok) => {
-      if (ok) {
-        logger.info("[startup] raster extractor Python deps: ok");
-      } else {
-        logger.error(
-          "[startup] raster extractor Python deps: MISSING — " +
-            "raster contour map uploads will fail. " +
-            "Install: PYTHONUSERBASE=.pythonlibs pip install opencv-python-headless pytesseract Pillow numpy",
-        );
-      }
-    });
+    checkRasterExtractorDeps()
+      .then((ok) => {
+        if (ok) {
+          logger.info("[startup] raster extractor Python deps: ok");
+        } else {
+          logger.error(
+            "[startup] raster extractor Python deps: MISSING — " +
+              "raster contour map uploads will fail. " +
+              "Install: PYTHONUSERBASE=.pythonlibs pip install opencv-python-headless pytesseract Pillow numpy",
+          );
+        }
+      })
+      .catch((err: unknown) => {
+        logger.error({ err }, "[startup] raster extractor dep check failed");
+      });
 
     // Load per-extension upload duration history so ETA estimates are seeded
     // from the very first job after a restart (non-critical; errors are caught).
@@ -205,8 +240,9 @@ function startServer(port: number): void {
 
     // Start the GCS bucket monitor — scans pending-datasets/ every 30 s and
     // processes any oversized dataset files uploaded via the presigned URL path.
+    // The returned stop function is stored so the SIGTERM handler can await it.
     try {
-      startBucketMonitor();
+      stopBucketMonitor = startBucketMonitor();
     } catch (err) {
       logger.error({ err }, "[startup] startBucketMonitor failed");
     }
@@ -214,8 +250,9 @@ function startServer(port: number): void {
     // Start the background weather cache refresher — re-fetches DB rows that are
     // >15 min old every 30 min so the 1-hour stale fallback window is never hit.
     // Also prunes rows older than 24 hours that no one is actively requesting.
+    // The returned stop function is stored so the SIGTERM handler can await it.
     try {
-      startWeatherCacheRefresher();
+      stopWeatherCacheRefresher = startWeatherCacheRefresher();
     } catch (err) {
       logger.error({ err }, "[startup] startWeatherCacheRefresher failed");
     }

@@ -814,13 +814,21 @@ export async function applyBucketLifecycleRules(): Promise<void> {
 const SCAN_INTERVAL_MS = 30_000;
 let scanTimer: ReturnType<typeof setInterval> | null = null;
 
-export function startBucketMonitor(): void {
-  if (scanTimer) return;
+/**
+ * Start the bucket monitor background job.
+ *
+ * Returns a stop function that clears the scan interval and waits for any
+ * in-flight scan to complete (up to 5 s) — call it during graceful shutdown
+ * before tearing down the DB pool or object-storage client.
+ */
+export function startBucketMonitor(): () => Promise<void> {
+  // Already running — return a no-op stop function.
+  if (scanTimer) return async () => {};
 
   const bucketId = process.env["DEFAULT_OBJECT_STORAGE_BUCKET_ID"];
   if (!bucketId) {
     logger.warn("[bucket-monitor] DEFAULT_OBJECT_STORAGE_BUCKET_ID not set — monitor disabled");
-    return;
+    return async () => {};
   }
 
   logger.info({ bucket: bucketId, intervalMs: SCAN_INTERVAL_MS }, "[bucket-monitor] starting");
@@ -832,7 +840,29 @@ export function startBucketMonitor(): void {
     logger.warn({ err }, "[bucket-monitor] failed to apply lifecycle rules (non-fatal)");
   });
 
+  // Track the current in-flight scan so stop() can await it.
+  let currentScan: Promise<void> = Promise.resolve();
+
+  function scheduledScan(): void {
+    currentScan = scan();
+    void currentScan;
+  }
+
   // Initial scan shortly after startup, then every 30 s
-  setTimeout(() => void scan(), 5_000);
-  scanTimer = setInterval(() => void scan(), SCAN_INTERVAL_MS);
+  setTimeout(() => scheduledScan(), 5_000);
+  scanTimer = setInterval(() => scheduledScan(), SCAN_INTERVAL_MS);
+
+  const STOP_TIMEOUT_MS = 5_000;
+
+  return async (): Promise<void> => {
+    if (scanTimer) {
+      clearInterval(scanTimer);
+      scanTimer = null;
+    }
+    // Wait for any in-flight scan to finish, but don't block shutdown forever.
+    await Promise.race([
+      currentScan,
+      new Promise<void>((resolve) => setTimeout(resolve, STOP_TIMEOUT_MS).unref()),
+    ]);
+  };
 }

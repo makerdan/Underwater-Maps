@@ -8,9 +8,21 @@
  *
  * The refresh reuses the existing `fetchWeatherStations` function — no
  * duplication of fetch / normalise / persist logic.
+ *
+ * Cross-process coordination
+ * --------------------------
+ * Under horizontal scale-out or blue/green deployments multiple API server
+ * instances run this job on the same interval.  Without coordination they
+ * would each hammer NOAA with duplicate re-fetches.  We use
+ * `pg_try_advisory_lock` (non-blocking) so exactly one instance runs the
+ * cycle; others skip silently.  The lock is acquired and released on a single
+ * dedicated `pg.Client` checked out from the pool for the duration of the
+ * cycle — this guarantees the session-level lock is never split across two
+ * different backend connections.
  */
 
-import { db, weatherStationCacheTable } from "@workspace/db";
+import type { PoolClient } from "pg";
+import { db, pool, weatherStationCacheTable } from "@workspace/db";
 import { lt } from "drizzle-orm";
 import { fetchWeatherStations } from "./noaaWeatherFetcher.js";
 import { logger } from "./logger.js";
@@ -18,6 +30,15 @@ import { logger } from "./logger.js";
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const STALE_THRESHOLD_MS = 15 * 60 * 1000; // refresh rows older than 15 min
 const PRUNE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // prune rows older than 24 h
+
+/**
+ * Stable advisory lock key for the weather cache refresher.
+ *
+ * Distinct from the rate-limit prune job key so both jobs can run in parallel
+ * across instances without blocking each other.  Derived from ASCII "wcat"
+ * (weather cache): w=0x77 c=0x63 a=0x61 t=0x74 → 0x77636174 = 2003134836
+ */
+export const WEATHER_ADVISORY_LOCK_KEY = 0x7763_6174;
 
 // ---------------------------------------------------------------------------
 // Cache-key parser
@@ -129,14 +150,24 @@ async function runRefreshCycle(): Promise<void> {
  *   overlapping with the next tick and compounding upstream load.
  * - The interval is unref'd so it does not prevent a clean shutdown when no
  *   other work remains.
+ * - Each cycle acquires a session-level Postgres advisory lock on a dedicated
+ *   client so only one instance across a scaled-out deployment runs the prune
+ *   + refresh.  If the lock is already held, the cycle is skipped at debug
+ *   level.
+ *
+ * Returns a stop function that:
+ *   1. Clears the interval so no new cycles start.
+ *   2. Waits for any in-flight cycle to finish (up to STOP_TIMEOUT_MS).
  */
-export function startWeatherCacheRefresher(): void {
+export function startWeatherCacheRefresher(): () => Promise<void> {
   logger.info(
     { intervalMs: REFRESH_INTERVAL_MS },
     "[weather-refresher] Background weather cache refresher started",
   );
 
   let cycleRunning = false;
+  // Holds a reference to the current in-flight cycle so stop() can await it.
+  let currentCycle: Promise<void> = Promise.resolve();
 
   async function safeCycle(): Promise<void> {
     if (cycleRunning) {
@@ -146,21 +177,70 @@ export function startWeatherCacheRefresher(): void {
       return;
     }
     cycleRunning = true;
+
+    let client: PoolClient | null = null;
+    let lockAcquired = false;
+
     try {
+      // Check out a dedicated connection for the lifetime of this cycle's
+      // advisory lock.  Session locks are scoped to the backend connection,
+      // so acquire and release must share the same client.
+      client = await pool.connect();
+
+      const lockResult = await client.query<{ acquired: boolean }>(
+        "SELECT pg_try_advisory_lock($1::int8) AS acquired",
+        [WEATHER_ADVISORY_LOCK_KEY],
+      );
+      lockAcquired = lockResult.rows[0]?.acquired ?? false;
+
+      if (!lockAcquired) {
+        // Another instance is running this cycle — skip.
+        logger.debug(
+          "[weather-refresher] Advisory lock held by another instance — skipping cycle",
+        );
+        return;
+      }
+
       await runRefreshCycle();
     } catch (err: unknown) {
       logger.warn({ err }, "[weather-refresher] Unexpected refresh cycle error");
     } finally {
       cycleRunning = false;
+      if (client) {
+        if (lockAcquired) {
+          try {
+            await client.query("SELECT pg_advisory_unlock($1::int8)", [
+              WEATHER_ADVISORY_LOCK_KEY,
+            ]);
+          } catch {
+            // Non-fatal: lock released on connection teardown.
+          }
+        }
+        client.release();
+      }
     }
   }
 
   // Immediate startup cycle — fire-and-forget; errors are caught inside safeCycle.
-  void safeCycle();
+  currentCycle = safeCycle();
+  void currentCycle;
 
   const interval = setInterval(() => {
-    void safeCycle();
+    currentCycle = safeCycle();
+    void currentCycle;
   }, REFRESH_INTERVAL_MS);
 
   interval.unref();
+
+  // Maximum time to wait for an in-flight cycle to finish during shutdown.
+  const STOP_TIMEOUT_MS = 5_000;
+
+  return async (): Promise<void> => {
+    clearInterval(interval);
+    // Wait for any in-flight cycle to complete, but don't block shutdown forever.
+    await Promise.race([
+      currentCycle,
+      new Promise<void>((resolve) => setTimeout(resolve, STOP_TIMEOUT_MS).unref()),
+    ]);
+  };
 }
