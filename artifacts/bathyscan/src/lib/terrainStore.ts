@@ -139,8 +139,10 @@ interface TerrainStore {
 
   /**
    * Proximity streaming: move a dataset from selected-but-not-active to active.
-   * Caller must ensure capacity (visibleDatasets.length < MAX_ACTIVE_DATASETS)
-   * before calling; this action does NOT evict anything.
+   * The cap (MAX_ACTIVE_DATASETS) is enforced internally inside the functional
+   * updater — if the active list is already full this is a silent no-op.
+   * Callers do not need to check capacity before calling.
+   * This action does NOT evict anything.
    */
   autoActivate: (datasetId: string) => void;
 
@@ -457,7 +459,10 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       // Must be in selectedIds but NOT in visibleDatasets.
       if (!prev.selectedIds.includes(datasetId)) return prev;
       if (prev.visibleDatasets.some((v) => v.datasetId === datasetId)) return prev;
-      // Caller is responsible for ensuring capacity.
+      // Cap is enforced here — callers cannot exceed MAX_ACTIVE_DATASETS regardless
+      // of call ordering or timing. Re-reading visibleDatasets.length inside the
+      // functional updater ensures concurrent calls each see up-to-date state.
+      if (prev.visibleDatasets.length >= MAX_ACTIVE_DATASETS) return prev;
       const source = prev.selectedSources[datasetId] ?? "preset";
       const entry: VisibleDataset = {
         datasetId,
@@ -466,6 +471,12 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         overviewGrid: null,
       };
       const nextVisible = [...prev.visibleDatasets, entry];
+      if (process.env.NODE_ENV === "development") {
+        console.assert(
+          nextVisible.length <= MAX_ACTIVE_DATASETS,
+          `[terrainStore] autoActivate: visibleDatasets exceeded MAX_ACTIVE_DATASETS (${nextVisible.length} > ${MAX_ACTIVE_DATASETS})`,
+        );
+      }
       return {
         ...prev,
         visibleDatasets: nextVisible,
@@ -477,6 +488,12 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
     set((prev) => {
       if (!prev.visibleDatasets.some((v) => v.datasetId === datasetId)) return prev;
       const nextVisible = prev.visibleDatasets.filter((v) => v.datasetId !== datasetId);
+      if (process.env.NODE_ENV === "development") {
+        console.assert(
+          nextVisible.length <= MAX_ACTIVE_DATASETS,
+          `[terrainStore] autoEvict: visibleDatasets exceeded MAX_ACTIVE_DATASETS (${nextVisible.length} > ${MAX_ACTIVE_DATASETS})`,
+        );
+      }
       return {
         ...prev,
         visibleDatasets: nextVisible,

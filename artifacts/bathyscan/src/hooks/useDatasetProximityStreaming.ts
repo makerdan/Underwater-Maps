@@ -187,9 +187,12 @@ export function useDatasetProximityStreaming({
         const currentVisible = useTerrainStore.getState().visibleDatasets;
 
         if (currentVisible.length >= MAX_ACTIVE_DATASETS) {
-          // Evict the farthest active dataset. Scan ALL active entries in
-          // withBbox (including non-selected ones) so pinned datasets don't
-          // block streaming capacity.
+          // Lightweight pre-check: evict the farthest active dataset to open a
+          // slot before calling onActivate. This is an optimisation, not a
+          // correctness gate — autoActivate enforces MAX_ACTIVE_DATASETS
+          // internally and will silently no-op if the slot isn't free. Scan ALL
+          // active entries in withBbox (including non-selected ones) so pinned
+          // datasets don't block streaming capacity.
           const activeWithBbox = withBbox.filter((e) =>
             currentVisible.some((v) => v.datasetId === e.id),
           );

@@ -356,4 +356,69 @@ describe("terrainStore multi-dataset", () => {
     const s = useTerrainStore.getState();
     expect(s.primaryDatasetIds).toEqual(["gamma"]);
   });
+
+  // ── Cap-enforcement regression tests ─────────────────────────────────────
+
+  it("autoActivate enforces MAX_ACTIVE_DATASETS regardless of how many times it is called", () => {
+    // Seed 5 datasets as selected-but-not-active, visibleDatasets empty.
+    const ids = ["a", "b", "c", "d", "e"];
+    useTerrainStore.setState({
+      selectedIds: ids,
+      selectedSources: Object.fromEntries(ids.map((id) => [id, "preset" as const])),
+      visibleDatasets: [],
+      primaryDatasetIds: [],
+      primaryDatasetId: null,
+      activeGrid: null,
+      overviewGrid: null,
+    });
+
+    // Call autoActivate for all 5 in sequence.
+    for (const id of ids) {
+      useTerrainStore.getState().autoActivate(id);
+      // Cap must hold after every individual call.
+      expect(useTerrainStore.getState().visibleDatasets.length).toBeLessThanOrEqual(
+        MAX_ACTIVE_DATASETS,
+      );
+    }
+
+    // Final state: exactly MAX_ACTIVE_DATASETS are active; the rest were silent no-ops.
+    const s = useTerrainStore.getState();
+    expect(s.visibleDatasets.length).toBe(MAX_ACTIVE_DATASETS);
+    // First three activations should have succeeded.
+    expect(s.visibleDatasets.map((v) => v.datasetId)).toEqual(["a", "b", "c"]);
+    // Calls 4 and 5 were no-ops — d and e remain inactive.
+    expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("d");
+    expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("e");
+  });
+
+  it("autoActivate is a no-op when active list is already at MAX_ACTIVE_DATASETS (proximity tick cap guard)", () => {
+    // Simulate a proximity tick with 3 active datasets and 2 inactive candidates.
+    // The hook would normally evict before activating, but this test verifies that
+    // if autoActivate is called without a preceding eviction the store's internal
+    // cap guard silently rejects the calls — no overflow is possible.
+    const ids = ["a", "b", "c", "d", "e"];
+    useTerrainStore.setState({
+      selectedIds: ids,
+      selectedSources: Object.fromEntries(ids.map((id) => [id, "preset" as const])),
+      visibleDatasets: [
+        { datasetId: "a", source: "preset", activeGrid: null, overviewGrid: null },
+        { datasetId: "b", source: "preset", activeGrid: null, overviewGrid: null },
+        { datasetId: "c", source: "preset", activeGrid: null, overviewGrid: null },
+      ],
+      primaryDatasetIds: ["a", "b", "c"],
+      primaryDatasetId: "a",
+      activeGrid: null,
+      overviewGrid: null,
+    });
+
+    // Attempt to activate the two candidates directly (no eviction first).
+    useTerrainStore.getState().autoActivate("d");
+    useTerrainStore.getState().autoActivate("e");
+
+    const s = useTerrainStore.getState();
+    // Both calls were no-ops — the cap is not exceeded.
+    expect(s.visibleDatasets.length).toBe(MAX_ACTIVE_DATASETS);
+    expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("d");
+    expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("e");
+  });
 });
