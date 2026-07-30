@@ -1820,15 +1820,6 @@ async function readDiskCache(key: string): Promise<TerrainGrid | null> {
     fsPromises.unlink(file).catch(() => {});
     return null;
   }
-  // Discard any legacy synthetic-fbm grids — buildTerrainGrid now throws
-  // NoDataError instead of producing synthetic terrain, so these entries are
-  // stale and would surface a misleading "Simulated" badge on the client.
-  if ((parsed as { dataSource?: string }).dataSource === "synthetic" ||
-      (parsed as { synthetic?: boolean }).synthetic === true) {
-    logger.info({ key }, `[terrain] Discarding stale synthetic cache ${key}`);
-    fsPromises.unlink(file).catch(() => {});
-    return null;
-  }
   // Basic schema check — guard against partially-written or truncated files.
   if (!Array.isArray(parsed.depths) || typeof parsed.width !== "number") {
     logger.warn({ key }, `[terrain] Disk cache ${key} failed schema check — deleting`);
@@ -2166,13 +2157,6 @@ async function readFreshwaterDiskCache(
   }
   const version = parsed.version ?? 1;
   if (version < TERRAIN_CACHE_VERSION) {
-    fsPromises.unlink(file).catch(() => {});
-    return null;
-  }
-  // Discard any legacy synthetic-fbm grids (see readDiskCache comment).
-  if ((parsed as { dataSource?: string }).dataSource === "synthetic" ||
-      (parsed as { synthetic?: boolean }).synthetic === true) {
-    logger.info({ key, cacheDir }, `[terrain] Discarding stale synthetic freshwater cache ${key}`);
     fsPromises.unlink(file).catch(() => {});
     return null;
   }

@@ -1588,8 +1588,8 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
         // the DatasetPreview enum (twdb, usace, usgs-3dep). User-uploaded sonar
         // is always real measured data, so map anything unrecognised to "ncei".
         const rawSource = tj.dataSource;
-        // Stale DB rows may carry "synthetic" — that value was removed from
-        // the schema; treat any unrecognised source as "ncei" (real upload).
+        // Map to the two values the API schema accepts; anything other than
+        // "gebco" (including unrecognised or legacy sources) maps to "ncei".
         const dataSource: "ncei" | "gebco" =
           rawSource === "gebco" ? "gebco" : "ncei";
         res.json(validateResponse(GetDatasetsIdPreviewResponse, {
