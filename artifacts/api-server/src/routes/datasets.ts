@@ -365,6 +365,7 @@ async function persistJobToDB(
   jobId: string,
   state: JobState,
   meta?: JobMetaForDB,
+  options?: { strict?: boolean },
 ): Promise<void> {
   try {
     await db
@@ -411,6 +412,7 @@ async function persistJobToDB(
         },
       });
   } catch (err) {
+    if (options?.strict) throw err;
     // Persistence failure is non-fatal during processing — the in-memory state
     // is still the source of truth for the current server process.
     const errMsg = err instanceof Error ? err.message : String(err);
@@ -706,7 +708,7 @@ export async function cleanupAbandonedUploadJobs(): Promise<void> {
       .where(
         and(
           eq(uploadJobsTable.status, "uploading"),
-          lt(uploadJobsTable.createdAt, cutoff),
+          lt(uploadJobsTable.updatedAt, cutoff),
         ),
       )
       .returning({ id: uploadJobsTable.id });
@@ -2351,7 +2353,7 @@ router.post(
   const resolution = (paramsParsed.data.resolution ?? paramsParsed.data.gridResolution) as number;
 
     const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
+    const smoothing = await getSmoothingPreference(req);
 
   // Auth-gated: requireAuth above guarantees a clerkUserId is present.
     const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
@@ -2386,11 +2388,10 @@ router.post(
 
     const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
 
-    let savedDatasetId: string | undefined;
-    let savedDatasetMeta:
-      | { id: string; name: string; minDepth: number; maxDepth: number; createdAt: string }
-      | undefined;
-    let saveError: string | undefined;
+    // H-2: treat dataset DB save failure as a hard error — never return a
+    // false-positive success when the row was not actually persisted.
+    let savedDatasetId: string;
+    let savedDatasetMeta: { id: string; name: string; minDepth: number; maxDepth: number; createdAt: string };
 
     try {
       const [saved] = await db
@@ -2412,28 +2413,23 @@ router.post(
           maxDepth: customDatasetsTable.maxDepth,
           createdAt: customDatasetsTable.createdAt,
         });
-      if (saved) {
-        savedDatasetId = saved.id;
-        savedDatasetMeta = {
-          id: saved.id,
-          name: saved.name,
-          minDepth: saved.minDepth,
-          maxDepth: saved.maxDepth,
-          createdAt: saved.createdAt.toISOString(),
-        };
-      } else {
-        saveError = "Database insert returned no row";
-        logger.warn(
-          { userId: effectiveUserId, datasetName },
-          `[raster-commit] upload returned without savedDatasetId (userId=${effectiveUserId}, name=${datasetName})`,
-        );
-      }
+      if (!saved) throw new Error("Database insert returned no row");
+      savedDatasetId = saved.id;
+      savedDatasetMeta = {
+        id: saved.id,
+        name: saved.name,
+        minDepth: saved.minDepth,
+        maxDepth: saved.maxDepth,
+        createdAt: saved.createdAt.toISOString(),
+      };
     } catch (err) {
-      saveError = err instanceof Error ? err.message : "Failed to save upload to account";
+      const errMsg = err instanceof Error ? err.message : "Failed to save upload to account";
       logger.error(
         { err, userId: effectiveUserId, datasetName },
-        `[raster-commit] failed to persist (userId=${effectiveUserId}, name=${datasetName})`,
+        `[direct-upload] failed to persist (userId=${effectiveUserId}, name=${datasetName})`,
       );
+      res.status(500).json({ error: "save_failed", details: errMsg });
+      return;
     }
 
     res.json(
@@ -2443,7 +2439,6 @@ router.post(
         coveragePercent,
         savedDatasetId,
         savedDatasetMeta,
-        saveError,
       }),
     );
   }),
@@ -2598,7 +2593,7 @@ router.post(
     }
 
     const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
+    const smoothing = await getSmoothingPreference(req);
     const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
     const gridId = crypto.randomUUID();
     const coveragePercent = 100;
@@ -2606,11 +2601,10 @@ router.post(
     const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
     const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
 
-    let savedDatasetId: string | undefined;
-    let savedDatasetMeta:
-      | { id: string; name: string; minDepth: number; maxDepth: number; createdAt: string }
-      | undefined;
-    let saveError: string | undefined;
+    // H-2: treat dataset DB save failure as a hard error — never return a
+    // false-positive success when the row was not actually persisted.
+    let savedDatasetId: string;
+    let savedDatasetMeta: { id: string; name: string; minDepth: number; maxDepth: number; createdAt: string };
 
     try {
       const [saved] = await db
@@ -2632,28 +2626,23 @@ router.post(
           maxDepth: customDatasetsTable.maxDepth,
           createdAt: customDatasetsTable.createdAt,
         });
-      if (saved) {
-        savedDatasetId = saved.id;
-        savedDatasetMeta = {
-          id: saved.id,
-          name: saved.name,
-          minDepth: saved.minDepth,
-          maxDepth: saved.maxDepth,
-          createdAt: saved.createdAt.toISOString(),
-        };
-      } else {
-        saveError = "Database insert returned no row";
-        logger.warn(
-          { userId: effectiveUserId, datasetName },
-          `[raster-commit] upload returned without savedDatasetId (userId=${effectiveUserId}, name=${datasetName})`,
-        );
-      }
+      if (!saved) throw new Error("Database insert returned no row");
+      savedDatasetId = saved.id;
+      savedDatasetMeta = {
+        id: saved.id,
+        name: saved.name,
+        minDepth: saved.minDepth,
+        maxDepth: saved.maxDepth,
+        createdAt: saved.createdAt.toISOString(),
+      };
     } catch (err) {
-      saveError = err instanceof Error ? err.message : "Failed to save upload to account";
+      const errMsg = err instanceof Error ? err.message : "Failed to save upload to account";
       logger.error(
         { err, userId: effectiveUserId, datasetName },
         `[raster-commit] failed to persist (userId=${effectiveUserId}, name=${datasetName})`,
       );
+      res.status(500).json({ error: "save_failed", details: errMsg });
+      return;
     }
 
     res.json(
@@ -2663,7 +2652,6 @@ router.post(
         coveragePercent,
         savedDatasetId,
         savedDatasetMeta,
-        saveError,
       }),
     );
   }),
@@ -2702,15 +2690,33 @@ router.post(
     const userId = (req as AuthenticatedRequest).clerkUserId;
 
     if (chunkIndex === 0) {
-      // First chunk: create the upload session bound to this user.
-      // Pre-generate the job UUID now so it can be reused as the finalize
-      // jobId — this lets the same DB row transition uploading→queued rather
-      // than spawning a second row per upload.
-      const sessionJobId = crypto.randomUUID();
-      uploadSessions.set(uploadId, { userId, sessionJobId, lastActivityAt: Date.now() });
-      // Persist to DB so chunk-status can reconstruct progress after a
-      // server restart that wiped /tmp.  Fire-and-forget — non-fatal.
-      void createUploadSessionRow(sessionJobId, userId, uploadId, totalChunks);
+      // First chunk: create (or verify) the upload session bound to this user.
+      // C-1: if another session already owns this uploadId, reject the hijack
+      // attempt with 409.  If the same user retries chunk 0 (e.g. after a
+      // transient network error), keep the existing session so the pre-generated
+      // sessionJobId is preserved and only one DB row ever exists per upload.
+      const existingSession = uploadSessions.get(uploadId);
+      if (existingSession) {
+        if (existingSession.userId !== userId) {
+          // Different user trying to claim an already-owned uploadId — reject.
+          await fs.promises.unlink(file.path).catch(() => undefined);
+          res.status(409).json({
+            error: "upload_conflict",
+            details: "An upload with this uploadId is already in progress by another user.",
+          });
+          return;
+        }
+        // Same user retrying chunk 0 — refresh activity and continue.
+        existingSession.lastActivityAt = Date.now();
+      } else {
+        // Pre-generate the job UUID now so it can be reused as the finalize
+        // jobId — this lets the same DB row transition uploading→queued rather
+        // than spawning a second row per upload.
+        const sessionJobId = crypto.randomUUID();
+        uploadSessions.set(uploadId, { userId, sessionJobId, lastActivityAt: Date.now() });
+        // Await so in-memory and DB state advance together (non-fatal on failure).
+        await createUploadSessionRow(sessionJobId, userId, uploadId, totalChunks);
+      }
     } else {
       // Subsequent chunks: verify ownership.
     let session = uploadSessions.get(uploadId);
@@ -2728,68 +2734,18 @@ router.post(
         })
         .from(uploadJobsTable)
         .where(eq(uploadJobsTable.uploadId, uploadId));
-
-        if (dbJob) {
-          session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, lastActivityAt: Date.now() };
-          uploadSessions.set(uploadId, session);
-        }
-      }
-
-      if (!session) {
-        await fs.promises.unlink(file.path).catch(() => undefined);
-        res.status(404).json({ error: "session_not_found", details: "Upload session not found. Start from chunk 0." });
-        return;
-      }
-      if (session.userId !== userId) {
-        await fs.promises.unlink(file.path).catch(() => undefined);
-        res.status(403).json({ error: "forbidden", details: "Upload session belongs to a different user." });
-        return;
-      }
-      // Refresh activity so an in-progress upload is never swept mid-flight.
-      session.lastActivityAt = Date.now();
-    }
-
-    // Rename the temp file to its canonical <uploadId>-chunk-<index> path
-    const dest = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${chunkIndex}`);
-    try {
-      await fs.promises.rename(file.path, dest);
-    } catch {
-      await fs.promises.unlink(file.path).catch(() => undefined);
-      res.status(500).json({ error: "chunk_write_error", details: "Failed to store chunk." });
-      return;
-    }
-
-    // Update chunksReceived in DB after successful disk write.
-    // Chunk 0 already set chunksReceived=1 in createUploadSessionRow; only
-    // subsequent chunks need an increment here.
-    if (chunkIndex > 0) {
-      void updateChunksReceivedInDB(uploadId, chunkIndex + 1);
-    }
-
-    res.json(validateResponse(UploadDatasetChunkResponse, { received: chunkIndex }, "POST /api/datasets/upload/chunk"));
-  }),
-);
-
-// ── GET /datasets/upload/chunk/status/:uploadId ───────────────────────────────
-// Returns which chunk indices have been received on disk for the given upload
-// session.  Used by the frontend auto-resume logic after a server reconnect:
-// the client fetches this endpoint to determine the next missing chunk and
-// resumes the upload from that point rather than starting over.
-//
-// Session ownership is checked against the in-memory map first.  After a
-// server restart where uploadSessions has been cleared, the handler falls back
-// to the DB (the upload_jobs row stores the uploadId since migration 0009) so
-// the caller's identity can still be verified without requiring chunk 0 to be
-// re-sent.
-router.get(
-  "/datasets/upload/chunk/status/:uploadId",
-  requireAuth,
-  validateParams(UploadIdParamSchema, "GET /api/datasets/upload/chunk/status/:uploadId"),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { uploadId } = res.locals.parsedParams as { uploadId: string };
     const userId = (req as AuthenticatedRequest).clerkUserId;
 
-    // Verify session ownership before queuing
+      const existingSession = uploadSessions.get(uploadId);
+
+      const existingSession = uploadSessions.get(uploadId);
+
+      const existingSession = uploadSessions.get(uploadId);
+
+      const existingSession = uploadSessions.get(uploadId);
+
+    // Fast path: in-memory session (current process lifetime).
     let session = uploadSessions.get(uploadId);
 
     // DB chunksReceived is captured here so it is available for the disk-empty
@@ -2804,6 +2760,7 @@ router.get(
       const [dbJob] = await db
         .select({
           userId: uploadJobsTable.userId,
+          chunksReceived: uploadJobsTable.chunksReceived,
           sessionJobId: uploadJobsTable.id,
         })
         .from(uploadJobsTable)
@@ -2823,28 +2780,39 @@ router.get(
       return;
     }
 
-    // Scan disk for the authoritative received-set — disk is always the ground
-    // truth while chunks are actively arriving.  After a server restart where
-    // /tmp was wiped we fall back to the DB chunksReceived count and synthesise
-    // a contiguous list [0, 1, …, chunksReceived-1] so the client can resume
-    // from exactly where it left off without re-sending earlier chunks.
+    // L-10: enumerate actual chunk files on disk — disk is always the
+    // authoritative source of truth while chunks are actively arriving.
+    //
+    // The DB chunksReceived count is used as a fallback ONLY when the chunk
+    // directory itself is inaccessible (e.g. /tmp not yet created after a
+    // fresh container start).  An accessible-but-empty directory means chunks
+    // were lost on restart — return [] so the client re-uploads rather than
+    // synthesising [0..N-1] from the count, which would cause finalize to
+    // fail the all-chunks-present verification.
     const receivedChunks: number[] = [];
-    const entries = await fs.promises.readdir(CHUNK_BASE_DIR).catch(() => [] as string[]);
-    const prefix = `${uploadId}-chunk-`;
-    for (const entry of entries) {
-      if (entry.startsWith(prefix)) {
-        const idx = parseInt(entry.slice(prefix.length), 10);
-        if (!Number.isNaN(idx)) receivedChunks.push(idx);
-      }
+    let chunkDirAccessible = true;
+    let dirEntries: string[] = [];
+    try {
+      dirEntries = await fs.promises.readdir(CHUNK_BASE_DIR);
+    } catch {
+      chunkDirAccessible = false;
+      logger.warn(
+        { uploadId, CHUNK_BASE_DIR },
+        "[chunk-status] chunk directory not accessible; falling back to DB chunksReceived count",
+      );
     }
 
-    if (receivedChunks.length === 0 && dbChunksReceived !== null && dbChunksReceived > 0) {
-      // Disk was wiped (container restart) but the DB still knows how many
-      // chunks arrived.  Synthesise the contiguous list so the client can ask
-      // for only the next missing chunk rather than starting over.
-    for (let i = 0; i < totalChunks; i++) {
-        receivedChunks.push(i);
+    if (chunkDirAccessible) {
+      const prefix = `${uploadId}-chunk-`;
+      for (const entry of dirEntries) {
+        if (entry.startsWith(prefix)) {
+          const idx = parseInt(entry.slice(prefix.length), 10);
+          if (!Number.isNaN(idx)) receivedChunks.push(idx);
+        }
       }
+    } else if (dbChunksReceived !== null && dbChunksReceived > 0) {
+      // Directory inaccessible — synthesise from DB count as a last resort.
+      for (let i = 0; i < dbChunksReceived; i++) receivedChunks.push(i);
     }
 
     receivedChunks.sort((a, b) => a - b);
@@ -3026,18 +2994,29 @@ router.post(
     session.activeJobId = jobId;
     session.finalizing = false;
 
-    // Persist initial "queued" state + chunk-upload metadata to DB before
-    // firing the job.  The meta columns (uploadId, fileName, totalChunks,
-    // chunksReceived, resolution, smoothing) replace the old JSON sidecar
-    // file so recovery survives a full container restart that wipes /tmp.
-    await persistJobToDB(jobId, initialState, {
-      uploadId,
-      fileName,
-      totalChunks,
-      chunksReceived: totalChunks, // all chunks verified present above
-      resolution,
-      smoothing,
-    });
+    // H-1: persist initial "queued" state + chunk-upload metadata to DB before
+    // firing the job.  Use strict:true so a DB failure surfaces as a hard 500
+    // rather than silently continuing — a queued job with no DB row cannot be
+    // polled or recovered after a server restart.
+    try {
+      await persistJobToDB(jobId, initialState, {
+        uploadId,
+        fileName,
+        totalChunks,
+        chunksReceived: totalChunks, // all chunks verified present above
+        resolution,
+        smoothing,
+      }, { strict: true });
+    } catch (persistErr) {
+      // Roll back in-memory state so the client can retry finalize cleanly.
+      uploadJobs.delete(jobId);
+      session.activeJobId = undefined;
+      session.finalizing = false;
+      const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
+      logger.error({ jobId, uploadId, errMsg }, `[finalize] failed to persist job to DB — aborting finalize: ${errMsg}`);
+      res.status(500).json({ error: "finalize_db_error", details: "Failed to register upload job. Please retry." });
+      return;
+    }
 
     // Fire-and-forget — the client polls /jobs/:jobId
     void processUploadJob(jobId, uploadId, totalChunks, fileName, resolution, userId, smoothing);
