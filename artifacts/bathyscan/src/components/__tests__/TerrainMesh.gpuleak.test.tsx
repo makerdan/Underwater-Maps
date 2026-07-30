@@ -29,9 +29,69 @@ const mockGeoInstances: Array<{ dispose: ReturnType<typeof vi.fn>; setAttribute:
 const mockSkirtGeoInstances: Array<{ dispose: ReturnType<typeof vi.fn> }> = [];
 
 // ---------------------------------------------------------------------------
-// vi.mock for three — shared mock is sufficient except we need spy dispose.
+// Tracked THREE object instances for new GPU-leak tests.
+// These are filled by the TrackedDataTexture / TrackedMeshStandardMaterial
+// constructors defined inside the vi.mock("three") factory below.
 // ---------------------------------------------------------------------------
-vi.mock("three");
+const mockDataTextureInstances: Array<{ dispose: ReturnType<typeof vi.fn> }> = [];
+const mockSkirtMaterialInstances: Array<{
+  opacity: number;
+  polygonOffset: boolean;
+  polygonOffsetFactor: number;
+  polygonOffsetUnits: number;
+  transparent: boolean;
+  dispose: ReturnType<typeof vi.fn>;
+}> = [];
+
+// Mutable habitat state — individual tests mutate this object then rerender.
+// Default mirrors the original fixed mock so existing tests are unaffected.
+const mockHabitatState = {
+  scores: { status: "idle" as "idle" | "done" | "error", data: [] as number[] },
+  activeSpecies: null as string | null,
+};
+
+// ---------------------------------------------------------------------------
+// vi.mock for three — factory form so we can inject tracked DataTexture and
+// MeshStandardMaterial constructors without touching the shared stub file.
+// All other exports are forwarded from the shared __tests__/mocks/three.ts.
+// ---------------------------------------------------------------------------
+vi.mock("three", async () => {
+  const mod = await import("../../__tests__/mocks/three");
+
+  class TrackedDataTexture {
+    minFilter: number = 0;
+    magFilter: number = 0;
+    wrapS: number = 0;
+    wrapT: number = 0;
+    needsUpdate: boolean = false;
+    dispose = vi.fn();
+    constructor(..._args: unknown[]) {
+      mockDataTextureInstances.push(this);
+    }
+  }
+
+  class TrackedMeshStandardMaterial {
+    opacity: number = 0;
+    transparent: boolean = false;
+    polygonOffset: boolean = false;
+    polygonOffsetFactor: number = 0;
+    polygonOffsetUnits: number = 0;
+    dispose = vi.fn();
+    constructor(_opts?: unknown) {
+      mockSkirtMaterialInstances.push(this);
+    }
+  }
+
+  return {
+    ...mod,
+    // Override with tracking versions.
+    DataTexture: TrackedDataTexture,
+    MeshStandardMaterial: TrackedMeshStandardMaterial,
+    // Constants used by the DataTexture construction in TerrainMesh.
+    RedFormat: 1028,
+    UnsignedByteType: 1009,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // @react-three/fiber — shared no-op stub.
@@ -169,8 +229,10 @@ vi.mock("@/lib/highlightStore", () => ({
 }));
 
 vi.mock("@/lib/habitatStore", () => ({
-  useHabitatStore: (sel: (s: Record<string, unknown>) => unknown) =>
-    sel({ scores: { status: "idle" }, activeSpecies: null }),
+  // Read from the mutable mockHabitatState so individual tests can override
+  // scores / activeSpecies and trigger the habitat DataTexture effect.
+  useHabitatStore: (sel: (s: typeof mockHabitatState) => unknown) =>
+    sel(mockHabitatState),
 }));
 
 vi.mock("@/lib/paletteStore", () => ({
@@ -244,6 +306,12 @@ function makeGrid(overrides: Partial<TerrainData> = {}): TerrainData {
 beforeEach(() => {
   mockGeoInstances.length = 0;
   mockSkirtGeoInstances.length = 0;
+  mockDataTextureInstances.length = 0;
+  mockSkirtMaterialInstances.length = 0;
+  // Reset mutable habitat state to the "idle" default so existing tests are
+  // unaffected and new tests start from a known baseline.
+  mockHabitatState.scores = { status: "idle", data: [] };
+  mockHabitatState.activeSpecies = null;
 });
 
 // ---------------------------------------------------------------------------
@@ -382,5 +450,135 @@ describe("TerrainMesh — net GPU budget: zero geometry leak across 5 grid switc
     for (const skirt of mockSkirtGeoInstances) {
       expect(skirt.dispose).toHaveBeenCalledTimes(1);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// habitatTexRef DataTexture lifecycle
+//
+// Guards against: the habitatScores effect failing to dispose() the old
+// DataTexture before uploading a replacement, which would silently grow GPU
+// memory on every species selection or score recompute.
+// ---------------------------------------------------------------------------
+describe("TerrainMesh — habitat DataTexture: dispose old texture before uploading new one", () => {
+  it("disposes the previous DataTexture when habitat scores are replaced", async () => {
+    const grid = makeGrid();
+
+    // Mount with idle scores — no DataTexture should be created.
+    mockHabitatState.scores = { status: "idle", data: [] };
+    const { rerender } = render(<TerrainMesh grid={grid} />);
+    expect(mockDataTextureInstances).toHaveLength(0);
+
+    // First set of scores arrives.
+    mockHabitatState.scores = {
+      status: "done",
+      data: Array.from({ length: 16 }, () => 0.5),
+    };
+    await act(async () => { rerender(<TerrainMesh grid={grid} />); });
+    expect(mockDataTextureInstances).toHaveLength(1);
+    const firstTex = mockDataTextureInstances[0]!;
+    expect(firstTex.dispose).not.toHaveBeenCalled();
+
+    // A second (updated) set of scores arrives for the same grid.
+    mockHabitatState.scores = {
+      status: "done",
+      data: Array.from({ length: 16 }, () => 0.8),
+    };
+    await act(async () => { rerender(<TerrainMesh grid={grid} />); });
+    expect(mockDataTextureInstances).toHaveLength(2);
+
+    // Old texture must be disposed exactly once before the new one was bound.
+    expect(firstTex.dispose).toHaveBeenCalledTimes(1);
+    // New texture must NOT be disposed yet.
+    expect(mockDataTextureInstances[1]!.dispose).not.toHaveBeenCalled();
+  });
+
+  it("disposes the active DataTexture on unmount", async () => {
+    const grid = makeGrid();
+    mockHabitatState.scores = {
+      status: "done",
+      data: Array.from({ length: 16 }, () => 0.5),
+    };
+
+    const { unmount } = render(<TerrainMesh grid={grid} />);
+    expect(mockDataTextureInstances).toHaveLength(1);
+    const tex = mockDataTextureInstances[0]!;
+    expect(tex.dispose).not.toHaveBeenCalled();
+
+    await act(async () => { unmount(); });
+    expect(tex.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("disposes the DataTexture and creates no new one when scores revert to idle", async () => {
+    const grid = makeGrid();
+    mockHabitatState.scores = {
+      status: "done",
+      data: Array.from({ length: 16 }, () => 0.5),
+    };
+
+    const { rerender } = render(<TerrainMesh grid={grid} />);
+    const firstTex = mockDataTextureInstances[0]!;
+
+    // Species deselected — scores go idle.
+    mockHabitatState.scores = { status: "idle", data: [] };
+    await act(async () => { rerender(<TerrainMesh grid={grid} />); });
+
+    // Old texture must be disposed; no new texture should have been created.
+    expect(mockDataTextureInstances).toHaveLength(1);
+    expect(firstTex.dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// skirtMaterial (MeshStandardMaterial) lifecycle
+//
+// Guards against: a future useMemo dep-array change that causes a new
+// MeshStandardMaterial on every render (or grid switch) without disposing the
+// old one, leaking GPU memory.
+// ---------------------------------------------------------------------------
+describe("TerrainMesh — skirtMaterial: created once, disposed exactly once on unmount", () => {
+  it("creates exactly one MeshStandardMaterial regardless of grid changes", async () => {
+    const gridA = makeGrid({ datasetId: "a" });
+    const gridB = makeGrid({ datasetId: "b" });
+    const gridC = makeGrid({ datasetId: "c" });
+
+    const { rerender } = render(<TerrainMesh grid={gridA} />);
+    // Only one instance should exist — skirtMaterial useMemo has [] deps.
+    expect(mockSkirtMaterialInstances).toHaveLength(1);
+
+    await act(async () => { rerender(<TerrainMesh grid={gridB} />); });
+    expect(mockSkirtMaterialInstances).toHaveLength(1);
+
+    await act(async () => { rerender(<TerrainMesh grid={gridC} />); });
+    expect(mockSkirtMaterialInstances).toHaveLength(1);
+  });
+
+  it("skirtMaterial.dispose() is called exactly once on unmount", async () => {
+    const grid = makeGrid();
+    const { unmount } = render(<TerrainMesh grid={grid} />);
+    const skirtMat = mockSkirtMaterialInstances[0]!;
+
+    expect(skirtMat.dispose).not.toHaveBeenCalled();
+
+    await act(async () => { unmount(); });
+    expect(skirtMat.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("skirtMaterial is not disposed during grid switches — only on unmount", async () => {
+    const grids = ["a", "b", "c", "d"].map((id) => makeGrid({ datasetId: id }));
+
+    const { rerender, unmount } = render(<TerrainMesh grid={grids[0]!} />);
+    const skirtMat = mockSkirtMaterialInstances[0]!;
+
+    for (let i = 1; i < grids.length; i++) {
+      await act(async () => { rerender(<TerrainMesh grid={grids[i]!} />); });
+    }
+
+    // Must not have been disposed during any grid switch.
+    expect(skirtMat.dispose).not.toHaveBeenCalled();
+
+    // Disposed exactly once on unmount.
+    await act(async () => { unmount(); });
+    expect(skirtMat.dispose).toHaveBeenCalledTimes(1);
   });
 });
