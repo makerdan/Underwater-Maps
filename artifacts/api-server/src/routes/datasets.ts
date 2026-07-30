@@ -2432,8 +2432,9 @@ router.post(
 // Accepts a PNG or JPEG contour-map image, runs OCR + line tracing, caches
 // the polylines in memory, and returns a JSON response.
 //
-// Response on success: { token, labels, polylineCount, width, height }
-// Response on extraction failure: 422 { error: "pdf_extract_error", details }
+// Response: always HTTP 200 text/event-stream (SSE).
+//   Success: data: { stage:"done", result:{ token, labels, polylineCount, width, height } }
+//   Failure: data: { stage:"error", error:"pdf_extract_error", details }
 //
 // The token expires in 5 minutes.  Pass it to /datasets/raster-commit to
 // complete the pipeline with (optionally corrected) labels.
@@ -2460,25 +2461,42 @@ router.post(
       return;
     }
 
+    // raster-extract always returns HTTP 200 with text/event-stream.
+    // Errors and results are communicated as SSE data events so that progress
+    // events can be streamed during long operations.
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.status(200);
+
+    function sendSseEvent(payload: Record<string, unknown>): void {
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    }
+
     let result: RasterExtractionResult;
     try {
       result = await extractRasterImageContoursOnly(file.buffer);
     } catch (err) {
       if (err instanceof PdfStageError) {
-        res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
-        return;
+        sendSseEvent({ stage: "error", error: `pdf_${err.stage}_error`, details: err.message });
+      } else {
+        sendSseEvent({ stage: "error", error: "extraction_failed", details: "An unexpected error occurred during extraction." });
       }
-      res.status(422).json({ error: "extraction_failed", details: "An unexpected error occurred during extraction." });
+      res.end();
       return;
     }
 
-    res.status(200).json({
-      token: result.token,
-      labels: result.labels,
-      polylineCount: result.polylineCount,
-      width: result.width,
-      height: result.height,
+    sendSseEvent({
+      stage: "done",
+      result: {
+        token: result.token,
+        labels: result.labels,
+        polylineCount: result.polylineCount,
+        width: result.width,
+        height: result.height,
+      },
     });
+    res.end();
   }),
 );
 
