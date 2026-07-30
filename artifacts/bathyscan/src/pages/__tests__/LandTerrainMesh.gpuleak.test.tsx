@@ -354,7 +354,8 @@ describe("LandTerrainMesh — Bug C: satellite texture disposed on unmount via r
 
     const { unmount } = render(<LandTerrainMesh />);
 
-    // Simulate the TextureLoader.load() callback delivering a texture.
+    // Deliver a fake texture via the TextureLoader callback so the satellite
+    // material branch (satelliteImagery && satelliteTexture) is reached.
     const loadArgs = mockTextureLoaderLoad.mock.calls[0];
     const onLoad = loadArgs?.[1] as
       | ((tex: { dispose: ReturnType<typeof vi.fn>; flipY: boolean; needsUpdate: boolean }) => void)
@@ -424,5 +425,94 @@ describe("LandTerrainMesh — Bug D: satellite material disposed on unmount", ()
 
     // Bug B cleanup disposes it once; the Bug D path must NOT add a second call.
     expect(proceduralMat!.dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Net budget — zero GPU leak across 5 consecutive landGrid switches
+//
+// Each switch must dispose the previous PlaneGeometry and proceduralMaterial
+// exactly once, so the number of live (not yet disposed) instances never
+// exceeds 1 at any point.  This is the render-side regression guard for
+// LandTerrainMesh that mirrors the TerrainMesh budget test: it will fail if
+// a future change re-introduces Bug A (geometry leak) or Bug B (material
+// leak) without being caught by the existing per-bug tests above.
+// ---------------------------------------------------------------------------
+describe("LandTerrainMesh — net GPU budget: zero geometry/material leak across 5 landGrid switches", () => {
+  it("disposes every superseded PlaneGeometry exactly once; exactly 1 live at all times", async () => {
+    mockLandGrid = makeGrid(0);
+    const { rerender } = render(<LandTerrainMesh />);
+
+    expect(mockGeoInstances).toHaveLength(1);
+
+    for (let i = 1; i <= 5; i++) {
+      await act(async () => {
+        mockLandGrid = makeGrid(i);
+        rerender(<LandTerrainMesh />);
+      });
+
+      // Every geometry created before the current one must be disposed.
+      for (let j = 0; j < i; j++) {
+        expect(mockGeoInstances[j]!.dispose).toHaveBeenCalledTimes(1);
+      }
+      // Current geometry must NOT be disposed yet.
+      expect(mockGeoInstances[i]!.dispose).not.toHaveBeenCalled();
+
+      // Invariant: exactly one PlaneGeometry is live at all times.
+      const liveCount = mockGeoInstances.filter((g) => g.dispose.mock.calls.length === 0).length;
+      expect(liveCount).toBe(1);
+    }
+  });
+
+  it("disposes every superseded proceduralMaterial exactly once; exactly 1 live at all times", async () => {
+    mockLandGrid = makeGrid(0);
+    const { rerender } = render(<LandTerrainMesh />);
+
+    // Procedural materials have vertexColors=true and no .map property.
+    const proceduralMats = () => mockMatInstances.filter((m) => !m.map);
+
+    expect(proceduralMats()).toHaveLength(1);
+
+    for (let i = 1; i <= 5; i++) {
+      await act(async () => {
+        mockLandGrid = makeGrid(i);
+        rerender(<LandTerrainMesh />);
+      });
+
+      const mats = proceduralMats();
+      // Every material created before the current one must be disposed.
+      for (let j = 0; j < i; j++) {
+        expect(mats[j]!.dispose).toHaveBeenCalledTimes(1);
+      }
+      // Current material must NOT be disposed yet.
+      expect(mats[i]!.dispose).not.toHaveBeenCalled();
+
+      // Invariant: exactly one proceduralMaterial is live at all times.
+      const liveCount = mats.filter((m) => m.dispose.mock.calls.length === 0).length;
+      expect(liveCount).toBe(1);
+    }
+  });
+
+  it("after unmount following 5 switches, no geometry or material instance is left live", async () => {
+    mockLandGrid = makeGrid(0);
+    const { rerender, unmount } = render(<LandTerrainMesh />);
+
+    for (let i = 1; i <= 5; i++) {
+      await act(async () => {
+        mockLandGrid = makeGrid(i);
+        rerender(<LandTerrainMesh />);
+      });
+    }
+
+    await act(async () => { unmount(); });
+
+    // Every PlaneGeometry must be disposed exactly once.
+    for (const geo of mockGeoInstances) {
+      expect(geo.dispose).toHaveBeenCalledTimes(1);
+    }
+    // Every proceduralMaterial (no .map) must be disposed exactly once.
+    for (const mat of mockMatInstances.filter((m) => !m.map)) {
+      expect(mat.dispose).toHaveBeenCalledTimes(1);
+    }
   });
 });

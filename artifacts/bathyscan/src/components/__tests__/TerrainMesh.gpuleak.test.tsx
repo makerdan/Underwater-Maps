@@ -311,3 +311,76 @@ describe("TerrainMesh — Bug D: no double-dispose of geometry on grid change", 
     expect(geoB.dispose).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Net budget — zero GPU leak across 5 consecutive grid switches
+//
+// Each switch must dispose the previous geometry/skirt exactly once, so the
+// number of live (not yet disposed) geometries never exceeds 1 at any point.
+// This is the regression guard described in task 3160: it will fail if
+// a future change re-introduces the double-dispose bug (geometry disposed
+// before the ref tracking it is updated) or a missed-dispose bug (cleanup
+// effect removed or dependency array widened).
+// ---------------------------------------------------------------------------
+describe("TerrainMesh — net GPU budget: zero geometry leak across 5 grid switches", () => {
+  it("disposes every superseded main geometry exactly once; exactly 1 live at all times", async () => {
+    const ids = ["a", "b", "c", "d", "e", "f"]; // 5 switches between 6 grids
+    const grids = ids.map((id) => makeGrid({ datasetId: id }));
+
+    const { rerender } = render(<TerrainMesh grid={grids[0]!} />);
+
+    for (let i = 1; i < grids.length; i++) {
+      await act(async () => { rerender(<TerrainMesh grid={grids[i]!} />); });
+
+      // Every geometry created so far except the current one must be disposed.
+      for (let j = 0; j < i; j++) {
+        expect(mockGeoInstances[j]!.dispose).toHaveBeenCalledTimes(1);
+      }
+      // Current geometry must NOT be disposed yet.
+      expect(mockGeoInstances[i]!.dispose).not.toHaveBeenCalled();
+
+      // Invariant: exactly one geometry is still live (not disposed) at all times.
+      const liveCount = mockGeoInstances.filter((g) => g.dispose.mock.calls.length === 0).length;
+      expect(liveCount).toBe(1);
+    }
+  });
+
+  it("disposes every superseded skirt geometry exactly once; exactly 1 live at all times", async () => {
+    const ids = ["a", "b", "c", "d", "e", "f"];
+    const grids = ids.map((id) => makeGrid({ datasetId: id }));
+
+    const { rerender } = render(<TerrainMesh grid={grids[0]!} />);
+
+    for (let i = 1; i < grids.length; i++) {
+      await act(async () => { rerender(<TerrainMesh grid={grids[i]!} />); });
+
+      for (let j = 0; j < i; j++) {
+        expect(mockSkirtGeoInstances[j]!.dispose).toHaveBeenCalledTimes(1);
+      }
+      expect(mockSkirtGeoInstances[i]!.dispose).not.toHaveBeenCalled();
+
+      const liveCount = mockSkirtGeoInstances.filter((g) => g.dispose.mock.calls.length === 0).length;
+      expect(liveCount).toBe(1);
+    }
+  });
+
+  it("after unmount following 5 switches, no geometry instance is left live", async () => {
+    const ids = ["a", "b", "c", "d", "e", "f"];
+    const grids = ids.map((id) => makeGrid({ datasetId: id }));
+
+    const { rerender, unmount } = render(<TerrainMesh grid={grids[0]!} />);
+    for (let i = 1; i < grids.length; i++) {
+      await act(async () => { rerender(<TerrainMesh grid={grids[i]!} />); });
+    }
+
+    await act(async () => { unmount(); });
+
+    // Every geometry (main + skirt) must now be disposed exactly once.
+    for (const geo of mockGeoInstances) {
+      expect(geo.dispose).toHaveBeenCalledTimes(1);
+    }
+    for (const skirt of mockSkirtGeoInstances) {
+      expect(skirt.dispose).toHaveBeenCalledTimes(1);
+    }
+  });
+});
