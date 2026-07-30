@@ -69,7 +69,7 @@ import { GpsExportDialog } from "@/components/GpsExportDialog";
 import { LoadingDial } from "@/components/LoadingDial";
 import { SUPPORTED_EXTENSIONS } from "@/components/FileUpload";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
-import { fetchJsonWithProgress } from "@/lib/fetchWithProgress";
+import { fetchJsonWithProgress, NoDataAvailableError } from "@/lib/fetchWithProgress";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
 import { GeoreferenceModal } from "@/components/GeoreferenceModal";
 import { useToast } from "@/hooks/use-toast";
@@ -825,8 +825,8 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // ─── User dataset pending + active tracking ────────────────────────────────
   const [pendingUserDatasetId, setPendingUserDatasetId] = useState<string | null>(null);
   const [activeUserDatasetId, setActiveUserDatasetId] = useState<string | null>(null);
-  const [userLoadError, setUserLoadError] = useState<{ id: string; name: string } | null>(null);
-  const [presetLoadError, setPresetLoadError] = useState<{ id: string; name: string } | null>(null);
+  const [userLoadError, setUserLoadError] = useState<{ id: string; name: string; noData?: boolean } | null>(null);
+  const [presetLoadError, setPresetLoadError] = useState<{ id: string; name: string; noData?: boolean } | null>(null);
 
   // ─── Upload progress (simulated, small-file path) ─────────────────────────
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -1063,7 +1063,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   useDatasetProximityStreaming({ bboxMap, onActivate: handleProximityActivate });
 
   // ─── Parallel fetch for pending PRESET dataset ─────────────────────────────
-  const { data: pendingTerrain, isError: terrainFetchError } = useGetDatasetsIdTerrain(
+  const { data: pendingTerrain, isError: terrainFetchError, error: terrainFetchRawError } = useGetDatasetsIdTerrain(
     pendingId ?? "",
     undefined,
     {
@@ -1075,11 +1075,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           pendingId ?? "",
           true,
         ),
+        retry: (_failureCount, error) => !(error instanceof NoDataAvailableError),
       },
     },
   );
 
-  const { data: pendingOverview, isError: overviewFetchError } = useGetDatasetsIdOverview(
+  const { data: pendingOverview, isError: overviewFetchError, error: overviewFetchRawError } = useGetDatasetsIdOverview(
     pendingId ?? "",
     {
       query: {
@@ -1090,6 +1091,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           pendingId ?? "",
           false,
         ),
+        retry: (_failureCount, error) => !(error instanceof NoDataAvailableError),
       },
     },
   );
@@ -1099,12 +1101,15 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     if (terrainFetchError || overviewFetchError) {
       const failedId = pendingId;
       const name = datasets?.find((d) => d.id === failedId)?.name ?? failedId;
-      setPresetLoadError({ id: failedId, name });
+      const noData =
+        terrainFetchRawError instanceof NoDataAvailableError ||
+        overviewFetchRawError instanceof NoDataAvailableError;
+      setPresetLoadError({ id: failedId, name, noData });
       setLoadingId(null);
       setPendingId(null);
       useActiveLoadStore.getState().fail(failedId);
     }
-  }, [pendingId, terrainFetchError, overviewFetchError, datasets]);
+  }, [pendingId, terrainFetchError, overviewFetchError, terrainFetchRawError, overviewFetchRawError, datasets]);
 
   useEffect(() => {
     if (!pendingId || !pendingTerrain || !pendingOverview) return;
@@ -1125,7 +1130,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   }, [pendingTerrain, pendingOverview, pendingId, setDatasetId, setTerrain]);
 
   // ─── Parallel fetch for pending USER dataset ──────────────────────────────
-  const { data: userPendingTerrain, isError: userTerrainError } = useGetUserDatasetsIdTerrain(
+  const { data: userPendingTerrain, isError: userTerrainError, error: userTerrainRawError } = useGetUserDatasetsIdTerrain(
     pendingUserDatasetId ?? "",
     {
       query: {
@@ -1136,11 +1141,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           pendingUserDatasetId ?? "",
           true,
         ),
+        retry: (_failureCount, error) => !(error instanceof NoDataAvailableError),
       },
     },
   );
 
-  const { data: userPendingOverview, isError: userOverviewError } = useGetUserDatasetsIdOverview(
+  const { data: userPendingOverview, isError: userOverviewError, error: userOverviewRawError } = useGetUserDatasetsIdOverview(
     pendingUserDatasetId ?? "",
     {
       query: {
@@ -1151,6 +1157,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           pendingUserDatasetId ?? "",
           false,
         ),
+        retry: (_failureCount, error) => !(error instanceof NoDataAvailableError),
       },
     },
   );
@@ -1160,12 +1167,15 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     if (userTerrainError || userOverviewError) {
       const failedId = pendingUserDatasetId;
       const name = userDatasets?.find((d) => d.id === failedId)?.name ?? failedId;
-      setUserLoadError({ id: failedId, name });
+      const noData =
+        userTerrainRawError instanceof NoDataAvailableError ||
+        userOverviewRawError instanceof NoDataAvailableError;
+      setUserLoadError({ id: failedId, name, noData });
       setLoadingId(null);
       setPendingUserDatasetId(null);
       useActiveLoadStore.getState().fail(failedId);
     }
-  }, [pendingUserDatasetId, userTerrainError, userOverviewError, userDatasets]);
+  }, [pendingUserDatasetId, userTerrainError, userOverviewError, userTerrainRawError, userOverviewRawError, userDatasets]);
 
   useEffect(() => {
     if (!pendingUserDatasetId || !userPendingTerrain || !userPendingOverview) return;
@@ -3087,38 +3097,55 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     style={{
                       margin: "4px 8px",
                       padding: "6px 8px",
-                      background: "rgba(239,68,68,0.08)",
-                      border: "1px solid rgba(239,68,68,0.35)",
+                      background: presetLoadError.noData
+                        ? "rgba(59,130,246,0.08)"
+                        : "rgba(239,68,68,0.08)",
+                      border: presetLoadError.noData
+                        ? "1px solid rgba(59,130,246,0.35)"
+                        : "1px solid rgba(239,68,68,0.35)",
                       borderRadius: 4,
                       fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                      color: "#fca5a5",
+                      color: presetLoadError.noData ? "#93c5fd" : "#fca5a5",
                       display: "flex",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       justifyContent: "space-between",
                       gap: 8,
                     }}
                   >
-                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-                      Failed to load "{presetLoadError.name}"
+                    <span style={{ minWidth: 0, lineHeight: 1.4 }}>
+                      {presetLoadError.noData ? (
+                        <>
+                          <span style={{ display: "block", fontWeight: 600 }}>No depth data for this location</span>
+                          <span style={{ display: "block", color: "#cbd5e1", fontSize: "calc(13px * var(--bs-font-scale, 1))", marginTop: 2 }}>
+                            No survey data is available here. Try a nearby preset or draw a custom area.
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
+                          Failed to load "{presetLoadError.name}"
+                        </span>
+                      )}
                     </span>
                     <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-                      <button
-                        data-testid="btn-retry-preset"
-                        onClick={handleRetryPreset}
-                        disabled={!!pendingId}
-                        style={{
-                          fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                          color: "#00e5ff",
-                          background: "transparent",
-                          border: "1px solid rgba(0,229,255,0.35)",
-                          borderRadius: 3,
-                          padding: "1px 6px",
-                          cursor: !!pendingId ? "not-allowed" : "pointer",
-                          opacity: !!pendingId ? 0.5 : 1,
-                        }}
-                      >
-                        {!!pendingId ? "Loading…" : "Retry"}
-                      </button>
+                      {!presetLoadError.noData && (
+                        <button
+                          data-testid="btn-retry-preset"
+                          onClick={handleRetryPreset}
+                          disabled={!!pendingId}
+                          style={{
+                            fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                            color: "#00e5ff",
+                            background: "transparent",
+                            border: "1px solid rgba(0,229,255,0.35)",
+                            borderRadius: 3,
+                            padding: "1px 6px",
+                            cursor: !!pendingId ? "not-allowed" : "pointer",
+                            opacity: !!pendingId ? 0.5 : 1,
+                          }}
+                        >
+                          {!!pendingId ? "Loading…" : "Retry"}
+                        </button>
+                      )}
                       <button
                         onClick={(e) => { e.stopPropagation(); setPresetLoadError(null); }}
                         style={{
@@ -3148,31 +3175,50 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         style={{
                           margin: "4px 8px 8px",
                           padding: "6px 8px",
-                          background: "rgba(239,68,68,0.08)",
-                          border: "1px solid rgba(239,68,68,0.35)",
-                          borderRadius: 4, fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#fca5a5",
-                          display: "flex", alignItems: "center",
+                          background: userLoadError.noData
+                            ? "rgba(59,130,246,0.08)"
+                            : "rgba(239,68,68,0.08)",
+                          border: userLoadError.noData
+                            ? "1px solid rgba(59,130,246,0.35)"
+                            : "1px solid rgba(239,68,68,0.35)",
+                          borderRadius: 4,
+                          fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                          color: userLoadError.noData ? "#93c5fd" : "#fca5a5",
+                          display: "flex", alignItems: "flex-start",
                           justifyContent: "space-between", gap: 8,
                         }}
                       >
-                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-                          Failed to load "{userLoadError.name}"
+                        <span style={{ minWidth: 0, lineHeight: 1.4 }}>
+                          {userLoadError.noData ? (
+                            <>
+                              <span style={{ display: "block", fontWeight: 600 }}>No depth data for this location</span>
+                              <span style={{ display: "block", color: "#cbd5e1", fontSize: "calc(13px * var(--bs-font-scale, 1))", marginTop: 2 }}>
+                                No survey data is available here. Try a nearby preset or draw a custom area.
+                              </span>
+                            </>
+                          ) : (
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
+                              Failed to load "{userLoadError.name}"
+                            </span>
+                          )}
                         </span>
                         <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-                          <button
-                            data-testid="btn-retry-user-dataset"
-                            onClick={handleRetryUserDataset}
-                            disabled={!!pendingUserDatasetId}
-                            style={{
-                              fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#00e5ff", background: "transparent",
-                              border: "1px solid rgba(0,229,255,0.35)", borderRadius: 3,
-                              padding: "1px 6px",
-                              cursor: !!pendingUserDatasetId ? "not-allowed" : "pointer",
-                              opacity: !!pendingUserDatasetId ? 0.5 : 1,
-                            }}
-                          >
-                            {!!pendingUserDatasetId ? "Loading…" : "Retry"}
-                          </button>
+                          {!userLoadError.noData && (
+                            <button
+                              data-testid="btn-retry-user-dataset"
+                              onClick={handleRetryUserDataset}
+                              disabled={!!pendingUserDatasetId}
+                              style={{
+                                fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#00e5ff", background: "transparent",
+                                border: "1px solid rgba(0,229,255,0.35)", borderRadius: 3,
+                                padding: "1px 6px",
+                                cursor: !!pendingUserDatasetId ? "not-allowed" : "pointer",
+                                opacity: !!pendingUserDatasetId ? 0.5 : 1,
+                              }}
+                            >
+                              {!!pendingUserDatasetId ? "Loading…" : "Retry"}
+                            </button>
+                          )}
                           <button
                             onClick={(e) => { e.stopPropagation(); setUserLoadError(null); }}
                             style={{

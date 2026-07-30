@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchJsonWithProgress } from "@/lib/fetchWithProgress";
+import { fetchJsonWithProgress, NoDataAvailableError } from "@/lib/fetchWithProgress";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 function makeStreamResponse(
@@ -162,5 +162,47 @@ describe("fetchJsonWithProgress", () => {
       ),
     );
     await expect(fetchJsonWithProgress("/x")).rejects.toThrow(/500/);
+  });
+
+  it("throws NoDataAvailableError on 503 with error:no_data body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "no_data" }), {
+          status: 503,
+          statusText: "Service Unavailable",
+        }),
+      ),
+    );
+    await expect(fetchJsonWithProgress("/x")).rejects.toBeInstanceOf(NoDataAvailableError);
+  });
+
+  it("throws a generic HTTP error on 503 without error:no_data body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("upstream timeout", { status: 503, statusText: "Service Unavailable" }),
+      ),
+    );
+    const err = await fetchJsonWithProgress("/x").catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(NoDataAvailableError);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/503/);
+  });
+
+  it("throws a generic HTTP error on 503 with a different error code in body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "rate_limited" }), {
+          status: 503,
+          statusText: "Service Unavailable",
+        }),
+      ),
+    );
+    const err = await fetchJsonWithProgress("/x").catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(NoDataAvailableError);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/503/);
   });
 });

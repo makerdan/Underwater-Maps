@@ -9,6 +9,21 @@
  */
 import { getAuthToken } from "@workspace/api-client-react";
 
+/**
+ * Thrown by fetchJsonWithProgress when the server responds HTTP 503 with
+ * `{ "error": "no_data" }`, indicating that every upstream bathymetry source
+ * was exhausted and no depth data exists for the requested location.
+ *
+ * Callers should NOT retry this error automatically — the server has already
+ * tried all available sources and will return the same response.
+ */
+export class NoDataAvailableError extends Error {
+  constructor() {
+    super("No survey data is available for this location.");
+    this.name = "NoDataAvailableError";
+  }
+}
+
 export interface ProgressEvent {
   loaded: number;
   total: number | null;
@@ -59,6 +74,22 @@ export async function fetchJsonWithProgress<T = unknown>(
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
+    if (response.status === 503) {
+      try {
+        const parsed = JSON.parse(body) as unknown;
+        if (
+          parsed !== null &&
+          typeof parsed === "object" &&
+          "error" in parsed &&
+          (parsed as Record<string, unknown>).error === "no_data"
+        ) {
+          throw new NoDataAvailableError();
+        }
+      } catch (e) {
+        // Re-throw NoDataAvailableError directly; parsing failures fall through.
+        if (e instanceof NoDataAvailableError) throw e;
+      }
+    }
     throw new Error(`HTTP ${response.status} ${response.statusText}: ${body.slice(0, 200)}`);
   }
 
