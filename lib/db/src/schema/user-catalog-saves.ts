@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { datasetFoldersTable } from "./dataset-folders.js";
 import { customDatasetsTable } from "./custom-datasets.js";
 
@@ -24,6 +24,7 @@ export const userCatalogSavesTable = pgTable("user_catalog_saves", {
   }),
 }, (table) => [
   index("user_catalog_saves_user_id_idx").on(table.userId),
+  uniqueIndex("user_catalog_saves_user_catalog_uniq").on(table.userId, table.catalogId),
 ]);
 
 export type UserCatalogSave = typeof userCatalogSavesTable.$inferSelect;

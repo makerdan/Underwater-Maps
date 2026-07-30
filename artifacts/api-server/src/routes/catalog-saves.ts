@@ -456,6 +456,8 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, as
   }
 
   // Create new save record in processing state.
+  // onConflictDoNothing handles the rare race where two concurrent requests
+  // both pass the "existing" check above and then race on the insert.
   const [created] = await db
     .insert(userCatalogSavesTable)
     .values({
@@ -463,10 +465,21 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, as
       catalogId,
       status: "processing",
     })
+    .onConflictDoNothing()
     .returning();
 
   if (!created) {
-    res.status(500).json({ error: "db_error", details: "Failed to create save record" });
+    // Race condition: a concurrent request created the row between our SELECT
+    // and this INSERT. Fetch and return the existing row instead of erroring.
+    const [conflicted] = await db
+      .select()
+      .from(userCatalogSavesTable)
+      .where(and(eq(userCatalogSavesTable.userId, userId), eq(userCatalogSavesTable.catalogId, catalogId)));
+    if (!conflicted) {
+      res.status(500).json({ error: "db_error", details: "Failed to create save record" });
+      return;
+    }
+    res.status(200).json(validateResponse(GetDatasetsMySavesResponseItem, formatSaveRow(conflicted, entry), "POST /api/datasets/catalog/:id/save (concurrent)"));
     return;
   }
 

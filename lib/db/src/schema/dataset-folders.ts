@@ -13,11 +13,18 @@ export const datasetFoldersTable = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (t) => ({
-    userIdIdx: index("dataset_folders_user_id_idx").on(t.userId),
-    uniqSiblingName: uniqueIndex("dataset_folders_unique_sibling_name")
-      .on(t.userId, t.parentId, sql`lower(${t.name})`),
-  }),
+  (t) => [
+    index("dataset_folders_user_id_idx").on(t.userId),
+    // Root-level folders (parent_id IS NULL): unique by (user_id, lower(name))
+    // using a partial index so NULL is not treated as distinct from itself.
+    uniqueIndex("dataset_folders_root_name_uniq")
+      .on(t.userId, sql`lower(${t.name})`)
+      .where(sql`${t.parentId} IS NULL`),
+    // Non-root folders: unique by (user_id, parent_id, lower(name)).
+    uniqueIndex("dataset_folders_child_name_uniq")
+      .on(t.userId, t.parentId, sql`lower(${t.name})`)
+      .where(sql`${t.parentId} IS NOT NULL`),
+  ],
 );
 
 export type DatasetFolder = typeof datasetFoldersTable.$inferSelect;

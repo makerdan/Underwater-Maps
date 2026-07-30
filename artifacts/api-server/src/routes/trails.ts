@@ -115,9 +115,15 @@ router.post("/trails", trailUploadRateLimit, requireAuth, dataMutationRateLimit,
       // Bulk-insert in chunks of 500 to avoid query size limits.
       // Yield between chunks so a large upload (up to 50 k points) does
       // not monopolise the Node.js event loop for its entire duration.
+      // onConflictDoNothing guards against retry-induced phantom points:
+      // if the client retries a failed upload the (trail_id, seq) unique
+      // index would otherwise produce a duplicate-key error.
       const CHUNK = 500;
       for (let i = 0; i < pointRows.length; i += CHUNK) {
-        await tx.insert(gpsTrailPointsTable).values(pointRows.slice(i, i + CHUNK));
+        await tx
+          .insert(gpsTrailPointsTable)
+          .values(pointRows.slice(i, i + CHUNK))
+          .onConflictDoNothing();
         if (i + CHUNK < pointRows.length) {
           await new Promise<void>((resolve) => setImmediate(resolve));
         }

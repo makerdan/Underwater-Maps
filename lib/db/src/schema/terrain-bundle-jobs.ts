@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, uuid, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, unique, index, check } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Tracks on-demand bathymetry bundle download jobs, one per user+preset.
@@ -11,6 +12,10 @@ import { pgTable, text, timestamp, uuid, unique, index } from "drizzle-orm/pg-co
  * GCS bundle path: users/{userId}/terrain/{presetId}.bundle.json
  *
  * Status flow: pending → running → complete | error
+ *
+ * Note: preset_id stores dataset/catalog identifiers (e.g. "gulf-of-maine-ncei")
+ * from ALL_PRESET_DATASETS or seeded catalog entries, NOT trolling preset UUIDs.
+ * It is deliberately kept as text to accommodate these string identifiers.
  */
 export const terrainBundleJobsTable = pgTable(
   "terrain_bundle_jobs",
@@ -35,6 +40,10 @@ export const terrainBundleJobsTable = pgTable(
     ),
     index("terrain_bundle_jobs_user_idx").on(table.userId),
     index("terrain_bundle_jobs_status_idx").on(table.status),
+    check(
+      "terrain_bundle_jobs_status_check",
+      sql`${table.status} IN ('pending', 'running', 'complete', 'error')`,
+    ),
   ],
 );
 

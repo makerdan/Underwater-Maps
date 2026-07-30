@@ -1,4 +1,6 @@
-import { pgTable, text, integer, boolean, timestamp, uuid, index } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, uuid, index, check } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { customDatasetsTable } from "./custom-datasets.js";
 
 /**
  * Persists background upload-processing job state across server restarts.
@@ -22,7 +24,10 @@ export const uploadJobsTable = pgTable("upload_jobs", {
   status: text("status").notNull().$type<"uploading" | "queued" | "processing" | "done" | "error">(),
   progress: integer("progress").notNull().default(0),
   error: text("error"),
-  datasetId: uuid("dataset_id"),
+  // FK to custom_datasets; nullified when the dataset is deleted.
+  datasetId: uuid("dataset_id").references(() => customDatasetsTable.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 
@@ -47,6 +52,10 @@ export const uploadJobsTable = pgTable("upload_jobs", {
   index("upload_jobs_user_id_idx").on(table.userId),
   index("upload_jobs_status_idx").on(table.status),
   index("upload_jobs_upload_id_idx").on(table.uploadId),
+  check(
+    "upload_jobs_status_check",
+    sql`${table.status} IN ('uploading', 'queued', 'processing', 'done', 'error')`,
+  ),
 ]);
 
 export type UploadJob = typeof uploadJobsTable.$inferSelect;
