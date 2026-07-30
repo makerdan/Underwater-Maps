@@ -83,7 +83,7 @@ const PresetDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => 
     });
     return () => {
       stale = true;
-      void (myEpoch, stale); // referenced so the guard is not tree-shaken
+      void myEpoch; void stale; // referenced so the guard is not tree-shaken
     };
   }, [datasetId, terrain, overview]);
 
@@ -132,7 +132,7 @@ const UserDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
     });
     return () => {
       stale = true;
-      void (myEpoch, stale);
+      void myEpoch; void stale;
     };
   }, [datasetId, terrain, overview]);
 
