@@ -282,6 +282,13 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       const existing = prev.visibleDatasets.find((v) => v.datasetId === datasetId);
       if (!existing) {
         // Loader can race ahead of the user removing a dataset — silently ignore.
+        //
+        // NOTE: this presence check does NOT protect against the re-add race.
+        // If dataset X is removed and immediately re-added, the entry for X is
+        // present again, so a stale in-flight completion for the OLD visibility
+        // instance would still write here. That race is prevented one layer up in
+        // VisibleDatasetsLoader via a per-component epoch counter — grids from a
+        // prior visibility cycle are rejected before this action is ever called.
         return prev;
       }
       const merged: VisibleDataset = {

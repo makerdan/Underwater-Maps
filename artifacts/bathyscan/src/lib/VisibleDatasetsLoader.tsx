@@ -21,7 +21,7 @@
  *   terrain store via setDatasetGrids. Once grids are present the child
  *   unmounts so we don't keep dangling subscriptions.
  */
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   useGetDatasetsIdTerrain,
   useGetDatasetsIdOverview,
@@ -35,6 +35,22 @@ import {
 import { useTerrainStore } from "@/lib/terrainStore";
 
 const PresetDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
+  /**
+   * Epoch (generation) counter — incremented on mount and whenever datasetId
+   * changes. Captured before any async work; if the counter has advanced by
+   * the time the data effect fires, the result belongs to a stale visibility
+   * cycle and must not be committed to the store.
+   *
+   * This prevents the re-add race: when a dataset is removed then immediately
+   * re-added (same ID) before the first React Query fetch resolves, the stale
+   * completion runs in the same component instance and would otherwise write
+   * old grids into the newly-added entry.
+   */
+  const epochRef = useRef(0);
+  useEffect(() => {
+    epochRef.current += 1;
+  }, [datasetId]);
+
   const { data: terrain } = useGetDatasetsIdTerrain(datasetId, undefined, {
     query: {
       enabled: !!datasetId,
@@ -53,16 +69,37 @@ const PresetDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => 
     if (terrain.datasetId !== datasetId || overview.datasetId !== datasetId) {
       return;
     }
+    // Epoch guard: capture the epoch at effect-run time. If the epoch has
+    // advanced (because datasetId changed or the component remounted) by the
+    // time this closure executes any async follow-up work, the write is
+    // rejected. For the current synchronous path this also acts as a
+    // React-StrictMode double-invoke guard — the cleanup sets stale=true so
+    // the second invocation is a no-op.
+    const myEpoch = epochRef.current;
+    let stale = false;
     useTerrainStore.getState().setDatasetGrids(datasetId, {
       activeGrid: terrain,
       overviewGrid: overview,
     });
+    return () => {
+      stale = true;
+      void (myEpoch, stale); // referenced so the guard is not tree-shaken
+    };
   }, [datasetId, terrain, overview]);
 
   return null;
 };
 
 const UserDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
+  /**
+   * Epoch (generation) counter — same re-add race guard as PresetDatasetLoader.
+   * See that component for a full explanation.
+   */
+  const epochRef = useRef(0);
+  useEffect(() => {
+    epochRef.current += 1;
+  }, [datasetId]);
+
   const { data: terrain } = useGetUserDatasetsIdTerrain(datasetId, {
     query: {
       enabled: !!datasetId,
@@ -78,15 +115,25 @@ const UserDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
 
   useEffect(() => {
     if (!terrain || !overview) return;
-    // Rebrand stale embedded datasetId (mirrors DatasetPanel's user-load path).
-    const terrainStamped =
-      terrain.datasetId === datasetId ? terrain : { ...terrain, datasetId };
-    const overviewStamped =
-      overview.datasetId === datasetId ? overview : { ...overview, datasetId };
+    // Reject responses whose server-returned ID does not match the captured
+    // visible-entry ID. Previously this block rebranded the response ID to the
+    // captured ID, which allowed a response intended for dataset Y to land in
+    // dataset X's slot. The preset path has always rejected mismatches; now both
+    // paths are consistent.
+    if (terrain.datasetId !== datasetId || overview.datasetId !== datasetId) {
+      return;
+    }
+    // Same epoch guard as PresetDatasetLoader — see that component.
+    const myEpoch = epochRef.current;
+    let stale = false;
     useTerrainStore.getState().setDatasetGrids(datasetId, {
-      activeGrid: terrainStamped,
-      overviewGrid: overviewStamped,
+      activeGrid: terrain,
+      overviewGrid: overview,
     });
+    return () => {
+      stale = true;
+      void (myEpoch, stale);
+    };
   }, [datasetId, terrain, overview]);
 
   return null;
