@@ -2444,65 +2444,6 @@ router.post(
   }),
 );
 
-// ── POST /datasets/upload/chunk ───────────────────────────────────────────────
-// Receives one 5 MB slice of a large file. Fields (all required):
-//   uploadId    — stable UUID chosen by the client for this upload session
-//   chunkIndex  — 0-based index of this slice
-//   totalChunks — total number of slices the client will send
-//   file        — the binary slice (multipart/form-data)
-// The first chunk (chunkIndex === 0) creates the upload session bound to the
-// caller's userId. Subsequent chunks must come from the same authenticated user.
-// Returns { received: chunkIndex }.
-router.post(
-  "/datasets/upload/chunk",
-  requireAuth,
-  uploadChunkMiddleware.single("file"),
-  multerErrorHandler,
-  validateBody(ChunkUploadBodySchema, "POST /api/datasets/upload/chunk"),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const file = req.file;
-    if (!file) {
-      res.status(400).json({ error: "missing_file", details: "No image file uploaded. Send a PNG or JPEG as the 'file' field." });
-      return;
-    }
-
-    const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
-
-    const sendEvent = (payload: Record<string, unknown>): void => {
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    };
-
-    const sendEvent = (payload: Record<string, unknown>): void => {
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    };
-    let result: RasterExtractionResult;
-    try {
-      result = await extractRasterImageContoursOnly(file.buffer);
-    } catch (err) {
-      if (err instanceof PdfStageError) {
-        sendEvent({ stage: "error", error: `pdf_${err.stage}_error`, details: err.message });
-      } else {
-        sendEvent({ stage: "error", error: "extraction_failed", details: "An unexpected error occurred during extraction." });
-      }
-      res.end();
-      return;
-    }
-
-    sendEvent({ stage: "ocr", label: "Reading depth labels…", pct: 85 });
-    sendEvent({
-      stage: "done",
-      result: {
-        token: result.token,
-        labels: result.labels,
-        polylineCount: result.polylineCount,
-        width: result.width,
-        height: result.height,
-      },
-    });
-    res.end();
-  }),
-);
-
 // ── POST /datasets/raster-commit ──────────────────────────────────────────────
 // Step 2 of the two-step raster contour pipeline.
 // Accepts a cached extraction token (from /datasets/raster-extract), the
@@ -2719,31 +2660,80 @@ router.post(
       }
     } else {
       // Subsequent chunks: verify ownership.
-    let session = uploadSessions.get(uploadId);
+      let session = uploadSessions.get(uploadId);
 
-    if (!session) {
-      // DB fallback — handles the case where the server restarted between the
-      // last chunk arriving and finalize being called, clearing the in-memory
-      // uploadSessions map.  The "uploading" row (written on chunk 0) carries
-      // the uploadId, userId, and sessionJobId so we can reconstruct the
-      // session and accept the finalize call without requiring a full re-upload.
-      const [dbJob] = await db
-        .select({
-          userId: uploadJobsTable.userId,
-          sessionJobId: uploadJobsTable.id,
-        })
-        .from(uploadJobsTable)
-        .where(eq(uploadJobsTable.uploadId, uploadId));
+      if (!session) {
+        // DB fallback — handles the case where the server restarted between the
+        // last chunk arriving and finalize being called, clearing the in-memory
+        // uploadSessions map.  The "uploading" row (written on chunk 0) carries
+        // the uploadId, userId, and sessionJobId so we can reconstruct the
+        // session and accept the finalize call without requiring a full re-upload.
+        const [dbJob] = await db
+          .select({
+            userId: uploadJobsTable.userId,
+            sessionJobId: uploadJobsTable.id,
+          })
+          .from(uploadJobsTable)
+          .where(eq(uploadJobsTable.uploadId, uploadId));
+
+        if (dbJob) {
+          session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, lastActivityAt: Date.now() };
+          uploadSessions.set(uploadId, session);
+        }
+      }
+
+      if (!session) {
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(404).json({ error: "session_not_found", details: "Upload session not found. Start from chunk 0." });
+        return;
+      }
+      if (session.userId !== userId) {
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(403).json({ error: "forbidden", details: "Upload session belongs to a different user." });
+        return;
+      }
+      // Refresh activity so an in-progress upload is never swept mid-flight.
+      session.lastActivityAt = Date.now();
+    }
+
+    // Rename the temp file to its canonical <uploadId>-chunk-<index> path.
+    const dest = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${chunkIndex}`);
+    try {
+      await fs.promises.rename(file.path, dest);
+    } catch {
+      await fs.promises.unlink(file.path).catch(() => undefined);
+      res.status(500).json({ error: "chunk_write_error", details: "Failed to store chunk." });
+      return;
+    }
+
+    // Update chunksReceived in DB after successful disk write.
+    // Chunk 0 already set chunksReceived=1 in createUploadSessionRow; only
+    // subsequent chunks need an increment here.
+    if (chunkIndex > 0) {
+      void updateChunksReceivedInDB(uploadId, chunkIndex + 1);
+    }
+
+    res.json(validateResponse(UploadDatasetChunkResponse, { received: chunkIndex }, "POST /api/datasets/upload/chunk"));
+  }),
+);
+
+// ── GET /datasets/upload/chunk/status/:uploadId ───────────────────────────────
+// Returns which chunk indices have been received on disk for the given upload
+// session.  Used by the frontend auto-resume logic after a server reconnect:
+// the client fetches this endpoint to determine the next missing chunk and
+// resumes the upload from that point rather than starting over.
+//
+// Session ownership is checked against the in-memory map first.  After a
+// server restart where uploadSessions has been cleared, the handler falls back
+// to the DB (the upload_jobs row stores the uploadId) so the caller's identity
+// can still be verified without requiring chunk 0 to be re-sent.
+router.get(
+  "/datasets/upload/chunk/status/:uploadId",
+  requireAuth,
+  validateParams(UploadIdParamSchema, "GET /api/datasets/upload/chunk/status/:uploadId"),
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { uploadId } = res.locals.parsedParams as { uploadId: string };
     const userId = (req as AuthenticatedRequest).clerkUserId;
-
-      const existingSession = uploadSessions.get(uploadId);
-
-      const existingSession = uploadSessions.get(uploadId);
-
-      const existingSession = uploadSessions.get(uploadId);
-
-      const existingSession = uploadSessions.get(uploadId);
 
     // Fast path: in-memory session (current process lifetime).
     let session = uploadSessions.get(uploadId);
@@ -3041,15 +3031,6 @@ router.post(
   validateBody(GcsUrlBodySchema, "POST /api/datasets/upload/request-gcs-url"),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { fileName } = res.locals.parsedBody;
-    const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
-
-    const sendEvent = (payload: Record<string, unknown>): void => {
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    };
-
-    const sendEvent = (payload: Record<string, unknown>): void => {
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    };
     const userId = (req as AuthenticatedRequest).clerkUserId;
     const { uploadUrl, objectKey } = await signDatasetUploadUrl(userId, fileName);
     res.json(validateResponse(RequestGcsUploadUrlResponse, { uploadUrl, objectKey }, "POST /api/datasets/upload/request-gcs-url"));

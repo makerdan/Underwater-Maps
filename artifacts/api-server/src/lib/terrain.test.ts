@@ -6,13 +6,17 @@
  * selected for each dataset category, and that error fallthrough works.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as nodeFs from "node:fs";
 import {
   resolveBathymetrySource,
   getDatasetSourcePriority,
   extractArcGisDepthM,
   DATASET_SOURCE_PRIORITY,
+  BUNDLED_TERRAIN,
+  buildTerrainGrid,
   type DatasetMeta,
 } from "./terrain.js";
+import { clearAllCaches } from "./cacheRegistry.js";
 import { writeArrayBuffer } from "geotiff";
 
 // ---------------------------------------------------------------------------
@@ -453,5 +457,112 @@ describe("extractArcGisDepthM unit handling", () => {
 
   it("returns null when no depth field is present", () => {
     expect(extractArcGisDepthM({ objectid: 5 })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildTerrainGrid — in-flight deduplication
+//
+// The `_terrainInFlight` map inside terrain.ts ensures that concurrent cache
+// misses for the same dataset+resolution key fire exactly one upstream
+// request. These tests verify that guarantee is not accidentally removed by a
+// future refactor.
+//
+// Strategy: spy on `node:fs` promises to prevent disk-cache hits (so every
+// call reaches the in-flight gate), then fire two concurrent calls via
+// Promise.all before either can resolve. The JavaScript event-loop ordering
+// guarantees:
+//   1. Call 1 runs synchronously until the first `await` inside the inner
+//      IIFE (`await readDiskCache`), registers its promise in `_terrainInFlight`,
+//      and returns.
+//   2. Call 2 then runs synchronously, finds the key already in
+//      `_terrainInFlight`, and returns the **same** promise.
+// Both therefore resolve to the same object reference — proof of dedup.
+// ---------------------------------------------------------------------------
+
+describe("buildTerrainGrid — in-flight deduplication", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    // setup.ts already calls clearAllCaches() globally, but be explicit here
+    // because the bundled-terrain short-circuit path depends on the memory
+    // cache being empty.
+    clearAllCaches();
+
+    // Prevent disk-cache reads from returning hits so every call goes through
+    // the in-flight gate (readDiskCache catches ENOENT and returns null).
+    vi.spyOn(nodeFs.promises, "readFile").mockRejectedValue(
+      Object.assign(new Error("ENOENT: no such file or directory"), {
+        code: "ENOENT",
+      }),
+    );
+    vi.spyOn(nodeFs.promises, "mkdir").mockResolvedValue(undefined);
+    vi.spyOn(nodeFs.promises, "writeFile").mockResolvedValue(undefined);
+    vi.spyOn(nodeFs.promises, "rename").mockResolvedValue(undefined);
+
+    // Provide a valid GEBCO GeoTIFF response for any upstream WCS fetch so the
+    // resolver can complete when the bundled-survey source is unavailable.
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => makeOkResponse(VALID_GEBCO_GRID),
+    ) as ReturnType<typeof vi.spyOn>;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // ── (A) bundled-survey path ───────────────────────────────────────────────
+  // "lake-ray-roberts" is the only dataset in ALL_PRESET_DATASETS. Its
+  // DATASET_SOURCE_PRIORITY leads with "bundled-survey", which reads from
+  // BUNDLED_TERRAIN["lake-ray-roberts"] (loaded synchronously at module init
+  // from demoTerrain.gen.json). No fetch call is needed.
+  it("(A) bundled path: two concurrent calls share one promise, fetch never called", async () => {
+    // Ensure the bundle is present (it was loaded at module-init and the spy
+    // on fsPromises.readFile only affects async reads, not the sync readFileSync
+    // used by loadBundledTerrain).
+    if (BUNDLED_TERRAIN["lake-ray-roberts"] === null) {
+      // Bundle file missing in this environment — skip; covered by test (B).
+      return;
+    }
+
+    const [r1, r2] = await Promise.all([
+      buildTerrainGrid("lake-ray-roberts", 32),
+      buildTerrainGrid("lake-ray-roberts", 32),
+    ]);
+
+    expect(r1).not.toBeNull();
+    expect(r2).not.toBeNull();
+    // Same object reference proves both calls resolved from the same promise.
+    expect(r1).toBe(r2);
+    // Bundle path requires no upstream fetch.
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // ── (B) upstream-fetch path ───────────────────────────────────────────────
+  // Temporarily null the bundle so the resolver falls through to "gebco"
+  // (the final ranked source for lake-ray-roberts). This exercises the
+  // path where the dedup map prevents a duplicate WCS call.
+  it("(B) fetch path: two concurrent calls issue exactly one upstream fetch", async () => {
+    const savedBundle = BUNDLED_TERRAIN["lake-ray-roberts"];
+    BUNDLED_TERRAIN["lake-ray-roberts"] = null;
+    try {
+      const [r1, r2] = await Promise.all([
+        buildTerrainGrid("lake-ray-roberts", 32),
+        buildTerrainGrid("lake-ray-roberts", 32),
+      ]);
+
+      expect(r1).not.toBeNull();
+      expect(r2).not.toBeNull();
+      // Same object reference proves both calls resolved from the same promise.
+      expect(r1).toBe(r2);
+      // The WCS endpoint must have been called exactly once — dedup prevented
+      // the second concurrent call from firing its own upstream request.
+      const wcsCalls = fetchSpy.mock.calls.filter(([url]) =>
+        String(url).includes("DEM_mosaics"),
+      );
+      expect(wcsCalls).toHaveLength(1);
+    } finally {
+      BUNDLED_TERRAIN["lake-ray-roberts"] = savedBundle ?? null;
+    }
   });
 });
