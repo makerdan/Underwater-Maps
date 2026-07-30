@@ -280,4 +280,93 @@ describe("useDatasetProximityStreaming hook — timer integration", () => {
     expect(ids).not.toContain("pinned");
     expect(ids).toHaveLength(3);
   });
+
+  it("does NOT activate a nearby candidate when all active datasets lack a bbox (break path)", () => {
+    // Regression guard: when ALL active datasets have no geographic bbox, the
+    // hook cannot determine which to evict and must not activate new candidates.
+    // Lines ~196-204 of useDatasetProximityStreaming: if activeWithBbox is
+    // empty, farthest is undefined → break → onActivate is never called.
+    useCameraStore.setState({ cameraPosition: { known: true, lon: 0, lat: 0 } });
+
+    // Fill all 3 slots with datasets that have NO bbox (e.g. user uploads).
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("no-bbox-1") });
+    useTerrainStore.getState().toggleVisible({ datasetId: "no-bbox-2", source: "user" });
+    useTerrainStore.getState().toggleVisible({ datasetId: "no-bbox-3", source: "user" });
+    // nearby-c is selected but at cap, so queued.
+    useTerrainStore.getState().addSelected("nearby-c", "preset");
+
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(3);
+    expect(useTerrainStore.getState().selectedIds).toContain("nearby-c");
+
+    const onActivate = vi.fn();
+
+    renderHook(() => useDatasetProximityStreaming({
+      bboxMap: {
+        // Only the candidate has a bbox; the 3 active datasets have no bbox entry.
+        "nearby-c": NEAR_BBOX,
+      },
+      onActivate,
+    }));
+
+    act(() => { vi.advanceTimersByTime(600); });
+
+    // No active dataset has a bbox → hook breaks without activating the candidate.
+    expect(onActivate).not.toHaveBeenCalled();
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(3);
+    const ids = useTerrainStore.getState().visibleDatasets.map((v) => v.datasetId);
+    expect(ids).not.toContain("nearby-c");
+  });
+
+  it("evicts the farthest active bbox dataset (2 of 3 have bbox) to admit a nearby candidate", () => {
+    // Scenario: 3 active datasets, 2 with bboxes within UNLOAD_THRESHOLD_M
+    // (so step-1 does NOT evict them), 1 with no bbox.  A nearby selected-but-
+    // inactive candidate needs a slot.  The hook must pick the farthest of the
+    // two bbox-bearing active datasets and evict it.
+    useCameraStore.setState({ cameraPosition: { known: true, lon: 0, lat: 0 } });
+
+    // "close-active" bbox edge is ~444 m from camera — inside UNLOAD_THRESHOLD_M.
+    const CLOSE_ACTIVE_BBOX: DatasetBbox = {
+      minLon: 0.004, maxLon: 0.006, minLat: -0.001, maxLat: 0.001,
+    };
+    // "far-active" bbox edge is ~2 km from camera — still inside UNLOAD_THRESHOLD_M.
+    const FAR_ACTIVE_BBOX: DatasetBbox = {
+      minLon: 0.018, maxLon: 0.022, minLat: -0.001, maxLat: 0.001,
+    };
+
+    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("no-bbox-active") });
+    useTerrainStore.getState().toggleVisible({ datasetId: "close-active", source: "preset" });
+    useTerrainStore.getState().toggleVisible({ datasetId: "far-active", source: "preset" });
+    // At cap. Select the nearby candidate — queued in selectedIds.
+    useTerrainStore.getState().addSelected("nearby-cand", "preset");
+
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(3);
+    expect(useTerrainStore.getState().selectedIds).toContain("nearby-cand");
+
+    const onActivate = vi.fn((id: string, source) => {
+      useTerrainStore.getState().autoActivate(id, source);
+    });
+
+    renderHook(() => useDatasetProximityStreaming({
+      bboxMap: {
+        "close-active": CLOSE_ACTIVE_BBOX,
+        "far-active": FAR_ACTIVE_BBOX,
+        "nearby-cand": NEAR_BBOX,
+      },
+      onActivate,
+    }));
+
+    act(() => { vi.advanceTimersByTime(600); });
+
+    const ids = useTerrainStore.getState().visibleDatasets.map((v) => v.datasetId);
+    // "far-active" was the farthest bbox-bearing active dataset and must be evicted.
+    expect(ids).not.toContain("far-active");
+    // "nearby-cand" must have been admitted via onActivate.
+    expect(onActivate).toHaveBeenCalledWith("nearby-cand", "preset");
+    expect(ids).toContain("nearby-cand");
+    // Total active count stays at MAX_ACTIVE_DATASETS (3).
+    expect(ids).toHaveLength(3);
+    // "close-active" and "no-bbox-active" are unaffected.
+    expect(ids).toContain("close-active");
+    expect(ids).toContain("no-bbox-active");
+  });
 });

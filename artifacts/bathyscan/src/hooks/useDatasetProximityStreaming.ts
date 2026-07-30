@@ -200,7 +200,17 @@ export function useDatasetProximityStreaming({
           if (farthest) {
             useTerrainStore.getState().autoEvict(farthest.id);
           } else {
-            // All active datasets have no bbox — don't evict them.
+            // INTENTIONAL DESIGN: all active datasets lack a geographic bbox
+            // (e.g. all slots are occupied by user uploads). We cannot make a
+            // distance-based eviction decision, so we leave the active set
+            // unchanged and skip every remaining candidate this tick.
+            //
+            // Rationale: evicting a no-bbox upload arbitrarily (e.g. LRU) would
+            // silently discard data the user just loaded.  The safer contract is
+            // to preserve active no-bbox datasets and let the user manually
+            // deselect one if they want a proximity-streamed catalog dataset.
+            // This behaviour is explicitly tested in
+            // useDatasetProximityStreaming.test.ts ("break path" suite).
             break;
           }
         }
