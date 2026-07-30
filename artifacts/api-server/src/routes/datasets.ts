@@ -2517,7 +2517,11 @@ const RasterCommitBodySchema = z.object({
       value: z.number().positive("depth value must be positive"),
       text: z.string(),
     }))
-    .min(1, "At least one depth label is required"),
+    .min(1, "At least one depth label is required")
+    .refine(
+      (labels) => new Set(labels.map((l) => l.value)).size >= 2,
+      "At least 2 distinct depth values are required — a single depth produces a flat grid with no terrain relief",
+    ),
   pdfBbox: z.string().min(1),
   pdfDepthUnit: z.enum(["feet", "meters"]).default("feet"),
   resolution: z.coerce.number().int().min(32).max(512).default(256),

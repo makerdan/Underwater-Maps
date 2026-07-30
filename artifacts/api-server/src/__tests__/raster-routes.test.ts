@@ -309,6 +309,26 @@ describe("POST /api/datasets/raster-commit", () => {
     expect(res.body).toHaveProperty("error", "invalid_param");
   });
 
+  it("returns 400 invalid_param when correctedLabels has only a single distinct depth value", async () => {
+    // A single unique depth value means interpolation will produce a uniform
+    // flat grid — visually indistinguishable from a broken upload. The route
+    // must reject this before calling commitCachedExtraction.
+    const res = await request(app)
+      .post("/api/datasets/raster-commit")
+      .set(AUTHED)
+      .send({
+        ...VALID_COMMIT_BODY,
+        correctedLabels: [
+          { x: 100, y: 200, value: 15, text: "15" },
+          { x: 200, y: 300, value: 15, text: "15" },
+          { x: 300, y: 400, value: 15, text: "15" },
+        ],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error", "invalid_param");
+    expect(String(res.body.details)).toMatch(/distinct/i);
+  });
+
   it("returns 400 invalid_param when pdfBbox is malformed JSON", async () => {
     const res = await request(app)
       .post("/api/datasets/raster-commit")
