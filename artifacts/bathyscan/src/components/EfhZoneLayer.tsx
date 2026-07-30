@@ -17,7 +17,7 @@
  *   worldX = ((lon - minLon) / lonRange) * WORLD_SIZE - WORLD_SIZE / 2
  *   worldZ = ((lat - minLat) / latRange) * WORLD_SIZE - WORLD_SIZE / 2
  */
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
@@ -33,7 +33,7 @@ import {
 import type { EfhFeature, EfhSpeciesProperties } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ThreeEvent } from "@react-three/fiber";
-import { toast } from "@/hooks/use-toast";
+
 import { polygonIntersectsBbox } from "@/lib/efhBboxFilter";
 import type { Bbox } from "@/lib/efhBboxFilter";
 /** UUID format: custom (user-uploaded) dataset IDs. */
@@ -258,29 +258,6 @@ export const EfhZoneLayer: React.FC = () => {
   useEffect(() => {
     clearHiddenEfhSpecies();
   }, [datasetId]); // eslint-disable-line react-hooks/exhaustive-deps -- clearHiddenEfhSpecies is a Zustand setter (stable ref)
-
-  // Fire a one-shot toast when the EFH overlay is enabled over synthetic terrain.
-  // A ref guards against re-firing on every render: it is set to the datasetId
-  // at the moment the toast fires, and cleared whenever the overlay turns off.
-  const syntheticToastFiredForRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!efhOverlayEnabled) {
-      syntheticToastFiredForRef.current = null;
-      return;
-    }
-    if (!terrain) return;
-    const isSynthetic =
-      terrain.dataSource === "synthetic" || terrain.synthetic === true;
-    if (!isSynthetic) return;
-    if (syntheticToastFiredForRef.current === datasetId) return;
-    syntheticToastFiredForRef.current = datasetId;
-    toast({
-      title: "No bathymetric data available",
-      description:
-        "This area uses procedurally generated terrain — the EFH overlay may be incomplete or inaccurate.",
-      variant: "destructive",
-    });
-  }, [efhOverlayEnabled, terrain, datasetId]);
 
   // Free GPU buffers when zones change or the component unmounts
   useEffect(() => {

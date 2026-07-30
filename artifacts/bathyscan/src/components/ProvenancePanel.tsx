@@ -27,7 +27,6 @@ interface ProvenancePanelProps {
 type DataSource =
   | "ncei"
   | "gebco"
-  | "synthetic"
   | "twdb"
   | "usace"
   | "usgs-3dep";
@@ -47,13 +46,6 @@ const SOURCE_META: Record<
     color: "#a78bfa",
     description: "General Bathymetric Chart of the Oceans (~400 m global grid, GEBCO/SRTM15+).",
     creditUrl: "https://www.gebco.net/data-products/gridded-bathymetry-data",
-  },
-  synthetic: {
-    label: "Simulated",
-    color: "#f59e0b",
-    description:
-      "Procedurally generated terrain. Real upstream data sources (NCEI, GEBCO) were unreachable.",
-    creditUrl: "",
   },
   "usgs-3dep": {
     label: "USGS 3DEP",
@@ -99,8 +91,7 @@ export const ProvenancePanel: React.FC<ProvenancePanelProps> = ({
   const showCopernicusBadge = terrain.hasTopography || landGridLoaded;
 
   const sourceKey: DataSource =
-    (terrain.dataSource as DataSource | undefined) ??
-    (terrain.synthetic ? "synthetic" : "gebco");
+    (terrain.dataSource as DataSource | undefined) ?? "gebco";
 
   const src = SOURCE_META[sourceKey] ?? SOURCE_META.gebco;
 

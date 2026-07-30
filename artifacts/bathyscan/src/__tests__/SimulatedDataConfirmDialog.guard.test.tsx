@@ -42,7 +42,7 @@ import { useSimulatedDataStore } from "@/lib/simulatedDataStore";
 
 function makePreview(): DatasetPreview {
   return {
-    dataSource: "synthetic",
+    dataSource: "unknown",
     syntheticReason: "upstream bathymetry services unreachable",
     bbox: { minLon: -134, maxLon: -132, minLat: 55, maxLat: 56.5 },
   } as unknown as DatasetPreview;

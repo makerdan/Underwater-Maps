@@ -1,14 +1,7 @@
 /**
- * Component tests for EfhZoneLayer — synthetic-terrain toast warning.
+ * Component tests for EfhZoneLayer — bbox clipping.
  *
  * Covers:
- * - When efhOverlayEnabled is toggled on while terrain.dataSource is "synthetic",
- *   the toast fires exactly once.
- * - When efhOverlayEnabled is toggled off and back on, the toast fires again
- *   (ref guard resets on overlay-off).
- * - When terrain is NOT synthetic, no toast is fired.
- * - When terrain.synthetic === true (alternate flag), the toast fires.
- * - When the overlay is enabled but terrain is null, no toast fires.
  * - Zones whose polygon is entirely outside the dataset bbox are not rendered
  *   (component returns null when all features are clipped out).
  *
@@ -16,18 +9,11 @@
  * - Keep mockEfhData undefined and habitatPolygons null so that activeFeatures
  *   is null → zones = [] → component returns null, preventing any attempt to
  *   render R3F/Three.js primitives inside jsdom.
- * - Drive efhOverlayEnabled through useUiStore.setState() and flush effects
- *   via act().
+ * - Drive efhOverlayEnabled through useUiStore.setState().
  */
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, act } from "@testing-library/react";
-
-// ── Toast spy ──────────────────────────────────────────────────────────────────
-// Must be hoisted so the vi.mock factory (which is itself hoisted to the top of
-// the file) can reference it without a temporal dead zone error.
-
-const { mockToast } = vi.hoisted(() => ({ mockToast: vi.fn() }));
+import { render } from "@testing-library/react";
 
 // Stub the heavy Three.js module graph so vitest skips loading ~3–4 s of
 // native WebGL code during jsdom runs.  EfhZoneLayer's render path returns
@@ -74,17 +60,11 @@ vi.mock("three", () => {
   };
 });
 
-vi.mock("@/hooks/use-toast", () => ({
-  toast: mockToast,
-  useToast: () => ({ toast: mockToast }),
-}));
-
 // ── Configurable terrain mock ──────────────────────────────────────────────────
 
 interface MockTerrain {
   datasetId: string;
   dataSource?: string;
-  synthetic?: boolean;
   habitatPolygons: null;
   minLon: number;
   maxLon: number;
@@ -94,7 +74,7 @@ interface MockTerrain {
 
 let mockTerrain: MockTerrain | null = {
   datasetId: "ds-test",
-  dataSource: "synthetic",
+  dataSource: "ncei",
   habitatPolygons: null,
   minLon: -150,
   maxLon: -140,
@@ -173,10 +153,9 @@ function resetUiStore(overrides: Partial<ReturnType<typeof useUiStore.getState>>
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  mockToast.mockClear();
   mockTerrain = {
     datasetId: "ds-test",
-    dataSource: "synthetic",
+    dataSource: "ncei",
     habitatPolygons: null,
     minLon: -150,
     maxLon: -140,
@@ -184,130 +163,6 @@ beforeEach(() => {
     maxLat: 60,
   };
   resetUiStore();
-});
-
-describe("EfhZoneLayer — synthetic terrain toast", () => {
-  it("fires the toast exactly once when the overlay is enabled over synthetic terrain", () => {
-    resetUiStore({ efhOverlayEnabled: true });
-
-    act(() => {
-      render(<EfhZoneLayer />);
-    });
-
-    expect(mockToast).toHaveBeenCalledTimes(1);
-    expect(mockToast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "No bathymetric data available",
-        variant: "destructive",
-      }),
-    );
-  });
-
-  it("does not fire the toast a second time when re-rendered with the overlay still on", () => {
-    resetUiStore({ efhOverlayEnabled: true });
-
-    const { rerender } = render(<EfhZoneLayer />);
-
-    act(() => {
-      rerender(<EfhZoneLayer />);
-    });
-
-    expect(mockToast).toHaveBeenCalledTimes(1);
-  });
-
-  it("fires the toast again after toggling the overlay off and back on", () => {
-    resetUiStore({ efhOverlayEnabled: true });
-
-    const { rerender } = render(<EfhZoneLayer />);
-
-    expect(mockToast).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      useUiStore.setState({ ...useUiStore.getState(), efhOverlayEnabled: false });
-      rerender(<EfhZoneLayer />);
-    });
-
-    act(() => {
-      useUiStore.setState({ ...useUiStore.getState(), efhOverlayEnabled: true });
-      rerender(<EfhZoneLayer />);
-    });
-
-    expect(mockToast).toHaveBeenCalledTimes(2);
-  });
-
-  it("does NOT fire the toast when terrain is not synthetic", () => {
-    mockTerrain = {
-      datasetId: "ds-real",
-      dataSource: "noaa",
-      habitatPolygons: null,
-      minLon: -150,
-      maxLon: -140,
-      minLat: 55,
-      maxLat: 60,
-    };
-    resetUiStore({ efhOverlayEnabled: true });
-
-    act(() => {
-      render(<EfhZoneLayer />);
-    });
-
-    expect(mockToast).not.toHaveBeenCalled();
-  });
-
-  it("fires the toast when terrain.synthetic===true (alternate flag)", () => {
-    mockTerrain = {
-      datasetId: "ds-syn2",
-      synthetic: true,
-      habitatPolygons: null,
-      minLon: -150,
-      maxLon: -140,
-      minLat: 55,
-      maxLat: 60,
-    };
-    resetUiStore({ efhOverlayEnabled: true });
-
-    act(() => {
-      render(<EfhZoneLayer />);
-    });
-
-    expect(mockToast).toHaveBeenCalledTimes(1);
-    expect(mockToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "No bathymetric data available" }),
-    );
-  });
-
-  it("does NOT fire the toast when terrain is null", () => {
-    mockTerrain = null;
-    resetUiStore({ efhOverlayEnabled: true });
-
-    act(() => {
-      render(<EfhZoneLayer />);
-    });
-
-    expect(mockToast).not.toHaveBeenCalled();
-  });
-
-  it("does NOT fire the toast when the overlay is disabled", () => {
-    resetUiStore({ efhOverlayEnabled: false });
-
-    act(() => {
-      render(<EfhZoneLayer />);
-    });
-
-    expect(mockToast).not.toHaveBeenCalled();
-  });
-
-  it("fires toast once per dataset, not again for same dataset on re-render", () => {
-    resetUiStore({ efhOverlayEnabled: true });
-
-    const { rerender } = render(<EfhZoneLayer />);
-
-    for (let i = 0; i < 5; i++) {
-      act(() => { rerender(<EfhZoneLayer />); });
-    }
-
-    expect(mockToast).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe("EfhZoneLayer — bbox clipping (zones outside bbox are excluded)", () => {

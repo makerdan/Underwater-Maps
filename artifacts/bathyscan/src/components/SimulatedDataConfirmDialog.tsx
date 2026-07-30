@@ -76,11 +76,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
   if (!pending) return null;
 
   const { datasetName, preview, onConfirm } = pending;
-  const reason =
-    preview.syntheticReason ??
-    (preview.dataSource === "synthetic"
-      ? "upstream bathymetry services unreachable"
-      : "could not verify data source");
+  const reason = preview.syntheticReason ?? "could not verify data source";
   const isUnknown = preview.dataSource === "unknown";
   const bboxLabel =
     preview.bbox.maxLon !== 0 || preview.bbox.minLon !== 0

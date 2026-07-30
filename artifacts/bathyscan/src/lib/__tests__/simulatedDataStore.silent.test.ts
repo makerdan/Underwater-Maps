@@ -124,8 +124,8 @@ describe("requestDatasetSwitch — suppressed mode (session-wide suppress)", () 
 });
 
 describe("requestDatasetSwitch — non-silent mode (dialog preserved)", () => {
-  it("sets pending in the store when preview resolves synthetic and silent is not set", async () => {
-    fetchQueryMock.mockResolvedValue(makePreview("synthetic"));
+  it("sets pending in the store when preview resolves unknown and silent is not set", async () => {
+    fetchQueryMock.mockResolvedValue(makePreview("unknown"));
     const onConfirm = vi.fn();
 
     await requestDatasetSwitch({
@@ -138,7 +138,7 @@ describe("requestDatasetSwitch — non-silent mode (dialog preserved)", () => {
     const pending = useSimulatedDataStore.getState().pending;
     expect(pending).not.toBeNull();
     expect(pending?.datasetId).toBe("ds-test");
-    expect(pending?.preview.dataSource).toBe("synthetic");
+    expect(pending?.preview.dataSource).toBe("unknown");
   });
 
   it("sets pending when preview rejects (non-silent) — treat as unknown", async () => {

@@ -33,7 +33,7 @@ function openPending(over: Partial<NonNullable<ReturnType<typeof useSimulatedDat
         datasetId: "ds-1",
         name: "Test Dataset",
         bbox: { minLon: -1, minLat: 1, maxLon: -2, maxLat: 2 },
-        dataSource: "synthetic",
+        dataSource: "unknown",
         syntheticReason: "Upstream bathymetry services unreachable",
       },
       onConfirm,

@@ -98,10 +98,10 @@ describe("requestDatasetSwitch — retry on transient failure", () => {
     expect(fetchQueryMock).toHaveBeenCalledTimes(2);
   });
 
-  it("opens the dialog when retry returns synthetic data", async () => {
+  it("opens the dialog when retry returns unknown data", async () => {
     fetchQueryMock
       .mockRejectedValueOnce(new Error("network hiccup"))
-      .mockResolvedValueOnce(makePreview("synthetic"));
+      .mockResolvedValueOnce(makePreview("unknown"));
 
     const onConfirm = vi.fn();
 
@@ -114,7 +114,7 @@ describe("requestDatasetSwitch — retry on transient failure", () => {
     expect(onConfirm).not.toHaveBeenCalled();
     const pending = useSimulatedDataStore.getState().pending;
     expect(pending).not.toBeNull();
-    expect(pending?.preview.dataSource).toBe("synthetic");
+    expect(pending?.preview.dataSource).toBe("unknown");
     expect(fetchQueryMock).toHaveBeenCalledTimes(2);
   });
 

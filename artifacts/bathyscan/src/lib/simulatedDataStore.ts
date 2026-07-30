@@ -181,7 +181,7 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
     return;
   }
 
-  const needsWarning = preview.dataSource === "synthetic" || preview.dataSource === "unknown";
+  const needsWarning = preview.dataSource === "unknown";
   if (!needsWarning || suppressed) {
     onConfirm();
     return;

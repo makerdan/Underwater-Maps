@@ -99,10 +99,7 @@ export const DepthProfilePanel: React.FC = () => {
   const hoverIndex = useDepthProfileStore((s) => s.hoverIndex);
   const setHoverIndex = useDepthProfileStore((s) => s.setHoverIndex);
   const units = useSettingsStore((s) => s.units);
-  const { datasetId, terrain } = useAppState();
-  const isSynthetic =
-    (terrain as { dataSource?: string; synthetic?: boolean } | null)?.dataSource === "synthetic" ||
-    (terrain as { dataSource?: string; synthetic?: boolean } | null)?.synthetic === true;
+  const { datasetId } = useAppState();
   const svgRef = React.useRef<SVGSVGElement | null>(null);
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const mountedRef = React.useRef(true);
@@ -615,8 +612,8 @@ export const DepthProfilePanel: React.FC = () => {
         )}
       </div>
 
-      {/* Save as route — only for path profiles with ≥2 waypoints on real (non-synthetic) terrain */}
-      {isPathProfile && profile.waypoints && profile.waypoints.length >= 2 && !isSynthetic && (
+      {/* Save as route — only for path profiles with ≥2 waypoints */}
+      {isPathProfile && profile.waypoints && profile.waypoints.length >= 2 && (
         <div
           data-testid="depth-profile-save-route"
           style={{
