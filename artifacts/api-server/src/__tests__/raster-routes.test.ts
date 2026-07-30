@@ -212,6 +212,32 @@ describe("POST /api/datasets/raster-extract", () => {
     expect(String(errEvent?.["details"])).toMatch(/contour/i);
   });
 
+  /**
+   * SSE contract guard — regression test for the raster-extract endpoint
+   * silently reverting to a plain 422 JSON response.
+   *
+   * The endpoint MUST return HTTP 200 text/event-stream regardless of whether
+   * the extraction succeeds or fails.  A future refactor that breaks the SSE
+   * contract (e.g. returning res.status(422).json({...}) on error) will be
+   * caught by these two assertions even if the event-payload tests above are
+   * accidentally skipped or misconfigured.
+   */
+  it("always returns HTTP 200 text/event-stream even when extraction throws (SSE contract guard)", async () => {
+    mockExtractRasterImageContoursOnly.mockRejectedValue(
+      new PdfStageError("extract", "synthetic failure to verify SSE contract"),
+    );
+    const res = await request(app)
+      .post("/api/datasets/raster-extract")
+      .set(AUTHED)
+      .attach("file", FAKE_PNG, { filename: "contract-guard.png", contentType: "image/png" });
+
+    // HTTP status must be 200 — never 422, 500, or any other error code.
+    expect(res.status).toBe(200);
+
+    // Content-Type must be text/event-stream — never application/json or similar.
+    expect(res.headers["content-type"]).toMatch(/text\/event-stream/);
+  });
+
   it("returns SSE done event with token, labels, polylineCount, width, height on success", async () => {
     mockExtractRasterImageContoursOnly.mockResolvedValue(FAKE_EXTRACT_RESULT);
     const res = await request(app)
