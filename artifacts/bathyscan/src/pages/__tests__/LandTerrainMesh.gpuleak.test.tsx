@@ -373,3 +373,56 @@ describe("LandTerrainMesh — Bug C: satellite texture disposed on unmount via r
     expect(fakeTexture.dispose).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Bug D — satellite-textured MeshStandardMaterial disposed on unmount
+// ---------------------------------------------------------------------------
+describe("LandTerrainMesh — Bug D: satellite material disposed on unmount", () => {
+  it("disposes the satellite MeshStandardMaterial when unmounting with satellite imagery active", async () => {
+    mockLandGrid = makeGrid(0);
+    mockTileUrl = "blob:fake-tile-url";
+    mockSatelliteImagery = true;
+
+    const { unmount } = render(<LandTerrainMesh />);
+
+    // Deliver a fake texture via the TextureLoader callback so the satellite
+    // material branch (satelliteImagery && satelliteTexture) is reached.
+    const loadArgs = mockTextureLoaderLoad.mock.calls[0];
+    const onLoad = loadArgs?.[1] as
+      | ((tex: { dispose: ReturnType<typeof vi.fn>; flipY: boolean; needsUpdate: boolean }) => void)
+      | undefined;
+    expect(onLoad).toBeDefined();
+
+    const fakeTexture = { dispose: vi.fn(), flipY: false, needsUpdate: false };
+    await act(async () => { onLoad!(fakeTexture); });
+
+    // After the texture loads the component creates a satellite MeshStandardMaterial
+    // (map !== undefined/null). Find it in the tracked instances.
+    const satelliteMat = mockMatInstances.find((m) => m.map != null);
+    expect(satelliteMat).toBeDefined();
+    expect(satelliteMat!.dispose).not.toHaveBeenCalled();
+
+    // Unmount — the ref-based unmount cleanup must dispose the satellite
+    // material (Bug D fix).
+    await act(async () => { unmount(); });
+    expect(satelliteMat!.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT dispose the procedural material on unmount via the satellite-material cleanup path", async () => {
+    // When satellite imagery is off, the active material is the procedural one
+    // (no .map). The satellite-material unmount cleanup must not dispose it —
+    // that is owned by prevProceduralMaterialRef (Bug B).
+    mockLandGrid = makeGrid(0);
+    mockSatelliteImagery = false;
+
+    const { unmount } = render(<LandTerrainMesh />);
+
+    const proceduralMat = mockMatInstances.find((m) => !m.map);
+    expect(proceduralMat).toBeDefined();
+
+    await act(async () => { unmount(); });
+
+    // Bug B cleanup disposes it once; the Bug D path must NOT add a second call.
+    expect(proceduralMat!.dispose).toHaveBeenCalledTimes(1);
+  });
+});

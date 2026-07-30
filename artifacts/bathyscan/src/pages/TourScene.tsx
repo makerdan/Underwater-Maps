@@ -293,6 +293,17 @@ export const LandTerrainMesh: React.FC = () => {
     prevMaterialRef.current = material;
   }, [material]);
 
+  // Dispose satellite material on unmount — reads the ref so it always holds
+  // the live material at teardown time, not the mount-time snapshot.
+  // Procedural materials are excluded (no .map) because their lifecycle is
+  // owned by prevProceduralMaterialRef above (Bug B fix).
+  useEffect(() => () => {
+    const mat = prevMaterialRef.current;
+    if (mat && (mat as THREE.MeshStandardMaterial).map) {
+      mat.dispose();
+    }
+  }, []);
+
   if (!geometry || !material) return null;
 
   // Dev audit hint: after any change to LandTerrainMesh disposal logic, verify
