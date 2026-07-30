@@ -36,6 +36,7 @@ import { validateResponse } from "../middlewares/validateResponse.js";
 import {
   ALL_PRESET_DATASETS,
   buildTerrainGrid,
+  NoDataError,
   parseXyzCsv,
   gridPoints,
   previewDataset,
@@ -1541,6 +1542,15 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
 
     let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
     const grid = await fetchCopernicusDem({ minLon, minLat, maxLon, maxLat }, gridSize);
+  try {
+    grid = await buildTerrainGrid(id, resolution, { smoothing });
+  } catch (err) {
+    if (err instanceof NoDataError) {
+      res.status(503).json({ error: "no_data", details: err.message });
+      return;
+    }
+    throw err;
+  }
   if (!grid) {
     res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
     return;
@@ -1661,6 +1671,15 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
 
     let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
     const grid = await fetchCopernicusDem({ minLon, minLat, maxLon, maxLat }, gridSize);
+  try {
+    grid = await buildTerrainGrid(id, 64, { smoothing });
+  } catch (err) {
+    if (err instanceof NoDataError) {
+      res.status(503).json({ error: "no_data", details: err.message });
+      return;
+    }
+    throw err;
+  }
   if (!grid) {
     res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
     return;

@@ -22,9 +22,29 @@ import { logger } from "./logger.js";
 
 const TERRAIN_CACHE_DIR = "/tmp/terrain-tile-cache";
 
-/** In-memory cache: key → PNG buffer */
+/**
+ * Tile cache version stamp. Bump whenever the tile pipeline changes in a way
+ * that makes previously cached tiles stale (e.g. new compositing algorithm,
+ * different USGS endpoint, changed colour mapping).
+ * Incorporated into both the memory cache key and the disk filename so stale
+ * tiles from a previous deployment are automatically treated as misses.
+ *
+ * History:
+ *   1 — initial tile cache format
+ */
+export const TILE_CACHE_VERSION = 1;
+
+/** In-memory cache: versioned key → PNG buffer */
 const terrainMemoryCache = new Map<string, Buffer>();
 registerCache(() => terrainMemoryCache.clear());
+
+/**
+ * In-flight promise map for concurrent tile requests.
+ * Concurrent cache misses for the same tile fire exactly one USGS request;
+ * additional waiters join the existing promise. Entries are removed in
+ * `finally` once the promise settles.
+ */
+const _tileInFlight = new Map<string, Promise<Buffer>>();
 
 /**
  * USGS National Map Shaded Relief — publicly accessible, no API key required.
@@ -37,15 +57,24 @@ function terrainCacheKey(
   bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
   size: number,
 ): string {
-  const payload = `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat},${size}`;
+  // Include TILE_CACHE_VERSION in the hash payload so bumping the version
+  // automatically invalidates all previously cached tiles.
+  const payload = `v${TILE_CACHE_VERSION}:${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat},${size}`;
   return createHash("sha256").update(payload).digest("hex");
 }
 
 async function readTerrainDiskCache(key: string): Promise<Buffer | null> {
+  const file = path.join(TERRAIN_CACHE_DIR, `${key}.png`);
   try {
-    const file = path.join(TERRAIN_CACHE_DIR, `${key}.png`);
     return await fsPromises.readFile(file);
-  } catch {
+  } catch (err) {
+    // ENOENT is a normal cache miss — all other errors indicate infrastructure
+    // problems (permissions, corrupted FS, etc.) that should surface explicitly.
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    logger.error(
+      { err, key },
+      `[terrain-tile] Unexpected disk error reading cache key ${key}: ${(err as Error).message}`,
+    );
     return null;
   }
 }
@@ -54,7 +83,11 @@ async function writeTerrainDiskCache(key: string, data: Buffer): Promise<void> {
   try {
     await fsPromises.mkdir(TERRAIN_CACHE_DIR, { recursive: true });
     const file = path.join(TERRAIN_CACHE_DIR, `${key}.png`);
-    await fsPromises.writeFile(file, data);
+    const tmp = `${file}.tmp`;
+    // Atomic write: write to a temp file then rename so a crash mid-write
+    // never leaves a corrupt entry that subsequent requests silently accept.
+    await fsPromises.writeFile(tmp, data);
+    await fsPromises.rename(tmp, file);
   } catch (err) {
     logger.warn({ err, key }, `[terrain-tile] Failed to write disk cache for ${key}: ${(err as Error).message}`);
   }
@@ -186,61 +219,77 @@ export async function fetchTerrainTile(
 ): Promise<Buffer> {
   const key = terrainCacheKey(bbox, size);
 
+  // 1. Memory cache (fastest path — no I/O).
   const inMemory = terrainMemoryCache.get(key);
   if (inMemory) return inMemory;
 
-  const onDisk = await readTerrainDiskCache(key);
-  if (onDisk) {
-    terrainMemoryCache.set(key, onDisk);
-    return onDisk;
-  }
+  // 2. In-flight deduplication — concurrent misses for the same tile fire
+  //    exactly one USGS request; additional waiters join the existing promise.
+  const inflight = _tileInFlight.get(key);
+  if (inflight) return inflight;
 
-  let data: Buffer;
+  // 3. Register the work promise before the first await so any callers that
+  //    arrive while the disk read or upstream fetch is in progress join it.
+  const promise: Promise<Buffer> = (async (): Promise<Buffer> => {
+    // 3a. Disk cache
+    const onDisk = await readTerrainDiskCache(key);
+    if (onDisk) {
+      terrainMemoryCache.set(key, onDisk);
+      return onDisk;
+    }
 
-  if (bbox.minLon > bbox.maxLon) {
-    // ── Antimeridian-crossing bbox ────────────────────────────────────────────
-    // Split at ±180° and composite the two halves.
-    const westSpan = 180 - bbox.minLon;
-    const eastSpan = bbox.maxLon - -180;
-    const totalSpan = westSpan + eastSpan;
+    // 3b. Upstream USGS fetch
+    let data: Buffer;
 
-    // Clamp to [1, size-1] so both halves are at least 1 px wide and their
-    // sum is exactly `size` (no rounding overshoot).
-    const westPxWidth = Math.min(size - 1, Math.max(1, Math.round((westSpan / totalSpan) * size)));
-    const eastPxWidth = size - westPxWidth;
+    if (bbox.minLon > bbox.maxLon) {
+      // ── Antimeridian-crossing bbox ──────────────────────────────────────────
+      // Split at ±180° and composite the two halves.
+      const westSpan = 180 - bbox.minLon;
+      const eastSpan = bbox.maxLon - -180;
+      const totalSpan = westSpan + eastSpan;
 
-    logger.info(
-      { bbox, westPxWidth, eastPxWidth, size },
-      `[terrain-tile] Antimeridian split: west (${bbox.minLon}→180, ${westPxWidth}px) + east (-180→${bbox.maxLon}, ${eastPxWidth}px) at ${size}px tall`,
-    );
+      // Clamp to [1, size-1] so both halves are at least 1 px wide and their
+      // sum is exactly `size` (no rounding overshoot).
+      const westPxWidth = Math.min(size - 1, Math.max(1, Math.round((westSpan / totalSpan) * size)));
+      const eastPxWidth = size - westPxWidth;
 
-    const [westBuf, eastBuf] = await Promise.all([
-      fetchTerrainTileFromUsgs(
-        { minLon: bbox.minLon, minLat: bbox.minLat, maxLon: 180, maxLat: bbox.maxLat },
-        westPxWidth,
-        size,
-      ),
-      fetchTerrainTileFromUsgs(
-        { minLon: -180, minLat: bbox.minLat, maxLon: bbox.maxLon, maxLat: bbox.maxLat },
-        eastPxWidth,
-        size,
-      ),
-    ]);
+      logger.info(
+        { bbox, westPxWidth, eastPxWidth, size },
+        `[terrain-tile] Antimeridian split: west (${bbox.minLon}→180, ${westPxWidth}px) + east (-180→${bbox.maxLon}, ${eastPxWidth}px) at ${size}px tall`,
+      );
 
-    data = await compositeHorizontal(westBuf, eastBuf);
-    logger.info({ bytes: data.length }, `[terrain-tile] Antimeridian composite complete — ${data.length} bytes`);
-  } else {
-    // ── Normal (non-crossing) bbox ────────────────────────────────────────────
-    logger.info(
-      { bbox, size },
-      `[terrain-tile] Fetching USGS Shaded Relief for bbox (${bbox.minLon},${bbox.minLat})→(${bbox.maxLon},${bbox.maxLat}) at ${size}×${size}…`,
-    );
-    data = await fetchTerrainTileFromUsgs(bbox, size, size);
-    logger.info({ bytes: data.length }, `[terrain-tile] Fetch complete — ${data.length} bytes`);
-  }
+      const [westBuf, eastBuf] = await Promise.all([
+        fetchTerrainTileFromUsgs(
+          { minLon: bbox.minLon, minLat: bbox.minLat, maxLon: 180, maxLat: bbox.maxLat },
+          westPxWidth,
+          size,
+        ),
+        fetchTerrainTileFromUsgs(
+          { minLon: -180, minLat: bbox.minLat, maxLon: bbox.maxLon, maxLat: bbox.maxLat },
+          eastPxWidth,
+          size,
+        ),
+      ]);
 
-  terrainMemoryCache.set(key, data);
-  void writeTerrainDiskCache(key, data);
+      data = await compositeHorizontal(westBuf, eastBuf);
+      logger.info({ bytes: data.length }, `[terrain-tile] Antimeridian composite complete — ${data.length} bytes`);
+    } else {
+      // ── Normal (non-crossing) bbox ──────────────────────────────────────────
+      logger.info(
+        { bbox, size },
+        `[terrain-tile] Fetching USGS Shaded Relief for bbox (${bbox.minLon},${bbox.minLat})→(${bbox.maxLon},${bbox.maxLat}) at ${size}×${size}…`,
+      );
+      data = await fetchTerrainTileFromUsgs(bbox, size, size);
+      logger.info({ bytes: data.length }, `[terrain-tile] Fetch complete — ${data.length} bytes`);
+    }
 
-  return data;
+    terrainMemoryCache.set(key, data);
+    void writeTerrainDiskCache(key, data);
+    return data;
+  })().finally(() => {
+    _tileInFlight.delete(key);
+  });
+
+  _tileInFlight.set(key, promise);
+  return promise;
 }

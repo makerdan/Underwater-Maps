@@ -29,6 +29,22 @@ export type TerrainDataSource =
   | "nysdec"
   | "mn-dnr";
 
+/**
+ * Thrown by `buildTerrainGrid` when the dataset exists in the preset registry
+ * but every ranked upstream bathymetry source fails. Callers should surface a
+ * 503 "no data available" response rather than a generic 404.
+ */
+export class NoDataError extends Error {
+  readonly datasetId: string;
+  constructor(datasetId: string) {
+    super(
+      `All upstream bathymetry sources failed for '${datasetId}' — no data available`,
+    );
+    this.name = "NoDataError";
+    this.datasetId = datasetId;
+  }
+}
+
 export interface TerrainGrid {
   datasetId: string;
   name: string;
@@ -1255,8 +1271,10 @@ async function fetchNceiGrid(
         }
         depths[row * resolution + col] = depth;
         topography[row * resolution + col] = elevation;
-        if (depth < minDepth) minDepth = depth;
-        if (depth > maxDepth) maxDepth = depth;
+        // Guard: filter NaN/Infinity before updating range (matches the pattern
+        // used in buildTerrainGrid's post-smoothing range recomputation).
+        if (isFinite(depth) && depth < minDepth) minDepth = depth;
+        if (isFinite(depth) && depth > maxDepth) maxDepth = depth;
       }
     }
   }
@@ -1771,33 +1789,59 @@ const DISK_CACHE_DIR = "/tmp/gebco-cache";
 const memoryCache = new Map<string, TerrainGrid>();
 registerCache(() => memoryCache.clear());
 
+/**
+ * In-flight promise map for concurrent terrain grid requests.
+ * When two requests for the same cache key arrive simultaneously and both miss
+ * the memory and disk caches, the second waits on the first's promise rather
+ * than issuing a duplicate upstream fetch. Entries are removed in `finally`
+ * once the promise settles (hit or error), so the map stays small.
+ */
+const _terrainInFlight = new Map<string, Promise<TerrainGrid | null>>();
+
 async function readDiskCache(key: string): Promise<TerrainGrid | null> {
+  const file = path.join(DISK_CACHE_DIR, `${key}.json`);
+  let raw: string;
   try {
-    const file = path.join(DISK_CACHE_DIR, `${key}.json`);
-    const raw = await fsPromises.readFile(file, "utf8");
-    const parsed = JSON.parse(raw) as TerrainGrid;
-    const version = parsed.version ?? 1;
-    if (version < TERRAIN_CACHE_VERSION) {
-      logger.info(
-        { key, cacheVersion: version, currentVersion: TERRAIN_CACHE_VERSION },
-        `[terrain] Discarding stale cache ${key} (v${version} < v${TERRAIN_CACHE_VERSION})`,
-      );
-      // Best-effort removal so the stale file doesn't linger on disk.
-      fsPromises.unlink(file).catch(() => {});
-      return null;
-    }
-    return parsed;
+    raw = await fsPromises.readFile(file, "utf8");
   } catch {
     return null;
   }
+  let parsed: TerrainGrid;
+  try {
+    parsed = JSON.parse(raw) as TerrainGrid;
+  } catch {
+    // JSON parse failure indicates a corrupt (mid-write) file — delete it so it
+    // doesn't block future writes, then treat as a cache miss.
+    logger.warn({ key }, `[terrain] Corrupt disk cache ${key} — deleting`);
+    fsPromises.unlink(file).catch(() => {});
+    return null;
+  }
+  const version = parsed.version ?? 1;
+  if (version < TERRAIN_CACHE_VERSION) {
+    logger.info(
+      { key, cacheVersion: version, currentVersion: TERRAIN_CACHE_VERSION },
+      `[terrain] Discarding stale cache ${key} (v${version} < v${TERRAIN_CACHE_VERSION})`,
+    );
+    fsPromises.unlink(file).catch(() => {});
+    return null;
+  }
+  // Basic schema check — guard against partially-written or truncated files.
+  if (!Array.isArray(parsed.depths) || typeof parsed.width !== "number") {
+    logger.warn({ key }, `[terrain] Disk cache ${key} failed schema check — deleting`);
+    fsPromises.unlink(file).catch(() => {});
+    return null;
+  }
+  return parsed;
 }
 
 async function writeDiskCache(key: string, grid: TerrainGrid): Promise<void> {
   try {
     await fsPromises.mkdir(DISK_CACHE_DIR, { recursive: true });
     const file = path.join(DISK_CACHE_DIR, `${key}.json`);
+    const tmp = `${file}.tmp`;
     const stamped: TerrainGrid = { ...grid, version: TERRAIN_CACHE_VERSION };
-    await fsPromises.writeFile(file, JSON.stringify(stamped), "utf8");
+    await fsPromises.writeFile(tmp, JSON.stringify(stamped), "utf8");
+    await fsPromises.rename(tmp, file);
   } catch (err) {
     logger.warn({ err, key }, `[terrain] Failed to write disk cache for ${key}: ${(err as Error).message}`);
   }
@@ -2102,19 +2146,32 @@ async function readFreshwaterDiskCache(
   cacheDir: string,
   key: string,
 ): Promise<TerrainGrid | null> {
+  const file = path.join(cacheDir, `${key}.json`);
+  let raw: string;
   try {
-    const file = path.join(cacheDir, `${key}.json`);
-    const raw = await fsPromises.readFile(file, "utf8");
-    const parsed = JSON.parse(raw) as TerrainGrid;
-    const version = parsed.version ?? 1;
-    if (version < TERRAIN_CACHE_VERSION) {
-      fsPromises.unlink(file).catch(() => {});
-      return null;
-    }
-    return parsed;
+    raw = await fsPromises.readFile(file, "utf8");
   } catch {
     return null;
   }
+  let parsed: TerrainGrid;
+  try {
+    parsed = JSON.parse(raw) as TerrainGrid;
+  } catch {
+    logger.warn({ key, cacheDir }, `[terrain] Corrupt freshwater disk cache ${key} — deleting`);
+    fsPromises.unlink(file).catch(() => {});
+    return null;
+  }
+  const version = parsed.version ?? 1;
+  if (version < TERRAIN_CACHE_VERSION) {
+    fsPromises.unlink(file).catch(() => {});
+    return null;
+  }
+  if (!Array.isArray(parsed.depths) || typeof parsed.width !== "number") {
+    logger.warn({ key, cacheDir }, `[terrain] Freshwater disk cache ${key} failed schema check — deleting`);
+    fsPromises.unlink(file).catch(() => {});
+    return null;
+  }
+  return parsed;
 }
 
 async function writeFreshwaterDiskCache(
@@ -2125,8 +2182,10 @@ async function writeFreshwaterDiskCache(
   try {
     await fsPromises.mkdir(cacheDir, { recursive: true });
     const file = path.join(cacheDir, `${key}.json`);
+    const tmp = `${file}.tmp`;
     const stamped: TerrainGrid = { ...grid, version: TERRAIN_CACHE_VERSION };
-    await fsPromises.writeFile(file, JSON.stringify(stamped), "utf8");
+    await fsPromises.writeFile(tmp, JSON.stringify(stamped), "utf8");
+    await fsPromises.rename(tmp, file);
   } catch (err) {
     logger.warn(
       { err, key, cacheDir },
@@ -2345,251 +2404,140 @@ export async function buildTerrainGrid(
 ): Promise<TerrainGrid | null> {
   const smoothing = options.smoothing ?? true;
   const safeId = datasetId.replace(/[^a-z0-9-]/gi, "_");
-  const cacheKey = `${safeId}-${resolution}${smoothing ? "" : "-raw"}`;
+  // Clamp resolution BEFORE building the cache key so requests with
+  // resolution=16 and resolution=32 both map to the same cache entry (M-6).
+  const N = Math.max(32, Math.min(512, resolution));
+  const cacheKey = `${safeId}-${N}${smoothing ? "" : "-raw"}`;
 
-  // 1. Memory cache (fastest)
+  // 1. Memory cache (fastest path — no I/O).
   const mem = memoryCache.get(cacheKey);
   if (mem) return mem;
+
+  // 2. In-flight deduplication — if another call is already resolving this
+  //    key, join its promise instead of issuing a duplicate upstream fetch.
+  const inflight = _terrainInFlight.get(cacheKey);
+  if (inflight) return inflight;
 
   const meta = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);
   if (!meta) return null;
 
-  const N = Math.max(32, Math.min(512, resolution));
-
-  // 2. Disk cache
-  const disk = await readDiskCache(cacheKey);
-  if (disk) {
-    logger.info({ cacheKey }, `[terrain] Disk cache hit: ${cacheKey}`);
-    // Inject noSurveyAvailable if absent (grids cached before this field was
-    // added won't have it; computing it is cheap — no cache version bump needed).
-    if (disk.noSurveyAvailable === undefined && !datasetHasSurveySource(datasetId)) {
-      disk.noSurveyAvailable = true;
+  // 3. Wrap all I/O work (disk + upstream) in a single promise registered
+  //    in the in-flight map before any await so concurrent callers join it.
+  const promise: Promise<TerrainGrid | null> = (async (): Promise<TerrainGrid | null> => {
+    // 3a. Disk cache
+    const disk = await readDiskCache(cacheKey);
+    if (disk) {
+      logger.info({ cacheKey }, `[terrain] Disk cache hit: ${cacheKey}`);
+      // Inject noSurveyAvailable if absent (grids cached before this field was
+      // added won't have it; computing it is cheap — no cache version bump needed).
+      if (disk.noSurveyAvailable === undefined && !datasetHasSurveySource(datasetId)) {
+        disk.noSurveyAvailable = true;
+      }
+      memoryCache.set(cacheKey, disk);
+      return disk;
     }
-    memoryCache.set(cacheKey, disk);
-    return disk;
-  }
 
-  // 3. Resolve the bathymetry grid through the AOI's ranked source list.
-  //    Each source is tried in priority order (local → regional/state →
-  //    national → global); the first usable grid wins. Synthetic fbm is
-  //    the implicit terminal fallback when every ranked source fails.
-  const resolved = await resolveBathymetrySource(meta, N);
+    // 3b. Resolve the bathymetry grid through the AOI's ranked source list.
+    //     Each source is tried in priority order (local → regional/state →
+    //     national → global); the first usable grid wins.
+    const resolved = await resolveBathymetrySource(meta, N);
 
-  let depths: number[];
-  let minDepth: number;
-  let maxDepth: number;
-  let topography: number[] | undefined;
-  let hasTopography = false;
-  let synthetic = false;
-  let dataSource: TerrainDataSource;
-  let bathymetrySource: TerrainDataSource;
-  let topographySource: TerrainDataSource | undefined;
-  let bathymetrySourceLabel: string | undefined;
-  let topographySourceLabel: string | undefined;
-  let bathymetryCreditUrl: string | undefined;
-  let topographyCreditUrl: string | undefined;
-  let bbox = meta.bbox;
+    // When every ranked source fails, throw NoDataError so callers can return
+    // an explicit 503 response. Synthetic FBM terrain is no longer served as a
+    // silent fallback — the user/client must be told no data is available.
+    if (!resolved) {
+      logger.warn(
+        { datasetId },
+        `[terrain] All ranked sources failed for ${datasetId} — returning no-data error.`,
+      );
+      throw new NoDataError(datasetId);
+    }
 
-  if (resolved) {
     const { source, result } = resolved;
-    depths = result.depths;
-    minDepth = result.minDepth;
-    maxDepth = result.maxDepth;
-    topography = result.topography;
-    hasTopography = result.hasTopography;
+    let depths = result.depths;
+    const topography = result.topography;
+    const hasTopography = result.hasTopography;
+    let bbox = meta.bbox;
     if (result.bbox) bbox = result.bbox;
+
     const bathProv = result.bathymetryProvenance ?? {
       source: source.dataSource,
       label: source.label,
       creditUrl: source.creditUrl,
     };
     const topoProv = result.topographyProvenance ?? bathProv;
-    dataSource = bathProv.source;
-    bathymetrySource = bathProv.source;
-    bathymetrySourceLabel = bathProv.label;
-    bathymetryCreditUrl = bathProv.creditUrl;
-    if (hasTopography) {
-      topographySource = topoProv.source;
-      topographySourceLabel = topoProv.label;
-      topographyCreditUrl = topoProv.creditUrl;
+    const dataSource: TerrainDataSource = bathProv.source;
+    const bathymetrySource: TerrainDataSource = bathProv.source;
+    const bathymetrySourceLabel: string | undefined = bathProv.label;
+    const bathymetryCreditUrl: string | undefined = bathProv.creditUrl;
+    const topographySource: TerrainDataSource | undefined = hasTopography ? topoProv.source : undefined;
+    const topographySourceLabel: string | undefined = hasTopography ? topoProv.label : undefined;
+    const topographyCreditUrl: string | undefined = hasTopography ? topoProv.creditUrl : undefined;
+
+    // Smooth spikes before finalising the grid (skipped when the user has
+    // disabled "Smooth terrain spikes" in their settings — raw bathymetry).
+    if (smoothing) {
+      let roughMin = Infinity, roughMax = -Infinity;
+      for (const d of depths) {
+        if (!Number.isNaN(d) && d < roughMin) roughMin = d;
+        if (!Number.isNaN(d) && d > roughMax) roughMax = d;
+      }
+      if (isFinite(roughMin) && isFinite(roughMax)) {
+        smoothSpikes(depths, N, roughMax - roughMin);
+      }
     }
-  } else {
-    logger.warn(
-      { datasetId },
-      `[terrain] All ranked sources failed for ${datasetId}; using synthetic fallback.`,
-    );
-    const synth = buildSyntheticGrid(datasetId, N, meta);
-    depths = synth.depths;
-    minDepth = synth.minDepth;
-    maxDepth = synth.maxDepth;
-    synthetic = true;
-    dataSource = "synthetic";
-    bathymetrySource = "synthetic";
-  }
 
-  // Smooth spikes before finalising the grid (skipped when the user has
-  // disabled "Smooth terrain spikes" in their settings — raw bathymetry).
-  if (smoothing) {
-    smoothSpikes(depths, N, maxDepth - minDepth);
-  }
+    // Recompute min/max after smoothing (values may have shifted).
+    // NaN cells (no-data sentinels) are excluded from the depth range —
+    // they sit at the water surface on the client, not in the depth range.
+    let minDepth = Infinity;
+    let maxDepth = -Infinity;
+    for (let i = 0; i < depths.length; i++) {
+      if (Number.isNaN(depths[i]!)) continue;
+      if (depths[i]! < minDepth) minDepth = depths[i]!;
+      if (depths[i]! > maxDepth) maxDepth = depths[i]!;
+    }
+    if (!isFinite(minDepth)) minDepth = 0;
+    if (!isFinite(maxDepth)) maxDepth = 0;
 
-  // Recompute min/max after smoothing (values may have shifted).
-  // NaN cells (no-data sentinels) are excluded from the depth range —
-  // they sit at the water surface on the client, not in the depth range.
-  minDepth = Infinity;
-  maxDepth = -Infinity;
-  for (let i = 0; i < depths.length; i++) {
-    if (Number.isNaN(depths[i]!)) continue;
-    if (depths[i]! < minDepth) minDepth = depths[i]!;
-    if (depths[i]! > maxDepth) maxDepth = depths[i]!;
-  }
+    const noSurveyAvailable = !datasetHasSurveySource(datasetId) || undefined;
 
-  const noSurveyAvailable = !datasetHasSurveySource(datasetId) || undefined;
+    const grid: TerrainGrid = {
+      datasetId,
+      name: meta.name,
+      waterType: meta.waterType,
+      resolution: N,
+      width: N,
+      height: N,
+      depths,
+      minDepth: Math.round(minDepth),
+      maxDepth: Math.round(maxDepth),
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      centerLon: meta.centerLon,
+      centerLat: meta.centerLat,
+      dataSource,
+      bathymetrySource,
+      ...(bathymetrySourceLabel ? { bathymetrySourceLabel } : {}),
+      ...(bathymetryCreditUrl ? { bathymetryCreditUrl } : {}),
+      ...(topographySource ? { topographySource } : {}),
+      ...(topographySourceLabel ? { topographySourceLabel } : {}),
+      ...(topographyCreditUrl ? { topographyCreditUrl } : {}),
+      ...(hasTopography && topography ? { topography, hasTopography: true } : {}),
+      ...(noSurveyAvailable ? { noSurveyAvailable } : {}),
+    };
 
-  const grid: TerrainGrid = {
-    datasetId,
-    name: meta.name,
-    waterType: meta.waterType,
-    resolution: N,
-    width: N,
-    height: N,
-    depths,
-    minDepth: Math.round(minDepth),
-    maxDepth: Math.round(maxDepth),
-    minLon: bbox.minLon,
-    maxLon: bbox.maxLon,
-    minLat: bbox.minLat,
-    maxLat: bbox.maxLat,
-    centerLon: meta.centerLon,
-    centerLat: meta.centerLat,
-    synthetic,
-    dataSource,
-    bathymetrySource,
-    ...(bathymetrySourceLabel ? { bathymetrySourceLabel } : {}),
-    ...(bathymetryCreditUrl ? { bathymetryCreditUrl } : {}),
-    ...(topographySource ? { topographySource } : {}),
-    ...(topographySourceLabel ? { topographySourceLabel } : {}),
-    ...(topographyCreditUrl ? { topographyCreditUrl } : {}),
-    ...(hasTopography && topography ? { topography, hasTopography: true } : {}),
-    ...(noSurveyAvailable ? { noSurveyAvailable } : {}),
-  };
-
-  memoryCache.set(cacheKey, grid);
-  await writeDiskCache(cacheKey, grid);
-  return grid;
-}
-
-// ---------------------------------------------------------------------------
-// Synthetic fallback (value-noise, used when GEBCO WCS is unreachable)
-// ---------------------------------------------------------------------------
-
-function hash(n: number): number {
-  const x = Math.sin(n) * 43758.5453123;
-  return x - Math.floor(x);
-}
-
-function hash2(x: number, y: number): number {
-  return hash(x * 127.1 + y * 311.7);
-}
-
-function smoothstep(t: number): number {
-  return t * t * (3 - 2 * t);
-}
-
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
-function valueNoise(x: number, y: number): number {
-  const ix = Math.floor(x);
-  const iy = Math.floor(y);
-  const fx = x - ix;
-  const fy = y - iy;
-  const ux = smoothstep(fx);
-  const uy = smoothstep(fy);
-  const a = hash2(ix, iy);
-  const b = hash2(ix + 1, iy);
-  const c = hash2(ix, iy + 1);
-  const d = hash2(ix + 1, iy + 1);
-  return lerp(lerp(a, b, ux), lerp(c, d, ux), uy);
-}
-
-function fbm(
-  x: number,
-  y: number,
-  octaves: number,
-  persistence: number,
-  lacunarity: number
-): number {
-  let value = 0;
-  let amplitude = 1.0;
-  let frequency = 1.0;
-  let maxValue = 0;
-  for (let i = 0; i < octaves; i++) {
-    value += valueNoise(x * frequency, y * frequency) * amplitude;
-    maxValue += amplitude;
-    amplitude *= persistence;
-    frequency *= lacunarity;
-  }
-  return value / maxValue;
-}
-
-function buildSyntheticGrid(
-  datasetId: string,
-  N: number,
-  meta: DatasetMeta
-): { depths: number[]; minDepth: number; maxDepth: number } {
-  const depthFns: Record<string, (nx: number, ny: number) => number> = {
-    "thorne-bay": (nx, ny) => {
-      // Model: Clarence Strait (N–S oriented, ~10 km wide), with Thorne Bay inlet.
-      // The bbox spans ~2° lon × 1.5° lat of SE Alaska Inside Passage.
-      const noise = fbm(nx * 12 + 17, ny * 12 + 17, 6, 0.52, 2.1);
-      const fineNoise = fbm(nx * 28 + 3, ny * 28 + 3, 4, 0.45, 2.2) * 0.15;
-
-      // Clarence Strait: deep N–S channel offset slightly west of centre
-      const straitCx = nx - 0.45;
-      const straitWidth = 0.18;
-      const straitDepth = Math.pow(Math.max(0, 1 - Math.abs(straitCx) / straitWidth), 1.4);
-
-      // Broad shelf areas on both sides
-      const shelf = Math.max(0, 1 - straitDepth * 2.5);
-
-      // Thorne Bay inlet: shallower pocket on the SW at ~(0.25, 0.55)
-      const tbDx = nx - 0.25;
-      const tbDy = ny - 0.55;
-      const thorneBayBowl = Math.pow(Math.max(0, 1 - (tbDx * tbDx * 30 + tbDy * tbDy * 20)), 1.5);
-
-      // Composite depth
-      const channelDepth = 180 + 190 * straitDepth;
-      const shelfDepth = 15 + 60 * shelf;
-      const thorneBayDepth = 10 + 55 * (1 - thorneBayBowl);
-      let depth = straitDepth * channelDepth + (1 - straitDepth) * shelfDepth;
-      // Blend in Thorne Bay bowl
-      depth = depth * (1 - thorneBayBowl * 0.6) + thorneBayDepth * (thorneBayBowl * 0.6);
-
-      return Math.max(10, depth + (noise - 0.5) * 60 + (fineNoise - 0.075) * 40);
-    },
-  };
-
-  const depthFn = depthFns[datasetId] ?? ((nx: number, ny: number) => {
-    const noise = fbm(nx * 6 + 7, ny * 6 + 7, 5, 0.5, 2.0);
-    return meta.minDepth + (meta.maxDepth - meta.minDepth) * noise;
+    memoryCache.set(cacheKey, grid);
+    await writeDiskCache(cacheKey, grid);
+    return grid;
+  })().finally(() => {
+    _terrainInFlight.delete(cacheKey);
   });
 
-  const depths: number[] = new Array(N * N);
-  let minDepth = Infinity;
-  let maxDepth = -Infinity;
-
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
-      const d = depthFn(col / (N - 1), row / (N - 1));
-      depths[row * N + col] = d;
-      if (d < minDepth) minDepth = d;
-      if (d > maxDepth) maxDepth = d;
-    }
-  }
-
-  return { depths, minDepth, maxDepth };
+  _terrainInFlight.set(cacheKey, promise);
+  return promise;
 }
 
 // ---------------------------------------------------------------------------

@@ -77,6 +77,13 @@ export function createTerrainMock(
     parseXyzCsv: vi.fn(),
     gridPoints: vi.fn(),
     datasetHasSurveySource: vi.fn().mockReturnValue(false),
+    // ── Error classes ──
+    NoDataError: class NoDataError extends Error {
+      constructor(datasetId: string) {
+        super(`All upstream bathymetry sources failed for '${datasetId}' — no data available`);
+        this.name = "NoDataError";
+      }
+    },
   };
   // Descriptor-based merge so getter overrides stay live (a plain spread
   // would snapshot the getter's value once at merge time).
