@@ -81,7 +81,7 @@ test.describe("Tide HUD scrubber slack visuals", () => {
     // Ensure showTidePanel / autoLoadTidal are enabled so a prior test that
     // disabled them cannot prevent TidePanel from mounting.
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { showTidePanel: true, autoLoadTidal: true },
     });
     // Mock the schedule endpoint with a deterministic 7-day slack schedule.

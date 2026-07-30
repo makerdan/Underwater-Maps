@@ -117,7 +117,7 @@ test.describe("Drift Planner — Drift vs Trolling modes", () => {
     // Server-side settings sync can override the localStorage flag above, so
     // persist hasSeenOnboarding on the server too (same as tide-station spec).
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true },
     });
     await mockOkSurfaceConditions(page);

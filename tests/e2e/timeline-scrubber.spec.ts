@@ -75,7 +75,7 @@ async function patchTideOverlay(page: Page, active: boolean): Promise<void> {
   // tideOverlayActive is server-persisted; without this PUT the server
   // settings hydrate resets the localStorage seed back to false post-load.
   await page.request.put(`${API_URL}/api/settings`, {
-    headers: { "x-e2e-user-id": E2E_USER_ID },
+    headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
     data: { tideOverlayActive: active, currentOverlayActive: false, windOverlayActive: false },
   });
 }
@@ -183,7 +183,7 @@ test.describe("Timeline scrubber — TidePanel cursor sync", () => {
     // is non-null (App.tsx Plan-tab gate). Ensure the server-persisted flags
     // are on and mock the tidal endpoint so data arrives deterministically.
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { showTidePanel: true, autoLoadTidal: true },
     });
     await page.route(/\/api\/tidal(\?|$)/, (route) =>

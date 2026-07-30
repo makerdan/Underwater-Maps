@@ -5,6 +5,15 @@ import { clearAllCaches } from "../lib/cacheRegistry.js";
 import { installFileBudgetGuard } from "../../../../tests/timeout-guard/vitest-guard.mjs";
 
 // ---------------------------------------------------------------------------
+// E2E auth bypass secret — set once at process level so all tests that use
+// the E2E_AUTH_BYPASS=1 path automatically have the secondary secret guard
+// satisfied.  Tests must pass `x-e2e-bypass-secret: vitest-test-secret` on
+// any request that also carries `x-e2e-user-id`.  This mirrors how the
+// Playwright webServer sets both env vars before starting the API server.
+// ---------------------------------------------------------------------------
+process.env["E2E_BYPASS_SECRET"] = "vitest-test-secret";
+
+// ---------------------------------------------------------------------------
 // Per-run disk-cache isolation for Poe zone + upscale caches
 //
 // poe.ts stores classification and upscale results in /tmp subdirectories that

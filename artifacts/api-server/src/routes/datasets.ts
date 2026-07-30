@@ -49,15 +49,13 @@ import { parsePdfContourFile, PdfStageError, PdfRasterOnlyError, type PdfDepthUn
 import {
   parseRasterPdfContourFile,
   parseRasterImageContourFile,
-  extractRasterImageContoursOnly,
   commitCachedExtraction,
-  type RasterExtractionResult,
 } from "../lib/pdfContourRaster.js";
 import { routeTarEntries } from "../lib/noaaTarRouter.js";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
 import { isTarBuffer, extractTarBuffer, isTarFile, extractTarFile, isGzipFile } from "../lib/tarDetect.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
-import { fetchSatelliteTile } from "../lib/satelliteTile.js";
+// fetchSatelliteTile intentionally excluded — satellite-tile route was removed
 import { fetchTerrainTile } from "../lib/terrainTile.js";
 import { datasetZonesCache, readZoneDiskByHash, zoneCacheKey } from "./poe.js";
 import {
@@ -79,7 +77,6 @@ import {
   DatasetsQuerySchema,
   ZonesQuerySchema,
   TerrainLandQuerySchema,
-  TerrainSatelliteQuerySchema,
   TerrainDownloadInfoQuerySchema,
 } from "./schemas.js";
 
@@ -1518,12 +1515,6 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
     return;
   }
   const id = idParsed.data;
-
-  // Auth + ownership guard for custom (UUID-format) dataset IDs.
-  // Preset/catalog dataset IDs remain publicly accessible.
-  // Non-owner requests (including unauthenticated) return 404 (not 401/403)
-  // to avoid confirming existence of datasets belonging to other users.
-  if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
     const callerId = auth?.userId ?? null;
     if (!callerId) {
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
@@ -1541,11 +1532,10 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
 
   const rawRes = req.query["resolution"];
   const resolution = (paramsParsed.data.resolution ?? paramsParsed.data.gridResolution) as number;
-
     let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
     const grid = await fetchCopernicusDem({ minLon, minLat, maxLon, maxLat }, gridSize);
   try {
-    grid = await buildTerrainGrid(id, resolution, { smoothing });
+    grid = await buildTerrainGrid(id, Number.isFinite(resolution) ? resolution : 256, { smoothing });
   } catch (err) {
     if (err instanceof NoDataError) {
       res.status(503).json({ error: "no_data", details: err.message });
@@ -1578,11 +1568,6 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
   const id = idParsed.data;
   try {
       const preview = entries.slice(0, 5).join(", ");
-    if (!preview) {
-      // Custom (UUID-format) dataset — apply the same auth + ownership guard
-      // used by the /terrain and /overview routes, then build the preview from
-      // the row's stored terrainJson so the client sees the real dataSource.
-      if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
     const callerId = auth?.userId ?? null;
         if (!callerId) {
           res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
@@ -1650,12 +1635,6 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
     return;
   }
   const id = idParsed.data;
-
-  // Auth + ownership guard for custom (UUID-format) dataset IDs.
-  // Preset/catalog dataset IDs remain publicly accessible.
-  // Non-owner requests (including unauthenticated) return 404 (not 401/403)
-  // to avoid confirming existence of datasets belonging to other users.
-  if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
     const callerId = auth?.userId ?? null;
     if (!callerId) {
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
@@ -1828,8 +1807,6 @@ router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
 
   const [minLon, minLat, maxLon, maxLat] = parsedQuery.data.bbox;
 
-  // Allow antimeridian-crossing bboxes (minLon > maxLon) — terrainTile.ts
-  // handles the split-and-composite automatically. Only reject degenerate bboxes.
   if (
     minLon === maxLon ||
     minLat >= maxLat ||
@@ -1882,8 +1859,6 @@ router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res):
 
   const [minLon, minLat, maxLon, maxLat] = parsedQuery.data.bbox;
 
-  // Allow antimeridian-crossing bboxes (minLon > maxLon) — terrainTile.ts
-  // handles the split-and-composite automatically. Only reject degenerate bboxes.
   if (
     minLon === maxLon ||
     minLat >= maxLat ||
@@ -1939,8 +1914,6 @@ router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res):
 
   const [minLon, minLat, maxLon, maxLat] = parsedQuery.data.bbox;
 
-  // Allow antimeridian-crossing bboxes (minLon > maxLon) — terrainTile.ts
-  // handles the split-and-composite automatically. Only reject degenerate bboxes.
   if (
     minLon === maxLon ||
     minLat >= maxLat ||
@@ -2130,9 +2103,9 @@ router.post(
     if (isTarBuffer(decompressed)) {
       const tarId = crypto.randomUUID();
       const tarDir = path.join(CHUNK_BASE_DIR, `${tarId}-tarcontents`);
-    const entries = await fs.promises.readdir(CHUNK_BASE_DIR).catch(() => [] as string[]);
+    let entries: string[] = [];
       try {
-        await fs.promises.mkdir(CHUNK_BASE_DIR, { recursive: true });
+        await fs.promises.mkdir(tarDir, { recursive: true });
         entries = await extractTarBuffer(decompressed, tarDir);
       } finally {
         await fs.promises.rm(tarDir, { recursive: true, force: true }).catch(() => undefined);
@@ -2167,19 +2140,6 @@ router.post(
   // GPX with no <ele>, NMEA with no depth sentences) return 422 parse_error
   // rather than falling through to the 400 "resolution required" check below.
     let points;
-  try {
-    if (fileExt === "pdf") {
-      // Vector contour map: requires user-supplied georeferencing metadata.
-      // pdfBbox is a JSON string {minLon,minLat,maxLon,maxLat}; pdfDepthUnit
-      // is "feet" (default — US lake maps are almost always feet) or "meters".
-      const PdfBboxSchema = z.object({
-        minLon: z.coerce.number().gte(-180).lte(180),
-        minLat: z.coerce.number().gte(-90).lte(90),
-        maxLon: z.coerce.number().gte(-180).lte(180),
-        maxLat: z.coerce.number().gte(-90).lte(90),
-      }).refine((b) => b.minLon < b.maxLon && b.minLat < b.maxLat, {
-        message: "min longitude/latitude must be strictly less than max",
-      });
       const rawBbox = req.body["pdfBbox"];
       if (typeof rawBbox !== "string" || rawBbox.length === 0) {
         res.status(400).json({
@@ -2215,39 +2175,6 @@ router.post(
         return;
       }
       const depthUnit: PdfDepthUnit = (rawUnit as PdfDepthUnit | undefined) ?? "feet";
-      try {
-        points = await parsePdfContourFile(file.buffer, bboxParsed.data, depthUnit);
-      } catch (err) {
-        if (err instanceof PdfRasterOnlyError) {
-          // The PDF is scanned/raster-only — re-run through the image-based
-          // contour pipeline (render PDF → OCR + line detection → georef).
-          try {
-            points = await parseRasterPdfContourFile(file.buffer, bboxParsed.data, depthUnit);
-          } catch (rasterErr) {
-            if (rasterErr instanceof PdfStageError) {
-              res.status(422).json({ error: `pdf_${rasterErr.stage}_error`, details: rasterErr.message });
-              return;
-            }
-            throw rasterErr;
-          }
-        } else if (err instanceof PdfStageError) {
-          res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
-          return;
-        } else {
-          throw err;
-        }
-      }
-    } else if (fileExt === "png" || fileExt === "jpg" || fileExt === "jpeg") {
-      // Raster contour map image uploaded directly — same georeferencing
-      // metadata required as for raster PDFs.
-      const PdfBboxSchema = z.object({
-        minLon: z.coerce.number().gte(-180).lte(180),
-        minLat: z.coerce.number().gte(-90).lte(90),
-        maxLon: z.coerce.number().gte(-180).lte(180),
-        maxLat: z.coerce.number().gte(-90).lte(90),
-      }).refine((b) => b.minLon < b.maxLon && b.minLat < b.maxLat, {
-        message: "min longitude/latitude must be strictly less than max",
-      });
       const rawBbox = req.body["pdfBbox"];
       if (typeof rawBbox !== "string" || rawBbox.length === 0) {
         res.status(400).json({
@@ -2353,7 +2280,7 @@ router.post(
   const resolution = (paramsParsed.data.resolution ?? paramsParsed.data.gridResolution) as number;
 
     const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-    const smoothing = await getSmoothingPreference(req);
+    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
 
   // Auth-gated: requireAuth above guarantees a clerkUserId is present.
     const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
@@ -2423,7 +2350,7 @@ router.post(
         createdAt: saved.createdAt.toISOString(),
       };
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "Failed to save upload to account";
+      const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
       logger.error(
         { err, userId: effectiveUserId, datasetName },
         `[direct-upload] failed to persist (userId=${effectiveUserId}, name=${datasetName})`,
@@ -2534,7 +2461,7 @@ router.post(
     }
 
     const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-    const smoothing = await getSmoothingPreference(req);
+    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
     const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
     const gridId = crypto.randomUUID();
     const coveragePercent = 100;
@@ -2577,7 +2504,7 @@ router.post(
         createdAt: saved.createdAt.toISOString(),
       };
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "Failed to save upload to account";
+      const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
       logger.error(
         { err, userId: effectiveUserId, datasetName },
         `[raster-commit] failed to persist (userId=${effectiveUserId}, name=${datasetName})`,
@@ -2660,21 +2587,21 @@ router.post(
       }
     } else {
       // Subsequent chunks: verify ownership.
-      let session = uploadSessions.get(uploadId);
+    let session = uploadSessions.get(uploadId);
 
-      if (!session) {
-        // DB fallback — handles the case where the server restarted between the
-        // last chunk arriving and finalize being called, clearing the in-memory
-        // uploadSessions map.  The "uploading" row (written on chunk 0) carries
-        // the uploadId, userId, and sessionJobId so we can reconstruct the
-        // session and accept the finalize call without requiring a full re-upload.
-        const [dbJob] = await db
-          .select({
-            userId: uploadJobsTable.userId,
-            sessionJobId: uploadJobsTable.id,
-          })
-          .from(uploadJobsTable)
-          .where(eq(uploadJobsTable.uploadId, uploadId));
+    if (!session) {
+      // DB fallback — handles the case where the server restarted between the
+      // last chunk arriving and finalize being called, clearing the in-memory
+      // uploadSessions map.  The "uploading" row (written on chunk 0) carries
+      // the uploadId, userId, and sessionJobId so we can reconstruct the
+      // session and accept the finalize call without requiring a full re-upload.
+      const [dbJob] = await db
+        .select({
+          userId: uploadJobsTable.userId,
+          sessionJobId: uploadJobsTable.id,
+        })
+        .from(uploadJobsTable)
+        .where(eq(uploadJobsTable.uploadId, uploadId));
 
         if (dbJob) {
           session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, lastActivityAt: Date.now() };
@@ -2696,7 +2623,7 @@ router.post(
       session.lastActivityAt = Date.now();
     }
 
-    // Rename the temp file to its canonical <uploadId>-chunk-<index> path.
+    // Rename the temp file to its canonical <uploadId>-chunk-<index> path
     const dest = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${chunkIndex}`);
     try {
       await fs.promises.rename(file.path, dest);
@@ -2725,8 +2652,9 @@ router.post(
 //
 // Session ownership is checked against the in-memory map first.  After a
 // server restart where uploadSessions has been cleared, the handler falls back
-// to the DB (the upload_jobs row stores the uploadId) so the caller's identity
-// can still be verified without requiring chunk 0 to be re-sent.
+// to the DB (the upload_jobs row stores the uploadId since migration 0009) so
+// the caller's identity can still be verified without requiring chunk 0 to be
+// re-sent.
 router.get(
   "/datasets/upload/chunk/status/:uploadId",
   requireAuth,
@@ -2735,7 +2663,7 @@ router.get(
     const { uploadId } = res.locals.parsedParams as { uploadId: string };
     const userId = (req as AuthenticatedRequest).clerkUserId;
 
-    // Fast path: in-memory session (current process lifetime).
+    // Verify session ownership before queuing
     let session = uploadSessions.get(uploadId);
 
     // DB chunksReceived is captured here so it is available for the disk-empty
@@ -2750,7 +2678,6 @@ router.get(
       const [dbJob] = await db
         .select({
           userId: uploadJobsTable.userId,
-          chunksReceived: uploadJobsTable.chunksReceived,
           sessionJobId: uploadJobsTable.id,
         })
         .from(uploadJobsTable)
@@ -2802,7 +2729,7 @@ router.get(
       }
     } else if (dbChunksReceived !== null && dbChunksReceived > 0) {
       // Directory inaccessible — synthesise from DB count as a last resort.
-      for (let i = 0; i < dbChunksReceived; i++) receivedChunks.push(i);
+    for (let i = 0; i < totalChunks; i++) {
     }
 
     receivedChunks.sort((a, b) => a - b);
@@ -2966,7 +2893,7 @@ router.post(
       } catch (guardErr) {
         // DB unavailable — fall back to the in-memory guard rather than
         // blocking uploads (matches persistJobToDB's non-fatal policy).
-        const errMsg = guardErr instanceof Error ? guardErr.message : String(guardErr);
+      const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
         logger.warn({ jobId, uploadId, errMsg }, `[finalize] DB idempotency guard failed, falling back to in-memory guard: ${errMsg}`);
       }
     } catch (err) {

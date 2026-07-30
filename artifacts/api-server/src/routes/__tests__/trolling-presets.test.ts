@@ -96,6 +96,7 @@ describe("GET /trolling-presets — list presets", () => {
   it("returns an empty array when user has no presets", async () => {
     const res = await request(makeApp())
       .get("/trolling-presets")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
@@ -106,6 +107,7 @@ describe("POST /trolling-presets — create preset", () => {
   it("returns 400 when required fields are missing", async () => {
     const res = await request(makeApp())
       .post("/trolling-presets")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(res.status).toBe(400);
@@ -115,6 +117,7 @@ describe("POST /trolling-presets — create preset", () => {
   it("returns 400 when headingDeg is out of range", async () => {
     const res = await request(makeApp())
       .post("/trolling-presets")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ name: "Test", headingDeg: 400, speedKnots: 3 });
     expect(res.status).toBe(400);
@@ -124,6 +127,7 @@ describe("POST /trolling-presets — create preset", () => {
   it("returns 201 with the created preset for a valid body", async () => {
     const res = await request(makeApp())
       .post("/trolling-presets")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ name: "My Preset", headingDeg: 90, speedKnots: 2.5 });
     expect(res.status).toBe(201);
@@ -136,6 +140,7 @@ describe("PATCH /trolling-presets/:id — update preset", () => {
   it("returns 400 when body has no updateable fields", async () => {
     const res = await request(makeApp())
       .patch("/trolling-presets/some-id")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(res.status).toBe(400);
@@ -145,6 +150,7 @@ describe("PATCH /trolling-presets/:id — update preset", () => {
   it("returns 404 when preset does not exist", async () => {
     const res = await request(makeApp())
       .patch("/trolling-presets/nonexistent-id")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ name: "New Name" });
     expect(res.status).toBe(404);
@@ -163,6 +169,7 @@ describe("DELETE /trolling-presets/:id — delete preset", () => {
   it("returns 404 when the preset does not exist", async () => {
     const res = await request(makeApp())
       .delete("/trolling-presets/00000000-0000-0000-0000-000000000001")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("not_found");
@@ -172,6 +179,7 @@ describe("DELETE /trolling-presets/:id — delete preset", () => {
     state.presets = [{ id: "preset-to-delete", userId: E2E_USER, name: "Delete Me" }];
     const res = await request(makeApp())
       .delete("/trolling-presets/preset-to-delete")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(204);
   });

@@ -187,6 +187,7 @@ describe("GET /api/markers", () => {
   it("returns 400 when datasetId query param is missing", async () => {
     const res = await request(app)
       .get("/api/markers")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-markers-400");
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_request" });
@@ -196,6 +197,7 @@ describe("GET /api/markers", () => {
     state.throwOnSelect = true;
     const res = await request(app)
       .get("/api/markers?datasetId=test-dataset")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-markers-db-fail");
     expect(res.status).toBe(500);
   });
@@ -203,6 +205,7 @@ describe("GET /api/markers", () => {
   it("returns 200 with an array when the DB succeeds", async () => {
     const res = await request(app)
       .get("/api/markers?datasetId=test-dataset")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-markers-ok");
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
@@ -224,6 +227,7 @@ describe("POST /api/markers — safeParse rejection (400)", () => {
   it("returns 400 with error: invalid_request when the body is completely absent", async () => {
     const res = await request(app)
       .post("/api/markers")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-markers-post-400")
       .set("content-type", "application/json")
       .send({});
@@ -234,6 +238,7 @@ describe("POST /api/markers — safeParse rejection (400)", () => {
   it("returns 400 when required field 'label' is missing from the body", async () => {
     const res = await request(app)
       .post("/api/markers")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-markers-post-400")
       .send({ datasetId: "ds-1", lon: -136.0, lat: 58.5, depth: 50 });
     expect(res.status).toBe(400);
@@ -243,6 +248,7 @@ describe("POST /api/markers — safeParse rejection (400)", () => {
   it("returns 400 when 'lon' is supplied as a string (wrong type)", async () => {
     const res = await request(app)
       .post("/api/markers")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-markers-post-400")
       .send({ datasetId: "ds-1", lon: "not-a-number", lat: 58.5, depth: 50, label: "Test" });
     expect(res.status).toBe(400);
@@ -269,6 +275,7 @@ describe("PATCH /api/markers/:id — safeParse rejection (400)", () => {
   it("returns 400 with error: invalid_request for any marker id (params validation)", async () => {
     const res = await request(app)
       .patch("/api/markers/not-a-uuid")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-markers-patch-400")
       .send({ label: "Updated" });
     expect(res.status).toBe(400);
@@ -278,6 +285,7 @@ describe("PATCH /api/markers/:id — safeParse rejection (400)", () => {
   it("returns 400 with error: invalid_request for a well-formed UUID id (params mock rejects all)", async () => {
     const res = await request(app)
       .patch("/api/markers/00000000-0000-0000-0000-000000000001")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-markers-patch-400")
       .send({ label: "Updated" });
     expect(res.status).toBe(400);

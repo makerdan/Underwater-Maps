@@ -66,6 +66,7 @@ describe("POST /api/datasets/upload — resolution/gridResolution Zod validation
   it("returns 400 when both resolution and gridResolution are absent", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .attach("file", Buffer.from(VALID_CSV), "survey.csv");
 
@@ -77,6 +78,7 @@ describe("POST /api/datasets/upload — resolution/gridResolution Zod validation
   it("returns 400 when resolution is a non-numeric string", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "not-a-number")
       .attach("file", Buffer.from(VALID_CSV), "survey.csv");
@@ -88,6 +90,7 @@ describe("POST /api/datasets/upload — resolution/gridResolution Zod validation
   it("returns 400 when resolution is zero (below minimum 32)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "0")
       .attach("file", Buffer.from(VALID_CSV), "survey.csv");
@@ -99,6 +102,7 @@ describe("POST /api/datasets/upload — resolution/gridResolution Zod validation
   it("returns 400 when resolution is negative", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "-64")
       .attach("file", Buffer.from(VALID_CSV), "survey.csv");
@@ -110,6 +114,7 @@ describe("POST /api/datasets/upload — resolution/gridResolution Zod validation
   it("accepts the request when only gridResolution is provided (legacy-client path)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("gridResolution", "64")
       .attach("file", Buffer.from(VALID_CSV), "survey.csv");
@@ -123,6 +128,7 @@ describe("POST /api/datasets/upload — resolution/gridResolution Zod validation
   it("uses resolution (not gridResolution) when both are provided", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "64")
       .field("gridResolution", "128")

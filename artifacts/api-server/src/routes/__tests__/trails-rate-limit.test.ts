@@ -107,6 +107,7 @@ describe("POST /api/trails — IP rate limit (10 req / min)", () => {
 
     const allowed = await request(app)
       .post("/api/trails")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", ip)
       .send(VALID_TRAIL_BODY);
@@ -115,6 +116,7 @@ describe("POST /api/trails — IP rate limit (10 req / min)", () => {
 
     const blocked = await request(app)
       .post("/api/trails")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", ip)
       .send(VALID_TRAIL_BODY);
@@ -133,6 +135,7 @@ describe("POST /api/trails — IP rate limit (10 req / min)", () => {
 
     const exhaustedRes = await request(app)
       .post("/api/trails")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", exhaustedIp)
       .send(VALID_TRAIL_BODY);
@@ -140,6 +143,7 @@ describe("POST /api/trails — IP rate limit (10 req / min)", () => {
 
     const freshRes = await request(app)
       .post("/api/trails")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", freshIp)
       .send(VALID_TRAIL_BODY);
@@ -149,6 +153,7 @@ describe("POST /api/trails — IP rate limit (10 req / min)", () => {
   it("sets X-RateLimit-* headers on allowed requests (user-based limit reflected last)", async () => {
     const res = await request(app)
       .post("/api/trails")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", "203.0.113.50")
       .send(VALID_TRAIL_BODY);
@@ -169,6 +174,7 @@ describe("POST /api/trails — IP rate limit (10 req / min)", () => {
 
     const res = await request(app)
       .post("/api/trails")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", "203.0.113.51")
       .send(VALID_TRAIL_BODY);

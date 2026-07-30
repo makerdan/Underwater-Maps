@@ -179,6 +179,7 @@ describe("POST /api/query — tool-call validation (route)", () => {
 
     const res = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-tool-validation")
       .send({ query: "go somewhere" });
 

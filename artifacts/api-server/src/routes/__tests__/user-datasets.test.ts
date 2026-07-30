@@ -273,6 +273,7 @@ describe("GET /api/user/datasets/:id/terrain — size pre-check", () => {
 
     const res = await request(app)
       .get("/api/user/datasets/ds-oversized/terrain")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
 
     expect(res.status).toBe(413);
@@ -291,6 +292,7 @@ describe("GET /api/user/datasets/:id/terrain — size pre-check", () => {
 
     const res = await request(app)
       .get("/api/user/datasets/ds-missing/terrain")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
 
     expect(res.status).toBe(404);
@@ -302,6 +304,7 @@ describe("GET /api/user/datasets/:id/terrain — size pre-check", () => {
 
     const res = await request(app)
       .get("/api/user/datasets/ds-normal/terrain")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
 
     expect(res.status).toBe(200);
@@ -332,6 +335,7 @@ describe("GET /api/user/datasets — list datasets", () => {
     state.datasets = [];
     const res = await request(app)
       .get("/api/user/datasets")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
@@ -351,6 +355,7 @@ describe("GET /api/user/datasets — list datasets", () => {
     ];
     const res = await request(app)
       .get("/api/user/datasets")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
@@ -373,6 +378,7 @@ describe("PATCH /api/user/datasets/:id/move — move to folder", () => {
   it("returns 400 when folderId is not present in body", async () => {
     const res = await request(app)
       .patch("/api/user/datasets/ds-1/move")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(res.status).toBe(400);
@@ -383,6 +389,7 @@ describe("PATCH /api/user/datasets/:id/move — move to folder", () => {
     state.folders = [];
     const res = await request(app)
       .patch("/api/user/datasets/ds-1/move")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ folderId: "nonexistent-folder-id" });
     expect(res.status).toBe(400);
@@ -393,6 +400,7 @@ describe("PATCH /api/user/datasets/:id/move — move to folder", () => {
     state.updateRow = null;
     const res = await request(app)
       .patch("/api/user/datasets/nonexistent/move")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ folderId: null });
     expect(res.status).toBe(404);
@@ -410,6 +418,7 @@ describe("PATCH /api/user/datasets/:id/move — move to folder", () => {
     };
     const res = await request(app)
       .patch("/api/user/datasets/ds-1/move")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ folderId: null });
     expect(res.status).toBe(200);
@@ -431,6 +440,7 @@ describe("PATCH /api/user/datasets/:id/rename — rename dataset", () => {
   it("returns 400 when name is missing from body", async () => {
     const res = await request(app)
       .patch("/api/user/datasets/ds-1/rename")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(res.status).toBe(400);
@@ -440,6 +450,7 @@ describe("PATCH /api/user/datasets/:id/rename — rename dataset", () => {
   it("returns 400 when name is blank (whitespace-only)", async () => {
     const res = await request(app)
       .patch("/api/user/datasets/ds-1/rename")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ name: "   " });
     expect(res.status).toBe(400);
@@ -450,6 +461,7 @@ describe("PATCH /api/user/datasets/:id/rename — rename dataset", () => {
     state.updateRow = null;
     const res = await request(app)
       .patch("/api/user/datasets/nonexistent/rename")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ name: "New Name" });
     expect(res.status).toBe(404);
@@ -467,6 +479,7 @@ describe("PATCH /api/user/datasets/:id/rename — rename dataset", () => {
     };
     const res = await request(app)
       .patch("/api/user/datasets/ds-1/rename")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ name: "New Name" });
     expect(res.status).toBe(200);
@@ -487,6 +500,7 @@ describe("DELETE /api/user/datasets/:id — delete dataset", () => {
     state.deleteRow = null;
     const res = await request(app)
       .delete("/api/user/datasets/nonexistent")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("not_found");
@@ -496,6 +510,7 @@ describe("DELETE /api/user/datasets/:id — delete dataset", () => {
     state.deleteRow = { id: "ds-1" };
     const res = await request(app)
       .delete("/api/user/datasets/ds-1")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(204);
   });

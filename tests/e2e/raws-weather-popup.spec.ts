@@ -141,7 +141,7 @@ async function enableRawsOverlay(page: Page): Promise<void> {
   // rawsOverlayActive is server-persisted; the async settings hydrate can
   // land after the bridge call and reset it to false, unpainting the pins.
   await page.request.put(`${API_URL}/api/settings`, {
-    headers: { "x-e2e-user-id": E2E_USER_ID },
+    headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
     data: { rawsOverlayActive: true },
   });
   await page.evaluate(() => {

@@ -7,6 +7,13 @@
  */
 import { logger } from "./logger.js";
 
+// Re-export from the zero-dependency production.ts so that callers can
+// import isProduction() from either env.ts or production.ts — both work.
+// env.ts itself must NOT import isProduction() here because env.ts is
+// imported by logger.ts (via logger.ts → production.ts), and a circular
+// dependency (logger.ts → env.ts → logger.ts) would break module init order.
+export { isProduction } from "./production.js";
+
 export interface EnvIssue {
   name: string;
   value: string;

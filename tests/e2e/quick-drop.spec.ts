@@ -62,7 +62,7 @@ async function quickDrop(
   extra: Record<string, unknown> = {},
 ): Promise<QuickMarker> {
   const res = await page.request.post(`${API_BASE}/api/markers`, {
-    headers: { "x-e2e-user-id": userId },
+    headers: { "x-e2e-user-id": userId, "x-e2e-bypass-secret": "e2e-playwright-secret" },
     data: {
       datasetId: DATASET_ID,
       lon: 142.5,
@@ -104,7 +104,7 @@ test.describe("Quick drop — server contract", () => {
 
     // Delete Catch 2 — the counter must NOT roll back.
     const del = await page.request.delete(`${API_BASE}/api/markers/${second.id}`, {
-      headers: { "x-e2e-user-id": userId },
+      headers: { "x-e2e-user-id": userId, "x-e2e-bypass-secret": "e2e-playwright-secret" },
     });
     expect(del.status()).toBe(204);
 
@@ -131,7 +131,7 @@ test.describe("Quick drop — server contract", () => {
   test("normal (non-quickCatch) creates skip the counter and store no snapshot", async ({ page }) => {
     const userId = uniqueUser("normal");
     const res = await page.request.post(`${API_BASE}/api/markers`, {
-      headers: { "x-e2e-user-id": userId },
+      headers: { "x-e2e-user-id": userId, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: {
         datasetId: DATASET_ID,
         lon: 142.5,
@@ -157,13 +157,13 @@ test.describe("Quick drop — server contract", () => {
     const created = await quickDrop(page, userId);
 
     const patch = await page.request.patch(`${API_BASE}/api/markers/${created.id}`, {
-      headers: { "x-e2e-user-id": userId },
+      headers: { "x-e2e-user-id": userId, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { label: "Renamed catch", notes: "big halibut" },
     });
     expect(patch.status()).toBe(200);
 
     const list = await page.request.get(`${API_BASE}/api/markers?datasetId=${DATASET_ID}`, {
-      headers: { "x-e2e-user-id": userId },
+      headers: { "x-e2e-user-id": userId, "x-e2e-bypass-secret": "e2e-playwright-secret" },
     });
     expect(list.ok()).toBe(true);
     const markers = (await list.json()) as QuickMarker[];
@@ -177,7 +177,7 @@ test.describe("Quick drop — server contract", () => {
   test("malformed conditions snapshot is rejected with 400", async ({ page }) => {
     const userId = uniqueUser("badcond");
     const res = await page.request.post(`${API_BASE}/api/markers`, {
-      headers: { "x-e2e-user-id": userId },
+      headers: { "x-e2e-user-id": userId, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: {
         datasetId: DATASET_ID,
         lon: 142.5,

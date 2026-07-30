@@ -214,7 +214,7 @@ export const test = base.extend<{ resetSettings: void; fileBudgetGuard: void; su
     async ({ request }, use) => {
       try {
         await request.put(`${API_URL}/api/settings`, {
-          headers: { "x-e2e-user-id": E2E_USER_ID },
+          headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
           data: DEFAULT_SETTINGS,
         });
       } catch (err) {

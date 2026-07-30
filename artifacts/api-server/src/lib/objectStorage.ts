@@ -170,10 +170,10 @@ export class ObjectStorageService {
     const { bucketName, objectName } = parseObjectPath(objectEntityPath);
     const bucket = objectStorageClient.bucket(bucketName);
     const objectFile = bucket.file(objectName);
-    const [exists] = await objectFile.exists();
-    if (!exists) {
-      throw new ObjectNotFoundError();
-    }
+    // No existence pre-check: the TOCTOU window between exists() and the
+    // actual read/write would allow race conditions and unnecessary round-trips.
+    // Callers receive the File handle and must handle GCS 404 errors (or
+    // ObjectNotFoundError re-mapped below in helpers) at the point of use.
     return objectFile;
   }
 
@@ -239,10 +239,17 @@ export class ObjectStorageService {
     try {
       objectFile = await this.getObjectEntityFile(objectPath);
     } catch (err) {
-      if (err instanceof ObjectNotFoundError) return; // already gone — ok
+      if (err instanceof ObjectNotFoundError) return; // path invalid / traversal — treat as gone
       throw err;
     }
-    await objectFile.delete();
+    try {
+      await objectFile.delete();
+    } catch (err) {
+      // GCS returns a 404-coded error when the object does not exist.
+      // Treat this as "already gone" so callers stay idempotent.
+      if (isGcsNotFound(err)) return;
+      throw err;
+    }
   }
 
   /**
@@ -282,6 +289,17 @@ export class ObjectStorageService {
     }
     return paths;
   }
+}
+
+/**
+ * Returns true for GCS ApiErrors that indicate a 404 Not Found — i.e. the
+ * object does not exist in the bucket.  Used to normalise "already gone"
+ * cases into idempotent no-ops without hiding other error kinds.
+ */
+function isGcsNotFound(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const code = (err as Record<string, unknown>)["code"];
+  return code === 404 || code === "404";
 }
 
 function parseObjectPath(path: string): {

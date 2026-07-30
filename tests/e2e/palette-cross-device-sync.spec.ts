@@ -42,7 +42,7 @@ test.describe("Depth palette cross-device sync", () => {
     ];
     const DEEP_INDEX = DEFAULT_BAND_COLORS.length - 1;
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { colormapTheme: "ocean", bandColors: DEFAULT_BAND_COLORS },
     });
 
@@ -80,7 +80,7 @@ test.describe("Depth palette cross-device sync", () => {
     const newBandColors = [...DEFAULT_BAND_COLORS];
     newBandColors[DEEP_INDEX] = newDeep;
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { bandColors: newBandColors },
     });
     // Reload (simulating a fresh page visit after saving) so the settings page
@@ -142,7 +142,7 @@ test.describe("Depth palette cross-device sync", () => {
     // Reset colormapTheme to "custom" with default band colours so a prior
     // failed run can't leave stale data that masks the assertion.
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: {
         colormapTheme: "custom",
         bandColors: DEFAULT_BAND_COLORS,
@@ -275,7 +275,7 @@ test.describe("Depth palette cross-device sync", () => {
 
     // ── Cleanup: restore defaults so subsequent specs start from ocean ───
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: {
         colormapTheme: "ocean",
         bandColors: DEFAULT_BAND_COLORS,
@@ -308,7 +308,7 @@ test.describe("Depth palette cross-device sync", () => {
 
     // ── Pre-flight: reset the server row to a known state ───────────────
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: {
         colormapTheme: "custom",
         bandColors: DEFAULT_BAND_COLORS,
@@ -414,7 +414,7 @@ test.describe("Depth palette cross-device sync", () => {
 
     // ── Cleanup: restore defaults ─────────────────────────────────────
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: {
         colormapTheme: "ocean",
         bandColors: DEFAULT_BAND_COLORS,

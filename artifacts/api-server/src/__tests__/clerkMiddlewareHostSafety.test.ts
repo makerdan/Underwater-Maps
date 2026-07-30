@@ -106,6 +106,7 @@ describe("clerkMiddleware host path — injected x-forwarded-host is inert", () 
     const res = await request(app)
       .get("/api/healthz")
       .set("x-forwarded-host", "evil.attacker.com")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user_host_inject_test");
 
     // The route should respond normally — 200 or 404 depending on whether

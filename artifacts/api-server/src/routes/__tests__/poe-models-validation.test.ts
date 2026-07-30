@@ -99,6 +99,7 @@ afterEach(() => {
 function getModels() {
   return request(app)
     .get("/api/poe/models")
+    .set("x-e2e-bypass-secret", "vitest-test-secret")
     .set("x-e2e-user-id", "user-models-test");
 }
 

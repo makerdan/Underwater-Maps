@@ -77,6 +77,7 @@ describe("POST /api/datasets/upload — IP rate limit (10 req / min)", () => {
 
     const allowed = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", ip)
       .field("resolution", "not-a-number")
@@ -86,6 +87,7 @@ describe("POST /api/datasets/upload — IP rate limit (10 req / min)", () => {
 
     const blocked = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", ip)
       .field("resolution", "not-a-number")
@@ -105,6 +107,7 @@ describe("POST /api/datasets/upload — IP rate limit (10 req / min)", () => {
 
     const exhaustedRes = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", exhaustedIp)
       .field("resolution", "not-a-number")
@@ -113,6 +116,7 @@ describe("POST /api/datasets/upload — IP rate limit (10 req / min)", () => {
 
     const freshRes = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", freshIp)
       .field("resolution", "not-a-number")
@@ -123,6 +127,7 @@ describe("POST /api/datasets/upload — IP rate limit (10 req / min)", () => {
   it("sets X-RateLimit-* headers on allowed requests", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", "198.51.100.20")
       .field("resolution", "not-a-number")

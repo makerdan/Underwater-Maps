@@ -71,6 +71,12 @@ export function assertDevAuthBypassSafe(): void {
  * This piggybacks on the api-server's existing `E2E_AUTH_BYPASS` path so
  * we don't have to weaken the production auth middleware.
  */
+// The bypass secret must match the E2E_BYPASS_SECRET env var on the API server
+// (set in playwright.config.ts webServer command). Without it the secondary
+// requireAuth guard blocks bypass requests.
+const E2E_BYPASS_SECRET: string =
+  (import.meta.env.DEV && (import.meta.env.VITE_E2E_BYPASS_SECRET as string | undefined)) || "";
+
 export function installDevAuthFetchPatch(): void {
   if (!DEV_AUTH_BYPASS) return;
   if (typeof window === "undefined" || typeof window.fetch !== "function") return;
@@ -85,6 +91,11 @@ export function installDevAuthFetchPatch(): void {
     );
     if (!headers.has("x-e2e-user-id")) {
       headers.set("x-e2e-user-id", FAKE_DEV_USER_ID);
+    }
+    // Secondary bypass guard: the API server requires this header to match
+    // E2E_BYPASS_SECRET when that env var is set.
+    if (E2E_BYPASS_SECRET && !headers.has("x-e2e-bypass-secret")) {
+      headers.set("x-e2e-bypass-secret", E2E_BYPASS_SECRET);
     }
     return original(input, { ...(init ?? {}), headers });
   }) as typeof window.fetch;

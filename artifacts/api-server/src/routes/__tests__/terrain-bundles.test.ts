@@ -131,6 +131,11 @@ app.use(express.json());
 // 500s before reaching the route handler.
 app.use((req, _res, next) => {
   req.headers["x-e2e-user-id"] = "test-user";
+  // Secondary bypass-secret guard: requireAuth now requires this header to
+  // match E2E_BYPASS_SECRET (set to "vitest-test-secret" by setup.ts) when
+  // that env var is present. Without it the bypass fails and getAuth() throws
+  // (no clerkMiddleware in this test app), producing a 500.
+  req.headers["x-e2e-bypass-secret"] = "vitest-test-secret";
   next();
 });
 app.use(terrainBundlesRouter);
@@ -166,6 +171,7 @@ describe("POST /terrain/bundles", () => {
   it("404 for unknown presetId", async () => {
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "bypass-user")
       .send({ presetId: "does-not-exist" });
 
@@ -176,6 +182,7 @@ describe("POST /terrain/bundles", () => {
   it("422 for preset without fetchStrategy", async () => {
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "bypass-user")
       .send({ presetId: "no-strategy-preset" });
 
@@ -186,6 +193,7 @@ describe("POST /terrain/bundles", () => {
   it("400 for missing presetId", async () => {
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "bypass-user")
       .send({});
 
@@ -198,6 +206,7 @@ describe("POST /terrain/bundles", () => {
 
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "bypass-user")
       .send({ presetId: "lake-ray-roberts" });
 
@@ -216,6 +225,7 @@ describe("POST /terrain/bundles", () => {
 
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "bypass-user")
       .send({ presetId: "lake-ray-roberts" });
 
@@ -233,6 +243,7 @@ describe("POST /terrain/bundles", () => {
 
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "bypass-user")
       .send({ presetId: "lake-ray-roberts" });
 

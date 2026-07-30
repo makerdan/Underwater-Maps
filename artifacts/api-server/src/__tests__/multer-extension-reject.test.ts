@@ -72,6 +72,7 @@ describe("POST /api/datasets/upload — disallowed extensions are rejected (415)
     it(`rejects ${ext} with 415 unsupported_file_type`, async () => {
       const res = await request(app)
         .post("/api/datasets/upload")
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .field("resolution", "128")
         .attach("file", TINY_CONTENT, `malicious${ext}`);
@@ -108,6 +109,7 @@ describe("POST /api/datasets/upload — allowlisted extensions pass the file fil
     it(`accepts ${ext} (not 415)`, async () => {
       const res = await request(app)
         .post("/api/datasets/upload")
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .field("resolution", "128")
         .attach("file", TINY_CONTENT, `survey${ext}`);

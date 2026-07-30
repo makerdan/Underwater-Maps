@@ -220,6 +220,7 @@ describe("DELETE /api/markers/:id", () => {
   it("returns 400 for a malformed (non-UUID) marker id", async () => {
     const res = await request(app)
       .delete("/api/markers/not-a-uuid")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-del");
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_request" });
@@ -229,6 +230,7 @@ describe("DELETE /api/markers/:id", () => {
     state.deletedMarkerRows = [];
     const res = await request(app)
       .delete(`/api/markers/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-del");
     expect(res.status).toBe(404);
     expect(res.body).toMatchObject({ error: "not_found" });
@@ -240,6 +242,7 @@ describe("DELETE /api/markers/:id", () => {
 
     const res = await request(app)
       .delete(`/api/markers/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-del");
 
     expect(res.status).toBe(204);
@@ -255,6 +258,7 @@ describe("DELETE /api/markers/:id", () => {
 
     const res = await request(app)
       .delete(`/api/markers/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-del");
 
     expect(res.status).toBe(204);
@@ -278,6 +282,7 @@ describe("DELETE /api/markers/:id", () => {
 
     const res = await request(app)
       .delete(`/api/markers/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-del");
 
     expect(res.status).toBe(204);
@@ -297,6 +302,7 @@ describe("DELETE /api/markers/:id", () => {
 
     const res = await request(app)
       .delete(`/api/markers/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-del");
 
     expect(res.status).toBe(204);

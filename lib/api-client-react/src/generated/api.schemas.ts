@@ -1936,6 +1936,8 @@ export interface Marker {
   /** Frozen conditions snapshot captured at quick-drop time; null when not a quick-drop marker */
   conditions?: MarkerConditions | null;
   createdAt: string;
+  /** Clerk user ID of the user who created this marker */
+  userId?: string;
 }
 
 export interface CatchEntry {
@@ -4452,4 +4454,3 @@ export type GetTerrainBundlesPresetId202 = {
   status?: GetTerrainBundlesPresetId202Status;
   message?: string;
 };
-

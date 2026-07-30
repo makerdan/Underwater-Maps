@@ -100,6 +100,7 @@ describe("GET /api/settings — response-parse failure → structured 500", () =
     state.settingsRow = null;
     const res = await request(app)
       .get("/api/settings")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-settings-parse-test");
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("fogDensity");
@@ -109,6 +110,7 @@ describe("GET /api/settings — response-parse failure → structured 500", () =
     state.settingsRow = { fogDensity: 0.02, textureQuality: "high" };
     const res = await request(app)
       .get("/api/settings")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-settings-parse-test");
     expect(res.status).toBe(200);
     expect(res.body.fogDensity).toBe(0.02);
@@ -121,6 +123,7 @@ describe("GET /api/settings — response-parse failure → structured 500", () =
     };
     const res = await request(app)
       .get("/api/settings")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-settings-parse-test");
     expect(res.status).toBe(500);
     expect(res.body).toMatchObject({ error: "internal" });

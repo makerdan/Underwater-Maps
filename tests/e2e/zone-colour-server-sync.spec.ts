@@ -50,7 +50,7 @@ test.describe("Zone colour server-sync round-trip", () => {
       // Reset both palettes on the shared dev-user row so a prior crashed run
       // cannot leave stale custom colours that satisfy our assertion trivially.
       await page.request.put(`${API_URL}/api/settings`, {
-        headers: { "x-e2e-user-id": E2E_USER_ID },
+        headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
         data: {
           zoneOverlaySlots: {
             saltwater: DEFAULT_ZONE_SLOTS,
@@ -210,7 +210,7 @@ test.describe("Zone colour server-sync round-trip", () => {
 
       // ── Pre-flight: reset server row ────────────────────────────────────
       await page.request.put(`${API_URL}/api/settings`, {
-        headers: { "x-e2e-user-id": E2E_USER_ID },
+        headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
         data: {
           zoneOverlaySlots: {
             saltwater: DEFAULT_ZONE_SLOTS,

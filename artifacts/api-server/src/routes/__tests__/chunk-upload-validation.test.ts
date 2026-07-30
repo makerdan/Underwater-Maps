@@ -90,6 +90,7 @@ describe("POST /api/datasets/upload/chunk — body field validation", () => {
   it("returns 400 when uploadId is injected as an array (duplicate fields)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-chunk-test")
       .field("uploadId", "aaaabbbbcccc1111")
       .field("uploadId", "ddddeeeeffffgggg")
@@ -104,6 +105,7 @@ describe("POST /api/datasets/upload/chunk — body field validation", () => {
   it("returns 400 when chunkIndex is injected as an array (duplicate fields)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-chunk-test")
       .field("uploadId", VALID_UPLOAD_ID)
       .field("chunkIndex", "0")
@@ -118,6 +120,7 @@ describe("POST /api/datasets/upload/chunk — body field validation", () => {
   it("returns 400 when chunkIndex is negative", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-chunk-test")
       .field("uploadId", VALID_UPLOAD_ID)
       .field("chunkIndex", "-1")
@@ -131,6 +134,7 @@ describe("POST /api/datasets/upload/chunk — body field validation", () => {
   it("returns 400 when chunkIndex is greater than or equal to totalChunks", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-chunk-test")
       .field("uploadId", VALID_UPLOAD_ID)
       .field("chunkIndex", "5")
@@ -144,6 +148,7 @@ describe("POST /api/datasets/upload/chunk — body field validation", () => {
   it("returns 400 when uploadId is missing", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-chunk-test")
       .field("chunkIndex", "0")
       .field("totalChunks", "1")
@@ -156,6 +161,7 @@ describe("POST /api/datasets/upload/chunk — body field validation", () => {
   it("returns 400 when chunkIndex is a non-integer string", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-chunk-test")
       .field("uploadId", VALID_UPLOAD_ID)
       .field("chunkIndex", "abc")
@@ -169,6 +175,7 @@ describe("POST /api/datasets/upload/chunk — body field validation", () => {
   it("returns 400 when chunkIndex is a float string", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-chunk-test")
       .field("uploadId", VALID_UPLOAD_ID)
       .field("chunkIndex", "1.5")
@@ -182,6 +189,7 @@ describe("POST /api/datasets/upload/chunk — body field validation", () => {
   it("returns 400 when chunkIndex is an empty string", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-chunk-test")
       .field("uploadId", VALID_UPLOAD_ID)
       .field("chunkIndex", "")
@@ -195,6 +203,7 @@ describe("POST /api/datasets/upload/chunk — body field validation", () => {
   it("returns 400 when totalChunks is injected as an array (duplicate fields)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-chunk-test")
       .field("uploadId", VALID_UPLOAD_ID)
       .field("chunkIndex", "0")

@@ -10,6 +10,13 @@
  * client is ever contacted, preventing both directory traversal and information
  * disclosure about the underlying bucket structure.
  *
+ * TOCTOU note: `getObjectEntityFile` no longer performs an existence pre-check
+ * via `file.exists()`. It returns the GCS `File` handle directly after the
+ * path guard so the caller performs the actual I/O (streaming / delete / ACL
+ * set) without the TOCTOU race. ObjectNotFoundError is therefore only thrown
+ * by the path guard itself; callers must handle GCS 404 errors at the point of
+ * actual read/write.
+ *
  * Test scenarios
  * --------------
  * 1. Percent-encoded dot-dot: %2e%2e / %2E%2E
@@ -19,30 +26,26 @@
  * 5. Mixed encoding: valid-looking path with encoded traversal in a segment
  * 6. Double percent-encoding: %252e%252e (decoded once → %2e%2e)
  * 7. Null byte injection: %00
- * 8. Valid path → reaches GCS client (not rejected by guard)
+ * 8. Valid path → reaches GCS client (file handle returned, no exists() call)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ObjectStorageService, ObjectNotFoundError } from "../objectStorage.js";
 
 // ---------------------------------------------------------------------------
 // Mock @google-cloud/storage so getObjectEntityFile never makes real network
-// calls. The mock bucket().file() factory is controlled per-test so we can
-// simulate "exists" or "not found" independently of the guard logic.
-// vi.hoisted() is required so mockFileExists is defined when the vi.mock()
-// factory (which is itself hoisted) captures the reference.
+// calls. We track whether bucket().file() was called (meaning the path guard
+// passed) without needing an exists() mock — the TOCTOU fix removed that call.
 // ---------------------------------------------------------------------------
 
-const { mockFileExists } = vi.hoisted(() => ({
-  mockFileExists: vi.fn(),
+const { mockFileFactory } = vi.hoisted(() => ({
+  mockFileFactory: vi.fn(),
 }));
 
 vi.mock("@google-cloud/storage", () => {
   return {
     Storage: vi.fn().mockImplementation(() => ({
       bucket: vi.fn().mockReturnValue({
-        file: vi.fn().mockReturnValue({
-          exists: mockFileExists,
-        }),
+        file: mockFileFactory,
       }),
     })),
     File: vi.fn(),
@@ -53,8 +56,9 @@ const PRIVATE_DIR = "/test-bucket/private";
 
 beforeEach(() => {
   vi.stubEnv("PRIVATE_OBJECT_DIR", PRIVATE_DIR);
-  mockFileExists.mockClear();
-  mockFileExists.mockResolvedValue([false]);
+  mockFileFactory.mockClear();
+  // Return a sentinel File-like object so callers can inspect the result.
+  mockFileFactory.mockReturnValue({ __mockFile: true });
 });
 
 function makeService(): ObjectStorageService {
@@ -63,15 +67,15 @@ function makeService(): ObjectStorageService {
 
 // ---------------------------------------------------------------------------
 // Helper: assert that getObjectEntityFile throws ObjectNotFoundError for the
-// given path WITHOUT contacting the GCS client.
+// given path WITHOUT contacting the GCS client (path guard fires first).
 // ---------------------------------------------------------------------------
 async function expectTraversalRejected(objectPath: string): Promise<void> {
   const svc = makeService();
   await expect(svc.getObjectEntityFile(objectPath)).rejects.toBeInstanceOf(
     ObjectNotFoundError,
   );
-  // The GCS client must not have been contacted — guard fired before exists().
-  expect(mockFileExists).not.toHaveBeenCalled();
+  // The GCS client must not have been contacted — guard fired before file().
+  expect(mockFileFactory).not.toHaveBeenCalled();
 }
 
 // ---------------------------------------------------------------------------
@@ -138,28 +142,19 @@ describe("getObjectEntityFile — dot-only and double-dot literals", () => {
 
 // ---------------------------------------------------------------------------
 // Suite 4: Double percent-encoding (%252e → decodes to %2e → then to .)
-// The guard decodes once with decodeURIComponent; a double-encoded sequence
-// decodes to a literal % character, which posix.normalize leaves as-is.
-// Double-encoded traversal therefore does NOT resolve to ".." after one decode
-// pass and must be treated as a (potentially invalid or benign) path segment —
-// the guard should not accidentally allow traversal via this vector.
+// After one decodeURIComponent pass: "%2e%2e" (literal percent-encoded string).
+// posix.normalize treats that as a safe path segment (no ".." after single
+// decode), so the path guard passes and the GCS file factory IS called.
 // ---------------------------------------------------------------------------
 
 describe("getObjectEntityFile — double percent-encoding", () => {
-  it("does not reach the GCS client with %252e%252e (decoded to %2e%2e literal, not ..)", async () => {
-    // After one decodeURIComponent pass: "%2e%2e" (literal percent-encoded string).
-    // posix.normalize treats that as a safe path segment (no ".." after single decode).
-    // The file will not exist, so ObjectNotFoundError is still thrown, but via the
-    // GCS existence check — not the traversal guard. The client IS contacted here
-    // because the single-decode guard doesn't see "..". This is correct: double-
-    // encoding doesn't produce traversal after one decode.
+  it("passes the path guard for %252e%252e (one-decode gives literal %2e%2e, not ..)", async () => {
     const svc = makeService();
-    mockFileExists.mockResolvedValue([false]);
-    await expect(
-      svc.getObjectEntityFile("/objects/%252e%252e/safe"),
-    ).rejects.toBeInstanceOf(ObjectNotFoundError);
-    // GCS client was reached (no traversal detected) but file doesn't exist.
-    expect(mockFileExists).toHaveBeenCalled();
+    // The path guard does not fire; getObjectEntityFile returns the File handle.
+    const file = await svc.getObjectEntityFile("/objects/%252e%252e/safe");
+    expect(file).toBeDefined();
+    // GCS file factory was reached (guard passed).
+    expect(mockFileFactory).toHaveBeenCalled();
   });
 });
 
@@ -172,52 +167,49 @@ describe("getObjectEntityFile — malformed percent-encoding", () => {
     await expectTraversalRejected("/objects/%2");
   });
 
-  it("rejects a path with null-byte injection (%00)", async () => {
+  it("passes the path guard for null-byte injection (%00) — file handle returned", async () => {
     // %00 decodes to NUL byte. posix.normalize leaves it in the segment.
-    // The resulting path is not ".." so the guard does NOT fire — this reaches
-    // the GCS client, which won't find the file. ObjectNotFoundError is thrown.
+    // The resulting entityId is not ".." so the guard does NOT fire.
+    // getObjectEntityFile returns the File handle; the caller will receive a
+    // GCS error if the object does not actually exist.
     const svc = makeService();
-    mockFileExists.mockResolvedValue([false]);
-    await expect(
-      svc.getObjectEntityFile("/objects/file%00.json"),
-    ).rejects.toBeInstanceOf(ObjectNotFoundError);
-    expect(mockFileExists).toHaveBeenCalled();
+    const file = await svc.getObjectEntityFile("/objects/file%00.json");
+    expect(file).toBeDefined();
+    expect(mockFileFactory).toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Suite 6: Valid paths — guard must NOT reject, request reaches GCS
+// Suite 6: Valid paths — guard must NOT reject, file handle returned
 // ---------------------------------------------------------------------------
 
-describe("getObjectEntityFile — valid paths reach the GCS client", () => {
-  it("allows a plain UUID-style objectId when the file exists", async () => {
-    mockFileExists.mockResolvedValue([true]);
+describe("getObjectEntityFile — valid paths return the GCS File handle", () => {
+  it("returns a File handle for a plain UUID-style objectId", async () => {
     const svc = makeService();
     const file = await svc.getObjectEntityFile(
       "/objects/uploads/550e8400-e29b-41d4-a716-446655440000",
     );
     expect(file).toBeDefined();
-    expect(mockFileExists).toHaveBeenCalled();
+    expect(mockFileFactory).toHaveBeenCalled();
   });
 
-  it("allows a nested valid path (subfolder/filename)", async () => {
-    mockFileExists.mockResolvedValue([true]);
+  it("returns a File handle for a nested valid path (subfolder/filename)", async () => {
     const svc = makeService();
     const file = await svc.getObjectEntityFile(
       "/objects/uploads/subfolder/data.bag",
     );
     expect(file).toBeDefined();
-    expect(mockFileExists).toHaveBeenCalled();
+    expect(mockFileFactory).toHaveBeenCalled();
   });
 
-  it("throws ObjectNotFoundError when the file does not exist (not a guard rejection)", async () => {
-    mockFileExists.mockResolvedValue([false]);
+  it("returns a File handle even when the underlying object does not exist (TOCTOU-free)", async () => {
+    // No existence pre-check: getObjectEntityFile succeeds for a valid path
+    // regardless of whether the object exists in GCS. The caller performs the
+    // actual I/O (stream / delete / ACL set) and handles GCS 404 there.
     const svc = makeService();
-    await expect(
-      svc.getObjectEntityFile("/objects/uploads/missing-file.csv"),
-    ).rejects.toBeInstanceOf(ObjectNotFoundError);
-    // GCS was contacted (guard passed, file just wasn't found).
-    expect(mockFileExists).toHaveBeenCalled();
+    const file = await svc.getObjectEntityFile("/objects/uploads/missing-file.csv");
+    expect(file).toBeDefined();
+    expect(mockFileFactory).toHaveBeenCalled();
   });
 });
 
@@ -231,7 +223,7 @@ describe("getObjectEntityFile — wrong path prefix is rejected immediately", ()
     await expect(
       svc.getObjectEntityFile("/uploads/some-file"),
     ).rejects.toBeInstanceOf(ObjectNotFoundError);
-    expect(mockFileExists).not.toHaveBeenCalled();
+    expect(mockFileFactory).not.toHaveBeenCalled();
   });
 
   it("rejects empty string path", async () => {
@@ -239,6 +231,6 @@ describe("getObjectEntityFile — wrong path prefix is rejected immediately", ()
     await expect(svc.getObjectEntityFile("")).rejects.toBeInstanceOf(
       ObjectNotFoundError,
     );
-    expect(mockFileExists).not.toHaveBeenCalled();
+    expect(mockFileFactory).not.toHaveBeenCalled();
   });
 });

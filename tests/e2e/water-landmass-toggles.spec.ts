@@ -126,7 +126,7 @@ test.describe("TOPO badge & download — ProvenancePanel", () => {
     // hydrate) and in the persisted local store (so the first datasets query
     // already targets freshwater).
     await request.put(apiUrl("/api/settings"), {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { ...DEFAULT_SETTINGS, waterType: "freshwater" },
     });
     await page.addInitScript(() => {

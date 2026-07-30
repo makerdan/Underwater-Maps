@@ -115,6 +115,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("uploadId", uploadId)
       .field("chunkIndex", "0")
@@ -147,6 +148,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     // Send chunk 0 first to create the in-memory session.
     const res0 = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("uploadId", uploadId)
       .field("chunkIndex", "0")
@@ -162,6 +164,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     // Send chunk 1 — this should call updateChunksReceivedInDB(uploadId, 2).
     const res1 = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("uploadId", uploadId)
       .field("chunkIndex", "1")
@@ -198,6 +201,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
 
     const res = await request(app)
       .get(`/api/datasets/upload/chunk/status/${uploadId}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
 
     expect(res.status).toBe(200);
@@ -227,6 +231,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     // Send chunk 1 without having sent chunk 0 in this process.
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("uploadId", uploadId)
       .field("chunkIndex", "1")
@@ -261,6 +266,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload/chunk/finalize")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ uploadId, fileName: "test.csv", totalChunks: 1, resolution: 256 })
       .set("Content-Type", "application/json");
@@ -294,6 +300,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     // without touching the DB again.
     const statusRes = await request(app)
       .get(`/api/datasets/upload/chunk/status/${uploadId}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
 
     expect(statusRes.status).toBe(200);
@@ -303,6 +310,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     // (session was restored by the status call above).  No DB select needed.
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("uploadId", uploadId)
       .field("chunkIndex", "1")

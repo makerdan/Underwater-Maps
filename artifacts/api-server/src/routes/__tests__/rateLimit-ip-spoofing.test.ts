@@ -97,6 +97,7 @@ describe("IP rate-limit — bucket key matches req.ip", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", clientIp)
       .field("resolution", "not-a-number")
@@ -113,6 +114,7 @@ describe("IP rate-limit — bucket key matches req.ip", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", freshIp)
       .field("resolution", "not-a-number")
@@ -128,6 +130,7 @@ describe("IP rate-limit — bucket key matches req.ip", () => {
 
     const penultimate = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", ip)
       .field("resolution", "not-a-number")
@@ -137,6 +140,7 @@ describe("IP rate-limit — bucket key matches req.ip", () => {
 
     const blocked = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", ip)
       .field("resolution", "not-a-number")
@@ -175,6 +179,7 @@ describe("IP rate-limit — multi-hop XFF: forged outer IPs are NOT used as the 
     // Request with a multi-hop XFF: forged outer + real client + trusted proxy.
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", `${forgedOuterIp}, ${realClientIp}`)
       .field("resolution", "not-a-number")
@@ -198,6 +203,7 @@ describe("IP rate-limit — multi-hop XFF: forged outer IPs are NOT used as the 
     // so req.ip = realClientIp (fresh bucket) → request must be allowed.
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", `${forgedOuterIp}, ${realClientIp}`)
       .field("resolution", "not-a-number")
@@ -219,6 +225,7 @@ describe("IP rate-limit — per-IP isolation", () => {
 
     const exhaustedRes = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", exhaustedIp)
       .field("resolution", "not-a-number")
@@ -227,6 +234,7 @@ describe("IP rate-limit — per-IP isolation", () => {
 
     const freshRes = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", unaffectedIp)
       .field("resolution", "not-a-number")

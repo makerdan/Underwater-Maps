@@ -83,6 +83,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
   it("returns 400 when uploadId is missing", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk/finalize")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-finalize-test")
       .send({ fileName: "scan.laz", totalChunks: 3 });
 
@@ -93,6 +94,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
   it("returns 400 when uploadId is injected as an array", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk/finalize")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-finalize-test")
       .send({
         uploadId: ["abcd1234efgh5678", "zzzz9999xxxx8888"],
@@ -107,6 +109,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
   it("returns 400 when totalChunks is 0 (below minimum)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk/finalize")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-finalize-test")
       .send({ uploadId: VALID_UPLOAD_ID, fileName: "scan.laz", totalChunks: 0 });
 
@@ -117,6 +120,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
   it("returns 400 when totalChunks is 4097 (above maximum)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk/finalize")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-finalize-test")
       .send({ uploadId: VALID_UPLOAD_ID, fileName: "scan.laz", totalChunks: 4097 });
 
@@ -127,6 +131,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
   it("returns 400 when resolution is below minimum (31)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk/finalize")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-finalize-test")
       .send({
         uploadId: VALID_UPLOAD_ID,
@@ -142,6 +147,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
   it("returns 400 when resolution is above maximum (513)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk/finalize")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-finalize-test")
       .send({
         uploadId: VALID_UPLOAD_ID,
@@ -157,6 +163,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
   it("returns 400 when resolution is a non-integer (1.5)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk/finalize")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-finalize-test")
       .send({
         uploadId: VALID_UPLOAD_ID,
@@ -172,6 +179,7 @@ describe("POST /api/datasets/upload/chunk/finalize — body field validation", (
   it("passes schema validation and reaches business logic (session not found) for a valid body", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk/finalize")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-finalize-test")
       .send({
         uploadId: VALID_UPLOAD_ID,

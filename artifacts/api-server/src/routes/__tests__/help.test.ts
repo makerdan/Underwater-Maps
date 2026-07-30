@@ -80,6 +80,7 @@ describe("POST /api/poe/help", () => {
   it("returns 400 when the question field is missing", async () => {
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-help-missing")
       .send({});
 
@@ -94,6 +95,7 @@ describe("POST /api/poe/help", () => {
     const longQuestion = "a".repeat(1001);
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-help-long")
       .send({ question: longQuestion });
 
@@ -106,6 +108,7 @@ describe("POST /api/poe/help", () => {
   it("returns 200 with an answer string on a valid request", async () => {
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-help-ok")
       .send({ question: "How do I drop a marker?" });
 
@@ -124,6 +127,7 @@ describe("POST /api/poe/help", () => {
     for (let i = 0; i < 30; i++) {
       const res = await request(app)
         .post("/api/poe/help")
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", userId)
         .send({ question: `Question ${i}` });
       expect(res.status).toBe(200);
@@ -131,6 +135,7 @@ describe("POST /api/poe/help", () => {
 
     const limited = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send({ question: "one too many" });
 

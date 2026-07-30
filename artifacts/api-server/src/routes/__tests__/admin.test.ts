@@ -100,6 +100,7 @@ describe("GET /admin/bucket-monitor — authentication", () => {
     vi.stubEnv("ADMIN_USER_IDS", "other_user");
     const res = await request(makeApp())
       .get("/admin/bucket-monitor")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(403);
     expect(res.body.error).toBe("forbidden");
@@ -110,6 +111,7 @@ describe("GET /admin/bucket-monitor — authentication", () => {
     vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
     const res = await request(makeApp())
       .get("/admin/bucket-monitor")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("lifecycle");
@@ -121,6 +123,7 @@ describe("GET /admin/bucket-monitor — authentication", () => {
     vi.stubEnv("ADMIN_USER_IDS", E2E_USER);
     const res = await request(makeApp())
       .get("/admin/bucket-monitor")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(res.body.lifecycle).toMatchObject({
@@ -152,6 +155,7 @@ describe("GET /admin/large-datasets-diff — authentication", () => {
     vi.stubEnv("ADMIN_USER_IDS", "other_user");
     const res = await request(makeApp())
       .get("/admin/large-datasets-diff")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(403);
     expect(res.body.error).toBe("forbidden");
@@ -161,6 +165,7 @@ describe("GET /admin/large-datasets-diff — authentication", () => {
     vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
     const res = await request(makeApp())
       .get("/admin/large-datasets-diff")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
@@ -191,6 +196,7 @@ describe("GET /admin/large-datasets-diff — authentication", () => {
     });
     const res = await request(makeApp())
       .get("/admin/large-datasets-diff")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(res.body.changedCount).toBe(1);

@@ -61,6 +61,7 @@ describe("POST /api/datasets/upload — parse error → 422", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "64")
       .attach("file", malformedTiff, "survey.tif");
@@ -74,6 +75,7 @@ describe("POST /api/datasets/upload — parse error → 422", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "64")
       .attach("file", malformedBag, "survey.bag");
@@ -87,6 +89,7 @@ describe("POST /api/datasets/upload — parse error → 422", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "64")
       .attach("file", malformedLaz, "survey.laz");
@@ -100,6 +103,7 @@ describe("POST /api/datasets/upload — parse error → 422", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "64")
       .attach("file", Buffer.from(tinyValidCsv), "small.csv");

@@ -155,6 +155,7 @@ describe("GET /api/user/datasets/:id/terrain — user rate limit (30 req/min)", 
 
     const allowed = await request(app)
       .get("/api/user/datasets/some-dataset-id/terrain")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", ip);
 
@@ -162,6 +163,7 @@ describe("GET /api/user/datasets/:id/terrain — user rate limit (30 req/min)", 
 
     const blocked = await request(app)
       .get("/api/user/datasets/some-dataset-id/terrain")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", ip);
 
@@ -180,12 +182,14 @@ describe("GET /api/user/datasets/:id/terrain — user rate limit (30 req/min)", 
 
     const exhaustedRes = await request(app)
       .get("/api/user/datasets/some-dataset-id/terrain")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", exhaustedUser)
       .set("x-forwarded-for", ip);
     expect(exhaustedRes.status).toBe(429);
 
     const freshRes = await request(app)
       .get("/api/user/datasets/some-dataset-id/terrain")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", freshUser)
       .set("x-forwarded-for", "198.51.100.82");
     expect(freshRes.status).not.toBe(429);
@@ -194,6 +198,7 @@ describe("GET /api/user/datasets/:id/terrain — user rate limit (30 req/min)", 
   it("sets X-RateLimit-* headers on allowed requests", async () => {
     const res = await request(app)
       .get("/api/user/datasets/some-dataset-id/terrain")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", "198.51.100.83");
 

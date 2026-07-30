@@ -11,7 +11,7 @@ import { test, expect, type Page, type APIResponse, API_URL, E2E_USER_ID } from 
 
 const DATASET_ID = "thorne-bay";
 const API_BASE = API_URL;
-const authHeaders = { "x-e2e-user-id": E2E_USER_ID };
+const authHeaders = { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" };
 
 interface Marker { id: string; label: string }
 interface CatchEntry {

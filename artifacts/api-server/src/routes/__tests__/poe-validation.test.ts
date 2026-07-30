@@ -139,6 +139,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
   it("returns 400 when gridBase64 is missing", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ waterType: "saltwater" });
     expect(res.status).toBe(400);
@@ -148,6 +149,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
   it("returns 400 when gridBase64 is an empty string", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ gridBase64: "" });
     expect(res.status).toBe(400);
@@ -157,6 +159,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
   it("returns 400 when gridBase64 is not a string", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ gridBase64: 12345 });
     expect(res.status).toBe(400);
@@ -166,6 +169,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
   it("returns 400 when depths32 is not an array", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ gridBase64: "dGVzdA==", depths32: "not-an-array" });
     expect(res.status).toBe(400);
@@ -175,6 +179,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
   it("returns 400 when depthsFull contains non-numbers", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ gridBase64: "dGVzdA==", depthsFull: ["a", "b", "c"] });
     expect(res.status).toBe(400);
@@ -184,6 +189,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
   it("returns 400 when waterType has an invalid enum value", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ gridBase64: "dGVzdA==", waterType: "brackish" });
     expect(res.status).toBe(400);
@@ -193,6 +199,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
   it("accepts an empty depths32 array (does not return 400)", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ gridBase64: "dGVzdA==", depths32: [] });
     expect(res.status).not.toBe(400);
@@ -201,6 +208,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
   it("accepts an empty depthsFull array (does not return 400)", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ gridBase64: "dGVzdA==", depthsFull: [] });
     expect(res.status).not.toBe(400);
@@ -209,6 +217,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
   it("does not return 400 when a valid minimal body is sent", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ gridBase64: "dGVzdA==" });
     expect(res.status).not.toBe(400);
@@ -217,6 +226,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
   it("SSE header guard: if the response ever streams, content-type must be text/event-stream, content-length must be absent, and transfer-encoding must not coexist with content-length", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ gridBase64: "dGVzdA==" });
 
@@ -246,6 +256,7 @@ describe("POST /api/poe/query — Zod validation", () => {
   it("returns 400 when userMessage is missing", async () => {
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ history: [] });
     expect(res.status).toBe(400);
@@ -255,6 +266,7 @@ describe("POST /api/poe/query — Zod validation", () => {
   it("returns 400 when userMessage is an empty string", async () => {
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ userMessage: "" });
     expect(res.status).toBe(400);
@@ -264,6 +276,7 @@ describe("POST /api/poe/query — Zod validation", () => {
   it("returns 400 when history is not an array", async () => {
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ userMessage: "hello", history: "not-an-array" });
     expect(res.status).toBe(400);
@@ -273,6 +286,7 @@ describe("POST /api/poe/query — Zod validation", () => {
   it("returns 400 when a history entry is missing the role field", async () => {
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ userMessage: "hello", history: [{ content: "hi" }] });
     expect(res.status).toBe(400);
@@ -282,6 +296,7 @@ describe("POST /api/poe/query — Zod validation", () => {
   it("returns 400 when a history entry has an invalid role enum value", async () => {
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({
         userMessage: "hello",
@@ -294,6 +309,7 @@ describe("POST /api/poe/query — Zod validation", () => {
   it("returns 400 when a history entry has non-string content", async () => {
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({
         userMessage: "hello",
@@ -306,6 +322,7 @@ describe("POST /api/poe/query — Zod validation", () => {
   it("returns 400 when a history entry is missing the content field", async () => {
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({
         userMessage: "hello",
@@ -322,6 +339,7 @@ describe("POST /api/poe/query — Zod validation", () => {
     }));
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ userMessage: "hello", history: oversized });
     expect(res.status).toBe(400);
@@ -331,6 +349,7 @@ describe("POST /api/poe/query — Zod validation", () => {
   it("does not return 400 when a valid minimal body is sent", async () => {
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ userMessage: "show me the deepest point" });
     expect(res.status).not.toBe(400);
@@ -339,6 +358,7 @@ describe("POST /api/poe/query — Zod validation", () => {
   it("does not return 400 with a valid history array (user + assistant entries)", async () => {
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({
         userMessage: "what is the depth here?",
@@ -353,6 +373,7 @@ describe("POST /api/poe/query — Zod validation", () => {
   it("SSE header guard: if the response ever streams, content-type must be text/event-stream, content-length must be absent, and transfer-encoding must not coexist with content-length", async () => {
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
       .send({ userMessage: "show me the deepest point" });
 
@@ -383,6 +404,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-no-q";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({ history: [] });
     expect(res.status).toBe(400);
@@ -393,6 +415,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-empty-q";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({ question: "" });
     expect(res.status).toBe(400);
@@ -403,6 +426,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-ws-q";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({ question: "   " });
     expect(res.status).toBe(400);
@@ -413,6 +437,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-q-type";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({ question: 42 });
     expect(res.status).toBe(400);
@@ -423,6 +448,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-q-long";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({ question: "a".repeat(1001) });
     expect(res.status).toBe(400);
@@ -433,6 +459,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-hist-arr";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({ question: "How do I upload data?", history: "not-an-array" });
     expect(res.status).toBe(400);
@@ -443,6 +470,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-hist-role";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({
         question: "How do I upload data?",
@@ -456,6 +484,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-hist-cnt";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({
         question: "How do I upload data?",
@@ -473,6 +502,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     }));
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({ question: "How do I upload data?", history: oversized });
     expect(res.status).toBe(400);
@@ -483,6 +513,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-valid-min";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({ question: "How do I upload a dataset?" });
     expect(res.status).not.toBe(400);
@@ -492,6 +523,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-valid-hist";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({
         question: "What is the Find Data panel?",
@@ -507,6 +539,7 @@ describe("POST /api/poe/help — Zod validation", () => {
     currentUserId = "user-help-q-1000";
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", currentUserId)
       .send({ question: "a".repeat(1000) });
     expect(res.status).not.toBe(400);

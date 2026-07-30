@@ -301,6 +301,7 @@ describe("GET /api/catches", () => {
   it("returns 400 when datasetId is missing", async () => {
     const res = await request(app)
       .get("/api/catches")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_request" });
@@ -309,6 +310,7 @@ describe("GET /api/catches", () => {
   it("returns [] when the user has no markers in the dataset", async () => {
     const res = await request(app)
       .get("/api/catches?datasetId=ds-1")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
@@ -319,6 +321,7 @@ describe("GET /api/catches", () => {
     state.catchRows = [{ id: "c1", markerId: VALID_UUID, symbol: "🐟" }];
     const res = await request(app)
       .get("/api/catches?datasetId=ds-1")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -330,6 +333,7 @@ describe("GET /api/markers/:markerId/catches", () => {
   it("returns 400 for a malformed marker id", async () => {
     const res = await request(app)
       .get("/api/markers/not-a-uuid/catches")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(400);
   });
@@ -337,6 +341,7 @@ describe("GET /api/markers/:markerId/catches", () => {
   it("returns 404 when the marker is not owned by the caller", async () => {
     const res = await request(app)
       .get(`/api/markers/${VALID_UUID}/catches`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(404);
   });
@@ -346,6 +351,7 @@ describe("GET /api/markers/:markerId/catches", () => {
     state.catchRows = [{ id: "c1", markerId: VALID_UUID, symbol: "🦀" }];
     const res = await request(app)
       .get(`/api/markers/${VALID_UUID}/catches`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(200);
     expect(res.body[0]).toMatchObject({ symbol: "🦀" });
@@ -365,6 +371,7 @@ describe("POST /api/markers/:markerId/catches", () => {
     state.markerRows = [{ id: VALID_UUID }];
     const res = await request(app)
       .post(`/api/markers/${VALID_UUID}/catches`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({});
     expect(res.status).toBe(400);
@@ -374,6 +381,7 @@ describe("POST /api/markers/:markerId/catches", () => {
     state.markerRows = [{ id: VALID_UUID }];
     const res = await request(app)
       .post(`/api/markers/${VALID_UUID}/catches`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ symbol: "🐟", photos: ["https://evil.example.com/x.png"] });
     expect(res.status).toBe(400);
@@ -385,6 +393,7 @@ describe("POST /api/markers/:markerId/catches", () => {
     const photos = Array.from({ length: 7 }, (_, i) => `/objects/uploads/p${i}`);
     const res = await request(app)
       .post(`/api/markers/${VALID_UUID}/catches`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ symbol: "🐟", photos });
     expect(res.status).toBe(400);
@@ -393,6 +402,7 @@ describe("POST /api/markers/:markerId/catches", () => {
   it("returns 404 when the marker is not owned by the caller", async () => {
     const res = await request(app)
       .post(`/api/markers/${VALID_UUID}/catches`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ symbol: "🐟" });
     expect(res.status).toBe(404);
@@ -402,6 +412,7 @@ describe("POST /api/markers/:markerId/catches", () => {
     state.markerRows = [{ id: VALID_UUID }];
     const res = await request(app)
       .post(`/api/markers/${VALID_UUID}/catches`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ symbol: "🐟", symbolName: "Fish", notes: "Nice one", photos: ["/objects/uploads/a"] });
     expect(res.status).toBe(201);
@@ -414,6 +425,7 @@ describe("POST /api/markers/:markerId/catches", () => {
     aclState.existingPolicies.set("/objects/uploads/theirs", { owner: "user-other", visibility: "private" });
     const res = await request(app)
       .post(`/api/markers/${VALID_UUID}/catches`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ symbol: "🐟", photos: ["/objects/uploads/theirs"] });
     expect(res.status).toBe(403);
@@ -428,6 +440,7 @@ describe("POST /api/markers/:markerId/catches", () => {
     aclState.existingPolicies.set("/objects/uploads/mine", { owner: "user-c", visibility: "private" });
     const res = await request(app)
       .post(`/api/markers/${VALID_UUID}/catches`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ symbol: "🐟", photos: ["/objects/uploads/mine"] });
     expect(res.status).toBe(201);
@@ -439,6 +452,7 @@ describe("POST /api/markers/:markerId/catches", () => {
     aclState.missingObjects.add("/objects/uploads/ghost");
     const res = await request(app)
       .post(`/api/markers/${VALID_UUID}/catches`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ symbol: "🐟", photos: ["/objects/uploads/ghost"] });
     expect(res.status).toBe(400);
@@ -450,6 +464,7 @@ describe("PATCH /api/catches/:id", () => {
   it("returns 400 for an empty patch body", async () => {
     const res = await request(app)
       .patch(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({});
     expect(res.status).toBe(400);
@@ -458,6 +473,7 @@ describe("PATCH /api/catches/:id", () => {
   it("returns 404 when the entry does not exist / is not owned", async () => {
     const res = await request(app)
       .patch(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ notes: "updated" });
     expect(res.status).toBe(404);
@@ -468,6 +484,7 @@ describe("PATCH /api/catches/:id", () => {
     aclState.existingPolicies.set("/objects/uploads/theirs", { owner: "user-other", visibility: "private" });
     const res = await request(app)
       .patch(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ photos: ["/objects/uploads/theirs"] });
     expect(res.status).toBe(403);
@@ -478,6 +495,7 @@ describe("PATCH /api/catches/:id", () => {
     state.updatedRows = [{ id: VALID_UUID, symbol: "🐟" }];
     const res = await request(app)
       .patch(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ notes: "updated" });
     expect(res.status).toBe(200);
@@ -489,6 +507,7 @@ describe("PATCH /api/catches/:id", () => {
     state.updatedRows = [{ id: VALID_UUID, symbol: "🐟", photos: ["/objects/uploads/new1"] }];
     const res = await request(app)
       .patch(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ photos: ["/objects/uploads/new1"] });
     expect(res.status).toBe(200);
@@ -504,6 +523,7 @@ describe("PATCH /api/catches/:id", () => {
     state.updatedRows = [{ id: VALID_UUID, symbol: "🐟" }];
     const res = await request(app)
       .patch(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c")
       .send({ notes: "note only" });
     expect(res.status).toBe(200);
@@ -516,6 +536,7 @@ describe("DELETE /api/catches/:id", () => {
   it("returns 404 when the entry does not exist / is not owned", async () => {
     const res = await request(app)
       .delete(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(404);
   });
@@ -524,6 +545,7 @@ describe("DELETE /api/catches/:id", () => {
     state.deletedRows = [{ id: VALID_UUID, photos: [] }];
     const res = await request(app)
       .delete(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(204);
   });
@@ -532,6 +554,7 @@ describe("DELETE /api/catches/:id", () => {
     state.deletedRows = [{ id: VALID_UUID, photos: ["/objects/uploads/p1", "/objects/uploads/p2"] }];
     const res = await request(app)
       .delete(`/api/catches/${VALID_UUID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(204);
     // Allow Promise.allSettled fire-and-forget to resolve before asserting.
@@ -551,6 +574,7 @@ describe("POST /api/catch-photos/upload-url", () => {
   it("returns a signed uploadURL and normalized objectPath", async () => {
     const res = await request(app)
       .post("/api/catch-photos/upload-url")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-c");
     expect(res.status).toBe(200);
     expect(res.body.uploadURL).toContain("https://");

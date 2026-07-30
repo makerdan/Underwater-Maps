@@ -18,6 +18,10 @@
  *
  * So when E2E_AUTH_BYPASS !== "1", x-e2e-user-id is unconditionally ignored
  * and Clerk auth takes over — which returns null in our mock → 401.
+ *
+ * Secondary secret guard tests: when E2E_AUTH_BYPASS=1 is active, the bypass
+ * additionally requires an `x-e2e-bypass-secret` header matching the
+ * E2E_BYPASS_SECRET env var. Missing or mismatched secrets must return 401.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
@@ -47,6 +51,10 @@ vi.mock("@clerk/shared/keys", () => ({
 
 import app from "../app.js";
 import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
+
+// The global setup.ts sets E2E_BYPASS_SECRET="vitest-test-secret" at process
+// level. We stub/unstub E2E_AUTH_BYPASS per-test via vi.stubEnv.
+const BYPASS_SECRET = "vitest-test-secret";
 
 beforeEach(() => {
   __resetRateLimitMemory();
@@ -86,5 +94,58 @@ describe("requireAuth — E2E bypass header is rejected when E2E_AUTH_BYPASS is 
     vi.stubEnv("E2E_AUTH_BYPASS", "1");
     const res = await request(app).get("/api/markers?datasetId=test");
     expect(res.status).toBe(401);
+  });
+});
+
+describe("requireAuth — secondary E2E_BYPASS_SECRET guard", () => {
+  it("returns 401 when E2E_AUTH_BYPASS=1 but x-e2e-bypass-secret header is missing", async () => {
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+
+    const res = await request(app)
+      .get("/api/markers?datasetId=test")
+      .set("x-e2e-user-id", "user-should-fail");
+
+    // Secret header absent — bypass must not activate.
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("error", "Unauthorized");
+  });
+
+  it("returns 401 when E2E_AUTH_BYPASS=1 but x-e2e-bypass-secret does not match", async () => {
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+
+    const res = await request(app)
+      .get("/api/markers?datasetId=test")
+      .set("x-e2e-bypass-secret", "wrong-secret")
+      .set("x-e2e-user-id", "user-should-fail");
+
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("error", "Unauthorized");
+  });
+
+  it("returns 401 when E2E_AUTH_BYPASS=1 and bypass-secret matches but x-e2e-user-id is empty", async () => {
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+
+    const res = await request(app)
+      .get("/api/markers?datasetId=test")
+      .set("x-e2e-bypass-secret", BYPASS_SECRET)
+      .set("x-e2e-user-id", "");
+
+    expect(res.status).toBe(401);
+  });
+
+  it("bypasses auth when E2E_AUTH_BYPASS=1 and x-e2e-bypass-secret matches", async () => {
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+
+    // With a matching secret the bypass activates — the request is authed as
+    // the given user. /api/markers returns 200 (empty list) for valid authed
+    // requests (db mock returns []).
+    const res = await request(app)
+      .get("/api/markers?datasetId=test")
+      .set("x-e2e-bypass-secret", BYPASS_SECRET)
+      .set("x-e2e-user-id", "user-bypass-ok");
+
+    // 200 (authenticated, markers route succeeds with empty array) or at worst
+    // a non-401 error — the key assertion is that auth was not rejected.
+    expect(res.status).not.toBe(401);
   });
 });

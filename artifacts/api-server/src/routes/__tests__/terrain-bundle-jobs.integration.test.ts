@@ -211,6 +211,7 @@ describe("terrain bundle job state machine (real DB)", () => {
 
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send({ presetId: "itest-preset" });
 
@@ -230,6 +231,7 @@ describe("terrain bundle job state machine (real DB)", () => {
     // GET returns the stored bundle.
     const getRes = await request(app)
       .get("/terrain/bundles/itest-preset")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId);
     expect(getRes.status).toBe(200);
     expect(getRes.body).toMatchObject({ label: "Test bundle", presetId: "itest-preset" });
@@ -237,6 +239,7 @@ describe("terrain bundle job state machine (real DB)", () => {
     // Re-POST short-circuits: bundle already available.
     const rePost = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send({ presetId: "itest-preset" });
     expect(rePost.status).toBe(200);
@@ -249,6 +252,7 @@ describe("terrain bundle job state machine (real DB)", () => {
 
     await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send({ presetId: "itest-preset" })
       .expect(202);
@@ -261,6 +265,7 @@ describe("terrain bundle job state machine (real DB)", () => {
     // Status endpoint surfaces the error.
     const statusRes = await request(app)
       .get("/terrain/bundles/itest-preset/status")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId);
     expect(statusRes.status).toBe(200);
     expect(statusRes.body.status).toBe("error");
@@ -269,6 +274,7 @@ describe("terrain bundle job state machine (real DB)", () => {
     // Retry: POST re-queues the errored job and it completes.
     const retryRes = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send({ presetId: "itest-preset" });
     expect(retryRes.status).toBe(202);
@@ -284,6 +290,7 @@ describe("terrain bundle job state machine (real DB)", () => {
 
     await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send({ presetId: "itest-preset" })
       .expect(202);
@@ -298,6 +305,7 @@ describe("terrain bundle job state machine (real DB)", () => {
 
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send({ presetId: "itest-catalog-lake" });
     expect(res.status).toBe(202);
@@ -316,6 +324,7 @@ describe("terrain bundle job state machine (real DB)", () => {
     const userId = newUserId();
     const res = await request(app)
       .post("/terrain/bundles")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send({ presetId: "definitely-not-a-preset" });
     expect(res.status).toBe(404);

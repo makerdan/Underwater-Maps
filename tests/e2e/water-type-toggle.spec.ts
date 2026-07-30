@@ -34,7 +34,7 @@ test.describe("Water-type toggle", () => {
     // initialises with the correct waterType on page.goto, independent of any
     // hydrateFromServer race with the server PUT above.
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { waterType: "saltwater", colormapTheme: "ocean" },
     });
 

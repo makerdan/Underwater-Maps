@@ -90,7 +90,7 @@ test.describe("Terrain visibility — real bundled datasets, real geometry", () 
     for (const waterType of ["freshwater", "saltwater"] as const) {
       const res = await request.get(
         apiUrl(`/api/datasets?waterType=${waterType}`),
-        { headers: { "x-e2e-user-id": E2E_USER_ID } },
+        { headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" } },
       );
       expect(res.ok()).toBe(true);
       const list = (await res.json()) as BundledDataset[];
@@ -115,7 +115,7 @@ test.describe("Terrain visibility — real bundled datasets, real geometry", () 
         // hydrate) and in the persisted local store (so the first datasets
         // query targets the right water type).
         await request.put(apiUrl("/api/settings"), {
-          headers: { "x-e2e-user-id": E2E_USER_ID },
+          headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
           data: { ...DEFAULT_SETTINGS, waterType: dataset.waterType },
         });
         // addInitScript registrations accumulate; the one registered last

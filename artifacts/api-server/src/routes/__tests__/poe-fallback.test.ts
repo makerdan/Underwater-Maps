@@ -170,6 +170,7 @@ describe("POST /api/poe/help — provider fallback", () => {
 
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-help-poe-ok")
       .send({ question: "How do I drop a marker?" });
 
@@ -184,6 +185,7 @@ describe("POST /api/poe/help — provider fallback", () => {
 
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-help-oai-fallback")
       .send({ question: "How do I use the Drift Planner?" });
 
@@ -199,6 +201,7 @@ describe("POST /api/poe/help — provider fallback", () => {
 
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-help-both-fail")
       .send({ question: "How do I export settings?" });
 
@@ -210,6 +213,7 @@ describe("POST /api/poe/help — provider fallback", () => {
 
     await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-help-no-oai-if-poe-ok")
       .send({ question: "What is TIDAL 3D?" });
 
@@ -222,6 +226,7 @@ describe("POST /api/poe/help — provider fallback", () => {
 
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-help-oai-content")
       .send({ question: "What does the TIDAL 3D toggle do?" });
 
@@ -238,6 +243,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
   it("returns source: 'ai' when Poe succeeds", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cls-poe-ok")
       .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
 
@@ -252,6 +258,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cls-oai-fallback")
       .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
 
@@ -268,6 +275,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cls-heuristic")
       .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
 
@@ -283,6 +291,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cls-no-depths")
       .send({ gridBase64: GRID_BASE64, waterType: "saltwater" });
 
@@ -304,6 +313,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
 
     const first = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send(body);
 
@@ -313,6 +323,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
 
     const second = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send(body);
 
@@ -325,6 +336,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
   it("does not call OpenAI when Poe succeeds", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cls-no-oai-poe-ok")
       .send({ gridBase64: GRID_BASE64, waterType: "freshwater", depths32: DEPTHS_32 });
 
@@ -343,6 +355,7 @@ describe("POST /api/poe/classify — provider fallback", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cls-freshwater-fallback")
       .send({ gridBase64: GRID_BASE64, waterType: "freshwater", depths32: DEPTHS_32 });
 
@@ -366,6 +379,7 @@ describe("OpenAI quota/429 detection", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cls-quota-429")
       .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
 
@@ -381,6 +395,7 @@ describe("OpenAI quota/429 detection", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cls-quota-code")
       .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
 
@@ -395,6 +410,7 @@ describe("OpenAI quota/429 detection", () => {
 
     const res = await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-help-quota-429")
       .send({ question: "What is the zone overlay?" });
 
@@ -425,6 +441,7 @@ describe("logUsage provider tagging", () => {
 
     await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cls-provider-tag")
       .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
 
@@ -444,6 +461,7 @@ describe("logUsage provider tagging", () => {
 
     await request(app)
       .post("/api/poe/help")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-help-provider-tag")
       .send({ question: "How do I use the zone overlay?" });
 
@@ -460,6 +478,7 @@ describe("logUsage provider tagging", () => {
 
     await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cls-poe-provider-absent")
       .send({ gridBase64: GRID_BASE64, waterType: "saltwater", depths32: DEPTHS_32 });
 

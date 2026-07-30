@@ -6823,6 +6823,9 @@ components:
         createdAt:
           type: string
           format: date-time
+        userId:
+          type: string
+          description: Clerk user ID of the user who created this marker
       required:
         - id
         - datasetId

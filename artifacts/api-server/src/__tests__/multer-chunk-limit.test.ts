@@ -50,6 +50,7 @@ describe("POST /api/datasets/upload/chunk — 6 MB per-chunk limit", () => {
   it("returns 413 when a single chunk exceeds 6 MB", async () => {
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("uploadId", "test-upload-chunk-limit-01")
       .field("chunkIndex", "0")
@@ -77,6 +78,7 @@ describe("POST /api/datasets/upload/chunk — 6 MB per-chunk limit", () => {
     const validChunk = Buffer.alloc(1024, 0x41);
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("uploadId", "test-upload-chunk-ok-01234567")
       .field("chunkIndex", "0")

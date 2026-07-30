@@ -214,7 +214,7 @@ test.describe("BathyScan — Two-click measurement flow", () => {
     // initialises with the correct value on page.goto, independent of any
     // hydrateFromServer race with the server PUT above.
     await request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { units: "metric" },
     });
     await page.addInitScript(() => {

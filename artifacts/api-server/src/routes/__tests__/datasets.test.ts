@@ -195,6 +195,7 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
   it("returns 400 with invalid_param when resolution is malformed", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "not-a-number")
       .attach("file", Buffer.from(ENOUGH_POINTS_CSV), "survey.csv");
@@ -206,6 +207,7 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
   it("returns 400 when resolution is out of range (too small)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "8")
       .attach("file", Buffer.from(ENOUGH_POINTS_CSV), "survey.csv");
@@ -217,6 +219,7 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
   it("returns 400 when resolution is out of range (too large)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "9999")
       .attach("file", Buffer.from(ENOUGH_POINTS_CSV), "survey.csv");
@@ -230,6 +233,7 @@ describe("POST /api/datasets/upload — numeric-param validation", () => {
     // surface a clean 400 (not a 5xx) when the value isn't a valid int.
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("gridResolution", "NaN")
       .attach("file", Buffer.from(ENOUGH_POINTS_CSV), "survey.csv");
@@ -269,6 +273,7 @@ describe("POST /api/datasets/upload — binary survey formats (end-to-end)", () 
     const buf = readFileSync(join(FIXTURE_DIR, "survey.tif"));
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "64")
       .attach("file", buf, { filename: "survey.tif", contentType: "image/tiff" });
@@ -286,6 +291,7 @@ describe("POST /api/datasets/upload — binary survey formats (end-to-end)", () 
     const buf = readFileSync(join(FIXTURE_DIR, "survey.nc"));
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "64")
       .attach("file", buf, { filename: "survey.nc", contentType: "application/octet-stream" });
@@ -303,6 +309,7 @@ describe("POST /api/datasets/upload — binary survey formats (end-to-end)", () 
     const buf = readFileSync(join(FIXTURE_DIR, "survey_1_2.las"));
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "64")
       .attach("file", buf, { filename: "survey_1_2.las", contentType: "application/octet-stream" });
@@ -320,6 +327,7 @@ describe("POST /api/datasets/upload — binary survey formats (end-to-end)", () 
     const buf = readFileSync(join(FIXTURE_DIR, "survey_1_4.las"));
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "64")
       .attach("file", buf, { filename: "survey_1_4.las", contentType: "application/octet-stream" });
@@ -333,6 +341,7 @@ describe("POST /api/datasets/upload — binary survey formats (end-to-end)", () 
   it("returns 415 for an unsupported binary extension (.shp)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("resolution", "64")
       .attach("file", Buffer.from("fake shapefile"), { filename: "survey.shp", contentType: "application/octet-stream" });
@@ -378,6 +387,7 @@ describe("GET /api/datasets/upload/jobs/:jobId — DB fallback after server rest
     // _mockJobRows is [] (reset in beforeEach) — neither memory nor DB has the job
     const res = await request(app)
       .get(`/api/datasets/upload/jobs/${JOB_ID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
 
     expect(res.status).toBe(404);
@@ -402,6 +412,7 @@ describe("GET /api/datasets/upload/jobs/:jobId — DB fallback after server rest
 
     const res = await request(app)
       .get(`/api/datasets/upload/jobs/${JOB_ID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
 
     expect(res.status).toBe(200);
@@ -425,6 +436,7 @@ describe("GET /api/datasets/upload/jobs/:jobId — DB fallback after server rest
 
     const res = await request(app)
       .get(`/api/datasets/upload/jobs/${OTHER_USER_JOB_ID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
 
     expect(res.status).toBe(403);
@@ -448,6 +460,7 @@ describe("GET /api/datasets/upload/jobs/:jobId — DB fallback after server rest
 
     const res = await request(app)
       .get(`/api/datasets/upload/jobs/${JOB_ID}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
 
     expect(res.status).toBe(200);

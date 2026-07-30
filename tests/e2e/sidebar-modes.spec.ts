@@ -112,7 +112,7 @@ test("overlay toggle state is preserved across mode switches", async ({ page }) 
   // the injected localStorage value, so both sources must agree or the
   // assertion races the hydrate → persist rewrite.
   await page.request.put(`${API_URL}/api/settings`, {
-    headers: { "x-e2e-user-id": E2E_USER_ID },
+    headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
     data: { windOverlayActive: true },
   });
 
@@ -149,7 +149,7 @@ test("panel collapse state is preserved across mode switches", async ({ page }) 
   // replaces the collapse store wholesale, wiping the localStorage seed if
   // the server row lacks the key.
   await page.request.put(`${API_URL}/api/settings`, {
-    headers: { "x-e2e-user-id": E2E_USER_ID },
+    headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
     data: { panelCollapse: { conditions: true } },
   });
 

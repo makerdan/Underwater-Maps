@@ -10,7 +10,7 @@ import {
 import { correlationIdMiddleware, globalTimeoutMiddleware } from "./middlewares/correlationId";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import { validateStartupEnv } from "./lib/env";
+import { validateStartupEnv, isProduction } from "./lib/env";
 
 // Validate format-sensitive env vars once at startup. Malformed values are
 // logged loudly here (and safe fallbacks apply at each point of use).
@@ -99,14 +99,22 @@ app.use(
         allowList.push(`https://${process.env["REPLIT_DEV_DOMAIN"]}`);
       }
 
-      const isProduction =
-        process.env["NODE_ENV"] === "production" ||
-        Boolean(process.env["REPLIT_DEPLOYMENT"]);
+      const isProd = isProduction();
 
-      // Dev with no allowlist configured: fall back to permissive so local
-      // developer machines and Playwright E2E tests are not broken.
-      if (!isProduction && allowList.length === 0) {
-        callback(null, requestOrigin);
+      // Dev with no allowlist configured: fall back to anonymous CORS
+      // (no credentials) unless the explicit opt-in env var is set.
+      // Reflecting the request origin with credentials: true would allow
+      // any web page to make credentialed mutations on behalf of a logged-in
+      // user, so it requires a deliberate CORS_ALLOW_REFLECTED=1 opt-in.
+      if (!isProd && allowList.length === 0) {
+        if (process.env["CORS_ALLOW_REFLECTED"] === "1") {
+          // Explicit opt-in: reflect origin with credentials (dev convenience).
+          callback(null, requestOrigin);
+        } else {
+          // No opt-in: allow the request but without credentials so the
+          // browser's CORS policy blocks cross-origin cookie/auth access.
+          callback(null, false);
+        }
         return;
       }
 

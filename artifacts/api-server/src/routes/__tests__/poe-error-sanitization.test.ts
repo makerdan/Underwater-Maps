@@ -108,6 +108,7 @@ describe("handlePoeError — unclassified error is sanitized", () => {
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-sanitize-1")
       .send(queryPayload());
 
@@ -124,6 +125,7 @@ describe("handlePoeError — unclassified error is sanitized", () => {
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-sanitize-2")
       .send(queryPayload());
 
@@ -140,6 +142,7 @@ describe("handlePoeError — unclassified error is sanitized", () => {
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-sanitize-3")
       .send(queryPayload());
 
@@ -155,6 +158,7 @@ describe("handlePoeError — unclassified error is sanitized", () => {
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-sanitize-4")
       .send(queryPayload());
 
@@ -172,6 +176,7 @@ describe("handlePoeError — unclassified error is sanitized", () => {
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-sanitize-5")
       .send(queryPayload());
 
@@ -185,6 +190,7 @@ describe("handlePoeError — unclassified error is sanitized", () => {
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-sanitize-6")
       .send(queryPayload());
 
@@ -203,6 +209,7 @@ describe("handlePoeError — classified errors use their own static strings", ()
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-classify-1")
       .send(queryPayload());
 
@@ -215,6 +222,7 @@ describe("handlePoeError — classified errors use their own static strings", ()
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-classify-2")
       .send(queryPayload());
 
@@ -227,6 +235,7 @@ describe("handlePoeError — classified errors use their own static strings", ()
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-classify-3")
       .send(queryPayload());
 
@@ -249,6 +258,7 @@ describe("handlePoeError — sensitive content in error properties is not leaked
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cause-1")
       .send(queryPayload());
 
@@ -266,6 +276,7 @@ describe("handlePoeError — sensitive content in error properties is not leaked
 
     const res = await request(app)
       .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-props-1")
       .send(queryPayload());
 

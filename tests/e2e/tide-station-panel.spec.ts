@@ -63,7 +63,7 @@ test.describe("Tide station prediction panel", () => {
       } catch {}
     });
     await page.request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { showTidePanel: true, autoLoadTidal: true, hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true },
     });
     // Nearest-station lookup → a station 42 miles away so the distance

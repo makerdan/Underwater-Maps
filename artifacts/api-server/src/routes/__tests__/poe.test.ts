@@ -101,6 +101,7 @@ describe("POST /api/poe/classify", () => {
   it("returns 400 when gridBase64 is missing", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-missing-grid")
       .send({ waterType: "saltwater" });
 
@@ -112,6 +113,7 @@ describe("POST /api/poe/classify", () => {
   it("returns a 1024-element zones array on a valid request", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-valid")
       .send({
         gridBase64: GRID_BASE64,
@@ -129,6 +131,7 @@ describe("POST /api/poe/classify", () => {
   it("sends a concrete output_format.schema (not empty {}) so Poe does not return 400", async () => {
     await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-schema-pin")
       .send({
         gridBase64: GRID_BASE64,
@@ -161,6 +164,7 @@ describe("POST /api/poe/classify", () => {
 
     await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-schema-fresh")
       .send({
         gridBase64: GRID_BASE64,
@@ -187,6 +191,7 @@ describe("POST /api/poe/classify", () => {
 
     const first = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cache")
       .send(body);
     expect(first.status).toBe(200);
@@ -194,6 +199,7 @@ describe("POST /api/poe/classify", () => {
 
     const second = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cache")
       .send(body);
     expect(second.status).toBe(200);
@@ -210,6 +216,7 @@ describe("POST /api/poe/classify", () => {
     const depths32 = Array.from({ length: 1024 }, (_, i) => i);
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-heuristic")
       .send({
         gridBase64: GRID_BASE64,
@@ -248,6 +255,7 @@ describe("POST /api/poe/classify", () => {
     fakeCreate.mockRejectedValue(new Error("transient AI outage"));
     const first = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-heur-cache")
       .send(body);
     expect(first.status).toBe(200);
@@ -259,6 +267,7 @@ describe("POST /api/poe/classify", () => {
     fakeCreate.mockResolvedValue(buildOkResponse());
     const second = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-heur-cache")
       .send(body);
     expect(second.status).toBe(200);
@@ -295,6 +304,7 @@ describe("POST /api/poe/classify", () => {
 
     const saltRes = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-wt-collision")
       .send({
         gridBase64: uniqueGrid,
@@ -307,6 +317,7 @@ describe("POST /api/poe/classify", () => {
 
     const freshRes = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-wt-collision")
       .send({
         gridBase64: uniqueGrid,
@@ -333,6 +344,7 @@ describe("POST /api/poe/classify", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-no-cov")
       .send({
         gridBase64: GRID_BASE64,
@@ -367,6 +379,7 @@ describe("POST /api/poe/classify", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-tiled")
       .send({
         gridBase64: GRID_BASE64,
@@ -403,6 +416,7 @@ describe("POST /api/poe/classify", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-partial")
       .send({
         gridBase64: GRID_BASE64,
@@ -442,6 +456,7 @@ describe("POST /api/poe/classify", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-big")
       .send({
         gridBase64: GRID_BASE64,
@@ -470,6 +485,7 @@ describe("POST /api/poe/classify", () => {
     const depths32 = Array.from({ length: 1024 }, (_, i) => i % 50);
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cf-empty")
       .send({
         gridBase64: GRID_BASE64,
@@ -494,6 +510,7 @@ describe("POST /api/poe/classify", () => {
     const depths32 = Array.from({ length: 1024 }, (_, i) => i % 50);
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cf-refusal")
       .send({
         gridBase64: GRID_BASE64,
@@ -521,6 +538,7 @@ describe("POST /api/poe/classify", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-cf-tiled")
       .send({
         gridBase64: GRID_BASE64,
@@ -545,6 +563,7 @@ describe("POST /api/poe/classify", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-small")
       .send({
         gridBase64: GRID_BASE64,
@@ -581,6 +600,7 @@ describe("POST /api/poe/classify", () => {
     for (let i = 0; i < 5; i++) {
       const res = await request(app)
         .post("/api/poe/classify")
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", "user-prose-breaker")
         .send({
           gridBase64: GRID_BASE64,
@@ -603,6 +623,7 @@ describe("POST /api/poe/classify", () => {
     fakeCreate.mockResolvedValue(buildOkResponse());
     const afterRes = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-prose-breaker")
       .send({
         gridBase64: GRID_BASE64,
@@ -627,6 +648,7 @@ describe("POST /api/poe/classify", () => {
 
     const res = await request(app)
       .post("/api/poe/classify")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-prose-json")
       .send({
         gridBase64: GRID_BASE64,
@@ -650,6 +672,7 @@ describe("POST /api/poe/upscale", () => {
   it("returns 400 when imageBase64 is missing from the request body", async () => {
     const res = await request(app)
       .post("/api/poe/upscale")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-upscale-missing")
       .send({});
 
@@ -668,6 +691,7 @@ describe("POST /api/poe/upscale", () => {
     // calling fakeChatCreate.
     const res = await request(app)
       .post("/api/poe/upscale")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-upscale-503")
       .send({ imageBase64: "data:image/png;base64,abc123" });
 
@@ -684,6 +708,7 @@ describe("POST /api/poe/upscale", () => {
 
     const res = await request(app)
       .post("/api/poe/upscale")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-upscale-no-image")
       .send({ imageBase64: "data:image/png;base64,abc123" });
 
@@ -712,6 +737,7 @@ describe("POST /api/poe/upscale", () => {
 
     const res = await request(app)
       .post("/api/poe/upscale")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-upscale-success")
       .send({ imageBase64: "data:image/png;base64,abc123" });
 

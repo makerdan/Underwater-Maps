@@ -69,6 +69,7 @@ function rawRequest(
       const bodyStr = body !== undefined ? JSON.stringify(body) : undefined;
       const reqHeaders: Record<string, string> = {
         "x-e2e-user-id": "user_e2e_github_test",
+        "x-e2e-bypass-secret": "vitest-test-secret",
         ...headers,
         ...(bodyStr !== undefined
           ? { "content-type": "application/json", "content-length": String(Buffer.byteLength(bodyStr)) }
@@ -118,6 +119,7 @@ describe("GET /repos — list repositories", () => {
     });
     const res = await request(makeApp())
       .get("/repos")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
@@ -129,6 +131,7 @@ describe("GET /repos — list repositories", () => {
     });
     const res = await request(makeApp())
       .get("/repos")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(500);
     expect(res.body.error).toBe("github_error");
@@ -165,6 +168,7 @@ describe("GET /repos/:owner/:repo/contents/*path — read file", () => {
   it("returns 400 for invalid owner characters", async () => {
     const res = await request(makeApp())
       .get("/repos/bad owner/repo/contents/README.md")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid_params");
@@ -183,6 +187,7 @@ describe("GET /repos/:owner/:repo/contents/*path — read file", () => {
     });
     const res = await request(makeApp())
       .get("/repos/owner/repo/contents/README.md")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("name", "README.md");
@@ -193,6 +198,7 @@ describe("PUT /repos/:owner/:repo/contents/*path — create/update file", () => 
   it("returns 400 for invalid owner characters", async () => {
     const res = await request(makeApp())
       .put("/repos/bad owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ message: "add file", content: "aGVsbG8=" });
     expect(res.status).toBe(400);
@@ -212,6 +218,7 @@ describe("PUT /repos/:owner/:repo/contents/*path — create/update file", () => 
   it("returns 400 when message is missing", async () => {
     const res = await request(makeApp())
       .put("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ content: "aGVsbG8=" });
     expect(res.status).toBe(400);
@@ -221,6 +228,7 @@ describe("PUT /repos/:owner/:repo/contents/*path — create/update file", () => 
   it("returns 400 when content is missing", async () => {
     const res = await request(makeApp())
       .put("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ message: "add file" });
     expect(res.status).toBe(400);
@@ -230,6 +238,7 @@ describe("PUT /repos/:owner/:repo/contents/*path — create/update file", () => 
   it("returns 400 when message is not a string", async () => {
     const res = await request(makeApp())
       .put("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ message: 42, content: "aGVsbG8=" });
     expect(res.status).toBe(400);
@@ -239,6 +248,7 @@ describe("PUT /repos/:owner/:repo/contents/*path — create/update file", () => 
   it("returns 400 when content is not a string", async () => {
     const res = await request(makeApp())
       .put("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ message: "add file", content: true });
     expect(res.status).toBe(400);
@@ -251,6 +261,7 @@ describe("PUT /repos/:owner/:repo/contents/*path — create/update file", () => 
     });
     const res = await request(makeApp())
       .put("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ message: "add file", content: "aGVsbG8=" });
     expect(res.status).toBe(200);
@@ -261,6 +272,7 @@ describe("DELETE /repos/:owner/:repo/contents/*path — delete file", () => {
   it("returns 400 for invalid owner characters", async () => {
     const res = await request(makeApp())
       .delete("/repos/bad owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ message: "delete file", sha: "abc123" });
     expect(res.status).toBe(400);
@@ -280,6 +292,7 @@ describe("DELETE /repos/:owner/:repo/contents/*path — delete file", () => {
   it("returns 400 when message is missing", async () => {
     const res = await request(makeApp())
       .delete("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ sha: "abc123" });
     expect(res.status).toBe(400);
@@ -289,6 +302,7 @@ describe("DELETE /repos/:owner/:repo/contents/*path — delete file", () => {
   it("returns 400 when sha is missing", async () => {
     const res = await request(makeApp())
       .delete("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ message: "delete file" });
     expect(res.status).toBe(400);
@@ -298,6 +312,7 @@ describe("DELETE /repos/:owner/:repo/contents/*path — delete file", () => {
   it("returns 400 when sha is not a string", async () => {
     const res = await request(makeApp())
       .delete("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ message: "delete file", sha: 99 });
     expect(res.status).toBe(400);
@@ -309,6 +324,7 @@ describe("POST /repos/:owner/:repo/actions/workflows/:workflow_id/dispatches", (
   it("returns 400 for invalid owner characters", async () => {
     const res = await request(makeApp())
       .post("/repos/bad owner/repo/actions/workflows/deploy/dispatches")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ ref: "main" });
     expect(res.status).toBe(400);
@@ -318,6 +334,7 @@ describe("POST /repos/:owner/:repo/actions/workflows/:workflow_id/dispatches", (
   it("returns 400 when ref is missing", async () => {
     const res = await request(makeApp())
       .post("/repos/owner/repo/actions/workflows/deploy/dispatches")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(res.status).toBe(400);
@@ -327,6 +344,7 @@ describe("POST /repos/:owner/:repo/actions/workflows/:workflow_id/dispatches", (
   it("returns 400 when ref is not a string", async () => {
     const res = await request(makeApp())
       .post("/repos/owner/repo/actions/workflows/deploy/dispatches")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ ref: 123 });
     expect(res.status).toBe(400);
@@ -337,6 +355,7 @@ describe("POST /repos/:owner/:repo/actions/workflows/:workflow_id/dispatches", (
     octokitMock.actions.createWorkflowDispatch.mockResolvedValue({});
     const res = await request(makeApp())
       .post("/repos/owner/repo/actions/workflows/deploy/dispatches")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ ref: "main" });
     expect(res.status).toBe(204);
@@ -361,6 +380,7 @@ describe("GET /repos/:owner/:repo/actions/runs — list workflow runs", () => {
     });
     const res = await request(makeApp())
       .get("/repos/owner/repo/actions/runs")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(res.body.total_count).toBe(1);
@@ -383,6 +403,7 @@ describe("repo-name injection — shell-special characters rejected before GitHu
         const encodedRepo = encodeURIComponent(repo);
         const res = await request(makeApp())
           .post(`/repos/owner/${encodedRepo}/actions/workflows/deploy.yml/dispatches`)
+          .set("x-e2e-bypass-secret", "vitest-test-secret")
           .set("x-e2e-user-id", E2E_USER)
           .send({ ref: "main" });
         expect(res.status).toBe(400);
@@ -399,6 +420,7 @@ describe("repo-name injection — shell-special characters rejected before GitHu
         const encodedOwner = encodeURIComponent(badOwner);
         const res = await request(makeApp())
           .get(`/repos/${encodedOwner}/repo/contents/README.md`)
+          .set("x-e2e-bypass-secret", "vitest-test-secret")
           .set("x-e2e-user-id", E2E_USER);
         expect(res.status).toBe(400);
         expect(res.body.error).toBe("invalid_params");
@@ -413,6 +435,7 @@ describe("repo-name injection — shell-special characters rejected before GitHu
         const encodedRepo = encodeURIComponent(repo);
         const res = await request(makeApp())
           .put(`/repos/owner/${encodedRepo}/contents/file.txt`)
+          .set("x-e2e-bypass-secret", "vitest-test-secret")
           .set("x-e2e-user-id", E2E_USER)
           .send({ message: "add file", content: "aGVsbG8=" });
         expect(res.status).toBe(400);
@@ -428,6 +451,7 @@ describe("repo-name injection — shell-special characters rejected before GitHu
         const encodedRepo = encodeURIComponent(repo);
         const res = await request(makeApp())
           .delete(`/repos/owner/${encodedRepo}/contents/file.txt`)
+          .set("x-e2e-bypass-secret", "vitest-test-secret")
           .set("x-e2e-user-id", E2E_USER)
           .send({ message: "remove file", sha: "abc123" });
         expect(res.status).toBe(400);
@@ -451,6 +475,7 @@ describe("PAT expiry / GitHub 401 — proxy returns safe error with no credentia
     );
     const res = await request(makeApp())
       .get("/repos")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(401);
     expect(res.body.error).toBe("github_error");
@@ -466,6 +491,7 @@ describe("PAT expiry / GitHub 401 — proxy returns safe error with no credentia
     );
     const res = await request(makeApp())
       .get("/repos/owner/repo/contents/README.md")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(401);
     expect(res.body.error).toBe("github_error");
@@ -479,6 +505,7 @@ describe("PAT expiry / GitHub 401 — proxy returns safe error with no credentia
     );
     const res = await request(makeApp())
       .post("/repos/owner/repo/actions/workflows/deploy.yml/dispatches")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ ref: "main" });
     expect(res.status).toBe(401);
@@ -493,6 +520,7 @@ describe("PAT expiry / GitHub 401 — proxy returns safe error with no credentia
     );
     const res = await request(makeApp())
       .put("/repos/owner/repo/contents/file.txt")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ message: "update", content: "aGVsbG8=" });
     expect(res.status).toBe(401);

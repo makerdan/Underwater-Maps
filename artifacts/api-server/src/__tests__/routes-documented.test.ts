@@ -78,6 +78,10 @@ const UNDOCUMENTED_ALLOWLIST = new Set([
   // corrected labels and commits the parsed terrain to the user's library.
   // New feature — OpenAPI spec entry pending.
   "POST /datasets/raster-commit",
+  // Terrain tile image endpoint: returns a PNG terrain tile for the requested
+  // bbox at the given size. Uses TerrainLandQuerySchema (bbox CSV + size).
+  // New feature — OpenAPI spec entry pending.
+  "GET /terrain/tile",
 ]);
 
 // ---------------------------------------------------------------------------

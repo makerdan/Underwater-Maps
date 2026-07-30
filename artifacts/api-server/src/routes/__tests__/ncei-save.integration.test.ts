@@ -484,6 +484,7 @@ async function pollUntilReady(
   while (Date.now() < deadline) {
     const res = await request(app)
       .get("/api/datasets/my-saves")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     const rows = res.body as Array<{
@@ -559,6 +560,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
   it("returns 400 when the request body is missing the result field", async () => {
     const res = await request(app)
       .post("/api/ncei/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(res.status).toBe(400);
@@ -568,6 +570,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
   it("returns 400 when coverageBbox is missing a required coordinate", async () => {
     const res = await request(app)
       .post("/api/ncei/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({
         result: {
@@ -584,6 +587,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
   it("returns 400 when the bbox does not intersect any NCEI WCS mosaic coverage", async () => {
     const res = await request(app)
       .post("/api/ncei/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({
         result: {
@@ -604,6 +608,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
     async () => {
       const res = await request(app)
         .post("/api/ncei/save")
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .send(VALID_SAVE_BODY);
 
@@ -647,6 +652,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
       // 1. Kick off the save.
       const saveRes = await request(app)
         .post("/api/ncei/save")
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .send(VALID_SAVE_BODY);
 
@@ -677,6 +683,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
   it("returns HTTP 200 and skips a second insert when the same dataset is saved again", async () => {
     const first = await request(app)
       .post("/api/ncei/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send(VALID_SAVE_BODY);
     expect(first.status).toBe(201);
@@ -688,6 +695,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
 
     const second = await request(app)
       .post("/api/ncei/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send(VALID_SAVE_BODY);
 
@@ -704,6 +712,7 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
     async () => {
       const saveRes = await request(app)
         .post("/api/ncei/save")
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .send({
           result: {

@@ -18,7 +18,7 @@ import { test, expect, type APIRequestContext, type Page, API_URL, E2E_USER_ID }
 const API_BASE = API_URL;
 const FAKE_USER_ID = E2E_USER_ID;
 
-const authHeaders = { "x-e2e-user-id": FAKE_USER_ID };
+const authHeaders = { "x-e2e-user-id": FAKE_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" };
 
 interface UserDatasetMeta {
   id: string;

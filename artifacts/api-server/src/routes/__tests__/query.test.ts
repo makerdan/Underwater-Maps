@@ -109,6 +109,7 @@ describe("POST /api/query", () => {
   it("serves requests via Poe when Poe is healthy (primary path)", async () => {
     const res = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-query-poe-ok")
       .send({ query: "navigate to the deepest point", context: { datasetName: "test" } });
 
@@ -123,6 +124,7 @@ describe("POST /api/query", () => {
 
     const res = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-query-poe-fail")
       .send({ query: "where is the deepest point" });
 
@@ -155,6 +157,7 @@ describe("POST /api/query", () => {
     fakePoeCreate.mockResolvedValue(toolCallPayload);
     const poRes = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-schema-poe")
       .send({ query: "go deep" });
 
@@ -171,6 +174,7 @@ describe("POST /api/query", () => {
 
     const oaRes = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-schema-openai")
       .send({ query: "go deep" });
 
@@ -190,6 +194,7 @@ describe("POST /api/query", () => {
 
     const res = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-both-fail")
       .send({ query: "anything" });
 
@@ -203,6 +208,7 @@ describe("POST /api/query", () => {
 
     const res = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-breaker-open")
       .send({ query: "anything" });
 
@@ -215,6 +221,7 @@ describe("POST /api/query", () => {
   it("passes an AbortSignal to the provider SDK so a stuck upstream cannot pin a worker", async () => {
     await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-query-signal")
       .send({ query: "anything" });
 
@@ -228,6 +235,7 @@ describe("POST /api/query", () => {
   it("returns 400 with structured error when query field is missing", async () => {
     const res = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-query-no-query")
       .send({ context: { datasetName: "test" } });
 
@@ -240,6 +248,7 @@ describe("POST /api/query", () => {
   it("returns 400 with structured error when query is an empty string", async () => {
     const res = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-query-empty")
       .send({ query: "" });
 
@@ -252,6 +261,7 @@ describe("POST /api/query", () => {
   it("returns 400 with structured error when query is whitespace only", async () => {
     const res = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-query-whitespace")
       .send({ query: "   " });
 
@@ -266,6 +276,7 @@ describe("POST /api/query", () => {
     for (let i = 0; i < 20; i++) {
       const res = await request(app)
         .post("/api/query")
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", userId)
         .send({ query: `q-${i}` });
       expect(res.status).toBe(200);
@@ -273,6 +284,7 @@ describe("POST /api/query", () => {
 
     const limited = await request(app)
       .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", userId)
       .send({ query: "one too many" });
 

@@ -23,7 +23,7 @@ import path from "path";
 import { test, expect, type APIRequestContext, type Page, API_URL, E2E_USER_ID } from "./fixtures";
 
 const API_BASE = API_URL;
-const authHeaders = { "x-e2e-user-id": E2E_USER_ID };
+const authHeaders = { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" };
 
 const LAZ_FIXTURE_PATH = path.resolve(
   process.cwd(),

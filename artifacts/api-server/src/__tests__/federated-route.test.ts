@@ -283,6 +283,7 @@ describe("POST /api/search/federated/save", () => {
   it("400s on a malformed body", async () => {
     const res = await request(makeApp())
       .post("/api/search/federated/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-1")
       .send({ result: { id: "x" } });
     expect(res.status).toBe(400);
@@ -291,6 +292,7 @@ describe("POST /api/search/federated/save", () => {
   it("400s (not_importable) when the endpoint has no fetch strategy", async () => {
     const res = await request(makeApp())
       .post("/api/search/federated/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-1")
       .send({
         result: {
@@ -307,6 +309,7 @@ describe("POST /api/search/federated/save", () => {
   it("400s (not_importable) when coverageBbox is missing", async () => {
     const res = await request(makeApp())
       .post("/api/search/federated/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-1")
       .send({ result: { ...importableResult, coverageBbox: null } });
     expect(res.status).toBe(400);
@@ -316,6 +319,7 @@ describe("POST /api/search/federated/save", () => {
   it("201s on an importable result: upserts catalog, creates save, kicks off materialize", async () => {
     const res = await request(makeApp())
       .post("/api/search/federated/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-1")
       .send({ result: importableResult });
     expect(res.status).toBe(201);
@@ -339,6 +343,7 @@ describe("POST /api/search/federated/save", () => {
   it("derives saltwater for NCEI WCS results", async () => {
     const res = await request(makeApp())
       .post("/api/search/federated/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-1")
       .send({
         result: {

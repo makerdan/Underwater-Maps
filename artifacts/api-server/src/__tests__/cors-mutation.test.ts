@@ -68,6 +68,7 @@ describe("CORS — non-allowlisted origin is rejected when ALLOWED_ORIGINS is se
     const res = await request(app)
       .post("/api/datasets/upload")
       .set("Origin", EVIL_ORIGIN)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user_cors_test")
       .field("resolution", "128")
       .attach("file", Buffer.from("lon,lat,depth\n"), "test.csv");
@@ -83,6 +84,7 @@ describe("CORS — non-allowlisted origin is rejected when ALLOWED_ORIGINS is se
     const res = await request(app)
       .post("/api/datasets/upload")
       .set("Origin", EVIL_ORIGIN)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user_cors_test")
       .field("resolution", "128")
       .attach("file", Buffer.from("lon,lat,depth\n"), "test.csv");
@@ -114,6 +116,7 @@ describe("CORS — allowlisted origin receives the header", () => {
     const res = await request(app)
       .post("/api/datasets/upload")
       .set("Origin", ALLOWED_ORIGIN)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user_cors_test")
       .field("resolution", "128")
       .attach("file", Buffer.from("lon,lat,depth\n"), "test.csv");
@@ -143,6 +146,7 @@ describe("CORS — requests without Origin header are always allowed", () => {
   it("POST without Origin header succeeds (no CORS block)", async () => {
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user_cors_test")
       .field("resolution", "128")
       .attach("file", Buffer.from("lon,lat,depth\n"), "test.csv");
@@ -170,6 +174,7 @@ describe("CORS — REPLIT_DEV_DOMAIN is automatically allowlisted", () => {
     const res = await request(app)
       .post("/api/datasets/upload")
       .set("Origin", devOrigin)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user_cors_test")
       .field("resolution", "128")
       .attach("file", Buffer.from("lon,lat,depth\n"), "test.csv");
@@ -191,6 +196,7 @@ describe("CORS — production mode rejects unknown origins when no allowlist is 
     const res = await request(app)
       .post("/api/datasets/upload")
       .set("Origin", EVIL_ORIGIN)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user_cors_test")
       .field("resolution", "128")
       .attach("file", Buffer.from("lon,lat,depth\n"), "test.csv");

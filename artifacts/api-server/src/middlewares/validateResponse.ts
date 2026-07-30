@@ -9,6 +9,11 @@ import { logger } from "../lib/logger.js";
  * a structured error and re-throws as a plain Error with { status: 500 } so
  * asyncHandler propagates it to Express error middleware.
  *
+ * Returns the Zod-parsed output (which may be stripped of extra keys and/or
+ * coerced by the schema), not the raw input. This ensures the serialised
+ * response is always schema-conformant even when the handler produces a
+ * superset object.
+ *
  * Usage:
  *   res.json(validateResponse(MyResponseSchema, rows, "GET /api/markers"));
  *
@@ -23,8 +28,8 @@ export function validateResponse<T extends z.ZodTypeAny>(
   routeLabel: string,
 ): z.infer<T> {
   try {
-    schema.parse(data);
-    return data as z.infer<T>;
+    const result = schema.parse(data);
+    return result as z.infer<T>;
   } catch (err) {
     logger.error(
       { route: routeLabel, err },

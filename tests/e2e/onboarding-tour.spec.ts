@@ -95,7 +95,7 @@ async function setServerOnboardingFlag(
   value: boolean,
 ) {
   await request.put(`${API_URL}/api/settings`, {
-    headers: { "x-e2e-user-id": E2E_USER_ID },
+    headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
     data: { hasSeenOnboarding: value, hasSeenToolbarRelocationHint: true },
   });
 }
@@ -191,7 +191,7 @@ test.describe("Onboarding tour overlay", () => {
 
     // Verify the server now records hasSeenOnboarding: true.
     const resp = await request.get(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
     });
     expect(resp.ok()).toBe(true);
     const body = await resp.json() as Record<string, unknown>;

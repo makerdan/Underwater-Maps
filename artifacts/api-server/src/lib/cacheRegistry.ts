@@ -7,7 +7,7 @@
  * starts with a clean slate — no per-test boilerplate required.
  *
  * Production code never calls `clearAllCaches`; the registry is inert at
- * runtime except for the tiny slice of memory used to hold the callback list.
+ * runtime except for the tiny slice of memory used to hold the callback set.
  *
  * ## Convention — every module-level cache MUST be registered
  *
@@ -31,24 +31,51 @@
  * See `src/routes/tidal.ts` for the canonical reference implementation.
  */
 
-const clearFns: Array<() => void> = [];
+import { logger } from "./logger.js";
+
+// Use a Set so the same callback reference can only be registered once.
+// Duplicate registrations (e.g. from module hot-reloads or accidental
+// double-imports) are silently ignored rather than doubling clear work.
+const clearFns: Set<() => void> = new Set();
 
 /**
  * Register a cache-clearing function.  Call this once per cache at module
- * initialisation time.
+ * initialisation time.  Duplicate registrations of the same callback
+ * reference are ignored.
  *
  * @param fn  A zero-argument function that empties the cache.
  */
 export function registerCache(fn: () => void): void {
-  clearFns.push(fn);
+  clearFns.add(fn);
+}
+
+/**
+ * Unregister a previously registered cache-clearing function.  This is
+ * rarely needed in production code but is useful in tests that create
+ * temporary caches to avoid polluting the global registry.
+ *
+ * @param fn  The same function reference passed to `registerCache`.
+ */
+export function unregisterCache(fn: () => void): void {
+  clearFns.delete(fn);
 }
 
 /**
  * Clear every registered cache.  Called automatically by the vitest global
  * setup file before each test — production code should not call this.
+ *
+ * Individual callback failures are caught, logged, and skipped so that one
+ * broken cache-clear does not prevent the remaining caches from being reset.
  */
 export function clearAllCaches(): void {
   for (const fn of clearFns) {
-    fn();
+    try {
+      fn();
+    } catch (err) {
+      logger.error(
+        { err },
+        "[cacheRegistry] clearAllCaches: a cache-clear callback threw — continuing with remaining caches",
+      );
+    }
   }
 }

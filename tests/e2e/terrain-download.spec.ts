@@ -39,7 +39,7 @@ import { overviewMapCanvas } from "./_helpers/canvases";
 
 const OVERLAY_HEADER = ".overview-map-header";
 
-const AUTH_HEADERS = { "x-e2e-user-id": E2E_USER_ID };
+const AUTH_HEADERS = { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" };
 
 // A small but valid ocean bbox (near Hawaii, clearly water-only).
 const BBOX = { north: 21.5, south: 21.0, east: -157.5, west: -158.0 };

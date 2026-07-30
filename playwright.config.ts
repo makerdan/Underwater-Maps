@@ -155,7 +155,7 @@ export default defineConfig({
       // connection setup can exceed 5 s, producing "Connection terminated due
       // to connection timeout" on the startup queries. A 30 s acquire window
       // rides out that transient contention instead of failing.
-      command: `node scripts/kill-port-holders.mjs ${E2E_API_PORT} && DIST_DIR=${E2E_DIST_DIR} pnpm --filter @workspace/api-server run build:e2e && PORT=${E2E_API_PORT} DIST_DIR=${E2E_DIST_DIR} E2E_AUTH_BYPASS=1 DB_CONNECTION_TIMEOUT_MS=30000 SETTINGS_MUTATION_MAX=600 pnpm --filter @workspace/api-server run start:e2e`,
+      command: `node scripts/kill-port-holders.mjs ${E2E_API_PORT} && DIST_DIR=${E2E_DIST_DIR} pnpm --filter @workspace/api-server run build:e2e && PORT=${E2E_API_PORT} DIST_DIR=${E2E_DIST_DIR} E2E_AUTH_BYPASS=1 E2E_BYPASS_SECRET=e2e-playwright-secret DB_CONNECTION_TIMEOUT_MS=30000 SETTINGS_MUTATION_MAX=600 pnpm --filter @workspace/api-server run start:e2e`,
       url: `${E2E_API_URL}/api/healthz`,
       reuseExistingServer: false,
       timeout: 60_000,
@@ -174,7 +174,7 @@ export default defineConfig({
       // run suffix / E2E_USER_ID env var), so a secondary suite on its own
       // ports uses its own settings rows and cannot clobber a concurrently
       // running suite's state.
-      command: `PORT=${E2E_WEB_PORT} BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 VITE_E2E_PRESERVE_BUFFER=1 VITE_E2E_USER_ID=${E2E_USER_ID} E2E_API_SERVER_URL=${E2E_API_URL} pnpm --filter @workspace/bathyscan run dev`,
+      command: `PORT=${E2E_WEB_PORT} BASE_PATH=/ VITE_DEV_AUTH_BYPASS=1 VITE_E2E_PRESERVE_BUFFER=1 VITE_E2E_USER_ID=${E2E_USER_ID} VITE_E2E_BYPASS_SECRET=e2e-playwright-secret E2E_API_SERVER_URL=${E2E_API_URL} pnpm --filter @workspace/bathyscan run dev`,
       url: E2E_WEB_URL,
       reuseExistingServer: false,
       timeout: 60_000,

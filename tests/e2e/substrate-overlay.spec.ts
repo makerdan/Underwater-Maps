@@ -32,7 +32,7 @@ import { test, expect, type Page, type APIRequestContext, API_URL, E2E_USER_ID }
  */
 
 const API_BASE = API_URL;
-const AUTH_HEADERS = { "x-e2e-user-id": E2E_USER_ID };
+const AUTH_HEADERS = { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" };
 const HELPER_TIMEOUT = 15_000;
 
 /**

@@ -1,5 +1,6 @@
 import { getAuth } from "@clerk/express";
 import type { Request, Response, NextFunction } from "express";
+import { logger } from "../lib/logger.js";
 
 // ---------------------------------------------------------------------------
 // Production safety guard — refuse to start if E2E_AUTH_BYPASS is active
@@ -15,6 +16,15 @@ if (
     "[requireAuth] E2E_AUTH_BYPASS=1 is set but NODE_ENV=production or REPLIT_DEPLOYMENT is " +
       "present. This combination is forbidden — it would allow any caller to impersonate any " +
       "user. Server startup aborted.",
+  );
+}
+
+// Emit a single startup warning when the bypass is active so it is visible
+// in server logs even if no bypass request is ever received.
+if (process.env["E2E_AUTH_BYPASS"] === "1") {
+  logger.warn(
+    "[requireAuth] E2E_AUTH_BYPASS=1 is active — authentication is bypassed for requests " +
+      "carrying the e2e bypass headers. This must never be set in production.",
   );
 }
 
@@ -34,9 +44,25 @@ export interface AuthenticatedRequest extends Request {
  *
  * Hard-gated on the env var so production deployments cannot accidentally
  * accept this header.
+ *
+ * Secondary guard: when `E2E_BYPASS_SECRET` is configured, the request must
+ * also carry an `x-e2e-bypass-secret` header whose value matches that env
+ * var. This prevents a header-only attack in the unlikely event that
+ * `E2E_AUTH_BYPASS=1` accidentally leaks into a non-dev deployment.
  */
 function readBypassUserId(req: Request): string | null {
   if (process.env["E2E_AUTH_BYPASS"] !== "1") return null;
+
+  // Secondary guard: require the bypass secret header to match the server-side
+  // secret when one is configured.
+  const serverSecret = process.env["E2E_BYPASS_SECRET"];
+  if (serverSecret) {
+    const clientSecret = req.headers["x-e2e-bypass-secret"];
+    if (typeof clientSecret !== "string" || clientSecret !== serverSecret) {
+      return null;
+    }
+  }
+
   const raw = req.headers["x-e2e-user-id"];
   if (typeof raw !== "string" || raw.trim() === "") return null;
   return raw.trim();

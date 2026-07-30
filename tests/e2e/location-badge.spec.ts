@@ -325,7 +325,7 @@ test.describe("LocationBadge on data panels", () => {
     });
     // Ensure showTidePanel and autoLoadTidal are on so TidePanel can mount.
     await request.put(`${API_URL}/api/settings`, {
-      headers: { "x-e2e-user-id": E2E_USER_ID },
+      headers: { "x-e2e-user-id": E2E_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: { showTidePanel: true, autoLoadTidal: true },
     });
     // Silence tidal schedule fetches (not relevant to badge tests).

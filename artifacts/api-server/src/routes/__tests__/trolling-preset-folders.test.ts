@@ -109,6 +109,7 @@ describe("GET /trolling-preset-folders — list folders", () => {
   it("returns an empty array when the user has no folders", async () => {
     const res = await request(makeApp())
       .get("/trolling-preset-folders")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
@@ -120,6 +121,7 @@ describe("POST /trolling-preset-folders — create folder", () => {
   it("returns 400 when name is missing", async () => {
     const res = await request(makeApp())
       .post("/trolling-preset-folders")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(res.status).toBe(400);
@@ -128,6 +130,7 @@ describe("POST /trolling-preset-folders — create folder", () => {
   it("returns 400 when name is an empty string", async () => {
     const res = await request(makeApp())
       .post("/trolling-preset-folders")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ name: "   " });
     expect([400, 500]).toContain(res.status);
@@ -136,6 +139,7 @@ describe("POST /trolling-preset-folders — create folder", () => {
   it("returns 201 with the folder JSON for a valid name", async () => {
     const res = await request(makeApp())
       .post("/trolling-preset-folders")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ name: "My Folder" });
     expect(res.status).toBe(201);
@@ -154,6 +158,7 @@ describe("POST /trolling-preset-folders — create folder", () => {
     }];
     const res = await request(makeApp())
       .post("/trolling-preset-folders")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ name: "salmon run" });
     expect(res.status).toBe(400);
@@ -165,6 +170,7 @@ describe("PATCH /trolling-preset-folders/:id — rename folder", () => {
   it("returns 400 when name is missing", async () => {
     const res = await request(makeApp())
       .patch("/trolling-preset-folders/some-id")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(res.status).toBe(400);
@@ -173,6 +179,7 @@ describe("PATCH /trolling-preset-folders/:id — rename folder", () => {
   it("returns 404 when the folder does not belong to the user", async () => {
     const res = await request(makeApp())
       .patch("/trolling-preset-folders/nonexistent-folder")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({ name: "New Name" });
     expect(res.status).toBe(404);
@@ -184,6 +191,7 @@ describe("DELETE /trolling-preset-folders/:id — delete folder", () => {
   it("returns 404 when the folder does not exist", async () => {
     const res = await request(makeApp())
       .delete("/trolling-preset-folders/nonexistent-folder")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("not_found");
@@ -199,6 +207,7 @@ describe("DELETE /trolling-preset-folders/:id — delete folder", () => {
     }];
     const res = await request(makeApp())
       .delete("/trolling-preset-folders/folder-to-delete")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(204);
   });

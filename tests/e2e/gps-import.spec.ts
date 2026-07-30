@@ -22,7 +22,7 @@ const DATASET_ID = "thorne-bay";
 // user's account via the UI and then query for them as a different user.
 const TEST_USER_ID = E2E_USER_ID;
 const API_BASE = API_URL;
-const authHeaders = { "x-e2e-user-id": TEST_USER_ID };
+const authHeaders = { "x-e2e-user-id": TEST_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" };
 
 interface Marker {
   id: string;
@@ -224,7 +224,7 @@ test.describe("GPS import — real auth-gated flow", () => {
     // Forward the auth-bypass header on browser-originated /api/* fetches so
     // React Query mutations the dialog fires are accepted by the api-server.
     await page.evaluate((uid) => {
-      window.__bathyTest!.setRequestHeaders({ "x-e2e-user-id": uid });
+      window.__bathyTest!.setRequestHeaders({ "x-e2e-user-id": uid, "x-e2e-bypass-secret": "e2e-playwright-secret" });
     }, TEST_USER_ID);
 
     // Canvas-gated: when Chromium can't bring up WebGL the signed-in tree
@@ -300,7 +300,7 @@ test.describe("GPS import — real auth-gated flow", () => {
     await page.waitForFunction(() => !!window.__bathyTest, undefined, { timeout: 15_000 });
 
     await page.evaluate((uid) => {
-      window.__bathyTest!.setRequestHeaders({ "x-e2e-user-id": uid });
+      window.__bathyTest!.setRequestHeaders({ "x-e2e-user-id": uid, "x-e2e-bypass-secret": "e2e-playwright-secret" });
     }, TEST_USER_ID);
 
     // Canvas-gated: same guard as the upload spec above — when headless

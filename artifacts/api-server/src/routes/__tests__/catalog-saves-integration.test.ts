@@ -603,6 +603,7 @@ async function pollUntilReady(
   while (Date.now() < deadline) {
     const res = await request(app)
       .get("/api/datasets/my-saves")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(200);
     const rows = res.body as Array<{
@@ -628,6 +629,7 @@ describe("catalog save → materialize → fetch round trip", () => {
       // 1. Kick off the save.
       const saveRes = await request(app)
         .post(`/api/datasets/catalog/${CATALOG_ID}/save`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .send({});
 
@@ -650,6 +652,7 @@ describe("catalog save → materialize → fetch round trip", () => {
       //    (not the bare preset id).
       const terrainRes = await request(app)
         .get(`/api/user/datasets/${datasetId}/terrain`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER);
       expect(terrainRes.status).toBe(200);
       expect(terrainRes.body.datasetId).toBe(datasetId);
@@ -660,6 +663,7 @@ describe("catalog save → materialize → fetch round trip", () => {
       // 4. Same for the lower-resolution overview grid.
       const overviewRes = await request(app)
         .get(`/api/user/datasets/${datasetId}/overview`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER);
       expect(overviewRes.status).toBe(200);
       expect(overviewRes.body.datasetId).toBe(datasetId);
@@ -672,6 +676,7 @@ describe("catalog save → materialize → fetch round trip", () => {
   it("is idempotent — POSTing the same catalog id twice returns the existing save row", async () => {
     const first = await request(app)
       .post(`/api/datasets/catalog/${CATALOG_ID}/save`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(first.status).toBe(201);
@@ -683,6 +688,7 @@ describe("catalog save → materialize → fetch round trip", () => {
 
     const second = await request(app)
       .post(`/api/datasets/catalog/${CATALOG_ID}/save`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(second.status).toBe(200);
@@ -703,6 +709,7 @@ describe("catalog save → materialize → fetch round trip", () => {
 
       const saveRes = await request(app)
         .post(`/api/datasets/catalog/${gebcoId}/save`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .send({});
       expect(saveRes.status).toBe(201);
@@ -719,6 +726,7 @@ describe("catalog save → materialize → fetch round trip", () => {
 
       const terrainRes = await request(app)
         .get(`/api/user/datasets/${datasetId}/terrain`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER);
       expect(terrainRes.status).toBe(200);
       expect(terrainRes.body.datasetId).toBe(datasetId);
@@ -727,6 +735,7 @@ describe("catalog save → materialize → fetch round trip", () => {
 
       const overviewRes = await request(app)
         .get(`/api/user/datasets/${datasetId}/overview`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER);
       expect(overviewRes.status).toBe(200);
       expect(overviewRes.body.datasetId).toBe(datasetId);
@@ -743,6 +752,7 @@ describe("catalog save → materialize → fetch round trip", () => {
 
       const saveRes = await request(app)
         .post(`/api/datasets/catalog/${nceiId}/save`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .send({});
       expect(saveRes.status).toBe(201);
@@ -755,6 +765,7 @@ describe("catalog save → materialize → fetch round trip", () => {
 
       const terrainRes = await request(app)
         .get(`/api/user/datasets/${datasetId}/terrain`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER);
       expect(terrainRes.status).toBe(200);
       expect(terrainRes.body.datasetId).toBe(datasetId);
@@ -770,6 +781,7 @@ describe("catalog save → materialize → fetch round trip", () => {
 
       const saveRes = await request(app)
         .post(`/api/datasets/catalog/${demId}/save`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .send({});
       expect(saveRes.status).toBe(201);
@@ -789,6 +801,7 @@ describe("catalog save → materialize → fetch round trip", () => {
 
       const saveRes = await request(app)
         .post(`/api/datasets/catalog/${efhId}/save`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .send({});
       expect(saveRes.status).toBe(201);
@@ -807,6 +820,7 @@ describe("catalog save → materialize → fetch round trip", () => {
       // (flat depth surface bounded by the EFH coverage bbox).
       const terrainRes = await request(app)
         .get(`/api/user/datasets/${datasetId}/terrain`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER);
       expect(terrainRes.status).toBe(200);
       expect(terrainRes.body.datasetId).toBe(datasetId);
@@ -816,6 +830,7 @@ describe("catalog save → materialize → fetch round trip", () => {
 
       const overviewRes = await request(app)
         .get(`/api/user/datasets/${datasetId}/overview`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER);
       expect(overviewRes.status).toBe(200);
       expect(overviewRes.body.resolution).toBe(64);
@@ -847,6 +862,7 @@ describe("catalog save → materialize → fetch round trip", () => {
       // 1. Kick off the save for the sablefish catalog entry.
       const saveRes = await request(app)
         .post(`/api/datasets/catalog/${sablefishId}/save`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER)
         .send({});
       expect(saveRes.status).toBe(201);
@@ -865,6 +881,7 @@ describe("catalog save → materialize → fetch round trip", () => {
       // 3. Terrain grid is a flat EFH overlay surface.
       const terrainRes = await request(app)
         .get(`/api/user/datasets/${datasetId}/terrain`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER);
       expect(terrainRes.status).toBe(200);
       expect(terrainRes.body.datasetId).toBe(datasetId);
@@ -875,6 +892,7 @@ describe("catalog save → materialize → fetch round trip", () => {
       // 4. Overview grid is the same surface at lower resolution.
       const overviewRes = await request(app)
         .get(`/api/user/datasets/${datasetId}/overview`)
+        .set("x-e2e-bypass-secret", "vitest-test-secret")
         .set("x-e2e-user-id", E2E_USER);
       expect(overviewRes.status).toBe(200);
       expect(overviewRes.body.resolution).toBe(64);
@@ -1002,6 +1020,7 @@ describe("catalog save → materialize → fetch round trip", () => {
   it("returns 404 for an unknown catalog id", async () => {
     const res = await request(app)
       .post(`/api/datasets/catalog/does-not-exist/save`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .send({});
     expect(res.status).toBe(404);

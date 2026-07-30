@@ -82,6 +82,7 @@ describe("GET /api/me/export — auth, input validation, and error handling", ()
   it("returns 200 with export payload for an authenticated user", async () => {
     const res = await request(app)
       .get("/api/me/export")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-me-export-ok");
     expect(res.status).toBe(200);
     expect(res.headers["content-disposition"]).toMatch(/attachment/);
@@ -94,6 +95,7 @@ describe("GET /api/me/export — auth, input validation, and error handling", ()
   it("returns 400 with invalid_params when unexpected query params are passed", async () => {
     const res = await request(app)
       .get("/api/me/export?filter=all&page=2")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-me-export-invalid-params");
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_params" });
@@ -103,6 +105,7 @@ describe("GET /api/me/export — auth, input validation, and error handling", ()
     state.dbThrows = true;
     const res = await request(app)
       .get("/api/me/export")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-me-export-db-fail");
     expect(res.status).toBe(500);
   });
@@ -118,6 +121,7 @@ describe("DELETE /api/me — auth, input validation, and error handling", () => 
   it("returns 200 with ok: true for an authenticated user", async () => {
     const res = await request(app)
       .delete("/api/me")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-me-delete-ok");
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true });
@@ -127,6 +131,7 @@ describe("DELETE /api/me — auth, input validation, and error handling", () => 
   it("returns 400 with invalid_params when unexpected query params are passed", async () => {
     const res = await request(app)
       .delete("/api/me?confirm=true&force=1")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-me-delete-invalid-params");
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_params" });
@@ -136,6 +141,7 @@ describe("DELETE /api/me — auth, input validation, and error handling", () => 
     state.dbThrows = true;
     const res = await request(app)
       .delete("/api/me")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-me-delete-db-fail");
     expect(res.status).toBe(500);
   });

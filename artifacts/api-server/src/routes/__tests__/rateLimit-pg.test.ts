@@ -97,6 +97,7 @@ describe("rate-limit pgBackend — first request allowed", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", TEST_IP)
       .field("resolution", "not-a-number")
@@ -117,6 +118,7 @@ describe("rate-limit pgBackend — first request allowed", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", TEST_IP)
       .field("resolution", "not-a-number")
@@ -141,6 +143,7 @@ describe("rate-limit pgBackend — limit exceeded returns 429", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", TEST_IP)
       .field("resolution", "not-a-number")
@@ -162,6 +165,7 @@ describe("rate-limit pgBackend — limit exceeded returns 429", () => {
     const before = Math.ceil(Date.now() / 1000);
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", TEST_IP)
       .field("resolution", "not-a-number")
@@ -197,6 +201,7 @@ describe("rate-limit pgBackend — prune CTE deletes stale rows", () => {
 
     await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", TEST_IP)
       .field("resolution", "not-a-number")
@@ -220,6 +225,7 @@ describe("rate-limit pgBackend — prune CTE deletes stale rows", () => {
 
     await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", TEST_IP)
       .field("resolution", "not-a-number")
@@ -241,6 +247,7 @@ describe("rate-limit pgBackend — DB error falls back to in-memory", () => {
 
     const res = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", TEST_IP)
       .field("resolution", "not-a-number")
@@ -265,6 +272,7 @@ describe("rate-limit pgBackend — DB error falls back to in-memory", () => {
 
     const blocked = await request(app)
       .post("/api/datasets/upload")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .set("x-forwarded-for", "203.0.113.200")
       .field("resolution", "not-a-number")

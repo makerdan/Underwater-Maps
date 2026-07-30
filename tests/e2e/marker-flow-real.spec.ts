@@ -43,7 +43,7 @@ interface Marker {
   label: string;
 }
 
-const authHeaders = { "x-e2e-user-id": TEST_USER_ID };
+const authHeaders = { "x-e2e-user-id": TEST_USER_ID, "x-e2e-bypass-secret": "e2e-playwright-secret" };
 
 async function createMarker(
   page: Page,
@@ -258,7 +258,7 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
     // Forward the E2E_AUTH_BYPASS header on browser-originated DELETEs so the
     // real auth-gated route accepts them without a Clerk session.
     await page.evaluate((uid) => {
-      window.__bathyTest!.setRequestHeaders({ "x-e2e-user-id": uid });
+      window.__bathyTest!.setRequestHeaders({ "x-e2e-user-id": uid, "x-e2e-bypass-secret": "e2e-playwright-secret" });
     }, TEST_USER_ID);
 
     // Seed the React Query marker-list cache for BOTH the active dataset and a
@@ -367,7 +367,7 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
     });
 
     await page.evaluate((uid) => {
-      window.__bathyTest!.setRequestHeaders({ "x-e2e-user-id": uid });
+      window.__bathyTest!.setRequestHeaders({ "x-e2e-user-id": uid, "x-e2e-bypass-secret": "e2e-playwright-secret" });
     }, TEST_USER_ID);
 
     const SWITCHED_DATASET_ID = "post-switch-dataset";
