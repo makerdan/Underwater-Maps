@@ -291,6 +291,24 @@ describe("POST /api/datasets/raster-commit", () => {
     expect(res.body).toHaveProperty("error", "invalid_param");
   });
 
+  it("returns 400 invalid_param when all correctedLabels have zero or negative depth values", async () => {
+    // All-zero/negative depths would produce a flat (invisible) terrain grid
+    // — the route must reject this before calling commitCachedExtraction.
+    const res = await request(app)
+      .post("/api/datasets/raster-commit")
+      .set(AUTHED)
+      .send({
+        ...VALID_COMMIT_BODY,
+        correctedLabels: [
+          { x: 100, y: 200, value: 0, text: "0" },
+          { x: 200, y: 300, value: -5, text: "-5" },
+          { x: 300, y: 400, value: -10, text: "-10" },
+        ],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error", "invalid_param");
+  });
+
   it("returns 400 invalid_param when pdfBbox is malformed JSON", async () => {
     const res = await request(app)
       .post("/api/datasets/raster-commit")
