@@ -70,6 +70,7 @@ import { LoadingDial } from "@/components/LoadingDial";
 import { SUPPORTED_EXTENSIONS } from "@/components/FileUpload";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
 import { fetchJsonWithProgress, NoDataAvailableError } from "@/lib/fetchWithProgress";
+import { checkDatasetIdMatch } from "@/lib/datasetResponseValidation";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
 import { GeoreferenceModal } from "@/components/GeoreferenceModal";
 import { useToast } from "@/hooks/use-toast";
@@ -1100,7 +1101,20 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   useEffect(() => {
     if (!pendingId || !pendingTerrain || !pendingOverview) return;
-    if (pendingTerrain.datasetId !== pendingId || pendingOverview.datasetId !== pendingId) return;
+
+    // Reject responses whose embedded datasetId does not match what was
+    // requested. A server-side bug or a stale React Query cache entry keyed
+    // for a different dataset could cause this; silently accepting such a
+    // response would display the wrong data in the scene.
+    const idCheck = checkDatasetIdMatch(pendingId, pendingTerrain, pendingOverview);
+    if (!idCheck.ok) {
+      const name = datasets?.find((d) => d.id === pendingId)?.name ?? pendingId;
+      setPresetLoadError({ id: pendingId, name, noData: false });
+      setLoadingId(null);
+      setPendingId(null);
+      useActiveLoadStore.getState().fail(pendingId);
+      return;
+    }
 
     setDatasetId(pendingId);
     setTerrain(pendingTerrain);
@@ -1114,7 +1128,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     useActiveLoadStore.getState().complete(pendingId);
     setLoadingId(null);
     setPendingId(null);
-  }, [pendingTerrain, pendingOverview, pendingId, setDatasetId, setTerrain]);
+  }, [pendingTerrain, pendingOverview, pendingId, datasets, setDatasetId, setTerrain]);
 
   // ─── Parallel fetch for pending USER dataset ──────────────────────────────
   const { data: userPendingTerrain, isError: userTerrainError, error: userTerrainRawError } = useGetUserDatasetsIdTerrain(
@@ -1581,6 +1595,22 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         { data: { file, resolution: 256, ...(effectivePdfMeta ?? {}) } },
         {
           onSuccess: (data) => {
+            // Validate that the terrain grid's embedded datasetId matches the
+            // library record ID. A mismatch means the server returned an
+            // inconsistent response — surface an error instead of silently
+            // storing the terrain under the wrong identity.
+            if (
+              data.savedDatasetId &&
+              data.terrain.datasetId &&
+              data.terrain.datasetId !== data.savedDatasetId
+            ) {
+              setUploadError(
+                `Server returned mismatched dataset IDs — ` +
+                  `terrain: "${data.terrain.datasetId}", saved: "${data.savedDatasetId}". ` +
+                  `Please try again or contact support.`,
+              );
+              return;
+            }
             setDatasetId(null);
             setTerrain(data.terrain);
             if (!useTerrainStore.getState().multiDatasetMode) {

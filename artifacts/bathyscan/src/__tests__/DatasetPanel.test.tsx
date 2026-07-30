@@ -61,6 +61,35 @@ const makeApiClientMock = vi.hoisted(() => {
 const setDatasetIdMock = vi.fn();
 const setTerrainMock = vi.fn();
 
+// Controls the upload mutation so the upload-mismatch describe block can fire
+// onSuccess with a controlled payload.
+const uploadCallbacks = vi.hoisted(() => {
+  let stored: { onSuccess?: (data: unknown) => void; onError?: (err: unknown) => void } = {};
+  const mutate = vi.fn((_vars: unknown, cbs?: typeof stored) => {
+    stored = cbs ?? {};
+  });
+  return {
+    mutate,
+    fire(cbs: typeof stored) {
+      stored.onSuccess?.call(undefined, cbs.onSuccess);
+      stored.onError?.call(undefined, cbs.onError);
+    },
+    onSuccess(data: unknown) { stored.onSuccess?.(data); },
+    onError(err: unknown) { stored.onError?.(err); },
+    reset() { stored = {}; mutate.mockClear(); },
+  };
+});
+
+// Captures the onDrop callback from useDropzone so the upload mismatch test
+// can trigger a file drop without clicking.
+const dropzoneCapture = vi.hoisted(() => {
+  let fn: ((files: File[], rejected: unknown[]) => void) | null = null;
+  return {
+    set(f: (files: File[], rejected: unknown[]) => void) { fn = f; },
+    trigger(files: File[]) { fn?.(files, []); },
+  };
+});
+
 const datasets = [
   {
     id: "alaska-fjord",
@@ -106,16 +135,21 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("react-dropzone", () => ({
-  useDropzone: () => ({
-    getRootProps: () => ({ "data-testid": "dropzone" }),
-    getInputProps: () => ({ "data-testid": "dropzone-input" }),
-    isDragActive: false,
-  }),
+  useDropzone: (opts?: { onDrop?: (files: File[], rejected: unknown[]) => void }) => {
+    if (opts?.onDrop) dropzoneCapture.set(opts.onDrop);
+    return {
+      getRootProps: () => ({ "data-testid": "dropzone" }),
+      getInputProps: () => ({ "data-testid": "dropzone-input" }),
+      isDragActive: false,
+    };
+  },
 }));
 
 vi.mock("@/lib/terrainStore", () => {
   const state = {
     setGrids: vi.fn(),
+    setSinglePrimary: vi.fn(),
+    multiDatasetMode: false,
     visibleDatasets: [] as Array<{ datasetId: string }>,
     primaryDatasetId: null as string | null,
     hideAllOthers: vi.fn(),
@@ -206,6 +240,12 @@ vi.mock(
       }),
       useGetUserDatasets: () => ({ data: [], isLoading: false }),
       useGetMarkers: () => ({ data: [] }),
+      usePostDatasetsUpload: () => ({
+        mutate: uploadCallbacks.mutate,
+        isPending: false,
+        isSuccess: false,
+        variables: undefined,
+      }),
     }),
 );
 
@@ -250,5 +290,71 @@ describe("DatasetPanel", () => {
     expect(screen.queryByTestId("dropzone-terrain")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText(/UPLOAD DATASET\(S\)/));
     expect(screen.getByTestId("dropzone-terrain")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Upload-complete path: ID mismatch guard
+//
+// When the server returns a response whose terrain.datasetId differs from the
+// savedDatasetId, the panel must surface an error instead of silently storing
+// the terrain data under the wrong identity.
+// ---------------------------------------------------------------------------
+describe("DatasetPanel — upload-complete ID mismatch", () => {
+  beforeEach(() => {
+    uploadCallbacks.reset();
+  });
+
+  it("surfaces an error when terrain.datasetId does not match savedDatasetId", async () => {
+    const { act } = await import("@testing-library/react");
+    render(<DatasetPanel />);
+
+    // Open the upload accordion so the dropzone is visible.
+    fireEvent.click(screen.getByText(/UPLOAD DATASET\(S\)/));
+
+    // Trigger a drop to wire up the mutate callbacks.
+    const file = new File(["x"], "survey.bag", { type: "application/octet-stream" });
+    act(() => {
+      dropzoneCapture.trigger([file]);
+    });
+
+    expect(uploadCallbacks.mutate).toHaveBeenCalledTimes(1);
+
+    // Simulate a server response where terrain.datasetId ≠ savedDatasetId.
+    await act(async () => {
+      uploadCallbacks.onSuccess({
+        terrain: { datasetId: "server-generated-id", depths: [], width: 1, height: 1, minDepth: 0, maxDepth: 1 },
+        overview: { datasetId: "server-generated-id", depths: [], width: 1, height: 1, minDepth: 0, maxDepth: 1 },
+        savedDatasetId: "different-saved-id",
+      });
+    });
+
+    // The panel must display an error — not silently commit the terrain.
+    expect(
+      screen.getByText(/mismatched dataset IDs/i),
+    ).toBeInTheDocument();
+  });
+
+  it("does not surface an error when terrain.datasetId matches savedDatasetId", async () => {
+    const { act } = await import("@testing-library/react");
+    render(<DatasetPanel />);
+
+    fireEvent.click(screen.getByText(/UPLOAD DATASET\(S\)/));
+
+    const file = new File(["x"], "survey.bag", { type: "application/octet-stream" });
+    act(() => {
+      dropzoneCapture.trigger([file]);
+    });
+
+    // Matching IDs: no error should be shown.
+    await act(async () => {
+      uploadCallbacks.onSuccess({
+        terrain: { datasetId: "saved-id-123", depths: [], width: 1, height: 1, minDepth: 0, maxDepth: 1 },
+        overview: { datasetId: "saved-id-123", depths: [], width: 1, height: 1, minDepth: 0, maxDepth: 1 },
+        savedDatasetId: "saved-id-123",
+      });
+    });
+
+    expect(screen.queryByText(/mismatched dataset IDs/i)).not.toBeInTheDocument();
   });
 });
