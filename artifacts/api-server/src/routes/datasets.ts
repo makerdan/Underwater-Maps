@@ -1551,10 +1551,9 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
 }));
 
 // ── GET /datasets/:id/preview ─────────────────────────────────────────────────
-// Lightweight preflight: returns the resolved dataSource (ncei | gebco |
-// synthetic) for a preset dataset without transferring the full depth grid.
-// The client uses this to warn users before loading procedurally-generated
-// (synthetic) bathymetry.
+// Lightweight preflight: returns the resolved dataSource (ncei | gebco | unknown)
+// for a preset dataset without transferring the full depth grid.
+// The client uses this to warn users before loading unverifiable datasets.
 router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
@@ -1589,10 +1588,10 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
         // the DatasetPreview enum (twdb, usace, usgs-3dep). User-uploaded sonar
         // is always real measured data, so map anything unrecognised to "ncei".
         const rawSource = tj.dataSource;
-        const dataSource: "ncei" | "gebco" | "synthetic" =
-          rawSource === "gebco" ? "gebco"
-          : rawSource === "synthetic" ? "synthetic"
-          : "ncei";
+        // Stale DB rows may carry "synthetic" — that value was removed from
+        // the schema; treat any unrecognised source as "ncei" (real upload).
+        const dataSource: "ncei" | "gebco" =
+          rawSource === "gebco" ? "gebco" : "ncei";
         res.json(validateResponse(GetDatasetsIdPreviewResponse, {
           datasetId: id,
           name: row.name,

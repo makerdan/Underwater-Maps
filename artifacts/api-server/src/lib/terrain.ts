@@ -81,13 +81,6 @@ export interface TerrainGrid {
   topography?: number[];
   /** True when this grid includes a non-empty `topography` array. */
   hasTopography?: boolean;
-  /**
-   * @deprecated The synthetic fbm fallback was removed — `buildTerrainGrid`
-   * now throws `NoDataError` instead of generating procedural terrain.
-   * This field is kept in the interface only so existing disk-cache JSON
-   * can be parsed and detected as stale. Do not write it in new code.
-   */
-  synthetic?: boolean;
   /** Which upstream source produced this grid (bathymetry primary). */
   dataSource?: TerrainDataSource;
   /**

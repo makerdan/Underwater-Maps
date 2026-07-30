@@ -25,10 +25,9 @@ export interface StoredTerrainJson {
   centerLat: number;
   topography?: number[];
   hasTopography?: boolean;
-  synthetic?: boolean;
-  dataSource?: "ncei" | "gebco" | "synthetic" | "twdb" | "usace" | "usgs-3dep";
-  bathymetrySource?: "ncei" | "gebco" | "synthetic" | "twdb" | "usace" | "usgs-3dep";
-  topographySource?: "ncei" | "gebco" | "synthetic" | "twdb" | "usace" | "usgs-3dep";
+  dataSource?: "ncei" | "gebco" | "twdb" | "usace" | "usgs-3dep";
+  bathymetrySource?: "ncei" | "gebco" | "twdb" | "usace" | "usgs-3dep";
+  topographySource?: "ncei" | "gebco" | "twdb" | "usace" | "usgs-3dep";
   bathymetrySourceLabel?: string;
   topographySourceLabel?: string;
   bathymetryCreditUrl?: string;
