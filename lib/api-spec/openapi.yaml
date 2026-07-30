@@ -4556,10 +4556,14 @@ paths:
                     description: Human-readable name of the upstream data source
                   dataSource:
                     type: string
-                    enum: [ncei, gebco, synthetic, twdb, usace, usgs-3dep]
+                    enum: [ncei, gebco, twdb, usace, usgs-3dep, unknown]
+                    description: >-
+                      Which upstream source would serve this bbox.
+                      "unknown" means both NCEI and GEBCO are unreachable —
+                      a download would fail.
                   nominalResolutionM:
                     type: number
-                    description: Nominal grid resolution in metres (0 when synthetic)
+                    description: Nominal grid resolution in metres (0 when no upstream source is available)
                   waterFraction:
                     type: number
                     minimum: 0

@@ -2,8 +2,9 @@
  * preview.test.ts — tests for GET /datasets/:id/preview (task #381).
  *
  * Verifies that the preflight endpoint correctly surfaces each upstream
- * dataSource branch (ncei | gebco | synthetic | unknown) and returns 404
- * for unknown preset IDs.  Also covers the custom UUID dataset branch added
+ * dataSource branch (ncei | gebco | unknown) and returns 404 for unknown
+ * preset IDs.  The "synthetic" branch was removed — the server now returns
+ * "unknown" when all upstream sources are unreachable.  Also covers the custom UUID dataset branch added
  * to serve My Saves entries owned by the authenticated user.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -90,17 +91,20 @@ describe("GET /api/datasets/:id/preview", () => {
     expect(res.body.dataSource).toBe("gebco");
   });
 
-  it("returns synthetic dataSource with syntheticReason", async () => {
+  it("returns unknown dataSource with syntheticReason when all sources fail", async () => {
+    // The server now returns "unknown" (not "synthetic") when every ranked
+    // bathymetry source is unreachable — buildTerrainGrid throws NoDataError
+    // instead of generating procedural terrain.
     previewDatasetMock.mockResolvedValueOnce({
       datasetId: "ds",
       name: "DS",
       bbox: { minLon: 0, minLat: 0, maxLon: 1, maxLat: 1 },
-      dataSource: "synthetic",
-      syntheticReason: "Bathymetry data unavailable — terrain is procedurally generated",
+      dataSource: "unknown",
+      syntheticReason: "Bathymetry data unavailable for this location",
     });
     const res = await request(app).get("/api/datasets/ds/preview");
     expect(res.status).toBe(200);
-    expect(res.body.dataSource).toBe("synthetic");
+    expect(res.body.dataSource).toBe("unknown");
     expect(res.body.syntheticReason).toMatch(/Bathymetry data unavailable/);
   });
 

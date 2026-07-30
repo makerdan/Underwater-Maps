@@ -237,8 +237,8 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
         datasetId: "ds-2",
         name: "Nowhere Lake",
         bbox: { minLon: -100, minLat: 40, maxLon: -99.9, maxLat: 40.1 },
-        dataSource: "synthetic",
-        syntheticReason: "outside NCEI/GEBCO coverage",
+        dataSource: "unknown",
+        syntheticReason: "Bathymetry data unavailable for this location",
       },
       {
         datasetId: "ds-3",
@@ -281,7 +281,7 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
     schema: apiZod.GetTerrainDownloadInfoResponse,
     payloads: [
       { sourceName: "NCEI Bag Mosaic", dataSource: "ncei", nominalResolutionM: 4, waterFraction: 0.82 },
-      { sourceName: "Synthetic terrain", dataSource: "synthetic", nominalResolutionM: 0, waterFraction: 0 },
+      { sourceName: "No upstream coverage", dataSource: "unknown", nominalResolutionM: 0, waterFraction: 0 },
     ],
   },
   GetUserDatasetsIdHyd93FeaturesResponse: {

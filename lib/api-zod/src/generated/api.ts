@@ -4880,8 +4880,8 @@ export const getTerrainDownloadInfoResponseWaterFractionMax = 1;
 
 export const GetTerrainDownloadInfoResponse = zod.object({
   "sourceName": zod.string().describe('Human-readable name of the upstream data source'),
-  "dataSource": zod.enum(['ncei', 'gebco', 'synthetic', 'twdb', 'usace', 'usgs-3dep']),
-  "nominalResolutionM": zod.number().describe('Nominal grid resolution in metres (0 when synthetic)'),
+  "dataSource": zod.enum(['ncei', 'gebco', 'twdb', 'usace', 'usgs-3dep', 'unknown']).describe('Which upstream source would serve this bbox. \"unknown\" means both NCEI and GEBCO are unreachable — a download would fail.'),
+  "nominalResolutionM": zod.number().describe('Nominal grid resolution in metres (0 when no upstream source is available)'),
   "waterFraction": zod.number().min(getTerrainDownloadInfoResponseWaterFractionMin).max(getTerrainDownloadInfoResponseWaterFractionMax).describe('Fraction of the probe grid cells that contain water (0–1)')
 })
 

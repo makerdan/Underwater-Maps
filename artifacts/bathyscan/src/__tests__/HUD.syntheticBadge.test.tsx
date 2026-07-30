@@ -1,3 +1,11 @@
+/**
+ * HUD synthetic-badge regression guard — post-removal.
+ *
+ * The "SIMULATED DATA" badge was removed because buildTerrainGrid now throws
+ * NoDataError instead of falling back to procedural (fbm) terrain. This file
+ * verifies that the badge is never rendered regardless of the terrain state,
+ * so no ghost badge can appear from legacy cached grids.
+ */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -108,7 +116,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
   };
 });
 
-function makeTerrain(synthetic: boolean): TerrainData {
+function makeLegacySyntheticTerrain(): TerrainData {
   return {
     datasetId: "gebco-test",
     bounds: { minLon: 0, maxLon: 1, minLat: 0, maxLat: 1 },
@@ -117,11 +125,13 @@ function makeTerrain(synthetic: boolean): TerrainData {
       height: 2,
       depths: [0, -1, -1, -2],
     },
-    synthetic,
+    // Legacy field — the server no longer produces this, but guard against
+    // any stale in-memory state that might have slipped through.
+    synthetic: true,
   } as unknown as TerrainData;
 }
 
-describe("HUD simulated-data badge", () => {
+describe("HUD simulated-data badge (removed)", () => {
   beforeEach(() => {
     useCameraStore.setState({
       crosshairGps: null,
@@ -134,22 +144,25 @@ describe("HUD simulated-data badge", () => {
     mockTerrain = null;
   });
 
-  it("shows the SIMULATED DATA badge when terrain.synthetic is true", () => {
-    mockTerrain = makeTerrain(true);
-    render(<HUD />);
-    const badge = screen.getByTestId("synthetic-data-badge");
-    expect(badge).toBeVisible();
-    expect(badge).toHaveTextContent(/SIMULATED DATA/);
-  });
-
-  it("hides the SIMULATED DATA badge when terrain.synthetic is false", () => {
-    mockTerrain = makeTerrain(false);
+  it("never renders the synthetic-data badge even when legacy terrain.synthetic is true", () => {
+    mockTerrain = makeLegacySyntheticTerrain();
     render(<HUD />);
     expect(screen.queryByTestId("synthetic-data-badge")).not.toBeInTheDocument();
   });
 
-  it("hides the SIMULATED DATA badge when terrain is null", () => {
+  it("never renders the synthetic-data badge when terrain is null", () => {
     mockTerrain = null;
+    render(<HUD />);
+    expect(screen.queryByTestId("synthetic-data-badge")).not.toBeInTheDocument();
+  });
+
+  it("never renders the synthetic-data badge for real-source terrain", () => {
+    mockTerrain = {
+      datasetId: "ncei-test",
+      bounds: { minLon: 0, maxLon: 1, minLat: 0, maxLat: 1 },
+      grid: { width: 2, height: 2, depths: [0, -5, -10, -15] },
+      dataSource: "ncei",
+    } as unknown as TerrainData;
     render(<HUD />);
     expect(screen.queryByTestId("synthetic-data-badge")).not.toBeInTheDocument();
   });

@@ -4238,23 +4238,27 @@ east: number;
 west: number;
 };
 
+/**
+ * Which upstream source would serve this bbox. "unknown" means both NCEI and GEBCO are unreachable — a download would fail.
+ */
 export type GetTerrainDownloadInfo200DataSource = typeof GetTerrainDownloadInfo200DataSource[keyof typeof GetTerrainDownloadInfo200DataSource];
 
 
 export const GetTerrainDownloadInfo200DataSource = {
   ncei: 'ncei',
   gebco: 'gebco',
-  synthetic: 'synthetic',
   twdb: 'twdb',
   usace: 'usace',
   'usgs-3dep': 'usgs-3dep',
+  unknown: 'unknown',
 } as const;
 
 export type GetTerrainDownloadInfo200 = {
   /** Human-readable name of the upstream data source */
   sourceName: string;
+  /** Which upstream source would serve this bbox. "unknown" means both NCEI and GEBCO are unreachable — a download would fail. */
   dataSource: GetTerrainDownloadInfo200DataSource;
-  /** Nominal grid resolution in metres (0 when synthetic) */
+  /** Nominal grid resolution in metres (0 when no upstream source is available) */
   nominalResolutionM: number;
   /**
      * Fraction of the probe grid cells that contain water (0–1)

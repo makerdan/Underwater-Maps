@@ -27,11 +27,14 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("isSyntheticGrid", () => {
-  it("returns true when grid.synthetic is true", () => {
+  it("returns true when legacy grid.synthetic flag is true (stale cache entries)", () => {
+    // The server no longer produces synthetic terrain but old disk-cache
+    // entries may still carry synthetic:true. The predicate must still detect
+    // them so the rainbow/hatch treatment fires until the grid is evicted.
     expect(isSyntheticGrid({ synthetic: true })).toBe(true);
   });
 
-  it("returns true when dataSource is 'synthetic'", () => {
+  it("returns true when dataSource is 'synthetic' (legacy serialised grids)", () => {
     expect(
       isSyntheticGrid({ dataSource: "synthetic" as TerrainData["dataSource"] }),
     ).toBe(true);
@@ -51,7 +54,9 @@ describe("isSyntheticGrid", () => {
     ).toBe(false);
   });
 
-  it("returns false for 'unknown' dataSource (badge/dialog handle that case)", () => {
+  it("returns false for 'unknown' dataSource (NoDataError case — not a ghost)", () => {
+    // "unknown" means the server threw NoDataError, not that it produced
+    // synthetic terrain. The client shows a different error UI for this.
     expect(
       isSyntheticGrid({ dataSource: "unknown" as TerrainData["dataSource"] }),
     ).toBe(false);

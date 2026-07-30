@@ -10,17 +10,21 @@ import { logger } from "./logger.js";
  * Which upstream data service produced this grid.
  *   "ncei"          — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
  *   "gebco"         — GEBCO 2024 WCS (~400 m global grid)
- *   "synthetic"     — fbm fallback used when all upstream services are unreachable
  *   "twdb"          — TWDB Reservoir Volumetric & Sedimentation Survey
  *   "usace"         — USACE Fort Worth District hydrographic survey
  *   "usgs-3dep"     — USGS 3DEP best-available DEM (lidar where available,
  *                     1/3" seamless otherwise) — used for inland reservoir
  *                     pre-impoundment bathymetry and surrounding topography.
+ *
+ * @deprecated "synthetic" — the fbm procedural fallback was removed;
+ *   `buildTerrainGrid` now throws `NoDataError` when all upstream sources fail.
+ *   The literal is kept in the union only so legacy disk-cache entries can be
+ *   detected and discarded. It is never written by new code.
  */
 export type TerrainDataSource =
   | "ncei"
   | "gebco"
-  | "synthetic"
+  | "synthetic" // @deprecated — never produced by new code; treated as stale in cache reads
   | "twdb"
   | "usace"
   | "usgs-3dep"
@@ -78,12 +82,10 @@ export interface TerrainGrid {
   /** True when this grid includes a non-empty `topography` array. */
   hasTopography?: boolean;
   /**
-   * True when the grid was generated from the synthetic fbm fallback
-   * because the upstream bathymetry service (e.g. GEBCO WCS) was
-   * unreachable or returned an unusable response. Clients can surface
-   * a "synthetic data" badge so users know the terrain is not a real
-   * survey.
-   * @deprecated Use `dataSource` for a more descriptive indicator.
+   * @deprecated The synthetic fbm fallback was removed — `buildTerrainGrid`
+   * now throws `NoDataError` instead of generating procedural terrain.
+   * This field is kept in the interface only so existing disk-cache JSON
+   * can be parsed and detected as stale. Do not write it in new code.
    */
   synthetic?: boolean;
   /** Which upstream source produced this grid (bathymetry primary). */
@@ -233,8 +235,8 @@ export const ALL_PRESET_DATASETS: DatasetMeta[] = [
 // Every AOI flows through a single ranked list of bathymetry sources. The
 // resolver tries each source in priority order and the first one that
 // returns a usable grid wins; failures are logged and fall through to the
-// next source, exactly mirroring the old NCEI→GEBCO loop. Synthetic fbm
-// remains the implicit terminal fallback when every ranked source fails.
+// next source, exactly mirroring the old NCEI→GEBCO loop. When every ranked
+// source fails, buildTerrainGrid throws NoDataError (no synthetic fallback).
 //
 // Ranking rubric (highest priority first):
 //   1. **Quality** — native resolution (1–50 m local multibeam beats
@@ -262,7 +264,7 @@ export const ALL_PRESET_DATASETS: DatasetMeta[] = [
 //      saltwater or freshwater preset list).
 //   2. Add a `DATASET_SOURCE_PRIORITY[<id>]` entry with at least the
 //      top 3 candidate sources in ranked order. If none is provided
-//      the resolver defaults to `["gebco"]` and ultimately synthetic.
+//      the resolver defaults to `["gebco"]`; if all fail, NoDataError is thrown.
 // ---------------------------------------------------------------------------
 
 /** Provenance overrides a source can return (lets bundled grids report
@@ -1825,6 +1827,15 @@ async function readDiskCache(key: string): Promise<TerrainGrid | null> {
     fsPromises.unlink(file).catch(() => {});
     return null;
   }
+  // Discard any legacy synthetic-fbm grids — buildTerrainGrid now throws
+  // NoDataError instead of producing synthetic terrain, so these entries are
+  // stale and would surface a misleading "Simulated" badge on the client.
+  if ((parsed as { dataSource?: string }).dataSource === "synthetic" ||
+      (parsed as { synthetic?: boolean }).synthetic === true) {
+    logger.info({ key }, `[terrain] Discarding stale synthetic cache ${key}`);
+    fsPromises.unlink(file).catch(() => {});
+    return null;
+  }
   // Basic schema check — guard against partially-written or truncated files.
   if (!Array.isArray(parsed.depths) || typeof parsed.width !== "number") {
     logger.warn({ key }, `[terrain] Disk cache ${key} failed schema check — deleting`);
@@ -1902,9 +1913,6 @@ export async function previewDataset(datasetId: string): Promise<DatasetPreview 
         name: meta.name,
         bbox: meta.bbox,
         dataSource: grid.dataSource,
-        ...(grid.dataSource === "synthetic"
-          ? { syntheticReason: "upstream bathymetry services unreachable" }
-          : {}),
       };
       previewCache.set(datasetId, { result, ts: now });
       return result;
@@ -1931,10 +1939,12 @@ export async function previewDataset(datasetId: string): Promise<DatasetPreview 
   // dataSource. Uses the ranked resolver so the preflight always matches
   // what buildTerrainGrid() would produce.
   const resolved = await resolveBathymetrySource(meta, 32);
-  const dataSource: DatasetPreview["dataSource"] = resolved ? resolved.source.dataSource : "synthetic";
+  // When every ranked source fails, report "unknown" rather than "synthetic" —
+  // the server now throws NoDataError at build time; there is no fbm fallback.
+  const dataSource: DatasetPreview["dataSource"] = resolved ? resolved.source.dataSource : "unknown";
   const syntheticReason: string | undefined =
-    dataSource === "synthetic"
-      ? "Bathymetry data unavailable — terrain is procedurally generated"
+    dataSource === "unknown"
+      ? "Bathymetry data unavailable for this location"
       : undefined;
 
   const result: DatasetPreview = {
@@ -1942,7 +1952,7 @@ export async function previewDataset(datasetId: string): Promise<DatasetPreview 
     name: meta.name,
     bbox: meta.bbox,
     dataSource,
-    ...(dataSource === "synthetic" && syntheticReason ? { syntheticReason } : {}),
+    ...(dataSource === "unknown" && syntheticReason ? { syntheticReason } : {}),
   };
   previewCache.set(datasetId, { result, ts: now });
   return result;
@@ -2163,6 +2173,13 @@ async function readFreshwaterDiskCache(
   }
   const version = parsed.version ?? 1;
   if (version < TERRAIN_CACHE_VERSION) {
+    fsPromises.unlink(file).catch(() => {});
+    return null;
+  }
+  // Discard any legacy synthetic-fbm grids (see readDiskCache comment).
+  if ((parsed as { dataSource?: string }).dataSource === "synthetic" ||
+      (parsed as { synthetic?: boolean }).synthetic === true) {
+    logger.info({ key, cacheDir }, `[terrain] Discarding stale synthetic freshwater cache ${key}`);
     fsPromises.unlink(file).catch(() => {});
     return null;
   }
@@ -2646,7 +2663,7 @@ export async function previewBboxForDownload(
   bbox: { north: number; south: number; east: number; west: number },
 ): Promise<{
   sourceName: string;
-  dataSource: TerrainDataSource;
+  dataSource: TerrainDataSource | "unknown";
   nominalResolutionM: number;
   waterFraction: number;
 }> {
@@ -2654,7 +2671,7 @@ export async function previewBboxForDownload(
   const gBbox = { minLon: west, minLat: south, maxLon: east, maxLat: north };
   const PROBE_N = 32;
 
-  let dataSource: TerrainDataSource = "gebco";
+  let dataSource: TerrainDataSource | "unknown" = "gebco";
   let sourceName = "GEBCO 2024 (~400 m)";
   let nominalResolutionM = 400;
   let probeDepths: number[] | null = null;
@@ -2675,7 +2692,9 @@ export async function previewBboxForDownload(
       nominalResolutionM = 400;
       probeDepths = r.depths;
     } catch {
-      dataSource = "synthetic";
+      // Both NCEI and GEBCO failed — no data available for this bbox.
+      // Report "unknown" rather than the removed synthetic fallback.
+      dataSource = "unknown";
       sourceName = "No upstream coverage";
       nominalResolutionM = 0;
     }

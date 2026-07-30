@@ -337,50 +337,10 @@ export const HUD: React.FC = () => {
           </button>
         </ViewscreenTooltip>
 
-        {/* Synthetic / simulated data warning badge — hidden on narrow screens */}
-        {terrain?.synthetic && !isNarrow && (
-          <ViewscreenTooltip
-            label="Real bathymetry sources were unreachable. Depths shown are procedurally generated, not actual sonar measurements."
-            side="bottom"
-          >
-            <div
-              data-testid="synthetic-data-badge"
-              style={{
-                ...PANEL,
-                fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                border: "1px solid rgba(245,158,11,0.5)",
-                background: "rgba(245,158,11,0.10)",
-                color: "#f59e0b",
-                letterSpacing: "0.18em",
-                fontWeight: 700,
-                textShadow: "0 0 6px rgba(245,158,11,0.4)",
-              }}
-            >
-              ⚠ SIMULATED DATA
-            </div>
-          </ViewscreenTooltip>
-        )}
-        {/* Narrow-screen icon-only synthetic badge */}
-        {terrain?.synthetic && isNarrow && (
-          <ViewscreenTooltip
-            label="Simulated data — real bathymetry sources were unreachable."
-            side="bottom"
-          >
-            <div
-              data-testid="synthetic-data-badge"
-              style={{
-                ...PANEL,
-                fontSize: "calc(18px * var(--bs-font-scale, 1))",
-                border: "1px solid rgba(245,158,11,0.5)",
-                background: "rgba(245,158,11,0.10)",
-                color: "#f59e0b",
-                padding: "3px 6px",
-              }}
-            >
-              ⚠
-            </div>
-          </ViewscreenTooltip>
-        )}
+        {/* Synthetic / simulated data badge removed — the server no longer
+            produces synthetic (fbm) terrain; buildTerrainGrid now throws
+            NoDataError instead. Any legacy grids with dataSource="synthetic"
+            are discarded by the server disk-cache stale check. */}
 
         {/* Raw bathymetry badge — hidden on narrow screens (non-essential) */}
         {!smoothTerrainSpikes && !isNarrow && (
