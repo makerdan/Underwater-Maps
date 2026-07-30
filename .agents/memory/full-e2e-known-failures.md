@@ -1,16 +1,26 @@
 ---
-name: Full e2e suite — 9 deterministic failures (July 2026)
-description: Known failing specs in the full playwright run unrelated to chip/settings work; all fixed 2026-07-21.
+name: Full e2e suite — known failures (July 2026)
+description: Known failing specs in the full playwright run; all originally fixed 2026-07-21, confirmed green 2026-07-30.
 ---
 
 As of 2026-07-20 the full playwright run (e2e-repro) failed deterministically on 9 tests.
-**All 9 are now fixed as of 2026-07-21.** test-standard-plus confirmed green (all 19 steps, exit 0).
+**All 9 are now fixed and confirmed green as of 2026-07-30.**
 
-## Root causes and fixes
+## Confirmation run (2026-07-30)
+
+Targeted run of the four dataset-load pipeline specs:
+- `find-data-my-uploads.spec.ts` — PASSED
+- `follow-handoff.spec.ts` — PASSED
+- `gps-trail.spec.ts` — PASSED
+- `live-mode.spec.ts` — PASSED
+
+Run completed in ~87 s with exit 0. No code changes were required — the fixes from tasks #3111 and #3112 were sufficient.
+
+## Root causes and fixes (applied 2026-07-21)
 
 **Why:** browser console showed "State loaded from storage couldn't be migrated since no migrate function was provided" (panelCollapseStore had `version: 1` with no `migrate`) and settings PUT "Failed to fetch" bursts.
 
-**Status (2026-07-21):** The panelCollapseStore now has a `migrate` function (see `artifacts/bathyscan/src/lib/panelCollapseStore.ts`). The 5 associated unit test failures (zoneSettingsTerrainSync, routes-documented, portsGuard, raster-routes, terrainMock) are all fixed and confirmed by test-standard passing (95/95 api-server, 3680/3680 bathyscan). The 4 dataset-load pipeline e2e specs need a full e2e run to confirm they now pass — see follow-up task #3120.
+**Status (2026-07-21 → confirmed 2026-07-30):** The panelCollapseStore now has a `migrate` function (see `artifacts/bathyscan/src/lib/panelCollapseStore.ts`).
 
 ### find-data-my-uploads (1 test)
 - `requestDatasetSwitch` checked the preview endpoint for `dataSource: "real"` before calling `onConfirm()`. The test had no mock for `/api/datasets/${UPLOAD_ID}/preview`.
@@ -25,7 +35,7 @@ As of 2026-07-20 the full playwright run (e2e-repro) failed deterministically on
 - **Fix:** moved `seedTerrain` call before the button wait.
 
 ### live-mode (1 test) and gps-trail (1 test)
-- Confirmed passing in targeted solo runs after the other fixes.
+- Confirmed passing in targeted solo runs after the other fixes (re-confirmed 2026-07-30).
 
 ## api-server unit failures (7 tests fixed)
 - `pdf-upload.test.ts` needed PYTHONUSERBASE/PYTHONPATH env vars in subprocess call and updated assertions.
