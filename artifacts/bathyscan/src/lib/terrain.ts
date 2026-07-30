@@ -436,6 +436,32 @@ export function computeZoneWeights(
 // ---------------------------------------------------------------------------
 
 /**
+ * Normalize a raw longitude difference (in degrees) into [−180, +180].
+ *
+ * When two geographic centers lie on opposite sides of the ±180° antimeridian,
+ * a raw subtraction (secCenterLon − primCenterLon) produces a difference of
+ * ≈±360° — approximately a full globe width.  This utility folds that into the
+ * shortest-arc value so secondary dataset meshes are placed at the correct
+ * short geographic offset, not translated a full globe away.
+ *
+ * Formula: ((dLon + 540) % 360) − 180
+ *   • Adding 540 first makes the modulo always positive for inputs ≥ −540.
+ *   • The result lands in [−180, +180].
+ *
+ * @param dLon - Raw longitude difference (degrees), any finite value.
+ * @returns Equivalent shortest-arc difference in [−180, +180].
+ */
+export function normalizeLonDelta(dLon: number): number {
+  // Two-step modulo keeps the result positive before subtracting 180, which
+  // is necessary because JavaScript's % operator preserves the sign of the
+  // dividend. A single ((dLon + 540) % 360) - 180 fails for inputs below
+  // −540 (e.g. −720) where dLon + 540 is still negative and JS returns a
+  // negative remainder.  Reducing modulo 360 first brings any finite input
+  // into (−360, +360), and the second step then lands in [−180, +180].
+  return (((dLon % 360) + 540) % 360) - 180;
+}
+
+/**
  * Convert a world-space Y position (negative = deeper) to an estimated depth
  * in metres for the given grid.
  *

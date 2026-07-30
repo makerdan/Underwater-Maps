@@ -21,6 +21,7 @@ import {
   applyColormapToVertexColors,
   getTerrainSurfaceY,
   getSeaSurfaceY,
+  normalizeLonDelta,
   NO_DATA_COLOR,
   WORLD_SIZE,
   MAX_DEPTH_WORLD,
@@ -892,5 +893,72 @@ describe("absolute-feet depth mapping — ocean/custom vertex colouring", () => 
     const r2 = getColormapTRange("ocean", -3, 10000);
     expect(r2.tMin).toBe(0);
     expect(r2.tMax).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeLonDelta — antimeridian longitude-difference normalization
+// ---------------------------------------------------------------------------
+
+describe("normalizeLonDelta", () => {
+  it("short difference well inside [−180, +180] is unchanged", () => {
+    // Same hemisphere: +5° east of primary
+    expect(normalizeLonDelta(5)).toBeCloseTo(5, 10);
+    // Same hemisphere: 20° west of primary
+    expect(normalizeLonDelta(-20)).toBeCloseTo(-20, 10);
+  });
+
+  it("antimeridian case: primary +175°, secondary −175° → delta +10°, not −350°", () => {
+    // Primary at 175°E, secondary at 175°W (= 185°E).
+    // Raw difference: −175 − 175 = −350. Correct short arc: +10° (secondary is
+    // 10° east of primary, crossing the dateline).
+    const raw = -175 - 175;
+    expect(raw).toBe(-350);
+    expect(normalizeLonDelta(raw)).toBeCloseTo(10, 10);
+  });
+
+  it("antimeridian case: primary −175°, secondary +175° → delta −10°, not +350°", () => {
+    // Primary at 175°W (185°E), secondary at 175°E.
+    // Raw difference: 175 − (−175) = +350. Correct short arc: −10° (secondary
+    // is 10° west of primary).
+    const raw = 175 - (-175);
+    expect(raw).toBe(350);
+    expect(normalizeLonDelta(raw)).toBeCloseTo(-10, 10);
+  });
+
+  it("exactly +180° wraps to −180°", () => {
+    expect(normalizeLonDelta(180)).toBeCloseTo(-180, 10);
+  });
+
+  it("exactly 0° is 0°", () => {
+    expect(normalizeLonDelta(0)).toBeCloseTo(0, 10);
+  });
+
+  it("result is always in [−180, +180]", () => {
+    const inputs = [-720, -540, -360, -181, -180, -90, 0, 90, 179, 180, 360, 540, 720];
+    for (const d of inputs) {
+      const r = normalizeLonDelta(d);
+      expect(r).toBeGreaterThanOrEqual(-180);
+      expect(r).toBeLessThanOrEqual(180);
+    }
+  });
+
+  it("span normalization: antimeridian bbox (minLon=170, maxLon=−170) yields span 20°, not −340°", () => {
+    // A bounding box where minLon=170, maxLon=−170 straddles the antimeridian.
+    // Raw maxLon − minLon = −170 − 170 = −340. Math.abs(normalizeLonDelta(−340)) = 20.
+    const minLon = 170;
+    const maxLon = -170;
+    const rawSpan = maxLon - minLon; // −340
+    const normalizedSpan = Math.abs(normalizeLonDelta(rawSpan));
+    expect(rawSpan).toBe(-340);
+    expect(normalizedSpan).toBeCloseTo(20, 10);
+  });
+
+  it("span normalization: normal bbox (minLon=−10, maxLon=+10) yields span 20° unchanged", () => {
+    const minLon = -10;
+    const maxLon = 10;
+    const rawSpan = maxLon - minLon; // 20
+    const normalizedSpan = Math.abs(normalizeLonDelta(rawSpan));
+    expect(normalizedSpan).toBeCloseTo(20, 10);
   });
 });

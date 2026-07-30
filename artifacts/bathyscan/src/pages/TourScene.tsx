@@ -25,7 +25,7 @@ import { DepthPoleLayer, DepthPoleDomLabels } from "@/components/DepthPoleLayer"
 import { GpsMarker } from "@/components/GpsMarker";
 import { DepthProfileLine } from "@/components/DepthProfileLine";
 import type { TidalDataResult } from "@/hooks/useTidalData";
-import { INITIAL_CAMERA_POSITION, MAX_DEPTH_WORLD, WORLD_SIZE, getSeaSurfaceY, buildWaterSurface, type WaterSurface } from "@/lib/terrain";
+import { INITIAL_CAMERA_POSITION, MAX_DEPTH_WORLD, WORLD_SIZE, getSeaSurfaceY, buildWaterSurface, normalizeLonDelta, type WaterSurface } from "@/lib/terrain";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { runFollowBoundsCheck } from "@/lib/followBoundsCheck";
@@ -320,8 +320,14 @@ const NonPrimaryDatasetMeshes: React.FC<{
   waterSurface?: WaterSurface;
 }> = ({ primary, showLandmass, tidalDataMap, tidalOverlay, depthLayer = "surface", waterSurface = { visible: true, y: 0 } }) => {
   const visible = useTerrainStore((s) => s.visibleDatasets);
-  const primaryId = useTerrainStore((s) => s.primaryDatasetId);
-  const primaryLonRange = (primary.maxLon - primary.minLon) || 1;
+  // Derive the primary dataset ID from the `primary` prop rather than reading
+  // store.primaryDatasetId separately. The two sources update in different
+  // React renders during a primary switch, causing a one-frame window where the
+  // filter and the reference geometry are inconsistent. Using primary.datasetId
+  // keeps filter + geometry reference in sync within a single render.
+  const primaryId = primary.datasetId;
+  // Normalize lon spans to handle antimeridian-crossing bounding boxes.
+  const primaryLonRange = Math.abs(normalizeLonDelta(primary.maxLon - primary.minLon)) || 1;
   const primaryLatRange = (primary.maxLat - primary.minLat) || 1;
   const primaryDepthRange = (primary.maxDepth - primary.minDepth) || 1;
   return (
@@ -330,7 +336,9 @@ const NonPrimaryDatasetMeshes: React.FC<{
         .filter((v) => v.datasetId !== primaryId && v.activeGrid)
         .map((v) => {
           const g = v.activeGrid as TerrainData;
-          const secLonRange = (g.maxLon - g.minLon) || 1;
+          // Normalize lon span: handles antimeridian-crossing bboxes where
+          // maxLon < minLon would otherwise yield a negative or ≈360° range.
+          const secLonRange = Math.abs(normalizeLonDelta(g.maxLon - g.minLon)) || 1;
           const secLatRange = (g.maxLat - g.minLat) || 1;
           const secDepthRange = (g.maxDepth - g.minDepth) || 1;
           // Latitude-corrected longitude scale: degrees of longitude shrink
@@ -347,7 +355,13 @@ const NonPrimaryDatasetMeshes: React.FC<{
           const secCenterLat = (g.minLat + g.maxLat) / 2;
           const primCenterLon = (primary.minLon + primary.maxLon) / 2;
           const primCenterLat = (primary.minLat + primary.maxLat) / 2;
-          const cx = ((secCenterLon - primCenterLon) / primaryLonRange) * WORLD_SIZE;
+          // normalizeLonDelta folds the raw difference into [−180, +180] so that
+          // a secondary dataset on the opposite side of the ±180° antimeridian
+          // from the primary is placed at the correct short offset (~10°) rather
+          // than a full-globe translation (~350°). Without this normalization,
+          // the raw difference wraps to ≈±360° — approximately a full globe
+          // width in world units — whenever the two centers straddle the dateline.
+          const cx = (normalizeLonDelta(secCenterLon - primCenterLon) / primaryLonRange) * WORLD_SIZE;
           const cz = -((secCenterLat - primCenterLat) / primaryLatRange) * WORLD_SIZE;
           const naturalCy =
             ((primary.minDepth - g.minDepth) / primaryDepthRange) * MAX_DEPTH_WORLD;
