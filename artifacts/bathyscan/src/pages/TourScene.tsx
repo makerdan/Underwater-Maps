@@ -125,7 +125,8 @@ const StubFollowBoundsWatcher: React.FC = () => {
 const MAX_LAND_HEIGHT_WORLD = MAX_DEPTH_WORLD * 0.4; // e.g. 20 world units
 
 
-const LandTerrainMesh: React.FC = () => {
+// Exported for unit testing only (GPU-leak regression tests).
+export const LandTerrainMesh: React.FC = () => {
   const { terrain } = useAppState();
   const landGrid = useLandTerrainStore((s) => s.landGrid);
   const tileUrl = useSatelliteTileStore((s) => s.tileUrl);
@@ -195,9 +196,45 @@ const LandTerrainMesh: React.FC = () => {
     return { geometry, proceduralMaterial };
   }, [landGrid]);
 
+  // --- Bug A fix: dispose old PlaneGeometry when landGrid changes / on unmount ---
+  // geometry is produced by useMemo above; a ref tracks the live instance so
+  // the cleanup always disposes exactly the geometry it installed, never a
+  // stale one. The ref is nulled after disposal to prevent dangling references.
+  const prevGeometryRef = useRef<THREE.BufferGeometry | null>(null);
+  useEffect(() => {
+    const prev = prevGeometryRef.current;
+    if (prev && prev !== geometry) prev.dispose();
+    prevGeometryRef.current = geometry ?? null;
+    return () => {
+      geometry?.dispose();
+      prevGeometryRef.current = null;
+    };
+  }, [geometry]);
+
+  // --- Bug B fix: dispose old proceduralMaterial when landGrid changes / on unmount ---
+  // Previously excluded from the satellite-material disposal path; now tracked
+  // independently so both material paths are covered.
+  const prevProceduralMaterialRef = useRef<THREE.Material | null>(null);
+  useEffect(() => {
+    const prev = prevProceduralMaterialRef.current;
+    if (prev && prev !== proceduralMaterial) prev.dispose();
+    prevProceduralMaterialRef.current = proceduralMaterial ?? null;
+    return () => {
+      proceduralMaterial?.dispose();
+      prevProceduralMaterialRef.current = null;
+    };
+  }, [proceduralMaterial]);
+
   // Satellite texture — loaded from the object URL whenever tileUrl changes.
   // Disposed when replaced or on unmount.
   const [satelliteTexture, setSatelliteTexture] = useState<THREE.Texture | null>(null);
+
+  // --- Bug C fix: keep a ref current so the unmount cleanup always disposes
+  // the live texture, not the mount-time snapshot captured by a stale closure.
+  const satelliteTextureRef = useRef<THREE.Texture | null>(null);
+  useEffect(() => {
+    satelliteTextureRef.current = satelliteTexture;
+  }, [satelliteTexture]);
 
   useEffect(() => {
     if (!tileUrl) {
@@ -220,8 +257,9 @@ const LandTerrainMesh: React.FC = () => {
     return () => { disposed = true; };
   }, [tileUrl]);
 
-  // Dispose texture on unmount.
-  useEffect(() => () => { satelliteTexture?.dispose(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only cleanup; intentionally captures the texture ref at mount time to avoid re-running disposal on every texture update
+  // Dispose texture on unmount — reads the ref (not the closure) so the live
+  // texture at unmount time is always disposed, even if it was loaded after mount.
+  useEffect(() => () => { satelliteTextureRef.current?.dispose(); }, []);
 
   // Build the final material: satellite when enabled + available, else procedural ramp.
   const material = useMemo(() => {
@@ -239,15 +277,28 @@ const LandTerrainMesh: React.FC = () => {
   }, [proceduralMaterial, satelliteTexture, satelliteImagery]);
 
   // Dispose the satellite-textured material when it is replaced.
+  // Procedural materials are intentionally excluded — their lifecycle is owned
+  // by prevProceduralMaterialRef above (Bug B fix).
+  // We identify satellite materials by their non-null `.map` property rather
+  // than comparing to `proceduralMaterial`: the comparison approach breaks when
+  // both change simultaneously (new landGrid), because `proceduralMaterial` in
+  // the closure refers to the NEW value and the old procedural material no
+  // longer equals it, causing a double-dispose.
   const prevMaterialRef = useRef<THREE.Material | null>(null);
   useEffect(() => {
     const prev = prevMaterialRef.current;
-    if (prev && prev !== proceduralMaterial && material !== prev) prev.dispose();
+    if (prev && (prev as THREE.MeshStandardMaterial).map && material !== prev) {
+      prev.dispose();
+    }
     prevMaterialRef.current = material;
-  }, [material, proceduralMaterial]);
+  }, [material]);
 
   if (!geometry || !material) return null;
 
+  // Dev audit hint: after any change to LandTerrainMesh disposal logic, verify
+  // renderer.info.memory.geometries and renderer.info.memory.textures do not
+  // grow across repeated primary-dataset switches (open browser devtools console
+  // and log useThree(s => s.gl).info.memory after each switch).
   return <mesh geometry={geometry} material={material} />;
 };
 

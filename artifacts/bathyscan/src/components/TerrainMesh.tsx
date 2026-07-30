@@ -195,22 +195,27 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
     }, [zoneMap, grid, geometry]);
 
     // Dispose old geometry to free GPU memory.
+    // NOTE: the *cleanup* of the previous effect run already calls geometry.dispose()
+    // for the old geometry object. The setup phase must NOT also call
+    // prevGeometryRef.current.dispose() — that would double-dispose the same
+    // object (React calls cleanup for the old effect before running setup for
+    // the new one, so prevGeometryRef.current still points to the geometry that
+    // was just cleaned up). Three.js is idempotent about double-dispose but
+    // double-disposing leaves a dangling ref until the next grid change.
     useEffect(() => {
-      const prev = prevGeometryRef.current;
-      if (prev && prev !== geometry) prev.dispose();
       prevGeometryRef.current = geometry;
       return () => {
         geometry.dispose();
+        prevGeometryRef.current = null;
       };
     }, [geometry]);
 
     // Dispose old skirt geometry on grid change / unmount.
     useEffect(() => {
-      const prev = prevSkirtGeometryRef.current;
-      if (prev && prev !== skirtGeometry) prev.dispose();
       prevSkirtGeometryRef.current = skirtGeometry;
       return () => {
         skirtGeometry.dispose();
+        prevSkirtGeometryRef.current = null;
       };
     }, [skirtGeometry]);
 
