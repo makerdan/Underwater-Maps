@@ -32,6 +32,14 @@ vi.mock("@workspace/db", () => ({
     query: vi.fn().mockImplementation((sql: string, params: unknown[]) =>
       _pgQueryImpl(sql, params),
     ),
+    // rateLimitPruneJob checks out a dedicated client for advisory locking;
+    // route the client's query through the same stateful impl.
+    connect: vi.fn().mockImplementation(async () => ({
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) =>
+        _pgQueryImpl(sql, params),
+      ),
+      release: vi.fn(),
+    })),
   },
 }));
 

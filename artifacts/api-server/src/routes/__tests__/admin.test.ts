@@ -225,7 +225,10 @@ describe("GET /admin/rate-limit/usage — query param validation", () => {
   });
 
   function get(url: string) {
-    return request(makeApp()).get(url).set("x-e2e-user-id", E2E_USER);
+    return request(makeApp())
+      .get(url)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
   }
 
   it("applies defaults when no params are given", async () => {
