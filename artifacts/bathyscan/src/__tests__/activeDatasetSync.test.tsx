@@ -32,6 +32,10 @@ const makeApiClientMock = vi.hoisted(() => {
     });
 });
 
+// Per-test override: when set, the terrain mock returns data with THIS id
+// instead of the requested id — simulating a stale/mismatched server response.
+const mockTerrainResponseId = vi.hoisted(() => ({ current: null as string | null }));
+
 const terrainFor = (id: string) => ({
   datasetId: id,
   minLat: 0, maxLat: 1, minLon: 0, maxLon: 1, resolution: 2,
@@ -44,13 +48,20 @@ const overviewFor = (id: string) => ({
 });
 
 // Mock the API client to return id-keyed data the hook can commit.
+// When mockTerrainResponseId.current is set, the terrain/overview responses
+// carry THAT datasetId instead of the requested one — simulating a mismatched
+// server response (e.g. stale CDN cache, inflight concurrent request).
 vi.mock("@workspace/api-client-react", () =>
   makeApiClientMock({
     useGetDatasetsIdTerrain: (id: string, _opts: unknown, options: { query?: { enabled?: boolean } }) => ({
-      data: options?.query?.enabled && id ? terrainFor(id) : undefined,
+      data: options?.query?.enabled && id
+        ? terrainFor(mockTerrainResponseId.current ?? id)
+        : undefined,
     }),
     useGetDatasetsIdOverview: (id: string, options: { query?: { enabled?: boolean } }) => ({
-      data: options?.query?.enabled && id ? overviewFor(id) : undefined,
+      data: options?.query?.enabled && id
+        ? overviewFor(mockTerrainResponseId.current ?? id)
+        : undefined,
     }),
     getGetDatasetsIdTerrainQueryKey: (id: string) => ["datasets", id, "terrain"],
     getGetDatasetsIdOverviewQueryKey: (id: string) => ["datasets", id, "overview"],
@@ -98,6 +109,7 @@ describe("useActiveDatasetSync", () => {
     setTerrainSpy.mockClear();
     currentDatasetId = null;
     currentTerrain = null;
+    mockTerrainResponseId.current = null;
     useTerrainStore.setState({ activeGrid: null, overviewGrid: null });
   });
 
@@ -139,5 +151,24 @@ describe("useActiveDatasetSync", () => {
     expect(setTerrainSpy).not.toHaveBeenCalled();
     expect(useTerrainStore.getState().activeGrid).toBeNull();
     expect(useTerrainStore.getState().overviewGrid).toBeNull();
+  });
+
+  it("rejects a mismatched server response — does not commit terrain or grids", () => {
+    // Server returns data whose datasetId is "dataset-stale", not "dataset-A".
+    // This simulates a stale CDN cache hit or a concurrent-request race where
+    // the response resolves after the active id has already moved on.
+    mockTerrainResponseId.current = "dataset-stale";
+
+    render(<Harness id="dataset-A" />);
+
+    // The hook must not commit mismatched data to context or to the store.
+    // Neither the requested id ("dataset-A") nor the stale server id
+    // ("dataset-stale") should appear in the store — the write is skipped.
+    expect(setTerrainSpy).not.toHaveBeenCalled();
+    const state = useTerrainStore.getState();
+    expect(state.activeGrid?.datasetId).not.toBe("dataset-stale");
+    expect(state.activeGrid?.datasetId).not.toBe("dataset-A");
+    expect(state.overviewGrid?.datasetId).not.toBe("dataset-stale");
+    expect(state.overviewGrid?.datasetId).not.toBe("dataset-A");
   });
 });
