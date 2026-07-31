@@ -62,6 +62,15 @@ const uploadJobsTableStub = {
   datasetId: "datasetId",
   createdAt: "createdAt",
   updatedAt: "updatedAt",
+  // chunk-upload columns — needed for chunk-status DB fallback and
+  // persistJobToDB column references in the upload pipeline tests.
+  uploadId: "uploadId",
+  fileName: "fileName",
+  totalChunks: "totalChunks",
+  chunksReceived: "chunksReceived",
+  resolution: "resolution",
+  smoothing: "smoothing",
+  stageStartedAt: "stageStartedAt",
 };
 
 const disabledPresetsTableStub = {

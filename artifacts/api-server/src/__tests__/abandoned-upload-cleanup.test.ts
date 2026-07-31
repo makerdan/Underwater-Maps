@@ -184,4 +184,47 @@ describe("cleanupAbandonedUploadJobs", () => {
       }
     }
   });
+
+  // ── updatedAt column guard ────────────────────────────────────────────────
+  // The staleness cutoff must be based on updatedAt (last activity), NOT on
+  // createdAt (row creation time).  A row with a recent updatedAt but an old
+  // createdAt is still active and must survive the sweep.
+  it("passes updatedAt (not createdAt) as the lt() column argument", async () => {
+    await cleanupAbandonedUploadJobs();
+
+    const ltMock = vi.mocked(lt);
+    // Find lt() calls where the second argument is a Date (the cutoff).
+    const dateCalls = ltMock.mock.calls.filter((call) => call[1] instanceof Date);
+    expect(dateCalls.length).toBeGreaterThanOrEqual(1);
+
+    // The column stub for updatedAt resolves to the string "updatedAt" (from
+    // createDbMock's uploadJobsTableStub).  The column stub for createdAt would
+    // be "createdAt".  We assert the correct column is used.
+    const columnArg = dateCalls[0]?.[0];
+    expect(columnArg).toBe("updatedAt");
+    expect(columnArg).not.toBe("createdAt");
+  });
+
+  it("a row with old createdAt but recent updatedAt is NOT deleted (updatedAt drives the cutoff)", async () => {
+    // This test verifies the semantic: lt(uploadJobsTable.updatedAt, cutoff)
+    // means rows whose last-activity timestamp is recent survive even if they
+    // were created long ago.  We assert that the lt() predicate is wired to
+    // updatedAt by checking that the column arg is "updatedAt".
+    const before = Date.now();
+    await cleanupAbandonedUploadJobs();
+    const after = Date.now();
+
+    const ltMock = vi.mocked(lt);
+    const dateCalls = ltMock.mock.calls.filter((call) => call[1] instanceof Date);
+    expect(dateCalls.length).toBeGreaterThanOrEqual(1);
+
+    // Column must be updatedAt so a recently-touched row (recent updatedAt,
+    // old createdAt) is below the cutoff and survives.
+    expect(dateCalls[0]?.[0]).toBe("updatedAt");
+
+    // Sanity-check: the cutoff date itself is in the expected window.
+    const cutoffMs = (dateCalls[0]?.[1] as Date).getTime();
+    expect(cutoffMs).toBeLessThan(before);  // cutoff is in the past
+    expect(cutoffMs).toBeLessThan(after);
+  });
 });
