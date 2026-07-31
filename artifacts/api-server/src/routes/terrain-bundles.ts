@@ -3,6 +3,12 @@
  *
  * On-demand bathymetry bundle API routes.
  *
+ * NOTE: The `presetId` parameter throughout this file is a **dataset/catalog
+ * string key** (e.g. "gulf-of-maine-ncei", "lake-ray-roberts") drawn from
+ * `ALL_PRESET_DATASETS` or seeded catalog entries. It is NOT a foreign key
+ * into the `trolling_presets` table — that table stores user-defined trolling
+ * routes, which are entirely unrelated.
+ *
  * POST /api/terrain/bundles
  *   Auth required. Checks GCS for an existing bundle; if absent, creates a
  *   DB job row and kicks off a background download.  Returns the job id.
@@ -102,10 +108,13 @@ interface BundleTarget {
 }
 
 /**
- * Resolves a presetId to a fetch strategy + bbox. Checks the in-memory
- * preset registry first, then falls back to seeded catalog entries
- * (bathymetry rows only) using the derived strategy for their source.
- * Returns null when the id is unknown in both places.
+ * Resolves a dataset/catalog string key to a fetch strategy + bbox.
+ *
+ * `presetId` is a dataset identifier (e.g. "gulf-of-maine-ncei") from
+ * `ALL_PRESET_DATASETS` or seeded catalog entries — NOT a `trolling_presets`
+ * UUID.  Checks the in-memory preset registry first, then falls back to
+ * seeded catalog entries (bathymetry rows only) using the derived strategy
+ * for their source.  Returns null when the id is unknown in both places.
  */
 async function resolveBundleTarget(presetId: string): Promise<BundleTarget | null> {
   const meta = ALL_PRESET_DATASETS.find((d) => d.id === presetId);
@@ -264,6 +273,10 @@ async function runBundleJob(
 // ---------------------------------------------------------------------------
 // Request schemas
 // ---------------------------------------------------------------------------
+
+// `presetId` in both schemas is a dataset/catalog string key (e.g.
+// "gulf-of-maine-ncei") from ALL_PRESET_DATASETS or seeded catalog entries.
+// It is NOT a foreign key into the `trolling_presets` table.
 
 const PostBundleBodySchema = z.object({
   presetId: z.string().min(1).max(128),
