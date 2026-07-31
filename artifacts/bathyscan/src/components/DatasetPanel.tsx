@@ -2866,7 +2866,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
     const firstSimulated = results.find(
       (r) =>
-        r.preview?.dataSource === "synthetic" || r.preview?.dataSource === "unknown",
+        // "synthetic" is no longer in the generated DatasetPreviewDataSource
+        // enum, but stale legacy DB rows may still surface it at runtime.
+        (r.preview?.dataSource as string | undefined) === "synthetic" ||
+        r.preview?.dataSource === "unknown",
     );
 
     if (!firstSimulated) {

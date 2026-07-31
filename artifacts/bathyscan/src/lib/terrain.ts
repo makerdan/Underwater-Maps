@@ -902,7 +902,10 @@ export function lonLatToWorldXZ(
  * rainbow "SIMULATED" treatment in the 3D scene and Overview Map.
  */
 export function isSyntheticGrid(
-  grid: Pick<TerrainData, "synthetic" | "dataSource">,
+  grid: Pick<TerrainData, "dataSource"> & { synthetic?: boolean },
 ): boolean {
-  return grid.synthetic === true || grid.dataSource === "synthetic";
+  // "synthetic" was removed from the generated TerrainDataDataSource enum
+  // (the server no longer produces it), but legacy cached grids can still
+  // carry the flag/value at runtime — widen to string for the comparison.
+  return grid.synthetic === true || (grid.dataSource as string | undefined) === "synthetic";
 }

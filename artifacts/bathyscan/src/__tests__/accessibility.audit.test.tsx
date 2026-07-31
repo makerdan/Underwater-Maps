@@ -198,7 +198,7 @@ describe("SimulatedDataConfirmDialog ARIA", () => {
     preview: {
       datasetId: "test-bay-01",
       name: "Test Bay",
-      dataSource: "synthetic",
+      dataSource: "unknown",
       syntheticReason: "no NOAA coverage",
       bbox: { minLon: -122, maxLon: -121, minLat: 37, maxLat: 38 },
     },
