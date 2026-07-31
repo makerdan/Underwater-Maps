@@ -64,12 +64,16 @@ vi.mock("@clerk/express", () => ({
   getAuth: vi.fn(() => ({ userId: null })),
 }));
 
-vi.mock("@workspace/db", () => ({
-  pool: { query: vi.fn() },
-  db: {
-    select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
-  },
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbPoolMock } = await import(
+    "../../__tests__/helpers/dbPoolMock.js"
+  );
+  return createDbPoolMock({
+    db: {
+      select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
+    },
+  });
+});
 
 import adminRouter from "../admin.js";
 

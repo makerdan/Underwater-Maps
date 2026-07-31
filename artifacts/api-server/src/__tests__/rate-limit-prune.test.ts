@@ -26,22 +26,14 @@ import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from "vites
 let _pgQueryImpl: (sql: string, params: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }> =
   async () => ({ rows: [], rowCount: 0 });
 
-vi.mock("@workspace/db", () => ({
-  db: {},
-  pool: {
-    query: vi.fn().mockImplementation((sql: string, params: unknown[]) =>
-      _pgQueryImpl(sql, params),
-    ),
-    // rateLimitPruneJob checks out a dedicated client for advisory locking;
-    // route the client's query through the same stateful impl.
-    connect: vi.fn().mockImplementation(async () => ({
-      query: vi.fn().mockImplementation((sql: string, params: unknown[]) =>
-        _pgQueryImpl(sql, params),
-      ),
-      release: vi.fn(),
-    })),
-  },
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbPoolMock } = await import("./helpers/dbPoolMock.js");
+  // The factory routes pool.query AND the connect()-client's query through
+  // this stateful impl, so the advisory-lock path is covered too.
+  return createDbPoolMock({
+    queryImpl: (sql, params) => _pgQueryImpl(sql, params ?? []),
+  });
+});
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(

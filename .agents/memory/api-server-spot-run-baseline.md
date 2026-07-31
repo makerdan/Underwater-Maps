@@ -15,3 +15,5 @@ After the datasets.ts mis-merge repair: shard 1 fully green (98 files / 1369 tes
 **How to apply:** treat only these as pre-existing when validating api-server work; anything else failing is new. The older note about pdf-upload/raster-routes SSE failures is obsolete — those pass now.
 
 Run shards directly with `NODE_OPTIONS=--max-old-space-size=8192 npx vitest run --shard=N/2` (~3 min each).
+
+Update 2026-07-31 (later): admin.test.ts 401 drift and rate-limit-prune pool.connect gaps fixed by migrating both to the shared `createDbPoolMock()` factory (src/__tests__/helpers/dbPoolMock.ts) with guard test db-pool-mock-guard.test.ts that scans src/ for pool.<prop> usages. Baseline bathyscan typecheck breakage ("synthetic"/TerrainData errors) still blocks test-standard; owned by the web-app type-errors task.
