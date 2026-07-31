@@ -464,7 +464,7 @@ export const OverlaysToolsPanel: React.FC = () => {
             className="uppercase tracking-widest"
             style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", ...CYAN, fontWeight: 700 }}
           >
-            ▼ Overlays &amp; Tools
+            Overlays &amp; Tools
           </span>
         </ViewscreenTooltip>
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
