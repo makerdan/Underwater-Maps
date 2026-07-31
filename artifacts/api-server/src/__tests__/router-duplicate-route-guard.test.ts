@@ -1,0 +1,163 @@
+/**
+ * router-duplicate-route-guard.test.ts
+ *
+ * Structural guard against duplicate-route mis-merges across EVERY router
+ * mounted in app.ts (via routes/index.ts) — not just datasets. A bad merge
+ * that pastes a route registration twice fails here with a message naming
+ * the offending router and the duplicated (method, path) pair(s).
+ *
+ * Keep the router list below in sync with routes/index.ts; the sync test at
+ * the bottom fails with instructions when a new router is mounted there but
+ * missing here.
+ */
+
+import { describe, it, expect, vi } from "vitest";
+
+// ---------------------------------------------------------------------------
+// Module mocks (hoisted) — keep router imports free of real upstreams/DB.
+// ---------------------------------------------------------------------------
+
+vi.mock("../lib/terrain.js", async () => {
+  const { createTerrainMock } = await import("./helpers/terrainMock.js");
+  return createTerrainMock();
+});
+
+vi.mock("../lib/copernicusDem.js", () => ({
+  fetchCopernicusDem: vi.fn(),
+}));
+
+vi.mock("../lib/substrateGrid.js", () => ({
+  substrateFingerprintForDataset: vi.fn(() => "00000000"),
+}));
+
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("./helpers/db-mock.js");
+  return createDbMock();
+});
+
+vi.mock("@clerk/express", () => ({
+  clerkMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+  getAuth: vi.fn(() => ({ userId: null })),
+}));
+
+vi.mock("http-proxy-middleware", () => ({
+  createProxyMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+}));
+
+vi.mock("@clerk/shared/keys", () => ({
+  publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
+}));
+
+// ---------------------------------------------------------------------------
+// Imports (after mocks) — every router mounted in routes/index.ts.
+// ---------------------------------------------------------------------------
+
+import fs from "node:fs";
+import path from "node:path";
+import { findDuplicateRoutes, countRoutes } from "./helpers/routeGuard.js";
+
+import healthRouter from "../routes/health.js";
+import poeRouter from "../routes/poe.js";
+import datasetsRouter from "../routes/datasets.js";
+import markersRouter from "../routes/markers.js";
+import catchesRouter from "../routes/catches.js";
+import objectsRouter from "../routes/objects.js";
+import settingsRouter from "../routes/settings.js";
+import userDatasetsRouter from "../routes/user-datasets.js";
+import foldersRouter from "../routes/folders.js";
+import tidalRouter from "../routes/tidal.js";
+import tidesRouter from "../routes/tides.js";
+import queryRouter from "../routes/query.js";
+import trailsRouter from "../routes/trails.js";
+import meRouter from "../routes/me.js";
+import substrateRouter from "../routes/substrate.js";
+import efhRouter from "../routes/efh.js";
+import intertidalSpotsRouter from "../routes/intertidal-spots.js";
+import catalogSavesRouter from "../routes/catalog-saves.js";
+import surfaceConditionsRouter from "../routes/surface-conditions.js";
+import trollingPresetsRouter from "../routes/trolling-presets.js";
+import trollingPresetFoldersRouter from "../routes/trolling-preset-folders.js";
+import waterTemperatureRouter from "../routes/water-temperature.js";
+import temperatureProfileRouter from "../routes/temperature-profile.js";
+import routesRouter from "../routes/routes.js";
+import weatherStationsRouter from "../routes/weather-stations.js";
+import weatherStationObsRouter from "../routes/weather-station-obs.js";
+import rawsStationsRouter from "../routes/raws-stations.js";
+import rawsWeatherRouter from "../routes/raws-weather.js";
+import nceiRouter from "../routes/ncei.js";
+import searchFederatedRouter from "../routes/search-federated.js";
+import adminRouter from "../routes/admin.js";
+import githubRouter from "../routes/github.js";
+import terrainBundlesRouter from "../routes/terrain-bundles.js";
+
+/** name = the routes/<name>.ts module the router comes from. */
+const ROUTERS: Array<[name: string, router: unknown]> = [
+  ["health", healthRouter],
+  ["poe", poeRouter],
+  ["datasets", datasetsRouter],
+  ["markers", markersRouter],
+  ["catches", catchesRouter],
+  ["objects", objectsRouter],
+  ["settings", settingsRouter],
+  ["user-datasets", userDatasetsRouter],
+  ["folders", foldersRouter],
+  ["tidal", tidalRouter],
+  ["tides", tidesRouter],
+  ["query", queryRouter],
+  ["trails", trailsRouter],
+  ["me", meRouter],
+  ["substrate", substrateRouter],
+  ["efh", efhRouter],
+  ["intertidal-spots", intertidalSpotsRouter],
+  ["catalog-saves", catalogSavesRouter],
+  ["surface-conditions", surfaceConditionsRouter],
+  ["trolling-presets", trollingPresetsRouter],
+  ["trolling-preset-folders", trollingPresetFoldersRouter],
+  ["water-temperature", waterTemperatureRouter],
+  ["temperature-profile", temperatureProfileRouter],
+  ["routes", routesRouter],
+  ["weather-stations", weatherStationsRouter],
+  ["weather-station-obs", weatherStationObsRouter],
+  ["raws-stations", rawsStationsRouter],
+  ["raws-weather", rawsWeatherRouter],
+  ["ncei", nceiRouter],
+  ["search-federated", searchFederatedRouter],
+  ["admin", adminRouter],
+  ["github", githubRouter],
+  ["terrain-bundles", terrainBundlesRouter],
+];
+
+describe("duplicate-route mis-merge guard (all routers)", () => {
+  it.each(ROUTERS)("routes/%s.ts registers every (method, path) pair at most once", (name, router) => {
+    expect(
+      countRoutes(router),
+      `routes/${name}.ts registered zero routes — guard would pass vacuously; is the export still a Router?`,
+    ).toBeGreaterThan(0);
+
+    const duplicates = findDuplicateRoutes(router);
+    expect(
+      duplicates,
+      `Duplicate route registration(s) on the "${name}" router — this is the signature of a ` +
+        `mis-merge in src/routes/${name}.ts. Duplicated: ${duplicates.join(", ")}. ` +
+        `Delete the extra registration(s); keep exactly one handler per (method, path).`,
+    ).toEqual([]);
+  });
+
+  it("covers every router mounted in routes/index.ts", () => {
+    const indexSrc = fs.readFileSync(
+      path.join(__dirname, "..", "routes", "index.ts"),
+      "utf8",
+    );
+    const mounted = [...indexSrc.matchAll(/from\s+["']\.\/([\w-]+)["']/g)]
+      .map((m) => m[1])
+      .filter((n) => n !== "index");
+    const covered = new Set(ROUTERS.map(([name]) => name));
+    const missing = mounted.filter((n) => !covered.has(n!));
+    expect(
+      missing,
+      `Router module(s) imported in routes/index.ts but missing from the duplicate-route ` +
+        `guard: ${missing.join(", ")}. Add them to the ROUTERS list in ` +
+        `src/__tests__/router-duplicate-route-guard.test.ts.`,
+    ).toEqual([]);
+  });
+});

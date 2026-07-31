@@ -79,6 +79,7 @@ import datasetsRouter from "../routes/datasets.js";
 import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 import { datasetZonesCache, zoneCacheKey } from "../routes/poe.js";
 import { previewBboxForDownload, buildBboxCsvRows } from "../lib/terrain.js";
+import { findDuplicateRoutes, countRoutes } from "./helpers/routeGuard.js";
 import { fetchCopernicusDem } from "../lib/copernicusDem.js";
 
 const mockPreview = vi.mocked(previewBboxForDownload);
@@ -103,24 +104,12 @@ beforeEach(() => {
 
 describe("datasets router structural guard", () => {
   it("registers every (method, path) pair at most once", () => {
-    const stack = (datasetsRouter as unknown as { stack: unknown[] }).stack;
-    expect(Array.isArray(stack), "datasets router has no layer stack — Express internals changed?").toBe(true);
-    expect(stack.length).toBeGreaterThan(10);
+    expect(
+      countRoutes(datasetsRouter),
+      "datasets router registered no routes — Express internals changed?",
+    ).toBeGreaterThan(10);
 
-    const seen = new Map<string, number>();
-    for (const layer of stack as Array<{ route?: { path: string | string[]; methods: Record<string, boolean> } }>) {
-      const route = layer.route;
-      if (!route) continue; // plain middleware layer
-      const paths = Array.isArray(route.path) ? route.path : [route.path];
-      for (const p of paths) {
-        for (const method of Object.keys(route.methods).filter((m) => route.methods[m])) {
-          const key = `${method.toUpperCase()} ${p}`;
-          seen.set(key, (seen.get(key) ?? 0) + 1);
-        }
-      }
-    }
-
-    const duplicates = [...seen.entries()].filter(([, n]) => n > 1).map(([k, n]) => `${k} (registered ${n}×)`);
+    const duplicates = findDuplicateRoutes(datasetsRouter);
     expect(
       duplicates,
       `Duplicate route registration(s) on the datasets router — this is the signature of a ` +
