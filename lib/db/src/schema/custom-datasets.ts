@@ -25,9 +25,18 @@ export interface StoredTerrainJson {
   centerLat: number;
   topography?: number[];
   hasTopography?: boolean;
-  dataSource?: "ncei" | "gebco" | "twdb" | "usace" | "usgs-3dep";
-  bathymetrySource?: "ncei" | "gebco" | "twdb" | "usace" | "usgs-3dep";
-  topographySource?: "ncei" | "gebco" | "twdb" | "usace" | "usgs-3dep";
+  /**
+   * Which upstream source produced this grid's bathymetry.
+   *
+   * "synthetic" is intentionally absent: the fbm procedural fallback was
+   * removed and buildTerrainGrid now throws NoDataError instead.  Any
+   * legacy DB row with dataSource = 'synthetic' pre-dates that change; on
+   * the read path, treat such a value as null (unknown source) rather than
+   * forwarding it to the client where validateResponse would reject it.
+   */
+  dataSource?: "ncei" | "gebco" | "twdb" | "usace" | "usgs-3dep" | "usgs-sciencebase" | "noaa-great-lakes" | "nysdec" | "mn-dnr";
+  bathymetrySource?: "ncei" | "gebco" | "twdb" | "usace" | "usgs-3dep" | "usgs-sciencebase" | "noaa-great-lakes" | "nysdec" | "mn-dnr";
+  topographySource?: "ncei" | "gebco" | "twdb" | "usace" | "usgs-3dep" | "usgs-sciencebase" | "noaa-great-lakes" | "nysdec" | "mn-dnr";
   bathymetrySourceLabel?: string;
   topographySourceLabel?: string;
   bathymetryCreditUrl?: string;

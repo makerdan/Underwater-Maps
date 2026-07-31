@@ -116,11 +116,10 @@ paths:
       summary: Probe which upstream source would serve this dataset
       description: |
         Lightweight preflight that resolves the upstream `dataSource`
-        (`ncei` | `gebco` | `synthetic`) for the given dataset without
-        transferring the full depth grid. The client uses this to warn the
-        user before loading procedurally-generated (synthetic) bathymetry.
-        Results are cached briefly per dataset to avoid double-probing
-        upstream services when the user immediately confirms.
+        for the given dataset without transferring the full depth grid.
+        The client uses this to surface source attribution before the user
+        loads the full grid. Results are cached briefly per dataset to avoid
+        double-probing upstream services when the user immediately confirms.
       parameters:
         - in: path
           name: id
@@ -6433,27 +6432,27 @@ components:
         hasTopography:
           type: boolean
           description: True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable/hide the landmass visualisation.
-        synthetic:
-          type: boolean
-          description: "Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback."
         dataSource:
           type: string
-          enum: [ncei, gebco, synthetic, twdb, usace, usgs-3dep]
+          enum: [ncei, gebco, twdb, usace, usgs-3dep, usgs-sciencebase, noaa-great-lakes, nysdec, mn-dnr]
           description: |
             Which upstream data service produced this grid (bathymetry primary).
-            ncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
-            gebco     — GEBCO 2024 WCS (~400 m global grid)
-            synthetic — fbm fallback used when all upstream services are unreachable
-            twdb      — TWDB Reservoir Volumetric & Sedimentation Survey
-            usace     — USACE hydrographic survey
-            usgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)
+            ncei            — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+            gebco           — GEBCO 2024 WCS (~400 m global grid)
+            twdb            — TWDB Reservoir Volumetric & Sedimentation Survey
+            usace           — USACE hydrographic survey
+            usgs-3dep       — USGS 3DEP best-available DEM (pre-impoundment basin + topography)
+            usgs-sciencebase — USGS ScienceBase hosted survey data
+            noaa-great-lakes — NOAA Great Lakes DEM mosaic
+            nysdec          — NYSDEC Finger Lakes bathymetric contours (depth polygons)
+            mn-dnr          — MN DNR lake bathymetric contour lines
         bathymetrySource:
           type: string
-          enum: [ncei, gebco, synthetic, twdb, usace, usgs-3dep]
+          enum: [ncei, gebco, twdb, usace, usgs-3dep, usgs-sciencebase, noaa-great-lakes, nysdec, mn-dnr]
           description: Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs).
         topographySource:
           type: string
-          enum: [ncei, gebco, synthetic, twdb, usace, usgs-3dep]
+          enum: [ncei, gebco, twdb, usace, usgs-3dep, usgs-sciencebase, noaa-great-lakes, nysdec, mn-dnr]
           description: Per-layer provenance for the above-water (topography) layer when it has a different source than bathymetry.
         bathymetrySourceLabel:
           type: string
@@ -6528,8 +6527,7 @@ components:
       description: |
         Lightweight preflight describing which upstream source would serve
         this dataset, without transferring the full depth grid. Used by the
-        client to warn the user before loading procedurally-generated
-        (synthetic) bathymetry.
+        client to warn the user before loading a dataset with limited coverage.
       properties:
         datasetId:
           type: string
@@ -6545,23 +6543,25 @@ components:
           required: [minLon, minLat, maxLon, maxLat]
         dataSource:
           type: string
-          enum: [ncei, gebco, synthetic, twdb, usace, usgs-3dep, unknown]
+          enum: [ncei, gebco, twdb, usace, usgs-3dep, usgs-sciencebase, noaa-great-lakes, nysdec, mn-dnr, unknown]
           description: |
             Which upstream source would produce this grid.
-            ncei       — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
-            gebco      — GEBCO 2024 WCS (~400 m global grid)
-            twdb       — Texas Water Development Board reservoir bathymetry
-            usace      — US Army Corps of Engineers reservoir survey
-            usgs-3dep  — USGS 3DEP DEM (used for inland AOIs)
-            synthetic  — fbm fallback used when no real source is available
-            unknown    — preflight itself failed (e.g. network/timeout); treat as suspect
+            ncei            — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+            gebco           — GEBCO 2024 WCS (~400 m global grid)
+            twdb            — Texas Water Development Board reservoir bathymetry
+            usace           — US Army Corps of Engineers reservoir survey
+            usgs-3dep       — USGS 3DEP DEM (used for inland AOIs)
+            usgs-sciencebase — USGS ScienceBase hosted survey data
+            noaa-great-lakes — NOAA Great Lakes DEM mosaic
+            nysdec          — NYSDEC Finger Lakes bathymetric contours
+            mn-dnr          — MN DNR lake bathymetric contour lines
+            unknown         — preflight itself failed (e.g. network/timeout); treat as suspect
         syntheticReason:
           type: string
           description: |
-            Short human-readable reason describing why the result would be
-            synthetic (e.g. "outside NCEI/GEBCO coverage" or "upstream
-            bathymetry services unreachable"). Present whenever
-            `dataSource` is `synthetic` or `unknown`.
+            Short human-readable reason why the source could not be verified
+            (e.g. "outside NCEI/GEBCO coverage" or "upstream bathymetry
+            services unreachable"). Present whenever `dataSource` is `unknown`.
       required:
         - datasetId
         - name

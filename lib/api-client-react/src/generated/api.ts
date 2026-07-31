@@ -368,11 +368,10 @@ export const getGetDatasetsIdPreviewUrl = (id: string,) => {
 
 /**
  * Lightweight preflight that resolves the upstream `dataSource`
-(`ncei` | `gebco` | `synthetic`) for the given dataset without
-transferring the full depth grid. The client uses this to warn the
-user before loading procedurally-generated (synthetic) bathymetry.
-Results are cached briefly per dataset to avoid double-probing
-upstream services when the user immediately confirms.
+for the given dataset without transferring the full depth grid.
+The client uses this to surface source attribution before the user
+loads the full grid. Results are cached briefly per dataset to avoid
+double-probing upstream services when the user immediately confirms.
 
  * @summary Probe which upstream source would serve this dataset
  */

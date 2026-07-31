@@ -1372,12 +1372,15 @@ export const TerrainDataWaterType = {
 
 /**
  * Which upstream data service produced this grid (bathymetry primary).
-ncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
-gebco     — GEBCO 2024 WCS (~400 m global grid)
-synthetic — fbm fallback used when all upstream services are unreachable
-twdb      — TWDB Reservoir Volumetric & Sedimentation Survey
-usace     — USACE hydrographic survey
-usgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)
+ncei            — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+gebco           — GEBCO 2024 WCS (~400 m global grid)
+twdb            — TWDB Reservoir Volumetric & Sedimentation Survey
+usace           — USACE hydrographic survey
+usgs-3dep       — USGS 3DEP best-available DEM (pre-impoundment basin + topography)
+usgs-sciencebase — USGS ScienceBase hosted survey data
+noaa-great-lakes — NOAA Great Lakes DEM mosaic
+nysdec          — NYSDEC Finger Lakes bathymetric contours (depth polygons)
+mn-dnr          — MN DNR lake bathymetric contour lines
 
  */
 export type TerrainDataDataSource = typeof TerrainDataDataSource[keyof typeof TerrainDataDataSource];
@@ -1386,10 +1389,13 @@ export type TerrainDataDataSource = typeof TerrainDataDataSource[keyof typeof Te
 export const TerrainDataDataSource = {
   ncei: 'ncei',
   gebco: 'gebco',
-  synthetic: 'synthetic',
   twdb: 'twdb',
   usace: 'usace',
   'usgs-3dep': 'usgs-3dep',
+  'usgs-sciencebase': 'usgs-sciencebase',
+  'noaa-great-lakes': 'noaa-great-lakes',
+  nysdec: 'nysdec',
+  'mn-dnr': 'mn-dnr',
 } as const;
 
 /**
@@ -1401,10 +1407,13 @@ export type TerrainDataBathymetrySource = typeof TerrainDataBathymetrySource[key
 export const TerrainDataBathymetrySource = {
   ncei: 'ncei',
   gebco: 'gebco',
-  synthetic: 'synthetic',
   twdb: 'twdb',
   usace: 'usace',
   'usgs-3dep': 'usgs-3dep',
+  'usgs-sciencebase': 'usgs-sciencebase',
+  'noaa-great-lakes': 'noaa-great-lakes',
+  nysdec: 'nysdec',
+  'mn-dnr': 'mn-dnr',
 } as const;
 
 /**
@@ -1416,10 +1425,13 @@ export type TerrainDataTopographySource = typeof TerrainDataTopographySource[key
 export const TerrainDataTopographySource = {
   ncei: 'ncei',
   gebco: 'gebco',
-  synthetic: 'synthetic',
   twdb: 'twdb',
   usace: 'usace',
   'usgs-3dep': 'usgs-3dep',
+  'usgs-sciencebase': 'usgs-sciencebase',
+  'noaa-great-lakes': 'noaa-great-lakes',
+  nysdec: 'nysdec',
+  'mn-dnr': 'mn-dnr',
 } as const;
 
 export type TerrainDataHabitatPolygonsType = typeof TerrainDataHabitatPolygonsType[keyof typeof TerrainDataHabitatPolygonsType];
@@ -1501,15 +1513,16 @@ export interface TerrainData {
   topography?: number[];
   /** True when this terrain grid includes a non-empty `topography` array. Clients can use this to enable/hide the landmass visualisation. */
   hasTopography?: boolean;
-  /** Deprecated: use dataSource instead. True when the grid was produced from the synthetic fbm fallback. */
-  synthetic?: boolean;
   /** Which upstream data service produced this grid (bathymetry primary).
-  ncei      — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
-  gebco     — GEBCO 2024 WCS (~400 m global grid)
-  synthetic — fbm fallback used when all upstream services are unreachable
-  twdb      — TWDB Reservoir Volumetric & Sedimentation Survey
-  usace     — USACE hydrographic survey
-  usgs-3dep — USGS 3DEP best-available DEM (pre-impoundment basin + topography)
+  ncei            — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+  gebco           — GEBCO 2024 WCS (~400 m global grid)
+  twdb            — TWDB Reservoir Volumetric & Sedimentation Survey
+  usace           — USACE hydrographic survey
+  usgs-3dep       — USGS 3DEP best-available DEM (pre-impoundment basin + topography)
+  usgs-sciencebase — USGS ScienceBase hosted survey data
+  noaa-great-lakes — NOAA Great Lakes DEM mosaic
+  nysdec          — NYSDEC Finger Lakes bathymetric contours (depth polygons)
+  mn-dnr          — MN DNR lake bathymetric contour lines
    */
   dataSource?: TerrainDataDataSource;
   /** Per-layer provenance for the below-water (bathymetry) layer when it has a different source than topography (e.g. inland reservoirs). */
@@ -1550,13 +1563,16 @@ export type DatasetPreviewBbox = {
 
 /**
  * Which upstream source would produce this grid.
-ncei       — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
-gebco      — GEBCO 2024 WCS (~400 m global grid)
-twdb       — Texas Water Development Board reservoir bathymetry
-usace      — US Army Corps of Engineers reservoir survey
-usgs-3dep  — USGS 3DEP DEM (used for inland AOIs)
-synthetic  — fbm fallback used when no real source is available
-unknown    — preflight itself failed (e.g. network/timeout); treat as suspect
+ncei            — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+gebco           — GEBCO 2024 WCS (~400 m global grid)
+twdb            — Texas Water Development Board reservoir bathymetry
+usace           — US Army Corps of Engineers reservoir survey
+usgs-3dep       — USGS 3DEP DEM (used for inland AOIs)
+usgs-sciencebase — USGS ScienceBase hosted survey data
+noaa-great-lakes — NOAA Great Lakes DEM mosaic
+nysdec          — NYSDEC Finger Lakes bathymetric contours
+mn-dnr          — MN DNR lake bathymetric contour lines
+unknown         — preflight itself failed (e.g. network/timeout); treat as suspect
 
  */
 export type DatasetPreviewDataSource = typeof DatasetPreviewDataSource[keyof typeof DatasetPreviewDataSource];
@@ -1565,18 +1581,20 @@ export type DatasetPreviewDataSource = typeof DatasetPreviewDataSource[keyof typ
 export const DatasetPreviewDataSource = {
   ncei: 'ncei',
   gebco: 'gebco',
-  synthetic: 'synthetic',
   twdb: 'twdb',
   usace: 'usace',
   'usgs-3dep': 'usgs-3dep',
+  'usgs-sciencebase': 'usgs-sciencebase',
+  'noaa-great-lakes': 'noaa-great-lakes',
+  nysdec: 'nysdec',
+  'mn-dnr': 'mn-dnr',
   unknown: 'unknown',
 } as const;
 
 /**
  * Lightweight preflight describing which upstream source would serve
 this dataset, without transferring the full depth grid. Used by the
-client to warn the user before loading procedurally-generated
-(synthetic) bathymetry.
+client to warn the user before loading a dataset with limited coverage.
 
  */
 export interface DatasetPreview {
@@ -1584,19 +1602,21 @@ export interface DatasetPreview {
   name: string;
   bbox: DatasetPreviewBbox;
   /** Which upstream source would produce this grid.
-  ncei       — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
-  gebco      — GEBCO 2024 WCS (~400 m global grid)
-  twdb       — Texas Water Development Board reservoir bathymetry
-  usace      — US Army Corps of Engineers reservoir survey
-  usgs-3dep  — USGS 3DEP DEM (used for inland AOIs)
-  synthetic  — fbm fallback used when no real source is available
-  unknown    — preflight itself failed (e.g. network/timeout); treat as suspect
+  ncei            — NCEI Bag Mosaic WCS (high-resolution multibeam survey)
+  gebco           — GEBCO 2024 WCS (~400 m global grid)
+  twdb            — Texas Water Development Board reservoir bathymetry
+  usace           — US Army Corps of Engineers reservoir survey
+  usgs-3dep       — USGS 3DEP DEM (used for inland AOIs)
+  usgs-sciencebase — USGS ScienceBase hosted survey data
+  noaa-great-lakes — NOAA Great Lakes DEM mosaic
+  nysdec          — NYSDEC Finger Lakes bathymetric contours
+  mn-dnr          — MN DNR lake bathymetric contour lines
+  unknown         — preflight itself failed (e.g. network/timeout); treat as suspect
    */
   dataSource: DatasetPreviewDataSource;
-  /** Short human-readable reason describing why the result would be
-  synthetic (e.g. "outside NCEI/GEBCO coverage" or "upstream
-  bathymetry services unreachable"). Present whenever
-  `dataSource` is `synthetic` or `unknown`.
+  /** Short human-readable reason why the source could not be verified
+  (e.g. "outside NCEI/GEBCO coverage" or "upstream bathymetry
+  services unreachable"). Present whenever `dataSource` is `unknown`.
    */
   syntheticReason?: string;
 }
