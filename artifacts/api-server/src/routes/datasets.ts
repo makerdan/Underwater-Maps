@@ -45,11 +45,13 @@ import {
   type TerrainGrid,
 } from "../lib/terrain.js";
 import { parseUploadedFile } from "../lib/uploadParsers.js";
-import { PdfStageError, type PdfDepthUnit } from "../lib/pdfContour.js";
+import { parsePdfContourFile, PdfStageError, PdfRasterOnlyError, type PdfDepthUnit } from "../lib/pdfContour.js";
 import {
+  parseRasterPdfContourFile,
   parseRasterImageContourFile,
   commitCachedExtraction,
   extractRasterImageContoursOnly,
+  type RasterExtractionResult,
 } from "../lib/pdfContourRaster.js";
 import { routeTarEntries } from "../lib/noaaTarRouter.js";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
@@ -77,6 +79,7 @@ import {
   DatasetsQuerySchema,
   ZonesQuerySchema,
   TerrainLandQuerySchema,
+  TerrainDownloadInfoQuerySchema,
 } from "./schemas.js";
 
 /**
@@ -1426,10 +1429,7 @@ router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
   // Load suppressed preset IDs so they are excluded from the response.
   let disabledIds = new Set<string>();
   try {
-    const rows = await db
-      .select()
-      .from(uploadJobsTable)
-      .where(eq(uploadJobsTable.id, jobId));
+    const rows = await db.select({ id: disabledPresetsTable.id }).from(disabledPresetsTable);
     disabledIds = new Set(rows.map((r) => r.id));
   } catch {
     // Non-fatal: if the table doesn't exist yet, serve all presets.
@@ -1454,7 +1454,18 @@ router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
     ...(d.hasEfh === true ? { hasEfh: true as const } : {}),
     ...(d.fetchStrategy ? { fetchStrategy: d.fetchStrategy.kind } : {}),
   }));
-      const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
+  try {
+    res.json(GetDatasetsResponse.parse(list));
+  } catch (err) {
+    const details = err instanceof Error ? err.message : "Response schema validation failed";
+    res.status(500).json({ error: "internal", details });
+  }
+}));
+
+// ── DELETE /datasets/presets/:id ──────────────────────────────────────────────
+// Globally suppresses a preset dataset for all users by inserting its ID into
+// the disabled_presets table. The next GET /datasets response will omit it.
+// Returns 204 on success, 404 if the id is not a known preset.
 const PresetIdParamSchema = z
   .string()
   .min(1)
@@ -1462,11 +1473,11 @@ const PresetIdParamSchema = z
   .regex(/^[a-zA-Z0-9_-]+$/, "Preset id must contain only alphanumeric characters, hyphens, or underscores");
 
 router.delete("/datasets/presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
+  const idParsed = PresetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
-      { route: "GET /api/datasets/:id/overview", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-      "GET /api/datasets/:id/overview — Zod params validation failed",
+      { route: "DELETE /api/datasets/presets/:id", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "DELETE /api/datasets/presets/:id — Zod params validation failed",
     );
     res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
     return;
@@ -1503,25 +1514,57 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
-      { route: "GET /api/datasets/:id/overview", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-      "GET /api/datasets/:id/overview — Zod params validation failed",
+      { route: "GET /api/datasets/:id/terrain", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets/:id/terrain — Zod params validation failed",
     );
     res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
     return;
   }
   const id = idParsed.data;
-    const callerId = auth?.userId ?? null;
+
+  // Auth + ownership guard for custom (UUID-format) dataset IDs.
+  // Preset/catalog dataset IDs remain publicly accessible.
+  // Non-owner requests (including unauthenticated) return 404 (not 401/403)
+  // to avoid confirming existence of datasets belonging to other users.
+  if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
+    const callerId = getAuth(req)?.userId ?? null;
     if (!callerId) {
-      res.status(401).json({ error: "unauthenticated", details: "Authentication required" });
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
-    if (CUSTOM_DATASET_UUID_RE.test(id)) {
-      const [ownRow] = await db
-        .select({ userId: customDatasetsTable.userId })
-        .from(customDatasetsTable)
-        .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
+    const [ownRow] = await db
+      .select({ userId: customDatasetsTable.userId })
+      .from(customDatasetsTable)
+      .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
+    if (!ownRow) {
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+      return;
+    }
+  }
 
   const rawRes = req.query["resolution"];
+  const resolution = rawRes ? Math.max(32, Math.min(512, parseInt(String(rawRes), 10))) : 256;
+
+  const smoothing = await getSmoothingPreference(req);
+  let grid;
+  try {
+    grid = await buildTerrainGrid(id, resolution, { smoothing });
+  } catch (err) {
+    if (err instanceof NoDataError) {
+      res.status(503).json({ error: "no_data", details: err.message });
+      return;
+    }
+    throw err;
+  }
+  if (!grid) {
+    res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+    return;
+  }
+  res.json(GetDatasetsIdTerrainResponse.parse(grid));
+}));
+
+// ── GET /datasets/:id/overview ────────────────────────────────────────────────
+router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
@@ -1532,47 +1575,106 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
     return;
   }
   const id = idParsed.data;
-      const preview = entries.slice(0, 5).join(", ");
-    const callerId = auth?.userId ?? null;
-      if (!callerId) {
-        res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
-        return;
-      }
-      const [row] = await db
-        .select({ name: customDatasetsTable.name, terrainJson: customDatasetsTable.terrainJson })
-        .from(customDatasetsTable)
-        .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
-      if (!row) {
-        res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
-        return;
-      }
-      const tj = row.terrainJson as StoredTerrainJson;
-      // StoredTerrainJson.dataSource may include source labels not present in
-      // the DatasetPreview enum (twdb, usace, usgs-3dep). User-uploaded sonar
-      // is always real measured data, so map anything unrecognised to "ncei".
-      const rawSource = tj.dataSource;
-      // Stale DB rows may carry "synthetic" — that value was removed from
-      // the schema; treat any unrecognised source as "ncei" (real upload).
-      // Map to the two values the API schema accepts; anything other than
-      // "gebco" (including unrecognised or legacy sources) maps to "ncei".
-      const dataSource: "ncei" | "gebco" = rawSource === "gebco" ? "gebco" : "ncei";
-      res.json(validateResponse(GetDatasetsIdPreviewResponse, {
-        datasetId: id,
-        name: row.name,
-        bbox: { minLon: tj.minLon, minLat: tj.minLat, maxLon: tj.maxLon, maxLat: tj.maxLat },
-        dataSource,
-      }, "GET /api/datasets/:id/preview (custom)"));
+
+  // Auth + ownership guard for custom (UUID-format) dataset IDs.
+  // Preset/catalog dataset IDs remain publicly accessible.
+  // Non-owner requests (including unauthenticated) return 404 (not 401/403)
+  // to avoid confirming existence of datasets belonging to other users.
+  if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
+    const callerId = getAuth(req)?.userId ?? null;
+    if (!callerId) {
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
-      const preview = entries.slice(0, 5).join(", ");
+    const [ownRow] = await db
+      .select({ userId: customDatasetsTable.userId })
+      .from(customDatasetsTable)
+      .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
+    if (!ownRow) {
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+      return;
+    }
+  }
+
+  const smoothing = await getSmoothingPreference(req);
+  let grid;
+  try {
+    grid = await buildTerrainGrid(id, 64, { smoothing });
+  } catch (err) {
+    if (err instanceof NoDataError) {
+      res.status(503).json({ error: "no_data", details: err.message });
+      return;
+    }
+    throw err;
+  }
+  if (!grid) {
+    res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+    return;
+  }
+  res.json(GetDatasetsIdOverviewResponse.parse(grid));
+}));
+
+// ── GET /datasets/:id/preview ─────────────────────────────────────────────────
+// Lightweight preflight: returns the resolved dataSource (ncei | gebco) for a
+// preset dataset without transferring the full depth grid. The client uses
+// this to warn users before loading low-resolution (gebco) bathymetry.
+router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void> => {
+  const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    logger.warn(
+      { route: "GET /api/datasets/:id/preview", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets/:id/preview — Zod params validation failed",
+    );
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
+    return;
+  }
+  const id = idParsed.data;
+  try {
+    const preview = await previewDataset(id);
     if (!preview) {
-      res.status(404).json({ error: "not_found", details: `'${id}' is not a known dataset` });
+      // Custom (UUID-format) dataset — apply the same auth + ownership guard
+      // used by the /terrain route, then build the preview from the row's
+      // stored terrainJson so the client sees the real dataSource.
+      if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
+        const callerId = getAuth(req)?.userId ?? null;
+        if (!callerId) {
+          res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+          return;
+        }
+        const [row] = await db
+          .select({ name: customDatasetsTable.name, terrainJson: customDatasetsTable.terrainJson })
+          .from(customDatasetsTable)
+          .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
+        if (!row) {
+          res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+          return;
+        }
+        const tj = row.terrainJson as StoredTerrainJson;
+        // StoredTerrainJson.dataSource may include source labels not present in
+        // the DatasetPreview enum (twdb, usace, usgs-3dep). User-uploaded sonar
+        // is always real measured data, so map anything unrecognised to "ncei".
+        // Stale DB rows may carry "synthetic" — that value was removed from
+        // the schema; treat any unrecognised source as "ncei" (real upload).
+        const rawSource = tj.dataSource;
+        const dataSource: "ncei" | "gebco" = rawSource === "gebco" ? "gebco" : "ncei";
+        res.json(validateResponse(GetDatasetsIdPreviewResponse, {
+          datasetId: id,
+          name: row.name,
+          bbox: { minLon: tj.minLon, minLat: tj.minLat, maxLon: tj.maxLon, maxLat: tj.maxLat },
+          dataSource,
+        }, "GET /api/datasets/:id/preview (custom)"));
+        return;
+      }
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
     res.json(validateResponse(GetDatasetsIdPreviewResponse, preview, "GET /api/datasets/:id/preview"));
   } catch (err) {
+    // Preflight itself failed (rare — internal probes already catch). Always
+    // return a graceful 200 with dataSource=unknown so the client can decide
+    // whether to proceed.
     const meta = ALL_PRESET_DATASETS.find((d) => d.id === id);
-    const msg = err instanceof Error ? err.message : "Parse error";
+    const msg = err instanceof Error ? err.message : "Preflight failed";
     res.json(validateResponse(GetDatasetsIdPreviewResponse, {
       datasetId: id,
       name: meta?.name ?? id,
@@ -1590,13 +1692,13 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
   const { id } = req.params as { id: string };
 
   // Validate ?h= and ?w= via Zod — rejects array injection and unknown values.
-    const parsedQuery = TerrainDownloadQuerySchema.safeParse(req.query);
-    if (!parsedQuery.success) {
-      logger.warn(
-        { route: "GET /api/terrain/download", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-        "GET /api/terrain/download — Zod query validation failed",
-      );
-      const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
+  const parsedQuery = ZonesQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    logger.warn(
+      { route: "GET /api/datasets/:id/zones", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets/:id/zones — Zod query validation failed",
+    );
+    const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_param", details });
     return;
   }
@@ -1605,12 +1707,43 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
 
   // --- Auth / ownership gate ---
   const isPreset = ALL_PRESET_DATASETS.some((d) => d.id === id);
+  if (!isPreset) {
+    // Only two non-preset ID shapes are recognised: UUID-format saved
+    // uploads, and the placeholder "upload" used for anonymous uploads.
+    // Anything else returns 404 cleanly.
+    if (!CUSTOM_DATASET_UUID_RE.test(id) && id !== "upload") {
+      res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+      return;
+    }
+
     const auth = getAuth(req);
     const callerId = auth?.userId ?? null;
-    const rows = await db
-      .select()
-      .from(uploadJobsTable)
-      .where(eq(uploadJobsTable.id, jobId));
+
+    if (!callerId) {
+      res.status(401).json({ error: "unauthenticated", details: "Authentication required" });
+      return;
+    }
+
+    // For UUID-format dataset IDs, verify ownership against the database.
+    if (CUSTOM_DATASET_UUID_RE.test(id)) {
+      const rows = await db
+        .select({ userId: customDatasetsTable.userId })
+        .from(customDatasetsTable)
+        .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
+      if (rows.length === 0) {
+        // Either dataset doesn't exist or belongs to a different user.
+        // Return 404 (not 403) to avoid leaking the existence of the dataset.
+        res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
+        return;
+      }
+    }
+    // For "upload" placeholder ID, auth is sufficient; no DB row exists.
+  }
+
+  // --- Cache lookup ---
+  // userId partitions the cache so two users who upload identical bathymetry
+  // data cannot share each other's classification results. Preset datasets
+  // are public, so they use "" as the userId.
   const cacheUserId = isPreset ? "" : (getAuth(req).userId ?? "");
   const substrateFp = substrateFingerprintForDataset(id);
   // Under the new sha256-namespaced cache scheme there are no "bare gridHash"
@@ -1661,13 +1794,13 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
 router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
   // Validate bbox (string, not array) and size via Zod — rejects array injection
   // and non-finite values before any manual parseFloat.
-    const parsedQuery = TerrainDownloadQuerySchema.safeParse(req.query);
-    if (!parsedQuery.success) {
-      logger.warn(
-        { route: "GET /api/terrain/download", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-        "GET /api/terrain/download — Zod query validation failed",
-      );
-      const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
+  const parsedQuery = TerrainLandQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    logger.warn(
+      { route: "GET /api/terrain/land", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/land — Zod query validation failed",
+    );
+    const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_param", details });
     return;
   }
@@ -1675,16 +1808,13 @@ router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
   const [minLon, minLat, maxLon, maxLat] = parsedQuery.data.bbox;
 
   if (
-    minLon === maxLon ||
-    minLat >= maxLat ||
-    minLon < -180 || minLon > 180 ||
-    maxLon < -180 || maxLon > 180 ||
-    minLat < -90 ||
-    maxLat > 90
+    minLon >= maxLon || minLat >= maxLat ||
+    minLon < -180 || maxLon > 180 ||
+    minLat < -90  || maxLat > 90
   ) {
     res.status(400).json({
       error: "invalid_bbox",
-      details: "bbox values out of range or degenerate",
+      details: "bbox values out of range or min >= max",
     });
     return;
   }
@@ -1696,17 +1826,7 @@ router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
     const grid = await fetchCopernicusDem({ minLon, minLat, maxLon, maxLat }, gridSize);
     res.json(validateResponse(GetTerrainLandResponse, grid, "GET /api/terrain/land"));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Parse error";
-
-  const UploadParamsSchema = z
-    .object({
-      resolution: z.coerce.number().int().min(32).max(512).optional(),
-      gridResolution: z.coerce.number().int().min(32).max(512).optional(),
-    })
-    .refine(
-      (data) => data.resolution !== undefined || data.gridResolution !== undefined,
-      { message: "resolution or gridResolution is required" },
-    );
+    const msg = err instanceof Error ? err.message : "Land DEM fetch failed";
     res.status(502).json({ error: "upstream_error", details: msg });
   }
 }));
@@ -1723,126 +1843,14 @@ router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
 router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   // Validate via Zod — rejects array injection on any cardinal param (e.g.
   // ?north[]=45&north[]=50 would previously resolve to parseFloat("45,50")=45).
-    const parsedQuery = TerrainDownloadQuerySchema.safeParse(req.query);
-    if (!parsedQuery.success) {
-      logger.warn(
-        { route: "GET /api/terrain/download", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-        "GET /api/terrain/download — Zod query validation failed",
-      );
-      const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
-    res.status(400).json({ error: "invalid_param", details });
-    return;
-  }
-
-  const [minLon, minLat, maxLon, maxLat] = parsedQuery.data.bbox;
-
-  if (
-    minLon === maxLon ||
-    minLat >= maxLat ||
-    minLon < -180 || minLon > 180 ||
-    maxLon < -180 || maxLon > 180 ||
-    minLat < -90 ||
-    maxLat > 90
-  ) {
-    res.status(400).json({
-      error: "invalid_bbox",
-      details: "bbox values out of range or degenerate",
-    });
-    return;
-  }
-
-  const rawSizeNum = parsedQuery.data.size;
-    const msg = err instanceof Error ? err.message : "Parse error";
-
-  const UploadParamsSchema = z
-    .object({
-      resolution: z.coerce.number().int().min(32).max(512).optional(),
-      gridResolution: z.coerce.number().int().min(32).max(512).optional(),
-    })
-    .refine(
-      (data) => data.resolution !== undefined || data.gridResolution !== undefined,
-      { message: "resolution or gridResolution is required" },
+  const parsedQuery = TerrainDownloadInfoQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    logger.warn(
+      { route: "GET /api/terrain/download/info", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/download/info — Zod query validation failed",
     );
-    res.status(502).json({ error: "upstream_error", details: msg });
-  }
-}));
-
-// ── GET /terrain/download/info ────────────────────────────────────────────────
-// Lightweight preflight for the Overview Map download tool.  Returns the
-// resolved source name, nominal resolution, and waterFraction (fraction of
-// the N=32 probe grid that contains water cells, 0–1) for the requested bbox.
-// The client derives estimatedPoints = resolution² × waterFraction locally so
-// resolution switching is instant without an extra round-trip.
-// Auth-required so anonymous users cannot probe our upstream APIs.
-//
-// Max bbox: 10° × 10°.  Returns 400 for out-of-range params.
-router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  // Validate via Zod — rejects array injection on any cardinal param (e.g.
-  // ?north[]=45&north[]=50 would previously resolve to parseFloat("45,50")=45).
-    const parsedQuery = TerrainDownloadQuerySchema.safeParse(req.query);
-    if (!parsedQuery.success) {
-      logger.warn(
-        { route: "GET /api/terrain/download", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-        "GET /api/terrain/download — Zod query validation failed",
-      );
-      const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
-    res.status(400).json({ error: "invalid_param", details });
-    return;
-  }
-
-  const [minLon, minLat, maxLon, maxLat] = parsedQuery.data.bbox;
-
-  if (
-    minLon === maxLon ||
-    minLat >= maxLat ||
-    minLon < -180 || minLon > 180 ||
-    maxLon < -180 || maxLon > 180 ||
-    minLat < -90 ||
-    maxLat > 90
-  ) {
-    res.status(400).json({
-      error: "invalid_bbox",
-      details: "bbox values out of range or degenerate",
-    });
-    return;
-  }
-
-  const rawSizeNum = parsedQuery.data.size;
-    const msg = err instanceof Error ? err.message : "Parse error";
-
-  const UploadParamsSchema = z
-    .object({
-      resolution: z.coerce.number().int().min(32).max(512).optional(),
-      gridResolution: z.coerce.number().int().min(32).max(512).optional(),
-    })
-    .refine(
-      (data) => data.resolution !== undefined || data.gridResolution !== undefined,
-      { message: "resolution or gridResolution is required" },
-    );
-    res.status(502).json({ error: "upstream_error", details: msg });
-  }
-}));
-
-// ── GET /terrain/download/info ────────────────────────────────────────────────
-// Lightweight preflight for the Overview Map download tool.  Returns the
-// resolved source name, nominal resolution, and waterFraction (fraction of
-// the N=32 probe grid that contains water cells, 0–1) for the requested bbox.
-// The client derives estimatedPoints = resolution² × waterFraction locally so
-// resolution switching is instant without an extra round-trip.
-// Auth-required so anonymous users cannot probe our upstream APIs.
-//
-// Max bbox: 10° × 10°.  Returns 400 for out-of-range params.
-router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  // Validate via Zod — rejects array injection on any cardinal param (e.g.
-  // ?north[]=45&north[]=50 would previously resolve to parseFloat("45,50")=45).
-    const parsedQuery = TerrainDownloadQuerySchema.safeParse(req.query);
-    if (!parsedQuery.success) {
-      logger.warn(
-        { route: "GET /api/terrain/download", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-        "GET /api/terrain/download — Zod query validation failed",
-      );
-      const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
-    res.status(400).json({ error: "invalid_param", details });
+    const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
+    res.status(400).json({ error: "invalid_bbox", details });
     return;
   }
 
@@ -1852,17 +1860,7 @@ router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res):
     const info = await previewBboxForDownload({ north, south, east, west });
     res.json(validateResponse(GetTerrainDownloadInfoResponse, info, "GET /api/terrain/download/info"));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Parse error";
-
-  const UploadParamsSchema = z
-    .object({
-      resolution: z.coerce.number().int().min(32).max(512).optional(),
-      gridResolution: z.coerce.number().int().min(32).max(512).optional(),
-    })
-    .refine(
-      (data) => data.resolution !== undefined || data.gridResolution !== undefined,
-      { message: "resolution or gridResolution is required" },
-    );
+    const msg = err instanceof Error ? err.message : "Preflight failed";
     res.status(502).json({ error: "upstream_error", details: msg });
   }
 }));
@@ -1885,47 +1883,45 @@ const TerrainDownloadQuerySchema = z.object({
   .refine((d) => d.east > d.west, { message: "east must be greater than west", path: ["east"] })
   .refine((d) => d.north - d.south <= 10, { message: "Bounding box must be at most 10° latitude span", path: ["north"] })
   .refine((d) => d.east - d.west <= 10, { message: "Bounding box must be at most 10° longitude span", path: ["east"] });
-    const parsed = RasterCommitBodySchema.safeParse(req.body);
-      const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
-      res.status(400).json({ error: "invalid_param", details });
-      return;
-    }
-    const { north, south, east, west, resolution } = parsedQuery.data;
 
-    const centerLat = (north + south) / 2;
-    const centerLon = (east + west) / 2;
-    const latAbs = Math.abs(centerLat).toFixed(1);
-    const lonAbs = Math.abs(centerLon).toFixed(1);
-    const latDir = centerLat >= 0 ? "N" : "S";
-    const lonDir = centerLon >= 0 ? "E" : "W";
-    const filename = `bathyscan_${latAbs}${latDir}_${lonAbs}${lonDir}_${resolution}.csv`;
+router.get("/terrain/download", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+  const parsedQuery = TerrainDownloadQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    logger.warn(
+      { route: "GET /api/terrain/download", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/download — Zod query validation failed",
+    );
+    const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
+    res.status(400).json({ error: "invalid_bbox", details });
+    return;
+  }
+  const { north, south, east, west, resolution } = parsedQuery.data;
+
+  const centerLat = (north + south) / 2;
+  const centerLon = (east + west) / 2;
+
+  // Derive filename: bathyscan_<lat>N_<lon>W_<res>.csv
+  const latAbs = Math.abs(centerLat).toFixed(1);
+  const lonAbs = Math.abs(centerLon).toFixed(1);
+  const latDir = centerLat >= 0 ? "N" : "S";
+  const lonDir = centerLon >= 0 ? "E" : "W";
+  const filename = `bathyscan_${latAbs}${latDir}_${lonAbs}${lonDir}_${resolution}.csv`;
+
+  try {
+    const rows = await buildBboxCsvRows({ north, south, east, west }, resolution);
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Cache-Control", "no-store");
 
-    try {
-    const rows = await db
-      .select()
-      .from(uploadJobsTable)
-      .where(eq(uploadJobsTable.id, jobId));
-      res.write("lon,lat,depth\n");
-      for (const row of rows) {
-        res.write(`${row.lon.toFixed(7)},${row.lat.toFixed(7)},${row.depth.toFixed(3)}\n`);
-      }
-      res.end();
-    } catch (err) {
-    const msg = err instanceof Error ? err.message : "Parse error";
-
-  const UploadParamsSchema = z
-    .object({
-      resolution: z.coerce.number().int().min(32).max(512).optional(),
-      gridResolution: z.coerce.number().int().min(32).max(512).optional(),
-    })
-    .refine(
-      (data) => data.resolution !== undefined || data.gridResolution !== undefined,
-      { message: "resolution or gridResolution is required" },
-    );
+    // Stream the CSV: header + data rows.
+    res.write("lon,lat,depth\n");
+    for (const row of rows) {
+      res.write(`${row.lon.toFixed(7)},${row.lat.toFixed(7)},${row.depth.toFixed(3)}\n`);
+    }
+    res.end();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Download failed";
     // Only send error header if not already started
     if (!res.headersSent) {
       res.status(502).json({ error: "upstream_error", details: msg });
@@ -1951,13 +1947,11 @@ router.post(
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const file = req.file;
     if (!file) {
-      res.status(400).json({ error: "missing_file", details: "No image file uploaded. Send a PNG or JPEG as the 'file' field." });
+      res.status(400).json({ error: "missing_file", details: "No file uploaded. Send the XYZ/CSV/.gz as the 'file' field in a multipart/form-data request." });
       return;
     }
 
-    const fileName = (file.originalname ?? "").toLowerCase();
-
-    const ext = fileName.slice(fileName.lastIndexOf(".") + 1);
+    const fileName = file.originalname;
 
   // Decompress .gz files before parsing.
   // gunzipBounded enforces the size cap *during* streaming inflate so a
@@ -2031,7 +2025,68 @@ router.post(
   // rather than falling through to the 400 "resolution required" check below.
     let points;
   try {
-    if (fileExt === "png" || fileExt === "jpg" || fileExt === "jpeg") {
+    if (fileExt === "pdf") {
+      // Vector contour map: requires user-supplied georeferencing metadata.
+      // pdfBbox is a JSON string {minLon,minLat,maxLon,maxLat}; pdfDepthUnit
+      // is "feet" (default — US lake maps are almost always feet) or "meters".
+      const rawBbox = req.body["pdfBbox"];
+      if (typeof rawBbox !== "string" || rawBbox.length === 0) {
+        res.status(400).json({
+          error: "pdf_georeference_required",
+          details:
+            "PDF contour maps need georeferencing: include a 'pdfBbox' form field " +
+            "with the map's corner coordinates as JSON " +
+            '({"minLon":…,"minLat":…,"maxLon":…,"maxLat":…}).',
+        });
+        return;
+      }
+      let bboxJson: unknown;
+      try {
+        bboxJson = JSON.parse(rawBbox);
+      } catch {
+        res.status(400).json({ error: "invalid_param", details: "pdfBbox is not valid JSON." });
+        return;
+      }
+      const bboxParsed = RasterCommitBboxSchema.safeParse(bboxJson);
+      if (!bboxParsed.success) {
+        res.status(400).json({
+          error: "invalid_param",
+          details: "pdfBbox: " + (bboxParsed.error.issues[0]?.message ?? "invalid bounding box"),
+        });
+        return;
+      }
+      const rawUnit = req.body["pdfDepthUnit"];
+      if (rawUnit !== undefined && rawUnit !== "feet" && rawUnit !== "meters") {
+        res.status(400).json({
+          error: "invalid_param",
+          details: 'pdfDepthUnit must be "feet" or "meters".',
+        });
+        return;
+      }
+      const depthUnit: PdfDepthUnit = (rawUnit as PdfDepthUnit | undefined) ?? "feet";
+      try {
+        points = await parsePdfContourFile(file.buffer, bboxParsed.data, depthUnit);
+      } catch (err) {
+        if (err instanceof PdfRasterOnlyError) {
+          // The PDF is scanned/raster-only — re-run through the image-based
+          // contour pipeline (render PDF → OCR + line detection → georef).
+          try {
+            points = await parseRasterPdfContourFile(file.buffer, bboxParsed.data, depthUnit);
+          } catch (rasterErr) {
+            if (rasterErr instanceof PdfStageError) {
+              res.status(422).json({ error: `pdf_${rasterErr.stage}_error`, details: rasterErr.message });
+              return;
+            }
+            throw rasterErr;
+          }
+        } else if (err instanceof PdfStageError) {
+          res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
+          return;
+        } else {
+          throw err;
+        }
+      }
+    } else if (fileExt === "png" || fileExt === "jpg" || fileExt === "jpeg") {
       // Raster contour map image uploaded directly — same georeferencing
       // metadata required as for raster PDFs.
       const rawBbox = req.body["pdfBbox"] as unknown;
@@ -2047,7 +2102,7 @@ router.post(
       }
     let bboxJson: unknown;
     try {
-      bboxJson = JSON.parse(pdfBbox);
+      bboxJson = JSON.parse(rawBbox);
     } catch {
       res.status(400).json({ error: "invalid_param", details: "pdfBbox is not valid JSON." });
       return;
@@ -2090,7 +2145,21 @@ router.post(
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Parse error";
+    res.status(422).json({ error: "parse_error", details: msg });
+    return;
+  }
 
+  if (points.length < 10) {
+    res.status(400).json({
+      error: "insufficient_data",
+      details: "File must contain at least 10 valid (lon, lat, depth) rows",
+    });
+    return;
+  }
+
+  // Validate numeric body params via Zod so malformed values surface as a
+  // clear 400 instead of falling through `parseInt` → `NaN` and producing a
+  // 5xx from a downstream grid call.
   const UploadParamsSchema = z
     .object({
       resolution: z.coerce.number().int().min(32).max(512).optional(),
@@ -2121,7 +2190,7 @@ router.post(
   const resolution = (paramsParsed.data.resolution ?? paramsParsed.data.gridResolution) as number;
 
     const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
+    const smoothing = await getSmoothingPreference(req);
 
   // Auth-gated: requireAuth above guarantees a clerkUserId is present.
     const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
@@ -2201,6 +2270,79 @@ router.post(
       savedDatasetMeta,
     }),
   );
+  }),
+);
+
+// ── POST /datasets/raster-extract ────────────────────────────────────────────
+// Step 1 of the two-step raster contour pipeline.
+// Accepts a PNG or JPEG contour-map image, runs OCR + line tracing, caches
+// the polylines in memory, and returns a JSON response.
+//
+// Response: always HTTP 200 text/event-stream (SSE).
+//   Success: data: { stage:"done", result:{ token, labels, polylineCount, width, height } }
+//   Failure: data: { stage:"error", error:"pdf_extract_error", details }
+//
+// The token expires in 5 minutes.  Pass it to /datasets/raster-commit to
+// complete the pipeline with (optionally corrected) labels.
+
+router.post(
+  "/datasets/raster-extract",
+  datasetUploadRateLimit,
+  requireAuth,
+  upload.single("file"),
+  multerErrorHandler,
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "missing_file", details: "No image file uploaded. Send a PNG or JPEG as the 'file' field." });
+      return;
+    }
+
+    const ext = (file.originalname.toLowerCase().split(".").pop() ?? "");
+    if (ext !== "png" && ext !== "jpg" && ext !== "jpeg") {
+      res.status(415).json({
+        error: "unsupported_file_type",
+        details: "raster-extract only accepts PNG and JPEG images.",
+      });
+      return;
+    }
+
+    // raster-extract always returns HTTP 200 with text/event-stream.
+    // Errors and results are communicated as SSE data events so that progress
+    // events can be streamed during long operations.
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.status(200);
+
+    function sendSseEvent(payload: Record<string, unknown>): void {
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    }
+
+    let result: RasterExtractionResult;
+    try {
+      result = await extractRasterImageContoursOnly(file.buffer);
+    } catch (err) {
+      if (err instanceof PdfStageError) {
+        sendSseEvent({ stage: "error", error: `pdf_${err.stage}_error`, details: err.message });
+      } else {
+        sendSseEvent({ stage: "error", error: "extraction_failed", details: "An unexpected error occurred during extraction." });
+      }
+      res.end();
+      return;
+    }
+
+    sendSseEvent({
+      stage: "done",
+      result: {
+        token: result.token,
+        labels: result.labels,
+        polylineCount: result.polylineCount,
+        width: result.width,
+        height: result.height,
+      },
+    });
+    res.end();
   }),
 );
 
@@ -2292,17 +2434,12 @@ router.post(
     }
 
     const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
+    const smoothing = await getSmoothingPreference(req);
     const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
     const gridId = crypto.randomUUID();
-    const coveragePercent = terrain.coveragePercent ?? 100;
-
-  const isTextPointSurvey = TEXT_EXTENSIONS.has(fileExt) || fileExt === "pdf" ||
-    fileExt === "png" || fileExt === "jpg" || fileExt === "jpeg";
+    const coveragePercent = 100;
 
     const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
-
-  const MAX_NODATA_PERCENT = 70;
     const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
 
     // H-2: treat dataset DB save failure as a hard error — never return a
@@ -2545,6 +2682,7 @@ router.get(
       const [dbJob] = await db
         .select({
           userId: uploadJobsTable.userId,
+          chunksReceived: uploadJobsTable.chunksReceived,
           sessionJobId: uploadJobsTable.id,
         })
         .from(uploadJobsTable)
@@ -2597,15 +2735,22 @@ router.get(
       }
     }
 
-    // DB synthesis fallback — covers two scenarios:
-    //   1. Disk directory inaccessible (e.g. /tmp wiped after restart).
-    //   2. Disk accessible but no chunk files found for this uploadId
-    //      (post-restart scenario where /tmp was cleared but DB row survived).
+    // DB synthesis fallback — dbChunksReceived is non-null ONLY when the
+    // session was just rehydrated from the DB (server restart wiped the
+    // in-memory map).  In that restart case the disk may also have been
+    // wiped, so the server-owned DB count is the best available progress
+    // signal.  For a live in-memory session (dbChunksReceived === null), an
+    // accessible-but-empty directory means chunks were genuinely lost —
+    // return [] so the client re-uploads rather than synthesising [0..N-1],
+    // which would cause finalize to fail the all-chunks-present verification.
     // DB count is server-owned, so synthesising from it is safe. This is
     // distinct from trusting a CLIENT-supplied list — the risk the disk-
     // primary approach guards against.
     if (receivedChunks.length === 0 && dbChunksReceived !== null && dbChunksReceived > 0) {
-    for (let i = 0; i < totalChunks; i++) {
+      // Disk was wiped (container restart) but the DB still knows how many
+      // chunks arrived.  Synthesise the contiguous list so the client can ask
+      // for only the next missing chunk rather than starting over.
+      for (let i = 0; i < dbChunksReceived; i++) {
         receivedChunks.push(i);
       }
     }
@@ -2776,7 +2921,7 @@ router.post(
       } catch (guardErr) {
         // DB unavailable — fall back to the in-memory guard rather than
         // blocking uploads (matches persistJobToDB's non-fatal policy).
-      const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
+        const errMsg = guardErr instanceof Error ? guardErr.message : String(guardErr);
         logger.warn({ jobId, uploadId, errMsg }, `[finalize] DB idempotency guard failed, falling back to in-memory guard: ${errMsg}`);
       }
     } catch (err) {
@@ -2841,6 +2986,15 @@ router.post(
   validateBody(GcsUrlBodySchema, "POST /api/datasets/upload/request-gcs-url"),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { fileName } = res.locals.parsedBody;
+    const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
+    if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+      res.status(415).json({
+        error: "unsupported_file_type",
+        details: `Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea`,
+      });
+      return;
+    }
+
     const userId = (req as AuthenticatedRequest).clerkUserId;
     const { uploadUrl, objectKey } = await signDatasetUploadUrl(userId, fileName);
     res.json(validateResponse(RequestGcsUploadUrlResponse, { uploadUrl, objectKey }, "POST /api/datasets/upload/request-gcs-url"));
@@ -2989,16 +3143,3 @@ router.get(
 );
 
 export default router;
-
-  const resolution = (paramsParsed.data.resolution ?? paramsParsed.data.gridResolution) as number;
-
-  const paramsParsed = UploadParamsSchema.safeParse({
-    resolution: req.body["resolution"],
-    gridResolution: req.body["gridResolution"],
-  });
-
-      const result = await extractRasterImageContoursOnly(file.buffer);
-
-    const sendEvent = (payload: Record<string, unknown>): void => {
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    };

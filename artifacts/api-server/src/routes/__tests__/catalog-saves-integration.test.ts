@@ -203,7 +203,12 @@ const H = vi.hoisted(() => {
             tableArr(table).push(row);
             inserted.push(row);
           }
-          return {
+          const chain = {
+            // Route uses .onConflictDoNothing().returning(); the mock has no
+            // unique-constraint simulation, so treat it as a pass-through.
+            onConflictDoNothing() {
+              return chain;
+            },
             returning(projection?: Record<string, ColRef>) {
               return Promise.resolve(
                 inserted.map((r) => projectRow(r, projection)),
@@ -213,6 +218,7 @@ const H = vi.hoisted(() => {
               resolve(undefined);
             },
           };
+          return chain;
         },
       };
     },

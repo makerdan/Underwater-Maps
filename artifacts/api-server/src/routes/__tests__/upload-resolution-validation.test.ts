@@ -15,7 +15,23 @@ import request from "supertest";
 
 vi.mock("@workspace/db", async () => {
   const { createDbMock } = await import("../../__tests__/helpers/db-mock.js");
-  return createDbMock();
+  // The upload route treats a no-row insert result as a hard 500 (H-2), so
+  // the happy-path tests need the insert to return a plausible saved row.
+  const insertReturningMock = vi.fn().mockResolvedValue([
+    {
+      id: "00000000-0000-4000-8000-000000000001",
+      name: "survey",
+      minDepth: 0,
+      maxDepth: 10,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    },
+  ]);
+  const valuesMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
+  return createDbMock({
+    db: {
+      insert: vi.fn().mockReturnValue({ values: valuesMock }),
+    },
+  });
 });
 
 vi.mock("@clerk/express", () => ({

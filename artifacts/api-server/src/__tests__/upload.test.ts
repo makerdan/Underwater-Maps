@@ -23,8 +23,6 @@
  */
 
 import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 
@@ -92,8 +90,6 @@ import {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const CHUNK_BASE_DIR = path.join(os.tmpdir(), "bathyscan-chunks");
 
 const USER_A = "user_upload_security_a";
 const USER_B = "user_upload_security_b";

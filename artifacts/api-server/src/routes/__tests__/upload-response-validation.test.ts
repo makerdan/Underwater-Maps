@@ -199,9 +199,12 @@ function authed(r: request.Test): request.Test {
   return r;
 }
 
-/** Upload chunk 0 of a 1-chunk session; returns the uploadId. */
+/** Upload chunk 0 of a 1-chunk session; returns the server-issued uploadId. */
 async function uploadChunkZero(): Promise<string> {
-  const uploadId = randomUUID();
+  // uploadIds are server-owned: a client-supplied UUID is rejected with 403.
+  const startRes = await authed(request(app).post("/api/datasets/upload/start"));
+  expect(startRes.status).toBe(200);
+  const uploadId = (startRes.body as { uploadId: string }).uploadId;
   const res = await authed(request(app).post("/api/datasets/upload/chunk"))
     .field("uploadId", uploadId)
     .field("chunkIndex", "0")
@@ -237,9 +240,13 @@ describe("POST /api/datasets/upload/chunk — response schema failure → 500", 
   });
 
   it("returns 500 when UploadDatasetChunkResponse.parse() throws", async () => {
+    // Server-owned uploadIds: start a session first or the chunk POST is 403.
+    const startRes = await authed(request(app).post("/api/datasets/upload/start"));
+    expect(startRes.status).toBe(200);
+    const uploadId = (startRes.body as { uploadId: string }).uploadId;
     schemaState.throwUploadChunk = true;
     const res = await authed(request(app).post("/api/datasets/upload/chunk"))
-      .field("uploadId", randomUUID())
+      .field("uploadId", uploadId)
       .field("chunkIndex", "0")
       .field("totalChunks", "1")
       .attach("file", Buffer.from("lat,lon,depth\n"), "slice.bin");

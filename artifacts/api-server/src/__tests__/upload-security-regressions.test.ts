@@ -183,8 +183,17 @@ function authHeader(userId: string) {
   return { "x-mock-clerk-user-id": userId };
 }
 
-/** Upload chunk 0 for a given uploadId / user, assert 200. */
-async function uploadChunk0(uploadId: string, userId: string): Promise<void> {
+/**
+ * Start a server-owned upload session for `userId` and upload chunk 0.
+ * Returns the server-issued uploadId (client-supplied uploadIds are rejected
+ * with 403 upload_not_started since the server-owned uploadId change).
+ */
+async function uploadChunk0(userId: string): Promise<string> {
+  const startRes = await request(app)
+    .post("/api/datasets/upload/start")
+    .set(authHeader(userId));
+  expect(startRes.status, `upload/start failed for ${userId}: ${JSON.stringify(startRes.body)}`).toBe(200);
+  const uploadId = (startRes.body as { uploadId: string }).uploadId;
   const res = await request(app)
     .post("/api/datasets/upload/chunk")
     .set(authHeader(userId))
@@ -193,6 +202,7 @@ async function uploadChunk0(uploadId: string, userId: string): Promise<void> {
     .field("totalChunks", "1")
     .attach("file", Buffer.from("hello"), { filename: "data.xyz", contentType: "text/plain" });
   expect(res.status, `chunk-0 upload failed for ${userId}: ${JSON.stringify(res.body)}`).toBe(200);
+  return uploadId;
 }
 
 function resetDbDefaults(): void {
@@ -214,12 +224,11 @@ describe("C-1: chunk-0 claim guard — second user gets 409", () => {
   });
 
   it("returns 409 when a second user tries to claim an uploadId already owned by user A", async () => {
-    const uploadId = crypto.randomUUID();
     const userA = "user_claim_A";
     const userB = "user_claim_B";
 
     // User A claims the uploadId first.
-    await uploadChunk0(uploadId, userA);
+    const uploadId = await uploadChunk0(userA);
 
     // User B sends chunk 0 with the same uploadId — should be rejected.
     const res = await request(app)
@@ -235,8 +244,7 @@ describe("C-1: chunk-0 claim guard — second user gets 409", () => {
   });
 
   it("the 409 does not expose information about the legitimate owner", async () => {
-    const uploadId = crypto.randomUUID();
-    await uploadChunk0(uploadId, "user_claim_C");
+    const uploadId = await uploadChunk0("user_claim_C");
 
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
@@ -264,11 +272,10 @@ describe("C-2: same-user chunk-0 retry — session preserved, not overwritten", 
   });
 
   it("keeps the same sessionJobId when the same user sends chunk 0 twice", async () => {
-    const uploadId = crypto.randomUUID();
-    const userId = "user_retry_chunk0";
+        const userId = "user_retry_chunk0";
 
     // First chunk-0: creates session with a sessionJobId.
-    await uploadChunk0(uploadId, userId);
+    const uploadId = await uploadChunk0(userId);
     const sessionAfterFirst = getUploadSessionForTest(uploadId);
     expect(sessionAfterFirst).toBeDefined();
     const originalJobId = sessionAfterFirst!.sessionJobId;
@@ -303,11 +310,10 @@ describe("H-1: finalize strict DB persist failure", () => {
   });
 
   it("returns 500 when persistJobToDB (db.insert) throws during finalize", async () => {
-    const uploadId = crypto.randomUUID();
-    const userId = "user_finalize_fail";
+        const userId = "user_finalize_fail";
 
     // Upload chunk 0 to create the session.
-    await uploadChunk0(uploadId, userId);
+    const uploadId = await uploadChunk0(userId);
 
     // Make db.insert throw for the finalize persist step.
     dbControl.insertShouldThrow = true;
@@ -324,10 +330,9 @@ describe("H-1: finalize strict DB persist failure", () => {
   });
 
   it("does NOT fire processUploadJob when DB persist fails", async () => {
-    const uploadId = crypto.randomUUID();
-    const userId = "user_finalize_no_worker";
+        const userId = "user_finalize_no_worker";
 
-    await uploadChunk0(uploadId, userId);
+    const uploadId = await uploadChunk0(userId);
 
     dbControl.insertShouldThrow = true;
 
@@ -407,7 +412,7 @@ describe("H-2: direct-upload DB hard failure", () => {
 // ---------------------------------------------------------------------------
 
 describe("L-10: chunk-status disk / DB fallback logic", () => {
-  let readdirSpy: ReturnType<typeof vi.spyOn> | undefined;
+  let readdirSpy: { mockRestore(): void } | undefined;
 
   beforeEach(() => {
     __resetRateLimitMemory();
@@ -426,14 +431,13 @@ describe("L-10: chunk-status disk / DB fallback logic", () => {
   });
 
   it("L-10a: returns receivedChunks=[] when chunk directory exists but is empty", async () => {
-    const uploadId = crypto.randomUUID();
-    const userId = "user_status_empty_dir";
+        const userId = "user_status_empty_dir";
 
     // Create session so the auth check passes.
-    await uploadChunk0(uploadId, userId);
+    const uploadId = await uploadChunk0(userId);
 
     // Override readdir to return an empty list (directory accessible, no chunks).
-    readdirSpy = vi.spyOn(fs.promises, "readdir").mockResolvedValueOnce([] as unknown as string[]);
+    readdirSpy = vi.spyOn(fs.promises, "readdir").mockResolvedValueOnce([] as never);
 
     const res = await request(app)
       .get(`/api/datasets/upload/chunk/status/${uploadId}`)
@@ -444,15 +448,14 @@ describe("L-10: chunk-status disk / DB fallback logic", () => {
   });
 
   it("L-10a: does NOT synthesise chunks from DB count when directory is accessible but empty", async () => {
-    const uploadId = crypto.randomUUID();
-    const userId = "user_status_accessible_empty";
+        const userId = "user_status_accessible_empty";
 
-    await uploadChunk0(uploadId, userId);
+    const uploadId = await uploadChunk0(userId);
 
     // Directory is accessible but contains no chunk files for this uploadId.
     readdirSpy = vi.spyOn(fs.promises, "readdir").mockResolvedValueOnce(
       // Other uploads' files present, but none for this uploadId.
-      ["other-upload-chunk-0", "another-chunk-1"] as unknown as string[],
+      ["other-upload-chunk-0", "another-chunk-1"] as never,
     );
 
     const res = await request(app)
