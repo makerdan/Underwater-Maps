@@ -136,6 +136,74 @@ test.describe("BathyScan — What's Here card (H shortcut & auto-close)", () => 
   });
 });
 
+test.describe("BathyScan — What's Here button clears the TEMP row", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+    await waitForTestApi(page);
+    await page.evaluate(() => {
+      window.__bathyTest!.setWhatsHereOpen(false);
+      window.__bathyTest!.setWhatsHerePinned(false);
+      window.__bathyTest!.setCrosshairGps(null);
+    });
+  });
+
+  /**
+   * Regression: the button used to float at a fixed offset below the
+   * vertical centre (`bottom: calc(50% - 108px)`) tuned before the panel
+   * grew the depth readout + TEMP row, so it overlapped the TEMP value.
+   * It is now anchored below the Crosshair Target panel in the centred
+   * column, so it must clear the TEMP row at any font scale.
+   */
+  async function expectButtonBelowTempRow(page: Page): Promise<void> {
+    const tempRow = page.locator('[data-testid="hud-water-temp"]');
+    const btn = page.locator('[data-testid="whats-here-btn"]');
+    await expect(tempRow).toBeVisible();
+    await expect(btn).toBeVisible();
+    const tempBox = (await tempRow.boundingBox())!;
+    const btnBox = (await btn.boundingBox())!;
+    expect(tempBox).not.toBeNull();
+    expect(btnBox).not.toBeNull();
+    // Button's top edge must sit below the TEMP row's bottom edge.
+    expect(btnBox.y).toBeGreaterThanOrEqual(tempBox.y + tempBox.height);
+  }
+
+  test("button sits below the TEMP row at default font scale", async ({ page }) => {
+    await seedTerrain(page);
+    await seedCrosshair(page);
+    await expectButtonBelowTempRow(page);
+  });
+
+  test("button still clears the TEMP row at font scale 1.25", async ({ page }) => {
+    await seedTerrain(page);
+    await seedCrosshair(page);
+    // Mirror what App.tsx does when the user raises the font-scale setting.
+    await page.evaluate(() => {
+      document.body.style.setProperty("--bs-font-scale", "1.25");
+    });
+    await expectButtonBelowTempRow(page);
+  });
+
+  test("narrow-viewport icon-only button clears the TEMP row", async ({ page }) => {
+    await page.setViewportSize({ width: 640, height: 800 });
+    await seedTerrain(page);
+    await seedCrosshair(page);
+    await expectButtonBelowTempRow(page);
+  });
+
+  test("button stays visible and clickable in the no-crosshair (shorter panel) state", async ({
+    page,
+  }) => {
+    await seedTerrain(page);
+    // crosshairGps is null (SURFACE / NO TERRAIN placeholder) — the button
+    // must still render below the shorter panel and open the card on click.
+    const btn = page.locator('[data-testid="whats-here-btn"]');
+    await expect(btn).toBeVisible();
+    await btn.click();
+    await expect(page.locator('[data-testid="whats-here-card"]')).toBeVisible();
+  });
+});
+
 test.describe("BathyScan — H shortcut suppression in text inputs", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");

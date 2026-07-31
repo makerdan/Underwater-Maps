@@ -224,6 +224,53 @@ export const HUD: React.FC = () => {
     textShadow: highContrastHud ? "0 0 2px #000, 0 0 6px #000" : undefined,
   };
 
+  /**
+   * "What's Here?" button (keyboard shortcut H) — rendered in one of two
+   * spots so it never overlaps the Crosshair Target panel's TEMP row:
+   *   - inside the centred crosshair column, anchored just below the panel
+   *     (`top: calc(100% + …)`), so it tracks the panel height at any
+   *     --bs-font-scale and in the shorter SURFACE / NO TERRAIN states;
+   *   - as a standalone centre overlay at the old fixed offset when the
+   *     crosshair panel is hidden (showCrosshairGps off), where there is
+   *     nothing to overlap.
+   */
+  const renderWhatsHereButton = (positionStyle: React.CSSProperties) =>
+    terrain ? (
+      <ViewscreenTooltip
+        label={whatsHereOpen ? "Close What's Here summary" : "What's Here? — terrain & conditions at your crosshair  [H]"}
+        side="top"
+      >
+        <button
+          data-testid="whats-here-btn"
+          aria-label={whatsHereOpen ? "Close What's Here summary" : "Open What's Here summary"}
+          aria-pressed={whatsHereOpen}
+          onClick={() => setWhatsHereOpen(!whatsHereOpen)}
+          style={{
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
+            ...positionStyle,
+            pointerEvents: "auto",
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
+            letterSpacing: "0.18em",
+            padding: "4px 10px",
+            borderRadius: 3,
+            border: `1px solid ${whatsHereOpen ? "rgba(0,229,255,0.55)" : "rgba(0,229,255,0.22)"}`,
+            background: whatsHereOpen ? "rgba(0,229,255,0.12)" : "rgba(2,8,18,0.72)",
+            color: whatsHereOpen ? "#00e5ff" : "#94a3b8",
+            textShadow: whatsHereOpen ? "0 0 6px rgba(0,229,255,0.45)" : "none",
+            cursor: "pointer",
+            backdropFilter: "blur(4px)",
+            transition: "border-color 0.12s, background 0.12s, color 0.12s",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {isNarrow ? "◎" : "◎ WHAT'S HERE?"}
+        </button>
+      </ViewscreenTooltip>
+    ) : null;
+
   return (
     <div
       className="absolute inset-0 overflow-hidden"
@@ -700,6 +747,11 @@ export const HUD: React.FC = () => {
               <div style={{ color: "#1e3a5f" }}>— NO TERRAIN —</div>
             )}
           </div>
+
+          {/* "What's Here?" button — anchored just below the panel so it
+              clears the TEMP row at any font scale without shifting the
+              reticle off the true screen centre. */}
+          {renderWhatsHereButton({ top: "calc(100% + 8px)" })}
         </div>
       )}
 
@@ -707,43 +759,11 @@ export const HUD: React.FC = () => {
           left sidebar's "Overlays & Tools" panel (see OverlaysToolsPanel).
           The Substrate Legend also lives inline within that panel now. */}
 
-      {/* ── Centre-bottom: What's Here? button ──
-          Floats just below the crosshair circle. Keyboard shortcut H. */}
-      {terrain && (
-        <ViewscreenTooltip
-          label={whatsHereOpen ? "Close What's Here summary" : "What's Here? — terrain & conditions at your crosshair  [H]"}
-          side="top"
-        >
-          <button
-            data-testid="whats-here-btn"
-            aria-label={whatsHereOpen ? "Close What's Here summary" : "Open What's Here summary"}
-            aria-pressed={whatsHereOpen}
-            onClick={() => setWhatsHereOpen(!whatsHereOpen)}
-            style={{
-              position: "absolute",
-              bottom: "calc(50% - 108px)",
-              left: "50%",
-              transform: "translateX(-50%)",
-              pointerEvents: "auto",
-              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              fontSize: "calc(15px * var(--bs-font-scale, 1))",
-              letterSpacing: "0.18em",
-              padding: "4px 10px",
-              borderRadius: 3,
-              border: `1px solid ${whatsHereOpen ? "rgba(0,229,255,0.55)" : "rgba(0,229,255,0.22)"}`,
-              background: whatsHereOpen ? "rgba(0,229,255,0.12)" : "rgba(2,8,18,0.72)",
-              color: whatsHereOpen ? "#00e5ff" : "#94a3b8",
-              textShadow: whatsHereOpen ? "0 0 6px rgba(0,229,255,0.45)" : "none",
-              cursor: "pointer",
-              backdropFilter: "blur(4px)",
-              transition: "border-color 0.12s, background 0.12s, color 0.12s",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {isNarrow ? "◎" : "◎ WHAT'S HERE?"}
-          </button>
-        </ViewscreenTooltip>
-      )}
+      {/* ── Centre-bottom: What's Here? button (fallback placement) ──
+          Only when the Crosshair Target panel is hidden (showCrosshairGps
+          off) — the panel-anchored copy above renders otherwise. */}
+      {!showCrosshairGps &&
+        renderWhatsHereButton({ bottom: "calc(50% - 108px)" })}
 
       {/* ── Bottom-left: pin readout only ──
           The "CAMERA POSITION" LON/LAT panel was renamed to
