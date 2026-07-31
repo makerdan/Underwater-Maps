@@ -178,6 +178,15 @@ async function finalizeUpload(
   return (res.body as { jobId: string }).jobId;
 }
 
+/** Start a server-issued upload session and return the uploadId. */
+async function startUpload(authHeaders: Record<string, string> = AUTH_A): Promise<string> {
+  const res = await request(app)
+    .post("/api/datasets/upload/start")
+    .set(authHeaders);
+  expect(res.status, `startUpload failed: ${JSON.stringify(res.body)}`).toBe(200);
+  return (res.body as { uploadId: string }).uploadId;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 1. GET /datasets/upload/chunk/status/:uploadId
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -206,7 +215,7 @@ describe("GET /datasets/upload/chunk/status/:uploadId", () => {
   });
 
   it("returns 404 when the session belongs to a different user", async () => {
-    const uploadId = crypto.randomUUID();
+    const uploadId = await startUpload(AUTH_A);
     await uploadChunk(uploadId, 0, 2, AUTH_A);
 
     const res = await request(app)
@@ -218,7 +227,7 @@ describe("GET /datasets/upload/chunk/status/:uploadId", () => {
   });
 
   it("returns receivedChunks=[0] after chunk 0 is uploaded", async () => {
-    const uploadId = crypto.randomUUID();
+    const uploadId = await startUpload(AUTH_A);
     await uploadChunk(uploadId, 0, 3, AUTH_A);
 
     const res = await request(app)
@@ -230,7 +239,7 @@ describe("GET /datasets/upload/chunk/status/:uploadId", () => {
   });
 
   it("returns receivedChunks sorted correctly after two chunks are uploaded", async () => {
-    const uploadId = crypto.randomUUID();
+    const uploadId = await startUpload(AUTH_A);
     await uploadChunk(uploadId, 0, 3, AUTH_A);
     await uploadChunk(uploadId, 1, 3, AUTH_A);
 
@@ -243,7 +252,7 @@ describe("GET /datasets/upload/chunk/status/:uploadId", () => {
   });
 
   it("returns receivedChunks=[] when the session exists but the chunk directory appears empty", async () => {
-    const uploadId = crypto.randomUUID();
+    const uploadId = await startUpload(AUTH_A);
     await uploadChunk(uploadId, 0, 2, AUTH_A);
 
     const readdirSpy = vi
@@ -448,7 +457,7 @@ describe("GET /api/datasets/upload/jobs/:jobId — poll resilience", () => {
   it(
     "survives repeated polls during processing and eventually resolves to done — simulates client reconnect poll loop",
     async () => {
-      const uploadId = crypto.randomUUID();
+      const uploadId = await startUpload(AUTH_A);
       const payload = Buffer.from("lon,lat,depth\n140.0,10.0,100\n141.0,11.0,200\n");
 
       await uploadChunk(uploadId, 0, 1, AUTH_A, payload);
@@ -483,7 +492,7 @@ describe("GET /api/datasets/upload/jobs/:jobId — poll resilience", () => {
   );
 
   it("returns 403 when a different user tries to poll another user's job", async () => {
-    const uploadId = crypto.randomUUID();
+    const uploadId = await startUpload(AUTH_A);
     await uploadChunk(uploadId, 0, 1, AUTH_A);
     const jobId = await finalizeUpload(uploadId, 1, AUTH_A);
 
@@ -496,7 +505,7 @@ describe("GET /api/datasets/upload/jobs/:jobId — poll resilience", () => {
   });
 
   it("returns 409 when finalize is called a second time for the same uploadId", async () => {
-    const uploadId = crypto.randomUUID();
+    const uploadId = await startUpload(AUTH_A);
     await uploadChunk(uploadId, 0, 1, AUTH_A);
 
     const body = { uploadId, fileName: "survey.xyz", totalChunks: 1, resolution: 32 };

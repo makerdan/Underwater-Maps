@@ -137,6 +137,13 @@ interface UploadSession {
    * ABANDONED_UPLOAD_THRESHOLD_MS of inactivity.
    */
   lastActivityAt: number;
+  /**
+   * True when this session was created by POST /api/datasets/upload/start (the
+   * server-owned uploadId endpoint).  Chunk-submit and finalize reject sessions
+   * that are not server-issued so that a client-supplied UUID can never hijack
+   * the upload pipeline.
+   */
+  serverIssued?: boolean;
 }
 const uploadSessions = new Map<string, UploadSession>();
 registerCache(() => uploadSessions.clear());
@@ -554,7 +561,7 @@ export async function recoverStaleUploadJobs(): Promise<void> {
           // Restore the in-memory upload session so chunk-status queries work.
           // Include sessionJobId so that if the client retries finalize the
           // same DB row is reused instead of spawning a second one.
-          uploadSessions.set(uploadId, { userId: job.userId, sessionJobId: job.id, lastActivityAt: Date.now() });
+          uploadSessions.set(uploadId, { userId: job.userId, sessionJobId: job.id, serverIssued: true, lastActivityAt: Date.now() });
 
           // Re-queue the job with its original parameters.
           const requeued: JobState = { status: "queued", progress: 0, userId: job.userId };
@@ -1515,6 +1522,12 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
     return;
   }
   const id = idParsed.data;
+
+  // Auth + ownership guard for custom (UUID-format) dataset IDs.
+  // Preset/catalog dataset IDs remain publicly accessible.
+  // Non-owner requests (including unauthenticated) return 404 (not 401/403)
+  // to avoid confirming existence of datasets belonging to other users.
+  if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
     const callerId = auth?.userId ?? null;
     if (!callerId) {
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
@@ -1567,6 +1580,11 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
   const id = idParsed.data;
   try {
       const preview = entries.slice(0, 5).join(", ");
+    if (!preview) {
+      // Custom (UUID-format) dataset — apply the same auth + ownership guard
+      // used by the /terrain and /overview routes, then build the preview from
+      // the row's stored terrainJson so the client sees the real dataSource.
+      if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
     const callerId = auth?.userId ?? null;
         if (!callerId) {
           res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
@@ -1634,6 +1652,12 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
     return;
   }
   const id = idParsed.data;
+
+  // Auth + ownership guard for custom (UUID-format) dataset IDs.
+  // Preset/catalog dataset IDs remain publicly accessible.
+  // Non-owner requests (including unauthenticated) return 404 (not 401/403)
+  // to avoid confirming existence of datasets belonging to other users.
+  if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
     const callerId = auth?.userId ?? null;
     if (!callerId) {
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
@@ -2139,6 +2163,10 @@ router.post(
   // GPX with no <ele>, NMEA with no depth sentences) return 422 parse_error
   // rather than falling through to the 400 "resolution required" check below.
     let points;
+  try {
+    if (fileExt === "png" || fileExt === "jpg" || fileExt === "jpeg") {
+      // Raster contour map image uploaded directly — same georeferencing
+      // metadata required as for raster PDFs.
       const rawBbox = req.body["pdfBbox"];
       if (typeof rawBbox !== "string" || rawBbox.length === 0) {
         res.status(400).json({
@@ -2150,49 +2178,14 @@ router.post(
         });
         return;
       }
-    let bboxJson: unknown;
-    try {
-      bboxJson = JSON.parse(pdfBbox);
-    } catch {
-      res.status(400).json({ error: "invalid_param", details: "pdfBbox is not valid JSON." });
-      return;
-    }
-    const bboxParsed = RasterCommitBboxSchema.safeParse(bboxJson);
-      if (!bboxParsed.success) {
-        res.status(400).json({
-          error: "invalid_param",
-          details: "pdfBbox: " + (bboxParsed.error.issues[0]?.message ?? "invalid bounding box"),
-        });
+      let bboxJson: unknown;
+      try {
+        bboxJson = JSON.parse(rawBbox);
+      } catch {
+        res.status(400).json({ error: "invalid_param", details: "pdfBbox is not valid JSON." });
         return;
       }
-      const rawUnit = req.body["pdfDepthUnit"];
-      if (rawUnit !== undefined && rawUnit !== "feet" && rawUnit !== "meters") {
-        res.status(400).json({
-          error: "invalid_param",
-          details: 'pdfDepthUnit must be "feet" or "meters".',
-        });
-        return;
-      }
-      const depthUnit: PdfDepthUnit = (rawUnit as PdfDepthUnit | undefined) ?? "feet";
-      const rawBbox = req.body["pdfBbox"];
-      if (typeof rawBbox !== "string" || rawBbox.length === 0) {
-        res.status(400).json({
-          error: "pdf_georeference_required",
-          details:
-            "Raster contour map images need georeferencing: include a 'pdfBbox' form field " +
-            "with the map's corner coordinates as JSON " +
-            '({"minLon":…,"minLat":…,"maxLon":…,"maxLat":…}).',
-        });
-        return;
-      }
-    let bboxJson: unknown;
-    try {
-      bboxJson = JSON.parse(pdfBbox);
-    } catch {
-      res.status(400).json({ error: "invalid_param", details: "pdfBbox is not valid JSON." });
-      return;
-    }
-    const bboxParsed = RasterCommitBboxSchema.safeParse(bboxJson);
+      const bboxParsed = RasterCommitBboxSchema.safeParse(bboxJson);
       if (!bboxParsed.success) {
         res.status(400).json({
           error: "invalid_param",
@@ -2279,7 +2272,7 @@ router.post(
   const resolution = (paramsParsed.data.resolution ?? paramsParsed.data.gridResolution) as number;
 
     const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
+    const smoothing = await getSmoothingPreference(req);
 
   // Auth-gated: requireAuth above guarantees a clerkUserId is present.
     const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
@@ -2348,10 +2341,10 @@ router.post(
         maxDepth: saved.maxDepth,
         createdAt: saved.createdAt.toISOString(),
       };
-    } catch (err) {
+    } catch (persistErr) {
       const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
       logger.error(
-        { err, userId: effectiveUserId, datasetName },
+        { err: persistErr, userId: effectiveUserId, datasetName },
         `[direct-upload] failed to persist (userId=${effectiveUserId}, name=${datasetName})`,
       );
       res.status(500).json({ error: "save_failed", details: errMsg });
@@ -2460,7 +2453,7 @@ router.post(
     }
 
     const datasetName = fileName.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
-    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
+    const smoothing = await getSmoothingPreference(req);
     const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
     const gridId = crypto.randomUUID();
     const coveragePercent = 100;
@@ -2502,10 +2495,10 @@ router.post(
         maxDepth: saved.maxDepth,
         createdAt: saved.createdAt.toISOString(),
       };
-    } catch (err) {
+    } catch (persistErr) {
       const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
       logger.error(
-        { err, userId: effectiveUserId, datasetName },
+        { err: persistErr, userId: effectiveUserId, datasetName },
         `[raster-commit] failed to persist (userId=${effectiveUserId}, name=${datasetName})`,
       );
       res.status(500).json({ error: "save_failed", details: errMsg });
@@ -2524,14 +2517,34 @@ router.post(
   }),
 );
 
+// ── POST /datasets/upload/start ───────────────────────────────────────────────
+// Step 0 of the chunked-upload flow.  Generates a server-issued uploadId,
+// registers the upload session in memory bound to the caller's userId, and
+// returns the uploadId.  Subsequent chunk-submit and finalize calls must supply
+// a uploadId that originated from this endpoint — client-supplied UUIDs are
+// rejected with 403 to prevent session-slot squatting.
+const PostUploadStartResponse = z.object({ uploadId: z.string().uuid() });
+
+router.post(
+  "/datasets/upload/start",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const userId = (req as AuthenticatedRequest).clerkUserId;
+    const uploadId = crypto.randomUUID();
+    // Pre-register the session so chunk-0 can verify it was server-issued.
+    uploadSessions.set(uploadId, { userId, serverIssued: true, lastActivityAt: Date.now() });
+    res.json(validateResponse(PostUploadStartResponse, { uploadId }, "POST /api/datasets/upload/start"));
+  }),
+);
+
 // ── POST /datasets/upload/chunk ───────────────────────────────────────────────
 // Receives one 5 MB slice of a large file. Fields (all required):
-//   uploadId    — stable UUID chosen by the client for this upload session
+//   uploadId    — server-issued UUID returned by POST /api/datasets/upload/start
 //   chunkIndex  — 0-based index of this slice
 //   totalChunks — total number of slices the client will send
 //   file        — the binary slice (multipart/form-data)
-// The first chunk (chunkIndex === 0) creates the upload session bound to the
-// caller's userId. Subsequent chunks must come from the same authenticated user.
+// The first chunk (chunkIndex === 0) verifies the server-issued session and
+// registers the sessionJobId. Subsequent chunks must come from the same user.
 // Returns { received: chunkIndex }.
 router.post(
   "/datasets/upload/chunk",
@@ -2557,32 +2570,41 @@ router.post(
     const userId = (req as AuthenticatedRequest).clerkUserId;
 
     if (chunkIndex === 0) {
-      // First chunk: create (or verify) the upload session bound to this user.
-      // C-1: if another session already owns this uploadId, reject the hijack
-      // attempt with 409.  If the same user retries chunk 0 (e.g. after a
-      // transient network error), keep the existing session so the pre-generated
-      // sessionJobId is preserved and only one DB row ever exists per upload.
+      // First chunk: verify the session was server-issued (created by
+      // POST /api/datasets/upload/start) and register the sessionJobId.
+      // C-1: no server-issued session → client-supplied UUID → reject 403.
+      // C-2: session from a different user → reject 409 (hijack guard).
+      // C-3: same user retrying chunk 0 → refresh activity only (idempotent).
       const existingSession = uploadSessions.get(uploadId);
-      if (existingSession) {
-        if (existingSession.userId !== userId) {
-          // Different user trying to claim an already-owned uploadId — reject.
-          await fs.promises.unlink(file.path).catch(() => undefined);
-          res.status(409).json({
-            error: "upload_conflict",
-            details: "An upload with this uploadId is already in progress by another user.",
-          });
-          return;
-        }
-        // Same user retrying chunk 0 — refresh activity and continue.
-        existingSession.lastActivityAt = Date.now();
-      } else {
-        // Pre-generate the job UUID now so it can be reused as the finalize
-        // jobId — this lets the same DB row transition uploading→queued rather
-        // than spawning a second row per upload.
+      if (!existingSession || !existingSession.serverIssued) {
+        // No server-issued session — client supplied their own UUID or skipped start.
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(403).json({
+          error: "upload_not_started",
+          details: "No server-issued upload session found for this uploadId. Call POST /api/datasets/upload/start first.",
+        });
+        return;
+      }
+      if (existingSession.userId !== userId) {
+        // Different user trying to claim an already-owned uploadId — reject.
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(409).json({
+          error: "upload_conflict",
+          details: "An upload with this uploadId is already in progress by another user.",
+        });
+        return;
+      }
+      if (!existingSession.sessionJobId) {
+        // First time chunk-0 is received for this session — generate the
+        // jobId now so the same DB row transitions uploading→queued.
         const sessionJobId = crypto.randomUUID();
-        uploadSessions.set(uploadId, { userId, sessionJobId, lastActivityAt: Date.now() });
+        existingSession.sessionJobId = sessionJobId;
+        existingSession.lastActivityAt = Date.now();
         // Await so in-memory and DB state advance together (non-fatal on failure).
         await createUploadSessionRow(sessionJobId, userId, uploadId, totalChunks);
+      } else {
+        // Same user retrying chunk 0 — refresh activity and continue.
+        existingSession.lastActivityAt = Date.now();
       }
     } else {
       // Subsequent chunks: verify ownership.
@@ -2603,7 +2625,9 @@ router.post(
         .where(eq(uploadJobsTable.uploadId, uploadId));
 
         if (dbJob) {
-          session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, lastActivityAt: Date.now() };
+          // Session was originally created via the server-owned start endpoint;
+          // mark it as such so the ownership chain remains intact after restart.
+          session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, serverIssued: true, lastActivityAt: Date.now() };
           uploadSessions.set(uploadId, session);
         }
       }
@@ -2678,6 +2702,7 @@ router.get(
         .select({
           userId: uploadJobsTable.userId,
           sessionJobId: uploadJobsTable.id,
+          chunksReceived: uploadJobsTable.chunksReceived,
         })
         .from(uploadJobsTable)
         .where(eq(uploadJobsTable.uploadId, uploadId));
@@ -2685,7 +2710,8 @@ router.get(
       if (dbJob) {
         // Restore the in-memory session so future requests in this process
         // take the fast path.
-        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, lastActivityAt: Date.now() };
+        // Mark server-issued so the ownership chain survives a server restart.
+        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, serverIssued: true, lastActivityAt: Date.now() };
         uploadSessions.set(uploadId, session);
         dbChunksReceived = dbJob.chunksReceived ?? null;
       }
@@ -2726,9 +2752,19 @@ router.get(
           if (!Number.isNaN(idx)) receivedChunks.push(idx);
         }
       }
-    } else if (dbChunksReceived !== null && dbChunksReceived > 0) {
-      // Directory inaccessible — synthesise from DB count as a last resort.
-    for (let i = 0; i < totalChunks; i++) {
+    }
+
+    // DB synthesis fallback — covers two scenarios:
+    //   1. Disk directory inaccessible (e.g. /tmp wiped after restart).
+    //   2. Disk accessible but no chunk files found for this uploadId
+    //      (post-restart scenario where /tmp was cleared but DB row survived).
+    // DB count is server-owned, so synthesising from it is safe. This is
+    // distinct from trusting a CLIENT-supplied list — the risk the disk-
+    // primary approach guards against.
+    if (receivedChunks.length === 0 && dbChunksReceived !== null && dbChunksReceived > 0) {
+      for (let i = 0; i < dbChunksReceived; i++) {
+        receivedChunks.push(i);
+      }
     }
 
     receivedChunks.sort((a, b) => a - b);
@@ -2794,7 +2830,8 @@ router.post(
         .where(eq(uploadJobsTable.uploadId, uploadId));
 
       if (dbJob) {
-        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, lastActivityAt: Date.now() };
+        // Mark server-issued — only legitimately started sessions have DB rows.
+        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, serverIssued: true, lastActivityAt: Date.now() };
         uploadSessions.set(uploadId, session);
       }
     }
@@ -2805,6 +2842,10 @@ router.post(
     }
     if (session.userId !== userId) {
       res.status(403).json({ error: "forbidden", details: "Upload session belongs to a different user." });
+      return;
+    }
+    if (!session.serverIssued) {
+      res.status(403).json({ error: "upload_not_started", details: "This upload was not registered via the server. Call POST /api/datasets/upload/start first." });
       return;
     }
     // Refresh activity so the session is never swept while finalize is underway.
@@ -2892,7 +2933,7 @@ router.post(
       } catch (guardErr) {
         // DB unavailable — fall back to the in-memory guard rather than
         // blocking uploads (matches persistJobToDB's non-fatal policy).
-      const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
+        const errMsg = guardErr instanceof Error ? guardErr.message : String(guardErr);
         logger.warn({ jobId, uploadId, errMsg }, `[finalize] DB idempotency guard failed, falling back to in-memory guard: ${errMsg}`);
       }
     } catch (err) {

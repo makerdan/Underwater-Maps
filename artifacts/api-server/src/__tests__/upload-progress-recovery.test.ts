@@ -111,7 +111,12 @@ beforeEach(() => {
 
 describe("Upload progress recovery — DB-backed session tracking", () => {
   it("chunk 0 inserts an 'uploading' DB row with chunksReceived = 1", async () => {
-    const uploadId = `recovery-test-chunk0-${Date.now()}`;
+    const startRes = await request(app)
+      .post("/api/datasets/upload/start")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(startRes.status).toBe(200);
+    const uploadId = (startRes.body as { uploadId: string }).uploadId;
 
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
@@ -143,7 +148,12 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
   });
 
   it("chunk N > 0 calls updateChunksReceivedInDB with chunkIndex + 1", async () => {
-    const uploadId = `recovery-test-chunk1-${Date.now()}`;
+    const startRes2 = await request(app)
+      .post("/api/datasets/upload/start")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(startRes2.status).toBe(200);
+    const uploadId = (startRes2.body as { uploadId: string }).uploadId;
 
     // Send chunk 0 first to create the in-memory session.
     const res0 = await request(app)
@@ -304,7 +314,10 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
       .set("x-e2e-user-id", E2E_USER);
 
     expect(statusRes.status).toBe(200);
-    expect(statusRes.body.receivedChunks).toEqual([0]); // chunksReceived = 1 → index 0
+    // DB synthesis fallback: no chunk file exists on disk (no chunk was actually sent),
+    // but the DB row has chunksReceived=1, so the server synthesises [0].
+    // This tests that the DB-backed session rehydration works correctly.
+    expect(statusRes.body.receivedChunks).toEqual([0]);
 
     // Step 3: send chunk 1 — this should now hit the in-memory fast path
     // (session was restored by the status call above).  No DB select needed.

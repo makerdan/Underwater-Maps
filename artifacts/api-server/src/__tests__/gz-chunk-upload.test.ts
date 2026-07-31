@@ -150,7 +150,12 @@ describe("chunked .gz upload — regression: parseWorker must use baseFileName n
     "completes with job status 'done' when a .gz-wrapped XYZ file is uploaded via the chunked path",
     async () => {
       const gzBuf = makeGzXyz();
-      const uploadId = crypto.randomUUID();
+      // Obtain a server-issued uploadId before sending any chunks.
+      const startRes = await request(app)
+        .post("/api/datasets/upload/start")
+        .set(AUTHED_HEADER);
+      expect(startRes.status).toBe(200);
+      const uploadId = (startRes.body as { uploadId: string }).uploadId;
 
       // Step 1: upload the entire gz buffer as chunk 0 of 1.
       const chunkRes = await request(app)

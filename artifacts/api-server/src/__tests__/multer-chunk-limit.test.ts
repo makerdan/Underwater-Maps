@@ -76,11 +76,18 @@ describe("POST /api/datasets/upload/chunk — 6 MB per-chunk limit", () => {
 
   it("returns 200 when a valid chunk within the 6 MB limit is accepted", async () => {
     const validChunk = Buffer.alloc(1024, 0x41);
+    // Obtain a server-issued uploadId before sending the chunk.
+    const startRes = await request(app)
+      .post("/api/datasets/upload/start")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(startRes.status).toBe(200);
+    const uploadId = (startRes.body as { uploadId: string }).uploadId;
     const res = await request(app)
       .post("/api/datasets/upload/chunk")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
-      .field("uploadId", "test-upload-chunk-ok-01234567")
+      .field("uploadId", uploadId)
       .field("chunkIndex", "0")
       .field("totalChunks", "1")
       .attach("file", validChunk, "small.csv");

@@ -161,6 +161,15 @@ function finalize(uploadId: string) {
     .send({ uploadId, fileName: "survey.xyz", totalChunks: 1, resolution: 32 });
 }
 
+/** Start a server-issued upload session and return the uploadId. */
+async function startUpload(): Promise<string> {
+  const res = await request(app)
+    .post("/api/datasets/upload/start")
+    .set(AUTH);
+  expect(res.status, `startUpload failed: ${JSON.stringify(res.body)}`).toBe(200);
+  return (res.body as { uploadId: string }).uploadId;
+}
+
 /** Wait until the job reaches a terminal state so no work leaks across tests. */
 async function waitForJobDone(jobId: string): Promise<void> {
   const deadline = Date.now() + 10_000;
@@ -184,7 +193,7 @@ describe("POST /datasets/upload/chunk/finalize — double-finalize guard", () =>
   });
 
   it("runs processing exactly once when two finalize requests race", async () => {
-    const uploadId = crypto.randomUUID();
+    const uploadId = await startUpload();
     await uploadChunk(uploadId);
 
     const [first, second] = await Promise.all([finalize(uploadId), finalize(uploadId)]);
@@ -202,7 +211,7 @@ describe("POST /datasets/upload/chunk/finalize — double-finalize guard", () =>
   }, 15_000);
 
   it("returns 409 with the existing jobId on a sequential repeat finalize", async () => {
-    const uploadId = crypto.randomUUID();
+    const uploadId = await startUpload();
     await uploadChunk(uploadId);
 
     const first = await finalize(uploadId);
@@ -218,7 +227,7 @@ describe("POST /datasets/upload/chunk/finalize — double-finalize guard", () =>
   }, 15_000);
 
   it("DB guard blocks finalize when the row is already processing, even without in-memory state (restart scenario)", async () => {
-    const uploadId = crypto.randomUUID();
+    const uploadId = await startUpload();
     await uploadChunk(uploadId);
 
     // Simulate the state after a server restart: the DB row for this upload
