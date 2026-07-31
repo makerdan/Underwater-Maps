@@ -64,6 +64,7 @@ export async function createTestDb(): Promise<TestContext> {
       user_id     text NOT NULL,
       parent_id   uuid REFERENCES dataset_folders(id) ON DELETE CASCADE,
       name        text NOT NULL,
+      area_request_id text,
       created_at  timestamp NOT NULL DEFAULT now(),
       updated_at  timestamp NOT NULL DEFAULT now()
     );
@@ -100,6 +101,7 @@ export async function createTestDb(): Promise<TestContext> {
       error_message text,
       display_label text,
       folder_id    uuid REFERENCES dataset_folders(id) ON DELETE SET NULL,
+      area_request_id text,
       dataset_id   uuid REFERENCES custom_datasets(id) ON DELETE SET NULL
     );
 

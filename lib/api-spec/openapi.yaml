@@ -2429,6 +2429,12 @@ paths:
           schema:
             type: string
           description: Catalog dataset ID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CatalogSaveBody"
       responses:
         "201":
           description: Save job created (status queued or ready)
@@ -7388,6 +7394,30 @@ components:
         label:
           type: string
           description: Human-readable source label
+    AreaRequestContext:
+      type: object
+      description: |
+        Identifies the originating area search (bbox / point-radius /
+        federated "find data" request) for a save. All saves issued from one
+        search share the same client-generated `id`; when more than two saves
+        carry the same id, the server auto-creates a dataset folder named
+        after `label` and routes every save from that request into it.
+      required: [id, label]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Client-generated UUID shared by all saves from one area search
+        label:
+          type: string
+          maxLength: 200
+          description: Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder
+    CatalogSaveBody:
+      type: object
+      description: Optional request body for POST /datasets/catalog/{id}/save
+      properties:
+        areaRequest:
+          $ref: "#/components/schemas/AreaRequestContext"
     FederatedSaveBody:
       type: object
       description: Request body for POST /search/federated/save
@@ -7395,6 +7425,8 @@ components:
       properties:
         result:
           $ref: "#/components/schemas/FederatedSearchResult"
+        areaRequest:
+          $ref: "#/components/schemas/AreaRequestContext"
     FederatedSearchResponse:
       type: object
       required: [results, sources]
@@ -7464,6 +7496,8 @@ components:
       properties:
         result:
           $ref: "#/components/schemas/NceiPortalResult"
+        areaRequest:
+          $ref: "#/components/schemas/AreaRequestContext"
       required:
         - result
 

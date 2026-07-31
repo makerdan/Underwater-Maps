@@ -96,5 +96,6 @@
 - [Terrain shader palette dominance](terrain-shader-palette-dominance.md) — palette hue is the base color; textures are clamped luminance detail, never a multiplier; guarded by a TS-mirror test.
 - [mark_task_complete validation window](mark-complete-validation-window.md) — completion workflow polls ~10.5 min but full suite takes 45+ min; never re-call immediately, drain orphaned lock waiters, verify run logs, then finalize with skip reason.
 - [Tesseract OCR upscale requirement](tesseract-ocr-upscale.md) — LSTM silently returns empty on <1200 px images; upscale to 2400 px short-side; labels must sit ≥60 px clear of any drawn lines in test fixtures.
+- [lib/db test DDL drift](lib-db-testdb-ddl-drift.md) — lib/db constraint tests create tables from hand-written SQL in test-db.ts, not the Drizzle schema; every new schema column must be added there too or all inserts fail.
 - [Server-owned uploadIds in tests](server-owned-upload-ids.md) — chunk-0 with a client-generated UUID is rejected 403 upload_not_started; test helpers must call POST /api/datasets/upload/start first and use the returned uploadId.
 - [chunk-status DB synthesis rule](chunk-status-db-synthesis.md) — synthesise [0..N-1] from DB chunksReceived ONLY when the session was rehydrated from DB (restart); live in-memory session + empty dir must return [] so the client re-uploads.

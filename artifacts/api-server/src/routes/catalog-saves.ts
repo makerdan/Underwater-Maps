@@ -54,6 +54,10 @@ import {
   type CatalogSeedEntry,
 } from "../lib/catalogSeeder.js";
 import {
+  AreaRequestContextSchema,
+  applyAreaRequestGrouping,
+} from "../lib/areaRequestFolders.js";
+import {
   buildTerrainGrid,
   buildGebcoTerrainForBbox,
   buildNceiTerrainForBbox,
@@ -417,8 +421,18 @@ router.post("/datasets/point-radius-query", validateBody(PointRadiusQueryBody, "
 // POST /datasets/catalog/:id/save  (auth-gated)
 // ---------------------------------------------------------------------------
 
-router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
+// Optional body: carries the originating area-request context so the server
+// can auto-group >2 saves from one area search into a folder. Older clients
+// send no body at all, which parses as `undefined`.
+const CatalogSaveBodySchema = z
+  .object({
+    areaRequest: AreaRequestContextSchema.optional(),
+  })
+  .optional();
+
+router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, validateBody(CatalogSaveBodySchema, "POST /api/datasets/catalog/:id/save"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
+  const areaRequest = (res.locals.parsedBody as z.infer<typeof CatalogSaveBodySchema>)?.areaRequest ?? null;
   const idParsed = CatalogIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     res.status(400).json({
@@ -464,6 +478,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, as
       userId,
       catalogId,
       status: "processing",
+      areaRequestId: areaRequest?.id ?? null,
     })
     .onConflictDoNothing()
     .returning();
@@ -481,6 +496,15 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, as
     }
     res.status(200).json(validateResponse(GetDatasetsMySavesResponseItem, formatSaveRow(conflicted, entry), "POST /api/datasets/catalog/:id/save (concurrent)"));
     return;
+  }
+
+  // Auto-folder grouping: when this request now has >2 saves, create (or
+  // reuse) a folder for the area request and move all of its saves into it.
+  // Runs before the materialize kickoff so the dataset row lands in the
+  // folder directly in the common case.
+  if (areaRequest) {
+    const groupFolderId = await applyAreaRequestGrouping(userId, areaRequest);
+    if (groupFolderId && created.folderId == null) created.folderId = groupFolderId;
   }
 
   // Kick off materialization. Fire-and-forget so the HTTP response returns
@@ -510,14 +534,6 @@ export async function materializeSave(
   userId: string,
   entry: CatalogSeedEntry,
 ): Promise<void> {
-  // Read the save's folderId so the materialized dataset lands in the same
-  // folder as the catalog save that triggered it.
-  const [saveRow] = await db
-    .select({ folderId: userCatalogSavesTable.folderId })
-    .from(userCatalogSavesTable)
-    .where(eq(userCatalogSavesTable.id, saveId));
-  const saveFolderId = saveRow?.folderId ?? null;
-
   try {
     try {
       const materialized = await buildCatalogGrids(entry);
@@ -529,6 +545,16 @@ export async function materializeSave(
       }
 
       const { terrain, overview } = materialized;
+
+      // Read the save's folderId so the materialized dataset lands in the
+      // same folder as the catalog save that triggered it. Read AFTER the
+      // (potentially slow) grid build so an auto-folder created for the
+      // save's area request while it was downloading/parsing is honored.
+      const [saveRow] = await db
+        .select({ folderId: userCatalogSavesTable.folderId })
+        .from(userCatalogSavesTable)
+        .where(eq(userCatalogSavesTable.id, saveId));
+      const saveFolderId = saveRow?.folderId ?? null;
 
       // Insert the materialized grids into the user's dataset store. We let
       // Postgres allocate the row UUID, then patch the in-memory grid copies
@@ -572,6 +598,23 @@ export async function materializeSave(
           errorMessage: null,
         })
         .where(eq(userCatalogSavesTable.id, saveId));
+
+      // Folder re-sync: an area-request auto-folder may have been stamped
+      // onto the save row between the pre-insert folderId read above and the
+      // datasetId link (the grouping pass only moves datasets it can see via
+      // datasetId). Re-read and align the dataset row so no straggler is
+      // left at root.
+      const [postRow] = await db
+        .select({ folderId: userCatalogSavesTable.folderId })
+        .from(userCatalogSavesTable)
+        .where(eq(userCatalogSavesTable.id, saveId));
+      const finalFolderId = postRow?.folderId ?? null;
+      if (finalFolderId !== saveFolderId) {
+        await db
+          .update(customDatasetsTable)
+          .set({ folderId: finalFolderId })
+          .where(eq(customDatasetsTable.id, created.id));
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Materialization failed";
       logger.warn({ saveId, entryId: entry.id, message }, `[catalog-saves] materialize ${saveId} (${entry.id}) failed: ${message}`);

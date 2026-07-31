@@ -10,11 +10,16 @@ export const datasetFoldersTable = pgTable(
       onDelete: "cascade",
     }),
     name: text("name").notNull(),
+    // Set when the folder was auto-created for a multi-dataset area request
+    // (client-generated request UUID). Lets later saves from the same
+    // request find their folder exactly, without guessing from save rows.
+    areaRequestId: text("area_request_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
     index("dataset_folders_user_id_idx").on(t.userId),
+    index("dataset_folders_area_request_idx").on(t.userId, t.areaRequestId),
     // Root-level folders (parent_id IS NULL): unique by (user_id, lower(name))
     // using a partial index so NULL is not treated as distinct from itself.
     uniqueIndex("dataset_folders_root_name_uniq")

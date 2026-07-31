@@ -326,6 +326,9 @@ describe("FindDataPanel — External sources (federated search)", () => {
           metadataUrl: "https://example.org/sitka-meta",
           wcsAvailable: true,
         },
+        // Area-request grouping context: same search → same request id, so
+        // the server can auto-folder >2 saves from one search.
+        areaRequest: { id: expect.any(String), label: "sitka" },
       },
     });
     expect(federatedSaveMutateAsync).not.toHaveBeenCalled();
@@ -338,7 +341,10 @@ describe("FindDataPanel — External sources (federated search)", () => {
     fireEvent.click(within(card).getByTestId("federated-save-button"));
     await waitFor(() => expect(federatedSaveMutateAsync).toHaveBeenCalledTimes(1));
     expect(federatedSaveMutateAsync).toHaveBeenCalledWith({
-      data: { result: MNDNR_ITEM },
+      data: {
+        result: MNDNR_ITEM,
+        areaRequest: { id: expect.any(String), label: "vermilion" },
+      },
     });
     expect(nceiSaveMutateAsync).not.toHaveBeenCalled();
   });

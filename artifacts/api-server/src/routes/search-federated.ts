@@ -23,6 +23,10 @@ import { registerCache } from "../lib/cacheRegistry.js";
 import { invalidateCatalogCache, type CatalogSeedEntry } from "../lib/catalogSeeder.js";
 import { materializeSave, formatSaveRow } from "./catalog-saves.js";
 import {
+  AreaRequestContextSchema,
+  applyAreaRequestGrouping,
+} from "../lib/areaRequestFolders.js";
+import {
   runFederatedSearch,
   listFederatedSources,
   deriveImportability,
@@ -174,6 +178,7 @@ const FederatedSaveResultSchema = z.object({
 
 const FederatedSaveBodySchema = z.object({
   result: FederatedSaveResultSchema,
+  areaRequest: AreaRequestContextSchema.optional(),
 });
 
 /** Sanitize a federated result id into a URL/DB-safe slug segment. */
@@ -192,6 +197,7 @@ router.post(
   asyncHandler(async (req, res): Promise<void> => {
     const userId = (req as AuthenticatedRequest).clerkUserId;
     const r = res.locals.parsedBody.result as z.infer<typeof FederatedSaveResultSchema>;
+    const areaRequest = (res.locals.parsedBody as z.infer<typeof FederatedSaveBodySchema>).areaRequest ?? null;
 
     const coverageBbox = r.coverageBbox ?? null;
     const endpointUrl = r.endpointUrl ?? null;
@@ -281,12 +287,20 @@ router.post(
 
     const [created] = await db
       .insert(userCatalogSavesTable)
-      .values({ userId, catalogId, status: "processing" })
+      .values({ userId, catalogId, status: "processing", areaRequestId: areaRequest?.id ?? null })
       .returning();
 
     if (!created) {
       res.status(500).json({ error: "db_error", details: "Failed to create save record" });
       return;
+    }
+
+    // Auto-folder grouping for multi-dataset area requests (>2 saves from
+    // one Find Data search). Runs before the materialize kickoff so the
+    // dataset row lands in the folder directly in the common case.
+    if (areaRequest) {
+      const groupFolderId = await applyAreaRequestGrouping(userId, areaRequest);
+      if (groupFolderId && created.folderId == null) created.folderId = groupFolderId;
     }
 
     void materializeSave(created.id, userId, entry);

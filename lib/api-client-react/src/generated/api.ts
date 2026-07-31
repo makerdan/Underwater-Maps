@@ -23,6 +23,7 @@ import type {
   AdminBucketMonitor200,
   AdminLargeDatasetsDiff200,
   ApiError,
+  CatalogSaveBody,
   CatchEntry,
   CatchEntryInput,
   CatchEntryPatch,
@@ -5173,14 +5174,16 @@ export const getPostDatasetsCatalogIdSaveUrl = (id: string,) => {
  * Queues a catalog dataset for caching and associates it with the authenticated user's account. Returns a save job record.
  * @summary Save a catalog dataset to the user's account
  */
-export const postDatasetsCatalogIdSave = async (id: string, options?: RequestInit): Promise<UserCatalogSave> => {
+export const postDatasetsCatalogIdSave = async (id: string,
+    catalogSaveBody?: CatalogSaveBody, options?: RequestInit): Promise<UserCatalogSave> => {
 
   return customFetch<UserCatalogSave>(getPostDatasetsCatalogIdSaveUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      catalogSaveBody,)
   }
 );}
 
@@ -5188,8 +5191,8 @@ export const postDatasetsCatalogIdSave = async (id: string, options?: RequestIni
 
 
 export const getPostDatasetsCatalogIdSaveMutationOptions = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, TError,{id: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, TError,{id: string;data?: BodyType<CatalogSaveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, TError,{id: string;data?: BodyType<CatalogSaveBody>}, TContext> => {
 
 const mutationKey = ['postDatasetsCatalogIdSave'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -5201,10 +5204,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, {id: string}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, {id: string;data?: BodyType<CatalogSaveBody>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  postDatasetsCatalogIdSave(id,requestOptions)
+          return  postDatasetsCatalogIdSave(id,data,requestOptions)
         }
 
 
@@ -5215,18 +5218,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type PostDatasetsCatalogIdSaveMutationResult = NonNullable<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>>
-
+    export type PostDatasetsCatalogIdSaveMutationBody = BodyType<CatalogSaveBody> | undefined
     export type PostDatasetsCatalogIdSaveMutationError = ErrorType<ApiError>
 
     /**
  * @summary Save a catalog dataset to the user's account
  */
 export const usePostDatasetsCatalogIdSave = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>, TError,{id: string;data?: BodyType<CatalogSaveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof postDatasetsCatalogIdSave>>,
         TError,
-        {id: string},
+        {id: string;data?: BodyType<CatalogSaveBody>},
         TContext
       > => {
       return useMutation(getPostDatasetsCatalogIdSaveMutationOptions(options));

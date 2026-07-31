@@ -15,6 +15,11 @@ export const userCatalogSavesTable = pgTable("user_catalog_saves", {
   // `name` in the My Saves list. Null means "use the catalog name".
   displayLabel: text("display_label"),
   folderId: uuid("folder_id").references(() => datasetFoldersTable.id, { onDelete: "set null" }),
+  // Groups saves that originated from one area search (bbox / point-radius /
+  // federated "find data" request). Client-generated id shared by every save
+  // from the same search; when >2 saves carry the same id, the server
+  // auto-creates a folder for the request and routes all of its saves into it.
+  areaRequestId: text("area_request_id"),
   // When the save is materialized into the user's per-account dataset store,
   // this links back to the resulting custom_datasets row. Lets the client load
   // saved catalog datasets through the unified /user/datasets/:id/{terrain,overview}
@@ -24,6 +29,7 @@ export const userCatalogSavesTable = pgTable("user_catalog_saves", {
   }),
 }, (table) => [
   index("user_catalog_saves_user_id_idx").on(table.userId),
+  index("user_catalog_saves_area_request_idx").on(table.userId, table.areaRequestId),
   uniqueIndex("user_catalog_saves_user_catalog_uniq").on(table.userId, table.catalogId),
 ]);
 

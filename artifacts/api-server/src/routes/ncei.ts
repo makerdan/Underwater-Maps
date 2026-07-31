@@ -53,6 +53,10 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { invalidateCatalogCache, type CatalogSeedEntry } from "../lib/catalogSeeder.js";
 import { materializeSave, formatSaveRow } from "./catalog-saves.js";
+import {
+  AreaRequestContextSchema,
+  applyAreaRequestGrouping,
+} from "../lib/areaRequestFolders.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 
 const router = Router();
@@ -586,6 +590,7 @@ const NceiPortalResultSchema = z.object({
 
 const NceiSaveBodySchema = z.object({
   result: NceiPortalResultSchema,
+  areaRequest: AreaRequestContextSchema.optional(),
 });
 
 /** Sanitize an NCEI record id into a URL/DB-safe slug segment. */
@@ -622,6 +627,7 @@ router.post("/ncei/save", requireAuth, validateBody(NceiSaveBodySchema, "POST /a
 
   // Coerce optional Zod fields (undefined) → null to satisfy NceiPortalResult
   const r = res.locals.parsedBody.result;
+  const areaRequest = (res.locals.parsedBody as z.infer<typeof NceiSaveBodySchema>).areaRequest ?? null;
 
   // Re-compute wcsAvailable server-side from the bbox rather than trusting
   // the client-supplied flag. This prevents a crafted request from forcing
@@ -700,12 +706,20 @@ router.post("/ncei/save", requireAuth, validateBody(NceiSaveBodySchema, "POST /a
 
   const [created] = await db
     .insert(userCatalogSavesTable)
-    .values({ userId, catalogId, status: "processing" })
+    .values({ userId, catalogId, status: "processing", areaRequestId: areaRequest?.id ?? null })
     .returning();
 
   if (!created) {
     res.status(500).json({ error: "db_error", details: "Failed to create save record" });
     return;
+  }
+
+  // Auto-folder grouping for multi-dataset area requests (>2 saves from one
+  // Find Data search). Runs before the materialize kickoff so the dataset
+  // row lands in the folder directly in the common case.
+  if (areaRequest) {
+    const groupFolderId = await applyAreaRequestGrouping(userId, areaRequest);
+    if (groupFolderId && created.folderId == null) created.folderId = groupFolderId;
   }
 
   void materializeSave(created.id, userId, entry);

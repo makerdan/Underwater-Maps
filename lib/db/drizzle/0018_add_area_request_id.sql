@@ -1,0 +1,2 @@
+ALTER TABLE "user_catalog_saves" ADD COLUMN "area_request_id" text;--> statement-breakpoint
+CREATE INDEX "user_catalog_saves_area_request_idx" ON "user_catalog_saves" USING btree ("user_id","area_request_id");

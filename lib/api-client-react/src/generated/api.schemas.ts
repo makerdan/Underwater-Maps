@@ -2287,10 +2287,36 @@ export interface FederatedSourceInfo {
 }
 
 /**
+ * Identifies the originating area search (bbox / point-radius /
+federated "find data" request) for a save. All saves issued from one
+search share the same client-generated `id`; when more than two saves
+carry the same id, the server auto-creates a dataset folder named
+after `label` and routes every save from that request into it.
+
+ */
+export interface AreaRequestContext {
+  /** Client-generated UUID shared by all saves from one area search */
+  id: string;
+  /**
+     * Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder
+     * @maxLength 200
+     */
+  label: string;
+}
+
+/**
+ * Optional request body for POST /datasets/catalog/{id}/save
+ */
+export interface CatalogSaveBody {
+  areaRequest?: AreaRequestContext;
+}
+
+/**
  * Request body for POST /search/federated/save
  */
 export interface FederatedSaveBody {
   result: FederatedSearchResult;
+  areaRequest?: AreaRequestContext;
 }
 
 export interface FederatedSearchResponse {
@@ -2337,6 +2363,7 @@ export interface NceiPortalResult {
  */
 export interface NceiPortalSaveBody {
   result: NceiPortalResult;
+  areaRequest?: AreaRequestContext;
 }
 
 export type DatasetCatalogEntryDataType = typeof DatasetCatalogEntryDataType[keyof typeof DatasetCatalogEntryDataType];

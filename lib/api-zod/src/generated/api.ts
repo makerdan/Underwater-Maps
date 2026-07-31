@@ -3445,6 +3445,10 @@ Idempotent — returns the existing save row if one already exists.
 
  * @summary Save an importable federated search result to the user's library
  */
+export const postSearchFederatedSaveBodyAreaRequestLabelMax = 200;
+
+
+
 export const PostSearchFederatedSaveBody = zod.object({
   "result": zod.object({
   "id": zod.string().describe('Globally unique id (\"<sourceId>:<upstream id>\")'),
@@ -3464,7 +3468,11 @@ export const PostSearchFederatedSaveBody = zod.object({
   "resolutionMMax": zod.number().nullable(),
   "importable": zod.boolean().describe('True when the catalog fetch-strategy derivation maps this result to a working fetcher'),
   "importKind": zod.string().nullable().describe('Fetch-strategy kind when importable (e.g. \"ncei-wcs\")')
-})
+}),
+  "areaRequest": zod.object({
+  "id": zod.string().uuid().describe('Client-generated UUID shared by all saves from one area search'),
+  "label": zod.string().max(postSearchFederatedSaveBodyAreaRequestLabelMax).describe('Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder')
+}).optional().describe('Identifies the originating area search (bbox \/ point-radius \/\nfederated \"find data\" request) for a save. All saves issued from one\nsearch share the same client-generated `id`; when more than two saves\ncarry the same id, the server auto-creates a dataset folder named\nafter `label` and routes every save from that request into it.\n')
 }).describe('Request body for POST \/search\/federated\/save')
 
 export const PostSearchFederatedSaveResponse = zod.object({
@@ -3554,6 +3562,10 @@ existing save row if one is already in progress or ready.
 
  * @summary Save an NCEI portal result to the user's library
  */
+export const postNceiSaveBodyAreaRequestLabelMax = 200;
+
+
+
 export const PostNceiSaveBody = zod.object({
   "result": zod.object({
   "id": zod.string().describe('NCEI Geoportal record id (e.g. \"gov.noaa.ngdc.mgg.dem:703\")'),
@@ -3570,7 +3582,11 @@ export const PostNceiSaveBody = zod.object({
 }),
   "metadataUrl": zod.string().nullish().describe('Link to the NCEI metadata record or landing page'),
   "wcsAvailable": zod.boolean().describe('True when the result\'s bbox intersects NCEI WCS mosaic coverage\n(BAG Mosaic for US coastal high-res data, DEM Global Mosaic for\nglobal ocean coverage). False means the dataset cannot be\nmaterialised in BathyScan yet.\n')
-}).describe('A bathymetric survey dataset discovered via the NCEI Bathymetry Geoportal')
+}).describe('A bathymetric survey dataset discovered via the NCEI Bathymetry Geoportal'),
+  "areaRequest": zod.object({
+  "id": zod.string().uuid().describe('Client-generated UUID shared by all saves from one area search'),
+  "label": zod.string().max(postNceiSaveBodyAreaRequestLabelMax).describe('Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder')
+}).optional().describe('Identifies the originating area search (bbox \/ point-radius \/\nfederated \"find data\" request) for a save. All saves issued from one\nsearch share the same client-generated `id`; when more than two saves\ncarry the same id, the server auto-creates a dataset folder named\nafter `label` and routes every save from that request into it.\n')
 }).describe('Request body for POST \/ncei\/save')
 
 export const PostNceiSaveResponse = zod.object({
@@ -3615,6 +3631,17 @@ export const PostNceiSaveResponse = zod.object({
 export const PostDatasetsCatalogIdSaveParams = zod.object({
   "id": zod.coerce.string().describe('Catalog dataset ID')
 })
+
+export const postDatasetsCatalogIdSaveBodyAreaRequestLabelMax = 200;
+
+
+
+export const PostDatasetsCatalogIdSaveBody = zod.object({
+  "areaRequest": zod.object({
+  "id": zod.string().uuid().describe('Client-generated UUID shared by all saves from one area search'),
+  "label": zod.string().max(postDatasetsCatalogIdSaveBodyAreaRequestLabelMax).describe('Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder')
+}).optional().describe('Identifies the originating area search (bbox \/ point-radius \/\nfederated \"find data\" request) for a save. All saves issued from one\nsearch share the same client-generated `id`; when more than two saves\ncarry the same id, the server auto-creates a dataset folder named\nafter `label` and routes every save from that request into it.\n')
+}).describe('Optional request body for POST \/datasets\/catalog\/{id}\/save')
 
 
 /**

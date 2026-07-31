@@ -1664,6 +1664,37 @@ const FederatedSourcesSummary: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
+// Area-request labels
+// ---------------------------------------------------------------------------
+
+/** Best-effort UUID for area-request grouping (crypto.randomUUID when available). */
+function newAreaRequestId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // RFC-4122-ish v4 fallback for older WebViews; the server only requires a
+  // UUID-shaped string, uniqueness per search is what matters.
+  return "xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx".replace(/x/g, () =>
+    Math.floor(Math.random() * 16).toString(16),
+  );
+}
+
+/** "57.05°N, 135.33°W" style coordinate summary for auto-folder names. */
+function formatLatLonLabel(lat: number, lon: number): string {
+  const latStr = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"}`;
+  const lonStr = `${Math.abs(lon).toFixed(2)}°${lon >= 0 ? "E" : "W"}`;
+  return `${latStr}, ${lonStr}`;
+}
+
+/** Human-readable label for a "west,south,east,north" bbox string. */
+function bboxStringLabel(bboxStr: string): string | null {
+  const parts = bboxStr.split(",").map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [west, south, east, north] = parts as [number, number, number, number];
+  return `Area ${formatLatLonLabel((south + north) / 2, (west + east) / 2)}`;
+}
+
+// ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
@@ -1837,6 +1868,56 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     return `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
   }, [coordSearchArea, currentDatasetId, mySaves]);
 
+  // -------------------------------------------------------------------------
+  // Area-request grouping context.
+  //
+  // Every save issued from one area search carries the same client-generated
+  // request id; when more than two saves share an id, the server auto-creates
+  // a dataset folder named after the search and routes all of the request's
+  // saves (including ones still downloading/processing) into it. The id is
+  // regenerated whenever the effective search context changes, so each
+  // distinct search gets its own folder.
+  // -------------------------------------------------------------------------
+  const areaRequestRef = useRef<{ key: string; id: string } | null>(null);
+  const currentAreaSearch = useMemo<{ key: string; label: string } | null>(() => {
+    if (tab === "ncei") {
+      const q = debouncedNceiQuery.trim();
+      if (q) return { key: `ncei:q:${q.toLowerCase()}`, label: q };
+      if (viewportBboxString) {
+        const label = coordSearchArea
+          ? `Area ${formatLatLonLabel(coordSearchArea.lat, coordSearchArea.lon)} (${coordSearchArea.radiusKm} km)`
+          : bboxStringLabel(viewportBboxString);
+        if (label) return { key: `ncei:bbox:${viewportBboxString}`, label };
+      }
+      return null;
+    }
+    // Search tab — catalog + federated results are keyed by the query text.
+    const q = debouncedQuery.trim();
+    if (q) return { key: `search:q:${q.toLowerCase()}`, label: q };
+    return null;
+  }, [tab, debouncedQuery, debouncedNceiQuery, viewportBboxString, coordSearchArea]);
+
+  const getAreaRequest = useCallback((): { id: string; label: string } | undefined => {
+    if (!currentAreaSearch) return undefined;
+    if (!areaRequestRef.current || areaRequestRef.current.key !== currentAreaSearch.key) {
+      areaRequestRef.current = { key: currentAreaSearch.key, id: newAreaRequestId() };
+    }
+    return { id: areaRequestRef.current.id, label: currentAreaSearch.label };
+  }, [currentAreaSearch]);
+
+  // When a save response comes back stamped with a folderId, an auto-folder
+  // was created (or reused) server-side — refresh the folder tree and the
+  // user-datasets list so the new folder and any moved items appear
+  // immediately in the Dataset Library and My Saves views.
+  const handleSaveFolderResponse = useCallback(
+    (row: UserCatalogSave | undefined) => {
+      if (!row?.folderId) return;
+      void qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() });
+      void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+    },
+    [qc],
+  );
+
   // Reset NCEI pagination whenever the query or bbox seed changes
   useEffect(() => {
     nceiFromRef.current = 1;
@@ -1901,7 +1982,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       if (!isSignedIn) return;
       setNceiSavingIds((s) => new Set(s).add(result.id));
       try {
-        await nceiSaveMutation.mutateAsync({ data: { result } });
+        const areaRequest = getAreaRequest();
+        const row = await nceiSaveMutation.mutateAsync({
+          data: { result, ...(areaRequest ? { areaRequest } : {}) },
+        });
+        handleSaveFolderResponse(row);
         void refetchSaves();
       } finally {
         setNceiSavingIds((s) => {
@@ -1911,7 +1996,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         });
       }
     },
-    [isSignedIn, nceiSaveMutation, refetchSaves],
+    [isSignedIn, nceiSaveMutation, refetchSaves, getAreaRequest, handleSaveFolderResponse],
   );
 
   // Generic save for importable non-NCEI federated results — goes through
@@ -1922,7 +2007,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       if (!isSignedIn) return;
       setNceiSavingIds((s) => new Set(s).add(item.id));
       try {
-        await federatedSaveMutation.mutateAsync({ data: { result: item } });
+        const areaRequest = getAreaRequest();
+        const row = await federatedSaveMutation.mutateAsync({
+          data: { result: item, ...(areaRequest ? { areaRequest } : {}) },
+        });
+        handleSaveFolderResponse(row);
         void refetchSaves();
       } finally {
         setNceiSavingIds((s) => {
@@ -1932,7 +2021,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         });
       }
     },
-    [isSignedIn, federatedSaveMutation, refetchSaves],
+    [isSignedIn, federatedSaveMutation, refetchSaves, getAreaRequest, handleSaveFolderResponse],
   );
 
   // Federated multi-source search (Search tab, "External sources" section).
@@ -2341,7 +2430,12 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       if (!isSignedIn) return;
       setSavingIds((s) => new Set(s).add(id));
       try {
-        await saveMutation.mutateAsync({ id });
+        const areaRequest = getAreaRequest();
+        const row = await saveMutation.mutateAsync({
+          id,
+          ...(areaRequest ? { data: { areaRequest } } : {}),
+        });
+        handleSaveFolderResponse(row);
         setSavedIds((s) => new Set(s).add(id));
         void refetchSaves();
       } finally {
@@ -2352,7 +2446,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         });
       }
     },
-    [isSignedIn, saveMutation, refetchSaves],
+    [isSignedIn, saveMutation, refetchSaves, getAreaRequest, handleSaveFolderResponse],
   );
 
   const handleLoad = useCallback(

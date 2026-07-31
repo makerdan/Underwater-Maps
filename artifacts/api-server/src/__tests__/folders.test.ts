@@ -19,6 +19,7 @@ type Row = {
   userId: string;
   parentId: string | null;
   name: string;
+  areaRequestId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -26,7 +27,15 @@ type Row = {
 const now = new Date("2026-01-01T00:00:00Z");
 
 function mkRow(id: string, parentId: string | null, name: string): Row {
-  return { id, userId: "u1", parentId, name, createdAt: now, updatedAt: now };
+  return {
+    id,
+    userId: "u1",
+    parentId,
+    name,
+    areaRequestId: null,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 describe("collectDescendantIds", () => {

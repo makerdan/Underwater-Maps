@@ -52,6 +52,10 @@ args = "e2e-repro"
 task = "workflow.run"
 args = "test-standard-plus"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-standard-skip-typecheck"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -158,6 +162,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "node scripts/run-with-timeout.mjs tierStandardPlus -- node scripts/run-tier.mjs full"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "test-standard-skip-typecheck"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --skip typecheck"
 
 [workflows.workflow.metadata]
 isValidation = true
