@@ -15,16 +15,10 @@ import { logger } from "./logger.js";
  *   "usgs-3dep"     — USGS 3DEP best-available DEM (lidar where available,
  *                     1/3" seamless otherwise) — used for inland reservoir
  *                     pre-impoundment bathymetry and surrounding topography.
- *
- * @deprecated "synthetic" — the fbm procedural fallback was removed;
- *   `buildTerrainGrid` now throws `NoDataError` when all upstream sources fail.
- *   The literal is kept in the union only so legacy disk-cache entries can be
- *   detected and discarded. It is never written by new code.
  */
 export type TerrainDataSource =
   | "ncei"
   | "gebco"
-  | "synthetic" // @deprecated — never produced by new code; treated as stale in cache reads
   | "twdb"
   | "usace"
   | "usgs-3dep"
