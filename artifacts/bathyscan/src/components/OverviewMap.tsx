@@ -418,6 +418,11 @@ export const OverviewMap: React.FC = () => {
     );
   }, [overviewGrid, cancelFlyThrough]);
 
+  // Hit rect for the "Find Data" link rendered in the empty-state canvas.
+  // Updated each rAF frame when no datasets are selected; used by handleClick
+  // and handleMouseMove to make the link interactive without an SVG overlay.
+  const emptyStateLinkRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+
   // In-progress drag rectangle (canvas pixels). `null` when no drag.
   const dragRectRef = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
 
@@ -1209,15 +1214,34 @@ export const OverviewMap: React.FC = () => {
       const visibleNow = visibleDatasetsRef.current;
       if (visibleNow.length === 0) {
         nullGridSince = null; // reset the stale-fetch tracker
-        ctx.fillStyle = "rgba(0,229,255,0.35)";
         ctx.font = "11px 'JetBrains Mono', monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("No datasets selected", cW / 2, cH / 2 - 8);
-        ctx.fillText("Choose a dataset from Find Data", cW / 2, cH / 2 + 8);
+        ctx.fillStyle = "rgba(0,229,255,0.35)";
+        ctx.fillText("No datasets selected", cW / 2, cH / 2 - 10);
+
+        // Draw "Choose a dataset from Find Data" as a clickable link.
+        const linkText = "Choose a dataset from Find Data";
+        const linkY = cH / 2 + 8;
+        ctx.fillStyle = "rgba(0,229,255,0.85)";
+        ctx.fillText(linkText, cW / 2, linkY);
+        // Underline
+        const tw = ctx.measureText(linkText).width;
+        const lx = cW / 2 - tw / 2;
+        ctx.strokeStyle = "rgba(0,229,255,0.85)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(lx, linkY + 7);
+        ctx.lineTo(lx + tw, linkY + 7);
+        ctx.stroke();
+        // Store hit rect for click / cursor detection (generous padding).
+        emptyStateLinkRectRef.current = { x: lx - 4, y: linkY - 9, w: tw + 8, h: 20 };
+
         rafRef.current = requestAnimationFrame(loop);
         return;
       }
+      // Clear the empty-state link rect once datasets are present.
+      emptyStateLinkRectRef.current = null;
 
       if (!grid || !bitmap || !t) {
         // Case 2: Datasets are selected but their grids are still fetching.
@@ -1685,6 +1709,14 @@ export const OverviewMap: React.FC = () => {
       const my = e.clientY - rect.top;
       mousePosRef.current = { x: mx, y: my };
 
+      // Empty-state: show pointer cursor when hovering the "Find Data" link.
+      if (visibleDatasetsRef.current.length === 0) {
+        const lr = emptyStateLinkRectRef.current;
+        const overLink = lr !== null && mx >= lr.x && mx <= lr.x + lr.w && my >= lr.y && my <= lr.y + lr.h;
+        canvas.style.cursor = overLink ? "pointer" : "default";
+        return;
+      }
+
       // Select-area / Download / Georef-pick tool: extend the drag rectangle, suppress tooltip/pan.
       if (selectModeRef.current || downloadModeRef.current || georefPickModeRef.current) {
         if (dragRectRef.current) {
@@ -1813,6 +1845,23 @@ export const OverviewMap: React.FC = () => {
         setShowWaypointPanel(true);
         return;
       }
+      // Empty-state: clicking the "Find Data" link opens the panel; clicking
+      // anywhere else closes the overview (same dismiss gesture as before).
+      if (visibleDatasetsRef.current.length === 0) {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const lr = emptyStateLinkRectRef.current;
+        if (lr && mx >= lr.x && mx <= lr.x + lr.w && my >= lr.y && my <= lr.y + lr.h) {
+          useUiStore.getState().setSidebarMode("explore");
+          useUiStore.getState().setFindDataPanelOpen(true);
+          useUiStore.getState().setOverviewOpen(false);
+        } else {
+          useUiStore.getState().setOverviewOpen(false);
+        }
+        return;
+      }
+
       const t = transformRef.current;
       if (!t || !overviewGrid) {
         // No terrain grid loaded yet — close the overlay to respect the dismiss
