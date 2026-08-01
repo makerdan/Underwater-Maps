@@ -77,3 +77,10 @@ id = "DvSBBEXtcuVYH8C1FNK9F"
 uri = "file://task-triage-skill.zip"
 type = "unspecified"
 title = "Task Triage Skill (both copies)"
+
+[[outputs]]
+id = "59L0NvQ1Aw5Kgz5LmyS5r"
+uri = "file://failure-gate-skill.zip"
+type = "unspecified"
+title = "Failure Gate Skill"
+description = "Zipped .agents/skills/failure-gate/ directory containing SKILL.md"
