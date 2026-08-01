@@ -2287,6 +2287,27 @@ export interface FederatedSourceInfo {
 }
 
 /**
+ * Optional center point of the searched area. When present, the
+server attempts to reverse-geocode it to a nearby place name for
+the auto-created folder, falling back to `label` when no place
+is found. Sent only for coordinate/viewport-driven searches;
+text-query searches omit it so the query text names the folder.
+
+ */
+export type AreaRequestContextCenter = {
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  lat: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  lon: number;
+};
+
+/**
  * Identifies the originating area search (bbox / point-radius /
 federated "find data" request) for a save. All saves issued from one
 search share the same client-generated `id`; when more than two saves
@@ -2302,6 +2323,13 @@ export interface AreaRequestContext {
      * @maxLength 200
      */
   label: string;
+  /** Optional center point of the searched area. When present, the
+  server attempts to reverse-geocode it to a nearby place name for
+  the auto-created folder, falling back to `label` when no place
+  is found. Sent only for coordinate/viewport-driven searches;
+  text-query searches omit it so the query text names the folder.
+   */
+  center?: AreaRequestContextCenter;
 }
 
 /**

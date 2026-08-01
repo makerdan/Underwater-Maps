@@ -26,6 +26,7 @@ import {
   datasetFoldersTable,
 } from "@workspace/db";
 import { logger } from "./logger.js";
+import { placeNameForPoint } from "./reverseGeocode.js";
 import { siblingNameTaken } from "../routes/folders.js";
 
 /** Folder is created when the save count for one request EXCEEDS this. */
@@ -41,6 +42,12 @@ const MAX_FOLDER_NAME = 120;
 export const AreaRequestContextSchema = z.object({
   id: z.string().uuid(),
   label: z.string().min(1).max(200),
+  center: z
+    .object({
+      lat: z.number().min(-90).max(90),
+      lon: z.number().min(-180).max(180),
+    })
+    .optional(),
 });
 
 export type AreaRequestContext = z.infer<typeof AreaRequestContextSchema>;
@@ -55,6 +62,24 @@ export function deriveAreaFolderName(label: string): string {
   if (!cleaned) return "Area search";
   if (cleaned.length <= MAX_FOLDER_NAME) return cleaned;
   return cleaned.slice(0, MAX_FOLDER_NAME - 1).trimEnd() + "…";
+}
+
+/**
+ * Resolve the label to name an area folder after. Coordinate/viewport
+ * searches send a `center` point — try to reverse-geocode it to a nearby
+ * place name ("Sitka, Alaska") so the folder is self-explanatory in the
+ * tree; fall back to the client's coordinate summary label when no place
+ * is found. Text-query searches carry no center and keep the query text.
+ */
+async function resolveAreaFolderLabel(
+  areaRequest: AreaRequestContext,
+): Promise<string> {
+  if (!areaRequest.center) return areaRequest.label;
+  const place = await placeNameForPoint(
+    areaRequest.center.lat,
+    areaRequest.center.lon,
+  );
+  return place ?? areaRequest.label;
 }
 
 /**
@@ -165,7 +190,7 @@ async function createAreaFolder(
   userId: string,
   areaRequest: AreaRequestContext,
 ): Promise<string | null> {
-  const base = deriveAreaFolderName(areaRequest.label);
+  const base = deriveAreaFolderName(await resolveAreaFolderLabel(areaRequest));
   const existing = await db
     .select()
     .from(datasetFoldersTable)

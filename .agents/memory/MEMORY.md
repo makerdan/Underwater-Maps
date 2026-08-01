@@ -99,3 +99,4 @@
 - [lib/db test DDL drift](lib-db-testdb-ddl-drift.md) — lib/db constraint tests create tables from hand-written SQL in test-db.ts, not the Drizzle schema; every new schema column must be added there too or all inserts fail.
 - [Server-owned uploadIds in tests](server-owned-upload-ids.md) — chunk-0 with a client-generated UUID is rejected 403 upload_not_started; test helpers must call POST /api/datasets/upload/start first and use the returned uploadId.
 - [chunk-status DB synthesis rule](chunk-status-db-synthesis.md) — synthesise [0..N-1] from DB chunksReceived ONLY when the session was rehydrated from DB (restart); live in-memory session + empty dir must return [] so the client re-uploads.
+- [cacheRegistry lint for new lib caches](cache-registry-lint.md) — any api-server lib module-level Map cache must call registerCache(() => cache.clear()) or cacheRegistry-lint.test.ts fails.

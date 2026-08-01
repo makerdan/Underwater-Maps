@@ -1688,10 +1688,17 @@ function formatLatLonLabel(lat: number, lon: number): string {
 
 /** Human-readable label for a "west,south,east,north" bbox string. */
 function bboxStringLabel(bboxStr: string): string | null {
+  const center = bboxStringCenter(bboxStr);
+  if (!center) return null;
+  return `Area ${formatLatLonLabel(center.lat, center.lon)}`;
+}
+
+/** Center point of a "west,south,east,north" bbox string. */
+function bboxStringCenter(bboxStr: string): { lat: number; lon: number } | null {
   const parts = bboxStr.split(",").map(Number);
   if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
   const [west, south, east, north] = parts as [number, number, number, number];
-  return `Area ${formatLatLonLabel((south + north) / 2, (west + east) / 2)}`;
+  return { lat: (south + north) / 2, lon: (west + east) / 2 };
 }
 
 // ---------------------------------------------------------------------------
@@ -1879,15 +1886,31 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   // distinct search gets its own folder.
   // -------------------------------------------------------------------------
   const areaRequestRef = useRef<{ key: string; id: string } | null>(null);
-  const currentAreaSearch = useMemo<{ key: string; label: string } | null>(() => {
+  const currentAreaSearch = useMemo<{
+    key: string;
+    label: string;
+    center?: { lat: number; lon: number };
+  } | null>(() => {
     if (tab === "ncei") {
       const q = debouncedNceiQuery.trim();
       if (q) return { key: `ncei:q:${q.toLowerCase()}`, label: q };
       if (viewportBboxString) {
+        // Coordinate/viewport-driven search — include the center point so
+        // the server can name the auto-folder after a nearby place instead
+        // of raw coordinates (label stays as the fallback name).
         const label = coordSearchArea
           ? `Area ${formatLatLonLabel(coordSearchArea.lat, coordSearchArea.lon)} (${coordSearchArea.radiusKm} km)`
           : bboxStringLabel(viewportBboxString);
-        if (label) return { key: `ncei:bbox:${viewportBboxString}`, label };
+        const center = coordSearchArea
+          ? { lat: coordSearchArea.lat, lon: coordSearchArea.lon }
+          : bboxStringCenter(viewportBboxString);
+        if (label) {
+          return {
+            key: `ncei:bbox:${viewportBboxString}`,
+            label,
+            ...(center ? { center } : {}),
+          };
+        }
       }
       return null;
     }
@@ -1897,12 +1920,18 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     return null;
   }, [tab, debouncedQuery, debouncedNceiQuery, viewportBboxString, coordSearchArea]);
 
-  const getAreaRequest = useCallback((): { id: string; label: string } | undefined => {
+  const getAreaRequest = useCallback(():
+    | { id: string; label: string; center?: { lat: number; lon: number } }
+    | undefined => {
     if (!currentAreaSearch) return undefined;
     if (!areaRequestRef.current || areaRequestRef.current.key !== currentAreaSearch.key) {
       areaRequestRef.current = { key: currentAreaSearch.key, id: newAreaRequestId() };
     }
-    return { id: areaRequestRef.current.id, label: currentAreaSearch.label };
+    return {
+      id: areaRequestRef.current.id,
+      label: currentAreaSearch.label,
+      ...(currentAreaSearch.center ? { center: currentAreaSearch.center } : {}),
+    };
   }, [currentAreaSearch]);
 
   // When a save response comes back stamped with a folderId, an auto-folder

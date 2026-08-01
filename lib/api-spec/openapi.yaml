@@ -7412,6 +7412,24 @@ components:
           type: string
           maxLength: 200
           description: Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder
+        center:
+          type: object
+          description: |
+            Optional center point of the searched area. When present, the
+            server attempts to reverse-geocode it to a nearby place name for
+            the auto-created folder, falling back to `label` when no place
+            is found. Sent only for coordinate/viewport-driven searches;
+            text-query searches omit it so the query text names the folder.
+          required: [lat, lon]
+          properties:
+            lat:
+              type: number
+              minimum: -90
+              maximum: 90
+            lon:
+              type: number
+              minimum: -180
+              maximum: 180
     CatalogSaveBody:
       type: object
       description: Optional request body for POST /datasets/catalog/{id}/save

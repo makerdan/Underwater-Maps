@@ -3447,6 +3447,12 @@ Idempotent — returns the existing save row if one already exists.
  */
 export const postSearchFederatedSaveBodyAreaRequestLabelMax = 200;
 
+export const postSearchFederatedSaveBodyAreaRequestCenterLatMin = -90;
+export const postSearchFederatedSaveBodyAreaRequestCenterLatMax = 90;
+
+export const postSearchFederatedSaveBodyAreaRequestCenterLonMin = -180;
+export const postSearchFederatedSaveBodyAreaRequestCenterLonMax = 180;
+
 
 
 export const PostSearchFederatedSaveBody = zod.object({
@@ -3471,7 +3477,11 @@ export const PostSearchFederatedSaveBody = zod.object({
 }),
   "areaRequest": zod.object({
   "id": zod.string().uuid().describe('Client-generated UUID shared by all saves from one area search'),
-  "label": zod.string().max(postSearchFederatedSaveBodyAreaRequestLabelMax).describe('Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder')
+  "label": zod.string().max(postSearchFederatedSaveBodyAreaRequestLabelMax).describe('Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder'),
+  "center": zod.object({
+  "lat": zod.number().min(postSearchFederatedSaveBodyAreaRequestCenterLatMin).max(postSearchFederatedSaveBodyAreaRequestCenterLatMax),
+  "lon": zod.number().min(postSearchFederatedSaveBodyAreaRequestCenterLonMin).max(postSearchFederatedSaveBodyAreaRequestCenterLonMax)
+}).optional().describe('Optional center point of the searched area. When present, the\nserver attempts to reverse-geocode it to a nearby place name for\nthe auto-created folder, falling back to `label` when no place\nis found. Sent only for coordinate\/viewport-driven searches;\ntext-query searches omit it so the query text names the folder.\n')
 }).optional().describe('Identifies the originating area search (bbox \/ point-radius \/\nfederated \"find data\" request) for a save. All saves issued from one\nsearch share the same client-generated `id`; when more than two saves\ncarry the same id, the server auto-creates a dataset folder named\nafter `label` and routes every save from that request into it.\n')
 }).describe('Request body for POST \/search\/federated\/save')
 
@@ -3564,6 +3574,12 @@ existing save row if one is already in progress or ready.
  */
 export const postNceiSaveBodyAreaRequestLabelMax = 200;
 
+export const postNceiSaveBodyAreaRequestCenterLatMin = -90;
+export const postNceiSaveBodyAreaRequestCenterLatMax = 90;
+
+export const postNceiSaveBodyAreaRequestCenterLonMin = -180;
+export const postNceiSaveBodyAreaRequestCenterLonMax = 180;
+
 
 
 export const PostNceiSaveBody = zod.object({
@@ -3585,7 +3601,11 @@ export const PostNceiSaveBody = zod.object({
 }).describe('A bathymetric survey dataset discovered via the NCEI Bathymetry Geoportal'),
   "areaRequest": zod.object({
   "id": zod.string().uuid().describe('Client-generated UUID shared by all saves from one area search'),
-  "label": zod.string().max(postNceiSaveBodyAreaRequestLabelMax).describe('Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder')
+  "label": zod.string().max(postNceiSaveBodyAreaRequestLabelMax).describe('Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder'),
+  "center": zod.object({
+  "lat": zod.number().min(postNceiSaveBodyAreaRequestCenterLatMin).max(postNceiSaveBodyAreaRequestCenterLatMax),
+  "lon": zod.number().min(postNceiSaveBodyAreaRequestCenterLonMin).max(postNceiSaveBodyAreaRequestCenterLonMax)
+}).optional().describe('Optional center point of the searched area. When present, the\nserver attempts to reverse-geocode it to a nearby place name for\nthe auto-created folder, falling back to `label` when no place\nis found. Sent only for coordinate\/viewport-driven searches;\ntext-query searches omit it so the query text names the folder.\n')
 }).optional().describe('Identifies the originating area search (bbox \/ point-radius \/\nfederated \"find data\" request) for a save. All saves issued from one\nsearch share the same client-generated `id`; when more than two saves\ncarry the same id, the server auto-creates a dataset folder named\nafter `label` and routes every save from that request into it.\n')
 }).describe('Request body for POST \/ncei\/save')
 
@@ -3634,12 +3654,22 @@ export const PostDatasetsCatalogIdSaveParams = zod.object({
 
 export const postDatasetsCatalogIdSaveBodyAreaRequestLabelMax = 200;
 
+export const postDatasetsCatalogIdSaveBodyAreaRequestCenterLatMin = -90;
+export const postDatasetsCatalogIdSaveBodyAreaRequestCenterLatMax = 90;
+
+export const postDatasetsCatalogIdSaveBodyAreaRequestCenterLonMin = -180;
+export const postDatasetsCatalogIdSaveBodyAreaRequestCenterLonMax = 180;
+
 
 
 export const PostDatasetsCatalogIdSaveBody = zod.object({
   "areaRequest": zod.object({
   "id": zod.string().uuid().describe('Client-generated UUID shared by all saves from one area search'),
-  "label": zod.string().max(postDatasetsCatalogIdSaveBodyAreaRequestLabelMax).describe('Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder')
+  "label": zod.string().max(postDatasetsCatalogIdSaveBodyAreaRequestLabelMax).describe('Human-readable name for the searched area (query text or coordinate summary); used to name the auto-created folder'),
+  "center": zod.object({
+  "lat": zod.number().min(postDatasetsCatalogIdSaveBodyAreaRequestCenterLatMin).max(postDatasetsCatalogIdSaveBodyAreaRequestCenterLatMax),
+  "lon": zod.number().min(postDatasetsCatalogIdSaveBodyAreaRequestCenterLonMin).max(postDatasetsCatalogIdSaveBodyAreaRequestCenterLonMax)
+}).optional().describe('Optional center point of the searched area. When present, the\nserver attempts to reverse-geocode it to a nearby place name for\nthe auto-created folder, falling back to `label` when no place\nis found. Sent only for coordinate\/viewport-driven searches;\ntext-query searches omit it so the query text names the folder.\n')
 }).optional().describe('Identifies the originating area search (bbox \/ point-radius \/\nfederated \"find data\" request) for a save. All saves issued from one\nsearch share the same client-generated `id`; when more than two saves\ncarry the same id, the server auto-creates a dataset folder named\nafter `label` and routes every save from that request into it.\n')
 }).describe('Optional request body for POST \/datasets\/catalog\/{id}\/save')
 

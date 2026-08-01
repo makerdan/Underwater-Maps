@@ -475,6 +475,21 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
   scoreEntry: () => 1,
 }));
 
+// Controllable reverse-geocode mock: tests set G.result to the place name
+// the "geocoder" returns (null = no place found); G.calls records lookups.
+const G = vi.hoisted(() => ({
+  result: null as string | null,
+  calls: [] as Array<{ lat: number; lon: number }>,
+}));
+
+vi.mock("../../lib/reverseGeocode.js", () => ({
+  placeNameForPoint: async (lat: number, lon: number) => {
+    G.calls.push({ lat, lon });
+    return G.result;
+  },
+  __clearReverseGeocodeCache: () => {},
+}));
+
 vi.mock("../../lib/efhFetcher.js", () => ({
   fetchNoaaAlaskaEfh: async () => null,
   buildCollectionFromLiveFeatures: () => ({
@@ -537,6 +552,8 @@ beforeEach(() => {
   H.dbState.datasets.length = 0;
   H.dbState.folders.length = 0;
   H.buildGate.current = null;
+  G.result = null;
+  G.calls.length = 0;
 });
 
 // ---------------------------------------------------------------------------
@@ -739,5 +756,70 @@ describe("auto-folder for multi-dataset area requests", () => {
     // Only 2 saves for AR2 → still just the AR folder.
     expect(H.dbState.folders).toHaveLength(1);
     expect(H.dbState.folders[0]!["name"]).toBe("Sitka Sound");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Place-name resolution for coordinate/viewport searches (areaRequest.center)
+// ---------------------------------------------------------------------------
+
+describe("area folder naming via reverse geocoding", () => {
+  const COORD_AR = {
+    id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    label: "Area 57.10°N, 135.50°W (25 km)",
+    center: { lat: 57.1, lon: -135.5 },
+  };
+
+  it("names the folder after the geocoded place when center is present", async () => {
+    G.result = "Sitka, Alaska";
+    for (const id of ["preset-area-a", "preset-area-b", "preset-area-c"]) {
+      await saveCatalog(id, { areaRequest: COORD_AR });
+    }
+    expect(H.dbState.folders).toHaveLength(1);
+    expect(H.dbState.folders[0]!["name"]).toBe("Sitka, Alaska");
+    expect(G.calls.length).toBeGreaterThan(0);
+    expect(G.calls[0]).toEqual({ lat: 57.1, lon: -135.5 });
+  });
+
+  it("falls back to the coordinate label when no place is found", async () => {
+    G.result = null;
+    for (const id of ["preset-area-a", "preset-area-b", "preset-area-c"]) {
+      await saveCatalog(id, { areaRequest: COORD_AR });
+    }
+    expect(H.dbState.folders).toHaveLength(1);
+    expect(H.dbState.folders[0]!["name"]).toBe(COORD_AR.label);
+  });
+
+  it("de-duplicates geocoded names against existing sibling folders", async () => {
+    G.result = "Sitka, Alaska";
+    H.dbState.folders.push({
+      id: "f-existing",
+      userId: E2E_USER,
+      parentId: null,
+      name: "Sitka, Alaska",
+      createdAt: new Date(),
+    });
+    for (const id of ["preset-area-a", "preset-area-b", "preset-area-c"]) {
+      await saveCatalog(id, { areaRequest: COORD_AR });
+    }
+    const created = H.dbState.folders.find((f) => f["id"] !== "f-existing")!;
+    expect(created["name"]).toBe("Sitka, Alaska 2");
+  });
+
+  it("never calls the geocoder for text-query searches (no center)", async () => {
+    G.result = "Should Not Appear";
+    for (const id of ["preset-area-a", "preset-area-b", "preset-area-c"]) {
+      await saveCatalog(id, { areaRequest: AR });
+    }
+    expect(G.calls).toHaveLength(0);
+    expect(H.dbState.folders[0]!["name"]).toBe("Sitka Sound");
+  });
+
+  it("rejects an out-of-range center with 400", async () => {
+    const res = await saveCatalog("preset-area-a", {
+      areaRequest: { ...AR, center: { lat: 200, lon: 0 } },
+    });
+    expect(res.status).toBe(400);
+    expect(H.dbState.saves).toHaveLength(0);
   });
 });
