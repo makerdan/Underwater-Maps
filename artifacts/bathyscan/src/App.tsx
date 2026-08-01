@@ -1267,17 +1267,13 @@ function Main() {
             </button>
           </ViewscreenTooltip>
         ) : (
-          <div
-            className="absolute top-24 left-4 z-20 overflow-y-auto overscroll-contain space-y-2"
-            style={{
-              maxHeight: "calc(100vh - 7rem)",
-              paddingRight: 4,
-              scrollbarWidth: "thin",
-              scrollbarColor: "rgba(0,229,255,0.35) transparent",
-              touchAction: "pan-y",
-            }}
-          >
-            <div className="flex justify-end" style={{ minWidth: 536, maxWidth: 616 }}>
+          <>
+            {/* Hide button — fixed-position so it stays inside the viewport on
+                narrow screens (the panel can extend off-screen on small devices
+                but this button must always remain reachable). Kept outside the
+                ErrorBoundary so the pane can still be collapsed when the sidebar
+                content throws. */}
+            <div style={{ position: "fixed", top: 96, right: 8, zIndex: 21 }}>
               <ViewscreenTooltip label="Hide side pane to free up screen space" side="right">
                 <button
                   onClick={() => setSidePaneCollapsed(true)}
@@ -1299,11 +1295,19 @@ function Main() {
                 </button>
               </ViewscreenTooltip>
             </div>
+            <div
+              className="absolute top-24 left-4 z-20 overflow-y-auto overscroll-contain space-y-2"
+              style={{
+                maxHeight: "calc(100vh - 7rem)",
+                paddingRight: 4,
+                scrollbarWidth: "thin",
+                scrollbarColor: "rgba(0,229,255,0.35) transparent",
+                touchAction: "pan-y",
+              }}
+            >
             {/* ── Sidebar shell boundary: a render error in tab logic or any
                 panel not covered by its own boundary collapses to a contained
-                fallback (with retry) instead of white-screening the app. The
-                HIDE button above stays outside so the pane can still be
-                collapsed even when the sidebar content is broken. ── */}
+                fallback (with retry) instead of white-screening the app. ── */}
             <ErrorBoundary label="the sidebar">
             {/* ── Mode tabs (always visible, above all panels) ── */}
             <SidebarModeTabs />
@@ -1620,6 +1624,7 @@ function Main() {
             </ErrorBoundary>
             <div style={{ height: "2in", flexShrink: 0 }} aria-hidden="true" />
           </div>
+          </>
         )}
 
         {/* The Drive Boat / Tidal 3D / Drift toggles that used to live here

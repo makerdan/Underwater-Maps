@@ -378,6 +378,27 @@ test("page reload restores the previously active sidebar mode", async ({ page })
   await expect(exploreTab).toHaveAttribute("aria-pressed", "true", { timeout: 8_000 });
 });
 
+for (const { label, width, height } of [
+  { label: "390×800 (mobile portrait)", width: 390, height: 800 },
+  { label: "768×600 (small landscape)", width: 768, height: 600 },
+]) {
+  test(`small screen (${label}): Hide button is visible and collapses the panel`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await injectSettings(page, BASE);
+    await page.goto("/");
+    await waitForSidebarTabs(page);
+
+    // Hide button must be within the viewport and clickable
+    const hideBtn = page.getByRole("button", { name: "Hide side pane" });
+    await expect(hideBtn).toBeVisible({ timeout: 8_000 });
+
+    // Clicking it must collapse the panel (Show button appears)
+    await hideBtn.click();
+    const showBtn = page.getByRole("button", { name: "Show side pane" });
+    await expect(showBtn).toBeVisible({ timeout: 5_000 });
+  });
+}
+
 test("mobile viewport: icon-only tabs remain clickable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   injectSettings(page, BASE);
