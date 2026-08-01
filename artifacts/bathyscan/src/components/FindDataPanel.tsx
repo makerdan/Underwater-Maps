@@ -1902,7 +1902,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     {
       query: {
         queryKey: getGetDatasetsCatalogSearchQueryKey(searchParams),
-        enabled: tab === "search",
+        enabled: tab === "search" && debouncedQuery.trim().length > 0,
         staleTime: 30_000,
       },
     },
