@@ -478,6 +478,10 @@ Authentication is handled by **Clerk** across all surfaces:
 
 ---
 
+## Agent rules
+
+The Failure Gate skill (`.local/custom_skills/failure-gate/SKILL.md`) applies to every task plan written in this project. Before writing any plan, complete the discovery checklist in that skill. Every plan file must include a `## Pre-existing failures to ignore` section. If none are known, use the "None known" template from the skill.
+
 ## User preferences
 
 - Always spell out "EFH" as "Essential Fish Habitat" in user-facing copy (UI strings, help articles, READMEs, OpenAPI summaries/descriptions). Bare "EFH" is allowed only as a parenthetical after the full phrase on first mention, e.g. "Essential Fish Habitat (EFH)". Code identifiers, file names, route paths, dataset `source` strings, log lines, and test-only strings are unaffected.
