@@ -16,6 +16,42 @@ import {
 import { z } from "zod";
 import { gunzipBounded } from "../lib/gunzipBounded.js";
 import sharp from "sharp";
+
+/**
+ * Sanitizes a stored terrain/overview JSON blob before it is passed to the
+ * Zod schema parser.  Two legacy issues can cause strict Zod validation to
+ * throw a 500:
+ *
+ *  1. Pre-freshwater rows (before 2026-07-19) have no `waterType` field.
+ *     We default these to "saltwater" because every dataset that predates
+ *     the freshwater feature is a saltwater/ocean dataset.
+ *
+ *  2. Old rows may carry `dataSource: "synthetic"` — the fbm procedural
+ *     fallback was removed; "synthetic" is no longer a valid enum value.
+ *     We delete the field so the optional `dataSource` is simply absent.
+ *
+ * This is a read-path shim.  The DB backfill script
+ * (lib/db/src/scripts/backfill-water-type-and-datasource.ts) fixes rows at
+ * rest so future reads no longer need the shim.
+ */
+const VALID_WATER_TYPES = new Set(["saltwater", "freshwater"]);
+
+function sanitizeLegacyStoredJson(raw: unknown): Record<string, unknown> {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const patched: Record<string, unknown> = { ...obj };
+
+  // 1. Inject missing waterType
+  if (!VALID_WATER_TYPES.has(patched["waterType"] as string)) {
+    patched["waterType"] = "saltwater";
+  }
+
+  // 2. Strip removed "synthetic" dataSource
+  if (patched["dataSource"] === "synthetic") {
+    delete patched["dataSource"];
+  }
+
+  return patched;
+}
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
@@ -248,7 +284,7 @@ router.get("/user/datasets/:id/terrain", terrainFetchIpRateLimit, requireAuth, t
     return;
   }
 
-  res.json(GetUserDatasetsIdTerrainResponse.parse(row.terrainJson));
+  res.json(GetUserDatasetsIdTerrainResponse.parse(sanitizeLegacyStoredJson(row.terrainJson)));
 }));
 
 // ── GET /user/datasets/:id/overview ────────────────────────────────────────
@@ -266,7 +302,7 @@ router.get("/user/datasets/:id/overview", requireAuth, asyncHandler(async (req, 
     return;
   }
 
-  res.json(GetUserDatasetsIdOverviewResponse.parse(row.overviewJson));
+  res.json(GetUserDatasetsIdOverviewResponse.parse(sanitizeLegacyStoredJson(row.overviewJson)));
 }));
 
 // ── GET /user/datasets/:id/raster-image ────────────────────────────────────
