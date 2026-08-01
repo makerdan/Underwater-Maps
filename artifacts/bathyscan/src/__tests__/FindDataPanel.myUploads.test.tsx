@@ -1,18 +1,25 @@
 /**
- * Unit tests for the "My Uploads" section in FindDataPanel.
+ * Unit tests for the merged "My Datasets" section in FindDataPanel.
  *
- * Coverage:
- *   1. My Uploads section is absent when the user is not signed in.
- *   2. Empty state ("No uploaded datasets yet") when signed in but no uploads.
- *   3. Upload cards render and deduplicate against catalog saves — a dataset
- *      already represented as a catalog save must not appear in My Uploads.
- *   4. Clicking "Load" on an upload card fires setPendingExternalUserDatasetId
- *      with the dataset's id.
- *   5. Clicking the delete button triggers the confirmation dialog, and
- *      confirming calls useDeleteUserDatasetsId.mutateAsync({ id }).
+ * The My Saves tab shows ONE section that merges the user's uploaded
+ * datasets and catalog saves into a single folder tree:
+ *   1. Section is absent when the user is not signed in.
+ *   2. Single "My Datasets" header with one "+ folder" button; the old
+ *      "My Saved Uploads" / "Catalog Saves" headers are gone.
+ *   3. Empty state when signed in with no datasets, folders, or saves.
+ *   4. No double-listing — a materialized catalog save and its linked
+ *      dataset render as ONE save-style card (never an upload card too).
+ *   5. Provenance badges distinguish uploads from catalog saves.
+ *   6. Upload rename / load / delete flows still work.
+ *   7. Delete confirmation copy differs by kind (permanent for uploads,
+ *      re-savable phrasing for catalog saves).
+ *   8. Folders: empty folders are visible; expanded folder contents render
+ *      inside the indented container for both card kinds.
+ *   9. "Move to folder…" for uploads hits the dataset move endpoint.
+ *  10. Processing/failed saves render inline with status/retry.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { FindDataPanel } from "@/components/FindDataPanel";
 
@@ -23,6 +30,8 @@ import { FindDataPanel } from "@/components/FindDataPanel";
 const mocks = vi.hoisted(() => ({
   deleteUploadMutateAsync: vi.fn().mockResolvedValue(undefined),
   renameUploadMutateAsync: vi.fn().mockResolvedValue(undefined),
+  moveUploadMutateAsync: vi.fn().mockResolvedValue(undefined),
+  moveSaveMutateAsync: vi.fn().mockResolvedValue(undefined),
   setPendingExternalUserDatasetId: vi.fn(),
   requestDatasetSwitch: vi.fn(
     ({
@@ -116,6 +125,7 @@ const SAVE_FOR_UPLOAD_A: Record<string, unknown> = {
   catalogId: "some-catalog-dataset",
   status: "ready",
   datasetId: "upload-a",
+  folderId: null,
   catalog: {
     name: "Some Catalog Dataset",
     sourceAgency: "NOAA",
@@ -124,12 +134,21 @@ const SAVE_FOR_UPLOAD_A: Record<string, unknown> = {
   errorMessage: null,
 };
 
+const FOLDER_1: Record<string, unknown> = {
+  id: "folder-1",
+  name: "Area A",
+  parentId: null,
+  createdAt: "2024-03-01T00:00:00.000Z",
+};
+
 // ---------------------------------------------------------------------------
 // Mutable state read by vi.mock overrides
 // ---------------------------------------------------------------------------
 let currentIsSignedIn = true;
 let currentUserDatasets: unknown[] = [];
 let currentMySaves: unknown[] = [];
+let currentUserFolders: unknown[] = [];
+let currentSaveFolderExpanded: Record<string, boolean> = {};
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -152,6 +171,12 @@ vi.mock(
         isError: false,
         refetch: () => Promise.resolve(),
       }),
+      useGetUserFolders: () => ({
+        data: currentUserFolders,
+        isFetching: false,
+        isLoading: false,
+        isError: false,
+      }),
       useDeleteUserDatasetsId: () => ({
         mutate: () => {},
         mutateAsync: mocks.deleteUploadMutateAsync,
@@ -162,6 +187,20 @@ vi.mock(
       usePatchUserDatasetsIdRename: () => ({
         mutate: () => {},
         mutateAsync: mocks.renameUploadMutateAsync,
+        isPending: false,
+        isSuccess: false,
+        variables: undefined,
+      }),
+      usePatchUserDatasetsIdMove: () => ({
+        mutate: () => {},
+        mutateAsync: mocks.moveUploadMutateAsync,
+        isPending: false,
+        isSuccess: false,
+        variables: undefined,
+      }),
+      usePatchDatasetsMySavesIdMove: () => ({
+        mutate: () => {},
+        mutateAsync: mocks.moveSaveMutateAsync,
         isPending: false,
         isSuccess: false,
         variables: undefined,
@@ -223,8 +262,13 @@ vi.mock("@/components/ViewscreenTooltip", () => ({
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
-  const mockUseSettingsStore = (sel: (s: { waterType: string }) => unknown) =>
-    sel({ waterType: "saltwater" });
+  const mockUseSettingsStore = (
+    sel: (s: { waterType: string; saveFolderExpanded: Record<string, boolean> }) => unknown,
+  ) =>
+    sel({
+      waterType: "saltwater",
+      saveFolderExpanded: currentSaveFolderExpanded,
+    });
   // uiStore.ts reads DEFAULT_SETTINGS and useSettingsStore.persist/setState at
   // module init — keep those real so importing uiStore doesn't crash.
   Object.assign(mockUseSettingsStore, {
@@ -253,68 +297,67 @@ function switchToSavesTab() {
   fireEvent.click(btn);
 }
 
+function resetState() {
+  onClose.mockClear();
+  mocks.setPendingExternalUserDatasetId.mockClear();
+  mocks.deleteUploadMutateAsync.mockClear();
+  mocks.moveUploadMutateAsync.mockClear();
+  mocks.moveSaveMutateAsync.mockClear();
+  mocks.requestDatasetSwitch.mockClear();
+  currentIsSignedIn = true;
+  currentUserDatasets = [];
+  currentMySaves = [];
+  currentUserFolders = [];
+  currentSaveFolderExpanded = {};
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("FindDataPanel — My Uploads section visibility", () => {
-  beforeEach(() => {
-    onClose.mockClear();
-    mocks.setPendingExternalUserDatasetId.mockClear();
-    mocks.deleteUploadMutateAsync.mockClear();
-    mocks.requestDatasetSwitch.mockClear();
-  });
+describe("FindDataPanel — My Datasets section visibility", () => {
+  beforeEach(resetState);
 
-  it("My Uploads section is absent when the user is not signed in", () => {
+  it("section is absent when the user is not signed in", () => {
     currentIsSignedIn = false;
-    currentUserDatasets = [];
-    currentMySaves = [];
     renderPanel();
     switchToSavesTab();
 
-    expect(screen.queryByText(/My Saved Uploads/i)).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/No uploaded datasets yet/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("My Datasets")).not.toBeInTheDocument();
+    expect(screen.getByText(/Sign in to see saved datasets/i)).toBeInTheDocument();
   });
 
-  it("shows empty state when signed in but no uploads", () => {
-    currentIsSignedIn = true;
-    currentUserDatasets = [];
-    currentMySaves = [];
+  it("shows a single merged empty state when signed in with no datasets", () => {
     renderPanel();
     switchToSavesTab();
 
-    expect(screen.getByText(/No uploaded datasets yet/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/No datasets yet — upload sonar data or save datasets from the catalog/i),
+    ).toBeInTheDocument();
   });
 });
 
-describe("FindDataPanel — section order and label", () => {
+describe("FindDataPanel — single merged header", () => {
   beforeEach(() => {
-    currentIsSignedIn = true;
+    resetState();
     currentUserDatasets = [UPLOAD_A];
     currentMySaves = [];
   });
 
-  it('section header reads "My Saved Uploads"', () => {
+  it('shows exactly one "My Datasets" header and no legacy section headers', () => {
     renderPanel();
     switchToSavesTab();
 
-    expect(screen.getByText("My Saved Uploads")).toBeInTheDocument();
-    expect(screen.queryByText(/^My Uploads$/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("My Datasets")).toHaveLength(1);
+    expect(screen.queryByText("My Saved Uploads")).not.toBeInTheDocument();
+    expect(screen.queryByText("Catalog Saves")).not.toBeInTheDocument();
   });
 
-  it("My Saved Uploads section appears above Catalog Saves", () => {
+  it('shows a single "+ folder" button in the header', () => {
     renderPanel();
     switchToSavesTab();
 
-    const uploadsHeader = screen.getByText("My Saved Uploads");
-    const catalogHeader = screen.getByText("Catalog Saves");
-    // DOCUMENT_POSITION_FOLLOWING (4): catalogHeader comes after uploadsHeader.
-    expect(
-      uploadsHeader.compareDocumentPosition(catalogHeader) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "+ folder" })).toHaveLength(1);
   });
 
   it("upload card filename carries a title attribute with the full name", () => {
@@ -326,13 +369,56 @@ describe("FindDataPanel — section order and label", () => {
   });
 });
 
-describe("FindDataPanel — My Uploads rename", () => {
+describe("FindDataPanel — no double-listing of materialized saves", () => {
+  beforeEach(resetState);
+
+  it("renders a materialized save and its linked dataset as ONE save card", () => {
+    currentUserDatasets = [UPLOAD_A, UPLOAD_B];
+    currentMySaves = [SAVE_FOR_UPLOAD_A];
+    renderPanel();
+    switchToSavesTab();
+
+    // The save renders as a save-style card…
+    expect(screen.getByTestId("save-card-save-001")).toBeInTheDocument();
+    // …and its linked dataset must NOT also appear as an upload card.
+    expect(
+      screen.queryByTestId("upload-card-upload-a"),
+    ).not.toBeInTheDocument();
+    // The unrelated upload still renders normally.
+    expect(screen.getByTestId("upload-card-upload-b")).toBeInTheDocument();
+  });
+
+  it("shows all upload cards when none match any catalog save datasetId", () => {
+    currentUserDatasets = [UPLOAD_A, UPLOAD_B];
+    currentMySaves = [];
+    renderPanel();
+    switchToSavesTab();
+
+    expect(screen.getByTestId("upload-card-upload-a")).toBeInTheDocument();
+    expect(screen.getByTestId("upload-card-upload-b")).toBeInTheDocument();
+  });
+});
+
+describe("FindDataPanel — provenance indicators", () => {
+  beforeEach(resetState);
+
+  it("upload cards carry an Upload badge and save cards a Catalog badge", () => {
+    currentUserDatasets = [UPLOAD_B];
+    currentMySaves = [SAVE_FOR_UPLOAD_A];
+    renderPanel();
+    switchToSavesTab();
+
+    expect(screen.getByTestId("provenance-upload-upload-b")).toHaveTextContent(/upload/i);
+    expect(screen.getByTestId("provenance-catalog-save-001")).toHaveTextContent(/catalog/i);
+  });
+});
+
+describe("FindDataPanel — upload rename", () => {
   beforeEach(() => {
+    resetState();
     mocks.renameUploadMutateAsync.mockClear();
     mocks.renameUploadMutateAsync.mockResolvedValue(undefined);
-    currentIsSignedIn = true;
     currentUserDatasets = [UPLOAD_A];
-    currentMySaves = [];
   });
 
   it("renames an upload via the inline editor (success path)", async () => {
@@ -414,49 +500,9 @@ describe("FindDataPanel — My Uploads rename", () => {
   });
 });
 
-describe("FindDataPanel — My Uploads deduplication", () => {
+describe("FindDataPanel — upload Load button", () => {
   beforeEach(() => {
-    onClose.mockClear();
-    mocks.setPendingExternalUserDatasetId.mockClear();
-    mocks.deleteUploadMutateAsync.mockClear();
-    mocks.requestDatasetSwitch.mockClear();
-    currentIsSignedIn = true;
-  });
-
-  it("excludes uploads whose id is already referenced by a catalog save's datasetId", () => {
-    currentUserDatasets = [UPLOAD_A, UPLOAD_B];
-    currentMySaves = [SAVE_FOR_UPLOAD_A];
-    renderPanel();
-    switchToSavesTab();
-
-    expect(
-      screen.getByText("Juneau Harbour Scan"),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("upload-card-upload-a"),
-    ).not.toBeInTheDocument();
-    expect(screen.getByTestId("upload-card-upload-b")).toBeInTheDocument();
-  });
-
-  it("shows all upload cards when none match any catalog save datasetId", () => {
-    currentUserDatasets = [UPLOAD_A, UPLOAD_B];
-    currentMySaves = [];
-    renderPanel();
-    switchToSavesTab();
-
-    expect(screen.getByTestId("upload-card-upload-a")).toBeInTheDocument();
-    expect(screen.getByTestId("upload-card-upload-b")).toBeInTheDocument();
-  });
-});
-
-describe("FindDataPanel — My Uploads Load button", () => {
-  beforeEach(() => {
-    onClose.mockClear();
-    mocks.setPendingExternalUserDatasetId.mockClear();
-    mocks.deleteUploadMutateAsync.mockClear();
-    mocks.requestDatasetSwitch.mockClear();
-    currentIsSignedIn = true;
-    currentMySaves = [];
+    resetState();
     currentUserDatasets = [UPLOAD_A];
   });
 
@@ -491,34 +537,167 @@ describe("FindDataPanel — My Uploads Load button", () => {
   });
 });
 
-describe("FindDataPanel — My Uploads delete button", () => {
-  beforeEach(() => {
-    onClose.mockClear();
-    mocks.setPendingExternalUserDatasetId.mockClear();
-    mocks.deleteUploadMutateAsync.mockClear();
-    mocks.requestDatasetSwitch.mockClear();
-    currentIsSignedIn = true;
-    currentMySaves = [];
-    currentUserDatasets = [UPLOAD_B];
-  });
+describe("FindDataPanel — delete confirmations differ by kind", () => {
+  beforeEach(resetState);
 
-  it("clicking delete opens confirmation dialog and confirming calls mutateAsync with the dataset id", async () => {
+  it("upload delete confirm warns the data is permanently deleted, and confirming calls mutateAsync", async () => {
+    currentUserDatasets = [UPLOAD_B];
     renderPanel();
     switchToSavesTab();
 
-    const deleteBtn = screen.getByTestId("btn-delete-upload-upload-b");
-    fireEvent.click(deleteBtn);
+    fireEvent.click(screen.getByTestId("btn-delete-upload-upload-b"));
 
     const dialog = screen.getByTestId("confirm-delete-upload");
     expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(/permanently remove the uploaded dataset/i);
+    expect(dialog).toHaveTextContent(/cannot be undone/i);
+    // No re-savable phrasing on the upload dialog.
+    expect(dialog).not.toHaveTextContent(/re-save it from the catalog/i);
 
-    const confirmBtn = screen.getByTestId("confirm-delete-upload-confirm");
-    fireEvent.click(confirmBtn);
+    fireEvent.click(screen.getByTestId("confirm-delete-upload-confirm"));
 
     await waitFor(() => {
       expect(mocks.deleteUploadMutateAsync).toHaveBeenCalledWith({
         id: "upload-b",
       });
     });
+  });
+
+  it("catalog save delete confirm says it can be re-saved from the catalog later", () => {
+    currentMySaves = [SAVE_FOR_UPLOAD_A];
+    currentUserDatasets = [UPLOAD_A];
+    renderPanel();
+    switchToSavesTab();
+
+    fireEvent.click(screen.getByTestId("btn-delete-save-save-001"));
+
+    const dialog = screen.getByTestId("confirm-delete-save");
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(/re-save it from the catalog later/i);
+    // No permanent-upload-deletion phrasing on the save dialog.
+    expect(dialog).not.toHaveTextContent(/permanently remove the uploaded dataset/i);
+  });
+});
+
+describe("FindDataPanel — merged folder tree", () => {
+  beforeEach(resetState);
+
+  it("shows an empty folder in the tree (visible immediately after creation)", () => {
+    currentUserFolders = [FOLDER_1];
+    renderPanel();
+    switchToSavesTab();
+
+    expect(screen.getByText("Area A")).toBeInTheDocument();
+    // Merged empty-state message must NOT hide the folder view.
+    expect(
+      screen.queryByText(/No datasets yet — upload sonar data/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("an expanded empty folder shows its empty placeholder", () => {
+    currentUserFolders = [FOLDER_1];
+    currentSaveFolderExpanded = { "folder-1": true };
+    renderPanel();
+    switchToSavesTab();
+
+    expect(screen.getByText(/No datasets in this folder/i)).toBeInTheDocument();
+  });
+
+  it("renders both save and upload cards inside the indented expanded folder container", () => {
+    // upload-c is a root-level upload unrelated to any save; upload-a is the
+    // save's materialized dataset and must stay collapsed into the save card.
+    const UPLOAD_C = { ...UPLOAD_A, id: "upload-c", name: "Root Scan" };
+    currentUserFolders = [FOLDER_1];
+    currentUserDatasets = [
+      { ...UPLOAD_B, folderId: "folder-1" },
+      UPLOAD_A,
+      UPLOAD_C,
+    ];
+    currentMySaves = [{ ...SAVE_FOR_UPLOAD_A, folderId: "folder-1" }];
+    currentSaveFolderExpanded = { "folder-1": true };
+    renderPanel();
+    switchToSavesTab();
+
+    const contents = screen.getByTestId("save-folder-contents-folder-1");
+    // Both kinds render inside the folder's indented contents container.
+    expect(within(contents).getByTestId("save-card-save-001")).toBeInTheDocument();
+    expect(within(contents).getByTestId("upload-card-upload-b")).toBeInTheDocument();
+    // The container carries the per-level right inset.
+    expect(contents).toHaveStyle({ marginLeft: "14px" });
+    // The save's linked dataset never double-renders as an upload card.
+    expect(screen.queryByTestId("upload-card-upload-a")).not.toBeInTheDocument();
+    // The root-level upload renders outside the folder container.
+    expect(
+      within(contents).queryByTestId("upload-card-upload-c"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("upload-card-upload-c")).toBeInTheDocument();
+  });
+});
+
+describe("FindDataPanel — move upload to folder", () => {
+  beforeEach(() => {
+    resetState();
+    currentUserFolders = [FOLDER_1];
+    currentUserDatasets = [UPLOAD_A];
+  });
+
+  it('"Move to folder…" on an upload calls the dataset move endpoint', async () => {
+    renderPanel();
+    switchToSavesTab();
+
+    fireEvent.click(screen.getByTestId("btn-move-upload-upload-a"));
+
+    const dialog = screen.getByRole("dialog", {
+      name: /Move "Tolstoi Sonar Survey"/i,
+    });
+    // Pick the folder option, then confirm.
+    fireEvent.click(within(dialog).getByText("📁 Area A"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Move" }));
+
+    await waitFor(() => {
+      expect(mocks.moveUploadMutateAsync).toHaveBeenCalledWith({
+        id: "upload-a",
+        data: { folderId: "folder-1" },
+      });
+    });
+    // The save move endpoint must NOT be involved for uploads.
+    expect(mocks.moveSaveMutateAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe("FindDataPanel — processing/failed saves render inline", () => {
+  beforeEach(resetState);
+
+  it("a processing save renders its card with status text and no upload card", () => {
+    currentMySaves = [
+      {
+        ...SAVE_FOR_UPLOAD_A,
+        id: "save-proc",
+        status: "processing",
+        datasetId: null,
+      },
+    ];
+    renderPanel();
+    switchToSavesTab();
+
+    const card = screen.getByTestId("save-card-save-proc");
+    expect(card).toHaveTextContent(/processing/i);
+  });
+
+  it("a failed save renders with a Retry button", () => {
+    currentMySaves = [
+      {
+        ...SAVE_FOR_UPLOAD_A,
+        id: "save-fail",
+        status: "failed",
+        datasetId: null,
+        errorMessage: "download failed",
+      },
+    ];
+    renderPanel();
+    switchToSavesTab();
+
+    expect(screen.getByTestId("save-card-save-fail")).toBeInTheDocument();
+    expect(screen.getByTestId("save-retry-save-fail")).toBeInTheDocument();
   });
 });

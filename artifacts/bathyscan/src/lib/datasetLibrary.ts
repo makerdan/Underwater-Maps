@@ -256,6 +256,118 @@ export function saveFolderNodeHasSaves(node: SaveFolderNode): boolean {
   return node.children.some(saveFolderNodeHasSaves);
 }
 
+// ---------------------------------------------------------------------------
+// Merged tree — one "My Datasets" tree holding folders, catalog saves, and
+// upload-only datasets. A materialized catalog save and its linked dataset
+// (save.datasetId → custom_datasets row) collapse into ONE save-kind entry;
+// upload-only datasets are those with no save row referencing them.
+// ---------------------------------------------------------------------------
+
+export type MergedEntry =
+  | {
+      kind: "save";
+      save: UserCatalogSave;
+      /** Linked custom_datasets row when the save is materialized (may be
+       *  absent from the datasets list if it hasn't refetched yet). */
+      dataset: UserDatasetMeta | null;
+    }
+  | { kind: "upload"; dataset: UserDatasetMeta };
+
+export interface MergedFolderNode {
+  folder: DatasetFolder;
+  children: MergedFolderNode[];
+  items: MergedEntry[];
+  depth: number;
+}
+
+export interface MergedTree {
+  roots: MergedFolderNode[];
+  rootItems: MergedEntry[];
+  byId: Map<string, MergedFolderNode>;
+}
+
+/**
+ * Build the merged My Datasets folder tree.
+ *
+ * Placement rules:
+ *   • save entries group by `save.folderId`
+ *   • upload entries group by `dataset.folderId`
+ *   • datasets already represented by ANY save row (via save.datasetId) are
+ *     collapsed into that save's entry and never emitted as uploads
+ *
+ * Every folder is kept — including empty ones — so a freshly created folder
+ * is visible immediately. Item order is preserved from the input lists
+ * (saves first, then uploads), letting callers keep their own sort.
+ */
+export function buildMergedTree(
+  folders: DatasetFolder[],
+  saves: UserCatalogSave[],
+  datasets: UserDatasetMeta[],
+): MergedTree {
+  const byId = new Map<string, MergedFolderNode>();
+  for (const f of folders) {
+    byId.set(f.id, { folder: f, children: [], items: [], depth: 0 });
+  }
+
+  const roots: MergedFolderNode[] = [];
+  for (const f of folders) {
+    const node = byId.get(f.id)!;
+    if (f.parentId && byId.has(f.parentId)) {
+      byId.get(f.parentId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  const datasetById = new Map<string, UserDatasetMeta>();
+  for (const d of datasets) datasetById.set(d.id, d);
+
+  const savedDatasetIds = new Set<string>();
+  for (const s of saves) {
+    if (s.datasetId) savedDatasetIds.add(s.datasetId);
+  }
+
+  const rootItems: MergedEntry[] = [];
+  const place = (folderId: string | null | undefined, entry: MergedEntry) => {
+    if (folderId && byId.has(folderId)) {
+      byId.get(folderId)!.items.push(entry);
+    } else {
+      rootItems.push(entry);
+    }
+  };
+
+  for (const s of saves) {
+    place(s.folderId ?? null, {
+      kind: "save",
+      save: s,
+      dataset: s.datasetId ? (datasetById.get(s.datasetId) ?? null) : null,
+    });
+  }
+  for (const d of datasets) {
+    if (savedDatasetIds.has(d.id)) continue; // collapsed into its save entry
+    place(d.folderId ?? null, { kind: "upload", dataset: d });
+  }
+
+  const safeName = (v: unknown): string => {
+    if (typeof v === "string") return v;
+    return v == null ? "" : String(v);
+  };
+  const sortNodes = (arr: MergedFolderNode[]) =>
+    arr.sort((a, b) =>
+      safeName(a.folder.name).localeCompare(safeName(b.folder.name), undefined, { sensitivity: "base" }),
+    );
+  sortNodes(roots);
+  const stack: { node: MergedFolderNode; depth: number }[] = roots.map((n) => ({ node: n, depth: 0 }));
+  while (stack.length) {
+    const { node, depth } = stack.pop()!;
+    node.depth = depth;
+    sortNodes(node.children);
+    for (const c of node.children) stack.push({ node: c, depth: depth + 1 });
+  }
+
+  return { roots, rootItems, byId };
+}
+
 /** Suggest a non-colliding name in a parent: "New folder", "New folder 2", ... */
 export function suggestUniqueName(
   siblings: { name: string }[],

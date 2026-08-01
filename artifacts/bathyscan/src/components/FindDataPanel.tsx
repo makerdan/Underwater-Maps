@@ -27,6 +27,7 @@ import {
   useDeleteDatasetsMySavesId,
   useDeleteUserDatasetsId,
   usePatchUserDatasetsIdRename,
+  usePatchUserDatasetsIdMove,
   usePatchDatasetsMySavesIdRename,
   usePatchDatasetsMySavesIdMove,
   usePostUserFolders,
@@ -75,7 +76,7 @@ import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { buildSaveTree, type SaveFolderNode, saveFolderNodeHasSaves } from "@/lib/datasetLibrary";
+import { buildMergedTree, type MergedFolderNode, type MergedEntry } from "@/lib/datasetLibrary";
 
 // Undo window for "soft" dataset deletes (ms). The row is hidden from the
 // list immediately and the actual DELETE request is deferred until the
@@ -719,8 +720,34 @@ const SaveCard: React.FC<{
               {displayName}
             </div>
           )}
-          <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
-            {save.displayLabel ? (save.catalog?.name ?? save.catalogId) : (save.catalog?.sourceAgency ?? "—")}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <span
+              data-testid={`provenance-catalog-${save.id}`}
+              style={{
+                fontSize: "calc(9.5px * var(--bs-font-scale, 1))",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "#67e8f9",
+                border: "1px solid rgba(0,229,255,0.35)",
+                borderRadius: 3,
+                padding: "0px 5px",
+                flexShrink: 0,
+                lineHeight: 1.6,
+              }}
+            >
+              Catalog
+            </span>
+            <span
+              style={{
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                color: "#94a3b8",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {save.displayLabel ? (save.catalog?.name ?? save.catalogId) : (save.catalog?.sourceAgency ?? "—")}
+            </span>
           </div>
         </div>
         <span
@@ -887,15 +914,18 @@ const SaveCard: React.FC<{
 // Save folder components — folder grouping for My Saves / Catalog Saves tab
 // ---------------------------------------------------------------------------
 
-/** Simple dialog that lets the user pick a folder (or root) for a save. */
-const SaveMoveDialog: React.FC<{
-  save: UserCatalogSave;
+/** Simple dialog that lets the user pick a folder (or root) for a save or upload. */
+const MoveToFolderDialog: React.FC<{
+  /** Display name of the item being moved. */
+  name: string;
+  /** The item's current folder id (null = root). */
+  currentFolderId: string | null;
   folders: DatasetFolder[];
   isPending?: boolean;
   onCancel: () => void;
   onConfirm: (folderId: string | null) => void;
-}> = ({ save, folders, isPending = false, onCancel, onConfirm }) => {
-  const displayName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
+}> = ({ name, currentFolderId, folders, isPending = false, onCancel, onConfirm }) => {
+  const displayName = name;
 
   // Build flat options list (all folders + root option)
   const options = useMemo(() => {
@@ -905,7 +935,7 @@ const SaveMoveDialog: React.FC<{
     return [{ id: null, name: "📂 Root level" }, ...sorted.map((f) => ({ id: f.id as string | null, name: `📁 ${f.name}` }))];
   }, [folders]);
 
-  const currentIdx = options.findIndex((o) => o.id === (save.folderId ?? null));
+  const currentIdx = options.findIndex((o) => o.id === currentFolderId);
   const [selectedIdx, setSelectedIdx] = useState(Math.max(currentIdx, 0));
 
   const selected = options[selectedIdx];
@@ -1116,14 +1146,87 @@ const DraggableSaveCard: React.FC<{
   );
 };
 
-/** Collapsible folder section that acts as a drop target for save cards. */
+/** Wraps an UploadCard with drag + move-to-folder behaviour. */
+const DraggableUploadCard: React.FC<{
+  dataset: UserDatasetMeta;
+  onLoad: (id: string, createdAt?: string | null) => void;
+  onDelete: (dataset: UserDatasetMeta) => void;
+  onRename: (id: string, name: string) => Promise<void>;
+  deleting: boolean;
+  onMoveTo: (dataset: UserDatasetMeta) => void;
+}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `upload-${dataset.id}`,
+    data: { kind: "upload", datasetId: dataset.id },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ opacity: isDragging ? 0.4 : 1, position: "relative" }}
+    >
+      {/* Invisible drag handle area — grab via right-edge grip icon */}
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label={`Drag ${dataset.name} to a folder`}
+        title="Drag to a folder"
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 88,
+          background: "transparent",
+          border: "none",
+          color: "#475569",
+          cursor: "grab",
+          fontSize: "calc(13px * var(--bs-font-scale, 1))",
+          padding: "2px 4px",
+          zIndex: 1,
+          lineHeight: 1,
+        }}
+      >
+        ⠿
+      </button>
+      <button
+        aria-label={`Move "${dataset.name}" to folder`}
+        title="Move to folder"
+        data-testid={`btn-move-upload-${dataset.id}`}
+        onClick={() => onMoveTo(dataset)}
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 63,
+          background: "transparent",
+          border: "none",
+          color: "#475569",
+          cursor: "pointer",
+          fontSize: "calc(12px * var(--bs-font-scale, 1))",
+          padding: "2px 4px",
+          zIndex: 1,
+          lineHeight: 1,
+        }}
+      >
+        📁
+      </button>
+      <UploadCard
+        dataset={dataset}
+        onLoad={onLoad}
+        onDelete={onDelete}
+        onRename={onRename}
+        deleting={deleting}
+      />
+    </div>
+  );
+};
+
+/** Collapsible folder section that acts as a drop target for dataset cards. */
 const SaveFolderSection: React.FC<{
-  node: import("@/lib/datasetLibrary").SaveFolderNode;
+  node: MergedFolderNode;
   isExpanded: boolean;
   onToggle: () => void;
-  renderSave: (save: UserCatalogSave) => React.ReactNode;
-  renderSubFolder: (child: import("@/lib/datasetLibrary").SaveFolderNode) => React.ReactNode;
-  onShowMenu?: (e: React.MouseEvent, node: import("@/lib/datasetLibrary").SaveFolderNode) => void;
+  renderItem: (item: MergedEntry) => React.ReactNode;
+  renderSubFolder: (child: MergedFolderNode) => React.ReactNode;
+  onShowMenu?: (e: React.MouseEvent, node: MergedFolderNode) => void;
   isRenaming?: boolean;
   renameValue?: string;
   onRenameChange?: (v: string) => void;
@@ -1133,7 +1236,7 @@ const SaveFolderSection: React.FC<{
   node,
   isExpanded,
   onToggle,
-  renderSave,
+  renderItem,
   renderSubFolder,
   onShowMenu,
   isRenaming = false,
@@ -1146,9 +1249,9 @@ const SaveFolderSection: React.FC<{
     id: `folder-${node.folder.id}`,
     data: { kind: "folder", folderId: node.folder.id },
   });
-  const saveCount = node.saves.length;
+  const itemCount = node.items.length;
   const childCount = node.children.length;
-  const totalCount = saveCount + childCount;
+  const totalCount = itemCount + childCount;
   const indent = node.depth * 14;
   const renameInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1245,12 +1348,12 @@ const SaveFolderSection: React.FC<{
         )}
       </div>
       {isExpanded && (
-        <div style={{ marginLeft: 14 }}>
+        <div style={{ marginLeft: 14 }} data-testid={`save-folder-contents-${node.folder.id}`}>
           {node.children.map((child) => renderSubFolder(child))}
-          {node.saves.map((s) => renderSave(s))}
-          {node.children.length === 0 && node.saves.length === 0 && (
+          {node.items.map((item) => renderItem(item))}
+          {node.children.length === 0 && node.items.length === 0 && (
             <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#475569", padding: "4px 8px" }}>
-              No saves in this folder
+              No datasets in this folder
             </div>
           )}
         </div>
@@ -1376,7 +1479,25 @@ const UploadCard: React.FC<{
               {dataset.name}
             </div>
           )}
-          <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>{createdDate}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <span
+              data-testid={`provenance-upload-${dataset.id}`}
+              style={{
+                fontSize: "calc(9.5px * var(--bs-font-scale, 1))",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "#c4b5fd",
+                border: "1px solid rgba(167,139,250,0.45)",
+                borderRadius: 3,
+                padding: "0px 5px",
+                flexShrink: 0,
+                lineHeight: 1.6,
+              }}
+            >
+              Upload
+            </span>
+            <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>{createdDate}</span>
+          </div>
         </div>
         {!editing && (
           <ViewscreenTooltip label="Rename this uploaded dataset" side="left">
@@ -2150,6 +2271,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
 
   const deleteUploadMutation = useDeleteUserDatasetsId();
   const renameUploadMutation = usePatchUserDatasetsIdRename();
+  const moveUploadMutation = usePatchUserDatasetsIdMove();
   const renameSaveMutation = usePatchDatasetsMySavesIdRename();
   const moveSaveMutation = usePatchDatasetsMySavesIdMove();
   const postFolderMutation = usePostUserFolders();
@@ -2165,10 +2287,10 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const [saveFolderDeleteError, setSaveFolderDeleteError] = useState<string | null>(null);
 
   const handleSaveFolderMenu = useCallback(
-    (e: React.MouseEvent, node: import("@/lib/datasetLibrary").SaveFolderNode) => {
+    (e: React.MouseEvent, node: MergedFolderNode) => {
       e.preventDefault();
       e.stopPropagation();
-      const hasSaves = node.saves.length > 0 || node.children.length > 0;
+      const hasSaves = node.items.length > 0 || node.children.length > 0;
       useContextMenuStore.getState().show(e.clientX, e.clientY, [
         {
           label: "Rename",
@@ -2232,16 +2354,28 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserFoldersQueryKey() },
   });
 
-  // Move-to-folder dialog state
-  const [moveSaveTarget, setMoveSaveTarget] = useState<UserCatalogSave | null>(null);
+  // Move-to-folder dialog state — either a catalog save or an upload dataset.
+  const [moveTarget, setMoveTarget] = useState<
+    | { kind: "save"; save: UserCatalogSave }
+    | { kind: "upload"; dataset: UserDatasetMeta }
+    | null
+  >(null);
 
   const handleMoveSave = useCallback(async (saveId: string, folderId: string | null) => {
     await moveSaveMutation.mutateAsync({ id: saveId, data: { folderId } });
     await qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() });
   }, [moveSaveMutation, qc]);
 
-  // DnD for catalog saves
-  const [activeDragSave, setActiveDragSave] = useState<{ saveId: string; saveName: string } | null>(null);
+  // Uploads move through the dataset move endpoint; invalidating the
+  // user-datasets list keeps both this tree and the Dataset panel's library
+  // (which share the query) in sync.
+  const handleMoveUpload = useCallback(async (datasetId: string, folderId: string | null) => {
+    await moveUploadMutation.mutateAsync({ id: datasetId, data: { folderId } });
+    await qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+  }, [moveUploadMutation, qc]);
+
+  // DnD for the merged My Datasets tree (saves + uploads)
+  const [activeDrag, setActiveDrag] = useState<{ label: string } | null>(null);
   const saveDndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
 
@@ -2433,26 +2567,39 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     });
 
   const handleSaveDragStart = useCallback((event: DragStartEvent) => {
-    const data = event.active.data.current as { kind: string; saveId: string } | undefined;
+    const data = event.active.data.current as
+      | { kind: "save"; saveId: string }
+      | { kind: "upload"; datasetId: string }
+      | undefined;
     if (data?.kind === "save") {
       const save = visibleSaves.find((s) => s.id === data.saveId);
       if (save) {
         const name = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
-        setActiveDragSave({ saveId: data.saveId, saveName: name });
+        setActiveDrag({ label: name });
       }
+    } else if (data?.kind === "upload") {
+      const dataset = userDatasets.find((d) => d.id === data.datasetId);
+      if (dataset) setActiveDrag({ label: dataset.name });
     }
-  }, [visibleSaves]);
+  }, [visibleSaves, userDatasets]);
 
   const handleSaveDragEnd = useCallback((event: DragEndEvent) => {
-    setActiveDragSave(null);
+    setActiveDrag(null);
     const over = event.over;
     if (!over) return;
-    const saveData = event.active.data.current as { kind: string; saveId: string } | undefined;
-    if (saveData?.kind !== "save") return;
+    const dragData = event.active.data.current as
+      | { kind: "save"; saveId: string }
+      | { kind: "upload"; datasetId: string }
+      | undefined;
+    if (!dragData) return;
     const dropData = over.data.current as { kind: string; folderId?: string } | undefined;
     const targetFolderId = dropData?.kind === "folder" ? (dropData.folderId ?? null) : null;
-    void handleMoveSave(saveData.saveId, targetFolderId);
-  }, [handleMoveSave]);
+    if (dragData.kind === "save") {
+      void handleMoveSave(dragData.saveId, targetFolderId);
+    } else if (dragData.kind === "upload") {
+      void handleMoveUpload(dragData.datasetId, targetFolderId);
+    }
+  }, [handleMoveSave, handleMoveUpload]);
 
   const handleSave = useCallback(
     async (id: string) => {
@@ -2743,111 +2890,46 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               Sign in to see saved datasets.
             </div>
           )}
-          {isSignedIn && isSavePending && (
+          {isSignedIn && (isSavePending || isUploadPending) && (
             <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
           )}
 
-          {/* ── My Saved Uploads section ── */}
-          {isSignedIn && (
-            <>
-              <div
-                style={{
-                  fontSize: "calc(11px * var(--bs-font-scale, 1))",
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                  color: "#64748b",
-                  marginBottom: 8,
-                  marginTop: 2,
-                }}
-              >
-                My Saved Uploads
-              </div>
-              {deleteUploadError && (
-                <div
-                  data-testid="upload-delete-error"
-                  style={{
-                    marginBottom: 8,
-                    padding: "6px 8px",
-                    border: "1px solid rgba(248,113,113,0.4)",
-                    background: "rgba(248,113,113,0.08)",
-                    borderRadius: 4,
-                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                    color: "#fca5a5",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <span>⚠ {deleteUploadError}</span>
-                  <button
-                    onClick={() => setDeleteUploadError(null)}
-                    aria-label="Dismiss error"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "#cbd5e1",
-                      cursor: "pointer",
-                      fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-              {isUploadPending && (
-                <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8 }}>Loading…</div>
-              )}
-              {!isUploadPending && uploadOnlyDatasets.length === 0 && (
-                <div
-                  style={{
-                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                    color: "#94a3b8",
-                    textAlign: "center",
-                    padding: "12px 0 16px",
-                  }}
-                >
-                  No uploaded datasets yet
-                </div>
-              )}
-              {uploadOnlyDatasets.map((dataset) => (
-                <UploadCard
-                  key={dataset.id}
-                  dataset={dataset}
+          {/* ── My Datasets section — one merged tree of uploads + catalog saves ── */}
+          {isSignedIn && (() => {
+            const mergedTree = buildMergedTree(userFolders, visibleSaves, uploadOnlyDatasets);
+
+            const renderItem = (item: MergedEntry): React.ReactNode =>
+              item.kind === "save" ? (
+                <DraggableSaveCard
+                  key={`save-${item.save.id}`}
+                  save={item.save}
+                  onLoadUserDataset={handleLoadUserDataset}
+                  onRetry={handleRetry}
+                  retrying={retryingIds.has(item.save.id)}
+                  onDelete={handleRequestDelete}
+                  deleting={deletingIds.has(item.save.id)}
+                  onRename={handleRenameSave}
+                  onMoveTo={(s) => setMoveTarget({ kind: "save", save: s })}
+                />
+              ) : (
+                <DraggableUploadCard
+                  key={`upload-${item.dataset.id}`}
+                  dataset={item.dataset}
                   onLoad={handleLoadUserDataset}
                   onDelete={handleRequestDeleteUpload}
                   onRename={handleRenameUpload}
-                  deleting={deletingUploadIds.has(dataset.id)}
+                  deleting={deletingUploadIds.has(item.dataset.id)}
+                  onMoveTo={(d) => setMoveTarget({ kind: "upload", dataset: d })}
                 />
-              ))}
-            </>
-          )}
+              );
 
-          {/* ── Catalog Saves section ── */}
-          {isSignedIn && (() => {
-            const saveTree = buildSaveTree(userFolders, visibleSaves);
-
-            const renderSave = (save: UserCatalogSave) => (
-              <DraggableSaveCard
-                key={save.id}
-                save={save}
-                onLoadUserDataset={handleLoadUserDataset}
-                onRetry={handleRetry}
-                retrying={retryingIds.has(save.id)}
-                onDelete={handleRequestDelete}
-                deleting={deletingIds.has(save.id)}
-                onRename={handleRenameSave}
-                onMoveTo={(s) => setMoveSaveTarget(s)}
-              />
-            );
-
-            const renderFolderNode = (node: SaveFolderNode): React.ReactNode => (
+            const renderFolderNode = (node: MergedFolderNode): React.ReactNode => (
               <SaveFolderSection
                 key={node.folder.id}
                 node={node}
                 isExpanded={saveFolderExpanded[node.folder.id] ?? false}
                 onToggle={() => handleToggleSaveFolder(node.folder.id)}
-                renderSave={renderSave}
+                renderItem={renderItem}
                 renderSubFolder={renderFolderNode}
                 onShowMenu={handleSaveFolderMenu}
                 isRenaming={renamingSaveFolder?.id === node.folder.id}
@@ -2858,8 +2940,12 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               />
             );
 
-            // Only show folders that have at least one save in their subtree
-            const visibleFolderRoots = saveTree.roots.filter(saveFolderNodeHasSaves);
+            const isListPending = isSavePending || isUploadPending;
+            const isEmpty =
+              !isListPending &&
+              visibleSaves.length === 0 &&
+              uploadOnlyDatasets.length === 0 &&
+              userFolders.length === 0;
 
             return (
               <DndContext
@@ -2876,15 +2962,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                       textTransform: "uppercase",
                       color: "#64748b",
                       marginBottom: 8,
-                      marginTop: 16,
-                      paddingTop: 12,
-                      borderTop: "1px solid rgba(0,229,255,0.08)",
+                      marginTop: 2,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
                     }}
                   >
-                    <span>Catalog Saves</span>
+                    <span>My Datasets</span>
                     <button
                       onClick={async () => {
                         const name = `New folder ${userFolders.length + 1}`;
@@ -2892,7 +2976,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                         await qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() });
                       }}
                       disabled={postFolderMutation.isPending}
-                      title="New folder for saves"
+                      title="New folder for datasets"
                       style={{
                         background: "transparent",
                         border: "1px solid rgba(0,229,255,0.3)",
@@ -2943,7 +3027,41 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                     </div>
                   )}
 
-                  {!isSavePending && visibleSaves.length === 0 && (
+                  {deleteUploadError && (
+                    <div
+                      data-testid="upload-delete-error"
+                      style={{
+                        marginBottom: 8,
+                        padding: "6px 8px",
+                        border: "1px solid rgba(248,113,113,0.4)",
+                        background: "rgba(248,113,113,0.08)",
+                        borderRadius: 4,
+                        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                        color: "#fca5a5",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <span>⚠ {deleteUploadError}</span>
+                      <button
+                        onClick={() => setDeleteUploadError(null)}
+                        aria-label="Dismiss error"
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "#cbd5e1",
+                          cursor: "pointer",
+                          fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+
+                  {isEmpty && (
                     <div
                       style={{
                         fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
@@ -2952,20 +3070,20 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                         padding: "12px 0 16px",
                       }}
                     >
-                      No catalog saves yet — search and save some above
+                      No datasets yet — upload sonar data or save datasets from the catalog
                     </div>
                   )}
 
-                  {/* Root-level saves (no folder) */}
-                  {saveTree.rootSaves.map(renderSave)}
+                  {/* Root-level datasets (no folder) */}
+                  {mergedTree.rootItems.map(renderItem)}
 
-                  {/* Folder sections */}
-                  {visibleFolderRoots.map(renderFolderNode)}
+                  {/* Folder sections — every folder is shown, including empty ones */}
+                  {mergedTree.roots.map(renderFolderNode)}
                 </div>
 
                 {/* Drag overlay */}
                 <DragOverlay dropAnimation={null}>
-                  {activeDragSave && (
+                  {activeDrag && (
                     <div
                       style={{
                         background: "rgba(0,10,20,0.9)",
@@ -2978,7 +3096,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                         pointerEvents: "none",
                       }}
                     >
-                      📦 {activeDragSave.saveName}
+                      📦 {activeDrag.label}
                     </div>
                   )}
                 </DragOverlay>
@@ -2986,16 +3104,29 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             );
           })()}
 
-          {/* Move-to-folder dialog */}
-          {moveSaveTarget && (
-            <SaveMoveDialog
-              save={moveSaveTarget}
+          {/* Move-to-folder dialog (saves + uploads) */}
+          {moveTarget && (
+            <MoveToFolderDialog
+              name={
+                moveTarget.kind === "save"
+                  ? (moveTarget.save.displayLabel ?? moveTarget.save.catalog?.name ?? moveTarget.save.catalogId)
+                  : moveTarget.dataset.name
+              }
+              currentFolderId={
+                moveTarget.kind === "save"
+                  ? (moveTarget.save.folderId ?? null)
+                  : (moveTarget.dataset.folderId ?? null)
+              }
               folders={userFolders}
-              isPending={moveSaveMutation.isPending}
-              onCancel={() => setMoveSaveTarget(null)}
+              isPending={moveTarget.kind === "save" ? moveSaveMutation.isPending : moveUploadMutation.isPending}
+              onCancel={() => setMoveTarget(null)}
               onConfirm={async (folderId) => {
-                await handleMoveSave(moveSaveTarget.id, folderId);
-                setMoveSaveTarget(null);
+                if (moveTarget.kind === "save") {
+                  await handleMoveSave(moveTarget.save.id, folderId);
+                } else {
+                  await handleMoveUpload(moveTarget.dataset.id, folderId);
+                }
+                setMoveTarget(null);
               }}
             />
           )}
@@ -3042,7 +3173,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 </div>
                 <div style={{ fontSize: "calc(14px * var(--bs-font-scale, 1))", color: "#94a3b8", lineHeight: 1.5, marginBottom: 14 }}>
                   {confirmDeleteSaveFolder.hasSaves
-                    ? "Saves inside this folder will be moved to the root level. The folder itself will be removed."
+                    ? "Datasets inside this folder (uploads and catalog saves) will be moved to the root level. The folder itself will be removed."
                     : "This empty folder will be removed."}
                 </div>
                 {saveFolderDeleteError && (
