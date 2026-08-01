@@ -616,7 +616,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
 
 const SaveCard: React.FC<{
   save: UserCatalogSave;
-  onLoadUserDataset: (userDatasetId: string, createdAt?: string | null) => void;
+  onLoadUserDataset: (save: UserCatalogSave) => void;
   onRetry: (saveId: string) => void;
   retrying: boolean;
   onDelete: (save: UserCatalogSave) => void;
@@ -858,7 +858,7 @@ const SaveCard: React.FC<{
       {save.status === "ready" && save.datasetId && (
         <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
           <button
-            onClick={() => onLoadUserDataset(save.datasetId!, save.catalog?.createdAt)}
+            onClick={() => onLoadUserDataset(save)}
             style={{
               marginTop: 8,
               fontSize: "calc(12px * var(--bs-font-scale, 1))",
@@ -1071,7 +1071,7 @@ const MoveToFolderDialog: React.FC<{
 /** Wraps a SaveCard with drag behaviour. */
 const DraggableSaveCard: React.FC<{
   save: UserCatalogSave;
-  onLoadUserDataset: (id: string, createdAt?: string | null) => void;
+  onLoadUserDataset: (save: UserCatalogSave) => void;
   onRetry: (id: string) => void;
   retrying: boolean;
   onDelete: (save: UserCatalogSave) => void;
@@ -2646,6 +2646,41 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   // Load a materialized catalog save through the unified user-datasets read
   // path. DatasetPanel listens on `pendingExternalUserDatasetId` and runs the
   // /user/datasets/:id/{terrain,overview} fetch + classification pipeline.
+  //
+  // The preview preflight uses the save's actual catalog ID (preset string like
+  // "thorne-bay") or its custom-upload UUID (`save.datasetId`), whichever is
+  // present. Using the save-row UUID directly would return 404 from the preview
+  // endpoint (it only handles preset IDs and custom_datasets UUIDs), which
+  // the store misinterprets as dataSource:"unknown" and opens the
+  // SimulatedDataConfirmDialog unexpectedly.
+  const handleLoadCatalogSave = useCallback(
+    (save: UserCatalogSave) => {
+      // For custom-upload saves `save.datasetId` is the custom_datasets UUID
+      // (recognized by the preview endpoint). For preset-catalog saves it is
+      // null until materialization completes, so fall back to `save.catalogId`
+      // (the preset string ID, also recognized by the preview endpoint).
+      const previewId = save.datasetId ?? save.catalogId;
+      const datasetName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
+      void requestDatasetSwitch({
+        datasetId: previewId,
+        datasetName,
+        onConfirm: () => {
+          // The terrain/overview pipeline reads custom_datasets by UUID, so
+          // pass save.datasetId (the materialized custom_datasets row UUID).
+          // The Load button is only rendered when save.datasetId is non-null
+          // (save.status === "ready" && save.datasetId guard in SaveCard),
+          // so the non-null assertion is safe here.
+          setPendingExternalUserDatasetId(save.datasetId!);
+          setCatalogSourcedAt({ forDatasetId: save.datasetId!, date: save.catalog?.createdAt ?? null });
+          onClose();
+        },
+      });
+    },
+    [setPendingExternalUserDatasetId, setCatalogSourcedAt, onClose],
+  );
+
+  // Load a user-uploaded custom dataset directly. The upload UUID is
+  // recognized by both the preview endpoint and the terrain/overview pipeline.
   const handleLoadUserDataset = useCallback(
     (userDatasetId: string, createdAt?: string | null) => {
       void requestDatasetSwitch({
@@ -2903,7 +2938,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 <DraggableSaveCard
                   key={`save-${item.save.id}`}
                   save={item.save}
-                  onLoadUserDataset={handleLoadUserDataset}
+                  onLoadUserDataset={handleLoadCatalogSave}
                   onRetry={handleRetry}
                   retrying={retryingIds.has(item.save.id)}
                   onDelete={handleRequestDelete}
