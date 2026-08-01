@@ -108,8 +108,8 @@ export const SidebarModeTabs: React.FC = () => {
       style={{
         display: "flex",
         width: "100%",
-        minWidth: 230,
-        maxWidth: 260,
+        minWidth: 460,
+        maxWidth: 520,
         background: "rgba(2,8,18,0.94)",
         border: "1px solid rgba(0,229,255,0.22)",
         borderRadius: 6,

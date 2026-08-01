@@ -27,8 +27,8 @@ const PANEL: React.CSSProperties = {
   letterSpacing: "0.07em",
   userSelect: "none",
   pointerEvents: "auto",
-  minWidth: 230,
-  maxWidth: 260,
+  minWidth: 460,
+  maxWidth: 520,
 };
 
 const CYAN: React.CSSProperties = { color: "#00e5ff", textShadow: "0 0 6px rgba(0,229,255,0.5)" };

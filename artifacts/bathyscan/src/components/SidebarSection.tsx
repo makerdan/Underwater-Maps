@@ -25,8 +25,8 @@ const SHELL: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#cbd5e1",
   fontSize: "calc(18px * var(--bs-font-scale, 1))",
-  minWidth: 230,
-  maxWidth: 260,
+  minWidth: 460,
+  maxWidth: 520,
   backdropFilter: "blur(6px)",
   pointerEvents: "auto",
 };

@@ -54,8 +54,8 @@ const PANEL: React.CSSProperties = {
   fontSize: "calc(18px * var(--bs-font-scale, 1))",
   backdropFilter: "blur(6px)",
   pointerEvents: "auto",
-  minWidth: 200,
-  maxWidth: 250,
+  minWidth: 400,
+  maxWidth: 500,
 };
 
 const AMBER: React.CSSProperties = {

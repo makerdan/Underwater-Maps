@@ -1277,7 +1277,7 @@ function Main() {
               touchAction: "pan-y",
             }}
           >
-            <div className="flex justify-end" style={{ minWidth: 268, maxWidth: 308 }}>
+            <div className="flex justify-end" style={{ minWidth: 536, maxWidth: 616 }}>
               <ViewscreenTooltip label="Hide side pane to free up screen space" side="right">
                 <button
                   onClick={() => setSidePaneCollapsed(true)}
@@ -1332,8 +1332,8 @@ function Main() {
                   onClick={() => setSidebarMode('plan')}
                   style={{
                     width: "100%",
-                    minWidth: 230,
-                    maxWidth: 260,
+                    minWidth: 460,
+                    maxWidth: 520,
                     padding: "7px 12px",
                     background: "rgba(2,8,18,0.88)",
                     border: "1px solid rgba(52,211,153,0.25)",
@@ -1404,8 +1404,8 @@ function Main() {
                 <div
                   data-testid="plan-timeline-hint"
                   style={{
-                    minWidth: 230,
-                    maxWidth: 260,
+                    minWidth: 460,
+                    maxWidth: 520,
                     padding: "7px 10px",
                     background: "rgba(0,229,255,0.04)",
                     border: "1px dashed rgba(0,229,255,0.18)",
@@ -1576,8 +1576,8 @@ function Main() {
                     onClick={() => setQueryOpen(true)}
                     style={{
                       width: "100%",
-                      minWidth: 230,
-                      maxWidth: 260,
+                      minWidth: 460,
+                      maxWidth: 520,
                       padding: "9px 14px",
                       background: "rgba(2,8,18,0.94)",
                       border: "1px solid rgba(0,229,255,0.22)",
