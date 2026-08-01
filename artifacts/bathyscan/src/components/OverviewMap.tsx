@@ -1134,6 +1134,12 @@ export const OverviewMap: React.FC = () => {
     // the user moves the map.
     let lastViewKey: string | null = null;
 
+    // Tracks when we first observed non-empty visibleDatasets with a null grid,
+    // so we can switch from "LOADING..." to an error message after a timeout.
+    // Reset to null whenever the grid arrives (effect re-runs) or visibleDatasets
+    // becomes empty again.
+    let nullGridSince: number | null = null;
+
     const loop = () => {
       const ctx = canvas.getContext("2d");
       // `grid` is the primary dataset's overview grid — used for per-dataset data
@@ -1156,17 +1162,45 @@ export const OverviewMap: React.FC = () => {
       ctx.fillStyle = "#020818";
       ctx.fillRect(0, 0, cW, cH);
 
-      if (!grid || !bitmap || !t) {
-        // Show a pulsing loading indicator while overview data is fetching.
+      // Case 1: No datasets selected — show an empty-state hint rather than the
+      // loading spinner. The rAF loop keeps running so the hint stays visible and
+      // responds immediately when the user selects a dataset.
+      const visibleNow = visibleDatasetsRef.current;
+      if (visibleNow.length === 0) {
+        nullGridSince = null; // reset the stale-fetch tracker
         ctx.fillStyle = "rgba(0,229,255,0.35)";
         ctx.font = "11px 'JetBrains Mono', monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        const dotsCount = 1 + (Math.floor(Date.now() / 400) % 3);
-        ctx.fillText("LOADING" + ".".repeat(dotsCount), cW / 2, cH / 2);
+        ctx.fillText("No datasets selected", cW / 2, cH / 2 - 8);
+        ctx.fillText("Choose a dataset from Find Data", cW / 2, cH / 2 + 8);
         rafRef.current = requestAnimationFrame(loop);
         return;
       }
+
+      if (!grid || !bitmap || !t) {
+        // Case 2: Datasets are selected but their grids are still fetching.
+        // Track how long we've been waiting; after 15 s assume the fetch failed
+        // and show an error message instead of spinning forever.
+        if (nullGridSince === null) nullGridSince = Date.now();
+        const waitedMs = Date.now() - nullGridSince;
+        ctx.fillStyle = "rgba(0,229,255,0.35)";
+        ctx.font = "11px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        if (waitedMs > 15_000) {
+          ctx.fillText("Could not load map data", cW / 2, cH / 2);
+        } else {
+          const dotsCount = 1 + (Math.floor(Date.now() / 400) % 3);
+          ctx.fillText("LOADING" + ".".repeat(dotsCount), cW / 2, cH / 2);
+        }
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
+      // Grid arrived — reset the stale-fetch tracker for the next time the
+      // primary dataset changes and we enter a fresh loading phase.
+      nullGridSince = null;
 
       // Tick the fit-to-data tween BEFORE the dirty check so the animation
       // keeps running even when nothing else has changed.
@@ -1233,7 +1267,7 @@ export const OverviewMap: React.FC = () => {
       ctx.globalAlpha = 1.0;
 
       // Secondary heatmaps — rendered first so the primary sits on top.
-      const visibleNow = visibleDatasetsRef.current;
+      // `visibleNow` is already declared above (for the empty-state check).
       const primIdNow = primaryDatasetIdRef.current;
       if (visibleNow.length > 1) {
         for (const v of visibleNow) {

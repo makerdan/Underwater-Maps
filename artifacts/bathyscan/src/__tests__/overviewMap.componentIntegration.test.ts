@@ -748,3 +748,182 @@ describe("OverviewMap — null overviewGrid in visibleDatasets does not crash", 
     await waitForCameraArrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 4. Empty-state detection — no datasets selected shows hint, not LOADING
+//
+// When visibleDatasets is empty the rAF loop now takes the early-exit
+// empty-state branch, rendering "No datasets selected" text.  It must NOT
+// render "LOADING" which previously spun forever in this state.
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — empty visibleDatasets shows empty-state hint, not LOADING", () => {
+  beforeEach(() => {
+    mockConfig.efhData = undefined;
+  });
+
+  /** Build a mock canvas 2D context that records every fillText call. */
+  function makeMockCtxWithFillText() {
+    const fillTextCalls: string[] = [];
+    const ctx = new Proxy(
+      {
+        fillRect: vi.fn(),
+        fillStyle: "" as string | CanvasGradient | CanvasPattern,
+        font: "",
+        textAlign: "start" as CanvasTextAlign,
+        textBaseline: "alphabetic" as CanvasTextBaseline,
+        fillText: vi.fn((...args: [string, number, number]) => {
+          fillTextCalls.push(args[0]);
+        }),
+        measureText: vi.fn(() => ({ width: 50 })),
+        drawImage: vi.fn(),
+        save: vi.fn(),
+        restore: vi.fn(),
+        beginPath: vi.fn(),
+        closePath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fill: vi.fn(),
+        translate: vi.fn(),
+        rotate: vi.fn(),
+        scale: vi.fn(),
+        setLineDash: vi.fn(),
+        strokeStyle: "",
+        lineWidth: 1,
+        globalAlpha: 1,
+        imageSmoothingEnabled: true,
+        shadowColor: "",
+        shadowBlur: 0,
+        strokeRect: vi.fn(),
+        roundRect: vi.fn(),
+        clip: vi.fn(),
+        createImageData: vi.fn((w: number, h: number) => ({
+          data: new Uint8ClampedArray(w * h * 4),
+          width: w,
+          height: h,
+        })),
+        putImageData: vi.fn(),
+      },
+      {
+        set(target: Record<string, unknown>, prop: string, value: unknown) {
+          target[prop] = value;
+          return true;
+        },
+      },
+    );
+    return { ctx, fillTextCalls };
+  }
+
+  it("renders 'No datasets selected' hint and does NOT render 'LOADING' when visibleDatasets is empty", async () => {
+    Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
+
+    // Empty visibleDatasets — this is the state that caused the eternal LOADING spinner.
+    useTerrainStore.setState({
+      visibleDatasets: [],
+      primaryDatasetId: null,
+      primaryDatasetIds: [],
+      overviewGrid: null,
+      activeGrid: null,
+    });
+
+    useUiStore.setState({
+      substrateColorMode: false,
+      selectedSubstrate: null,
+      efhOverlayEnabled: false,
+      overviewOpen: true,
+      pendingDropIn: null,
+    });
+
+    useCameraStore.setState({
+      cameraPosition: { known: false },
+      heading: 0,
+      cameraDepth: 0,
+      cameraAltitude: 0,
+    });
+
+    const { ctx, fillTextCalls } = makeMockCtxWithFillText();
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // Allow several rAF frames to fire so the loop definitely executes.
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
+
+    getContextSpy.mockRestore();
+
+    // Must have rendered the empty-state message.
+    expect(
+      fillTextCalls.some((t) => t.includes("No datasets selected")),
+      `Expected fillText to be called with "No datasets selected". Got: ${JSON.stringify(fillTextCalls)}`,
+    ).toBe(true);
+
+    // Must NOT have rendered the loading spinner text.
+    expect(
+      fillTextCalls.some((t) => t.startsWith("LOADING")),
+      `Expected "LOADING" text to be absent when visibleDatasets is empty. Got: ${JSON.stringify(fillTextCalls)}`,
+    ).toBe(false);
+  });
+
+  it("still renders 'LOADING' when a dataset is selected but its grid is not yet fetched", async () => {
+    Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
+
+    // One dataset selected, grid not yet loaded — grid fetch is in flight.
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: "fetching-ds", source: "preset", overviewGrid: null, activeGrid: null },
+      ],
+      primaryDatasetId: "fetching-ds",
+      primaryDatasetIds: ["fetching-ds"],
+      overviewGrid: null,
+      activeGrid: null,
+    });
+
+    useUiStore.setState({
+      substrateColorMode: false,
+      selectedSubstrate: null,
+      efhOverlayEnabled: false,
+      overviewOpen: true,
+      pendingDropIn: null,
+    });
+
+    useCameraStore.setState({
+      cameraPosition: { known: false },
+      heading: 0,
+      cameraDepth: 0,
+      cameraAltitude: 0,
+    });
+
+    const { ctx, fillTextCalls } = makeMockCtxWithFillText();
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
+
+    getContextSpy.mockRestore();
+
+    // Must have rendered the loading indicator (dataset selected, grid in-flight).
+    expect(
+      fillTextCalls.some((t) => t.startsWith("LOADING")),
+      `Expected "LOADING" text when dataset is selected but grid is null. Got: ${JSON.stringify(fillTextCalls)}`,
+    ).toBe(true);
+
+    // Must NOT have rendered the empty-state message.
+    expect(
+      fillTextCalls.some((t) => t.includes("No datasets selected")),
+      `Expected "No datasets selected" to be absent when a dataset is selected. Got: ${JSON.stringify(fillTextCalls)}`,
+    ).toBe(false);
+  });
+});
