@@ -480,7 +480,29 @@ Authentication is handled by **Clerk** across all surfaces:
 
 ## Agent rules
 
-The Failure Gate skill (`.local/custom_skills/failure-gate/SKILL.md`) applies to every task plan written in this project. Before writing any plan, complete the discovery checklist in that skill. Every plan file must include a `## Pre-existing failures to ignore` section. If none are known, use the "None known" template from the skill.
+> **HARD GATE — applies before writing any plan.**
+> Read `.agents/skills/failure-gate/SKILL.md` now if you have not already done so this session.
+
+### Failure Gate checklist (complete every item before writing any plan)
+
+1. **Memory scan** — Open `.agents/memory/MEMORY.md` and scan for entries touching
+   suites or files this task affects. Note any known-flaky patterns.
+2. **Recent task scan** — Search recently merged task descriptions for "pre-existing",
+   "known failure", "flaky", or the suite names this task touches.
+3. **Spot-run** (api-server tasks only) — Run the api-server test suite once in its
+   current state and record any failures. Those failures are pre-existing by definition.
+   Skip if the task does not touch `artifacts/api-server`.
+4. **Write the section** — Add `## Pre-existing failures to ignore` to the plan after
+   "Steps". Use the populated template if failures were found, or the "None known"
+   template if not. The section is MANDATORY — a plan without it is defective.
+5. **Emit the announcement** — Before writing the plan's first heading, emit:
+   `[FAILURE-GATE] Discovery checklist complete. Pre-existing failures documented: <N>.`
+
+### Lint guard
+
+`node scripts/check-failure-gate.mjs` scans all `.local/tasks/*.md` plan files and
+fails if any are missing the required section. Run it after writing a plan batch to
+verify compliance.
 
 ## User preferences
 
