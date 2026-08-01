@@ -532,6 +532,110 @@ describe("OverviewMap — renderEfhLegend called/suppressed by LOD gate and over
 });
 
 // ---------------------------------------------------------------------------
+// 4. Retry button — appears after 15 s load timeout, clicking it resets to LOADING
+//
+// When visibleDatasets is non-empty but the overview grid never arrives, the
+// rAF loop flips overviewLoadFailed → true after 15 s, which mounts the
+// data-testid="overview-load-retry" DOM button.  Clicking it calls
+// handleOverviewRetry, which resets overviewLoadFailed → false (button
+// unmounts) and resets nullGridSince so the LOADING spinner restarts.
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — retry button after load timeout", () => {
+  beforeEach(() => {
+    mockConfig.efhData = undefined;
+  });
+
+  // Always restore mocks so a failing assertion doesn't leak Date.now() into
+  // the next test (testing-library's waitFor uses Date.now() for its deadline,
+  // so a stale far-future mock causes every subsequent waitFor to time out
+  // immediately).
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("retry button appears after 15 s and clicking it removes the button (back to LOADING state)", async () => {
+    Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
+
+    // Dataset selected but grid never arrives — simulates a stalled fetch.
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: "slow-ds", source: "preset", overviewGrid: null, activeGrid: null },
+      ],
+      primaryDatasetId: "slow-ds",
+      primaryDatasetIds: ["slow-ds"],
+      overviewGrid: null,
+      activeGrid: null,
+    });
+
+    useUiStore.setState({
+      substrateColorMode: false,
+      selectedSubstrate: null,
+      efhOverlayEnabled: false,
+      overviewOpen: true,
+      pendingDropIn: null,
+    });
+
+    // Keep a valid in-bounds camera position so the Zustand store isn't left
+    // with `known: false` for subsequent tests that rely on it being in-bounds.
+    useCameraStore.setState({
+      cameraPosition: { known: true, lon: -120.5, lat: 48.0 },
+      heading: 0,
+      cameraDepth: 50,
+      cameraAltitude: 30,
+    });
+
+    // Freeze Date.now() at a known baseline so we can jump time precisely.
+    const realNow = Date.now();
+    const dateSpy = vi.spyOn(Date, "now").mockReturnValue(realNow);
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // Allow several rAF frames so nullGridSince is established at ~realNow.
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+
+    // Retry button must NOT be visible yet (< 15 s elapsed).
+    expect(document.querySelector('[data-testid="overview-load-retry"]')).toBeNull();
+
+    // Jump Date.now() 16 s into the future so the next rAF frame sees
+    // waitedMs > 15_000 and flips overviewLoadFailed → true.
+    dateSpy.mockReturnValue(realNow + 16_000);
+
+    // Use waitFor so the test keeps polling until the React state update from
+    // inside the rAF callback is flushed and the DOM reflects the new state.
+    const retryWrapper = await waitFor(
+      () => {
+        const el = document.querySelector('[data-testid="overview-load-retry"]');
+        if (!el) throw new Error("Retry button not yet in DOM (rAF / React flush pending)");
+        return el;
+      },
+      { timeout: 4000 },
+    );
+
+    expect(
+      retryWrapper,
+      "Expected data-testid='overview-load-retry' to appear after 15 s timeout",
+    ).not.toBeNull();
+
+    // Click the retry button — handleOverviewRetry sets overviewLoadFailed → false.
+    await act(async () => {
+      const btn = retryWrapper.querySelector("button");
+      expect(btn, "Expected a <button> inside the retry wrapper").not.toBeNull();
+      btn!.click();
+    });
+
+    // After clicking Retry the error state is cleared → button unmounts.
+    expect(
+      document.querySelector('[data-testid="overview-load-retry"]'),
+      "Expected retry button to disappear after clicking it",
+    ).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 4. Null overviewGrid guard — no crash when a visible dataset has no grid yet
 //
 // OverviewMap.tsx useEffect (line ~987):

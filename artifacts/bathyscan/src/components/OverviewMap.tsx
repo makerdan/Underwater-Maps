@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import {
   useGetMarkers,
@@ -82,6 +83,8 @@ import {
   getGetIntertidalSpotsQueryKey,
   useGetUserDatasets,
   getGetUserDatasetsQueryKey,
+  getGetDatasetsIdOverviewQueryKey,
+  getGetUserDatasetsIdOverviewQueryKey,
 } from "@workspace/api-client-react";
 import type {
   EfhFeature,
@@ -254,6 +257,41 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => { isUpscalingRef.current = isUpscaling; }, [isUpscaling]);
   useEffect(() => { requestUpscaleIfNeededRef.current = requestUpscaleIfNeeded; }, [requestUpscaleIfNeeded]);
   useEffect(() => { invalidateUpscaleRef.current = invalidateUpscale; }, [invalidateUpscale]);
+
+  // React Query client — used by handleOverviewRetry to invalidate overview queries.
+  const queryClient = useQueryClient();
+
+  // --- Overview load-failure state -------------------------------------------
+  // Set to true after the 15 s LOADING timeout so the retry button renders.
+  // Reset to false when the user clicks Retry.
+  const [overviewLoadFailed, setOverviewLoadFailed] = useState(false);
+  const overviewLoadFailedRef = useRef(false);
+
+  // Exposes a function that resets `nullGridSince` inside the rAF closure so
+  // the retry handler (outside the closure) can restart the loading timer.
+  const nullGridSinceResetRef = useRef<(() => void) | null>(null);
+
+  const handleOverviewRetry = useCallback(() => {
+    // Clear the error state → LOADING spinner reappears immediately.
+    overviewLoadFailedRef.current = false;
+    setOverviewLoadFailed(false);
+    // Restart the stale-fetch timer inside the rAF closure.
+    nullGridSinceResetRef.current?.();
+    dirtyRef.current = true;
+    // Invalidate the overview query for every visible dataset so React Query
+    // re-issues the fetch (the VisibleDatasetsLoader children will re-trigger).
+    for (const v of visibleDatasets) {
+      if (v.source === "preset") {
+        void queryClient.invalidateQueries({
+          queryKey: getGetDatasetsIdOverviewQueryKey(v.datasetId),
+        });
+      } else if (v.source === "user") {
+        void queryClient.invalidateQueries({
+          queryKey: getGetUserDatasetsIdOverviewQueryKey(v.datasetId),
+        });
+      }
+    }
+  }, [queryClient, visibleDatasets]);
 
   // Dirty flag — rAF loop skips draws when nothing has changed (no camera
   // movement, no data updates, no mouse interaction, no GPS/trail pulse).
@@ -1139,6 +1177,9 @@ export const OverviewMap: React.FC = () => {
     // Reset to null whenever the grid arrives (effect re-runs) or visibleDatasets
     // becomes empty again.
     let nullGridSince: number | null = null;
+    // Expose a reset function so handleOverviewRetry (outside this closure) can
+    // restart the loading clock without the effect needing to re-run.
+    nullGridSinceResetRef.current = () => { nullGridSince = null; };
 
     const loop = () => {
       const ctx = canvas.getContext("2d");
@@ -1189,6 +1230,11 @@ export const OverviewMap: React.FC = () => {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         if (waitedMs > 15_000) {
+          // Flip the React state once so the retry button renders in the DOM.
+          if (!overviewLoadFailedRef.current) {
+            overviewLoadFailedRef.current = true;
+            setOverviewLoadFailed(true);
+          }
           ctx.fillText("Could not load map data", cW / 2, cH / 2);
         } else {
           const dotsCount = 1 + (Math.floor(Date.now() / 400) % 3);
@@ -1196,6 +1242,13 @@ export const OverviewMap: React.FC = () => {
         }
         rafRef.current = requestAnimationFrame(loop);
         return;
+      }
+
+      // Grid arrived — clear any lingering error state so a retry → success path
+      // removes the retry button without the user having to interact again.
+      if (overviewLoadFailedRef.current) {
+        overviewLoadFailedRef.current = false;
+        setOverviewLoadFailed(false);
       }
 
       // Grid arrived — reset the stale-fetch tracker for the next time the
@@ -2036,6 +2089,38 @@ export const OverviewMap: React.FC = () => {
         height={window.innerHeight}
         style={{ width: "100%", height: "100%", cursor: "crosshair", display: "block" }}
       />
+
+      {/* Retry button — appears after the 15 s load-failure timeout so the
+          user can re-trigger the fetch without closing and reopening the map. */}
+      {overviewLoadFailed && (
+        <div
+          data-testid="overview-load-retry"
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, calc(-50% + 20px))",
+            zIndex: 42,
+          }}
+        >
+          <button
+            onClick={handleOverviewRetry}
+            style={{
+              background: "rgba(2,8,24,0.85)",
+              border: "1px solid rgba(0,229,255,0.4)",
+              borderRadius: 3,
+              color: "rgba(0,229,255,0.75)",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.15em",
+              padding: "4px 16px",
+              cursor: "pointer",
+            }}
+          >
+            ↻ RETRY
+          </button>
+        </div>
+      )}
 
       {/* Fixed compass rose — always North-up; pinned to top-right corner so it
           is visible on top of all overlays and clearly communicates orientation. */}
