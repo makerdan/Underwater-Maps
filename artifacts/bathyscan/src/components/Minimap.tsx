@@ -4,7 +4,7 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
-import { getColormap, colormapCssGradient, getColormapTRange } from "@/lib/colormap";
+import { getColormap, colormapCssGradient, getColormapTRange, getColormapStops } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ColormapTheme } from "@/lib/settingsStore";
@@ -28,6 +28,124 @@ function linToSRGBByte(c: number): number {
 const ND_R = linToSRGBByte(NO_DATA_COLOR.r);
 const ND_G = linToSRGBByte(NO_DATA_COLOR.g);
 const ND_B = linToSRGBByte(NO_DATA_COLOR.b);
+
+const MINIMAP_FT_TO_M = 0.3048;
+
+/**
+ * Draw depth-band contour lines on the minimap canvas at each band boundary.
+ *
+ * For ocean/custom themes the boundaries come from `paletteStore.bandBoundaries`
+ * (in feet) and are colored with the adjacent band's color. For fixed preset
+ * themes the color-stop positions are used as t-values and converted to depths.
+ *
+ * Skips degenerate grids (< 4 cells in either dimension or flat depth range)
+ * to avoid visual noise on placeholder/loading states.
+ */
+function drawMinimapContours(
+  ctx: CanvasRenderingContext2D,
+  depths: DepthsArray,
+  width: number,
+  height: number,
+  minDepth: number,
+  maxDepth: number,
+  colormapTheme: ColormapTheme,
+  bandBoundaries: readonly number[],
+  bandColors: readonly string[],
+): void {
+  if (width < 4 || height < 4 || maxDepth === minDepth) return;
+
+  const depthRange = maxDepth - minDepth;
+
+  // Build contour list: each entry is a depth value (metres, positive-down)
+  // at which to draw an isoline, plus the display color for that line.
+  const contours: Array<{ depthM: number; colorHex: string }> = [];
+
+  if (colormapTheme === "ocean" || colormapTheme === "custom") {
+    // bandBoundaries are in feet; skip the first (0 ft) and last boundary —
+    // interior boundaries are where the visible band edges sit.
+    for (let i = 1; i < bandBoundaries.length - 1; i++) {
+      const depthM = bandBoundaries[i]! * MINIMAP_FT_TO_M;
+      if (depthM <= minDepth || depthM >= maxDepth) continue;
+      // Color: the band *above* this boundary (band index i, which runs from
+      // boundaries[i] down to boundaries[i+1]).
+      const colorHex = (bandColors[i] ?? bandColors[bandColors.length - 1])!;
+      contours.push({ depthM, colorHex });
+    }
+  } else {
+    // Fixed preset themes: derive contour depths from the t-positions of the
+    // interior color stops.
+    const stops = getColormapStops(colormapTheme);
+    for (let i = 1; i < stops.length - 1; i++) {
+      const stop = stops[i]!;
+      const depthM = minDepth + stop.t * depthRange;
+      if (depthM <= minDepth || depthM >= maxDepth) continue;
+      // Convert THREE.Color (linear-sRGB) to a display-space hex string.
+      const c = stop.color.clone().convertLinearToSRGB();
+      const r = Math.max(0, Math.min(255, Math.round(c.r * 255)));
+      const g = Math.max(0, Math.min(255, Math.round(c.g * 255)));
+      const b = Math.max(0, Math.min(255, Math.round(c.b * 255)));
+      const colorHex = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+      contours.push({ depthM, colorHex });
+    }
+  }
+
+  if (contours.length === 0) return;
+
+  // Canvas cell size (one grid cell → these many canvas pixels).
+  const cellW = W / width;
+  const cellH = H / height;
+
+  ctx.save();
+  ctx.lineWidth = 1;
+
+  for (const { depthM, colorHex } of contours) {
+    ctx.strokeStyle = colorHex;
+    ctx.globalAlpha = 0.65;
+    ctx.beginPath();
+
+    // --- Horizontal edges: between grid rows gy and gy+1 ---
+    // Y-flip convention (matching drawHeatmap): gy=0 is the southernmost
+    // (bottom) row, which maps to canvas py ≈ H. gy=height-1 is northernmost
+    // (top), mapping to canvas py ≈ 0. The canvas y of the shared edge between
+    // rows gy and gy+1 is (height - 1 - gy) * cellH.
+    for (let gy = 0; gy < height - 1; gy++) {
+      const edgeCy = (height - 1 - gy) * cellH;
+      for (let gx = 0; gx < width; gx++) {
+        const d1 = depths[gy * width + gx];
+        const d2 = depths[(gy + 1) * width + gx];
+        if (d1 == null || d2 == null) continue;
+        if ((d1 < depthM) !== (d2 < depthM)) {
+          const cx = gx * cellW;
+          ctx.moveTo(cx, edgeCy);
+          ctx.lineTo(cx + cellW, edgeCy);
+        }
+      }
+    }
+
+    // --- Vertical edges: between grid columns gx and gx+1 ---
+    // The canvas x of the shared edge between columns gx and gx+1 is
+    // (gx + 1) * cellW. Each row gy spans canvas y from (height-1-gy)*cellH
+    // to (height-gy)*cellH.
+    for (let gx = 0; gx < width - 1; gx++) {
+      const edgeCx = (gx + 1) * cellW;
+      for (let gy = 0; gy < height; gy++) {
+        const d1 = depths[gy * width + gx];
+        const d2 = depths[gy * width + (gx + 1)];
+        if (d1 == null || d2 == null) continue;
+        if ((d1 < depthM) !== (d2 < depthM)) {
+          const cy = (height - 1 - gy) * cellH;
+          ctx.moveTo(edgeCx, cy);
+          ctx.lineTo(edgeCx, cy + cellH);
+        }
+      }
+    }
+
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = 1.0;
+  ctx.restore();
+}
 
 function drawHeatmap(
   ctx: CanvasRenderingContext2D,
@@ -409,6 +527,20 @@ export const Minimap: React.FC = () => {
       terrain.maxDepth,
       colormapTheme,
       terrain.topography,
+    );
+    // Overlay contour lines at each depth-band boundary, colored by the
+    // adjacent band's color. Drawn on the same offscreen canvas immediately
+    // after the heatmap so satellite compositing (globalAlpha) applies to both.
+    drawMinimapContours(
+      offCtx,
+      terrain.depths,
+      terrain.width,
+      terrain.height,
+      terrain.minDepth,
+      terrain.maxDepth,
+      colormapTheme,
+      bandBoundaries,
+      bandColors,
     );
     heatmapCanvasRef.current = offscreen;
 

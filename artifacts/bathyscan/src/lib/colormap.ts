@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { ColormapTheme } from "./settingsStore";
 import { usePaletteStore, DEFAULT_BAND_COLORS, DEFAULT_BAND_BOUNDARIES } from "./paletteStore";
 
-interface ColorStop {
+export interface ColorStop {
   t: number;
   color: THREE.Color;
 }
@@ -175,6 +175,24 @@ const FIXED_THEME_STOPS: Record<Exclude<ColormapTheme, "ocean" | "custom">, Colo
     { t: 1.00, color: new THREE.Color("#1a2f2b") },
   ],
 };
+
+/**
+ * Return the ColorStop array for the given theme.
+ *
+ * For ocean/custom themes the stops are built from the live paletteStore
+ * (without a depth range so positions are normalised 0–1 over the palette
+ * scale). For fixed preset themes the hard-coded stops are returned directly.
+ *
+ * Use these stops to derive contour positions: a stop at t=0.3 sits at
+ * depth = minDepth + 0.3 * (maxDepth - minDepth) for fixed themes, or at
+ * the corresponding absolute depth for ocean/custom.
+ */
+export function getColormapStops(theme: ColormapTheme): ColorStop[] {
+  if (theme === "ocean" || theme === "custom") {
+    return getBandStops();
+  }
+  return [...FIXED_THEME_STOPS[theme]];
+}
 
 function interpolateStops(stops: ColorStop[], t: number): THREE.Color {
   const clamped = Math.max(0, Math.min(1, t));
