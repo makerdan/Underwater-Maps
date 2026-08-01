@@ -2977,8 +2977,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               )}
             </button>
 
-            {!myLibraryCollapsed && (
-              <div>
+            <div style={{ display: myLibraryCollapsed ? 'none' : 'block' }}>
                 {presetLoadError && (
                   <div
                     data-testid="preset-dataset-load-error"
@@ -3334,7 +3333,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   </div>
                 )}
               </div>
-            )}
           </div>
 
           {/* ── Markers section ── */}
