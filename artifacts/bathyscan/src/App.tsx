@@ -1319,41 +1319,7 @@ function Main() {
             <div style={{ display: sidebarMode === 'explore' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
               <SidebarSectionGroup>
                 <SidebarSection id="mapData" title="Your Data">
-                  {!terrain ? (
-                    <div
-                      data-testid="explore-empty-state"
-                      style={{
-                        padding: "14px 12px",
-                        textAlign: "center",
-                        color: "#475569",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                        letterSpacing: "0.1em",
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      <div style={{ fontSize: "calc(30px * var(--bs-font-scale, 1))", marginBottom: 6, opacity: 0.5 }}>🌊</div>
-                      <div style={{ color: "#64748b", marginBottom: 8 }}>
-                        Load a dataset to begin.
-                      </div>
-                      <button
-                        onClick={() => useUiStore.getState().setFindDataPanelOpen(true)}
-                        style={{
-                          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                          letterSpacing: "0.12em",
-                          padding: "4px 10px",
-                          background: "rgba(0,229,255,0.06)",
-                          border: "1px solid rgba(0,229,255,0.28)",
-                          borderRadius: 3,
-                          color: "#00e5ff",
-                          cursor: "pointer",
-                          fontFamily: "'JetBrains Mono', monospace",
-                        }}
-                      >
-                        BROWSE DATASETS →
-                      </button>
-                    </div>
-                  ) : showDatasetPanel ? <DatasetPanel embedded /> : null}
+                  {(!terrain || showDatasetPanel) ? <DatasetPanel embedded /> : null}
                 </SidebarSection>
               </SidebarSectionGroup>
 

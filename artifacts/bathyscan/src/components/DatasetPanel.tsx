@@ -29,7 +29,7 @@ import {
   getDatasetsIdPreview,
   getGetDatasetsIdPreviewQueryKey,
 } from "@workspace/api-client-react";
-import type { DatasetMeta, UserDatasetMeta } from "@workspace/api-client-react";
+import type { DatasetMeta, UserDatasetMeta, UserCatalogSave } from "@workspace/api-client-react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { useAppState } from "@/lib/context";
 import { requestDatasetSwitch, useSimulatedDataStore } from "@/lib/simulatedDataStore";
@@ -55,8 +55,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import type { CameraBookmark } from "@/lib/settingsStore";
 import { formatDepthRange } from "@/lib/units";
 import { ProvenancePanel } from "@/components/ProvenancePanel";
-import { DatasetFolderTree } from "@/components/DatasetFolderTree";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { MySavesSection } from "@/components/MySavesSection";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -708,6 +707,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     pendingExternalUserDatasetId,
     setPendingExternalUserDatasetId,
     catalogSourcedAt,
+    setCatalogSourcedAt,
   } = useAppState();
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
@@ -787,17 +787,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   // ─── MY LIBRARY multi-select action-bar state ─────────────────────────────
   const [presetSelectedIds, setPresetSelectedIds] = useState<Set<string>>(() => new Set());
-  const [librarySelectedIds, setLibrarySelectedIds] = useState<Set<string>>(() => new Set());
-  const [libraryBulkDeleteSignal, setLibraryBulkDeleteSignal] = useState(0);
-  const [libraryMoveSignal, setLibraryMoveSignal] = useState<{
-    id: string; name: string; folderId: string | null; kind?: "dataset" | "folder"; seq: number;
-  } | null>(null);
-  const [libraryBulkMoveSignal, setLibraryBulkMoveSignal] = useState<{
-    datasetIds: string[]; seq: number;
-  } | null>(null);
-  const [libraryRenameSignal, setLibraryRenameSignal] = useState<{
-    id: string; name: string; seq: number;
-  } | null>(null);
 
   const togglePresetSelected = useCallback((id: string) => {
     setPresetSelectedIds((prev) => {
@@ -911,24 +900,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const { data: userDatasets, isLoading: userDatasetsLoading } = useGetUserDatasets({
     query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserDatasetsQueryKey() },
   });
-  const { data: userFolders } = useGetUserFolders({
+  // Pre-warm folder cache for MySavesSection (deduped by React Query).
+  useGetUserFolders({
     query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserFoldersQueryKey() },
   });
-  /** Set of folder ids in the user library — used by action-bar move logic. */
-  const userFolderIdSet = useMemo(
-    () => new Set((userFolders ?? []).map((f) => f.id)),
-    [userFolders],
-  );
-  /**
-   * "Move To Folder" is enabled when:
-   *  • exactly 1 item selected (folder or dataset), OR
-   *  • 2+ items all of which are datasets (no folders mixed in).
-   */
-  const canMoveToFolder = useMemo(() => {
-    if (librarySelectedIds.size === 0) return false;
-    if (librarySelectedIds.size === 1) return true;
-    return [...librarySelectedIds].every((id) => !userFolderIdSet.has(id));
-  }, [librarySelectedIds, userFolderIdSet]);
 
   // ─── Eviction toast: fires when terrainStore silently evicts a dataset ─────
   useEffect(() => {
@@ -1279,16 +1254,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     });
   };
 
-  const handleSelectUserDataset = (ds: UserDatasetMeta) => {
-    if (ds.id === activeUserDatasetId && !pendingUserDatasetId) return;
-    setUserLoadError(null);
-    setPresetLoadError(null);
-    void qc.invalidateQueries({ queryKey: getGetSubstrateQueryKey(ds.id) });
-    setLoadingId(ds.id);
-    beginActiveLoad(ds.id);
-    setPendingUserDatasetId(ds.id);
-    setPendingId(null);
-  };
 
   // ─── Cross-panel handoff (FileUpload / FindDataPanel → DatasetPanel) ──────
   // Other panels can ask us to load a freshly-materialized user dataset by
@@ -2800,16 +2765,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     const visibleIds = new Set(state.visibleDatasets.map((v) => v.datasetId));
 
     const presetToAdd = [...presetSelectedIds].filter((id) => !visibleIds.has(id));
-    const libraryToAdd = [...librarySelectedIds].filter((id) => !visibleIds.has(id));
-
-    // Library datasets carry grids inline — add them to the selected pool immediately, no preflight.
-    const toggleLibrary = () => {
-      const st = useTerrainStore.getState();
-      const selected = new Set(st.selectedIds);
-      for (const id of libraryToAdd) {
-        if (!selected.has(id)) st.addSelected(id, "user");
-      }
-    };
 
     // Add preset datasets to selected pool and clear selection after preflight passes.
     const togglePresetsAndClear = () => {
@@ -2823,25 +2778,14 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       // SceneContents reads from AppState.terrain, not terrainStore directly.
       if (presetToAdd[0]) setDatasetId(presetToAdd[0]);
       setPresetSelectedIds(new Set());
-      setLibrarySelectedIds(new Set());
     };
 
     if (presetToAdd.length === 0) {
-      // Only library datasets selected — toggle immediately.
-      toggleLibrary();
-      // Drive the primary user dataset through the existing pending-load
-      // pipeline so AppState.terrain (and setGrids) are updated, which is what
-      // SceneContents uses to render the primary TerrainMesh.
-      if (libraryToAdd[0]) setPendingUserDatasetId(libraryToAdd[0]);
       setPresetSelectedIds(new Set());
-      setLibrarySelectedIds(new Set());
       return;
     }
 
     const { suppressed, setPending } = useSimulatedDataStore.getState();
-
-    // Toggle library datasets now; they never need a preflight.
-    toggleLibrary();
 
     if (suppressed) {
       togglePresetsAndClear();
@@ -2890,16 +2834,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         setPending(null);
       },
     });
-  }, [presetSelectedIds, librarySelectedIds, setDatasetId, setPendingUserDatasetId]);
+  }, [presetSelectedIds, setDatasetId]);
 
   const handleActionDelete = useCallback(() => {
     if (presetSelectedIds.size > 0) {
       setPresetDeleteConfirm(true);
-      return;
     }
-    if (librarySelectedIds.size === 0) return;
-    setLibraryBulkDeleteSignal((s) => s + 1);
-  }, [librarySelectedIds.size, presetSelectedIds.size]);
+  }, [presetSelectedIds.size]);
 
   const handleConfirmPresetDelete = useCallback(async () => {
     setPresetDeleteConfirm(false);
@@ -2916,64 +2857,45 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setPresetSelectedIds(new Set());
     void qc.invalidateQueries({ queryKey: getGetDatasetsQueryKey() });
     void qc.invalidateQueries({ queryKey: getGetDatasetsQueryKey({ waterType }) });
-    if (librarySelectedIds.size > 0) {
-      setLibraryBulkDeleteSignal((s) => s + 1);
-    }
-  }, [presetSelectedIds, librarySelectedIds.size, qc, waterType]);
+  }, [presetSelectedIds, qc, waterType]);
 
   const handleActionCopy = useCallback(() => {
     toast({ title: "Coming soon", description: "Copy is not yet available." });
   }, [toast]);
 
-  const handleActionMoveToFolder = useCallback(() => {
-    if (librarySelectedIds.size === 0) return;
-    const ids = [...librarySelectedIds];
-
-    if (librarySelectedIds.size === 1) {
-      const id = ids[0]!;
-      if (userFolderIdSet.has(id)) {
-        // Single folder selected
-        const folder = (userFolders ?? []).find((f) => f.id === id);
-        if (!folder) return;
-        setLibraryMoveSignal({
-          id: folder.id,
-          name: folder.name,
-          folderId: folder.parentId ?? null,
-          kind: "folder",
-          seq: Date.now(),
-        });
-      } else {
-        // Single dataset selected
-        const ds = (userDatasets ?? []).find((d) => d.id === id);
-        if (!ds) return;
-        setLibraryMoveSignal({
-          id: ds.id,
-          name: ds.name,
-          folderId: ds.folderId ?? null,
-          kind: "dataset",
-          seq: Date.now(),
-        });
-      }
-    } else {
-      // Multi-dataset bulk move (only reachable when all ids are datasets)
-      const datasetIds = ids.filter((id) => !userFolderIdSet.has(id));
-      if (datasetIds.length === 0) return;
-      setLibraryBulkMoveSignal({ datasetIds, seq: Date.now() });
-    }
-  }, [librarySelectedIds, userDatasets, userFolders, userFolderIdSet]);
-
   const handleActionPaste = useCallback(() => {
     toast({ title: "Coming soon", description: "Paste is not yet available." });
   }, [toast]);
 
-  const handleActionRename = useCallback(() => {
-    if (librarySelectedIds.size !== 1 || presetSelectedIds.size > 0) return;
-    const [id] = [...librarySelectedIds];
-    if (!id) return;
-    const ds = (userDatasets ?? []).find((d) => d.id === id);
-    if (!ds) return;
-    setLibraryRenameSignal({ id: ds.id, name: ds.name, seq: Date.now() });
-  }, [librarySelectedIds, presetSelectedIds.size, userDatasets]);
+  // ── Load callbacks for MySavesSection (in MY LIBRARY) ────────────────────
+  const handleLoadCatalogSaveFromLeft = useCallback(
+    (save: UserCatalogSave) => {
+      const previewId = save.datasetId ?? save.catalogId;
+      const datasetName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
+      void requestDatasetSwitch({
+        datasetId: previewId,
+        datasetName,
+        onConfirm: () => {
+          setPendingExternalUserDatasetId(save.datasetId!);
+          setCatalogSourcedAt({ forDatasetId: save.datasetId!, date: save.catalog?.createdAt ?? null });
+        },
+      });
+    },
+    [setPendingExternalUserDatasetId, setCatalogSourcedAt],
+  );
+
+  const handleLoadUserDatasetFromLeft = useCallback(
+    (userDatasetId: string, createdAt?: string | null) => {
+      void requestDatasetSwitch({
+        datasetId: userDatasetId,
+        onConfirm: () => {
+          setPendingExternalUserDatasetId(userDatasetId);
+          setCatalogSourcedAt({ forDatasetId: userDatasetId, date: createdAt ?? null });
+        },
+      });
+    },
+    [setPendingExternalUserDatasetId, setCatalogSourcedAt],
+  );
 
   // ─── Offline Pack modal ───────────────────────────────────────────────────
   const [offlinePackDataset, setOfflinePackDataset] = useState<{
@@ -3196,67 +3118,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         </div>
                       </div>
                     )}
-                    <ErrorBoundary label="the dataset library">
-                      <DatasetFolderTree
-                        datasets={userDatasets ?? []}
-                        activeUserDatasetId={pendingUserDatasetId ? null : activeUserDatasetId}
-                        loadingId={loadingId}
-                        onSelectDataset={handleSelectUserDataset}
-                        onDatasetsRemoved={handleDatasetsRemoved}
-                        onSelectionChange={setLibrarySelectedIds}
-                        bulkDeleteSignal={libraryBulkDeleteSignal}
-                        externalMoveSignal={libraryMoveSignal}
-                        bulkMoveSignal={libraryBulkMoveSignal}
-                        externalRenameSignal={libraryRenameSignal}
-                        onGeoreference={setGeorefDataset}
-                        actionBar={librarySelectedIds.size > 0 ? (
-                          <div
-                            data-testid="library-action-bar"
-                            style={{
-                              margin: "0 8px 0",
-                              padding: "6px 8px",
-                              background: "rgba(0,229,255,0.06)",
-                              border: "1px solid rgba(0,229,255,0.2)",
-                              borderRadius: 4,
-                              display: "flex",
-                              flexWrap: "wrap",
-                              gap: 4,
-                              position: "sticky",
-                              top: 0,
-                              zIndex: 10,
-                            }}
-                          >
-                            <span style={{
-                              fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#7dd3fc", width: "100%",
-                              letterSpacing: "0.08em", marginBottom: 2,
-                            }}>
-                              {presetSelectedIds.size + librarySelectedIds.size} selected
-                            </span>
-                            <button data-testid="btn-action-load-together" onClick={() => { void handleLoadTogether(); }} style={ACTION_BTN_STYLE}>Load Together</button>
-                            <button
-                              data-testid="btn-action-delete"
-                              onClick={handleActionDelete}
-                              disabled={librarySelectedIds.size === 0 && presetSelectedIds.size === 0}
-                              style={{ ...ACTION_BTN_STYLE, opacity: (librarySelectedIds.size === 0 && presetSelectedIds.size === 0) ? 0.35 : 1, color: "#fca5a5", borderColor: "rgba(239,68,68,0.4)" }}
-                            >Delete</button>
-                            <button data-testid="btn-action-copy" onClick={handleActionCopy} style={ACTION_BTN_STYLE}>Copy</button>
-                            <button
-                              data-testid="btn-action-move-to-folder"
-                              onClick={handleActionMoveToFolder}
-                              disabled={!canMoveToFolder}
-                              style={{ ...ACTION_BTN_STYLE, opacity: !canMoveToFolder ? 0.35 : 1 }}
-                            >Move To Folder</button>
-                            <button data-testid="btn-action-paste" onClick={handleActionPaste} style={ACTION_BTN_STYLE}>Paste</button>
-                            <button
-                              data-testid="btn-action-rename"
-                              onClick={handleActionRename}
-                              disabled={librarySelectedIds.size !== 1 || presetSelectedIds.size > 0}
-                              style={{ ...ACTION_BTN_STYLE, opacity: (librarySelectedIds.size !== 1 || presetSelectedIds.size > 0) ? 0.35 : 1 }}
-                            >Rename</button>
-                          </div>
-                        ) : null}
-                      />
-                    </ErrorBoundary>
+                    <MySavesSection
+                      onLoadCatalogSave={handleLoadCatalogSaveFromLeft}
+                      onLoadUserDataset={handleLoadUserDatasetFromLeft}
+                      onDatasetsRemoved={handleDatasetsRemoved}
+                      onBrowseDatasets={() => useUiStore.getState().setFindDataPanelOpen(true)}
+                    />
                   </>
                 )}
 
@@ -3435,7 +3302,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                     rendered here. When library items are selected, the action bar is
                     passed into DatasetFolderTree as actionBar prop and floats above the
                     first selected row. */}
-                {presetSelectedIds.size > 0 && librarySelectedIds.size === 0 && (
+                {presetSelectedIds.size > 0 && (
                   <div
                     data-testid="library-action-bar"
                     style={{
@@ -3463,19 +3330,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       style={{ ...ACTION_BTN_STYLE, opacity: presetSelectedIds.size === 0 ? 0.35 : 1, color: "#fca5a5", borderColor: "rgba(239,68,68,0.4)" }}
                     >Delete</button>
                     <button data-testid="btn-action-copy" onClick={handleActionCopy} style={ACTION_BTN_STYLE}>Copy</button>
-                    <button
-                      data-testid="btn-action-move-to-folder"
-                      onClick={handleActionMoveToFolder}
-                      disabled={true}
-                      style={{ ...ACTION_BTN_STYLE, opacity: 0.35 }}
-                    >Move To Folder</button>
                     <button data-testid="btn-action-paste" onClick={handleActionPaste} style={ACTION_BTN_STYLE}>Paste</button>
-                    <button
-                      data-testid="btn-action-rename"
-                      onClick={handleActionRename}
-                      disabled={true}
-                      style={{ ...ACTION_BTN_STYLE, opacity: 0.35 }}
-                    >Rename</button>
                   </div>
                 )}
               </div>

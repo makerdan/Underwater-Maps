@@ -227,9 +227,9 @@ vi.mock("@/lib/terrain", () => ({
 }));
 
 // Heavy sub-components — render null or a lightweight stub.
-vi.mock("@/components/DatasetFolderTree", () => ({
-  DatasetFolderTree: () =>
-    React.createElement("div", { "data-testid": "dataset-folder-tree" }),
+vi.mock("@/components/MySavesSection", () => ({
+  MySavesSection: () =>
+    React.createElement("div", { "data-testid": "my-saves-section" }),
 }));
 
 vi.mock("@/components/ErrorBoundary", () => ({
@@ -286,14 +286,14 @@ describe("DatasetPanel — MY LIBRARY collapse / expand", () => {
     usePanelCollapseStore.setState({ collapsed: { ...DEFAULTS } });
   });
 
-  it("starts expanded: shows ▲ MY LIBRARY and renders DatasetFolderTree", () => {
+  it("starts expanded: shows ▲ MY LIBRARY and renders MySavesSection", () => {
     render(<DatasetPanel />);
 
     // Header should show the expanded chevron.
     expect(getMyLibraryBtn()).toHaveTextContent("▲ MY LIBRARY");
 
-    // The tree should be visible in the expanded state.
-    expect(screen.getByTestId("dataset-folder-tree")).toBeInTheDocument();
+    // The saves section should be visible in the expanded state.
+    expect(screen.getByTestId("my-saves-section")).toBeInTheDocument();
   });
 
   it("clicking the header collapses the section and flips the chevron", () => {
@@ -304,8 +304,8 @@ describe("DatasetPanel — MY LIBRARY collapse / expand", () => {
     // Chevron should flip to indicate collapsed state.
     expect(getMyLibraryBtn()).toHaveTextContent("▾ MY LIBRARY");
 
-    // Tree should no longer be in the DOM.
-    expect(screen.queryByTestId("dataset-folder-tree")).not.toBeInTheDocument();
+    // MySavesSection should no longer be in the DOM.
+    expect(screen.queryByTestId("my-saves-section")).not.toBeInTheDocument();
   });
 
   it("clicking the header twice re-expands and restores ▲ MY LIBRARY", () => {
@@ -316,7 +316,7 @@ describe("DatasetPanel — MY LIBRARY collapse / expand", () => {
     fireEvent.click(btn); // expand
 
     expect(btn).toHaveTextContent("▲ MY LIBRARY");
-    expect(screen.getByTestId("dataset-folder-tree")).toBeInTheDocument();
+    expect(screen.getByTestId("my-saves-section")).toBeInTheDocument();
   });
 
   it("collapse is reflected in panelCollapseStore", () => {
