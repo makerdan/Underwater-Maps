@@ -1,19 +1,20 @@
 /**
- * DatasetPanel.loadTogether.test.tsx
+ * DatasetPanel.addToView.test.tsx
  *
- * Unit tests for the handleLoadTogether preflight logic in DatasetPanel.
+ * Unit tests for the "Add to View" multi-dataset entry point in DatasetPanel.
  *
- * handleLoadTogether runs parallel preview fetches for selected preset
- * datasets; if any return a synthetic/unknown dataSource it calls
- * useSimulatedDataStore.setPending to open the warning dialog.
+ * DatasetPanel reads `visibleDatasets` from terrainStore and passes
+ * `onAddToView`, `visibleDatasetIds`, and `atViewCap` to MySavesSection.
+ * The handler calls `addSelected` (to add) or `toggleVisible` (to remove).
  *
  * Scenarios covered:
- *   (a) All presets return real data → toggleVisible called immediately, no dialog
- *   (b) At least one preset returns synthetic → dialog opens; confirm → toggles;
- *       cancel → no toggles
- *   (c) Suppression active → toggleVisible called immediately (no preflight)
- *   (d) Only library IDs selected → toggleVisible called immediately (no preflight)
- *   (e) Preflight fetch throws → treated as "proceed" (toggles immediately)
+ *   (a) ADD button present when a primary dataset is loaded and row not in view
+ *   (b) ADD button disabled when atViewCap=true and dataset not already in view
+ *   (c) ADD button shows alternate "IN VIEW" state when already in visibleDatasets
+ *   (d) Clicking ADD on a non-active row calls addSelected(dsId, "user")
+ *   (e) Clicking IN VIEW on an active row calls toggleVisible({datasetId, source:"user"})
+ *   (f) VisibleDatasetsHeader renders once visibleDatasets.length > 1
+ *   (g) No primary loaded → onAddToView not wired → ADD button absent on all rows
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -67,25 +68,25 @@ const makeApiClientMock = vi.hoisted(() => {
     });
 });
 
-// Controllable fetchQuery spy — the test overrides its return value per scenario.
+// Controllable fetchQuery spy.
 const fetchQueryMock = vi.hoisted(() => vi.fn());
 
-// Mutable state for simulatedDataStore so each test can set suppressed/spy on setPending.
-const simulatedStore = vi.hoisted(() => ({
-  suppressed: false,
-  setPending: vi.fn(),
-}));
-
-// Mutable state for terrainStore so each test can assert toggleVisible calls.
+// Mutable terrainStore state shared across all tests.
 const terrainState = vi.hoisted(() => ({
-  visibleDatasets: [] as Array<{ datasetId: string }>,
+  visibleDatasets: [] as Array<{ datasetId: string; activeGrid: null | object; source?: string }>,
   selectedIds: [] as string[],
+  selectedSources: {} as Record<string, string>,
   toggleVisible: vi.fn(),
   addSelected: vi.fn(),
   removeSelected: vi.fn(),
   setGrids: vi.fn(),
   primaryDatasetId: null as string | null,
   hideAllOthers: vi.fn(),
+  evictedId: null as string | null,
+  clearEviction: vi.fn(),
+  activeGrid: null as null | object,
+  autoActivate: vi.fn(),
+  multiDatasetMode: false,
 }));
 
 // ── Module mocks ───────────────────────────────────────────────────────────────
@@ -104,8 +105,8 @@ vi.mock("@/lib/simulatedDataStore", () => ({
   },
   useSimulatedDataStore: {
     getState: () => ({
-      suppressed: simulatedStore.suppressed,
-      setPending: simulatedStore.setPending,
+      suppressed: false,
+      setPending: vi.fn(),
     }),
   },
 }));
@@ -117,8 +118,53 @@ vi.mock("@/lib/terrainStore", () => {
     getState: () => typeof terrainState;
   };
   useTerrainStore.getState = () => terrainState;
-  return { useTerrainStore, VISIBLE_DATASETS_CAP: 4 };
+  return {
+    useTerrainStore,
+    MAX_ACTIVE_DATASETS: 3,
+    // Legacy alias kept for import compat.
+    VISIBLE_DATASETS_CAP: 3,
+  };
 });
+
+// MySavesSection mock — renders ADD/IN VIEW buttons for two known test dataset IDs.
+// Buttons are only rendered when onAddToView is provided (case g asserts absence).
+vi.mock("@/components/MySavesSection", () => ({
+  MySavesSection: ({
+    onAddToView,
+    visibleDatasetIds,
+    atViewCap,
+  }: {
+    onAddToView?: (id: string) => void;
+    visibleDatasetIds?: Set<string>;
+    atViewCap?: boolean;
+  }) =>
+    React.createElement(
+      React.Fragment,
+      null,
+      onAddToView
+        ? React.createElement(
+            "button",
+            {
+              "data-testid": "mock-add-ds1",
+              disabled: atViewCap && !visibleDatasetIds?.has("user-ds-1"),
+              onClick: () => onAddToView("user-ds-1"),
+            },
+            visibleDatasetIds?.has("user-ds-1") ? "IN VIEW" : "ADD",
+          )
+        : null,
+      onAddToView
+        ? React.createElement(
+            "button",
+            {
+              "data-testid": "mock-add-ds2",
+              disabled: atViewCap && !visibleDatasetIds?.has("user-ds-2"),
+              onClick: () => onAddToView("user-ds-2"),
+            },
+            visibleDatasetIds?.has("user-ds-2") ? "IN VIEW" : "ADD",
+          )
+        : null,
+    ),
+}));
 
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({
@@ -134,8 +180,7 @@ vi.mock("@/lib/context", () => ({
 
 vi.mock("@/lib/clerkCompat", async () => {
   const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
-  // Use signed-in so the MY LIBRARY section (DatasetFolderTree) renders.
-  // DatasetFolderTree is gated by {isSignedIn && ...} in DatasetPanel.
+  // Signed-in so MySavesSection (and VisibleDatasetsHeader) renders.
   return mockClerkCompat();
 });
 
@@ -171,6 +216,7 @@ vi.mock("@/lib/uiStore", () => {
     georefPickMode: false,
     setGeorefPickMode: vi.fn(),
     setGeorefPickBbox: vi.fn(),
+    setFindDataPanelOpen: vi.fn(),
   };
   const useUiStore = Object.assign(
     (sel: (s: typeof mockState) => unknown) => sel(mockState),
@@ -190,17 +236,25 @@ vi.mock("@/lib/settingsStore", () => {
     waterType: "saltwater" | "freshwater";
     units: "metric" | "imperial";
     bookmarks: unknown[];
+    saveFolderExpanded: Record<string, boolean>;
   };
   const state: SettingsMockState = {
     waterType: "saltwater",
     units: "metric",
     bookmarks: [],
+    saveFolderExpanded: {},
   };
   const useSettingsStore = ((sel: (s: SettingsMockState) => unknown) =>
     sel(state)) as ((sel: (s: SettingsMockState) => unknown) => unknown) & {
     getState: () => SettingsMockState;
+    setState: (fn: (s: SettingsMockState) => Partial<SettingsMockState>) => void;
+    persist: { hasHydrated: () => boolean };
+    subscribe: () => () => void;
   };
   useSettingsStore.getState = () => state;
+  useSettingsStore.setState = () => {};
+  useSettingsStore.persist = { hasHydrated: () => true };
+  useSettingsStore.subscribe = () => () => {};
   return { useSettingsStore };
 });
 
@@ -219,6 +273,7 @@ vi.mock("@/lib/panelCollapseStore", () => {
     collapsed: {
       datasets: false,
       uploadTerrainAccordion: false,
+      myLibrary: false,
     },
     toggle: vi.fn(),
     setCollapsed: vi.fn(),
@@ -256,7 +311,10 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 vi.mock("@/hooks/useUndoableMarkerDelete", () => ({
-  useUndoableMarkerDelete: () => ({ requestDelete: vi.fn(), isDeletePending: vi.fn().mockReturnValue(false) }),
+  useUndoableMarkerDelete: () => ({
+    requestDelete: vi.fn(),
+    isDeletePending: vi.fn().mockReturnValue(false),
+  }),
 }));
 
 vi.mock("@/lib/fetchWithProgress", () => ({
@@ -273,27 +331,6 @@ vi.mock("@/components/GpsExportDialog", () => ({
 
 vi.mock("@/components/ProvenancePanel", () => ({
   ProvenancePanel: () => null,
-}));
-
-// DatasetFolderTree mock renders a trigger that simulates selecting a library dataset.
-// This lets case (d) set librarySelectedIds without going through real tree UI.
-vi.mock("@/components/DatasetFolderTree", () => ({
-  DatasetFolderTree: ({
-    onSelectionChange,
-    actionBar,
-  }: {
-    onSelectionChange: (ids: Set<string>) => void;
-    actionBar?: React.ReactNode;
-  }) =>
-    React.createElement(
-      React.Fragment,
-      null,
-      React.createElement("button", {
-        "data-testid": "mock-select-library",
-        onClick: () => onSelectionChange(new Set(["lib-ds-1"])),
-      }, "select library"),
-      actionBar ?? null,
-    ),
 }));
 
 vi.mock("@/components/ErrorBoundary", () => ({
@@ -328,166 +365,108 @@ vi.mock("@/lib/terrain", () => ({
   MAX_DEPTH_WORLD: 10000,
 }));
 
-// Two saltwater preset datasets for the tests.
-const PRESET_A = {
-  id: "preset-alpha",
-  name: "Alpha Bay",
-  description: "Test preset A",
-  minDepth: 0,
-  maxDepth: 200,
-  waterType: "saltwater",
-};
-
-const PRESET_B = {
-  id: "preset-beta",
-  name: "Beta Fjord",
-  description: "Test preset B",
-  minDepth: 5,
-  maxDepth: 500,
-  waterType: "saltwater",
-};
-
 vi.mock(
   "@workspace/api-client-react",
   () =>
     makeApiClientMock({
-      useGetDatasets: () => ({
-        data: [PRESET_A, PRESET_B],
-        isLoading: false,
-      }),
+      useGetDatasets: () => ({ data: [], isLoading: false }),
       useGetUserDatasets: () => ({ data: undefined, isLoading: false }),
       useGetMarkers: () => ({ data: undefined }),
     }),
 );
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-/** Select preset checkboxes by id and click "Load Together". */
-async function selectPresetsAndLoadTogether(...ids: string[]): Promise<void> {
-  for (const id of ids) {
-    fireEvent.click(screen.getByTestId(`chk-preset-${id}`));
-  }
-  await act(async () => {
-    fireEvent.click(screen.getByTestId("btn-action-load-together"));
-  });
-}
-
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
-describe("DatasetPanel — handleLoadTogether preflight", () => {
+describe("DatasetPanel — handleAddToView multi-dataset entry point", () => {
   beforeEach(() => {
-    fetchQueryMock.mockReset();
+    terrainState.visibleDatasets = [];
+    terrainState.selectedIds = [];
+    terrainState.selectedSources = {};
+    terrainState.primaryDatasetId = null;
+    terrainState.evictedId = null;
+    terrainState.activeGrid = null;
     terrainState.toggleVisible.mockReset();
     terrainState.addSelected.mockReset();
     terrainState.removeSelected.mockReset();
-    terrainState.visibleDatasets = [];
-    terrainState.selectedIds = [];
-    simulatedStore.setPending.mockReset();
-    simulatedStore.suppressed = false;
+    terrainState.hideAllOthers.mockReset();
+    fetchQueryMock.mockReset();
   });
 
-  it("(a) all presets return real data → addSelected called immediately, dialog never opened", async () => {
-    // Both preview fetches resolve with a real (non-synthetic) dataSource.
-    fetchQueryMock.mockResolvedValue({ dataSource: "ncei", name: "Alpha Bay" });
+  it("(a) ADD button present when a primary is loaded and dataset not in view", () => {
+    terrainState.visibleDatasets = [{ datasetId: "primary-ds", activeGrid: null }];
 
     render(<DatasetPanel />);
-    await selectPresetsAndLoadTogether(PRESET_A.id, PRESET_B.id);
 
-    // addSelected must have been called for each selected preset.
-    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_A.id, "preset");
-    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_B.id, "preset");
-
-    // The simulated-data dialog must NOT have been triggered.
-    expect(simulatedStore.setPending).not.toHaveBeenCalled();
+    expect(screen.getByTestId("mock-add-ds1")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-add-ds1")).toHaveTextContent("ADD");
   });
 
-  it("(b-confirm) one preset is synthetic → dialog opens; confirm → addSelected called for all presets", async () => {
-    // First preset is real, second is synthetic.
-    fetchQueryMock
-      .mockResolvedValueOnce({ dataSource: "gebco", name: "Alpha Bay" })
-      .mockResolvedValueOnce({ dataSource: "synthetic", name: "Beta Fjord", syntheticReason: "no survey data" });
+  it("(b) ADD button disabled when atViewCap and dataset not already in view", () => {
+    // Cap is 3 — fill all slots with non-test datasets.
+    terrainState.visibleDatasets = [
+      { datasetId: "ds-slot-1", activeGrid: null },
+      { datasetId: "ds-slot-2", activeGrid: null },
+      { datasetId: "ds-slot-3", activeGrid: null },
+    ];
 
     render(<DatasetPanel />);
-    await selectPresetsAndLoadTogether(PRESET_A.id, PRESET_B.id);
 
-    // setPending must be called with the first simulated dataset's info.
-    expect(simulatedStore.setPending).toHaveBeenCalledTimes(1);
-    const pendingArg = simulatedStore.setPending.mock.calls[0]![0]!;
-    expect(pendingArg.datasetId).toBe(PRESET_B.id);
-    expect(pendingArg.datasetName).toBe("Beta Fjord");
+    expect(screen.getByTestId("mock-add-ds1")).toBeDisabled();
+    expect(screen.getByTestId("mock-add-ds2")).toBeDisabled();
+  });
 
-    // addSelected must NOT have been called yet (waiting for user confirmation).
-    expect(terrainState.addSelected).not.toHaveBeenCalled();
+  it("(c) ADD button shows IN VIEW when dataset is already in visibleDatasets", () => {
+    terrainState.visibleDatasets = [{ datasetId: "user-ds-1", activeGrid: null }];
 
-    // Simulate the user confirming the dialog.
+    render(<DatasetPanel />);
+
+    expect(screen.getByTestId("mock-add-ds1")).toHaveTextContent("IN VIEW");
+  });
+
+  it("(d) clicking ADD on a non-active row calls addSelected(dsId, 'user')", async () => {
+    terrainState.visibleDatasets = [{ datasetId: "primary-ds", activeGrid: null }];
+
+    render(<DatasetPanel />);
     await act(async () => {
-      pendingArg.onConfirm();
+      fireEvent.click(screen.getByTestId("mock-add-ds1"));
     });
 
-    // After confirmation, addSelected fires for all presets.
-    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_A.id, "preset");
-    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_B.id, "preset");
+    expect(terrainState.addSelected).toHaveBeenCalledWith("user-ds-1", "user");
+    expect(terrainState.toggleVisible).not.toHaveBeenCalled();
   });
 
-  it("(b-cancel) one preset is synthetic → dialog opens; cancel → no addSelected at all", async () => {
-    fetchQueryMock
-      .mockResolvedValueOnce({ dataSource: "ncei", name: "Alpha Bay" })
-      .mockResolvedValueOnce({ dataSource: "unknown", name: "Beta Fjord" });
+  it("(e) clicking IN VIEW on an active row calls toggleVisible", async () => {
+    terrainState.visibleDatasets = [{ datasetId: "user-ds-1", activeGrid: null }];
 
     render(<DatasetPanel />);
-    await selectPresetsAndLoadTogether(PRESET_A.id, PRESET_B.id);
-
-    expect(simulatedStore.setPending).toHaveBeenCalledTimes(1);
-    const pendingArg = simulatedStore.setPending.mock.calls[0]![0]!;
-
-    // Simulate the user cancelling the dialog.
     await act(async () => {
-      pendingArg.onCancel();
+      fireEvent.click(screen.getByTestId("mock-add-ds1"));
     });
 
-    // addSelected must never have been called.
+    expect(terrainState.toggleVisible).toHaveBeenCalledWith({
+      datasetId: "user-ds-1",
+      source: "user",
+    });
     expect(terrainState.addSelected).not.toHaveBeenCalled();
   });
 
-  it("(c) suppression active → addSelected called immediately, preflight fetch never runs", async () => {
-    simulatedStore.suppressed = true;
+  it("(f) VisibleDatasetsHeader renders once visibleDatasets.length > 1", () => {
+    terrainState.visibleDatasets = [
+      { datasetId: "ds-a", activeGrid: null },
+      { datasetId: "ds-b", activeGrid: null },
+    ];
 
     render(<DatasetPanel />);
-    await selectPresetsAndLoadTogether(PRESET_A.id);
 
-    // Suppression bypasses the preflight entirely.
-    expect(fetchQueryMock).not.toHaveBeenCalled();
-    expect(simulatedStore.setPending).not.toHaveBeenCalled();
-    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_A.id, "preset");
+    expect(screen.getByTestId("visible-datasets-header")).toBeInTheDocument();
   });
 
-  it("(d) only library IDs selected → addSelected called immediately with no preflight", async () => {
-    render(<DatasetPanel />);
-
-    // Trigger library selection via the mock DatasetFolderTree button, then Load Together.
-    fireEvent.click(screen.getByTestId("mock-select-library"));
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("btn-action-load-together"));
-    });
-
-    // No preflight fetches should occur for library-only selections.
-    expect(fetchQueryMock).not.toHaveBeenCalled();
-    expect(simulatedStore.setPending).not.toHaveBeenCalled();
-
-    // Library dataset added to the selected pool immediately.
-    expect(terrainState.addSelected).toHaveBeenCalledWith("lib-ds-1", "user");
-  });
-
-  it("(e) preflight fetch throws → treated as 'proceed' (addSelected immediately, no dialog)", async () => {
-    fetchQueryMock.mockRejectedValue(new Error("Network error"));
+  it("(g) no primary loaded → onAddToView not wired → ADD button absent on all rows", () => {
+    terrainState.visibleDatasets = []; // empty — no primary
 
     render(<DatasetPanel />);
-    await selectPresetsAndLoadTogether(PRESET_A.id);
 
-    // An error during preflight is treated as a null preview (dataSource not synthetic),
-    // so the load proceeds without opening the dialog.
-    expect(simulatedStore.setPending).not.toHaveBeenCalled();
-    expect(terrainState.addSelected).toHaveBeenCalledWith(PRESET_A.id, "preset");
+    expect(screen.queryByTestId("mock-add-ds1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("mock-add-ds2")).not.toBeInTheDocument();
   });
 });

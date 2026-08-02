@@ -877,6 +877,26 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     }
   }, [hideAllOthers, visibleDatasetsForToast, datasets, userDatasets, toast]);
 
+  // ─── Multi-dataset: "Add to View" handler ────────────────────────────────
+  // Adds a user dataset alongside the primary (or removes it if already in view).
+  // Only wired to MySavesSection when at least one primary dataset is already
+  // loaded (visibleDatasetsForToast.length > 0).
+  const handleAddToView = useCallback((dsId: string) => {
+    const state = useTerrainStore.getState();
+    const alreadyVisible = state.visibleDatasets.some((v) => v.datasetId === dsId);
+    if (alreadyVisible) {
+      state.toggleVisible({ datasetId: dsId, source: "user" });
+    } else {
+      state.addSelected(dsId, "user");
+    }
+  }, []);
+
+  const visibleDatasetIds = React.useMemo(
+    () => new Set(visibleDatasetsForToast.map((v) => v.datasetId)),
+    [visibleDatasetsForToast],
+  );
+  const atViewCap = visibleDatasetsForToast.length >= MAX_ACTIVE_DATASETS;
+
   // ─── Proximity streaming ──────────────────────────────────────────────────
   // Build a map from datasetId → bbox for preset catalog datasets that have a
   // geographic bounding box. User datasets do not have a bbox so they activate
@@ -2922,6 +2942,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       onDatasetsRemoved={handleDatasetsRemoved}
                       onBrowseDatasets={() => useUiStore.getState().setFindDataPanelOpen(true)}
                       browseLabel="OPEN FIND DATA →"
+                      onAddToView={visibleDatasetsForToast.length > 0 ? handleAddToView : undefined}
+                      visibleDatasetIds={visibleDatasetIds}
+                      atViewCap={atViewCap}
                     />
                   </>
                 )}

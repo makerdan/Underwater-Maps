@@ -283,7 +283,10 @@ const UploadCard: React.FC<{
   onDelete: (dataset: UserDatasetMeta) => void;
   onRename: (id: string, name: string) => Promise<void>;
   deleting: boolean;
-}> = ({ dataset, onLoad, onDelete, onRename, deleting }) => {
+  onAddToView?: (dsId: string) => void;
+  isAlreadyInView?: boolean;
+  atViewCap?: boolean;
+}> = ({ dataset, onLoad, onDelete, onRename, deleting, onAddToView, isAlreadyInView = false, atViewCap = false }) => {
   const createdDate = useMemo(() => {
     const d = new Date(dataset.createdAt);
     if (Number.isNaN(d.getTime())) return dataset.createdAt.slice(0, 10);
@@ -390,13 +393,39 @@ const UploadCard: React.FC<{
           ⚠ {renameError}
         </div>
       )}
-      <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
-        <button
-          onClick={() => onLoad(dataset.id)}
-          data-testid={`btn-load-upload-${dataset.id}`}
-          style={{ marginTop: 8, fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 12px", background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#00e5ff", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
-        >Load</button>
-      </ViewscreenTooltip>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
+          <button
+            onClick={() => onLoad(dataset.id)}
+            data-testid={`btn-load-upload-${dataset.id}`}
+            style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 12px", background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#00e5ff", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
+          >Load</button>
+        </ViewscreenTooltip>
+        {onAddToView && (
+          <ViewscreenTooltip
+            label={isAlreadyInView ? "Remove from 3D view" : atViewCap ? "View limit reached" : "Add alongside current dataset in 3D view"}
+            side="top"
+          >
+            <button
+              onClick={() => onAddToView(dataset.id)}
+              data-testid={`btn-add-to-view-upload-${dataset.id}`}
+              disabled={atViewCap && !isAlreadyInView}
+              style={{
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                padding: "3px 10px",
+                background: isAlreadyInView ? "rgba(0,229,255,0.15)" : "rgba(0,229,255,0.06)",
+                border: isAlreadyInView ? "1px solid rgba(0,229,255,0.5)" : "1px solid rgba(0,229,255,0.3)",
+                borderRadius: 3,
+                color: isAlreadyInView ? "#00e5ff" : "#67e8f9",
+                cursor: (atViewCap && !isAlreadyInView) ? "not-allowed" : "pointer",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                opacity: (atViewCap && !isAlreadyInView) ? 0.4 : 1,
+              }}
+            >{isAlreadyInView ? "IN VIEW" : "ADD"}</button>
+          </ViewscreenTooltip>
+        )}
+      </div>
     </div>
   );
 };
@@ -512,7 +541,10 @@ const DraggableUploadCard: React.FC<{
   onRename: (id: string, name: string) => Promise<void>;
   deleting: boolean;
   onMoveTo: (dataset: UserDatasetMeta) => void;
-}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo }) => {
+  onAddToView?: (dsId: string) => void;
+  isAlreadyInView?: boolean;
+  atViewCap?: boolean;
+}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo, onAddToView, isAlreadyInView = false, atViewCap = false }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `upload-${dataset.id}`,
     data: { kind: "upload", datasetId: dataset.id },
@@ -528,6 +560,7 @@ const DraggableUploadCard: React.FC<{
       <UploadCard
         dataset={dataset} onLoad={(id) => onLoad(id, dataset.createdAt)}
         onDelete={onDelete} onRename={onRename} deleting={deleting}
+        onAddToView={onAddToView} isAlreadyInView={isAlreadyInView} atViewCap={atViewCap}
       />
     </div>
   );
@@ -665,6 +698,16 @@ export interface MySavesSectionProps {
    * rather than switching a tab within the same panel.
    */
   browseLabel?: string;
+  /**
+   * Called when the user clicks "ADD" on an uploaded dataset row to add it to
+   * the current 3D view alongside the primary dataset. When undefined the ADD
+   * button is not rendered on any row.
+   */
+  onAddToView?: (dsId: string) => void;
+  /** Dataset IDs currently visible (active) in the 3D scene. */
+  visibleDatasetIds?: Set<string>;
+  /** True when MAX_ACTIVE_DATASETS cap is reached (disables ADD for non-active rows). */
+  atViewCap?: boolean;
 }
 
 export const MySavesSection: React.FC<MySavesSectionProps> = ({
@@ -673,6 +716,9 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   onDatasetsRemoved,
   onBrowseDatasets,
   browseLabel = "BROWSE DATASETS →",
+  onAddToView,
+  visibleDatasetIds,
+  atViewCap = false,
 }) => {
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
@@ -994,6 +1040,9 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
         onRename={handleRenameUpload}
         deleting={deletingUploadIds.has(item.dataset.id)}
         onMoveTo={(d) => setMoveTarget({ kind: "upload", dataset: d })}
+        onAddToView={onAddToView}
+        isAlreadyInView={visibleDatasetIds?.has(item.dataset.id) ?? false}
+        atViewCap={atViewCap}
       />
     );
 

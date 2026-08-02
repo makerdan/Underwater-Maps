@@ -86,6 +86,21 @@ interface Props {
   onGeoreference?: (ds: UserDatasetMeta) => void;
   /** Optional action bar node — rendered above the first selected row when present. */
   actionBar?: React.ReactNode;
+  /**
+   * Called when the user clicks "ADD" to add a dataset to the current 3D view
+   * alongside the primary. When undefined the ADD button is not rendered.
+   */
+  onAddToView?: (dsId: string) => void;
+  /**
+   * Set of dataset IDs currently visible (active) in the 3D scene.
+   * Used to show "IN VIEW" state on rows that are already in the view.
+   */
+  visibleDatasetIds?: Set<string>;
+  /**
+   * True when MAX_ACTIVE_DATASETS cap has been reached.
+   * Disables ADD for rows that are not already in view.
+   */
+  atViewCap?: boolean;
 }
 
 type DragKind = "folder" | "dataset";
@@ -118,6 +133,9 @@ export const DatasetFolderTree: React.FC<Props> = ({
   externalRenameSignal,
   onGeoreference,
   actionBar,
+  onAddToView,
+  visibleDatasetIds,
+  atViewCap = false,
 }) => {
   const qc = useQueryClient();
   const expanded = useSettingsStore((s) => s.datasetFolderExpanded);
@@ -1304,6 +1322,9 @@ export const DatasetFolderTree: React.FC<Props> = ({
         selectionMode={selectionMode}
         isSelected={isSelected}
         panelWidth={panelWidth}
+        onAddToView={onAddToView ? () => onAddToView(ds.id) : undefined}
+        isAlreadyInView={visibleDatasetIds?.has(ds.id) ?? false}
+        atViewCap={atViewCap}
       />
     );
     if (showActionBarHere) {
@@ -1672,6 +1693,12 @@ interface DatasetRowProps {
   selectionMode?: boolean;
   isSelected?: boolean;
   panelWidth: number;
+  /** Called to add/remove this dataset from the current 3D view. Absent = no ADD button. */
+  onAddToView?: () => void;
+  /** True when this dataset is already in the active view (shows "IN VIEW" state). */
+  isAlreadyInView?: boolean;
+  /** True when MAX_ACTIVE_DATASETS cap is reached (disables ADD for non-active rows). */
+  atViewCap?: boolean;
 }
 
 const DatasetRow: React.FC<DatasetRowProps> = ({
@@ -1694,6 +1721,9 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
   selectionMode = false,
   isSelected = false,
   panelWidth,
+  onAddToView,
+  isAlreadyInView = false,
+  atViewCap = false,
 }) => {
   const indentRaw = ROOT_INDENT_PX + depth * INDENT_PX;
   const indent = Math.min(
@@ -1810,6 +1840,36 @@ const DatasetRow: React.FC<DatasetRowProps> = ({
         )}
         {loading && !selectionMode && (
           <LoadingDial datasetId={ds.id} label={ds.name} />
+        )}
+        {!isRenaming && !deleting && !pendingDelete && !selectionMode && onAddToView && (
+          <button
+            type="button"
+            data-testid={`btn-add-to-view-${ds.id}`}
+            aria-label={isAlreadyInView ? `Remove ${ds.name} from 3D view` : `Add ${ds.name} to 3D view`}
+            disabled={atViewCap && !isAlreadyInView}
+            onClick={(e) => { e.stopPropagation(); onAddToView(); }}
+            style={{
+              flexShrink: 0,
+              fontSize: "calc(10px * var(--bs-font-scale, 1))",
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              padding: "1px 6px",
+              borderRadius: 3,
+              border: isAlreadyInView
+                ? "1px solid rgba(0,229,255,0.5)"
+                : "1px solid rgba(0,229,255,0.3)",
+              background: isAlreadyInView
+                ? "rgba(0,229,255,0.15)"
+                : "rgba(0,229,255,0.06)",
+              color: isAlreadyInView ? "#00e5ff" : "#67e8f9",
+              cursor: (atViewCap && !isAlreadyInView) ? "not-allowed" : "pointer",
+              opacity: (atViewCap && !isAlreadyInView) ? 0.4 : 1,
+              textTransform: "uppercase",
+              lineHeight: 1.6,
+            }}
+          >
+            {isAlreadyInView ? "IN VIEW" : "ADD"}
+          </button>
         )}
         {!isRenaming && !deleting && !pendingDelete && !selectionMode && (
           <RowDeleteButton
