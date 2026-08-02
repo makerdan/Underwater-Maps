@@ -57,7 +57,7 @@ describe("getColormapTRange — ocean theme (absolute depth scale)", () => {
 
   it("shallow lake (0–15 m) still has tMax < 0.1", () => {
     // 15 m / 609.6 m ≈ 0.0246
-    const { tMin, tMax } = getColormapTRange("ocean", 0, 15);
+    const { tMin: _tMin, tMax } = getColormapTRange("ocean", 0, 15);
     expect(tMax).toBeLessThan(0.1);
   });
 
