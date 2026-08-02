@@ -82,6 +82,10 @@ export function getValidationSteps(logPrefix) {
     { name: "check:duplicate-hooks-registry", resource: null, cmd: "pnpm run check:duplicate-hooks-registry", tiers: FAST },
     // no resource: CI coverage meta-check for check:* scripts, sub-second
     { name: "check:runner-step-sync", resource: null, cmd: "pnpm run check:runner-step-sync", tiers: FAST },
+    // no resource: failure-gate stub-placeholder lint (plan files in .local/tasks/), sub-second.
+    // Uses --stubs-only so old pre-mandate plan files (missing required headings) do not
+    // permanently break the fast tier; the full heading check is available manually.
+    { name: "check:failure-gate", resource: null, cmd: "pnpm run check:failure-gate -- --stubs-only", tiers: FAST },
     // no resource: skip-count ratchet guard (static file scan), sub-second
     { name: "check:skip-count", resource: null, cmd: "pnpm run check:skip-count", tiers: FAST },
     // unit-cpu resource: prevents CPU saturation / budget breach
