@@ -339,12 +339,13 @@ describe("MySavesSection — single merged header", () => {
     currentMySaves = [];
   });
 
-  it('shows exactly one "My Datasets" header and no legacy section headers', () => {
+  it('shows no legacy section headers and a single "+ folder" button', () => {
     renderSection();
 
-    expect(screen.getAllByText("My Datasets")).toHaveLength(1);
+    expect(screen.queryByText("My Datasets")).not.toBeInTheDocument();
     expect(screen.queryByText("My Saved Uploads")).not.toBeInTheDocument();
     expect(screen.queryByText("Catalog Saves")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /\+ folder/i })).toHaveLength(1);
   });
 
   it('shows a single "+ folder" button in the header', () => {

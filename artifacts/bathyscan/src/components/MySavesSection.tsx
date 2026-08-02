@@ -1059,12 +1059,13 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       onDelete={(node) => { setSaveFolderDeleteError(null); setConfirmDeleteSaveFolder({ id: node.folder.id, name: node.folder.name, hasSaves: node.items.length > 0 || node.children.length > 0 }); }}
       onNewFolder={async () => {
         const name = `New folder ${userFolders.length + 1}`;
-        await postFolderMutation.mutateAsync({ data: { name, parentId: node.folder.id } });
+        const newFolder = await postFolderMutation.mutateAsync({ data: { name, parentId: node.folder.id } });
         await qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() });
         // Ensure the parent folder is expanded so the new subfolder is visible
         useSettingsStore.setState((prev) => ({
           saveFolderExpanded: { ...prev.saveFolderExpanded, [node.folder.id]: true },
         }));
+        setRenamingSaveFolder({ id: newFolder.id, value: newFolder.name });
       }}
       isRenaming={renamingSaveFolder?.id === node.folder.id}
       renameValue={renamingSaveFolder?.id === node.folder.id ? renamingSaveFolder.value : ""}
@@ -1077,13 +1078,13 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   return (
     <div style={{ padding: "8px 8px 0" }}>
       {/* Section header row */}
-      <div style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", letterSpacing: "0.15em", textTransform: "uppercase", color: "#64748b", marginBottom: 8, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span>My Datasets</span>
+      <div style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", letterSpacing: "0.15em", textTransform: "uppercase", color: "#64748b", marginBottom: 8, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
         <button
           onClick={async () => {
             const name = `New folder ${userFolders.length + 1}`;
-            await postFolderMutation.mutateAsync({ data: { name } });
+            const newFolder = await postFolderMutation.mutateAsync({ data: { name } });
             await qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() });
+            setRenamingSaveFolder({ id: newFolder.id, value: newFolder.name });
           }}
           disabled={postFolderMutation.isPending}
           title="New root folder"
@@ -1133,8 +1134,8 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       {!isEmpty && (
         <DndContext sensors={saveDndSensors} onDragStart={handleSaveDragStart} onDragEnd={handleSaveDragEnd}>
           <div>
-            {mergedTree.rootItems.map(renderItem)}
             {mergedTree.roots.map(renderFolderNode)}
+            {mergedTree.rootItems.map(renderItem)}
           </div>
           <DragOverlay dropAnimation={null}>
             {activeDrag && (
