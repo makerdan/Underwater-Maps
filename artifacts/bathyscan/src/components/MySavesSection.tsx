@@ -537,12 +537,13 @@ const SaveFolderSection: React.FC<{
   renderItem: (item: MergedEntry) => React.ReactNode;
   renderSubFolder: (child: MergedFolderNode) => React.ReactNode;
   onShowMenu?: (e: React.MouseEvent, node: MergedFolderNode) => void;
+  onNewFolder?: () => void;
   isRenaming?: boolean;
   renameValue?: string;
   onRenameChange?: (v: string) => void;
   onRenameCommit?: () => void;
   onRenameCancel?: () => void;
-}> = ({ node, isExpanded, onToggle, renderItem, renderSubFolder, onShowMenu, isRenaming = false, renameValue = "", onRenameChange, onRenameCommit, onRenameCancel }) => {
+}> = ({ node, isExpanded, onToggle, renderItem, renderSubFolder, onShowMenu, onNewFolder, isRenaming = false, renameValue = "", onRenameChange, onRenameCommit, onRenameCancel }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `folder-${node.folder.id}`,
     data: { kind: "folder", folderId: node.folder.id },
@@ -587,6 +588,14 @@ const SaveFolderSection: React.FC<{
         )}
         {!isRenaming && totalCount > 0 && (
           <span style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b" }}>{totalCount}</span>
+        )}
+        {onNewFolder && !isRenaming && (
+          <button
+            data-testid={`save-folder-new-subfolder-${node.folder.id}`}
+            onClick={(e) => { e.stopPropagation(); onNewFolder(); }}
+            title="New folder inside"
+            style={{ background: "transparent", border: "none", color: "#64748b", cursor: "pointer", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+          >⊕</button>
         )}
         {onShowMenu && !isRenaming && (
           <button
@@ -968,6 +977,15 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       renderItem={renderItem}
       renderSubFolder={renderFolderNode}
       onShowMenu={handleSaveFolderMenu}
+      onNewFolder={async () => {
+        const name = `New folder ${userFolders.length + 1}`;
+        await postFolderMutation.mutateAsync({ data: { name, parentId: node.folder.id } });
+        await qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() });
+        // Ensure the parent folder is expanded so the new subfolder is visible
+        useSettingsStore.setState((prev) => ({
+          saveFolderExpanded: { ...prev.saveFolderExpanded, [node.folder.id]: true },
+        }));
+      }}
       isRenaming={renamingSaveFolder?.id === node.folder.id}
       renameValue={renamingSaveFolder?.id === node.folder.id ? renamingSaveFolder.value : ""}
       onRenameChange={(v) => setRenamingSaveFolder((prev) => prev ? { ...prev, value: v } : null)}
@@ -988,7 +1006,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
             await qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() });
           }}
           disabled={postFolderMutation.isPending}
-          title="New folder for datasets"
+          title="New root folder"
           style={{ background: "transparent", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "1px 6px", borderRadius: 2, cursor: postFolderMutation.isPending ? "not-allowed" : "pointer", opacity: postFolderMutation.isPending ? 0.5 : 1, letterSpacing: "0.08em" }}
         >+ folder</button>
       </div>
