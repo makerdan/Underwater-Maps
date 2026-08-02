@@ -77,6 +77,7 @@ const SCANNED_FILES: string[] = [
   "components/HabitatPanel.tsx",
   "components/HUD.tsx",
   "components/MarkerForm.tsx",
+  "components/MySavesSection.tsx",
   "components/Minimap.tsx",
   "components/OverlaysToolsPanel.tsx",
   "components/OverviewMap.tsx",
