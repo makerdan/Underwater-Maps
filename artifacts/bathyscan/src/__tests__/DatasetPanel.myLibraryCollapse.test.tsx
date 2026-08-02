@@ -304,8 +304,8 @@ describe("DatasetPanel — MY LIBRARY collapse / expand", () => {
     // Chevron should flip to indicate collapsed state.
     expect(getMyLibraryBtn()).toHaveTextContent("▾ MY LIBRARY");
 
-    // MySavesSection should no longer be in the DOM.
-    expect(screen.queryByTestId("my-saves-section")).not.toBeInTheDocument();
+    // The collapse uses display:none, not unmount — check visibility not presence.
+    expect(screen.queryByTestId("my-saves-section")).not.toBeVisible();
   });
 
   it("clicking the header twice re-expands and restores ▲ MY LIBRARY", () => {

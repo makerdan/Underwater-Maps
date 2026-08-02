@@ -1,14 +1,16 @@
 /**
  * DatasetPanel.folderMove.test.tsx
  *
- * Unit tests for the handleActionMoveToFolder dispatch logic in DatasetPanel.
+ * Tests for DatasetPanel's user-library callback wiring.
+ * The move-to-folder logic now lives entirely inside MySavesSection; these
+ * tests verify that DatasetPanel correctly wires and handles the callbacks it
+ * passes down to MySavesSection.
  *
  * Scenarios covered:
- *   (a) Single folder selected → externalMoveSignal set with kind:"folder" + folder id
- *   (b) Single dataset selected → externalMoveSignal set with kind:"dataset" + dataset id
- *   (c) Multiple datasets selected → bulkMoveSignal set (not externalMoveSignal)
- *   (d) Action bar DOM position — library-action-bar appears in DOM before
- *       the first selected row, not after the last row in the tree
+ *   (a) MySavesSection is mounted inside the MY LIBRARY section when signed in
+ *   (b) onLoadUserDataset fires setPendingExternalUserDatasetId with the dataset id
+ *   (c) onLoadCatalogSave fires setPendingExternalUserDatasetId with the save's datasetId
+ *   (d) onBrowseDatasets calls setFindDataPanelOpen(true) on the uiStore
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -72,7 +74,7 @@ const simulatedStore = vi.hoisted(() => ({
 const terrainState = vi.hoisted(() => ({
   visibleDatasets: [] as Array<{ datasetId: string }>,
   selectedIds: [] as string[],
-  selectedSources: [] as string[],
+  selectedSources: {} as Record<string, string>,
   toggleVisible: vi.fn(),
   addSelected: vi.fn(),
   removeSelected: vi.fn(),
@@ -81,6 +83,11 @@ const terrainState = vi.hoisted(() => ({
   activeGrid: null,
   hideAllOthers: vi.fn(),
 }));
+
+// Persistent mock handles for asserting on DatasetPanel callback wiring.
+const setPendingExternalUserDatasetIdMock = vi.hoisted(() => vi.fn());
+const setTerrainMock = vi.hoisted(() => vi.fn());
+const setFindDataPanelOpenMock = vi.hoisted(() => vi.fn());
 
 // ── Module mocks ───────────────────────────────────────────────────────────────
 
@@ -118,11 +125,13 @@ vi.mock("@/lib/context", () => ({
   useAppState: () => ({
     datasetId: null,
     setDatasetId: vi.fn(),
-    setTerrain: vi.fn(),
+    setTerrain: setTerrainMock,
     terrain: null,
     mode: "fly",
     pendingExternalUserDatasetId: null,
-    setPendingExternalUserDatasetId: vi.fn(),
+    setPendingExternalUserDatasetId: setPendingExternalUserDatasetIdMock,
+    catalogSourcedAt: null,
+    setCatalogSourcedAt: vi.fn(),
   }),
 }));
 
@@ -164,6 +173,7 @@ vi.mock("@/lib/uiStore", () => {
     georefPickMode: false,
     setGeorefPickMode: vi.fn(),
     setGeorefPickBbox: vi.fn(),
+    setFindDataPanelOpen: setFindDataPanelOpenMock,
   };
   const useUiStore = Object.assign(
     (sel: (s: typeof mockState) => unknown) => sel(mockState),
@@ -179,8 +189,13 @@ vi.mock("@/lib/classificationStore", () => ({
 }));
 
 vi.mock("@/lib/settingsStore", () => {
-  type S = { waterType: "saltwater" | "freshwater"; units: "metric" | "imperial"; bookmarks: unknown[] };
-  const state: S = { waterType: "saltwater", units: "metric", bookmarks: [] };
+  type S = {
+    waterType: "saltwater" | "freshwater";
+    units: "metric" | "imperial";
+    bookmarks: unknown[];
+    saveFolderExpanded: Record<string, boolean>;
+  };
+  const state: S = { waterType: "saltwater", units: "metric", bookmarks: [], saveFolderExpanded: {} };
   const useSettingsStore = ((sel: (s: S) => unknown) => sel(state)) as ((sel: (s: S) => unknown) => unknown) & {
     getState: () => S;
   };
@@ -199,7 +214,7 @@ vi.mock("@/lib/markerEditStore", () => ({
 
 vi.mock("@/lib/panelCollapseStore", () => {
   const state = {
-    collapsed: { datasets: false, uploadTerrainAccordion: false },
+    collapsed: { datasets: false, uploadTerrainAccordion: false, myLibrary: false },
     toggle: vi.fn(),
     setCollapsed: vi.fn(),
   };
@@ -268,125 +283,78 @@ vi.mock("@/lib/terrain", () => ({
   MAX_DEPTH_WORLD: 10000,
 }));
 
-// ── DatasetFolderTree mock ─────────────────────────────────────────────────────
-// Renders the actionBar prop (so its buttons are accessible) and provides:
-//   • "mock-select-folder"  — selects a folder id via onSelectionChange
-//   • "mock-select-dataset" — selects a dataset id via onSelectionChange
-//   • "mock-select-two-datasets" — selects two dataset ids via onSelectionChange
-//   • "captured-signal-kind" / "captured-signal-id" — reflect externalMoveSignal back
-//   • "captured-bulk-ids"   — reflects bulkMoveSignal.datasetIds back
+// ── MySavesSection mock ────────────────────────────────────────────────────────
+// Renders control buttons so tests can fire each DatasetPanel callback without
+// depending on the full MySavesSection render tree.
 
-vi.mock("@/components/DatasetFolderTree", () => ({
-  DatasetFolderTree: ({
-    onSelectionChange,
-    actionBar,
-    externalMoveSignal,
-    bulkMoveSignal,
+type UserCatalogSave = {
+  datasetId?: string | null;
+  catalogId: string;
+  displayLabel?: string | null;
+  catalog?: { name?: string; createdAt?: string } | null;
+  folderId?: string | null;
+};
+
+vi.mock("@/components/MySavesSection", () => ({
+  MySavesSection: ({
+    onLoadUserDataset,
+    onLoadCatalogSave,
+    onBrowseDatasets,
   }: {
-    onSelectionChange?: (ids: Set<string>) => void;
-    actionBar?: React.ReactNode;
-    externalMoveSignal?: { id: string; name: string; folderId: string | null; kind?: string; seq: number } | null;
-    bulkMoveSignal?: { datasetIds: string[]; seq: number } | null;
+    onLoadUserDataset?: (id: string, createdAt?: string | null) => void;
+    onLoadCatalogSave?: (save: UserCatalogSave) => void;
+    onBrowseDatasets?: () => void;
   }) =>
     React.createElement(
       "div",
-      { "data-testid": "mock-folder-tree-root" },
-      actionBar,
+      { "data-testid": "my-saves-section" },
       React.createElement(
         "button",
         {
-          "data-testid": "mock-select-folder",
-          onClick: () => onSelectionChange?.(new Set(["folder-u1"])),
+          "data-testid": "mock-load-user-dataset",
+          onClick: () => onLoadUserDataset?.("dataset-u1"),
         },
-        "select folder",
-      ),
-      React.createElement(
-        "button",
-        {
-          "data-testid": "mock-select-dataset",
-          onClick: () => onSelectionChange?.(new Set(["dataset-u1"])),
-        },
-        "select dataset",
+        "Load user dataset",
       ),
       React.createElement(
         "button",
         {
-          "data-testid": "mock-select-two-datasets",
-          onClick: () => onSelectionChange?.(new Set(["dataset-u1", "dataset-u2"])),
+          "data-testid": "mock-load-catalog-save",
+          onClick: () =>
+            onLoadCatalogSave?.({
+              datasetId: "catalog-ds-1",
+              catalogId: "cat-1",
+              displayLabel: "Test Catalog Save",
+              catalog: { createdAt: "2026-01-01T00:00:00Z" },
+              folderId: null,
+            }),
         },
-        "select two datasets",
+        "Load catalog save",
       ),
       React.createElement(
-        "span",
-        { "data-testid": "mock-tree-ds-row" },
-        "dataset-row-placeholder",
-      ),
-      React.createElement(
-        "span",
-        { "data-testid": "captured-signal-kind" },
-        externalMoveSignal?.kind ?? "",
-      ),
-      React.createElement(
-        "span",
-        { "data-testid": "captured-signal-id" },
-        externalMoveSignal?.id ?? "",
-      ),
-      React.createElement(
-        "span",
-        { "data-testid": "captured-bulk-ids" },
-        bulkMoveSignal ? JSON.stringify(bulkMoveSignal.datasetIds) : "",
+        "button",
+        {
+          "data-testid": "mock-browse-datasets",
+          onClick: () => onBrowseDatasets?.(),
+        },
+        "Browse datasets",
       ),
     ),
 }));
-
-// ── Fixture data ───────────────────────────────────────────────────────────────
-
-const FOLDER_U1 = {
-  id: "folder-u1",
-  name: "Survey Zones",
-  parentId: null,
-  createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z",
-};
-
-const DATASET_U1 = {
-  id: "dataset-u1",
-  name: "Mariana Survey",
-  minDepth: 5,
-  maxDepth: 1000,
-  folderId: "folder-u1",
-  createdAt: "2026-01-01T00:00:00Z",
-};
-
-const DATASET_U2 = {
-  id: "dataset-u2",
-  name: "Pacific Ridge",
-  minDepth: 10,
-  maxDepth: 2000,
-  folderId: null,
-  createdAt: "2026-01-01T00:00:00Z",
-};
 
 vi.mock(
   "@workspace/api-client-react",
   () =>
     makeApiClientMock({
       useGetDatasets: () => ({ data: [], isLoading: false }),
-      useGetUserDatasets: () => ({
-        data: [DATASET_U1, DATASET_U2],
-        isLoading: false,
-      }),
-      useGetUserFolders: () => ({
-        data: [FOLDER_U1],
-        isLoading: false,
-      }),
+      useGetUserDatasets: () => ({ data: [], isLoading: false }),
       useGetMarkers: () => ({ data: undefined }),
     }),
 );
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
-describe("DatasetPanel — handleActionMoveToFolder dispatch", () => {
+describe("DatasetPanel — MySavesSection callback wiring", () => {
   beforeEach(() => {
     fetchQueryMock.mockReset();
     terrainState.toggleVisible.mockReset();
@@ -396,78 +364,46 @@ describe("DatasetPanel — handleActionMoveToFolder dispatch", () => {
     terrainState.selectedIds = [];
     simulatedStore.setPending.mockReset();
     simulatedStore.suppressed = false;
+    setPendingExternalUserDatasetIdMock.mockReset();
+    setTerrainMock.mockReset();
+    setFindDataPanelOpenMock.mockReset();
   });
 
-  it("(a) single folder selected → externalMoveSignal kind:folder + correct id", async () => {
+  it("(a) MySavesSection is mounted inside the MY LIBRARY section when signed in", () => {
     render(<DatasetPanel />);
-
-    // Select the folder via the mock tree
-    fireEvent.click(screen.getByTestId("mock-select-folder"));
-
-    // The action bar should now be rendered; click Move To Folder
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("btn-action-move-to-folder"));
-    });
-
-    expect(screen.getByTestId("captured-signal-kind").textContent).toBe("folder");
-    expect(screen.getByTestId("captured-signal-id").textContent).toBe("folder-u1");
+    // MY LIBRARY section is expanded by default; MySavesSection should be present.
+    expect(screen.getByTestId("my-saves-section")).toBeInTheDocument();
   });
 
-  it("(b) single dataset selected → externalMoveSignal kind:dataset + correct id", async () => {
+  it("(b) onLoadUserDataset fires setPendingExternalUserDatasetId with the dataset id", async () => {
     render(<DatasetPanel />);
-
-    fireEvent.click(screen.getByTestId("mock-select-dataset"));
 
     await act(async () => {
-      fireEvent.click(screen.getByTestId("btn-action-move-to-folder"));
+      fireEvent.click(screen.getByTestId("mock-load-user-dataset"));
     });
 
-    expect(screen.getByTestId("captured-signal-kind").textContent).toBe("dataset");
-    expect(screen.getByTestId("captured-signal-id").textContent).toBe("dataset-u1");
+    // requestDatasetSwitch is mocked to immediately call onConfirm, so
+    // setPendingExternalUserDatasetId must be called with "dataset-u1".
+    expect(setPendingExternalUserDatasetIdMock).toHaveBeenCalledWith("dataset-u1");
   });
 
-  it("(c) two datasets selected → bulkMoveSignal set, not externalMoveSignal", async () => {
+  it("(c) onLoadCatalogSave fires setPendingExternalUserDatasetId with the save's datasetId", async () => {
     render(<DatasetPanel />);
-
-    fireEvent.click(screen.getByTestId("mock-select-two-datasets"));
 
     await act(async () => {
-      fireEvent.click(screen.getByTestId("btn-action-move-to-folder"));
+      fireEvent.click(screen.getByTestId("mock-load-catalog-save"));
     });
 
-    // Bulk signal must carry both dataset ids
-    const bulk = JSON.parse(
-      screen.getByTestId("captured-bulk-ids").textContent || "[]",
-    ) as string[];
-    expect(bulk.sort()).toEqual(["dataset-u1", "dataset-u2"].sort());
-
-    // externalMoveSignal must NOT have been set (kind stays empty)
-    expect(screen.getByTestId("captured-signal-kind").textContent).toBe("");
+    expect(setPendingExternalUserDatasetIdMock).toHaveBeenCalledWith("catalog-ds-1");
   });
 
-  it("(d) action bar appears in DOM before the first selected tree row, not after", async () => {
+  it("(d) onBrowseDatasets calls setFindDataPanelOpen(true) on the uiStore", async () => {
     render(<DatasetPanel />);
 
-    // Select the dataset so the action bar is injected
-    fireEvent.click(screen.getByTestId("mock-select-dataset"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-browse-datasets"));
+    });
 
-    // The actionBar prop is passed to DatasetFolderTree and rendered first
-    // in the mock-folder-tree-root div, before the dataset-row placeholder.
-    const root = screen.getByTestId("mock-folder-tree-root");
-    const actionBar = screen.getByTestId("library-action-bar");
-    const dsRow = screen.getByTestId("mock-tree-ds-row");
-
-    // compareDocumentPosition: DOCUMENT_POSITION_FOLLOWING = 4
-    // If dsRow follows actionBar, then actionBar is before dsRow.
-    const dsFollowsBar = Boolean(
-      actionBar.compareDocumentPosition(dsRow) & Node.DOCUMENT_POSITION_FOLLOWING,
-    );
-    const barFollowsDs = Boolean(
-      dsRow.compareDocumentPosition(actionBar) & Node.DOCUMENT_POSITION_FOLLOWING,
-    );
-
-    expect(root.contains(actionBar)).toBe(true);
-    expect(dsFollowsBar).toBe(true);
-    expect(barFollowsDs).toBe(false);
+    expect(setFindDataPanelOpenMock).toHaveBeenCalledWith(true);
   });
 });

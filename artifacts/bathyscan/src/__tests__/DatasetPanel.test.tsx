@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DatasetPanel } from "@/components/DatasetPanel";
+import { usePanelCollapseStore, DEFAULTS } from "@/lib/panelCollapseStore";
 
 // ---------------------------------------------------------------------------
 // Shared proxy factory — available to the synchronous vi.mock factory below.
@@ -89,25 +90,6 @@ const dropzoneCapture = vi.hoisted(() => {
     trigger(files: File[]) { fn?.(files, []); },
   };
 });
-
-const datasets = [
-  {
-    id: "alaska-fjord",
-    name: "Alaska Fjord",
-    description: "Deep saltwater fjord",
-    minDepth: 5,
-    maxDepth: 350,
-    waterType: "saltwater",
-  },
-  {
-    id: "lake-ray-roberts",
-    name: "Lake Ray Roberts (TX)",
-    description: "Lake Ray Roberts, Denton County, TX",
-    minDepth: 0,
-    maxDepth: 28,
-    waterType: "freshwater",
-  },
-];
 
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({
@@ -230,14 +212,7 @@ vi.mock(
   "@workspace/api-client-react",
   () =>
     makeApiClientMock({
-      useGetDatasets: (params?: {
-        waterType?: "saltwater" | "freshwater";
-      }) => ({
-        data: params?.waterType
-          ? datasets.filter((d) => d.waterType === params.waterType)
-          : datasets,
-        isLoading: false,
-      }),
+      useGetDatasets: () => ({ data: [], isLoading: false }),
       useGetUserDatasets: () => ({ data: [], isLoading: false }),
       useGetMarkers: () => ({ data: [] }),
       usePostDatasetsUpload: () => ({
@@ -253,36 +228,40 @@ describe("DatasetPanel", () => {
   beforeEach(() => {
     setDatasetIdMock.mockClear();
     setTerrainMock.mockClear();
+    // Reset the real panelCollapseStore so every test starts with a fully
+    // expanded panel (collapsed.datasets = false).
+    try { localStorage.clear(); } catch { /* ignore */ }
+    usePanelCollapseStore.setState({ collapsed: { ...DEFAULTS } });
   });
 
-  it("renders datasets matching the current waterType setting (default saltwater)", () => {
+  it("renders the panel title and the expanded collapse chevron", () => {
     render(<DatasetPanel />);
-    expect(screen.getByText("Alaska Fjord")).toBeInTheDocument();
-    // Depth range is shown in full-word form under the active units setting.
-    expect(screen.getByText("5 meters to 350 meters")).toBeInTheDocument();
-    expect(screen.getByTestId("btn-dataset-alaska-fjord")).toBeInTheDocument();
-    // Freshwater dataset is filtered out under the default saltwater setting.
-    expect(screen.queryByText("Lake Michigan")).not.toBeInTheDocument();
+    // The outer header button carries the "Datasets" title.
+    expect(screen.getByText("Datasets")).toBeInTheDocument();
+    // Default state: panel is expanded, so the ▾ chevron is shown.
+    expect(screen.getByText("▾")).toBeInTheDocument();
   });
 
-  it("clicking a dataset triggers loading state (pending fetch)", () => {
+  it("renders the MY LIBRARY section header in expanded state", () => {
     render(<DatasetPanel />);
-    const btn = screen.getByTestId("btn-dataset-alaska-fjord");
-    fireEvent.click(btn);
-    // The LoadingDial should mount for the clicked dataset's row.
-    expect(screen.getByTestId("loading-dial")).toBeInTheDocument();
+    // The MY LIBRARY toggle button must be present when the panel is expanded.
+    expect(screen.getByRole("button", { name: /MY LIBRARY/ })).toBeInTheDocument();
   });
 
-  it("collapses and expands dataset list when header is clicked", () => {
+  it("collapses and expands the panel when the Datasets header is clicked", () => {
     render(<DatasetPanel />);
-    expect(screen.getByText("Alaska Fjord")).toBeInTheDocument();
+    // Panel starts expanded — MY LIBRARY header is visible.
+    expect(screen.getByRole("button", { name: /MY LIBRARY/ })).toBeInTheDocument();
 
+    // Click the Datasets header to collapse the entire panel.
     const header = screen.getByText("Datasets").closest("button")!;
     fireEvent.click(header);
-    expect(screen.queryByText("Alaska Fjord")).not.toBeInTheDocument();
+    // MY LIBRARY section is unmounted when the panel is collapsed.
+    expect(screen.queryByRole("button", { name: /MY LIBRARY/ })).not.toBeInTheDocument();
 
+    // Click again to re-expand.
     fireEvent.click(header);
-    expect(screen.getByText("Alaska Fjord")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /MY LIBRARY/ })).toBeInTheDocument();
   });
 
   it("renders the upload dropzone area after expanding the upload section", () => {
