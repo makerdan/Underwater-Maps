@@ -435,6 +435,7 @@ Authentication is handled by **Clerk** across all surfaces:
 | GET | `/healthz` | Health check |
 | GET | `/healthz/deep` | Deep health probe — checks DB, Poe, and AOOS subsystems |
 | GET | `/admin/bucket-monitor` | GCS dataset landing bucket processing summary |
+| GET | `/admin/skill/failure-gate` | Download the failure-gate skill zip with no-cache headers |
 | GET | `/admin/large-datasets-diff` | Detect Large_Datasets files that have changed since last import |
 
 #### Other
