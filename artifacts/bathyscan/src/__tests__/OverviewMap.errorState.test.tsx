@@ -303,6 +303,97 @@ describe("OverviewMap — error-state UX: hint link + retry loop", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Scenario (c): isError=true from React Query → immediate error UI
+  //   These tests set overviewFetchErrorIds in the terrain store BEFORE
+  //   rendering so the fast-error useEffect fires on the first render.
+  //   The Date.now spy stays at initialNow (< 15 s) — the error UI must
+  //   appear without any clock advance.
+  // -------------------------------------------------------------------------
+  it("shows error UI immediately when overviewFetchErrorIds contains the primary dataset", async () => {
+    // Seed the error IDs so the fast-error effect fires on mount.
+    useTerrainStore.setState({ overviewFetchErrorIds: ["fail-ds"] });
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // Clock has NOT been advanced — the 15 s timeout has NOT elapsed.
+    // The error UI must still appear via the fast-error path.
+    await waitFor(
+      () => {
+        if (!document.querySelector('[data-testid="overview-load-retry"]')) {
+          throw new Error("Retry button not yet in DOM");
+        }
+      },
+      { timeout: 3000 },
+    );
+
+    expect(document.querySelector('[data-testid="overview-load-retry"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="overview-error-hint"]')).not.toBeNull();
+  });
+
+  it("does NOT show error UI immediately when overviewFetchErrorIds is empty", async () => {
+    // overviewFetchErrorIds is empty (default from setupNoGridState).
+    useTerrainStore.setState({ overviewFetchErrorIds: [] });
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // Clock has NOT been advanced — neither fast-error nor 15 s timeout should fire.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(document.querySelector('[data-testid="overview-load-retry"]')).toBeNull();
+    expect(document.querySelector('[data-testid="overview-error-hint"]')).toBeNull();
+  });
+
+  it("does NOT show error UI when overviewFetchErrorIds contains a different dataset", async () => {
+    // Error is for a dataset that is NOT the primary (fail-ds).
+    useTerrainStore.setState({ overviewFetchErrorIds: ["other-ds"] });
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(document.querySelector('[data-testid="overview-load-retry"]')).toBeNull();
+  });
+
+  it("Retry clears fast-error state so the loading spinner reappears", async () => {
+    useTerrainStore.setState({ overviewFetchErrorIds: ["fail-ds"] });
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // Wait for the error UI to appear via the fast-error path.
+    await waitFor(
+      () => {
+        if (!document.querySelector('[data-testid="overview-load-retry"]')) {
+          throw new Error("Retry button not yet in DOM");
+        }
+      },
+      { timeout: 3000 },
+    );
+
+    // Click Retry — the error UI must disappear immediately.
+    await act(async () => {
+      const retryBtn = document.querySelector<HTMLButtonElement>(
+        '[data-testid="overview-load-retry"] button',
+      )!;
+      retryBtn.click();
+    });
+
+    expect(document.querySelector('[data-testid="overview-load-retry"]')).toBeNull();
+    expect(document.querySelector('[data-testid="overview-error-hint"]')).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
   // Scenario (b) edge: clicking Retry multiple times must not leave stuck state
   // -------------------------------------------------------------------------
   it("clicking Retry twice in quick succession does not permanently disable the Retry button", async () => {

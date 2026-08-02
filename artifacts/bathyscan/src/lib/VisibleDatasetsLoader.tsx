@@ -57,12 +57,22 @@ const PresetDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => 
       queryKey: getGetDatasetsIdTerrainQueryKey(datasetId),
     },
   });
-  const { data: overview } = useGetDatasetsIdOverview(datasetId, {
+  const { data: overview, isError: overviewIsError } = useGetDatasetsIdOverview(datasetId, {
     query: {
       enabled: !!datasetId,
       queryKey: getGetDatasetsIdOverviewQueryKey(datasetId),
     },
   });
+
+  // Propagate definitive fetch failures to the terrain store so OverviewMap
+  // can surface the error UI immediately (without waiting for the 15 s timeout).
+  useEffect(() => {
+    useTerrainStore.getState().setOverviewFetchError(datasetId, overviewIsError);
+    return () => {
+      // Clear the error when the loader unmounts (dataset removed or grids loaded).
+      useTerrainStore.getState().setOverviewFetchError(datasetId, false);
+    };
+  }, [datasetId, overviewIsError]);
 
   useEffect(() => {
     if (!terrain || !overview) return;
@@ -106,12 +116,22 @@ const UserDatasetLoader: React.FC<{ datasetId: string }> = ({ datasetId }) => {
       queryKey: getGetUserDatasetsIdTerrainQueryKey(datasetId),
     },
   });
-  const { data: overview } = useGetUserDatasetsIdOverview(datasetId, {
+  const { data: overview, isError: overviewIsError } = useGetUserDatasetsIdOverview(datasetId, {
     query: {
       enabled: !!datasetId,
       queryKey: getGetUserDatasetsIdOverviewQueryKey(datasetId),
     },
   });
+
+  // Propagate definitive fetch failures to the terrain store so OverviewMap
+  // can surface the error UI immediately (without waiting for the 15 s timeout).
+  useEffect(() => {
+    useTerrainStore.getState().setOverviewFetchError(datasetId, overviewIsError);
+    return () => {
+      // Clear the error when the loader unmounts (dataset removed or grids loaded).
+      useTerrainStore.getState().setOverviewFetchError(datasetId, false);
+    };
+  }, [datasetId, overviewIsError]);
 
   useEffect(() => {
     if (!terrain || !overview) return;

@@ -172,6 +172,20 @@ interface TerrainStore {
 
   /** Clear the autoEvictedId after proximity streaming has recorded the eviction. */
   clearAutoEviction: () => void;
+
+  /**
+   * Dataset IDs whose overview fetch has definitively failed (React Query
+   * returned isError: true).  OverviewMap reads this to surface the error UI
+   * immediately rather than waiting for the 15 s stale-fetch timeout.
+   */
+  overviewFetchErrorIds: string[];
+
+  /**
+   * Record or clear a definitively-failed overview fetch for a dataset.
+   * Called by VisibleDatasetsLoader when the overview query transitions to
+   * isError: true (set hasError=true) or recovers / unmounts (hasError=false).
+   */
+  setOverviewFetchError: (datasetId: string, hasError: boolean) => void;
 }
 
 /**
@@ -207,6 +221,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
   selectedIds: [],
   selectedSources: {},
   multiDatasetMode: false,
+  overviewFetchErrorIds: [],
 
   setGrids: ({ activeGrid, overviewGrid, source }) =>
     set((prev) => {
@@ -569,6 +584,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       selectedIds: [],
       selectedSources: {},
       multiDatasetMode: false,
+      overviewFetchErrorIds: [],
     }),
 
   clearEviction: () =>
@@ -576,4 +592,16 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
 
   clearAutoEviction: () =>
     set((prev) => (prev.autoEvictedId === null ? prev : { ...prev, autoEvictedId: null })),
+
+  setOverviewFetchError: (datasetId, hasError) =>
+    set((prev) => {
+      const had = prev.overviewFetchErrorIds.includes(datasetId);
+      if (hasError === had) return prev; // no-op: state unchanged
+      return {
+        ...prev,
+        overviewFetchErrorIds: hasError
+          ? [...prev.overviewFetchErrorIds, datasetId]
+          : prev.overviewFetchErrorIds.filter((id) => id !== datasetId),
+      };
+    }),
 }));

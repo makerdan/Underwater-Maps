@@ -137,6 +137,7 @@ export const OverviewMap: React.FC = () => {
   const { terrain: appTerrain } = useAppState();
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
+  const overviewFetchErrorIds = useTerrainStore((s) => s.overviewFetchErrorIds);
   // Refs so the rAF render + DOM event handlers always read the latest store
   // state without forcing the effects to re-run on every store update.
   const visibleDatasetsRef = useRef(visibleDatasets);
@@ -303,6 +304,20 @@ export const OverviewMap: React.FC = () => {
       }
     }
   }, [queryClient, visibleDatasets]);
+
+  // Fast-error path: when React Query returns isError=true for the primary
+  // dataset's overview fetch, surface the error UI immediately without
+  // waiting for the 15 s stale-fetch timeout.  The 15 s timeout remains as a
+  // backstop for stalls where the query stays in isLoading without erroring.
+  useEffect(() => {
+    if (!primaryDatasetId) return;
+    if (!overviewFetchErrorIds.includes(primaryDatasetId)) return;
+    // Only flip once — avoid repeated setState on every re-render.
+    if (overviewLoadFailedRef.current) return;
+    overviewLoadFailedRef.current = true;
+    setOverviewLoadFailed(true);
+    dirtyRef.current = true;
+  }, [overviewFetchErrorIds, primaryDatasetId]);
 
   // Navigates to Find Data from the error-state hint link so users can
   // switch to a working dataset without closing and reopening the map.
@@ -1283,12 +1298,16 @@ export const OverviewMap: React.FC = () => {
         ctx.font = "11px 'JetBrains Mono', monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
+        // Treat both a definitive React Query error (overviewLoadFailedRef set
+        // by the fast-error useEffect) and a 15 s stall as "failed".
         if (waitedMs > 15_000) {
           // Flip the React state once so the retry button renders in the DOM.
           if (!overviewLoadFailedRef.current) {
             overviewLoadFailedRef.current = true;
             setOverviewLoadFailed(true);
           }
+        }
+        if (overviewLoadFailedRef.current) {
           ctx.fillText("Could not load map data", cW / 2, cH / 2);
         } else {
           const dotsCount = 1 + (Math.floor(Date.now() / 400) % 3);
