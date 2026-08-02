@@ -71,6 +71,11 @@ const TerrainContourLines: React.FC<TerrainContourLinesProps> = ({ grid }) => {
     const wSegs = Math.max(W - 1, 1);
     const hSegs = Math.max(H - 1, 1);
 
+    // Grid-relative depth range for Y positioning — mirrors buildTerrainGeometry
+    // which always normalises Y over the grid's own minDepth/maxDepth, not the
+    // colormap's absolute domain.  Guard against flat-bottom grids (depthRange=0).
+    const gridDepthRange = (maxDepth - minDepth) || 1;
+
     // Match the absolute depth domain used by TerrainMesh vertex colours so
     // contour lines land on the same colour as the underlying surface.
     const domain = getColormapDepthDomain(effectiveColormapTheme, minDepth, maxDepth);
@@ -85,8 +90,17 @@ const TerrainContourLines: React.FC<TerrainContourLinesProps> = ({ grid }) => {
       const seg = segments[i]!;
       const { depth, x0, y0, x1, y1 } = seg;
 
+      // tPos: grid-relative normalisation used for world-Y position.
+      // Matches buildTerrainGeometry's formula so lines sit flush on the mesh
+      // regardless of whether the colormap uses an absolute domain (ocean/custom)
+      // or a grid-relative one.
+      const tPos = Math.max(0, Math.min(1, (depth - minDepth) / gridDepthRange));
+      const worldY = -tPos * MAX_DEPTH_WORLD + LINE_Y_OFFSET;
+
+      // t01: colormap-domain normalisation used for colour sampling only.
+      // For ocean/custom themes this is over the absolute [0, OCEAN_MAX_DEPTH_M]
+      // domain so colours match the underlying terrain vertex colours exactly.
       const t01 = Math.max(0, Math.min(1, (depth - domain.min) / domainRange));
-      const worldY = -t01 * MAX_DEPTH_WORLD + LINE_Y_OFFSET;
 
       // Keep colors in linear space — Three.js vertex colors are stored and
       // rendered in linear-sRGB, matching how applyColormapToVertexColors
