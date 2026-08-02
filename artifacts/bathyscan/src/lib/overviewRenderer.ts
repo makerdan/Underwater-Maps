@@ -203,22 +203,161 @@ export function clampTransform(
 }
 
 // ---------------------------------------------------------------------------
+// Hillshade lighting layer
+// ---------------------------------------------------------------------------
+
+// Mirror the 3D shader lighting constants from terrainShader.ts:
+//   float ambient = 0.55;
+//   float diffuse = max(0.0, dot(normal, sunDir)) * 0.45;
+//   float lighting = min(ambient + diffuse, 1.2);
+const HS_AMBIENT = 0.55;
+const HS_DIFFUSE = 0.45;
+
+// Frozen sun direction — same as `uSunDir: new THREE.Vector3(0.5, 1.0, 0.7).normalize()`
+// in createTerrainShaderMaterial (terrainShader.ts).
+const _HS_SUN_MAG = Math.sqrt(0.5 * 0.5 + 1.0 * 1.0 + 0.7 * 0.7);
+const HS_SUN_X = 0.5 / _HS_SUN_MAG;
+const HS_SUN_Y = 1.0 / _HS_SUN_MAG;
+const HS_SUN_Z = 0.7 / _HS_SUN_MAG;
+
+// 3D mesh scale constants (mirrored from terrain.ts) used to convert
+// depth-per-cell slopes to world-space slopes matching the 3D viewer.
+const _HS_WORLD_SIZE = 100;
+const _HS_MAX_DEPTH_WORLD = 50;
+
+/**
+ * Compute per-cell hillshade lighting multipliers for the Overview Map heatmap.
+ *
+ * Replicates the Blinn-Phong ambient+diffuse lighting from terrainShader.ts
+ * (ambient=0.55, diffuse=0.45, sun=normalize(0.5,1.0,0.7)) entirely in CPU
+ * space so the 2D bitmap matches the shaded appearance of the 3D view.
+ *
+ * Returns a Float32Array of length W×H (one multiplier per canvas pixel,
+ * row-major with the same Y-flip as buildHeatmapBitmap: index 0 = top-left =
+ * northernmost data cell). Values lie in [HS_AMBIENT, 1.2].
+ *
+ * Null/NaN depth cells return HS_AMBIENT (no additional darkening).
+ * Finite-difference neighbours that are null/NaN fall back to the cell's own
+ * depth so slope estimation degrades gracefully at data boundaries.
+ */
+export function buildHillshadeLayer(grid: TerrainData): Float32Array {
+  const { width: W, height: H, depths, minDepth, maxDepth } = grid;
+  const depthRange = (maxDepth - minDepth) || 1;
+  const result = new Float32Array(W * H);
+
+  // World-space horizontal step per grid column / row (matches buildTerrainGeometry).
+  const worldStepX = _HS_WORLD_SIZE / Math.max(1, W - 1);
+  const worldStepZ = _HS_WORLD_SIZE / Math.max(1, H - 1);
+  // Factor converting depth-metres to world-Y displacement magnitude.
+  const depthToWorld = _HS_MAX_DEPTH_WORLD / depthRange;
+
+  for (let row = 0; row < H; row++) {
+    for (let col = 0; col < W; col++) {
+      const pixelIdx = row * W + col;
+      // Y-flip: canvas row 0 = northernmost = data row H-1.
+      const dataRow = H - 1 - row;
+
+      const rawDepth = depths[dataRow * W + col];
+
+      // Null / NaN cells → ambient floor (no shape cue, no extra darkening).
+      if (rawDepth === null || rawDepth === undefined || Number.isNaN(rawDepth as number)) {
+        result[pixelIdx] = HS_AMBIENT;
+        continue;
+      }
+      const selfDepth = rawDepth as number;
+
+      // Central-difference neighbours in data space, clamped at borders.
+      const r0 = Math.max(0, dataRow - 1);
+      const r1 = Math.min(H - 1, dataRow + 1);
+      const c0 = Math.max(0, col - 1);
+      const c1 = Math.min(W - 1, col + 1);
+      const dCols = c1 - c0; // 1 at left/right edges, 2 in interior
+      const dRows = r1 - r0; // 1 at top/bottom edges, 2 in interior
+
+      /** Read depth at data (r, c); fall back to selfDepth on null/NaN. */
+      const d = (r: number, c: number): number => {
+        const v = depths[r * W + c];
+        return (v === null || v === undefined || Number.isNaN(v as number))
+          ? selfDepth
+          : (v as number);
+      };
+
+      // Finite differences: depth change per grid step.
+      // Guard against degenerate 1-pixel dimensions (dCols/dRows = 0) by
+      // treating flat slopes in that direction (no shading contribution).
+      const ddCol = dCols > 0 ? (d(dataRow, c1) - d(dataRow, c0)) / dCols : 0; // m per col
+      const ddRow = dRows > 0 ? (d(r1, col)    - d(r0, col))    / dRows   : 0; // m per row
+
+      // Convert to world-space normal.
+      // In the 3D mesh (Y-up, XZ horizontal):
+      //   world Y = -(depth / depthRange) * MAX_DEPTH_WORLD
+      //   dY/dX = -(depthToWorld * ddCol) / worldStepX
+      //   N = normalize(-dY/dX,  1,  -dY/dZ)
+      //     = normalize(+depthToWorld*ddCol/worldStepX,  1,  +depthToWorld*ddRow/worldStepZ)
+      const nx = (depthToWorld * ddCol) / worldStepX;
+      const ny = 1.0;
+      const nz = (depthToWorld * ddRow) / worldStepZ;
+
+      const mag = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+      const dot = (nx / mag) * HS_SUN_X + (ny / mag) * HS_SUN_Y + (nz / mag) * HS_SUN_Z;
+
+      result[pixelIdx] = Math.min(HS_AMBIENT + HS_DIFFUSE * Math.max(0, dot), 1.2);
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Heatmap bitmap
 // ---------------------------------------------------------------------------
 
 /**
- * Pre-render the depth grid as a coloured bitmap (one pixel per data cell).
- * Result is an offscreen HTMLCanvasElement that can be scaled via drawImage.
+ * Pre-render the depth grid as a coloured, hillshaded bitmap (one pixel per
+ * data cell). Result is an offscreen HTMLCanvasElement that can be scaled via
+ * drawImage.
+ *
+ * @param grid           Terrain data grid.
+ * @param colormapTheme  Active colormap theme (default "ocean").
+ * @param topography     Optional elevation array for land-cell detection.
+ * @param stretchContrast
+ *   When true (default), the depth domain is stretched to the grid's actual
+ *   [minDepth, maxDepth] whenever the survey's real depth range spans less
+ *   than 15% of the absolute colormap domain (e.g. an ocean/custom theme
+ *   whose 0–2000 ft scale far exceeds a shallow 20–80 ft lake).  This ensures
+ *   the full palette gradient is visible across the actual data range.
+ *
+ *   This is a bitmap-level decision only — it does NOT affect contour-line
+ *   depth values, the legend strip, or the 3D terrain view.
  */
 export function buildHeatmapBitmap(
   grid: TerrainData,
   colormapTheme: ColormapTheme = "ocean",
   topography?: number[] | null,
+  stretchContrast = true,
 ): HTMLCanvasElement {
   const { width: W, height: H, depths, minDepth, maxDepth } = grid;
-  const domain = getColormapDepthDomain(colormapTheme, minDepth, maxDepth);
+
+  // Resolve the effective domain (may be stretched for narrow surveys).
+  const absoluteDomain = getColormapDepthDomain(colormapTheme, minDepth, maxDepth);
+  let domain = absoluteDomain;
+  if (stretchContrast) {
+    const actualRange = maxDepth - minDepth;
+    const absDomainRange = absoluteDomain.max - absoluteDomain.min || 1;
+    if (actualRange > 0 && actualRange / absDomainRange < 0.15) {
+      // Survey spans < 15% of the absolute palette scale — use actual extents
+      // so the full gradient maps across the real depth range.
+      domain = { min: minDepth, max: maxDepth };
+    }
+  }
+
   const domainRange = domain.max - domain.min || 1;
   const toColor = getColormap(colormapTheme);
+
+  // Pre-compute per-cell hillshade multipliers.  Applied to the linear-space
+  // palette colour before sRGB conversion so the lighting is physically correct,
+  // mirroring the GLSL `fragColor = paletteColor * lighting` in terrainShader.ts.
+  const hillshade = buildHillshadeLayer(grid);
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -232,7 +371,8 @@ export function buildHeatmapBitmap(
       // matching Minimap.tsx's North-up convention.
       const dataIdx = (H - 1 - row) * W + col;
       const rawDepth = depths[dataIdx];
-      const i = (row * W + col) * 4;
+      const pixelIdx = row * W + col;
+      const i = pixelIdx * 4;
 
       // Null / NaN depth → survey gap: render as the NO_DATA_COLOR light-gray
       // so coverage boundaries are visible at a glance, matching the 3D
@@ -246,22 +386,34 @@ export function buildHeatmapBitmap(
         continue;
       }
 
-      // Land cell (above-water elevation > 0 in topography): render as flat
+      const hs = hillshade[pixelIdx]!;
+
+      // Land cell (above-water elevation > 0 in topography): render as hillshaded
       // gray matching the 3D shader land colour so inland reservoirs like Lake
       // Ray Roberts show the surrounding land distinctly from the water.
       if (topography && (topography[dataIdx] ?? 0) > 0) {
-        imageData.data[i]     = 120;
-        imageData.data[i + 1] = 120;
-        imageData.data[i + 2] = 120;
+        // Base land gray is (120,120,120) in display-sRGB.  Apply hillshade in
+        // sRGB space (acceptable for neutral gray where gamma error is minimal).
+        const v = Math.max(0, Math.min(255, Math.round(120 * hs)));
+        imageData.data[i]     = v;
+        imageData.data[i + 1] = v;
+        imageData.data[i + 2] = v;
         imageData.data[i + 3] = 255;
         continue;
       }
 
       const t = Math.max(0, Math.min(1, (rawDepth - domain.min) / domainRange));
-      // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
-      // display-space sRGB bytes for 2D canvas, matching the legend strip and
-      // the colormapCanvas helper in colormap.ts.
+      // Get the palette colour in linear-sRGB space (THREE.Color with
+      // ColorManagement enabled stores values in linear space).
+      // Multiply by the hillshade factor BEFORE sRGB conversion so the
+      // lighting is physically correct, exactly matching the GLSL path:
+      //   finalColor = paletteColor * lighting
       const lin = toColor(t);
+      lin.r *= hs;
+      lin.g *= hs;
+      lin.b *= hs;
+      // Convert THREE.Color (linear-sRGB) to display-space sRGB bytes for the
+      // 2D canvas, matching the legend strip and colormapCanvas helper in colormap.ts.
       const c = lin.clone().convertLinearToSRGB();
       imageData.data[i]     = Math.max(0, Math.min(255, Math.round(c.r * 255)));
       imageData.data[i + 1] = Math.max(0, Math.min(255, Math.round(c.g * 255)));
@@ -1447,8 +1599,11 @@ export function renderContourLines(
     return lonLatToCanvas(lon, lat, grid, t);
   };
 
-  const lineW = Math.max(0.5, Math.min(1.5, t.scale * 0.35));
-  const showLabels = t.scale >= 3;
+  // At scale=1 (initial zoomed-out view) lines are drawn at minimum width so
+  // terrain relief is visible without cluttering the overview.  Labels appear
+  // at scale≥2 (one zoom step in) where individual depths are legible.
+  const lineW = Math.max(0.5, Math.min(1.5, t.scale * 0.5));
+  const showLabels = t.scale >= 2;
   const fontSize = Math.max(8, Math.min(11, 9 * t.scale * 0.35));
 
   ctx.save();

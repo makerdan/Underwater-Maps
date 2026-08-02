@@ -1265,7 +1265,7 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
    *   dataIdx 2 → topo  5 → LAND  (row=0,col=0, i=0)
    *   dataIdx 3 → topo  8 → LAND  (row=0,col=1, i=4)
    */
-  it("land cells (topography > 0) are rendered as rgb(120,120,120)", () => {
+  it("land cells (topography > 0) are rendered as a hillshaded neutral gray", () => {
     const W = 2;
     const H = 2;
     const depths = [10, 20, 30, 40];
@@ -1279,16 +1279,20 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
     expect(capturedImageDatas.length).toBe(1);
     const px = capturedImageDatas[0]!;
 
-    // Canvas pixel 0 → dataIdx 2 (topo=5 → LAND)
-    expect(px[0]).toBe(120);
-    expect(px[1]).toBe(120);
-    expect(px[2]).toBe(120);
+    // Canvas pixel 0 → dataIdx 2 (topo=5 → LAND).
+    // Land cells use 120 as the base gray modulated by the hillshade multiplier,
+    // so R=G=B (neutral) but the exact value depends on the local surface normal.
+    expect(px[0]).toBe(px[1]); // R=G — neutral gray
+    expect(px[1]).toBe(px[2]); // G=B — neutral gray
+    expect(px[0]).toBeGreaterThan(50);   // not completely dark
+    expect(px[0]).toBeLessThanOrEqual(120); // never brighter than the base value
     expect(px[3]).toBe(255);
 
     // Canvas pixel 1 (i=4) → dataIdx 3 (topo=8 → LAND)
-    expect(px[4]).toBe(120);
-    expect(px[5]).toBe(120);
-    expect(px[6]).toBe(120);
+    expect(px[4]).toBe(px[5]);
+    expect(px[5]).toBe(px[6]);
+    expect(px[4]).toBeGreaterThan(50);
+    expect(px[4]).toBeLessThanOrEqual(120);
     expect(px[7]).toBe(255);
   });
 
