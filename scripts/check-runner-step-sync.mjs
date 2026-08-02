@@ -59,7 +59,11 @@ export const CI_COVERAGE_ALLOWLIST = {
 // ---------------------------------------------------------------------------
 
 export const ORPHAN_FILE_ALLOWLIST = {
-  // (empty — every check file on disk is currently wired up somewhere)
+  // Failure-gate lint guard — created by the failure-gate skill for optional
+  // manual use (node scripts/check-failure-gate.mjs --fix-stub). It is not
+  // wired into any validation tier because it operates on .local/tasks/ plan
+  // files that are gitignored and only present during active agent sessions.
+  "check-failure-gate.mjs": "skill helper, not a validation step — operates on gitignored .local/tasks/ plan files",
 };
 
 // ---------------------------------------------------------------------------

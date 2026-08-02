@@ -1078,6 +1078,85 @@ describe("buildContourLines — known grid crossings", () => {
 });
 
 // ---------------------------------------------------------------------------
+// buildContourLines — null / no-data cell suppression
+// ---------------------------------------------------------------------------
+
+describe("buildContourLines — null cell suppression", () => {
+  /**
+   * 4×4 grid where the centre 2×2 block (rows 1–2, cols 1–2) is null and the
+   * surrounding ring has real depths spanning several iso-depth intervals.
+   *
+   * Layout (row-major, null = no survey data):
+   *   10  10  10  10
+   *   10  null null 10
+   *   10  null null 10
+   *   10  10  10  10
+   *
+   * No contour segment endpoint should map into the null quad columns/rows.
+   * Quads that touch the null block occupy:
+   *   (row=1,col=1), (row=1,col=2) — top-inner row
+   *   (row=2,col=1), (row=2,col=2) — bottom-inner row
+   *
+   * A quad at (row, col) covers grid cols [col, col+1] and rows [row, row+1].
+   * The null cells occupy grid positions (row 1, col 1), (row 1, col 2),
+   * (row 2, col 1), (row 2, col 2).  Any segment touching those positions
+   * would indicate a phantom line.
+   */
+  it("produces no segments whose endpoints fall inside the null block", () => {
+    const W = 4;
+    const H = 4;
+    // Surrounding ring = 10 m, centre 2×2 = null
+    const depths: (number | null)[] = [
+      10,   10,   10,   10,
+      10,   null, null, 10,
+      10,   null, null, 10,
+      10,   10,   10,   10,
+    ];
+    const grid = makeGrid({
+      width: W,
+      height: H,
+      depths,
+      minDepth: 10,
+      maxDepth: 50,
+    });
+    const segs = buildContourLines(grid, 10);
+
+    // Null cells sit at grid (row, col): (1,1), (1,2), (2,1), (2,2).
+    // Any segment endpoint with col in (1,2] AND row in (1,2] would be
+    // inside or on the border of the null block.
+    for (const seg of segs) {
+      const insideNull = (x: number, y: number) =>
+        x > 1 - 1e-9 && x < 3 + 1e-9 && y > 1 - 1e-9 && y < 3 + 1e-9;
+      expect(insideNull(seg.x0, seg.y0)).toBe(false);
+      expect(insideNull(seg.x1, seg.y1)).toBe(false);
+    }
+  });
+
+  it("still produces segments on fully-dense grids (no regression)", () => {
+    const grid = makeGrid({
+      width: 2,
+      height: 2,
+      depths: [0, 0, 20, 20],
+      minDepth: 0,
+      maxDepth: 20,
+    });
+    expect(buildContourLines(grid, 10).length).toBeGreaterThan(0);
+  });
+
+  it("returns empty array when the whole grid is null", () => {
+    const depths: (number | null)[] = [null, null, null, null];
+    const grid = makeGrid({
+      width: 2,
+      height: 2,
+      depths,
+      minDepth: 0,
+      maxDepth: 100,
+    });
+    expect(buildContourLines(grid, 10)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // renderIntertidalBand — deep-water cells and null-MHW early exit
 // ---------------------------------------------------------------------------
 

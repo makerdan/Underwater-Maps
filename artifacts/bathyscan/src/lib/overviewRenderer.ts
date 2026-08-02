@@ -1243,10 +1243,15 @@ export function buildContourLines(
   ) {
     for (let row = 0; row < H - 1; row++) {
       for (let col = 0; col < W - 1; col++) {
-        const tl = depths[row * W + col] ?? minDepth;
-        const tr = depths[row * W + (col + 1)] ?? minDepth;
-        const br = depths[(row + 1) * W + (col + 1)] ?? minDepth;
-        const bl = depths[(row + 1) * W + col] ?? minDepth;
+        const tl = depths[row * W + col];
+        const tr = depths[row * W + (col + 1)];
+        const br = depths[(row + 1) * W + (col + 1)];
+        const bl = depths[(row + 1) * W + col];
+
+        // Skip quads that contain any no-data (null/undefined) corner — these
+        // cells have no terrain surface, so drawing contour lines along their
+        // edges would produce phantom lines over empty areas.
+        if (tl == null || tr == null || br == null || bl == null) continue;
 
         const idx =
           ((tl >= isoDepth ? 1 : 0) << 3) |
