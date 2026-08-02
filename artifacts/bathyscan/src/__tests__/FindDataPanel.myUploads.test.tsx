@@ -260,6 +260,20 @@ vi.mock("@/components/ViewscreenTooltip", () => ({
   }) => children,
 }));
 
+vi.mock("@dnd-kit/core", () => ({
+  DndContext: ({ children }: { children: React.ReactNode }) => children,
+  PointerSensor: class {},
+  useSensor: () => ({}),
+  useSensors: (...args: unknown[]) => args,
+  DragOverlay: ({ children }: { children: React.ReactNode }) => children ?? null,
+  useDraggable: () => ({ attributes: {}, listeners: {}, setNodeRef: () => {}, isDragging: false }),
+  useDroppable: () => ({ setNodeRef: () => {}, isOver: false }),
+}));
+
+vi.mock("@/lib/contextMenuStore", () => ({
+  useContextMenuStore: { getState: () => ({ show: vi.fn() }) },
+}));
+
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
   const mockUseSettingsStore = (
