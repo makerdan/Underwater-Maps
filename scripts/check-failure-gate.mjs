@@ -49,7 +49,7 @@ responsibility.
     stub: `
 ## Validation
 **Command:** \`test-standard\`
-**Why:** <replace with one-line justification — what this command covers and why it fits the scope of this task>
+**Why:** Placeholder — review before running this task (state what the command covers and why it fits the task scope).
 `,
   },
 ];
