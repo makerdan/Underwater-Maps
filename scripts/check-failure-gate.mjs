@@ -66,16 +66,44 @@ handled above — they are never a reason to run a heavier tier.
 
 // ---------------------------------------------------------------------------
 // Required lines within the ## Validation section
-// Each entry: { marker, fixLine, placeholder, insertAfterMarker }
+// Each entry: { marker, fixLine, placeholder?, insertAfterMarker?, validateLine? }
 //   marker            — startsWith string to detect the line is present
 //   fixLine           — the line(s) to insert when --fix-stub patches a file
 //                       that already has ## Validation but lacks this line
 //   placeholder       — recognisable string added by an old --fix-stub that a
-//                       human must still fill in
-//   insertAfterMarker — startsWith string of the line this should follow;
-//                       falls back to inserting right after ## Validation
+//                       human must still fill in (optional)
+//   insertAfterMarker — startsWith string of the line this entry should follow
+//                       within the section; falls back to inserting right after
+//                       ## Validation when absent or not found
+//   validateLine      — optional (line: string) => string | null; called with
+//                       the matched line (trimStart'd) when present. Return a
+//                       descriptive error string if invalid, or null if valid.
+//                       Only called when the marker line IS present.
 // ---------------------------------------------------------------------------
+
+const VALID_TIERS = [
+  "test-fast",
+  "test-standard",
+  "test-standard-plus",
+  "test-heavy",
+];
+
 const REQUIRED_VALIDATION_LINES = [
+  {
+    marker: "**Command:**",
+    fixLine: "**Command:** `test-standard`",
+    // no insertAfterMarker — falls back to right after ## Validation (first line)
+    validateLine(line) {
+      const m = line.match(/\*\*Command:\*\*\s+`([^`]+)`/);
+      if (!m) {
+        return `**Command:** line must contain a backtick-quoted tier name (e.g. \`test-standard\`)`;
+      }
+      if (!VALID_TIERS.includes(m[1])) {
+        return `**Command:** "${m[1]}" is not a valid tier — must be one of: ${VALID_TIERS.join(", ")}`;
+      }
+      return null;
+    },
+  },
   {
     marker: "**Why:**",
     fixLine: "**Why:** <replace with one-line justification>",
@@ -109,7 +137,7 @@ const stubsOnly = process.argv.includes("--stubs-only");
 // ---------------------------------------------------------------------------
 const STUB_PLACEHOLDERS = [
   "**Command:** `<mid-weight tier for this project>`",
-  ...REQUIRED_VALIDATION_LINES.map((r) => r.placeholder),
+  ...REQUIRED_VALIDATION_LINES.flatMap((r) => (r.placeholder ? [r.placeholder] : [])),
 ];
 
 // ---------------------------------------------------------------------------
@@ -154,8 +182,8 @@ async function insertValidationLine(filePath, content, fixLine, insertAfterMarke
       break;
     }
   }
-
   const insertAt = insertAfter !== -1 ? insertAfter + 1 : valIdx + 1;
+
   const newLines = [
     ...lines.slice(0, insertAt),
     fixLine,
@@ -204,17 +232,46 @@ for (const file of files) {
 
   // Check for required lines within the Validation section — only when the
   // section is present (missing section is already caught by missingSections).
-  const hasValidationSection = lines.some((l) => l.trimEnd() === "## Validation");
-  const missingValidationLines = hasValidationSection
-    ? REQUIRED_VALIDATION_LINES.filter(
-        ({ marker }) => !lines.some((l) => l.trimStart().startsWith(marker)),
-      )
+  // Each entry in validationLineIssues is { rvl, reason, absent } where:
+  //   absent — true when the marker line is entirely missing (fixable by --fix-stub)
+  //   reason — human-readable error description (marker name or validateLine message)
+  const valHeadingIdx = lines.findIndex((l) => l.trimEnd() === "## Validation");
+  const hasValidationSection = valHeadingIdx !== -1;
+
+  // Collect only the lines that belong to the ## Validation section (between the
+  // heading and the next ## heading or EOF). This prevents false positives when a
+  // marker string appears in a code-block example earlier in the document.
+  const validationSectionLines = hasValidationSection
+    ? (() => {
+        const sectionLines = [];
+        for (let i = valHeadingIdx + 1; i < lines.length; i++) {
+          if (lines[i].startsWith("## ")) break;
+          sectionLines.push(lines[i]);
+        }
+        return sectionLines;
+      })()
+    : [];
+
+  const validationLineIssues = hasValidationSection
+    ? REQUIRED_VALIDATION_LINES.flatMap((rvl) => {
+        const matchedLine = validationSectionLines.find((l) =>
+          l.trimStart().startsWith(rvl.marker),
+        );
+        if (!matchedLine) {
+          return [{ rvl, reason: `missing "${rvl.marker}" line`, absent: true }];
+        }
+        if (rvl.validateLine) {
+          const err = rvl.validateLine(matchedLine.trimStart());
+          if (err) return [{ rvl, reason: err, absent: false }];
+        }
+        return [];
+      })
     : [];
 
   if (
     missingSections.length === 0 &&
     unfilledPlaceholders.length === 0 &&
-    missingValidationLines.length === 0
+    validationLineIssues.length === 0
   ) {
     compliant.push(file);
   } else {
@@ -222,7 +279,10 @@ for (const file of files) {
       file,
       missingSections: missingSections.map((s) => s.heading),
       unfilledPlaceholders,
-      missingValidationLines: missingValidationLines.map((r) => r.marker),
+      // Store descriptive reason strings for display
+      missingValidationLines: validationLineIssues.map((i) => i.reason),
+      // Store raw issue objects for fix-stub (need rvl + absent flag)
+      _validationLineIssues: validationLineIssues,
     });
 
     if (fixStub) {
@@ -244,11 +304,12 @@ for (const file of files) {
         }
       }
 
-      // Insert missing required validation lines into existing Validation section.
-      // Iterate directly over missingValidationLines (already the filtered list
-      // of REQUIRED_VALIDATION_LINES entries whose marker was absent).
-      if (missingValidationLines.length > 0) {
-        for (const rvl of missingValidationLines) {
+      // Insert lines that are entirely absent from the Validation section.
+      // Lines with an invalid value (absent=false) are NOT auto-fixed — the
+      // agent must correct the value manually.
+      const absentIssues = validationLineIssues.filter((i) => i.absent);
+      if (absentIssues.length > 0) {
+        for (const { rvl } of absentIssues) {
           try {
             content = await insertValidationLine(filePath, content, rvl.fixLine, rvl.insertAfterMarker);
             console.warn(
@@ -298,17 +359,23 @@ for (const { file, missingSections, unfilledPlaceholders, missingValidationLines
 }
 
 const trueNonCompliant = nonCompliant.filter(
-  ({ missingSections, unfilledPlaceholders, missingValidationLines }) =>
-    (!fixStub && missingSections.length > 0) ||
-    unfilledPlaceholders.length > 0 ||
-    (!fixStub && missingValidationLines.length > 0),
+  ({ missingSections, unfilledPlaceholders, _validationLineIssues }) => {
+    const issues = _validationLineIssues || [];
+    // Absent lines are auto-inserted by --fix-stub, so skip them in fixStub mode.
+    // Invalid values (absent=false) cannot be auto-fixed — always surface them.
+    const unfixableIssues = issues.filter((i) => !i.absent);
+    return (
+      (!fixStub && missingSections.length > 0) ||
+      unfilledPlaceholders.length > 0 ||
+      (!fixStub && issues.some((i) => i.absent)) ||
+      unfixableIssues.length > 0
+    );
+  },
 );
 
 if (trueNonCompliant.length > 0) {
   const sectionNames = [...new Set(trueNonCompliant.flatMap((e) => e.missingSections))].join(", ");
-  const missingLineNames = [
-    ...new Set(trueNonCompliant.flatMap((e) => e.missingValidationLines)),
-  ].join(", ");
+  const hasValidationLineIssues = trueNonCompliant.some((e) => e.missingValidationLines.length > 0);
   console.error(
     `\ncheck-failure-gate — ${trueNonCompliant.length} non-compliant plan file(s) found.\n` +
       `Each plan must:\n` +
@@ -318,10 +385,12 @@ if (trueNonCompliant.length > 0) {
       `     Replace "<mid-weight tier for this project>" with the real command,\n` +
       `     "<replace with one-line justification>" with a real justification,\n` +
       `     and "<FILL IN>" with the real do-not-escalate rationale.\n` +
-      `  3. Include both a "**Why:**" line and a "**Do not escalate:**" line in\n` +
-      `     the ## Validation section.\n` +
-      (missingLineNames ? `     Files missing required line(s): see listing above.\n` : "") +
-      `Run with --fix-stub to append stubs for missing sections automatically.`,
+      `  3. Include a valid "**Command:**" line in the ## Validation section whose\n` +
+      `     backtick-quoted value is one of: ${VALID_TIERS.map((t) => `\`${t}\``).join(", ")}.\n` +
+      `  4. Include a "**Why:**" line in the ## Validation section.\n` +
+      `  5. Include a "**Do not escalate:**" line in the ## Validation section.\n` +
+      (hasValidationLineIssues ? `     See per-file listing above for details.\n` : "") +
+      `Run with --fix-stub to insert missing lines automatically (invalid values must be corrected manually).`,
   );
   process.exit(1);
 }

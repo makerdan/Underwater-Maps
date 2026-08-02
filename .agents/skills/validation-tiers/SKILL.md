@@ -56,7 +56,7 @@ For trivial tasks:
 - **Escalation is forbidden** unless `test-fast` itself fails on code the task touched. A pre-existing failure elsewhere (see below) is never a reason to escalate.
 - Do not investigate or fix unrelated red — record it as baseline breakage and finish the task.
 
-**Plan tier is authoritative:** when a task plan or task description names a validation tier, run exactly that tier. Do not run heavier tiers on your own initiative, even if the escalation rules below would otherwise suggest one — those rules apply only when no tier was specified.
+**Plan tier is authoritative:** the `**Command:**` line in a task plan's `## Validation` section is the sole authority for which tier runs. Run exactly that tier and no other. Do not run heavier tiers on your own initiative, even as a "sanity check" — doing so is a violation of the plan. The escalation rules below apply only when no `**Command:**` line is present in the plan.
 
 ## Pre-Existing Failure Triage
 
