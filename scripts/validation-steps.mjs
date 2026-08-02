@@ -78,6 +78,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:root-relative-api", resource: null, cmd: "pnpm run check:root-relative-api", tiers: FAST },
     // no resource: grep-based exhaustive-deps suppression rationale gate, sub-second
     { name: "check:deps-suppression", resource: null, cmd: "pnpm run check:deps-suppression", tiers: FAST },
+    // no resource: scans src/ for .tsx files that qualify for the duplicate-hooks guard but are unregistered, sub-second
+    { name: "check:duplicate-hooks-registry", resource: null, cmd: "pnpm run check:duplicate-hooks-registry", tiers: FAST },
     // no resource: CI coverage meta-check for check:* scripts, sub-second
     { name: "check:runner-step-sync", resource: null, cmd: "pnpm run check:runner-step-sync", tiers: FAST },
     // no resource: skip-count ratchet guard (static file scan), sub-second
