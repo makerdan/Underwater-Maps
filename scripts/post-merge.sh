@@ -14,6 +14,30 @@ pnpm install --no-frozen-lockfile
 # here so a merge that only changes openapi.yaml (no dependency changes) still
 # refreshes the generated files.
 pnpm --filter @workspace/api-spec run codegen:generate
+# Push the Drizzle schema to the dev database.
+#
+# WHY push, not migrate:
+#   The dev DB has an empty __drizzle_migrations table (no migration history),
+#   so `drizzle-kit migrate` always fails with "no migrations to apply" or a
+#   journal mismatch.  `drizzle-kit push` is the only viable path in this
+#   environment.
+#
+# KNOWN LIMITATION — column type changes require a manual pre-step:
+#   drizzle-kit push generates bare:
+#     ALTER TABLE … ALTER COLUMN … SET DATA TYPE <new_type>
+#   without a USING clause.  When the column contains values that Postgres
+#   cannot implicitly cast (e.g. text slugs being changed to uuid), the push
+#   fails at runtime with "ERROR: column … cannot be cast automatically to
+#   type uuid".
+#
+#   This happened for gps_trails.dataset_id (text → uuid) and WILL recur for
+#   any future column type change of the same kind.
+#
+#   Before running `pnpm --filter db push` for a type-changing migration,
+#   execute the orphan-cleanup SQL manually (or in CI) first.  A template is
+#   in scripts/pre-push-cleanup.sql.example — copy it, adapt the table/column
+#   names and the filter predicate, then run it against the dev DB before
+#   re-running post-merge.sh.
 pnpm --filter db push
 # Guardrail: surface typecheck/lint regressions immediately after a merge.
 # Unit tests are run separately (non-blocking) because there are known

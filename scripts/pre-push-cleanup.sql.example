@@ -1,0 +1,75 @@
+-- pre-push-cleanup.sql.example
+--
+-- Template for the manual orphan-cleanup step that must run BEFORE
+-- `drizzle-kit push` whenever a column type change would fail without a
+-- USING clause.
+--
+-- BACKGROUND
+-- ----------
+-- drizzle-kit push emits bare ALTER COLUMN … SET DATA TYPE without a USING
+-- clause.  Postgres can only execute such a statement when every existing
+-- value is implicitly castable to the new type.  Non-castable values (e.g.
+-- a text slug being changed to uuid, or a free-form string being changed to
+-- integer) cause the push to abort with:
+--
+--   ERROR: column "<col>" cannot be cast automatically to type <new_type>
+--
+-- The fix is to delete or update the offending rows BEFORE running push.
+--
+-- HOW TO USE THIS TEMPLATE
+-- ------------------------
+-- 1. Copy this file to a throwaway name (do NOT commit the copy — it will
+--    contain table/column specifics that go stale after the migration lands).
+-- 2. Fill in <table>, <column>, and the DELETE/UPDATE predicate below.
+-- 3. Connect to the dev database and run the adapted script:
+--      psql "$DATABASE_URL" -f /tmp/pre-push-cleanup.sql
+-- 4. Immediately run `pnpm --filter db push` (or re-run post-merge.sh).
+-- 5. Verify row counts and application behaviour.
+--
+-- REAL EXAMPLE — gps_trails.dataset_id (text → uuid)
+-- ---------------------------------------------------
+-- The column stored free-text dataset identifiers such as "thorne-bay" that
+-- were not valid UUIDs.  Those rows had to be removed before push could run:
+--
+--   DELETE FROM gps_trails
+--   WHERE dataset_id IS NOT NULL
+--     AND dataset_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+--
+-- GENERIC TEMPLATE
+-- ----------------
+
+BEGIN;
+
+-- Option A: delete orphaned rows whose value cannot be cast.
+-- Replace <table>, <column>, and the WHERE predicate to match your case.
+DELETE FROM <table>
+WHERE <column> IS NOT NULL
+  AND <column> !~ '<regex-that-valid-values-must-match>';
+
+-- Option B: null out the column instead of deleting the row (use when the
+-- column is nullable and the row is still meaningful without the value).
+-- UPDATE <table>
+-- SET <column> = NULL
+-- WHERE <column> IS NOT NULL
+--   AND <column> !~ '<regex-that-valid-values-must-match>';
+
+-- Sanity check: confirm no non-castable values remain.
+-- Adjust the regex / cast expression to match the target type.
+DO $$
+DECLARE
+  bad_count integer;
+BEGIN
+  SELECT COUNT(*) INTO bad_count
+  FROM <table>
+  WHERE <column> IS NOT NULL
+    AND <column> !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+  IF bad_count > 0 THEN
+    RAISE EXCEPTION 'Still % non-castable rows in <table>.<column> — fix before pushing', bad_count;
+  END IF;
+END $$;
+
+COMMIT;
+
+-- After this script succeeds, run:
+--   pnpm --filter db push
+-- (or re-run post-merge.sh which calls it automatically).
