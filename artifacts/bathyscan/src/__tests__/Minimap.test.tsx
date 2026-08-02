@@ -28,8 +28,9 @@ const makeApiClientMock = vi.hoisted(() => {
 
 import { Minimap, drawArrow, drawHeatmap } from "@/components/Minimap";
 import { useUiStore } from "@/lib/uiStore";
-import { WORLD_SIZE } from "@/lib/terrain";
+import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
 import { usePaletteStore } from "@/lib/paletteStore";
+import type { ColormapTheme } from "@/lib/settingsStore";
 
 const mockTerrain = {
   datasetId: "test-ds",
@@ -227,4 +228,224 @@ describe("drawHeatmap — full palette domain", () => {
     // Post-fix: different bands → diff >> 30.
     expect(diff).toBeGreaterThan(30);
   });
+});
+
+// ---------------------------------------------------------------------------
+// drawHeatmap — null depths, topography, and fixed preset themes
+// ---------------------------------------------------------------------------
+
+describe("drawHeatmap — null depths, topography cells, and fixed preset themes", () => {
+  type DepthsArray = import("@workspace/api-client-react").DepthsArray;
+
+  beforeEach(() => {
+    usePaletteStore.getState().reset();
+  });
+
+  /** Same 180×180 mock canvas used by the function (W and H are module constants). */
+  function makeHeatmapCtx() {
+    const imageData = {
+      data: new Uint8ClampedArray(180 * 180 * 4),
+      width: 180,
+      height: 180,
+    };
+    const captured: Uint8ClampedArray[] = [];
+    const ctx = {
+      createImageData: () => imageData,
+      putImageData: vi.fn((id: typeof imageData) => {
+        captured.push(new Uint8ClampedArray(id.data));
+      }),
+    } as unknown as CanvasRenderingContext2D;
+    return { ctx, captured };
+  }
+
+  /** Read one pixel (r,g,b,a) from a flat 180-wide image-data buffer. */
+  function px(data: Uint8ClampedArray, canvasPx: number, canvasPy: number): [number, number, number, number] {
+    const i = (canvasPy * 180 + canvasPx) * 4;
+    return [data[i]!, data[i + 1]!, data[i + 2]!, data[i + 3]!];
+  }
+
+  /** Replicate the linToSRGBByte transform used by drawHeatmap for NO_DATA_COLOR. */
+  function linToSRGBByte(c: number): number {
+    const s = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
+    return Math.max(0, Math.min(255, Math.round(s * 255)));
+  }
+
+  // ── null / undefined depths → NO_DATA_COLOR ────────────────────────────
+
+  it("null-depth pixel renders as NO_DATA_COLOR (sRGB-converted)", () => {
+    // Single-cell grid, depth is null → survey gap
+    const depths = [null] as unknown as DepthsArray;
+    const { ctx, captured } = makeHeatmapCtx();
+
+    drawHeatmap(ctx, depths, 1, 1, 0, 100, "ocean");
+
+    expect(captured.length).toBeGreaterThan(0);
+    const data = captured[0]!;
+
+    const expectedR = linToSRGBByte(NO_DATA_COLOR.r);
+    const expectedG = linToSRGBByte(NO_DATA_COLOR.g);
+    const expectedB = linToSRGBByte(NO_DATA_COLOR.b);
+
+    // Every canvas pixel should be the no-data colour (all cells are null).
+    const [r, g, b, a] = px(data, 0, 0);
+    expect(a).toBe(255);
+    expect(r).toBe(expectedR);
+    expect(g).toBe(expectedG);
+    expect(b).toBe(expectedB);
+
+    // Spot-check centre pixel as well.
+    const [r2, g2, b2] = px(data, 90, 90);
+    expect([r2, g2, b2]).toEqual([expectedR, expectedG, expectedB]);
+  });
+
+  it("undefined-depth pixel also renders as NO_DATA_COLOR", () => {
+    const depths = [undefined] as unknown as DepthsArray;
+    const { ctx, captured } = makeHeatmapCtx();
+
+    drawHeatmap(ctx, depths, 1, 1, 0, 100, "thermal");
+
+    const data = captured[0]!;
+    const expectedR = linToSRGBByte(NO_DATA_COLOR.r);
+    const [r, g, b, a] = px(data, 0, 0);
+    expect(a).toBe(255);
+    expect(r).toBe(expectedR);
+    // null and undefined must produce the identical byte — not the theme colour.
+    expect([r, g, b]).toEqual([linToSRGBByte(NO_DATA_COLOR.r), linToSRGBByte(NO_DATA_COLOR.g), linToSRGBByte(NO_DATA_COLOR.b)]);
+  });
+
+  it("null-depth cells are a different colour from valid-depth cells in the same heatmap", () => {
+    // 2-cell grid: left cell null, right cell has a real depth.
+    const depths = [null, 50] as unknown as DepthsArray;
+    const { ctx, captured } = makeHeatmapCtx();
+
+    drawHeatmap(ctx, depths, 2, 1, 0, 100, "ocean");
+
+    const data = captured[0]!;
+    const [rNull] = px(data, 0, 0);   // left half → null cell
+    const [rReal] = px(data, 179, 0); // right half → depth 50 m
+
+    // The null pixel should not match the coloured depth pixel.
+    // (They would be equal if the null branch were accidentally falling through
+    // into the colour calculation.)
+    const expectedNdR = linToSRGBByte(NO_DATA_COLOR.r);
+    expect(rNull).toBe(expectedNdR);
+    expect(rReal).not.toBe(expectedNdR);
+  });
+
+  // ── topography > 0 cells → flat gray (120, 120, 120) ───────────────────
+
+  it("topography > 0 cell renders as flat gray (120, 120, 120)", () => {
+    // Single-cell grid: depth 50 m but topography elevation is positive (land).
+    const depths = [50] as unknown as DepthsArray;
+    const topography = [1]; // > 0 → land
+
+    const { ctx, captured } = makeHeatmapCtx();
+    drawHeatmap(ctx, depths, 1, 1, 0, 100, "ocean", topography);
+
+    const data = captured[0]!;
+    const [r, g, b, a] = px(data, 0, 0);
+    expect(a).toBe(255);
+    expect(r).toBe(120);
+    expect(g).toBe(120);
+    expect(b).toBe(120);
+  });
+
+  it("topography = 0 cell is NOT treated as land (renders the depth colour instead)", () => {
+    const depths = [50] as unknown as DepthsArray;
+    const topography = [0]; // exactly 0 → not land
+
+    const { ctx, captured } = makeHeatmapCtx();
+    drawHeatmap(ctx, depths, 1, 1, 0, 100, "ocean", topography);
+
+    const data = captured[0]!;
+    const [r, g, b] = px(data, 0, 0);
+    // Should NOT be the flat gray — it must be a colour-mapped depth pixel.
+    expect([r, g, b]).not.toEqual([120, 120, 120]);
+    // And should not be no-data colour.
+    expect(r).not.toBe(linToSRGBByte(NO_DATA_COLOR.r));
+  });
+
+  it("topography > 0 overrides a valid depth: land colour, not depth colour", () => {
+    // 2-cell grid: left is land (topo > 0), right is ocean depth
+    const depths = [30, 90] as unknown as DepthsArray;
+    const topography = [5, 0]; // left = land, right = ocean
+
+    const { ctx, captured } = makeHeatmapCtx();
+    drawHeatmap(ctx, depths, 2, 1, 0, 100, "viridis", topography);
+
+    const data = captured[0]!;
+    const [rLand, gLand, bLand] = px(data, 0, 0);
+    const [rOcean] = px(data, 179, 0);
+
+    expect([rLand, gLand, bLand]).toEqual([120, 120, 120]);
+    expect(rOcean).not.toBe(120); // ocean cell gets a colormap colour, not gray
+  });
+
+  // ── fixed preset themes: non-flat gradient ──────────────────────────────
+
+  const FIXED_THEMES: ColormapTheme[] = ["thermal", "grayscale", "viridis", "freshwater"];
+
+  it.each(FIXED_THEMES)(
+    'theme "%s" paints a non-flat gradient (shallow ≠ deep pixel)',
+    (theme) => {
+      // 2-cell grid: one shallow cell, one deep cell.
+      const depths = [1, 99] as unknown as DepthsArray;
+      const { ctx, captured } = makeHeatmapCtx();
+
+      drawHeatmap(ctx, depths, 2, 1, 1, 99, theme);
+
+      expect(captured.length).toBeGreaterThan(0);
+      const data = captured[0]!;
+
+      const [r0, g0, b0] = px(data, 0, 0);   // shallow cell (left)
+      const [r1, g1, b1] = px(data, 179, 0); // deep cell (right)
+
+      const diff = Math.abs(r0 - r1) + Math.abs(g0 - g1) + Math.abs(b0 - b1);
+      // A flat palette would produce diff === 0; any working gradient must differ.
+      expect(diff).toBeGreaterThan(0);
+    },
+  );
+
+  it.each(FIXED_THEMES)(
+    'theme "%s" produces at least 3 distinct colours across a 5-step depth gradient',
+    (theme) => {
+      // 5-cell 1D grid spanning full minDepth→maxDepth
+      const depths = [0, 25, 50, 75, 100] as unknown as DepthsArray;
+      const { ctx, captured } = makeHeatmapCtx();
+
+      drawHeatmap(ctx, depths, 5, 1, 0, 100, theme);
+
+      const data = captured[0]!;
+      const colourSet = new Set<string>();
+      for (let gx = 0; gx < 5; gx++) {
+        // Sample the canvas column that maps to grid cell gx
+        const canvasPx = Math.floor((gx / 5) * 180);
+        const [r, g, b] = px(data, canvasPx, 0);
+        colourSet.add(`${r},${g},${b}`);
+      }
+      // A palette with ≥ 2 stops must produce more than 1 distinct colour
+      // across a 0→100 range; require at least 3 to catch severely flattened palettes.
+      expect(colourSet.size).toBeGreaterThanOrEqual(3);
+    },
+  );
+
+  it.each(FIXED_THEMES)(
+    'theme "%s" never produces the NO_DATA_COLOR or the flat-land gray for a valid depth',
+    (theme) => {
+      const depths = [50] as unknown as DepthsArray;
+      const { ctx, captured } = makeHeatmapCtx();
+
+      drawHeatmap(ctx, depths, 1, 1, 0, 100, theme);
+
+      const data = captured[0]!;
+      const [r, g, b] = px(data, 0, 0);
+
+      const expectedNdR = linToSRGBByte(NO_DATA_COLOR.r);
+      const expectedNdG = linToSRGBByte(NO_DATA_COLOR.g);
+      const expectedNdB = linToSRGBByte(NO_DATA_COLOR.b);
+
+      expect([r, g, b]).not.toEqual([expectedNdR, expectedNdG, expectedNdB]);
+      expect([r, g, b]).not.toEqual([120, 120, 120]);
+    },
+  );
 });
