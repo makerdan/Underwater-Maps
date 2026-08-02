@@ -17,7 +17,6 @@ import { describe, it, expect } from "vitest";
 import {
   buildNodataBoundarySegments,
   MAX_NODATA_BOUNDARY_SEGMENTS,
-  type NodataBoundarySegment,
 } from "../lib/overviewRenderer";
 import type { TerrainData } from "@workspace/api-client-react";
 
