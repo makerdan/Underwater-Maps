@@ -19,7 +19,7 @@ import { usePanelCollapseStore, type PanelId } from "@/lib/panelCollapseStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 const SHELL: React.CSSProperties = {
-  background: "rgba(2,8,18,0.94)",
+  background: "rgb(2,8,18)",
   border: "1px solid rgba(0,229,255,0.22)",
   borderRadius: 6,
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -27,7 +27,6 @@ const SHELL: React.CSSProperties = {
   fontSize: "calc(18px * var(--bs-font-scale, 1))",
   minWidth: 460,
   maxWidth: 520,
-  backdropFilter: "blur(6px)",
   pointerEvents: "auto",
 };
 

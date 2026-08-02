@@ -1298,10 +1298,9 @@ function Main() {
                     padding: "2px 8px",
                     borderRadius: 4,
                     border: "1px solid rgba(0,229,255,0.35)",
-                    background: "rgba(2,8,18,0.94)",
+                    background: "rgb(2,8,18)",
                     color: "#00e5ff",
                     cursor: "pointer",
-                    backdropFilter: "blur(6px)",
                     letterSpacing: "0.1em",
                   }}
                 >
@@ -1353,7 +1352,7 @@ function Main() {
                     minWidth: 460,
                     maxWidth: 520,
                     padding: "7px 12px",
-                    background: "rgba(2,8,18,0.88)",
+                    background: "rgb(2,8,18)",
                     border: "1px solid rgba(52,211,153,0.25)",
                     borderRadius: 6,
                     color: "#34d399",
@@ -1362,7 +1361,6 @@ function Main() {
                     letterSpacing: "0.15em",
                     textTransform: "uppercase",
                     cursor: "pointer",
-                    backdropFilter: "blur(6px)",
                     textAlign: "left",
                     display: "flex",
                     alignItems: "center",
@@ -1544,10 +1542,9 @@ function Main() {
                     fontSize: "calc(15px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.1em",
                     lineHeight: 1.6,
-                    background: "rgba(2,8,18,0.94)",
+                    background: "rgb(2,8,18)",
                     border: "1px solid rgba(0,229,255,0.22)",
                     borderRadius: 6,
-                    backdropFilter: "blur(6px)",
                   }}
                 >
                   <div style={{ fontSize: "calc(30px * var(--bs-font-scale, 1))", marginBottom: 6, opacity: 0.5 }}>◈</div>
@@ -1597,7 +1594,7 @@ function Main() {
                       minWidth: 460,
                       maxWidth: 520,
                       padding: "9px 14px",
-                      background: "rgba(2,8,18,0.94)",
+                      background: "rgb(2,8,18)",
                       border: "1px solid rgba(0,229,255,0.22)",
                       borderRadius: 6,
                       color: "#64748b",
@@ -1606,7 +1603,6 @@ function Main() {
                       letterSpacing: "0.2em",
                       textTransform: "uppercase",
                       cursor: "pointer",
-                      backdropFilter: "blur(6px)",
                       textAlign: "left",
                     }}
                   >
