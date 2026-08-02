@@ -5,21 +5,23 @@
  *   1. "## Pre-existing failures to ignore"
  *   2. "## Validation"
  *
- * Also checks that any file whose ## Validation section is present contains a
- * "**Do not escalate:**" line, and detects unfilled validation stubs — plan
- * files where the Validation section still contains the raw placeholder text
- * appended by --fix-stub instead of a real command and justification.
+ * Also checks that any file whose ## Validation section is present contains
+ * both a "**Why:**" line and a "**Do not escalate:**" line, and detects
+ * unfilled validation stubs — plan files where the Validation section still
+ * contains the raw placeholder text appended by --fix-stub instead of a real
+ * command and justification.
  *
  * Run:  node scripts/check-failure-gate.mjs
  *
  * Flags:
  *   --fix-stub    Append stubs for whichever required sections are missing in
  *                 each non-compliant file instead of just reporting them.
- *                 Also inserts the **Do not escalate:** line beneath **Why:**
- *                 when it is absent from an existing Validation section.
+ *                 Also inserts the **Why:** line after **Command:** and the
+ *                 **Do not escalate:** line after **Why:** when either is
+ *                 absent from an existing Validation section.
  *                 Prints a warning per file patched.
  *   --stubs-only  Skip the required-headings check and only report unfilled
- *                 stub placeholders and missing **Do not escalate:** lines.
+ *                 stub placeholders and missing required validation lines.
  *                 Used by the CI fast-tier step so that old pre-mandate plan
  *                 files (which lack the required sections) do not permanently
  *                 break the fast tier.
@@ -28,7 +30,8 @@
  *   0 — all files compliant (or no files found)
  *   1 — one or more files missing at least one required section, OR one or
  *       more files still contain unfilled stub placeholders, OR one or more
- *       files have ## Validation but are missing the **Do not escalate:** line
+ *       files have ## Validation but are missing the **Why:** or
+ *       **Do not escalate:** line
  */
 
 import { readdir, readFile, appendFile, writeFile } from "fs/promises";
@@ -63,21 +66,29 @@ handled above — they are never a reason to run a heavier tier.
 
 // ---------------------------------------------------------------------------
 // Required lines within the ## Validation section
-// Each entry: { marker, fixLine, placeholder }
-//   marker      — startsWith string to detect the line is present
-//   fixLine     — the line(s) to insert when --fix-stub patches a file that
-//                 already has ## Validation but lacks this line; inserted
-//                 after the **Why:** line (or appended to the section)
-//   placeholder — recognisable string added by an old --fix-stub that a human
-//                 must still fill in
+// Each entry: { marker, fixLine, placeholder, insertAfterMarker }
+//   marker            — startsWith string to detect the line is present
+//   fixLine           — the line(s) to insert when --fix-stub patches a file
+//                       that already has ## Validation but lacks this line
+//   placeholder       — recognisable string added by an old --fix-stub that a
+//                       human must still fill in
+//   insertAfterMarker — startsWith string of the line this should follow;
+//                       falls back to inserting right after ## Validation
 // ---------------------------------------------------------------------------
 const REQUIRED_VALIDATION_LINES = [
+  {
+    marker: "**Why:**",
+    fixLine: "**Why:** <replace with one-line justification>",
+    placeholder: "**Why:** <replace with one-line justification>",
+    insertAfterMarker: "**Command:**",
+  },
   {
     marker: "**Do not escalate:**",
     fixLine:
       "**Do not escalate:** Run exactly this command. Pre-existing failures are\n" +
       "handled above — they are never a reason to run a heavier tier.",
     placeholder: "**Do not escalate:** <FILL IN>",
+    insertAfterMarker: "**Why:**",
   },
 ];
 
@@ -98,7 +109,6 @@ const stubsOnly = process.argv.includes("--stubs-only");
 // ---------------------------------------------------------------------------
 const STUB_PLACEHOLDERS = [
   "**Command:** `<mid-weight tier for this project>`",
-  "**Why:** <replace with one-line justification",
   ...REQUIRED_VALIDATION_LINES.map((r) => r.placeholder),
 ];
 
@@ -125,24 +135,22 @@ if (files.length === 0) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: insert the **Do not escalate:** line into existing Validation section
+// Helper: insert a required line into an existing ## Validation section.
+// Inserts immediately after the line that starts with insertAfterMarker
+// (scanned within the section); falls back to right after ## Validation.
 // ---------------------------------------------------------------------------
-async function insertDoNotEscalateLine(filePath, content, fixLine) {
+async function insertValidationLine(filePath, content, fixLine, insertAfterMarker) {
   const lines = content.split("\n");
   // Find the ## Validation heading
   const valIdx = lines.findIndex((l) => l.trimEnd() === "## Validation");
   if (valIdx === -1) return content; // no Validation section — nothing to insert
 
-  // Look for a **Why:** line after the heading (within the section, before the
-  // next ## heading or end of file)
+  // Look for insertAfterMarker within the section (before the next ## heading)
   let insertAfter = -1;
   for (let i = valIdx + 1; i < lines.length; i++) {
     if (lines[i].startsWith("## ")) break; // next section
-    if (lines[i].startsWith("**Why:**")) {
+    if (insertAfterMarker && lines[i].startsWith(insertAfterMarker)) {
       insertAfter = i;
-      // keep scanning for the last continuation line of **Why:** (non-blank,
-      // non-heading, non-bold-key lines that immediately follow)
-      // For simplicity, insert right after the **Why:** line itself.
       break;
     }
   }
@@ -242,7 +250,7 @@ for (const file of files) {
       if (missingValidationLines.length > 0) {
         for (const rvl of missingValidationLines) {
           try {
-            content = await insertDoNotEscalateLine(filePath, content, rvl.fixLine);
+            content = await insertValidationLine(filePath, content, rvl.fixLine, rvl.insertAfterMarker);
             console.warn(
               `check-failure-gate [--fix-stub] ⚠ patched "${file}" — inserted "${rvl.marker}" into Validation section.`,
             );
@@ -307,10 +315,12 @@ if (trueNonCompliant.length > 0) {
       `  1. Contain all required sections: ${REQUIRED_SECTIONS.map((s) => `"${s.heading}"`).join(", ")}.\n` +
       (sectionNames ? `     Missing sections across files: ${sectionNames}.\n` : "") +
       `  2. Have no unfilled stub placeholders in the Validation section.\n` +
-      `     Replace "<mid-weight tier for this project>" with the real command\n` +
-      `     and "<replace with one-line justification" with a real justification.\n` +
-      `  3. Include a "**Do not escalate:**" line in the ## Validation section.\n` +
-      (missingLineNames ? `     Files missing this line: see listing above.\n` : "") +
+      `     Replace "<mid-weight tier for this project>" with the real command,\n` +
+      `     "<replace with one-line justification>" with a real justification,\n` +
+      `     and "<FILL IN>" with the real do-not-escalate rationale.\n` +
+      `  3. Include both a "**Why:**" line and a "**Do not escalate:**" line in\n` +
+      `     the ## Validation section.\n` +
+      (missingLineNames ? `     Files missing required line(s): see listing above.\n` : "") +
       `Run with --fix-stub to append stubs for missing sections automatically.`,
   );
   process.exit(1);
