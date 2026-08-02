@@ -29,9 +29,9 @@ This rule is enforced at three independent layers — all three must stay in syn
 
 | Layer | File | What it does |
 |---|---|---|
-| 0 — Session mandate | `replit.md` § "Agent rules" | Loaded at every Planner session start; contains the numbered hard-gate checklist |
+| 0 — Session mandate | The project's session mandate (e.g. `replit.md` § "Agent rules") — loaded at every Planner session start; contains the project's hard-gate checklist and any project-specific flaky patterns | Loaded at every Planner session start; contains the numbered hard-gate checklist |
 | 1 — Skill definition | `.agents/skills/failure-gate/SKILL.md` (this file) | Defines discovery checklist, templates, decision tree |
-| 2 — Lint guard | `scripts/check-failure-gate.mjs` | Scans `.local/tasks/*.md` and fails if any plan omits the required section |
+| 2 — Lint guard | The project's plan-file lint guard (e.g. `scripts/check-failure-gate.mjs`) — scans the plan directory and fails if any plan omits a required section | Scans `.local/tasks/*.md` and fails if any plan omits the required sections |
 
 A change to the rule must be applied to all three layers in the same task.
 
@@ -41,9 +41,9 @@ A change to the rule must be applied to all three layers in the same task.
 
 <HARD-GATE>
 You MUST complete the discovery checklist below before writing any plan. The
-"Pre-existing failures to ignore" section is MANDATORY in every plan — even when
-empty. A plan that omits it is defective and must be corrected before an agent
-picks it up.
+"Pre-existing failures to ignore" section AND the "Validation" section are MANDATORY
+in every plan — even when the failures list is empty. A plan that omits either section
+is defective and must be corrected before an agent picks it up.
 </HARD-GATE>
 
 ### Discovery checklist
@@ -52,32 +52,36 @@ Work through every item in order. Mark each complete before moving on.
 
 1. **Memory scan** — Open `.agents/memory/MEMORY.md` and scan for entries whose
    linked topic file names or hook lines mention suites, files, or patterns
-   touched by this task. Pay particular attention to these known-flaky categories
-   already documented:
-   - `reverseVendorMap row-order flake` → vendor map suites
-   - `vendor-map heap-order tests` → vendor map suites
-   - `concurrent effects consume fetchWithAuth mocks out of order` → WarehouseMapView
-   - `jest.clearAllMocks clears ALL mock implementations` → any suite using
-     `clearAllMocks` in a `beforeEach`
+   touched by this task. Project-specific known-flaky patterns live in the
+   project's session mandate and memory, not in this skill — treat every match
+   as a candidate for the plan section.
 
 2. **Recent task scan** — Query recently merged task descriptions for the words
    "pre-existing", "known failure", "flaky", or the names of suites the current
    task touches. Any match is a candidate for the list.
 
-3. **Spot-run** — When the task touches `artifacts/api-server` code, run the
-   api-server test suite once in its current state (before any changes) and record
-   any failures. Those failures are pre-existing by definition.
-   Skip this step if the task does not touch api-server code — it is expensive.
+3. **Spot-run** — When the task touches the project's main backend or server code,
+   run the project's primary backend test suite once in its current state (before
+   any changes) and record any failures — those failures are pre-existing by
+   definition. Consult the project's session mandate to identify which suite
+   qualifies. Skip if the task does not touch backend code; the run is expensive
+   and the benefit only applies when you're changing code that suite covers.
 
 4. **Write the section** — Use one of the two templates below. Place it in the
    plan after "Steps" and before "Relevant files". Do not omit it.
+
+5. **Choose a validation command** — Consult the project's registered validation
+   commands or its equivalent of the `validation-tiers` skill. Name the exact
+   command that matches the scope of changes: use the lightest tier whose coverage
+   is sufficient. Default to the mid-weight tier when uncertain. Add the
+   `## Validation` section to the plan using the template below.
 
 ### Required Planner announcement
 
 Before writing the first heading of any plan, emit this exact line in your response:
 
 ```
-[FAILURE-GATE] Discovery checklist complete. Pre-existing failures documented: <N> (or "none").
+[FAILURE-GATE] Discovery checklist complete. Pre-existing failures documented: <N> (or "none"). Validation command: `<command>`.
 ```
 
 This creates a visible, searchable audit trail in the conversation. A plan written
@@ -87,7 +91,7 @@ without this line was not gated.
 
 ### Plan section templates
 
-**When pre-existing failures are known:**
+**Pre-existing failures — when known:**
 
 ~~~markdown
 ## Pre-existing failures to ignore
@@ -105,7 +109,7 @@ failures — see the Failure Gate skill), you are cleared to mark this task
 complete. Do not attempt further validation fixes.
 ~~~
 
-**When no pre-existing failures are found:**
+**Pre-existing failures — when none found:**
 
 ~~~markdown
 ## Pre-existing failures to ignore
@@ -115,6 +119,22 @@ None known at plan time. Treat every failure as a potential regression.
 it is a regression you caused. Only treat a consistent 3/3 failure as your
 responsibility.
 ~~~
+
+**Validation (mandatory in every plan):**
+
+~~~markdown
+## Validation
+**Command:** `<exact command to run>`
+**Why:** <one-line justification — what this command covers and why it fits the
+scope of this task>
+~~~
+
+Default stub when the command is not yet determined:
+```
+## Validation
+**Command:** `<mid-weight tier for this project>`
+**Why:** <replace with justification>
+```
 
 ---
 
@@ -143,7 +163,8 @@ in order. Do not skip steps.
 
 **Step 2 — 3× retry rule.**
 
-Run the failing test in isolation three times (e.g. `npx jest <test-file> --testNamePattern="<name>"`).
+Run the failing test in isolation three times using the project's test runner
+(e.g. `npx vitest run <file>`, `npx jest <file> --testNamePattern="<name>"`).
 
 - Passes on any retry → it is a **flaky pre-existing failure**. Log it (see Step 4)
   and go to Step 5.
@@ -180,7 +201,7 @@ This creates a visible record so the Planner can add it to future plans.
 
 Example:
 ```
-[SELF-CLASSIFIED PRE-EXISTING] reverseVendorMap › conflict winner — evidence: file untouched (git diff clean), fails on main (stash-verified)
+[SELF-CLASSIFIED PRE-EXISTING] <suite name> › <test name> — evidence: file untouched (git diff clean), fails on main (stash-verified)
 ```
 
 ---
@@ -199,23 +220,22 @@ Once all remaining failures are either:
 
 ## Regression hardening
 
-The mandatory section in every plan is itself the guard. If an agent starts a task
-and finds the section missing, it adds the "None known" template — the safe-direction
-fallback — before any other work. This means:
+The mandatory sections in every plan are themselves the guard. If an agent starts a
+task and finds either section missing, it adds the appropriate template — the
+safe-direction fallback — before any other work. This means:
 
 - A missing section is never silently ignored
 - The default (treat everything as a regression) is conservative, not permissive
 - Self-classification logs give the Planner the data to improve future plans
 
-Compliance spot-checks (verifying that merged plans contain the section) are handled
+Compliance spot-checks (verifying that merged plans contain both sections) are handled
 by the task-triage skill and dedicated audit tasks.
 
 ---
 
 ## Reference
 
-- Source spec: `docs/superpowers/specs/2026-07-26-pre-existing-failure-handling-design.md`
 - Known-flaky patterns: `.agents/memory/MEMORY.md`
 - Canonical skill (tracked): `.agents/skills/failure-gate/SKILL.md`
-- Lint guard: `scripts/check-failure-gate.mjs`
-- Enforcement mandate: `replit.md` § "Agent rules"
+- Lint guard: the project's lint guard script (e.g. `scripts/check-failure-gate.mjs`)
+- Enforcement mandate: the project's session mandate (e.g. `replit.md` § "Agent rules")
