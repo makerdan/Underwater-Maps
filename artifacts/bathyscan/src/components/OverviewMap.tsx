@@ -34,6 +34,7 @@ import { lonLatToWorldXZ, isSyntheticGrid } from "@/lib/terrain";
 import {
   buildHeatmapBitmap,
   buildContourLines,
+  buildNodataBoundarySegments,
   computeInitialTransform,
   computeFitTransform,
   clampTransform,
@@ -44,6 +45,7 @@ import {
   renderHeatmap,
   renderHeatmapAtBbox,
   renderSyntheticHatch,
+  renderNodataBoundary,
   renderContourLines,
   renderIntertidalBand,
   renderGridLines,
@@ -65,7 +67,7 @@ import {
 } from "@/lib/overviewRenderer";
 import { appendWaypoint, planFlyThroughStops } from "@/lib/waypointHelpers";
 import type { Waypoint } from "@/lib/waypointHelpers";
-import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
+import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, NodataBoundarySegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { MarkerIconPaths } from "@/lib/markerIcons";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
@@ -198,6 +200,8 @@ export const OverviewMap: React.FC = () => {
   const efhFeaturesRef = useRef<EfhFeature[]>([]);
   /** Pre-built contour segments, rebuilt when grid or interval changes. */
   const contourSegmentsRef = useRef<ContourSegment[]>([]);
+  /** Pre-built no-data boundary segments, rebuilt when grid changes. */
+  const nodataBoundarySegmentsRef = useRef<NodataBoundarySegment[]>([]);
   const contoursEnabledRef = useRef(contoursEnabled);
   useEffect(() => { contoursEnabledRef.current = contoursEnabled; }, [contoursEnabled]);
   const substrateFeaturesRef = useRef<SubstrateFeature[]>([]);
@@ -1003,6 +1007,17 @@ export const OverviewMap: React.FC = () => {
     };
   }, [trailsData]);
 
+  // Rebuild no-data boundary segments whenever the overview grid changes.
+  useEffect(() => {
+    if (!overviewGrid) {
+      nodataBoundarySegmentsRef.current = [];
+      dirtyRef.current = true;
+      return;
+    }
+    nodataBoundarySegmentsRef.current = buildNodataBoundarySegments(overviewGrid);
+    dirtyRef.current = true;
+  }, [overviewGrid]);
+
   // Rebuild contour segments whenever the grid, contour interval, or units change.
   useEffect(() => {
     if (!overviewGrid || !contoursEnabled) {
@@ -1444,6 +1459,13 @@ export const OverviewMap: React.FC = () => {
           intertidalMhwFtRef.current,
           intertidalMhhwFtRef.current,
         );
+      }
+
+      // Survey-boundary indicators — dashed grey strokes at the edge of null
+      // (no-data) zones so users understand where coverage ends.  Drawn above
+      // the heatmap/intertidal fill but below contour lines and labels.
+      if (nodataBoundarySegmentsRef.current.length > 0) {
+        renderNodataBoundary(ctx, nodataBoundarySegmentsRef.current, grid, t);
       }
 
       // Contour lines — drawn over the heatmap and intertidal fill, under the

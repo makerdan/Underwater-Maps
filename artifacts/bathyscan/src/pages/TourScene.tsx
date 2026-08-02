@@ -49,6 +49,7 @@ import { useLandTerrain } from "@/hooks/useLandTerrain";
 import { useSatelliteTileStore } from "@/lib/satelliteTileStore";
 import { useSatelliteTile } from "@/hooks/useSatelliteTile";
 import { TerrainContourLines } from "@/components/TerrainContourLines";
+import { TerrainNodataBoundary } from "@/components/TerrainNodataBoundary";
 import { useTemperatureProfile } from "@/hooks/useTemperatureProfile";
 import { useWaterTempTexture, type TempSample } from "@/hooks/useWaterTempTexture";
 import { sampleTemperatureProfile } from "@/lib/waterTemp";
@@ -620,6 +621,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       {enableMarineSnow && <Particles />}
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
       {terrain && <TerrainContourLines grid={terrain} />}
+      {terrain && <TerrainNodataBoundary grid={terrain} />}
       {/* LandmassMesh is a flat-silhouette fallback; hidden once the richer
           Copernicus DEM surface (LandTerrainMesh) is loaded — never both. */}
       {terrain && showLandmass && !hasLandDem && <LandmassMesh grid={terrain} />}
