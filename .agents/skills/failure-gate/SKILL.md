@@ -29,9 +29,9 @@ This rule is enforced at three independent layers — all three must stay in syn
 
 | Layer | File | What it does |
 |---|---|---|
-| 0 — Session mandate | The project's session mandate (e.g. `replit.md` § "Agent rules") — loaded at every Planner session start; contains the project's hard-gate checklist and any project-specific flaky patterns | Loaded at every Planner session start; contains the numbered hard-gate checklist |
+| 0 — Session mandate | the project's session mandate (e.g. `replit.md` § "Agent rules") | Loaded at every Planner session start; contains the project's hard-gate checklist and any project-specific known-flaky patterns |
 | 1 — Skill definition | `.agents/skills/failure-gate/SKILL.md` (this file) | Defines discovery checklist, templates, decision tree |
-| 2 — Lint guard | The project's plan-file lint guard (e.g. `scripts/check-failure-gate.mjs`) — scans the plan directory and fails if any plan omits a required section | Scans `.local/tasks/*.md` and fails if any plan omits the required sections |
+| 2 — Lint guard | the project's plan-file lint guard (e.g. `scripts/check-failure-gate.mjs`) | Scans the plan directory and fails if any plan omits a required section |
 
 A change to the rule must be applied to all three layers in the same task.
 
@@ -40,10 +40,10 @@ A change to the rule must be applied to all three layers in the same task.
 ## Part 1 — Plan-time (Planner)
 
 <HARD-GATE>
-You MUST complete the discovery checklist below before writing any plan. The
-"Pre-existing failures to ignore" section AND the "Validation" section are MANDATORY
-in every plan — even when the failures list is empty. A plan that omits either section
-is defective and must be corrected before an agent picks it up.
+You MUST complete the discovery checklist below before writing any plan. Both
+"Pre-existing failures to ignore" AND "Validation" sections are MANDATORY in
+every plan — even when the failures list is empty. A plan that omits either
+section is defective and must be corrected before an agent picks it up.
 </HARD-GATE>
 
 ### Discovery checklist
@@ -60,28 +60,29 @@ Work through every item in order. Mark each complete before moving on.
    "pre-existing", "known failure", "flaky", or the names of suites the current
    task touches. Any match is a candidate for the list.
 
-3. **Spot-run** — When the task touches the project's main backend or server code,
-   run the project's primary backend test suite once in its current state (before
-   any changes) and record any failures — those failures are pre-existing by
-   definition. Consult the project's session mandate to identify which suite
+3. **Spot-run** — When the task touches the project's main backend or server
+   code, run the project's primary backend test suite once in its current state
+   (before any changes) and record any failures — those failures are pre-existing
+   by definition. Consult the project's session mandate to identify which suite
    qualifies. Skip if the task does not touch backend code; the run is expensive
    and the benefit only applies when you're changing code that suite covers.
 
-4. **Write the section** — Use one of the two templates below. Place it in the
-   plan after "Steps" and before "Relevant files". Do not omit it.
+4. **Write the pre-existing failures section** — Use one of the two templates
+   below. Place it in the plan after "Steps" and before "Relevant files". Do not
+   omit it.
 
 5. **Choose a validation command** — Consult the project's registered validation
    commands or its equivalent of the `validation-tiers` skill. Name the exact
-   command that matches the scope of changes: use the lightest tier whose coverage
-   is sufficient. Default to the mid-weight tier when uncertain. Add the
-   `## Validation` section to the plan using the template below.
+   command that matches the scope of changes: use the lightest tier whose
+   coverage is sufficient. Default to the mid-weight tier when uncertain. Add a
+   `## Validation` section immediately after the pre-existing failures section.
 
 ### Required Planner announcement
 
 Before writing the first heading of any plan, emit this exact line in your response:
 
 ```
-[FAILURE-GATE] Discovery checklist complete. Pre-existing failures documented: <N> (or "none"). Validation command: `<command>`.
+[FAILURE-GATE] Discovery checklist complete. Pre-existing failures documented: <N>. Validation command: `<command>`.
 ```
 
 This creates a visible, searchable audit trail in the conversation. A plan written
@@ -120,21 +121,21 @@ it is a regression you caused. Only treat a consistent 3/3 failure as your
 responsibility.
 ~~~
 
-**Validation (mandatory in every plan):**
+**Validation section (always required):**
 
 ~~~markdown
 ## Validation
 **Command:** `<exact command to run>`
-**Why:** <one-line justification — what this command covers and why it fits the
-scope of this task>
+**Why:** <one-line justification — what this command covers and why it fits the scope of this task>
 ~~~
 
-Default stub when the command is not yet determined:
-```
+Default stub when the right tier is uncertain:
+
+~~~markdown
 ## Validation
-**Command:** `<mid-weight tier for this project>`
-**Why:** <replace with justification>
-```
+**Command:** `test-standard`
+**Why:** <replace with one-line justification>
+~~~
 
 ---
 
@@ -142,8 +143,8 @@ Default stub when the command is not yet determined:
 
 <HARD-GATE>
 Read the "Pre-existing failures to ignore" section at the start of every task
-before touching any code. If the section is missing from the plan, add the
-"None known" template variant now — then continue. Do not skip this step.
+before touching any code. If either required section is missing from the plan,
+add the appropriate stub now — then continue. Do not skip this step.
 </HARD-GATE>
 
 When a test or validation gate fails, work through the following decision tree
@@ -220,16 +221,17 @@ Once all remaining failures are either:
 
 ## Regression hardening
 
-The mandatory sections in every plan are themselves the guard. If an agent starts a
-task and finds either section missing, it adds the appropriate template — the
+Both mandatory sections in every plan are themselves the guards. If an agent
+starts a task and finds a section missing, it adds the appropriate stub — the
 safe-direction fallback — before any other work. This means:
 
 - A missing section is never silently ignored
-- The default (treat everything as a regression) is conservative, not permissive
+- The default (treat everything as a regression; run the mid-weight tier) is
+  conservative, not permissive
 - Self-classification logs give the Planner the data to improve future plans
 
-Compliance spot-checks (verifying that merged plans contain both sections) are handled
-by the task-triage skill and dedicated audit tasks.
+Compliance spot-checks (verifying that merged plans contain both sections) are
+handled by the task-triage skill and dedicated audit tasks.
 
 ---
 
@@ -237,5 +239,5 @@ by the task-triage skill and dedicated audit tasks.
 
 - Known-flaky patterns: `.agents/memory/MEMORY.md`
 - Canonical skill (tracked): `.agents/skills/failure-gate/SKILL.md`
-- Lint guard: the project's lint guard script (e.g. `scripts/check-failure-gate.mjs`)
-- Enforcement mandate: the project's session mandate (e.g. `replit.md` § "Agent rules")
+- Lint guard: the project's plan-file lint guard script (e.g. `scripts/check-failure-gate.mjs`)
+- Session mandate: the project's session mandate (e.g. `replit.md` § "Agent rules")

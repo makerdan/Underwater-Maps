@@ -497,8 +497,8 @@ Authentication is handled by **Clerk** across all surfaces:
    template if not. The section is MANDATORY — a plan without it is defective.
 5. **Add `## Validation`** — Add a `## Validation` section to the plan naming the exact
    command and a one-line justification. Choose the lightest validation tier whose
-   coverage is sufficient; default to `test-standard` when uncertain. The section is
-   MANDATORY — a plan without it is defective.
+   coverage is sufficient (consult the `validation-tiers` skill); default to
+   `test-standard` when uncertain. The section is MANDATORY — a plan without it is defective.
 6. **Emit the announcement** — Before writing the plan's first heading, emit:
    `[FAILURE-GATE] Discovery checklist complete. Pre-existing failures documented: <N>. Validation command: \`<command>\`.`
 
@@ -507,6 +507,7 @@ Authentication is handled by **Clerk** across all surfaces:
 `node scripts/check-failure-gate.mjs` scans all `.local/tasks/*.md` plan files and
 fails if any are missing either of the two required sections (`## Pre-existing failures
 to ignore` and `## Validation`). Run it after writing a plan batch to verify compliance.
+
 
 ## User preferences
 

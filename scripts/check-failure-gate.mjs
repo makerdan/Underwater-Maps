@@ -8,12 +8,13 @@
  * Run:  node scripts/check-failure-gate.mjs
  *
  * Flags:
- *   --fix-stub   Append stub templates for any missing sections instead of
- *                just reporting them. Prints a warning per file patched.
+ *   --fix-stub   Append stubs for whichever required sections are missing in
+ *                each non-compliant file instead of just reporting them.
+ *                Prints a warning per file patched.
  *
  * Exit codes:
  *   0 — all files compliant (or no files found)
- *   1 — one or more files missing one or both required sections
+ *   1 — one or more files missing at least one required section
  */
 
 import { readdir, readFile, appendFile } from "fs/promises";
@@ -22,13 +23,10 @@ import { join } from "path";
 
 const TASKS_DIR = ".local/tasks";
 
-const REQUIRED_HEADINGS = [
-  "## Pre-existing failures to ignore",
-  "## Validation",
-];
-
-const STUBS = {
-  "## Pre-existing failures to ignore": `
+const REQUIRED_SECTIONS = [
+  {
+    heading: "## Pre-existing failures to ignore",
+    stub: `
 ## Pre-existing failures to ignore
 None known at plan time. Treat every failure as a potential regression.
 
@@ -36,12 +34,16 @@ None known at plan time. Treat every failure as a potential regression.
 it is a regression you caused. Only treat a consistent 3/3 failure as your
 responsibility.
 `,
-  "## Validation": `
+  },
+  {
+    heading: "## Validation",
+    stub: `
 ## Validation
-**Command:** \`<mid-weight tier for this project>\`
+**Command:** \`test-standard\`
 **Why:** <replace with one-line justification — what this command covers and why it fits the scope of this task>
 `,
-};
+  },
+];
 
 const fixStub = process.argv.includes("--fix-stub");
 
@@ -70,8 +72,8 @@ if (files.length === 0) {
 // ---------------------------------------------------------------------------
 // Check each file
 // ---------------------------------------------------------------------------
-/** @type {Array<{file: string, missing: string[]}>} */
-const results = [];
+const compliant = [];
+const nonCompliant = []; // { file, missingSections[] }
 
 for (const file of files) {
   const filePath = join(TASKS_DIR, file);
@@ -80,29 +82,33 @@ for (const file of files) {
     content = await readFile(filePath, "utf8");
   } catch (err) {
     console.error(`check-failure-gate — could not read "${filePath}": ${err.message}`);
-    results.push({ file, missing: REQUIRED_HEADINGS.slice() });
+    nonCompliant.push({ file, missingSections: REQUIRED_SECTIONS.map((s) => s.heading) });
     continue;
   }
 
   const lines = content.split("\n");
-  const missing = REQUIRED_HEADINGS.filter(
-    (heading) => !lines.some((line) => line.trimEnd() === heading),
+  const missingSections = REQUIRED_SECTIONS.filter(
+    ({ heading }) => !lines.some((line) => line.trimEnd() === heading),
   );
 
-  if (missing.length > 0 && fixStub) {
-    for (const heading of missing) {
-      try {
-        await appendFile(filePath, STUBS[heading], "utf8");
-        console.warn(
-          `check-failure-gate [--fix-stub] ⚠ patched "${file}" — appended stub for "${heading}".`,
-        );
-      } catch (err) {
-        console.error(`check-failure-gate — failed to patch "${file}" (${heading}): ${err.message}`);
+  if (missingSections.length === 0) {
+    compliant.push(file);
+  } else {
+    nonCompliant.push({ file, missingSections: missingSections.map((s) => s.heading) });
+
+    if (fixStub) {
+      for (const section of missingSections) {
+        try {
+          await appendFile(filePath, section.stub, "utf8");
+          console.warn(
+            `check-failure-gate [--fix-stub] ⚠ patched "${file}" — appended stub for "${section.heading}".`,
+          );
+        } catch (err) {
+          console.error(`check-failure-gate — failed to patch "${file}" with "${section.heading}": ${err.message}`);
+        }
       }
     }
   }
-
-  results.push({ file, missing });
 }
 
 // ---------------------------------------------------------------------------
@@ -110,30 +116,30 @@ for (const file of files) {
 // ---------------------------------------------------------------------------
 console.log(`\ncheck-failure-gate — scanned ${files.length} plan file(s) in "${TASKS_DIR}":\n`);
 
-let nonCompliantCount = 0;
-for (const { file, missing } of results) {
-  if (missing.length === 0) {
-    console.log(`  ✓ ${file}`);
-  } else if (fixStub) {
-    console.log(`  ✓ ${file} (patched by --fix-stub: ${missing.join(", ")})`);
+for (const f of compliant) {
+  console.log(`  ✓ ${f}`);
+}
+for (const { file, missingSections } of nonCompliant) {
+  if (fixStub) {
+    console.log(`  ✓ ${file} (patched by --fix-stub: ${missingSections.join(", ")})`);
   } else {
-    nonCompliantCount++;
-    console.log(`  ✗ ${file} — missing: ${missing.map((h) => `"${h}"`).join(", ")}`);
+    console.log(`  ✗ ${file} — missing: ${missingSections.join(", ")}`);
   }
 }
 
-if (nonCompliantCount > 0) {
+if (nonCompliant.length > 0 && !fixStub) {
+  const sectionNames = [...new Set(nonCompliant.flatMap((e) => e.missingSections))].join(", ");
   console.error(
-    `\ncheck-failure-gate — ${nonCompliantCount} non-compliant plan file(s) found.\n` +
-      `Each plan must contain both required sections:\n` +
-      REQUIRED_HEADINGS.map((h) => `  • "${h}"`).join("\n") + "\n" +
-      `Run with --fix-stub to append stub templates automatically.`,
+    `\ncheck-failure-gate — ${nonCompliant.length} non-compliant plan file(s) found.\n` +
+      `Each plan must contain all required sections: ${REQUIRED_SECTIONS.map((s) => `"${s.heading}"`).join(", ")}.\n` +
+      `Missing sections across files: ${sectionNames}.\n` +
+      `Run with --fix-stub to append stubs automatically.`,
   );
   process.exit(1);
 }
 
-const patchedCount = fixStub ? results.filter((r) => r.missing.length > 0).length : 0;
-const passCount = results.filter((r) => r.missing.length === 0).length + patchedCount;
+const patchedCount = fixStub ? nonCompliant.length : 0;
+const passCount = compliant.length + patchedCount;
 console.log(
   `\ncheck-failure-gate — ${passCount}/${files.length} file(s) compliant.${patchedCount > 0 ? ` (${patchedCount} patched)` : ""} ✓`,
 );
