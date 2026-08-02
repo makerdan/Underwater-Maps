@@ -279,7 +279,8 @@ export const OverviewMap: React.FC = () => {
     // Clear the error state → LOADING spinner reappears immediately.
     overviewLoadFailedRef.current = false;
     setOverviewLoadFailed(false);
-    // Restart the stale-fetch timer inside the rAF closure.
+    // Restart the stale-fetch timer inside the rAF closure so a second
+    // consecutive fetch failure correctly re-surfaces the Retry button.
     nullGridSinceResetRef.current?.();
     dirtyRef.current = true;
     // Invalidate the overview query for every visible dataset so React Query
@@ -296,6 +297,14 @@ export const OverviewMap: React.FC = () => {
       }
     }
   }, [queryClient, visibleDatasets]);
+
+  // Navigates to Find Data from the error-state hint link so users can
+  // switch to a working dataset without closing and reopening the map.
+  const handleErrorHintClick = useCallback(() => {
+    useUiStore.getState().setSidebarMode("explore");
+    useUiStore.getState().setFindDataPanelOpen(true);
+    useUiStore.getState().setOverviewOpen(false);
+  }, []);
 
   // Dirty flag — rAF loop skips draws when nothing has changed (no camera
   // movement, no data updates, no mouse interaction, no GPS/trail pulse).
@@ -2189,6 +2198,41 @@ export const OverviewMap: React.FC = () => {
             }}
           >
             ↻ RETRY
+          </button>
+        </div>
+      )}
+
+      {/* Error-state hint link — visible alongside the Retry button so users
+          can switch to a working dataset without reloading the page.
+          Mirrors the "Choose a dataset from Find Data" canvas link shown in
+          the empty-state (no datasets selected) case. */}
+      {overviewLoadFailed && (
+        <div
+          data-testid="overview-error-hint"
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, calc(-50% + 52px))",
+            zIndex: 42,
+            textAlign: "center",
+          }}
+        >
+          <button
+            onClick={handleErrorHintClick}
+            style={{
+              background: "none",
+              border: "none",
+              color: "rgba(0,229,255,0.85)",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.05em",
+              padding: "4px 8px",
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            Choose a dataset from Find Data
           </button>
         </div>
       )}
