@@ -298,7 +298,7 @@ function Main() {
     { query: { queryKey: getGetDatasetsQueryKey({ waterType: waterTypeForDatasets }) } },
   );
   const {
-    datasetId, setDatasetId, terrain, tidalOverlay, setTidalOverlay,
+    datasetId, setDatasetId, terrain, setTerrain, tidalOverlay, setTidalOverlay,
     tidalDataOverride,
     realisticMode, setRealisticMode,
     pendingExternalUserDatasetId, setPendingExternalUserDatasetId,
@@ -372,6 +372,20 @@ function Main() {
 
   // Multi-primary: compute center coords for secondary visible datasets.
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+
+  // When the user removes all datasets from view, clear the context terrain and
+  // datasetId so TourScene stops rendering the last mesh. terrainStore already
+  // nulls its own primaryDatasetId / activeGrid via syncPrimaryGrids, but
+  // useAppState().terrain and .datasetId are independent React state and are not
+  // automatically cleared — this effect bridges that gap.
+  const visibleCount = visibleDatasets.length;
+  useEffect(() => {
+    if (visibleCount === 0) {
+      setTerrain(null);
+      setDatasetId(null);
+    }
+  }, [visibleCount, setTerrain, setDatasetId]);
+
   const ds0 = visibleDatasets[0];
   const ds1 = visibleDatasets[1];
   const ds2 = visibleDatasets[2];
