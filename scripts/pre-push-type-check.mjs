@@ -239,6 +239,29 @@ async function main() {
       return;
     }
 
+    /**
+     * Generate a ready-to-paste DELETE statement for a failing column.
+     * Returns null for unknown target types (caller falls back to template).
+     */
+    function buildCleanupSql(table, column, newType) {
+      const t = newType.toLowerCase().trim();
+      if (t === "uuid") {
+        return (
+          `DELETE FROM "${table}"\n` +
+          `WHERE "${column}" IS NOT NULL\n` +
+          `  AND "${column}" !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';`
+        );
+      }
+      if (t === "integer" || t === "bigint" || t === "int" || t === "int4" || t === "int8") {
+        return (
+          `DELETE FROM "${table}"\n` +
+          `WHERE "${column}" IS NOT NULL\n` +
+          `  AND "${column}" ~ '[^0-9]';`
+        );
+      }
+      return null;
+    }
+
     const lines = [
       `${failures.length} column-type change(s) would cause drizzle-kit push to fail.`,
       "",
@@ -246,17 +269,28 @@ async function main() {
       "You must delete or update the non-castable rows BEFORE running push.",
       "",
       "Failing columns:",
-      ...failures.map(
-        (f) => `  • "${f.table}"."${f.column}"  →  ${f.newType}\n    ${f.error}`
-      ),
+      ...failures.map((f) => {
+        const sql = buildCleanupSql(f.table, f.column, f.newType);
+        const header = `  • "${f.table}"."${f.column}"  →  ${f.newType}\n    ${f.error}`;
+        if (sql) {
+          return (
+            header +
+            "\n\n    Ready-to-paste cleanup SQL (run against dev DB before push):\n" +
+            sql.split("\n").map((l) => `      ${l}`).join("\n")
+          );
+        }
+        return (
+          header +
+          "\n\n    Copy scripts/pre-push-cleanup.sql.example and adapt the predicate" +
+          "\n    for this column (unknown target type — no auto-generated SQL available)."
+        );
+      }),
       "",
       "How to fix:",
-      "  1. Copy scripts/pre-push-cleanup.sql.example to a throwaway file.",
-      "  2. Adapt the DELETE (or UPDATE … SET col = NULL) predicate for each",
-      "     failing column listed above.",
-      "  3. Run the adapted script against the dev database:",
+      "  1. Run the cleanup SQL above (or adapt scripts/pre-push-cleanup.sql.example)",
+      "     against the dev database:",
       "       psql \"$DATABASE_URL\" -f /tmp/pre-push-cleanup.sql",
-      "  4. Re-run post-merge.sh (or `pnpm --filter db push` directly).",
+      "  2. Re-run post-merge.sh (or `pnpm --filter db push` directly).",
       "",
       "Do NOT commit the cleanup script — it is specific to this migration.",
     ];
