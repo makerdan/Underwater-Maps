@@ -940,7 +940,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   if (!isSignedIn) {
     return (
       <div style={{ padding: "12px 8px", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f59e0b", textAlign: "center" }}>
-        Sign in to see your saved datasets.
+        Sign in to see saved datasets
       </div>
     );
   }
@@ -1101,7 +1101,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
               Delete &ldquo;{confirmDelete.displayLabel ?? confirmDelete.catalog?.name ?? confirmDelete.catalogId}&rdquo;?
             </div>
             <div style={{ fontSize: "calc(14px * var(--bs-font-scale, 1))", color: "#94a3b8", lineHeight: 1.5, marginBottom: 14 }}>
-              This will remove the save entry and its underlying dataset.
+              This will remove the save entry and its underlying dataset. You can re-save it from the catalog later.
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button onClick={() => setConfirmDelete(null)} data-testid="confirm-delete-cancel" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", padding: "5px 12px", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 3, color: "#e2e8f0", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cancel</button>
@@ -1124,7 +1124,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
               Delete &ldquo;{confirmDeleteUpload.name}&rdquo;?
             </div>
             <div style={{ fontSize: "calc(14px * var(--bs-font-scale, 1))", color: "#94a3b8", lineHeight: 1.5, marginBottom: 14 }}>
-              This will permanently remove the uploaded dataset.
+              This will permanently remove the uploaded dataset. This action cannot be undone.
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button onClick={() => setConfirmDeleteUpload(null)} data-testid="confirm-delete-upload-cancel" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", padding: "5px 12px", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 3, color: "#e2e8f0", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cancel</button>

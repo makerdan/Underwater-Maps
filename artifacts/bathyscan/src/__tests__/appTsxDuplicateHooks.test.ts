@@ -86,6 +86,7 @@ const SCANNED_FILES: string[] = [
   "components/ThrottlePanel.tsx",
   "components/TidePanel.tsx",
   "components/WeatherPanel.tsx",
+  "components/MySavesSection.tsx",
   "components/ZoneOverlay.tsx",
 ];
 
