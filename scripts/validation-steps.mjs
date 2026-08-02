@@ -76,6 +76,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:failure-gate-zip", resource: null, cmd: "pnpm run check:failure-gate-zip", tiers: FAST },
     // no resource: binary-diff check, sub-second — catches stale poe-setup-skill.zip (skip if zip not yet published)
     { name: "check:poe-setup-zip", resource: null, cmd: "pnpm run check:poe-setup-zip", tiers: FAST },
+    // no resource: binary-diff check, sub-second — catches stale port-authority-skill.zip (skip if zip not yet published)
+    { name: "check:port-authority-zip", resource: null, cmd: "pnpm run check:port-authority-zip", tiers: FAST },
     // no resource: grep-based root-relative /api/ fetch guard, sub-second
     { name: "check:root-relative-api", resource: null, cmd: "pnpm run check:root-relative-api", tiers: FAST },
     // no resource: grep-based exhaustive-deps suppression rationale gate, sub-second
