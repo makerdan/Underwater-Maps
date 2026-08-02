@@ -127,6 +127,8 @@ responsibility.
 ## Validation
 **Command:** `<exact command to run>`
 **Why:** <one-line justification — what this command covers and why it fits the scope of this task>
+**Do not escalate:** Run exactly this command. Pre-existing failures are
+handled above — they are never a reason to run a heavier tier.
 ~~~
 
 Default stub when the right tier is uncertain:
@@ -135,6 +137,8 @@ Default stub when the right tier is uncertain:
 ## Validation
 **Command:** `test-standard`
 **Why:** <replace with one-line justification>
+**Do not escalate:** Run exactly this command. Pre-existing failures are
+handled above — they are never a reason to run a heavier tier.
 ~~~
 
 ---
@@ -145,6 +149,10 @@ Default stub when the right tier is uncertain:
 Read the "Pre-existing failures to ignore" section at the start of every task
 before touching any code. If either required section is missing from the plan,
 add the appropriate stub now — then continue. Do not skip this step.
+
+The validation command named in `## Validation` is the **ceiling**. Do not run
+any heavier tier for any reason — including pre-existing failures, flaky retries,
+or self-classification outcomes. Escalation is never the Build agent's call.
 </HARD-GATE>
 
 When a test or validation gate fails, work through the following decision tree
@@ -216,6 +224,9 @@ Once all remaining failures are either:
 → You are cleared to mark this task complete.
 
 **Do not attempt further validation fixes.**
+
+If you are tempted to run a heavier tier "to be sure", resist. The Planner
+chose the ceiling; your job is to meet it, not raise it.
 
 ---
 

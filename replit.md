@@ -500,8 +500,14 @@ Authentication is handled by **Clerk** across all surfaces:
    command and a one-line justification. Choose the lightest validation tier whose
    coverage is sufficient (consult the `validation-tiers` skill); default to
    `test-standard` when uncertain. The section is MANDATORY — a plan without it is defective.
+   The named command is the **ceiling** for the Build agent. The Build agent must not run
+   any heavier tier regardless of what failures it encounters.
 6. **Emit the announcement** — Before writing the plan's first heading, emit:
    `[FAILURE-GATE] Discovery checklist complete. Pre-existing failures documented: <N>. Validation command: \`<command>\`.`
+
+> **BUILD AGENT:** The validation command in `## Validation` is your ceiling.
+> Do not escalate to a heavier tier for any reason, including pre-existing
+> failures or self-classified flakes.
 
 ### Lint guard
 
