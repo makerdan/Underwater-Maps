@@ -2921,6 +2921,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       onLoadUserDataset={handleLoadUserDatasetFromLeft}
                       onDatasetsRemoved={handleDatasetsRemoved}
                       onBrowseDatasets={() => useUiStore.getState().setFindDataPanelOpen(true)}
+                      browseLabel="OPEN FIND DATA →"
                     />
                   </>
                 )}

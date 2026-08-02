@@ -642,8 +642,15 @@ export interface MySavesSectionProps {
    * clean up active-dataset state (clear terrain, cancel in-flight loads).
    */
   onDatasetsRemoved?: (ids: string[]) => void;
-  /** Called when the user clicks "Browse Datasets →" from the empty-state nudge. */
+  /** Called when the user clicks the empty-state browse button. */
   onBrowseDatasets?: () => void;
+  /**
+   * Label for the empty-state browse button.
+   * Defaults to "BROWSE DATASETS →".
+   * Override in DatasetPanel context where clicking opens the Find Data panel
+   * rather than switching a tab within the same panel.
+   */
+  browseLabel?: string;
 }
 
 export const MySavesSection: React.FC<MySavesSectionProps> = ({
@@ -651,6 +658,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   onLoadUserDataset,
   onDatasetsRemoved,
   onBrowseDatasets,
+  browseLabel = "BROWSE DATASETS →",
 }) => {
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
@@ -1047,9 +1055,10 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
           {onBrowseDatasets && (
             <button
               onClick={onBrowseDatasets}
+              data-testid="empty-state-browse-btn"
               style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", padding: "4px 10px", background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.28)", borderRadius: 3, color: "#00e5ff", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}
             >
-              BROWSE DATASETS →
+              {browseLabel}
             </button>
           )}
         </div>
