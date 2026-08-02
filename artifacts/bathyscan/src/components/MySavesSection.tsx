@@ -194,9 +194,11 @@ const SaveCard: React.FC<{
             </span>
           </div>
         </div>
-        <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.1em", textTransform: "uppercase", color: statusColor }}>
-          {save.status}
-        </span>
+        {save.status !== "ready" && (
+          <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.1em", textTransform: "uppercase", color: statusColor }}>
+            {save.status}
+          </span>
+        )}
         {!editing && (
           <ViewscreenTooltip label="Rename this saved dataset" side="left">
             <button
@@ -238,12 +240,17 @@ const SaveCard: React.FC<{
         </div>
       )}
       {save.status === "ready" && save.datasetId && (
-        <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
-          <button
-            onClick={() => onLoadUserDataset(save)}
-            style={{ marginTop: 8, fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 12px", background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#00e5ff", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
-          >Load into viewer</button>
-        </ViewscreenTooltip>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+          <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.1em", textTransform: "uppercase", color: statusColor }}>
+            {save.status}
+          </span>
+          <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
+            <button
+              onClick={() => onLoadUserDataset(save)}
+              style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 12px", background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#00e5ff", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
+            >Load into viewer</button>
+          </ViewscreenTooltip>
+        </div>
       )}
       {save.status === "failed" && (
         <>
