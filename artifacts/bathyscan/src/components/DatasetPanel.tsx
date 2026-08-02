@@ -1060,7 +1060,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     }
     useTerrainStore.getState().setGrids({ activeGrid: pendingTerrain, overviewGrid: pendingOverview });
     useClassificationStore.getState().clearZoneMap();
-    void useClassificationStore.getState().classify(pendingTerrain);
     useActiveLoadStore.getState().complete(pendingId);
     setLoadingId(null);
     setPendingId(null);
@@ -1142,7 +1141,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       overviewGrid: overviewStamped,
     });
     useClassificationStore.getState().clearZoneMap();
-    void useClassificationStore.getState().classify(terrainStamped);
     useActiveLoadStore.getState().complete(pendingUserDatasetId);
     setLoadingId(null);
     setPendingUserDatasetId(null);
@@ -1514,7 +1512,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               overviewGrid: data.overview,
             });
             useClassificationStore.getState().clearZoneMap();
-            void useClassificationStore.getState().classify(data.terrain);
             if (data.savedDatasetId) {
               setActiveUserDatasetId(data.savedDatasetId);
               // Optimistically insert the freshly-saved row into the
@@ -2411,7 +2408,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         overviewGrid: data.overview,
       });
       useClassificationStore.getState().clearZoneMap();
-      void useClassificationStore.getState().classify(data.terrain);
 
       if (data.savedDatasetId) {
         setActiveUserDatasetId(data.savedDatasetId);

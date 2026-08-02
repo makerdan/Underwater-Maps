@@ -202,6 +202,36 @@ export const ZoneOverlay: React.FC<ZoneOverlayProps> = ({ embedded = false }) =>
       {/* Body */}
       {!collapsed && (
       <div className="px-3 py-2">
+        {/* Classify Seafloor button — primary entry point, shown before any classification has run */}
+        {!hasZoneMap && !loading && (
+          <button
+            type="button"
+            data-testid="zone-classify-btn"
+            onClick={() => {
+              if (terrain) void classify(terrain);
+            }}
+            style={{
+              width: "100%",
+              marginBottom: 8,
+              padding: "6px 12px",
+              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#001a1f",
+              background: "#00e5ff",
+              border: "1px solid #00e5ff",
+              borderRadius: 4,
+              cursor: "pointer",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              fontWeight: 700,
+              boxShadow: "0 0 10px rgba(0,229,255,0.35)",
+              transition: "opacity 0.15s",
+            }}
+          >
+            ◈ Classify Seafloor
+          </button>
+        )}
+
         {/* Loading state */}
         {loading && (
           <div style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginBottom: 6 }}>

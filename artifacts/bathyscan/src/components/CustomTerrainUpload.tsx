@@ -91,7 +91,6 @@ export const CustomTerrainUpload: React.FC = () => {
               overviewGrid: data.overview,
             });
             useClassificationStore.getState().clearZoneMap();
-            void useClassificationStore.getState().classify(data.terrain);
             if (data.savedDatasetId) {
               if (data.savedDatasetMeta) {
                 const meta = data.savedDatasetMeta;

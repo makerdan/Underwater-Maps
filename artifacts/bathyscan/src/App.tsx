@@ -66,7 +66,6 @@ import { VirtualJoystick } from "@/components/VirtualJoystick";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
-import { useClassificationStore } from "@/lib/classificationStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useTrailStore } from "@/lib/trailStore";
 import { useGpsStore } from "@/lib/gpsStore";
@@ -913,20 +912,6 @@ function Main() {
       // If conversion fails (e.g. coords outside dataset bounds), skip silently.
     }
   }, [terrain]);
-
-  // Multi-primary: trigger classification for ALL visible datasets whenever the
-  // set of visible grids changes. classify() is idempotent — it returns
-  // immediately on sessionStorage/server cache hit, so calling it for multiple
-  // datasets is safe.
-  const visibleGridIds = visibleDatasets
-    .filter((v) => !!v.activeGrid)
-    .map((v) => v.datasetId)
-    .join(",");
-  useEffect(() => {
-    for (const vd of useTerrainStore.getState().visibleDatasets) {
-      if (vd.activeGrid) void useClassificationStore.getState().classify(vd.activeGrid);
-    }
-  }, [visibleGridIds]);
 
   // Sync online/offline state into offlineStore
   useEffect(() => {
