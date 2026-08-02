@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo } from "react";
+import React, { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import { useAppState } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -312,6 +312,8 @@ export const Minimap: React.FC = () => {
   const satelliteImgRef = useRef<HTMLImageElement | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
+  const showNodataBoundary = useUiStore((s) => s.showNodataBoundary);
+  const setShowNodataBoundary = useUiStore((s) => s.setShowNodataBoundary);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
   const units = useSettingsStore((s) => s.units);
   const shallow = usePaletteStore((s) => s.shallow);
@@ -603,6 +605,41 @@ export const Minimap: React.FC = () => {
     useUiStore.getState().setPendingDropIn({ worldX, worldZ });
   };
 
+  /**
+   * Tooltip label for the minimap canvas.
+   * Shows "Survey gap" when the cursor is over a null-depth cell and the
+   * nodata boundary overlay is enabled; otherwise shows the drop-in hint.
+   */
+  const [canvasTooltip, setCanvasTooltip] = useState("Click to teleport here");
+
+  const handleMinimapMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!terrain || !showNodataBoundary) {
+        setCanvasTooltip("Click to teleport here");
+        return;
+      }
+      const rect = e.currentTarget.getBoundingClientRect();
+      // Scale from CSS pixels to canvas logical pixels.
+      const scaleX = W / rect.width;
+      const scaleY = H / rect.height;
+      const px = (e.clientX - rect.left) * scaleX;
+      const py = (e.clientY - rect.top) * scaleY;
+
+      // Mirror drawHeatmap's grid-lookup: py=0 (top) maps to North (high gy).
+      const gx = Math.min(terrain.width - 1, Math.floor((px / W) * terrain.width));
+      const gy = (terrain.height - 1) - Math.min(terrain.height - 1, Math.floor((py / H) * terrain.height));
+      const depth = terrain.depths[gy * terrain.width + gx];
+      const isNull = depth === null || depth === undefined || isNaN(depth as number);
+
+      setCanvasTooltip(isNull ? "Survey gap" : "Click to teleport here");
+    },
+    [terrain, showNodataBoundary],
+  );
+
+  const handleMinimapMouseLeave = useCallback(() => {
+    setCanvasTooltip("Click to teleport here");
+  }, []);
+
   if (!terrain) return null;
 
   return (
@@ -615,25 +652,50 @@ export const Minimap: React.FC = () => {
         pointerEvents: "auto",
       }}
     >
-      <ViewscreenTooltip label="Open the full overview map" side="left">
-        <button
-          onClick={() => setOverviewOpen(true)}
-          style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-            letterSpacing: "0.15em",
-            color: "#94a3b8",
-            background: "rgba(0,10,20,0.75)",
-            border: "1px solid rgba(0,229,255,0.15)",
-            borderRadius: 3,
-            padding: "3px 8px",
-            cursor: "pointer",
-          }}
-          className="hover:text-cyan-400 transition-colors"
+      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+        <ViewscreenTooltip
+          label={showNodataBoundary ? "Hide survey-gap rings" : "Show survey-gap rings"}
+          side="left"
         >
-          ▲ OVERVIEW
-        </button>
-      </ViewscreenTooltip>
+          <button
+            data-testid="nodata-boundary-toggle"
+            onClick={() => setShowNodataBoundary(!showNodataBoundary)}
+            aria-pressed={showNodataBoundary}
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              color: showNodataBoundary ? "#00e5ff" : "#475569",
+              background: "rgba(0,10,20,0.75)",
+              border: `1px solid ${showNodataBoundary ? "rgba(0,229,255,0.35)" : "rgba(100,116,139,0.25)"}`,
+              borderRadius: 3,
+              padding: "3px 6px",
+              cursor: "pointer",
+            }}
+            className="transition-colors"
+          >
+            ⊘
+          </button>
+        </ViewscreenTooltip>
+        <ViewscreenTooltip label="Open the full overview map" side="left">
+          <button
+            onClick={() => setOverviewOpen(true)}
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.15em",
+              color: "#94a3b8",
+              background: "rgba(0,10,20,0.75)",
+              border: "1px solid rgba(0,229,255,0.15)",
+              borderRadius: 3,
+              padding: "3px 8px",
+              cursor: "pointer",
+            }}
+            className="hover:text-cyan-400 transition-colors"
+          >
+            ▲ OVERVIEW
+          </button>
+        </ViewscreenTooltip>
+      </div>
 
 
       <div
@@ -645,13 +707,15 @@ export const Minimap: React.FC = () => {
           boxShadow: "0 0 12px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,229,255,0.1)",
         }}
       >
-        <ViewscreenTooltip label="Click to teleport here" side="left">
+        <ViewscreenTooltip label={canvasTooltip} side="left">
           <canvas
             ref={canvasRef}
             data-testid="minimap-canvas"
             width={W}
             height={H}
             onClick={handleClick}
+            onMouseMove={handleMinimapMouseMove}
+            onMouseLeave={handleMinimapMouseLeave}
             style={{ display: "block", cursor: "crosshair" }}
           />
         </ViewscreenTooltip>

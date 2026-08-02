@@ -297,6 +297,12 @@ interface UiStore {
   hasSeenOrbitTouchHint: boolean;
   setHasSeenOrbitTouchHint: (seen: boolean) => void;
   /**
+   * Whether the survey-gap boundary overlay is visible in the 3D scene and
+   * the 2D minimap. Defaults to true. Session-only (resets on reload).
+   */
+  showNodataBoundary: boolean;
+  setShowNodataBoundary: (show: boolean) => void;
+  /**
    * When true, the OverviewMap enters "pick a bounding box for PDF georef"
    * mode — a rubber-band rectangle draw that commits into `georefPickBbox`.
    * DatasetPanel sets this true when the user clicks "Pick on map";
@@ -794,6 +800,10 @@ export const useUiStore = create<UiStore>((set, get) => {
     setGeorefPickMode: (enabled) => set({ georefPickMode: enabled }),
     georefPickBbox: null,
     setGeorefPickBbox: (bbox) => set({ georefPickBbox: bbox }),
+
+    // ── Survey-gap overlay visibility (transient: resets on reload) ─────────
+    showNodataBoundary: true,
+    setShowNodataBoundary: (show) => set({ showNodataBoundary: show }),
   };
 });
 

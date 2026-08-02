@@ -34,6 +34,7 @@ import { WaterTempVolumeLayer } from "@/components/WaterTempVolumeLayer";
 import { LandmassMesh } from "@/components/LandmassMesh";
 import type { TerrainData } from "@workspace/api-client-react";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
+import { useUiStore } from "@/lib/uiStore";
 import { useDriftStore } from "@/lib/driftStore";
 import { DriftWaterPlane } from "@/components/DriftWaterPlane";
 import { DriftBoat } from "@/components/DriftBoat";
@@ -584,6 +585,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
   const hasLandDem = useLandTerrainStore(
     (s) => s.landGrid !== null && (s.landGrid.maxElevation ?? 0) > 0,
   );
+  const showNodataBoundary = useUiStore((s) => s.showNodataBoundary);
 
   // Freshwater environments are clearer and brighter than the open ocean —
   // shift the background/fog hue toward green-teal, thin the fog, and warm
@@ -621,7 +623,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
       {enableMarineSnow && <Particles />}
       {terrain && <TerrainMesh ref={terrainMeshRef} grid={terrain} />}
       {terrain && <TerrainContourLines grid={terrain} />}
-      {terrain && <TerrainNodataBoundary grid={terrain} />}
+      {terrain && showNodataBoundary && <TerrainNodataBoundary grid={terrain} />}
       {/* LandmassMesh is a flat-silhouette fallback; hidden once the richer
           Copernicus DEM surface (LandTerrainMesh) is loaded — never both. */}
       {terrain && showLandmass && !hasLandDem && <LandmassMesh grid={terrain} />}
