@@ -189,7 +189,31 @@ describe("PUT /api/settings — intertidalMhhwOverrideFt Zod validation", () => 
   });
 });
 
-// ─── 2. showNodataBoundary boolean validation ─────────────────────────────────
+// ─── 2. overviewHillshading boolean validation ───────────────────────────────
+
+describe("PUT /api/settings — overviewHillshading validation", () => {
+  it("accepts true (hillshading enabled)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ overviewHillshading: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.overviewHillshading).toBe(true);
+  });
+
+  it("accepts false (hillshading disabled)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ overviewHillshading: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body.overviewHillshading).toBe(false);
+  });
+});
+
+// ─── 3. showNodataBoundary boolean validation ─────────────────────────────────
 
 describe("PUT /api/settings — showNodataBoundary validation", () => {
   it("accepts true (rings visible)", async () => {

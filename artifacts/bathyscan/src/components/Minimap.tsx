@@ -341,6 +341,7 @@ export const Minimap: React.FC = () => {
   const showNodataBoundary = useUiStore((s) => s.showNodataBoundary);
   const setShowNodataBoundary = useUiStore((s) => s.setShowNodataBoundary);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+  const overviewHillshading = useSettingsStore((s) => s.overviewHillshading);
   const units = useSettingsStore((s) => s.units);
   const shallow = usePaletteStore((s) => s.shallow);
   const deep = usePaletteStore((s) => s.deep);
@@ -556,7 +557,7 @@ export const Minimap: React.FC = () => {
       terrain.maxDepth,
       colormapTheme,
       terrain.topography,
-      terrain,
+      overviewHillshading ? terrain : undefined,
     );
     // Overlay contour lines at each depth-band boundary, colored by the
     // adjacent band's color. Drawn on the same offscreen canvas immediately
@@ -579,7 +580,7 @@ export const Minimap: React.FC = () => {
     const cp0 = camState.cameraPosition;
     compositeFrame(ctx, cp0.known ? cp0.lon : null, cp0.known ? cp0.lat : null, camState.heading, terrain);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers that change every render; data deps are listed explicitly
-  }, [terrain, colormapTheme, shallow, deep, bandColors, customStops, bandBoundaries]);
+  }, [terrain, colormapTheme, overviewHillshading, shallow, deep, bandColors, customStops, bandBoundaries]);
 
   // Re-composite when satellite image loads (tileUrl changed)
   useEffect(() => {

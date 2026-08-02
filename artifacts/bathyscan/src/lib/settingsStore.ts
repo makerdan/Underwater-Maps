@@ -61,7 +61,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 31;
+export const SETTINGS_SCHEMA_VERSION = 32;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -294,6 +294,12 @@ export interface SettingsState {
   overviewShowGrid: boolean;
   overviewShowMarkers: boolean;
   overviewOpenOnLoad: boolean;
+  /**
+   * Apply hillshading (lighting) to the depth heatmap in both the Overview
+   * Map and the Minimap. When false, both render as flat colour only.
+   * Defaults to true (same as the pre-toggle behaviour).
+   */
+  overviewHillshading: boolean;
   /** Draw iso-depth contour lines on the 2D overview map. */
   contoursEnabled: boolean;
   /**
@@ -656,6 +662,7 @@ interface SettingsActions {
   setOverviewShowGrid: (v: boolean) => void;
   setOverviewShowMarkers: (v: boolean) => void;
   setOverviewOpenOnLoad: (v: boolean) => void;
+  setOverviewHillshading: (v: boolean) => void;
   setContoursEnabled: (v: boolean) => void;
   setContourInterval: (v: number) => void;
 
@@ -953,6 +960,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   overviewShowGrid: true,
   overviewShowMarkers: true,
   overviewOpenOnLoad: false,
+  overviewHillshading: true,
   contoursEnabled: true,
   contourInterval: 10,
 
@@ -1096,6 +1104,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   overview: [
     "overviewDefaultZoom", "overviewShowGrid", "overviewShowMarkers", "overviewOpenOnLoad",
+    "overviewHillshading",
   ],
   markers: [
     "defaultMarkerType", "defaultDepthPoleColor", "showMarkerLabels",
@@ -1274,6 +1283,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setOverviewShowGrid: setter("overviewShowGrid"),
         setOverviewShowMarkers: setter("overviewShowMarkers"),
         setOverviewOpenOnLoad: setter("overviewOpenOnLoad"),
+        setOverviewHillshading: setter("overviewHillshading"),
         setContoursEnabled: setter("contoursEnabled"),
         setContourInterval: setter("contourInterval"),
 
@@ -1814,6 +1824,12 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).showNodataBoundary === undefined) {
             migratedNodataBoundary.showNodataBoundary = DEFAULT_SETTINGS.showNodataBoundary;
           }
+          // v31 → v32: inject overviewHillshading default (true — hillshading
+          // on by default to match the pre-toggle behaviour).
+          const migratedHillshading: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).overviewHillshading === undefined) {
+            migratedHillshading.overviewHillshading = DEFAULT_SETTINGS.overviewHillshading;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1834,6 +1850,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedNodataColor,
             ...migratedManualConditions,
             ...migratedNodataBoundary,
+            ...migratedHillshading,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
