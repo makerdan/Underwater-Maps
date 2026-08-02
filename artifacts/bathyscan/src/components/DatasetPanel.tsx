@@ -26,13 +26,11 @@ import {
   getGetSubstrateQueryKey,
   getAuthToken,
   hasAuthTokenGetter,
-  getDatasetsIdPreview,
-  getGetDatasetsIdPreviewQueryKey,
 } from "@workspace/api-client-react";
-import type { DatasetMeta, UserDatasetMeta, UserCatalogSave } from "@workspace/api-client-react";
+import type { UserDatasetMeta, UserCatalogSave } from "@workspace/api-client-react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { useAppState } from "@/lib/context";
-import { requestDatasetSwitch, useSimulatedDataStore } from "@/lib/simulatedDataStore";
+import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
 import type { DatasetSource } from "@/lib/terrainStore";
 import { useDatasetProximityStreaming } from "@/hooks/useDatasetProximityStreaming";
@@ -53,8 +51,6 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { CameraBookmark } from "@/lib/settingsStore";
-import { formatDepthRange } from "@/lib/units";
-import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { MySavesSection } from "@/components/MySavesSection";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
@@ -62,10 +58,8 @@ import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { BundleDownloadButton } from "@/components/BundleDownloadButton";
 import { GpsImportDialog } from "@/components/GpsImportDialog";
 import { GpsExportDialog } from "@/components/GpsExportDialog";
-import { LoadingDial } from "@/components/LoadingDial";
 import { SUPPORTED_EXTENSIONS } from "@/components/FileUpload";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
 import { fetchJsonWithProgress, NoDataAvailableError } from "@/lib/fetchWithProgress";
@@ -173,18 +167,6 @@ const PANEL: React.CSSProperties = {
   minWidth: 536,
   maxWidth: 616,
   backdropFilter: "blur(6px)",
-};
-
-const ACTION_BTN_STYLE: React.CSSProperties = {
-  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-  letterSpacing: "0.06em",
-  padding: "3px 7px",
-  background: "rgba(0,229,255,0.06)",
-  border: "1px solid rgba(0,229,255,0.28)",
-  borderRadius: 3,
-  color: "#00e5ff",
-  cursor: "pointer",
-  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
 };
 
 const CYAN: React.CSSProperties = {
@@ -706,7 +688,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     terrain,
     pendingExternalUserDatasetId,
     setPendingExternalUserDatasetId,
-    catalogSourcedAt,
     setCatalogSourcedAt,
   } = useAppState();
   const { isSignedIn, isLoaded } = useAuth();
@@ -721,31 +702,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const clearEviction = useTerrainStore((s) => s.clearEviction);
   const visibleDatasetsForToast = useTerrainStore((s) => s.visibleDatasets);
 
-  // Track which dataset IDs are available in the service-worker cache
-  const [cachedIds, setCachedIds] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    if (isOnline || !("caches" in window)) return;
-    let mounted = true;
-    void (async () => {
-      const ids = new Set<string>();
-      try {
-        const names = await caches.keys();
-        for (const name of names) {
-          const cache = await caches.open(name);
-          const keys = await cache.keys();
-          for (const req of keys) {
-            const m = /\/datasets\/([^/]+)\/(terrain|overview)/.exec(req.url);
-            if (m?.[1]) ids.add(m[1]);
-          }
-        }
-      } catch {
-        // Cache Storage not available
-      }
-      if (mounted) setCachedIds(ids);
-    })();
-    return () => { mounted = false; };
-  }, [isOnline]);
-
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.datasets);
   const collapsed = embedded ? false : storeCollapsed;
   const togglePanel = usePanelCollapseStore((s) => s.toggle);
@@ -757,7 +713,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     [setPanelCollapsed],
   );
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [, setLoadingId] = useState<string | null>(null);
 
   // GCS upload poll/watchdog refs — cleared on unmount to avoid state updates after destroy
   const gcsPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -784,20 +740,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   // ─── Preset dataset pending fetch ─────────────────────────────────────────
   const [pendingId, setPendingId] = useState<string | null>(null);
-
-  // ─── MY LIBRARY multi-select action-bar state ─────────────────────────────
-  const [presetSelectedIds, setPresetSelectedIds] = useState<Set<string>>(() => new Set());
-
-  const togglePresetSelected = useCallback((id: string) => {
-    setPresetSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const [exampleDatasetsFolderExpanded, setExampleDatasetsFolderExpanded] = useState(true);
-  const [presetDeleteConfirm, setPresetDeleteConfirm] = useState(false);
 
   // ─── User dataset pending + active tracking ────────────────────────────────
   const [pendingUserDatasetId, setPendingUserDatasetId] = useState<string | null>(null);
@@ -851,7 +793,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const pendingResumeRef = useRef<SavedUploadSession | null>(null);
 
   const waterType = useSettingsStore((s) => s.waterType);
-  const units = useSettingsStore((s) => s.units);
 
   // Accent colour tracks waterType: cyan for saltwater, green for freshwater.
   const accent = waterType === "freshwater" ? "#4ade80" : "#00e5ff";
@@ -1220,40 +1161,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     }
     useActiveLoadStore.getState().start({ datasetId: id, bucket: id });
   };
-
-  // On-demand bundle finished downloading + parsing → load it into the viewer
-  // exactly like a completed preset terrain fetch (same store/classify flow).
-  const handleBundleLoaded = useCallback(
-    (ds: DatasetMeta, bundleTerrain: TerrainData) => {
-      setDatasetId(ds.id);
-      setTerrain(bundleTerrain);
-      setActiveUserDatasetId(null);
-      if (!useTerrainStore.getState().multiDatasetMode) {
-        useTerrainStore.getState().setSinglePrimary(ds.id, "preset");
-      }
-      useTerrainStore.getState().setGrids({ activeGrid: bundleTerrain, overviewGrid: bundleTerrain });
-      useClassificationStore.getState().clearZoneMap();
-      void useClassificationStore.getState().classify(bundleTerrain);
-    },
-    [setDatasetId, setTerrain],
-  );
-
-  const handleSelectPreset = (ds: DatasetMeta) => {
-    if (ds.id === datasetId && !pendingId) return;
-    void requestDatasetSwitch({
-      datasetId: ds.id,
-      datasetName: ds.name,
-      onConfirm: () => {
-        setPresetLoadError(null);
-        setUserLoadError(null);
-        setLoadingId(ds.id);
-        beginActiveLoad(ds.id);
-        setPendingId(ds.id);
-        setPendingUserDatasetId(null);
-      },
-    });
-  };
-
 
   // ─── Cross-panel handoff (FileUpload / FindDataPanel → DatasetPanel) ──────
   // Other panels can ask us to load a freshly-materialized user dataset by
@@ -2759,114 +2666,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     useUiStore.getState().setPendingDropIn({ worldX: x, worldZ: z });
   };
 
-  // ─── Action-bar handlers ─────────────────────────────────────────────────
-  const handleLoadTogether = useCallback(async () => {
-    const state = useTerrainStore.getState();
-    const visibleIds = new Set(state.visibleDatasets.map((v) => v.datasetId));
-
-    const presetToAdd = [...presetSelectedIds].filter((id) => !visibleIds.has(id));
-
-    // Add preset datasets to selected pool and clear selection after preflight passes.
-    const togglePresetsAndClear = () => {
-      const st = useTerrainStore.getState();
-      const selected = new Set(st.selectedIds);
-      for (const id of presetToAdd) {
-        if (!selected.has(id)) st.addSelected(id, "preset");
-      }
-      // Drive AppState.datasetId to the first preset so useActiveDatasetSync
-      // fetches its terrain into AppState context — the primary TerrainMesh in
-      // SceneContents reads from AppState.terrain, not terrainStore directly.
-      if (presetToAdd[0]) setDatasetId(presetToAdd[0]);
-      setPresetSelectedIds(new Set());
-    };
-
-    if (presetToAdd.length === 0) {
-      setPresetSelectedIds(new Set());
-      return;
-    }
-
-    const { suppressed, setPending } = useSimulatedDataStore.getState();
-
-    if (suppressed) {
-      togglePresetsAndClear();
-      return;
-    }
-
-    // Fetch previews for preset datasets in parallel (errors → proceed).
-    const results = await Promise.all(
-      presetToAdd.map(async (id) => {
-        try {
-          const preview = await queryClient.fetchQuery({
-            queryKey: getGetDatasetsIdPreviewQueryKey(id),
-            queryFn: () => getDatasetsIdPreview(id),
-            staleTime: 30_000,
-          });
-          return { id, preview };
-        } catch {
-          return { id, preview: null };
-        }
-      }),
-    );
-
-    const firstSimulated = results.find(
-      (r) =>
-        // "synthetic" is no longer in the generated DatasetPreviewDataSource
-        // enum, but stale legacy DB rows may still surface it at runtime.
-        (r.preview?.dataSource as string | undefined) === "synthetic" ||
-        r.preview?.dataSource === "unknown",
-    );
-
-    if (!firstSimulated) {
-      togglePresetsAndClear();
-      return;
-    }
-
-    // Show one combined warning dialog for the preset batch.
-    setPending({
-      datasetId: firstSimulated.id,
-      datasetName: firstSimulated.preview?.name ?? firstSimulated.id,
-      preview: firstSimulated.preview!,
-      onConfirm: () => {
-        setPending(null);
-        togglePresetsAndClear();
-      },
-      onCancel: () => {
-        setPending(null);
-      },
-    });
-  }, [presetSelectedIds, setDatasetId]);
-
-  const handleActionDelete = useCallback(() => {
-    if (presetSelectedIds.size > 0) {
-      setPresetDeleteConfirm(true);
-    }
-  }, [presetSelectedIds.size]);
-
-  const handleConfirmPresetDelete = useCallback(async () => {
-    setPresetDeleteConfirm(false);
-    const ids = [...presetSelectedIds];
-    for (const id of ids) {
-      try {
-        await authorizedFetch(`${API_BASE}/api/datasets/presets/${encodeURIComponent(id)}`, {
-          method: "DELETE",
-        });
-      } catch {
-        // best-effort; server already guards against duplicates
-      }
-    }
-    setPresetSelectedIds(new Set());
-    void qc.invalidateQueries({ queryKey: getGetDatasetsQueryKey() });
-    void qc.invalidateQueries({ queryKey: getGetDatasetsQueryKey({ waterType }) });
-  }, [presetSelectedIds, qc, waterType]);
-
-  const handleActionCopy = useCallback(() => {
-    toast({ title: "Coming soon", description: "Copy is not yet available." });
-  }, [toast]);
-
-  const handleActionPaste = useCallback(() => {
-    toast({ title: "Coming soon", description: "Paste is not yet available." });
-  }, [toast]);
-
   // ── Load callbacks for MySavesSection (in MY LIBRARY) ────────────────────
   const handleLoadCatalogSaveFromLeft = useCallback(
     (save: UserCatalogSave) => {
@@ -3126,212 +2925,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   </>
                 )}
 
-                {/* ── Example Datasets virtual folder (always below user library) ── */}
-                <div>
-                  <button
-                    type="button"
-                    data-testid="example-datasets-folder-toggle"
-                    onClick={() => setExampleDatasetsFolderExpanded((v) => !v)}
-                    style={{
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "4px 12px 4px 8px",
-                      background: "transparent",
-                      border: "none",
-                      borderTop: "1px solid rgba(0,229,255,0.08)",
-                      cursor: "pointer",
-                      color: "#7dd3fc",
-                      fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                      letterSpacing: "0.08em",
-                      textAlign: "left",
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>{exampleDatasetsFolderExpanded ? "▾" : "▸"}</span>
-                    <span style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))" }}>📁</span>
-                    <span style={{ flex: 1 }}>Example Datasets</span>
-                    {(datasets ?? []).length > 0 && (
-                      <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#64748b" }}>{(datasets ?? []).length}</span>
-                    )}
-                  </button>
-
-                  {exampleDatasetsFolderExpanded && (datasets ?? []).map((ds) => {
-                  const active = ds.id === datasetId && !pendingId && !activeUserDatasetId;
-                  const loading = ds.id === loadingId;
-                  const isChecked = presetSelectedIds.has(ds.id);
-                  const isRowDisabled = (!isOnline && !cachedIds.has(ds.id)) || loading;
-                  return (
-                    <ViewscreenTooltip key={ds.id} label={`Load ${ds.name}`} side="right">
-                    <div
-                      data-testid={`row-dataset-${ds.id}`}
-                      className="w-full flex items-stretch transition-colors hover:bg-white/5"
-                      style={{
-                        background: active ? "rgba(0,229,255,0.07)" : "transparent",
-                        borderLeft: active ? "2px solid #00e5ff" : "2px solid transparent",
-                        opacity: !isOnline && !cachedIds.has(ds.id) ? 0.4 : 1,
-                        paddingLeft: 8,
-                      }}
-                    >
-                      <span
-                        role="checkbox"
-                        aria-checked={isChecked}
-                        data-testid={`chk-preset-${ds.id}`}
-                        onClick={(e) => { e.stopPropagation(); togglePresetSelected(ds.id); }}
-                        style={{
-                          width: 28, flexShrink: 0, display: "flex",
-                          alignItems: "center", justifyContent: "center", cursor: "pointer",
-                        }}
-                      >
-                        <span style={{
-                          width: 14, height: 14,
-                          border: `1px solid ${isChecked ? "#00e5ff" : "rgba(148,163,184,0.5)"}`,
-                          borderRadius: 2,
-                          background: isChecked ? "rgba(0,229,255,0.18)" : "transparent",
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#00e5ff",
-                        }}>
-                          {isChecked ? "✓" : ""}
-                        </span>
-                      </span>
-                    <div
-                      role="button"
-                      tabIndex={isRowDisabled ? -1 : 0}
-                      aria-disabled={isRowDisabled}
-                      data-testid={`btn-dataset-${ds.id}`}
-                      onClick={() => { if (!isRowDisabled) handleSelectPreset(ds); }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          if (!isRowDisabled) handleSelectPreset(ds);
-                        }
-                      }}
-                      className="flex-1 text-left px-2 py-2"
-                      style={{
-                        background: "transparent",
-                        cursor: isRowDisabled ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span
-                          style={{
-                            flex: 1, minWidth: 0, fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
-                            fontWeight: active ? 700 : 400,
-                            color: active ? "#00e5ff" : !isOnline && !cachedIds.has(ds.id) ? "#cbd5e1" : "#e2e8f0",
-                            textShadow: active ? "0 0 6px rgba(0,229,255,0.4)" : "none",
-                            whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word",
-                            textDecoration: "underline", textUnderlineOffset: 2,
-                          }}
-                        >
-                          {ds.name}
-                        </span>
-                        <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1", flexShrink: 0 }}>
-                          {loading ? (
-                            <LoadingDial datasetId={ds.id} label={ds.name} />
-                          ) : !isOnline ? (
-                            cachedIds.has(ds.id) ? (
-                              <ViewscreenTooltip label="Cached — works offline" side="left">
-                                <span data-testid={`cache-badge-${ds.id}`} style={{ color: "#4ade80", letterSpacing: "0.1em" }}>✓</span>
-                              </ViewscreenTooltip>
-                            ) : (
-                              <ViewscreenTooltip label="Not cached — needs internet" side="left">
-                                <span data-testid={`unavailable-badge-${ds.id}`} style={{ color: "#ef4444", letterSpacing: "0.1em" }}>✗</span>
-                              </ViewscreenTooltip>
-                            )
-                          ) : null}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginTop: 2, letterSpacing: "0.05em" }}>
-                        {formatDepthRange(ds.minDepth, ds.maxDepth, { units })}
-                      </div>
-                      {ds.fetchStrategy && isSignedIn && isOnline && (
-                        <BundleDownloadButton dataset={ds} onLoaded={handleBundleLoaded} />
-                      )}
-                      {active && terrain && terrain.datasetId === ds.id && (
-                        <div onClick={(e) => e.stopPropagation()}>
-                          <ProvenancePanel
-                            terrain={terrain}
-                            hasEfh={ds.hasEfh ?? false}
-                            catalogSourcedAt={
-                              catalogSourcedAt?.forDatasetId === terrain.datasetId
-                                ? catalogSourcedAt.date
-                                : null
-                            }
-                          />
-                          <div style={{ marginTop: 4, paddingTop: 4, borderTop: "1px solid rgba(0,229,255,0.08)" }}>
-                            <button
-                              data-testid={`btn-save-offline-${ds.id}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOfflinePackDataset({
-                                  id: ds.id,
-                                  name: ds.name,
-                                  bbox: terrain
-                                    ? { minLon: terrain.minLon, maxLon: terrain.maxLon, minLat: terrain.minLat, maxLat: terrain.maxLat }
-                                    : null,
-                                });
-                              }}
-                              style={{
-                                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                                padding: "3px 8px",
-                                background: "rgba(251,191,36,0.08)",
-                                border: "1px solid rgba(251,191,36,0.35)",
-                                borderRadius: 3,
-                                color: "#fbbf24",
-                                cursor: "pointer",
-                                letterSpacing: "0.1em",
-                                textTransform: "uppercase",
-                              }}
-                            >
-                              ⬇ Save Offline
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    </div>
-                    </ViewscreenTooltip>
-                  );
-                })}
-                </div>
-                {/* ── end Example Datasets folder ── */}
-
-                {/* Action bar when ONLY preset items are selected (no library selection) —
-                    rendered here. When library items are selected, the action bar is
-                    passed into DatasetFolderTree as actionBar prop and floats above the
-                    first selected row. */}
-                {presetSelectedIds.size > 0 && (
-                  <div
-                    data-testid="library-action-bar"
-                    style={{
-                      margin: "6px 8px 4px",
-                      padding: "6px 8px",
-                      background: "rgba(0,229,255,0.06)",
-                      border: "1px solid rgba(0,229,255,0.2)",
-                      borderRadius: 4,
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 4,
-                    }}
-                  >
-                    <span style={{
-                      fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#7dd3fc", width: "100%",
-                      letterSpacing: "0.08em", marginBottom: 2,
-                    }}>
-                      {presetSelectedIds.size} selected
-                    </span>
-                    <button data-testid="btn-action-load-together" onClick={() => { void handleLoadTogether(); }} style={ACTION_BTN_STYLE}>Load Together</button>
-                    <button
-                      data-testid="btn-action-delete"
-                      onClick={handleActionDelete}
-                      disabled={presetSelectedIds.size === 0}
-                      style={{ ...ACTION_BTN_STYLE, opacity: presetSelectedIds.size === 0 ? 0.35 : 1, color: "#fca5a5", borderColor: "rgba(239,68,68,0.4)" }}
-                    >Delete</button>
-                    <button data-testid="btn-action-copy" onClick={handleActionCopy} style={ACTION_BTN_STYLE}>Copy</button>
-                    <button data-testid="btn-action-paste" onClick={handleActionPaste} style={ACTION_BTN_STYLE}>Paste</button>
-                  </div>
-                )}
               </div>
           </div>
 
@@ -4418,90 +4011,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 )}
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {presetDeleteConfirm && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="preset-delete-dialog-title"
-          data-testid="preset-delete-confirm-dialog"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(0,0,0,0.55)",
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setPresetDeleteConfirm(false);
-          }}
-        >
-          <div
-            style={{
-              background: "rgba(0,10,20,0.92)",
-              border: "1px solid rgba(239,68,68,0.45)",
-              borderRadius: 6,
-              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              padding: "20px 24px",
-              maxWidth: 340,
-              width: "90%",
-              backdropFilter: "blur(8px)",
-              boxShadow: "0 0 24px rgba(239,68,68,0.12)",
-            }}
-          >
-            <div
-              id="preset-delete-dialog-title"
-              style={{
-                fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
-                letterSpacing: "0.12em",
-                color: "#fca5a5",
-                textShadow: "0 0 6px rgba(239,68,68,0.4)",
-                marginBottom: 12,
-                textTransform: "uppercase",
-              }}
-            >
-              Remove Example Dataset{presetSelectedIds.size !== 1 ? "s" : ""}
-            </div>
-            <p style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#e2e8f0", lineHeight: 1.5, marginBottom: 16 }}>
-              Remove {presetSelectedIds.size === 1 ? "this preset" : `${presetSelectedIds.size} presets`} from the app for all users? This cannot be undone from the UI.
-            </p>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button
-                data-testid="preset-delete-cancel"
-                onClick={() => setPresetDeleteConfirm(false)}
-                style={{
-                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                  padding: "5px 14px",
-                  background: "transparent",
-                  border: "1px solid rgba(148,163,184,0.4)",
-                  borderRadius: 3,
-                  color: "#94a3b8",
-                  cursor: "pointer",
-                  letterSpacing: "0.08em",
-                  fontFamily: "inherit",
-                }}
-              >Cancel</button>
-              <button
-                data-testid="preset-delete-confirm"
-                onClick={() => { void handleConfirmPresetDelete(); }}
-                style={{
-                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                  padding: "5px 14px",
-                  background: "rgba(239,68,68,0.12)",
-                  border: "1px solid rgba(239,68,68,0.5)",
-                  borderRadius: 3,
-                  color: "#fca5a5",
-                  cursor: "pointer",
-                  letterSpacing: "0.08em",
-                  fontFamily: "inherit",
-                }}
-              >Remove</button>
-            </div>
           </div>
         </div>
       )}
