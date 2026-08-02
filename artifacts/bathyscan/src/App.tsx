@@ -353,6 +353,20 @@ function Main() {
   const [queryOpen, setQueryOpen] = useState(false);
   const sidePaneCollapsed = useUiStore((s) => s.sidePaneCollapsed);
   const setSidePaneCollapsed = useUiStore((s) => s.setSidePaneCollapsed);
+  // Ref + ResizeObserver to track the side panel's right edge so the Hide
+  // button is always anchored just past the panel's right edge (never buried
+  // under it on narrow screens or wide-panel modes).
+  const sidePanelRef = useRef<HTMLDivElement>(null);
+  const [panelRightEdge, setPanelRightEdge] = useState(280);
+  useEffect(() => {
+    const el = sidePanelRef.current;
+    if (!el) return;
+    const update = () => setPanelRightEdge(el.getBoundingClientRect().right);
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [sidePaneCollapsed]);
   const sidebarMode = useUiStore((s) => s.sidebarMode);
   const setSidebarMode = useUiStore((s) => s.setSidebarMode);
   const tideOverlayActive = useUiStore((s) => s.tideOverlayActive);
@@ -1287,7 +1301,7 @@ function Main() {
                 but this button must always remain reachable). Kept outside the
                 ErrorBoundary so the pane can still be collapsed when the sidebar
                 content throws. */}
-            <div style={{ position: "fixed", top: 96, left: 16, zIndex: 21 }}>
+            <div style={{ position: "fixed", top: 96, left: panelRightEdge + 4, zIndex: 21 }}>
               <ViewscreenTooltip label="Hide side pane to free up screen space" side="left">
                 <button
                   onClick={() => setSidePaneCollapsed(true)}
@@ -1309,6 +1323,7 @@ function Main() {
               </ViewscreenTooltip>
             </div>
             <div
+              ref={sidePanelRef}
               className="absolute top-24 left-4 z-20 overflow-y-auto overscroll-contain space-y-2"
               style={{
                 maxHeight: "calc(100vh - 7rem)",
