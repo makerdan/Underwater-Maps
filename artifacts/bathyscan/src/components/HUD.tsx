@@ -76,7 +76,14 @@ function toDMS(decimal: number): string {
   return `${sign}${d}°${m}'${s}"`;
 }
 
-export const HUD: React.FC = () => {
+interface HUDProps {
+  /** Right edge (px from left of viewport) of the expanded left panel.
+   *  Pass 0 when the panel is collapsed so the crosshair centres on the
+   *  full viewport width. */
+  panelRightEdge?: number;
+}
+
+export const HUD: React.FC<HUDProps> = ({ panelRightEdge = 0 }) => {
   const [tempProfileOpen, setTempProfileOpen] = React.useState(false);
   const crosshairGps = useCameraStore((s) => s.crosshairGps);
   const lastClickedGps = useCameraStore((s) => s.lastClickedGps);
@@ -542,7 +549,9 @@ export const HUD: React.FC = () => {
           className="absolute"
           style={{
             top: "50%",
-            left: "50%",
+            left: panelRightEdge > 0
+              ? `calc(50vw + ${panelRightEdge / 2}px)`
+              : "50%",
             transform: "translate(-50%, -50%)",
             display: "flex",
             flexDirection: "column",

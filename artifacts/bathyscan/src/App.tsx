@@ -1235,7 +1235,7 @@ function Main() {
         >
           <div className="flex-1 relative">
             <ErrorBoundary label="HUD">
-              <HUD />
+              <HUD panelRightEdge={sidePaneCollapsed ? 0 : panelRightEdge} />
             </ErrorBoundary>
           </div>
         </div>
