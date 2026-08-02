@@ -65,34 +65,21 @@ export function deriveAreaFolderName(label: string): string {
 }
 
 /**
- * Resolve the label to name an area folder after. Coordinate/viewport
- * searches send a `center` point — try to reverse-geocode it to a nearby
- * place name ("Sitka, Alaska") so the folder is self-explanatory in the
- * tree; fall back to the client's coordinate summary label when no place
- * is found. Text-query searches carry no center and keep the query text.
- */
-async function resolveAreaFolderLabel(
-  areaRequest: AreaRequestContext,
-): Promise<string> {
-  if (!areaRequest.center) return areaRequest.label;
-  const place = await placeNameForPoint(
-    areaRequest.center.lat,
-    areaRequest.center.lon,
-  );
-  return place ?? areaRequest.label;
-}
-
-/**
  * Apply auto-folder grouping for one area request after a save was created.
  *
  * - Counts the user's saves stamped with `areaRequestId`; at ≤ threshold it
  *   does nothing (searches yielding ≤2 datasets behave exactly as today).
  * - Above the threshold it reuses the folder already associated with this
  *   request (any save row's folderId) or creates a new root folder named
- *   after `label`, de-duplicated against existing sibling folders.
+ *   after the reverse-geocoded place name (coordinate searches) or the
+ *   client label (text searches), de-duplicated against existing siblings.
  * - Stamps the folder onto every save row of this request still at root
  *   (in-flight saves included) and onto every already-materialized dataset
  *   row still at root.
+ *
+ * The Nominatim request is fired immediately and runs in parallel with the
+ * database queries so it does not add latency on top of DB work — the result
+ * is only awaited at the moment we actually need to name the folder.
  *
  * Returns the folderId when a folder applies, else null. Never throws.
  */
@@ -101,6 +88,13 @@ export async function applyAreaRequestGrouping(
   areaRequest: AreaRequestContext,
 ): Promise<string | null> {
   try {
+    // Start the reverse-geocode request immediately so it runs in parallel
+    // with the database queries below. placeNameForPoint never throws; we
+    // only await the result if a new folder actually needs to be created.
+    const placeNamePromise: Promise<string | null> = areaRequest.center
+      ? placeNameForPoint(areaRequest.center.lat, areaRequest.center.lon)
+      : Promise.resolve(null);
+
     const requestCond = and(
       eq(userCatalogSavesTable.userId, userId),
       eq(userCatalogSavesTable.areaRequestId, areaRequest.id),
@@ -115,7 +109,12 @@ export async function applyAreaRequestGrouping(
     let folderId = await findRequestFolder(userId, areaRequest.id);
 
     if (!folderId) {
-      folderId = await createAreaFolder(userId, areaRequest);
+      // Await the geocoded name now — it may already be resolved since it
+      // ran in parallel with the DB queries above. On timeout or any error,
+      // placeNameForPoint returns null and we fall back to the client label.
+      const placeName = await placeNamePromise;
+      const resolvedLabel = placeName ?? areaRequest.label;
+      folderId = await createAreaFolder(userId, areaRequest, resolvedLabel);
       if (!folderId) {
         // Unique-name race: a concurrent save for this request may have
         // created the folder between our select and insert. Re-check.
@@ -185,12 +184,17 @@ async function findRequestFolder(
  * Create a root folder for an area request, de-duplicating the name against
  * the user's existing root folders ("Name", "Name 2", "Name 3", …). Returns
  * null when the insert loses a unique-constraint race on every attempt.
+ *
+ * `resolvedLabel` is the already-resolved folder name (geocoded place name or
+ * coordinate-summary label) — the caller is responsible for resolving it
+ * before this function is called so geocoding can run in parallel with DB work.
  */
 async function createAreaFolder(
   userId: string,
   areaRequest: AreaRequestContext,
+  resolvedLabel: string,
 ): Promise<string | null> {
-  const base = deriveAreaFolderName(await resolveAreaFolderLabel(areaRequest));
+  const base = deriveAreaFolderName(resolvedLabel);
   const existing = await db
     .select()
     .from(datasetFoldersTable)

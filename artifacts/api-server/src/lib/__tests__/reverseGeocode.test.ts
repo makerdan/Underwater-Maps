@@ -102,6 +102,20 @@ describe("placeNameForPoint", () => {
     await expect(placeNameForPoint(20, 20)).resolves.toBeNull();
   });
 
+  it("returns null when AbortSignal.timeout fires (TimeoutError DOMException)", async () => {
+    // Simulate the DOMException thrown by AbortSignal.timeout when the 3.5 s
+    // budget expires — must not propagate as an unhandled rejection.
+    const err = new DOMException("signal timed out", "TimeoutError");
+    fetchMock.mockRejectedValueOnce(err);
+    await expect(placeNameForPoint(57.05, -135.33)).resolves.toBeNull();
+  });
+
+  it("returns null when the fetch is aborted (AbortError)", async () => {
+    const err = new DOMException("The operation was aborted", "AbortError");
+    fetchMock.mockRejectedValueOnce(err);
+    await expect(placeNameForPoint(30, 30)).resolves.toBeNull();
+  });
+
   it("returns null for non-finite coordinates without fetching", async () => {
     await expect(placeNameForPoint(NaN, 0)).resolves.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();

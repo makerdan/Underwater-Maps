@@ -480,11 +480,14 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
 const G = vi.hoisted(() => ({
   result: null as string | null,
   calls: [] as Array<{ lat: number; lon: number }>,
+  /** Extra artificial delay before resolving, in milliseconds (0 = none). */
+  delay: 0,
 }));
 
 vi.mock("../../lib/reverseGeocode.js", () => ({
   placeNameForPoint: async (lat: number, lon: number) => {
     G.calls.push({ lat, lon });
+    if (G.delay > 0) await new Promise<void>((r) => setTimeout(r, G.delay));
     return G.result;
   },
   __clearReverseGeocodeCache: () => {},
@@ -554,6 +557,7 @@ beforeEach(() => {
   H.buildGate.current = null;
   G.result = null;
   G.calls.length = 0;
+  G.delay = 0;
 });
 
 // ---------------------------------------------------------------------------
@@ -813,6 +817,32 @@ describe("area folder naming via reverse geocoding", () => {
     }
     expect(G.calls).toHaveLength(0);
     expect(H.dbState.folders[0]!["name"]).toBe("Sitka Sound");
+  });
+
+  it("uses the coordinate label when the geocoder times out (returns null)", async () => {
+    // G.result = null simulates what placeNameForPoint returns on timeout or
+    // any upstream failure; the folder must fall back to the client label.
+    G.result = null;
+    for (const id of ["preset-area-a", "preset-area-b", "preset-area-c"]) {
+      await saveCatalog(id, { areaRequest: COORD_AR });
+    }
+    expect(H.dbState.folders).toHaveLength(1);
+    expect(H.dbState.folders[0]!["name"]).toBe(COORD_AR.label);
+    // Geocoder was still called — it just returned null (timeout/error).
+    expect(G.calls.length).toBeGreaterThan(0);
+  });
+
+  it("names the folder correctly even when geocoding resolves after the DB queries (parallel race)", async () => {
+    // Simulate geocoding that takes longer than the DB work (the in-parallel
+    // optimisation fires it early; we must await the result before creating
+    // the folder so the name is never an empty/stale string).
+    G.result = "Sitka, Alaska";
+    G.delay = 50;
+    for (const id of ["preset-area-a", "preset-area-b", "preset-area-c"]) {
+      await saveCatalog(id, { areaRequest: COORD_AR });
+    }
+    expect(H.dbState.folders).toHaveLength(1);
+    expect(H.dbState.folders[0]!["name"]).toBe("Sitka, Alaska");
   });
 
   it("rejects an out-of-range center with 400", async () => {
