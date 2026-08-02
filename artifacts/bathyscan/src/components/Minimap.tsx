@@ -41,7 +41,7 @@ const MINIMAP_FT_TO_M = 0.3048;
  * Skips degenerate grids (< 4 cells in either dimension or flat depth range)
  * to avoid visual noise on placeholder/loading states.
  */
-function drawMinimapContours(
+export function drawMinimapContours(
   ctx: CanvasRenderingContext2D,
   depths: DepthsArray,
   width: number,
