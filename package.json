@@ -26,6 +26,7 @@
     "check:failure-gate-zip": "node scripts/check-failure-gate-zip-stale.mjs",
     "check:poe-setup-zip": "node scripts/check-poe-setup-zip-stale.mjs",
     "check:port-authority-zip": "node scripts/check-port-authority-zip-stale.mjs",
+    "check:port-authority-heavy-zip": "node scripts/check-port-authority-heavy-zip-stale.mjs",
     "check:root-relative-api": "node --test scripts/__tests__/check-root-relative-api.test.mjs && node scripts/check-root-relative-api.mjs",
     "check:deps-suppression": "node scripts/check-deps-suppression.mjs",
     "check:duplicate-hooks-registry": "node scripts/check-duplicate-hooks-registry.mjs",

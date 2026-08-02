@@ -130,6 +130,24 @@ if [ -f "artifacts/bathyscan/public/port-authority-skill.zip" ]; then
     echo "[post-merge] port-authority-skill.zip updated."
   fi
 fi
+# Guardrail: keep artifacts/bathyscan/public/port-authority-heavy-skill.zip in sync
+# with .agents/skills/Port-Authority-Heavy/SKILL.md. Auto-regenerate if stale and
+# commit the result so the check:port-authority-heavy-zip step passes cleanly.
+# Skip entirely if the zip has not yet been published.
+if [ -f "artifacts/bathyscan/public/port-authority-heavy-skill.zip" ]; then
+  if ! node scripts/check-port-authority-heavy-zip-stale.mjs 2>/dev/null; then
+    echo "[post-merge] port-authority-heavy-skill.zip was stale — regenerating and committing..."
+    (cd .agents/skills && zip ../../artifacts/bathyscan/public/port-authority-heavy-skill.zip Port-Authority-Heavy/SKILL.md)
+    git add artifacts/bathyscan/public/port-authority-heavy-skill.zip
+    if ! git diff --cached --quiet; then
+      # Set a fallback identity in case the runner has no global git config.
+      git config --local user.email "post-merge@replit.local" 2>/dev/null || true
+      git config --local user.name  "BathyScan Post-Merge Bot"  2>/dev/null || true
+      git commit -m "chore: sync port-authority-heavy-skill.zip with SKILL.md [post-merge]"
+    fi
+    echo "[post-merge] port-authority-heavy-skill.zip updated."
+  fi
+fi
 # Re-register tiered validation commands so they survive future merges and are
 # always available on a fresh environment. The commands are defined in
 # scripts/register-validation-commands.mjs; agent sessions call
