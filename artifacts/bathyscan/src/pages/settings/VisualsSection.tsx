@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useUiStore } from "@/lib/uiStore";
 import { useIntertidal } from "@/lib/useIntertidal";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { PaletteSuggestionBanner } from "@/components/PaletteSuggestionBanner";
@@ -137,6 +138,11 @@ function IntertidalDatumsCard() {
 
 export function VisualsSection() {
   const s = useSettingsStore(useShallow((s) => s));
+  // showNodataBoundary is read by uiStore-dependent 3D components (TourScene,
+  // Minimap).  Write through uiStore so the auto-mirror subscription keeps
+  // both stores in sync; direct settingsStore writes bypass uiStore and leave
+  // the 3D scene stale until the next hydration.
+  const setShowNodataBoundaryViaUi = useUiStore((s) => s.setShowNodataBoundary);
   return (
     <>
       <SectionTitle helpId="settings" helpLabel="Visuals & Performance">◈ VISUALS &amp; PERFORMANCE</SectionTitle>
@@ -245,7 +251,7 @@ export function VisualsSection() {
           <ToggleRow
             label="Show survey-gap boundary rings"
             value={s.showNodataBoundary}
-            onChange={s.setShowNodataBoundary}
+            onChange={setShowNodataBoundaryViaUi}
             sublabel="Outline rings that mark the edges of survey coverage gaps in the terrain mesh."
           />
           <ToggleRow

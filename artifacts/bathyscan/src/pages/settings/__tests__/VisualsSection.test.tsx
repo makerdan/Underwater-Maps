@@ -117,6 +117,7 @@ vi.mock("@/pages/settings/components/SectionTitle", () => ({
 
 import { VisualsSection } from "../VisualsSection";
 import { useTidalStore } from "@/lib/tidalStore";
+import { useUiStore } from "@/lib/uiStore";
 
 describe("VisualsSection", () => {
   beforeEach(() => {
@@ -264,6 +265,33 @@ describe("VisualsSection", () => {
       h.stateOverrides.colormapUserSet = true;
       render(<VisualsSection />);
       expect(screen.queryByTestId("bright-daylight-grayscale-note")).toBeNull();
+    });
+  });
+
+  describe("showNodataBoundary — Settings toggle keeps uiStore in sync", () => {
+    beforeEach(() => {
+      // Ensure uiStore starts at the known default (true) before each sync test.
+      useUiStore.setState({ showNodataBoundary: true });
+    });
+
+    it("clicking the toggle from ON→OFF updates uiStore.showNodataBoundary to false", () => {
+      // The mocked settingsStore returns showNodataBoundary: true (see mock above).
+      // VisualsSection now calls the uiStore setter on toggle so the 3D scene
+      // (which reads uiStore) stays in sync with the Settings panel.
+      render(<VisualsSection />);
+      const toggle = screen.getByRole("switch", { name: "Show survey-gap boundary rings" });
+      fireEvent.click(toggle);
+      expect(useUiStore.getState().showNodataBoundary).toBe(false);
+    });
+
+    it("clicking the toggle from OFF→ON updates uiStore.showNodataBoundary to true", () => {
+      // Prime both stores to false so the mock reports the toggle as off.
+      useUiStore.setState({ showNodataBoundary: false });
+      h.stateOverrides.showNodataBoundary = false;
+      render(<VisualsSection />);
+      const toggle = screen.getByRole("switch", { name: "Show survey-gap boundary rings" });
+      fireEvent.click(toggle);
+      expect(useUiStore.getState().showNodataBoundary).toBe(true);
     });
   });
 

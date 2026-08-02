@@ -44,6 +44,7 @@ beforeEach(() => {
     hiddenEfhSpecies: [],
     hyd93ActiveFeatureCodes: [89, 103, 146, 530, 988],
     hyd93FeaturesEnabled: false,
+    showNodataBoundary: true,
     weatherStationsActive: false,
     rawsOverlayActive: false,
     windOverlayActive: false,
@@ -66,6 +67,7 @@ beforeEach(() => {
     hiddenEfhSpecies: new Set(),
     hyd93ActiveFeatureCodes: new Set([89, 103, 146, 530, 988]),
     hyd93FeaturesEnabled: false,
+    showNodataBoundary: true,
     weatherStationsActive: false,
     rawsOverlayActive: false,
     windOverlayActive: false,
@@ -156,6 +158,18 @@ describe("auto-mirror — boolean overlay setters propagate to settingsStore", (
   it("setSidePaneCollapsed mirrors to settingsStore", () => {
     useUiStore.getState().setSidePaneCollapsed(true);
     expect(useSettingsStore.getState().sidePaneCollapsed).toBe(true);
+  });
+
+  it("setShowNodataBoundary(false) mirrors to settingsStore", () => {
+    useUiStore.getState().setShowNodataBoundary(false);
+    expect(useSettingsStore.getState().showNodataBoundary).toBe(false);
+  });
+
+  it("setShowNodataBoundary(true) mirrors back to settingsStore", () => {
+    useUiStore.setState({ showNodataBoundary: false });
+    useSettingsStore.setState({ showNodataBoundary: false });
+    useUiStore.getState().setShowNodataBoundary(true);
+    expect(useSettingsStore.getState().showNodataBoundary).toBe(true);
   });
 });
 
@@ -336,6 +350,7 @@ describe("MIRRORED_UI_KEYS registry", () => {
       "hiddenEfhSpecies",
       "hyd93ActiveFeatureCodes",
       "hyd93FeaturesEnabled",
+      "showNodataBoundary",
       "weatherStationsActive",
       "rawsOverlayActive",
       "windOverlayActive",
