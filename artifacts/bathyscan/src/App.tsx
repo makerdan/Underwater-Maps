@@ -1287,8 +1287,8 @@ function Main() {
                 but this button must always remain reachable). Kept outside the
                 ErrorBoundary so the pane can still be collapsed when the sidebar
                 content throws. */}
-            <div style={{ position: "fixed", top: 96, right: 8, zIndex: 21 }}>
-              <ViewscreenTooltip label="Hide side pane to free up screen space" side="right">
+            <div style={{ position: "fixed", top: 96, left: 16, zIndex: 21 }}>
+              <ViewscreenTooltip label="Hide side pane to free up screen space" side="left">
                 <button
                   onClick={() => setSidePaneCollapsed(true)}
                   aria-label="Hide side pane"

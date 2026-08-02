@@ -270,6 +270,31 @@ test("collapsing the sidebar hides mode tabs and panel content; expanding shows 
   await expect(modeTabs).toBeVisible({ timeout: 5_000 });
 });
 
+test("Hide button and Show button are both left-anchored (x-centre in left half of viewport)", async ({ page }) => {
+  await injectSettings(page, BASE);
+  await page.goto("/");
+  await waitForSidebarTabs(page);
+
+  const viewportWidth = page.viewportSize()!.width;
+
+  // Hide button must be in the left half of the viewport
+  const hideBtn = page.getByRole("button", { name: "Hide side pane" });
+  await expect(hideBtn).toBeVisible({ timeout: 8_000 });
+  const hideBox = await hideBtn.boundingBox();
+  expect(hideBox).not.toBeNull();
+  const hideCentreX = hideBox!.x + hideBox!.width / 2;
+  expect(hideCentreX).toBeLessThan(viewportWidth / 2);
+
+  // After collapsing, Show button must also be in the left half
+  await hideBtn.click();
+  const showBtn = page.getByRole("button", { name: "Show side pane" });
+  await expect(showBtn).toBeVisible({ timeout: 5_000 });
+  const showBox = await showBtn.boundingBox();
+  expect(showBox).not.toBeNull();
+  const showCentreX = showBox!.x + showBox!.width / 2;
+  expect(showCentreX).toBeLessThan(viewportWidth / 2);
+});
+
 test("sidebar-section-habitat is only visible in Analyze mode", async ({ page }) => {
   await injectSettings(page, { ...BASE, sidebarMode: "explore" });
   await page.goto("/");
