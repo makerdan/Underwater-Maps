@@ -82,13 +82,13 @@ describe("uiStore — showNodataBoundary toggle", () => {
   });
 });
 
-describe("uiStore — showNodataBoundary is NOT in MIRRORED_UI_KEYS (session-only)", () => {
-  it("showNodataBoundary is absent from the mirror list so it resets on reload", async () => {
-    // MIRRORED_UI_KEYS drives the auto-sync to settingsStore.  The overlay
-    // visibility toggle is intentionally transient (session-only) so it must
-    // NOT appear in the mirror list.
+describe("uiStore — showNodataBoundary IS in MIRRORED_UI_KEYS (persisted)", () => {
+  it("showNodataBoundary is present in the mirror list so it persists cross-device", async () => {
+    // MIRRORED_UI_KEYS drives the auto-sync to settingsStore.  showNodataBoundary
+    // was promoted to a persisted setting (settingsStore v31) so it MUST appear
+    // in the mirror list and sync cross-device.
     const { MIRRORED_UI_KEYS } = await import("@/lib/uiStore");
-    expect((MIRRORED_UI_KEYS as readonly string[]).includes("showNodataBoundary")).toBe(false);
+    expect((MIRRORED_UI_KEYS as readonly string[]).includes("showNodataBoundary")).toBe(true);
   });
 });
 

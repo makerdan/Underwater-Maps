@@ -243,6 +243,12 @@ export function VisualsSection() {
             sublabel="Translucent sea-level plane over the bathymetry. Colour tracks the active water type. Turn off for dry cross-section views."
           />
           <ToggleRow
+            label="Show survey-gap boundary rings"
+            value={s.showNodataBoundary}
+            onChange={s.setShowNodataBoundary}
+            sublabel="Outline rings that mark the edges of survey coverage gaps in the terrain mesh."
+          />
+          <ToggleRow
             label="Show landmass"
             value={s.showLandmass}
             onChange={s.setShowLandmass}

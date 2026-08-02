@@ -64,6 +64,8 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     setSmoothTerrainSpikes: vi.fn(),
     showWaterSurface: true,
     setShowWaterSurface: vi.fn(),
+    showNodataBoundary: true,
+    setShowNodataBoundary: vi.fn(),
     showLandmass: false,
     setShowLandmass: vi.fn(),
     satelliteImagery: false,
@@ -202,6 +204,13 @@ describe("VisualsSection", () => {
     const advanced = screen.getByTestId("advanced-disclosure");
     const { getByText } = within(advanced);
     expect(getByText("Show water surface")).toBeInTheDocument();
+  });
+
+  it("renders Show survey-gap boundary rings toggle inside the AdvancedDisclosure wrapper", () => {
+    render(<VisualsSection />);
+    const advanced = screen.getByTestId("advanced-disclosure");
+    const { getByText } = within(advanced);
+    expect(getByText("Show survey-gap boundary rings")).toBeInTheDocument();
   });
 
   it("renders Show landmass toggle inside the AdvancedDisclosure wrapper", () => {
