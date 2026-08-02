@@ -202,6 +202,12 @@ export const OverviewMap: React.FC = () => {
   const contourSegmentsRef = useRef<ContourSegment[]>([]);
   /** Pre-built no-data boundary segments, rebuilt when grid changes. */
   const nodataBoundarySegmentsRef = useRef<NodataBoundarySegment[]>([]);
+  const showNodataBoundary = useUiStore((s) => s.showNodataBoundary);
+  const showNodataBoundaryRef = useRef(showNodataBoundary);
+  useEffect(() => {
+    showNodataBoundaryRef.current = showNodataBoundary;
+    dirtyRef.current = true;
+  }, [showNodataBoundary]);
   const contoursEnabledRef = useRef(contoursEnabled);
   useEffect(() => { contoursEnabledRef.current = contoursEnabled; }, [contoursEnabled]);
   const substrateFeaturesRef = useRef<SubstrateFeature[]>([]);
@@ -1473,7 +1479,7 @@ export const OverviewMap: React.FC = () => {
       // Survey-boundary indicators — dashed grey strokes at the edge of null
       // (no-data) zones so users understand where coverage ends.  Drawn above
       // the heatmap/intertidal fill but below contour lines and labels.
-      if (nodataBoundarySegmentsRef.current.length > 0) {
+      if (showNodataBoundaryRef.current && nodataBoundarySegmentsRef.current.length > 0) {
         renderNodataBoundary(ctx, nodataBoundarySegmentsRef.current, grid, t);
       }
 
