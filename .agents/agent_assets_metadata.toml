@@ -84,3 +84,10 @@ uri = "file://failure-gate-skill.zip"
 type = "unspecified"
 title = "Failure Gate Skill"
 description = "Zipped .agents/skills/failure-gate/ directory containing SKILL.md"
+
+[[outputs]]
+id = "iSzY6YJd8_VmiWOGIgVxd"
+uri = "file://exports/failure-gate.zip"
+type = "unspecified"
+title = "Failure Gate Skill"
+description = "The Failure Gate SKILL.md packaged as a zip — drop the failure-gate/ folder into .agents/skills/ in any Replit project to install it."
