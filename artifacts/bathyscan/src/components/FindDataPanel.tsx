@@ -15,6 +15,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatFreshness } from "@/lib/freshnessUtils";
+import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
 import { useQueryClient, useQueries } from "@tanstack/react-query";
 import {
@@ -392,9 +393,17 @@ interface CatalogCardProps {
   canSave: boolean;
   presetId: string | null;
   onLoad: (presetDatasetId: string) => void;
+  /** True when at least one dataset is already loaded (enables the ADD button). */
+  hasPrimary: boolean;
+  /** True when this preset's id is already in the terrain store's selected/visible pool. */
+  inView: boolean;
+  /** True when the terrain store has reached MAX_ACTIVE_DATASETS. */
+  atCap: boolean;
+  /** Called with the presetId when the user clicks ADD. */
+  onAddToView: (presetId: string) => void;
 }
 
-const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, canSave, presetId, onLoad }) => {
+const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, canSave, presetId, onLoad, hasPrimary, inView, atCap, onAddToView }) => {
   const icon = DATA_TYPE_ICONS[entry.dataType] ?? "📦";
   const color = DATA_TYPE_COLORS[entry.dataType] ?? "#e2e8f0";
   const isIntertidal = INTERTIDAL_CATALOG_IDS.has(entry.id);
@@ -484,6 +493,40 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
       )}
 
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        {presetId && hasPrimary && (
+          <ViewscreenTooltip
+            label={
+              inView
+                ? "Already added to the 3D view"
+                : atCap
+                  ? `View is full (max ${MAX_ACTIVE_DATASETS} datasets)`
+                  : "Add this dataset alongside the current view"
+            }
+            side="top"
+          >
+            <button
+              data-testid={`catalog-add-to-view-${entry.id}`}
+              onClick={() => !inView && !atCap && onAddToView(presetId)}
+              disabled={inView || atCap}
+              style={{
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                padding: "3px 10px",
+                background: inView
+                  ? "rgba(74,222,128,0.1)"
+                  : "rgba(255,255,255,0.04)",
+                border: `1px solid ${inView ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.15)"}`,
+                borderRadius: 3,
+                color: inView ? "#4ade80" : atCap ? "#64748b" : "#cbd5e1",
+                cursor: inView || atCap ? "default" : "pointer",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                opacity: atCap && !inView ? 0.6 : 1,
+              }}
+            >
+              {inView ? "IN VIEW" : "ADD"}
+            </button>
+          </ViewscreenTooltip>
+        )}
         {presetId && (
           <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
             <button
@@ -813,6 +856,26 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const { setDatasetId, setCatalogSourcedAt, datasetId: currentDatasetId, setPendingExternalUserDatasetId } = useAppState();
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
+
+  // Terrain store — used to derive "Add to View" state for catalog cards.
+  const terrainVisibleDatasets = useTerrainStore((s) => s.visibleDatasets);
+  const terrainSelectedIds = useTerrainStore((s) => s.selectedIds);
+
+  const hasCatalogPrimary = terrainVisibleDatasets.length > 0;
+  const atCatalogCap = terrainSelectedIds.length >= MAX_ACTIVE_DATASETS;
+  // Set of all dataset IDs currently selected (active or queued) — for "IN VIEW" state.
+  const catalogSelectedIdSet = useMemo(
+    () => new Set([
+      ...terrainVisibleDatasets.map((v) => v.datasetId),
+      ...terrainSelectedIds,
+    ]),
+    [terrainVisibleDatasets, terrainSelectedIds],
+  );
+
+  const handleCatalogAddToView = useCallback((presetId: string) => {
+    const state = useTerrainStore.getState();
+    state.addSelected(presetId, "preset");
+  }, []);
 
   // Debounce search query
   const handleQueryChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1403,6 +1466,10 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   canSave={!!isSignedIn}
                   presetId={presetId}
                   onLoad={handleLoad}
+                  hasPrimary={hasCatalogPrimary}
+                  inView={presetId !== null && catalogSelectedIdSet.has(presetId)}
+                  atCap={atCatalogCap}
+                  onAddToView={handleCatalogAddToView}
                 />
               );
             })}
