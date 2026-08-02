@@ -5,28 +5,33 @@
  *   1. "## Pre-existing failures to ignore"
  *   2. "## Validation"
  *
- * Also detects unfilled validation stubs — plan files where the Validation
- * section still contains the raw placeholder text appended by --fix-stub
- * instead of a real command and justification.
+ * Also checks that any file whose ## Validation section is present contains a
+ * "**Do not escalate:**" line, and detects unfilled validation stubs — plan
+ * files where the Validation section still contains the raw placeholder text
+ * appended by --fix-stub instead of a real command and justification.
  *
  * Run:  node scripts/check-failure-gate.mjs
  *
  * Flags:
  *   --fix-stub    Append stubs for whichever required sections are missing in
  *                 each non-compliant file instead of just reporting them.
+ *                 Also inserts the **Do not escalate:** line beneath **Why:**
+ *                 when it is absent from an existing Validation section.
  *                 Prints a warning per file patched.
  *   --stubs-only  Skip the required-headings check and only report unfilled
- *                 stub placeholders. Used by the CI fast-tier step so that old
- *                 pre-mandate plan files (which lack the required sections) do
- *                 not permanently break the fast tier.
+ *                 stub placeholders and missing **Do not escalate:** lines.
+ *                 Used by the CI fast-tier step so that old pre-mandate plan
+ *                 files (which lack the required sections) do not permanently
+ *                 break the fast tier.
  *
  * Exit codes:
  *   0 — all files compliant (or no files found)
  *   1 — one or more files missing at least one required section, OR one or
- *       more files still contain unfilled stub placeholders
+ *       more files still contain unfilled stub placeholders, OR one or more
+ *       files have ## Validation but are missing the **Do not escalate:** line
  */
 
-import { readdir, readFile, appendFile } from "fs/promises";
+import { readdir, readFile, appendFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 
@@ -50,15 +55,38 @@ responsibility.
 ## Validation
 **Command:** \`test-standard\`
 **Why:** Placeholder — review before running this task (state what the command covers and why it fits the task scope).
+**Do not escalate:** Run exactly this command. Pre-existing failures are
+handled above — they are never a reason to run a heavier tier.
 `,
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Required lines within the ## Validation section
+// Each entry: { marker, fixLine, placeholder }
+//   marker      — startsWith string to detect the line is present
+//   fixLine     — the line(s) to insert when --fix-stub patches a file that
+//                 already has ## Validation but lacks this line; inserted
+//                 after the **Why:** line (or appended to the section)
+//   placeholder — recognisable string added by an old --fix-stub that a human
+//                 must still fill in
+// ---------------------------------------------------------------------------
+const REQUIRED_VALIDATION_LINES = [
+  {
+    marker: "**Do not escalate:**",
+    fixLine:
+      "**Do not escalate:** Run exactly this command. Pre-existing failures are\n" +
+      "handled above — they are never a reason to run a heavier tier.",
+    placeholder: "**Do not escalate:** <FILL IN>",
   },
 ];
 
 const fixStub = process.argv.includes("--fix-stub");
 // --stubs-only: skip the required-headings check and only report unfilled stub
-// placeholders. Used by the CI fast-tier step so that old pre-mandate plan
-// files (which lack the required sections) do not permanently break the fast
-// tier. The missing-sections check remains available for manual audits.
+// placeholders and missing required validation lines. Used by the CI fast-tier
+// step so that old pre-mandate plan files (which lack the required sections)
+// do not permanently break the fast tier. The missing-sections check remains
+// available for manual audits.
 const stubsOnly = process.argv.includes("--stubs-only");
 
 // ---------------------------------------------------------------------------
@@ -71,6 +99,7 @@ const stubsOnly = process.argv.includes("--stubs-only");
 const STUB_PLACEHOLDERS = [
   "**Command:** `<mid-weight tier for this project>`",
   "**Why:** <replace with one-line justification",
+  ...REQUIRED_VALIDATION_LINES.map((r) => r.placeholder),
 ];
 
 // ---------------------------------------------------------------------------
@@ -96,10 +125,44 @@ if (files.length === 0) {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: insert the **Do not escalate:** line into existing Validation section
+// ---------------------------------------------------------------------------
+async function insertDoNotEscalateLine(filePath, content, fixLine) {
+  const lines = content.split("\n");
+  // Find the ## Validation heading
+  const valIdx = lines.findIndex((l) => l.trimEnd() === "## Validation");
+  if (valIdx === -1) return content; // no Validation section — nothing to insert
+
+  // Look for a **Why:** line after the heading (within the section, before the
+  // next ## heading or end of file)
+  let insertAfter = -1;
+  for (let i = valIdx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) break; // next section
+    if (lines[i].startsWith("**Why:**")) {
+      insertAfter = i;
+      // keep scanning for the last continuation line of **Why:** (non-blank,
+      // non-heading, non-bold-key lines that immediately follow)
+      // For simplicity, insert right after the **Why:** line itself.
+      break;
+    }
+  }
+
+  const insertAt = insertAfter !== -1 ? insertAfter + 1 : valIdx + 1;
+  const newLines = [
+    ...lines.slice(0, insertAt),
+    fixLine,
+    ...lines.slice(insertAt),
+  ];
+  const newContent = newLines.join("\n");
+  await writeFile(filePath, newContent, "utf8");
+  return newContent;
+}
+
+// ---------------------------------------------------------------------------
 // Check each file
 // ---------------------------------------------------------------------------
 const compliant = [];
-const nonCompliant = []; // { file, missingSections[], unfilledPlaceholders[] }
+const nonCompliant = []; // { file, missingSections[], unfilledPlaceholders[], missingValidationLines[] }
 
 for (const file of files) {
   const filePath = join(TASKS_DIR, file);
@@ -108,7 +171,12 @@ for (const file of files) {
     content = await readFile(filePath, "utf8");
   } catch (err) {
     console.error(`check-failure-gate — could not read "${filePath}": ${err.message}`);
-    nonCompliant.push({ file, missingSections: REQUIRED_SECTIONS.map((s) => s.heading), unfilledPlaceholders: [] });
+    nonCompliant.push({
+      file,
+      missingSections: REQUIRED_SECTIONS.map((s) => s.heading),
+      unfilledPlaceholders: [],
+      missingValidationLines: [],
+    });
     continue;
   }
 
@@ -119,22 +187,70 @@ for (const file of files) {
         ({ heading }) => !lines.some((line) => line.trimEnd() === heading),
       );
 
-  const unfilledPlaceholders = STUB_PLACEHOLDERS.filter((p) => content.includes(p));
+  // Check only for placeholders that appear at the start of a line (ignoring
+  // leading whitespace). This avoids false positives when the placeholder
+  // string is mentioned in prose or a task description inside backticks.
+  const unfilledPlaceholders = STUB_PLACEHOLDERS.filter((p) =>
+    lines.some((line) => line.trimStart().startsWith(p)),
+  );
 
-  if (missingSections.length === 0 && unfilledPlaceholders.length === 0) {
+  // Check for required lines within the Validation section — only when the
+  // section is present (missing section is already caught by missingSections).
+  const hasValidationSection = lines.some((l) => l.trimEnd() === "## Validation");
+  const missingValidationLines = hasValidationSection
+    ? REQUIRED_VALIDATION_LINES.filter(
+        ({ marker }) => !lines.some((l) => l.trimStart().startsWith(marker)),
+      )
+    : [];
+
+  if (
+    missingSections.length === 0 &&
+    unfilledPlaceholders.length === 0 &&
+    missingValidationLines.length === 0
+  ) {
     compliant.push(file);
   } else {
-    nonCompliant.push({ file, missingSections: missingSections.map((s) => s.heading), unfilledPlaceholders });
+    nonCompliant.push({
+      file,
+      missingSections: missingSections.map((s) => s.heading),
+      unfilledPlaceholders,
+      missingValidationLines: missingValidationLines.map((r) => r.marker),
+    });
 
-    if (fixStub && missingSections.length > 0) {
-      for (const section of missingSections) {
-        try {
-          await appendFile(filePath, section.stub, "utf8");
-          console.warn(
-            `check-failure-gate [--fix-stub] ⚠ patched "${file}" — appended stub for "${section.heading}".`,
-          );
-        } catch (err) {
-          console.error(`check-failure-gate — failed to patch "${file}" with "${section.heading}": ${err.message}`);
+    if (fixStub) {
+      // Append stubs for entirely missing sections
+      if (missingSections.length > 0) {
+        for (const section of missingSections) {
+          try {
+            await appendFile(filePath, section.stub, "utf8");
+            // Re-read content after patching so subsequent fixes see the update
+            content = await readFile(filePath, "utf8");
+            console.warn(
+              `check-failure-gate [--fix-stub] ⚠ patched "${file}" — appended stub for "${section.heading}".`,
+            );
+          } catch (err) {
+            console.error(
+              `check-failure-gate — failed to patch "${file}" with "${section.heading}": ${err.message}`,
+            );
+          }
+        }
+      }
+
+      // Insert missing required validation lines into existing Validation section.
+      // Iterate directly over missingValidationLines (already the filtered list
+      // of REQUIRED_VALIDATION_LINES entries whose marker was absent).
+      if (missingValidationLines.length > 0) {
+        for (const rvl of missingValidationLines) {
+          try {
+            content = await insertDoNotEscalateLine(filePath, content, rvl.fixLine);
+            console.warn(
+              `check-failure-gate [--fix-stub] ⚠ patched "${file}" — inserted "${rvl.marker}" into Validation section.`,
+            );
+          } catch (err) {
+            console.error(
+              `check-failure-gate — failed to insert "${rvl.marker}" into "${file}": ${err.message}`,
+            );
+          }
         }
       }
     }
@@ -149,14 +265,23 @@ console.log(`\ncheck-failure-gate — scanned ${files.length} plan file(s) in "$
 for (const f of compliant) {
   console.log(`  ✓ ${f}`);
 }
-for (const { file, missingSections, unfilledPlaceholders } of nonCompliant) {
+for (const { file, missingSections, unfilledPlaceholders, missingValidationLines } of nonCompliant) {
   const hasMissing = !fixStub && missingSections.length > 0;
-  if (!hasMissing && unfilledPlaceholders.length === 0) {
+  const hasMissingLines = !fixStub && missingValidationLines.length > 0;
+  if (!hasMissing && !hasMissingLines && unfilledPlaceholders.length === 0) {
     // patched by --fix-stub
-    console.log(`  ✓ ${file} (patched by --fix-stub: ${missingSections.join(", ")})`);
+    const patchDetails = [
+      ...missingSections.map((s) => `section: ${s}`),
+      ...missingValidationLines.map((m) => `line: ${m}`),
+    ].join(", ");
+    console.log(`  ✓ ${file} (patched by --fix-stub: ${patchDetails})`);
   } else {
     const reasons = [];
-    if (hasMissing) reasons.push(`missing: ${missingSections.join(", ")}`);
+    if (hasMissing) reasons.push(`missing section(s): ${missingSections.join(", ")}`);
+    if (hasMissingLines)
+      reasons.push(
+        `## Validation present but missing required line(s): ${missingValidationLines.join(", ")}`,
+      );
     if (unfilledPlaceholders.length > 0) {
       reasons.push(`unfilled stub placeholder(s): ${unfilledPlaceholders.map((p) => `"${p}"`).join(", ")}`);
     }
@@ -165,12 +290,17 @@ for (const { file, missingSections, unfilledPlaceholders } of nonCompliant) {
 }
 
 const trueNonCompliant = nonCompliant.filter(
-  ({ missingSections, unfilledPlaceholders }) =>
-    (!fixStub && missingSections.length > 0) || unfilledPlaceholders.length > 0,
+  ({ missingSections, unfilledPlaceholders, missingValidationLines }) =>
+    (!fixStub && missingSections.length > 0) ||
+    unfilledPlaceholders.length > 0 ||
+    (!fixStub && missingValidationLines.length > 0),
 );
 
 if (trueNonCompliant.length > 0) {
   const sectionNames = [...new Set(trueNonCompliant.flatMap((e) => e.missingSections))].join(", ");
+  const missingLineNames = [
+    ...new Set(trueNonCompliant.flatMap((e) => e.missingValidationLines)),
+  ].join(", ");
   console.error(
     `\ncheck-failure-gate — ${trueNonCompliant.length} non-compliant plan file(s) found.\n` +
       `Each plan must:\n` +
@@ -179,12 +309,18 @@ if (trueNonCompliant.length > 0) {
       `  2. Have no unfilled stub placeholders in the Validation section.\n` +
       `     Replace "<mid-weight tier for this project>" with the real command\n` +
       `     and "<replace with one-line justification" with a real justification.\n` +
+      `  3. Include a "**Do not escalate:**" line in the ## Validation section.\n` +
+      (missingLineNames ? `     Files missing this line: see listing above.\n` : "") +
       `Run with --fix-stub to append stubs for missing sections automatically.`,
   );
   process.exit(1);
 }
 
-const patchedCount = fixStub ? nonCompliant.filter((e) => e.missingSections.length > 0).length : 0;
+const patchedCount = fixStub
+  ? nonCompliant.filter(
+      (e) => e.missingSections.length > 0 || e.missingValidationLines.length > 0,
+    ).length
+  : 0;
 const passCount = compliant.length + patchedCount;
 console.log(
   `\ncheck-failure-gate — ${passCount}/${files.length} file(s) compliant.${patchedCount > 0 ? ` (${patchedCount} patched)` : ""} ✓`,
