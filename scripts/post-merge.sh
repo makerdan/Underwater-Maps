@@ -33,11 +33,12 @@ pnpm --filter @workspace/api-spec run codegen:generate
 #   This happened for gps_trails.dataset_id (text → uuid) and WILL recur for
 #   any future column type change of the same kind.
 #
-#   Before running `pnpm --filter db push` for a type-changing migration,
-#   execute the orphan-cleanup SQL manually (or in CI) first.  A template is
-#   in scripts/pre-push-cleanup.sql.example — copy it, adapt the table/column
-#   names and the filter predicate, then run it against the dev DB before
-#   re-running post-merge.sh.
+#   The pre-push-type-check.mjs script below now catches this automatically
+#   before the push runs.  If it fires, follow the instructions it prints to
+#   clean up the non-castable rows, then re-run post-merge.sh.
+# Pre-push guardrail: detect column-type changes that Postgres cannot
+# implicitly cast (no USING clause) and abort before the push runs.
+pnpm --filter @workspace/db exec node ../../scripts/pre-push-type-check.mjs
 pnpm --filter db push
 # Guardrail: surface typecheck/lint regressions immediately after a merge.
 # Unit tests are run separately (non-blocking) because there are known
