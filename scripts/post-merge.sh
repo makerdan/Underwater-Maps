@@ -94,6 +94,24 @@ if ! node scripts/check-failure-gate-zip-stale.mjs 2>/dev/null; then
   fi
   echo "[post-merge] failure-gate-skill.zip updated."
 fi
+# Guardrail: keep artifacts/bathyscan/public/poe-setup-skill.zip in sync
+# with .agents/skills/poe-setup/SKILL.md. Auto-regenerate if stale and
+# commit the result so the check:poe-setup-zip step passes cleanly.
+# Skip entirely if the zip has not yet been published.
+if [ -f "artifacts/bathyscan/public/poe-setup-skill.zip" ]; then
+  if ! node scripts/check-poe-setup-zip-stale.mjs 2>/dev/null; then
+    echo "[post-merge] poe-setup-skill.zip was stale — regenerating and committing..."
+    (cd .agents/skills && zip ../../artifacts/bathyscan/public/poe-setup-skill.zip poe-setup/SKILL.md)
+    git add artifacts/bathyscan/public/poe-setup-skill.zip
+    if ! git diff --cached --quiet; then
+      # Set a fallback identity in case the runner has no global git config.
+      git config --local user.email "post-merge@replit.local" 2>/dev/null || true
+      git config --local user.name  "BathyScan Post-Merge Bot"  2>/dev/null || true
+      git commit -m "chore: sync poe-setup-skill.zip with SKILL.md [post-merge]"
+    fi
+    echo "[post-merge] poe-setup-skill.zip updated."
+  fi
+fi
 # Re-register tiered validation commands so they survive future merges and are
 # always available on a fresh environment. The commands are defined in
 # scripts/register-validation-commands.mjs; agent sessions call

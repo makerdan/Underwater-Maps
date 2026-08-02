@@ -24,6 +24,7 @@
     "check:routes-documented": "pnpm --filter @workspace/api-server exec vitest run src/__tests__/routes-documented.test.ts",
     "check:lock-skill-sync": "node scripts/check-lock-skill-sync.mjs",
     "check:failure-gate-zip": "node scripts/check-failure-gate-zip-stale.mjs",
+    "check:poe-setup-zip": "node scripts/check-poe-setup-zip-stale.mjs",
     "check:root-relative-api": "node --test scripts/__tests__/check-root-relative-api.test.mjs && node scripts/check-root-relative-api.mjs",
     "check:deps-suppression": "node scripts/check-deps-suppression.mjs",
     "check:duplicate-hooks-registry": "node scripts/check-duplicate-hooks-registry.mjs",
