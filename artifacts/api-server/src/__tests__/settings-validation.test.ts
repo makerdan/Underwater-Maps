@@ -189,7 +189,31 @@ describe("PUT /api/settings — intertidalMhhwOverrideFt Zod validation", () => 
   });
 });
 
-// ─── 2. Freshwater band-limit guard ──────────────────────────────────────────
+// ─── 2. showNodataBoundary boolean validation ─────────────────────────────────
+
+describe("PUT /api/settings — showNodataBoundary validation", () => {
+  it("accepts true (rings visible)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ showNodataBoundary: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.showNodataBoundary).toBe(true);
+  });
+
+  it("accepts false (rings hidden)", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ showNodataBoundary: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body.showNodataBoundary).toBe(false);
+  });
+});
+
+// ─── 3. Freshwater band-limit guard ──────────────────────────────────────────
 
 describe("PUT /api/settings — freshwater band-limit guard", () => {
   /** Seed the mock DB with an existing freshwater settings row. */

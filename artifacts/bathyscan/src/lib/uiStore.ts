@@ -450,6 +450,7 @@ export const MIRRORED_UI_KEYS = [
   "hiddenEfhSpecies",
   "hyd93ActiveFeatureCodes",
   "hyd93FeaturesEnabled",
+  "showNodataBoundary",
   "weatherStationsActive",
   "rawsOverlayActive",
   "windOverlayActive",
@@ -481,6 +482,7 @@ function computeSettingsPatch(state: UiStore): Partial<SettingsState> {
     hiddenEfhSpecies: [...state.hiddenEfhSpecies],
     hyd93ActiveFeatureCodes: [...state.hyd93ActiveFeatureCodes],
     hyd93FeaturesEnabled: state.hyd93FeaturesEnabled,
+    showNodataBoundary: state.showNodataBoundary,
     weatherStationsActive: state.weatherStationsActive,
     rawsOverlayActive: state.rawsOverlayActive,
     windOverlayActive: state.windOverlayActive,
@@ -515,6 +517,7 @@ function applySettingsToUiStore(s: typeof DEFAULT_SETTINGS) {
       hiddenEfhSpecies: new Set<string>(s.hiddenEfhSpecies ?? []),
       hyd93ActiveFeatureCodes: new Set<number>(s.hyd93ActiveFeatureCodes ?? [89, 103, 146, 530, 988]),
       hyd93FeaturesEnabled: s.hyd93FeaturesEnabled,
+      showNodataBoundary: s.showNodataBoundary,
       weatherStationsActive: s.weatherStationsActive,
       rawsOverlayActive: s.rawsOverlayActive,
       windOverlayActive: s.windOverlayActive,
@@ -801,8 +804,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     georefPickBbox: null,
     setGeorefPickBbox: (bbox) => set({ georefPickBbox: bbox }),
 
-    // ── Survey-gap overlay visibility (transient: resets on reload) ─────────
-    showNodataBoundary: true,
+    // ── Survey-gap overlay visibility (persisted via settingsStore) ─────────
+    showNodataBoundary: s.showNodataBoundary,
     setShowNodataBoundary: (show) => set({ showNodataBoundary: show }),
   };
 });

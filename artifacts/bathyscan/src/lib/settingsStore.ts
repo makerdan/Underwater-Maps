@@ -61,7 +61,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 30;
+export const SETTINGS_SCHEMA_VERSION = 31;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -535,6 +535,13 @@ export interface SettingsState {
    * who always work with HYD93 datasets keep the overlay on between sessions.
    */
   hyd93FeaturesEnabled: boolean;
+  /**
+   * Whether the survey-gap boundary rings overlay is visible in the 3D scene
+   * and the 2D minimap. Defaults to true. Persisted so users who prefer a
+   * cleaner view of sparse datasets keep the rings off between sessions and
+   * across devices.
+   */
+  showNodataBoundary: boolean;
 
   // ── Shortcuts (remappable bindings) ──────────────────────────────────
   /**
@@ -767,6 +774,7 @@ interface SettingsActions {
   setHiddenEfhSpecies: (v: string[]) => void;
   setHyd93ActiveFeatureCodes: (v: number[]) => void;
   setHyd93FeaturesEnabled: (v: boolean) => void;
+  setShowNodataBoundary: (v: boolean) => void;
 
   // Shortcuts
   setKeyBinding: (action: ShortcutActionId, code: string) => void;
@@ -1051,6 +1059,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   hiddenEfhSpecies: [],
   hyd93ActiveFeatureCodes: [89, 103, 146, 530, 988],
   hyd93FeaturesEnabled: false,
+  showNodataBoundary: true,
 
   // Shortcuts
   keyBindings: { ...DEFAULT_KEY_BINDINGS },
@@ -1076,7 +1085,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
     "showWaterSurface", "showWaterTempLayer", "showLandmass", "landmassStyle", "satelliteImagery", "colormapUserSet",
-    "contoursEnabled", "contourInterval",
+    "contoursEnabled", "contourInterval", "showNodataBoundary",
   ],
   hud: [
     "hudOpacity", "showCrosshairGps", "showCameraPosition",
@@ -1427,6 +1436,7 @@ export const useSettingsStore = create<SettingsStore>()(
         setHiddenEfhSpecies: setter("hiddenEfhSpecies"),
         setHyd93ActiveFeatureCodes: setter("hyd93ActiveFeatureCodes"),
         setHyd93FeaturesEnabled: setter("hyd93FeaturesEnabled"),
+        setShowNodataBoundary: setter("showNodataBoundary"),
 
         setSidebarMode: setter("sidebarMode"),
 
@@ -1797,6 +1807,13 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).manualConditionsActiveSource === undefined) {
             migratedManualConditions.manualConditionsActiveSource = DEFAULT_SETTINGS.manualConditionsActiveSource;
           }
+          // v30 → v31: inject showNodataBoundary default (true — rings visible
+          // by default). Previously session-only in uiStore; now persisted so
+          // users who always want the rings off keep them off between sessions.
+          const migratedNodataBoundary: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).showNodataBoundary === undefined) {
+            migratedNodataBoundary.showNodataBoundary = DEFAULT_SETTINGS.showNodataBoundary;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1816,6 +1833,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedSaveFolderExpanded,
             ...migratedNodataColor,
             ...migratedManualConditions,
+            ...migratedNodataBoundary,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
