@@ -4,6 +4,7 @@
  * Covers:
  *   GET /admin/bucket-monitor      — auth-gated, admin-only bucket status
  *   GET /admin/large-datasets-diff — auth-gated, admin-only drift detection
+ *   GET /admin/skill/failure-gate  — auth-gated, admin-only skill zip download
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
@@ -73,6 +74,32 @@ vi.mock("@workspace/db", async () => {
       select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
     },
   });
+});
+
+const { mockExistsSync, mockReadFileSync } = vi.hoisted(() => ({
+  mockExistsSync: vi.fn().mockReturnValue(true),
+  mockReadFileSync: vi.fn().mockReturnValue(Buffer.from("fake-zip-bytes")),
+}));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    existsSync: (...args: Parameters<typeof actual.existsSync>) => {
+      const p = args[0];
+      if (typeof p === "string" && p.includes("failure-gate-skill.zip")) {
+        return mockExistsSync(...args) as boolean;
+      }
+      return actual.existsSync(...args);
+    },
+    readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
+      const p = args[0];
+      if (typeof p === "string" && p.includes("failure-gate-skill.zip")) {
+        return mockReadFileSync(...args) as ReturnType<typeof actual.readFileSync>;
+      }
+      return (actual.readFileSync as (...a: typeof args) => ReturnType<typeof actual.readFileSync>)(...args);
+    },
+  };
 });
 
 import adminRouter from "../admin.js";
@@ -271,5 +298,63 @@ describe("GET /admin/rate-limit/usage — query param validation", () => {
     const res = await get("/admin/rate-limit/usage?limit=10&limit=20");
     expect(res.status).toBe(400);
     expect(mockQueryRateLimitUsage).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /admin/skill/failure-gate", () => {
+  const FAKE_ZIP = Buffer.from("fake-zip-bytes");
+
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue(FAKE_ZIP);
+  });
+
+  it("returns 401 when the request is unauthenticated", async () => {
+    vi.stubEnv("E2E_AUTH_BYPASS", "0");
+    const res = await request(makeApp()).get("/admin/skill/failure-gate");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 when the user is not an admin", async () => {
+    vi.stubEnv("BUCKET_MONITOR_ADMIN", "0");
+    vi.stubEnv("ADMIN_USER_IDS", "other_user");
+    const res = await request(makeApp())
+      .get("/admin/skill/failure-gate")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+  });
+
+  it("returns 404 when the zip file is missing", async () => {
+    vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+    mockExistsSync.mockReturnValue(false);
+    const res = await request(makeApp())
+      .get("/admin/skill/failure-gate")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("not_found");
+  });
+
+  it("returns 200 with zip bytes and correct headers for admin", async () => {
+    vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+    const res = await request(makeApp())
+      .get("/admin/skill/failure-gate")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/application\/zip/);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    expect(res.headers["content-disposition"]).toContain("failure-gate-skill.zip");
+    expect(Buffer.from(res.body as Buffer).equals(FAKE_ZIP)).toBe(true);
   });
 });

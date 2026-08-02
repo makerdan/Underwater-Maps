@@ -11,6 +11,7 @@
 
 import React, { useEffect, useState } from "react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
+import { triggerBlobDownload } from "@/lib/blobDownload";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -115,6 +116,59 @@ function SkeletonCard() {
   );
 }
 
+function SkillDownloadCard({ adminStatus }: { adminStatus: "loading" | "ok" | "forbidden" | "error" }) {
+  const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "error">("idle");
+
+  const handleDownload = async () => {
+    setDownloadState("downloading");
+    try {
+      const res = await authorizedFetch(`${basePath}/api/admin/skill/failure-gate`);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const blob = await res.blob();
+      triggerBlobDownload(blob, "failure-gate-skill.zip");
+      setDownloadState("idle");
+    } catch {
+      setDownloadState("error");
+    }
+  };
+
+  if (adminStatus === "loading") return null;
+
+  return (
+    <div style={{ ...S.card, marginTop: 12 }}>
+      <div style={S.cardTitle}>Skill Download</div>
+
+      {adminStatus === "forbidden" ? (
+        <div style={S.note}>Admin access required to download skills.</div>
+      ) : (
+        <>
+          <button
+            onClick={() => void handleDownload()}
+            disabled={downloadState === "downloading"}
+            style={{
+              background: "rgba(0,229,255,0.06)",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 3,
+              color: "#67e8f9",
+              fontSize: "calc(9px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.15em",
+              padding: "4px 12px",
+              cursor: downloadState === "downloading" ? "default" : "pointer",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              opacity: downloadState === "downloading" ? 0.6 : 1,
+            }}
+          >
+            {downloadState === "downloading" ? "DOWNLOADING…" : "DOWNLOAD FAILURE GATE SKILL"}
+          </button>
+          {downloadState === "error" && (
+            <div style={{ ...S.error, marginTop: 8 }}>Download failed. Check server logs.</div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function AdminPanel() {
   const [stats, setStats] = useState<UpscaleCacheStats | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "forbidden" | "error">("loading");
@@ -200,6 +254,8 @@ export function AdminPanel() {
           </div>
         </div>
       )}
+
+      <SkillDownloadCard adminStatus={status} />
     </div>
   );
 }
