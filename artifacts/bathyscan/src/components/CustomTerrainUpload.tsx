@@ -11,6 +11,8 @@ import type { UserDatasetMeta } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useClassificationStore } from "@/lib/classificationStore";
+import { useUiStore } from "@/lib/uiStore";
+import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -91,6 +93,9 @@ export const CustomTerrainUpload: React.FC = () => {
               overviewGrid: data.overview,
             });
             useClassificationStore.getState().clearZoneMap();
+            useUiStore.getState().setZoneOverlayEnabled(false);
+            useUiStore.getState().setZonePaintMode(false);
+            useZoneOverlayStore.getState().resetToDefaults();
             if (data.savedDatasetId) {
               if (data.savedDatasetMeta) {
                 const meta = data.savedDatasetMeta;

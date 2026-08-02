@@ -48,6 +48,7 @@ import {
 import { MarkerIcon } from "@/lib/markerIcons";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { useClassificationStore } from "@/lib/classificationStore";
+import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { CameraBookmark } from "@/lib/settingsStore";
@@ -77,6 +78,26 @@ import {
 import type { TerrainData } from "@workspace/api-client-react";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+/**
+ * Reset all zone-panel state that is scoped to a specific dataset.
+ * Called whenever a new dataset is loaded (preset, user dataset, or upload)
+ * so stale zone overlay, paint-mode, and colour settings from the previous
+ * dataset do not bleed into the new one.
+ *
+ * Specifically resets:
+ *   - classificationStore zone map (the painted per-cell assignments)
+ *   - uiStore.zoneOverlayEnabled → false
+ *   - uiStore.zonePaintMode → false
+ *   - zoneOverlayStore slot colours → defaults for the active water type
+ */
+function resetZonePanelState() {
+  useClassificationStore.getState().clearZoneMap();
+  useUiStore.getState().setZoneOverlayEnabled(false);
+  useUiStore.getState().setZonePaintMode(false);
+  useZoneOverlayStore.getState().resetToDefaults();
+}
+
 /**
  * Build a human-readable import summary for an archive upload result.
  *
@@ -1059,7 +1080,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       useTerrainStore.getState().setSinglePrimary(pendingId, "preset");
     }
     useTerrainStore.getState().setGrids({ activeGrid: pendingTerrain, overviewGrid: pendingOverview });
-    useClassificationStore.getState().clearZoneMap();
+    resetZonePanelState();
     useActiveLoadStore.getState().complete(pendingId);
     setLoadingId(null);
     setPendingId(null);
@@ -1140,7 +1161,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       activeGrid: terrainStamped,
       overviewGrid: overviewStamped,
     });
-    useClassificationStore.getState().clearZoneMap();
+    resetZonePanelState();
     useActiveLoadStore.getState().complete(pendingUserDatasetId);
     setLoadingId(null);
     setPendingUserDatasetId(null);
@@ -1269,7 +1290,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         setTerrain(null);
         useTerrainStore.getState().setGrids({ activeGrid: null, overviewGrid: null });
         try {
-          useClassificationStore.getState().clearZoneMap?.();
+          resetZonePanelState();
         } catch {
           // noop
         }
@@ -1511,7 +1532,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
               activeGrid: data.terrain,
               overviewGrid: data.overview,
             });
-            useClassificationStore.getState().clearZoneMap();
+            resetZonePanelState();
             if (data.savedDatasetId) {
               setActiveUserDatasetId(data.savedDatasetId);
               // Optimistically insert the freshly-saved row into the
@@ -2407,7 +2428,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         activeGrid: data.terrain,
         overviewGrid: data.overview,
       });
-      useClassificationStore.getState().clearZoneMap();
+      resetZonePanelState();
 
       if (data.savedDatasetId) {
         setActiveUserDatasetId(data.savedDatasetId);
