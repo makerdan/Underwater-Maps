@@ -10,6 +10,8 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import type { ColormapTheme } from "@/lib/settingsStore";
 import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
 import type { DepthsArray } from "@workspace/api-client-react";
+import type { TerrainData } from "@workspace/api-client-react";
+import { buildHillshadeLayer } from "@/lib/overviewRenderer";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { loadMarkerIconImage, peekMarkerIconImage } from "@/lib/markerIcons";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -156,17 +158,27 @@ export function drawHeatmap(
   maxDepth: number,
   colormapTheme: ColormapTheme = "ocean",
   topography?: number[] | null,
+  grid?: TerrainData,
 ) {
   const domain = getColormapDepthDomain(colormapTheme, minDepth, maxDepth);
   const domainRange = domain.max - domain.min || 1;
   const toColor = getColormap(colormapTheme);
   const imageData = ctx.createImageData(W, H);
 
+  // Pre-compute per-cell hillshade multipliers when a grid is supplied.
+  // Applied in linear-sRGB space before gamma conversion, mirroring
+  // buildHeatmapBitmap in overviewRenderer.ts and the GLSL path in terrainShader.ts.
+  // buildHillshadeLayer indexes its output as (canvasRow * width + col) where
+  // canvasRow 0 = northernmost (Y-flipped, same convention as this loop).
+  const hillshade = grid ? buildHillshadeLayer(grid) : null;
+
   for (let py = 0; py < H; py++) {
     for (let px = 0; px < W; px++) {
       const gx = Math.min(width - 1, Math.floor((px / W) * width));
       // Flip y so that py=0 (top) maps to high-latitude rows (North-up).
-      const gy = (height - 1) - Math.min(height - 1, Math.floor((py / H) * height));
+      // hillshadeRow is the Y-flipped grid row (same axis as buildHillshadeLayer).
+      const hillshadeRow = Math.min(height - 1, Math.floor((py / H) * height));
+      const gy = (height - 1) - hillshadeRow;
       const idx = gy * width + gx;
       const rawDepth = depths[idx];
       const i = (py * W + px) * 4;
@@ -181,21 +193,35 @@ export function drawHeatmap(
         continue;
       }
 
-      // Land cell (above-water elevation > 0 in topography): render as flat
-      // gray matching overviewRenderer.ts and the 3D shader land colour.
+      // Hillshade multiplier for this grid cell (defaults to 1.0 if no grid).
+      const hs = hillshade ? (hillshade[hillshadeRow * width + gx] ?? 1.0) : 1.0;
+
+      // Land cell (above-water elevation > 0 in topography): render as
+      // hillshaded gray matching overviewRenderer.ts and the 3D shader land colour.
       if (topography && (topography[idx] ?? 0) > 0) {
-        imageData.data[i]     = 120;
-        imageData.data[i + 1] = 120;
-        imageData.data[i + 2] = 120;
+        // Base land gray is (120,120,120) in display-sRGB. Apply hillshade in
+        // sRGB space (acceptable for neutral gray where gamma error is minimal),
+        // mirroring the same approach in buildHeatmapBitmap.
+        const v = Math.max(0, Math.min(255, Math.round(120 * hs)));
+        imageData.data[i]     = v;
+        imageData.data[i + 1] = v;
+        imageData.data[i + 2] = v;
         imageData.data[i + 3] = 255;
         continue;
       }
 
       const t = Math.max(0, Math.min(1, (rawDepth - domain.min) / domainRange));
+      // Multiply by the hillshade factor in linear-sRGB space BEFORE gamma
+      // conversion so the lighting is physically correct, matching the GLSL path
+      //   finalColor = paletteColor * lighting
+      // in terrainShader.ts and the same approach in buildHeatmapBitmap.
+      const lin = toColor(t);
+      lin.r *= hs;
+      lin.g *= hs;
+      lin.b *= hs;
       // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
       // display-space sRGB bytes for 2D canvas, matching the legend overlay
       // and the colormapCanvas helper in colormap.ts.
-      const lin = toColor(t);
       const c = lin.clone().convertLinearToSRGB();
       imageData.data[i]     = Math.max(0, Math.min(255, Math.round(c.r * 255)));
       imageData.data[i + 1] = Math.max(0, Math.min(255, Math.round(c.g * 255)));
@@ -530,6 +556,7 @@ export const Minimap: React.FC = () => {
       terrain.maxDepth,
       colormapTheme,
       terrain.topography,
+      terrain,
     );
     // Overlay contour lines at each depth-band boundary, colored by the
     // adjacent band's color. Drawn on the same offscreen canvas immediately
