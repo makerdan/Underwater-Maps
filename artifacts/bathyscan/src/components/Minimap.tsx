@@ -4,7 +4,7 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
-import { getColormap, colormapCssGradient, getColormapTRange, getColormapStops } from "@/lib/colormap";
+import { getColormap, getColormapDepthDomain, colormapCssGradient, getColormapTRange, getColormapStops } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ColormapTheme } from "@/lib/settingsStore";
@@ -147,7 +147,7 @@ function drawMinimapContours(
   ctx.restore();
 }
 
-function drawHeatmap(
+export function drawHeatmap(
   ctx: CanvasRenderingContext2D,
   depths: DepthsArray,
   width: number,
@@ -157,8 +157,9 @@ function drawHeatmap(
   colormapTheme: ColormapTheme = "ocean",
   topography?: number[] | null,
 ) {
-  const depthRange = maxDepth - minDepth || 1;
-  const toColor = getColormap(colormapTheme, { min: minDepth, max: maxDepth });
+  const domain = getColormapDepthDomain(colormapTheme, minDepth, maxDepth);
+  const domainRange = domain.max - domain.min || 1;
+  const toColor = getColormap(colormapTheme);
   const imageData = ctx.createImageData(W, H);
 
   for (let py = 0; py < H; py++) {
@@ -190,7 +191,7 @@ function drawHeatmap(
         continue;
       }
 
-      const t = (rawDepth - minDepth) / depthRange;
+      const t = Math.max(0, Math.min(1, (rawDepth - domain.min) / domainRange));
       // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
       // display-space sRGB bytes for 2D canvas, matching the legend overlay
       // and the colormapCanvas helper in colormap.ts.

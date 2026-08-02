@@ -26,9 +26,10 @@ const makeApiClientMock = vi.hoisted(() => {
     });
 });
 
-import { Minimap, drawArrow } from "@/components/Minimap";
+import { Minimap, drawArrow, drawHeatmap } from "@/components/Minimap";
 import { useUiStore } from "@/lib/uiStore";
 import { WORLD_SIZE } from "@/lib/terrain";
+import { usePaletteStore } from "@/lib/paletteStore";
 
 const mockTerrain = {
   datasetId: "test-ds",
@@ -178,5 +179,52 @@ describe("drawArrow cardinal directions", () => {
     drawArrow(ctx, 0, 0, heading);
     const expected = (180 - heading) * (Math.PI / 180);
     expect(ctx.rotate).toHaveBeenCalledWith(expected);
+  });
+});
+
+describe("drawHeatmap — full palette domain", () => {
+  beforeEach(() => {
+    // Ensure the default 10-band ocean palette is active.
+    usePaletteStore.getState().reset();
+  });
+
+  function makeHeatmapCtx(w: number, h: number) {
+    const captured: Uint8ClampedArray[] = [];
+    const imageData = {
+      data: new Uint8ClampedArray(w * h * 4),
+      width: w,
+      height: h,
+    };
+    const ctx = {
+      createImageData: (_w: number, _h: number) => imageData,
+      putImageData: vi.fn((id: typeof imageData) => {
+        captured.push(new Uint8ClampedArray(id.data));
+      }),
+    } as unknown as CanvasRenderingContext2D;
+    return { ctx, captured };
+  }
+
+  it("renders visibly different colors for 5 m vs 120 m depth on the ocean theme", () => {
+    // drawHeatmap maps grid cells to a 180x180 canvas; use a 2×1 grid so the
+    // two depth values land in predictable canvas columns.
+    // depths: [5, 120] — 5 m ≈ band 0 (cyan), 120 m ≈ band 6 (royal blue).
+    const depths = [5, 120] as unknown as import("@workspace/api-client-react").DepthsArray;
+    const { ctx, captured } = makeHeatmapCtx(180, 180);
+
+    drawHeatmap(ctx, depths, 2, 1, 5, 120, "ocean");
+
+    expect(captured.length).toBeGreaterThan(0);
+    const pixels = captured[0]!;
+
+    // Canvas px=0 maps to grid col 0 (depth 5 m); px=179 maps to grid col 1 (depth 120 m).
+    const i0 = 0 * 4; // first pixel of the last row (gy flipped)
+    const i1 = 179 * 4;
+    const r0 = pixels[i0]!, g0 = pixels[i0 + 1]!, b0 = pixels[i0 + 2]!;
+    const r1 = pixels[i1]!, g1 = pixels[i1 + 1]!, b1 = pixels[i1 + 2]!;
+
+    const diff = Math.abs(r0 - r1) + Math.abs(g0 - g1) + Math.abs(b0 - b1);
+    // Pre-fix: both pixels got band 0's color → diff = 0.
+    // Post-fix: different bands → diff >> 30.
+    expect(diff).toBeGreaterThan(30);
   });
 });

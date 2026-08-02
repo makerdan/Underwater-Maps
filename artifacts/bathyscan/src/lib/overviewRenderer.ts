@@ -11,7 +11,7 @@ import type {
 } from "@workspace/api-client-react";
 import type { UnitsSystem, ColormapTheme } from "./settingsStore";
 import type { SelectedHotspot } from "./uiStore";
-import { getColormap } from "./colormap";
+import { getColormap, getColormapDepthDomain } from "./colormap";
 import { formatDepth } from "./units";
 import { NO_DATA_COLOR } from "./terrain";
 
@@ -216,8 +216,9 @@ export function buildHeatmapBitmap(
   topography?: number[] | null,
 ): HTMLCanvasElement {
   const { width: W, height: H, depths, minDepth, maxDepth } = grid;
-  const depthRange = maxDepth - minDepth || 1;
-  const toColor = getColormap(colormapTheme, { min: minDepth, max: maxDepth });
+  const domain = getColormapDepthDomain(colormapTheme, minDepth, maxDepth);
+  const domainRange = domain.max - domain.min || 1;
+  const toColor = getColormap(colormapTheme);
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -256,7 +257,7 @@ export function buildHeatmapBitmap(
         continue;
       }
 
-      const t = Math.max(0, Math.min(1, (rawDepth - minDepth) / depthRange));
+      const t = Math.max(0, Math.min(1, (rawDepth - domain.min) / domainRange));
       // Convert THREE.Color (linear-sRGB when ColorManagement is enabled) to
       // display-space sRGB bytes for 2D canvas, matching the legend strip and
       // the colormapCanvas helper in colormap.ts.
@@ -1104,12 +1105,14 @@ export function renderColormapLegend(
   const y = MARGIN_TOP;
   const LABEL_X = x - 4;
 
-  const toColor = getColormap(theme, { min: minDepth, max: maxDepth });
+  const toColor = getColormap(theme);
   ctx.save();
 
   // Draw the gradient strip row by row (top = shallow, bottom = deep).
   // Convert THREE.Color (linear-sRGB) to display-space sRGB bytes so the strip
   // matches the colour the renderer paints on screen.
+  // t runs 0→1 across the strip; getColormap(theme) (no range arg) maps t
+  // through the absolute band positions so all palette bands are visible.
   for (let py = 0; py < STRIP_H; py++) {
     const t = py / (STRIP_H - 1);
     const c = toColor(t).clone().convertLinearToSRGB();
@@ -1431,12 +1434,11 @@ export function renderContourLines(
   if (!segments.length) return;
 
   const { width: W, height: H, minDepth, maxDepth } = grid;
-  // Normalise against the grid's own range; getColormap(theme, range)
-  // anchors the user's depth bands to real depths internally.
-  const depthRange = maxDepth - minDepth || 1;
+  const contourDomain = getColormapDepthDomain(colormapTheme, minDepth, maxDepth);
+  const contourDomainRange = contourDomain.max - contourDomain.min || 1;
   const lonRange = lonRangeOf(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
-  const toColor = getColormap(colormapTheme, { min: minDepth, max: maxDepth });
+  const toColor = getColormap(colormapTheme);
 
   /** Convert fractional grid coords (col, row) to canvas pixel coords. */
   const toCanvas = (gx: number, gy: number): [number, number] => {
@@ -1510,7 +1512,7 @@ export function renderContourLines(
   };
 
   for (const [depth, segs] of byDepth) {
-    const t01 = Math.max(0, Math.min(1, (depth - minDepth) / depthRange));
+    const t01 = Math.max(0, Math.min(1, (depth - contourDomain.min) / contourDomainRange));
     const col = toColor(t01).clone().convertLinearToSRGB();
     const r = Math.max(0, Math.min(255, Math.round(col.r * 255)));
     const g = Math.max(0, Math.min(255, Math.round(col.g * 255)));
