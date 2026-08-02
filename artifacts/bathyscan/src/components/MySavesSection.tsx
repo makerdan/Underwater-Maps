@@ -545,12 +545,14 @@ const SaveFolderSection: React.FC<{
   renderSubFolder: (child: MergedFolderNode) => React.ReactNode;
   onShowMenu?: (e: React.MouseEvent, node: MergedFolderNode) => void;
   onNewFolder?: () => void;
+  onRenameStart?: () => void;
+  onDelete?: (node: MergedFolderNode) => void;
   isRenaming?: boolean;
   renameValue?: string;
   onRenameChange?: (v: string) => void;
   onRenameCommit?: () => void;
   onRenameCancel?: () => void;
-}> = ({ node, isExpanded, onToggle, renderItem, renderSubFolder, onShowMenu, onNewFolder, isRenaming = false, renameValue = "", onRenameChange, onRenameCommit, onRenameCancel }) => {
+}> = ({ node, isExpanded, onToggle, renderItem, renderSubFolder, onShowMenu, onNewFolder, onRenameStart, onDelete, isRenaming = false, renameValue = "", onRenameChange, onRenameCommit, onRenameCancel }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `folder-${node.folder.id}`,
     data: { kind: "folder", folderId: node.folder.id },
@@ -596,21 +598,33 @@ const SaveFolderSection: React.FC<{
         {!isRenaming && totalCount > 0 && (
           <span style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b" }}>{totalCount}</span>
         )}
-        {onNewFolder && !isRenaming && (
-          <button
-            data-testid={`save-folder-new-subfolder-${node.folder.id}`}
-            onClick={(e) => { e.stopPropagation(); onNewFolder(); }}
-            title="New folder inside"
-            style={{ background: "transparent", border: "none", color: "#64748b", cursor: "pointer", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
-          >⊕</button>
-        )}
-        {onShowMenu && !isRenaming && (
-          <button
-            data-testid={`save-folder-menu-${node.folder.id}`}
-            onClick={(e) => { e.stopPropagation(); onShowMenu(e, node); }}
-            title="Folder options"
-            style={{ background: "transparent", border: "none", color: "#64748b", cursor: "pointer", fontSize: "calc(14px * var(--bs-font-scale, 1))", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
-          >⋮</button>
+        {!isRenaming && (
+          <>
+            {onNewFolder && (
+              <button
+                data-testid={`save-folder-new-subfolder-${node.folder.id}`}
+                onClick={(e) => { e.stopPropagation(); onNewFolder(); }}
+                title="New folder inside"
+                style={{ background: "transparent", border: "none", color: "#cbd5e1", cursor: "pointer", fontSize: "calc(14px * var(--bs-font-scale, 1))", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+              >⊕</button>
+            )}
+            {onRenameStart && (
+              <button
+                data-testid={`save-folder-rename-${node.folder.id}`}
+                onClick={(e) => { e.stopPropagation(); onRenameStart(); }}
+                title="Rename folder"
+                style={{ background: "transparent", border: "none", color: "#cbd5e1", cursor: "pointer", fontSize: "calc(14px * var(--bs-font-scale, 1))", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+              >✎</button>
+            )}
+            {onDelete && (
+              <button
+                data-testid={`save-folder-delete-${node.folder.id}`}
+                onClick={(e) => { e.stopPropagation(); onDelete(node); }}
+                title="Delete folder"
+                style={{ background: "transparent", border: "none", color: "#cbd5e1", cursor: "pointer", fontSize: "calc(14px * var(--bs-font-scale, 1))", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+              >×</button>
+            )}
+          </>
         )}
       </div>
       {isExpanded && (
@@ -992,6 +1006,8 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       renderItem={renderItem}
       renderSubFolder={renderFolderNode}
       onShowMenu={handleSaveFolderMenu}
+      onRenameStart={() => setRenamingSaveFolder({ id: node.folder.id, value: node.folder.name })}
+      onDelete={(node) => { setSaveFolderDeleteError(null); setConfirmDeleteSaveFolder({ id: node.folder.id, name: node.folder.name, hasSaves: node.items.length > 0 || node.children.length > 0 }); }}
       onNewFolder={async () => {
         const name = `New folder ${userFolders.length + 1}`;
         await postFolderMutation.mutateAsync({ data: { name, parentId: node.folder.id } });
