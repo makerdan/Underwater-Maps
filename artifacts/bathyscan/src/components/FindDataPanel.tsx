@@ -313,6 +313,12 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
         : <span style={{ fontStyle: "italic", color: "#475569" }}>resolution unknown</span>}
     </div>
 
+    {result.modified && (
+      <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 6 }}>
+        Updated {result.modified.slice(0, 7)}
+      </div>
+    )}
+
     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
       {result.metadataUrl && (
         <a
