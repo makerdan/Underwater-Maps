@@ -29,6 +29,7 @@ import { useTerrainStore } from "@/lib/terrainStore";
 import type { VisibleDataset } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useCameraStore } from "@/lib/cameraStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 import * as overviewRenderer from "@/lib/overviewRenderer";
 import { POLYGON_LOD_MIN_ZOOM } from "@/lib/overviewRenderer";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -1614,5 +1615,133 @@ describe("OverviewMap — recency sort draws older bitmap before newer bitmap", 
 
     buildSpy2.mockRestore();
     getContextSpy2.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// N. Secondary dataset contour segments — rebuilt for ALL datasets when
+//    contourInterval changes
+//
+// OverviewMap.tsx useEffect (lines ~1053-1082):
+//   for (const v of visibleDatasets) {
+//     const og = v.overviewGrid;
+//     if (!og) continue;
+//     contourSegmentsRef.current.set(v.datasetId, buildContourLines(og, intervalMetres));
+//   }
+//   }, [visibleDatasets, contourInterval, contoursEnabled, unitsForUi]);
+//
+// The contourSegmentsRef is internal, so correctness is observed by spying on
+// buildContourLines.  On initial mount (contoursEnabled=true) it must fire
+// once per dataset.  After a contourInterval change it must fire again for
+// EVERY visible dataset — catching any future regression that accidentally
+// narrows the loop back to only the primary dataset.
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — contour segments rebuilt for all datasets when contourInterval changes", () => {
+  /** Minimal TerrainData grid with distinct datasetId and real depth values. */
+  function makeContourGrid(id: string): TerrainData {
+    const N = 4;
+    return {
+      datasetId: id,
+      name: id,
+      resolution: N,
+      width: N,
+      height: N,
+      depths: new Array(N * N).fill(0).map((_, i) => 10 + i * 5),
+      minDepth: 10,
+      maxDepth: 10 + (N * N - 1) * 5,
+      minLon: -122,
+      maxLon: -119,
+      minLat: 47,
+      maxLat: 49,
+      centerLon: -120.5,
+      centerLat: 48.0,
+      waterType: "saltwater" as const,
+    } as unknown as TerrainData;
+  }
+
+  beforeEach(() => {
+    mockConfig.efhData = undefined;
+    Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("calls buildContourLines for both datasets on initial mount and for both again after contourInterval changes", async () => {
+    const gridPrimary   = makeContourGrid("ds-contour-primary");
+    const gridSecondary = makeContourGrid("ds-contour-secondary");
+
+    // Enable contours with a known initial interval so the effect definitely runs.
+    useSettingsStore.setState({ contoursEnabled: true, contourInterval: 10, units: "imperial" });
+
+    useTerrainStore.setState({
+      visibleDatasets: [
+        ({ datasetId: gridPrimary.datasetId,   source: "preset", overviewGrid: gridPrimary,   activeGrid: null } satisfies VisibleDataset),
+        ({ datasetId: gridSecondary.datasetId, source: "preset", overviewGrid: gridSecondary, activeGrid: null } satisfies VisibleDataset),
+      ],
+      primaryDatasetId: gridPrimary.datasetId,
+      overviewGrid: gridPrimary,
+      activeGrid: null,
+    });
+
+    useUiStore.setState({
+      substrateColorMode: false,
+      selectedSubstrate: null,
+      efhOverlayEnabled: false,
+      overviewOpen: true,
+      pendingDropIn: null,
+    });
+
+    useCameraStore.setState({
+      cameraPosition: { known: true, lon: -120.5, lat: 48.0 },
+      heading: 0,
+      cameraDepth: 50,
+      cameraAltitude: 30,
+    });
+
+    const buildSpy = vi.spyOn(overviewRenderer, "buildContourLines");
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // Allow React effects to flush.
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+
+    // Phase 1 — initial mount: both datasets must have had segments built.
+    const mountDatasetIds = buildSpy.mock.calls.map((c) => (c[0] as TerrainData).datasetId);
+    expect(
+      mountDatasetIds,
+      `Expected buildContourLines to be called for both datasets on mount. Called for: ${JSON.stringify(mountDatasetIds)}`,
+    ).toContain(gridPrimary.datasetId);
+    expect(
+      mountDatasetIds,
+      `Expected buildContourLines to be called for secondary dataset on mount. Called for: ${JSON.stringify(mountDatasetIds)}`,
+    ).toContain(gridSecondary.datasetId);
+
+    // Capture call count baseline, then clear so rebuild calls are isolated.
+    buildSpy.mockClear();
+
+    // Phase 2 — change contourInterval; the effect must re-run for every
+    // visible dataset, not just the primary one.
+    await act(async () => {
+      useSettingsStore.setState({ contourInterval: 20 });
+    });
+
+    // Allow the React effect triggered by the store change to flush.
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+
+    const rebuildDatasetIds = buildSpy.mock.calls.map((c) => (c[0] as TerrainData).datasetId);
+    expect(
+      rebuildDatasetIds,
+      `Expected buildContourLines to be called for primary dataset after interval change. Called for: ${JSON.stringify(rebuildDatasetIds)}`,
+    ).toContain(gridPrimary.datasetId);
+    expect(
+      rebuildDatasetIds,
+      `Expected buildContourLines to be called for secondary dataset after interval change. Called for: ${JSON.stringify(rebuildDatasetIds)}`,
+    ).toContain(gridSecondary.datasetId);
   });
 });
