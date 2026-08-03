@@ -2376,6 +2376,8 @@ export interface NceiPortalResult {
   /** Coarsest resolution in metres (null when not stated in NCEI metadata) */
   resolutionMMax?: number | null;
   coverageBbox: NceiPortalResultCoverageBbox;
+  /** ISO 8601 date string of the last modification recorded in NCEI metadata (null when not present) */
+  modified?: string | null;
   /** Link to the NCEI metadata record or landing page */
   metadataUrl?: string | null;
   /** True when the result's bbox intersects NCEI WCS mosaic coverage

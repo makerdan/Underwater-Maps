@@ -7520,6 +7520,10 @@ components:
             maxLon: { type: number }
             maxLat: { type: number }
           required: [minLon, minLat, maxLon, maxLat]
+        modified:
+          type: string
+          nullable: true
+          description: ISO 8601 date string of the last modification recorded in NCEI metadata (null when not present)
         metadataUrl:
           type: string
           nullable: true

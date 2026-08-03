@@ -7,8 +7,8 @@
  * around bbox shape, wcsAvailable, and metadata link selection are exercised.
  */
 
-import { describe, it, expect } from "vitest";
-import { normalizeNceiHit, computeWcsAvailable } from "../routes/ncei.js";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { normalizeNceiHit, computeWcsAvailable, searchNceiGeoportal } from "../routes/ncei.js";
 
 // ---------------------------------------------------------------------------
 // Helper to build a minimal geoportal hit
@@ -419,5 +419,114 @@ describe("normalizeNceiHit — resolution extraction", () => {
     // 3 arc-seconds ≈ 93 m → should route to DEM global (> 50 m)
     expect(result!.resolutionMMin).not.toBeNull();
     expect(result!.resolutionMMin!).toBeGreaterThan(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeNceiHit — modified field extraction
+// ---------------------------------------------------------------------------
+
+describe("normalizeNceiHit — modified field", () => {
+  it("preserves the modified date string from the source", () => {
+    const hit = {
+      _id: "gov.noaa.ngdc.mgg.dem:mod-test",
+      _source: {
+        title: "Modified Date Test",
+        bbox: [-135, 55, -130, 60],
+        modified: "2024-03-15T00:00:00Z",
+      },
+    };
+    const result = normalizeNceiHit(hit);
+    expect(result).not.toBeNull();
+    expect(result!.modified).toBe("2024-03-15T00:00:00Z");
+  });
+
+  it("trims whitespace from the modified date string", () => {
+    const hit = {
+      _id: "gov.noaa.ngdc.mgg.dem:mod-trim",
+      _source: {
+        title: "Modified Trim Test",
+        bbox: [-135, 55, -130, 60],
+        modified: "  2024-01-01T00:00:00Z  ",
+      },
+    };
+    const result = normalizeNceiHit(hit);
+    expect(result!.modified).toBe("2024-01-01T00:00:00Z");
+  });
+
+  it("sets modified to null when the source has no modified field", () => {
+    const hit = makeHit({ title: "No Modified", bbox: [-135, 55, -130, 60] });
+    const result = normalizeNceiHit(hit);
+    expect(result).not.toBeNull();
+    expect(result!.modified).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// searchNceiGeoportal — date-descending sort
+// ---------------------------------------------------------------------------
+
+/** Build a minimal Elasticsearch-style NCEI geoportal response envelope. */
+function makeGeoportalResponse(hits: Array<{ id: string; title: string; modified?: string }>) {
+  return {
+    hits: {
+      total: { value: hits.length },
+      hits: hits.map((h) => ({
+        _id: h.id,
+        _source: {
+          title: h.title,
+          modified: h.modified,
+          bbox: [-135, 55, -130, 60],
+        },
+      })),
+    },
+  };
+}
+
+describe("searchNceiGeoportal — date-descending sort", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns results ordered newest-first (nulls last)", async () => {
+    const payload = makeGeoportalResponse([
+      { id: "id-old", title: "Old Dataset", modified: "2020-01-01T00:00:00Z" },
+      { id: "id-null", title: "Null Date Dataset" /* no modified */ },
+      { id: "id-new", title: "New Dataset", modified: "2024-06-15T00:00:00Z" },
+      { id: "id-mid", title: "Mid Dataset", modified: "2022-09-30T00:00:00Z" },
+    ]);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(payload), { status: 200 }),
+    );
+
+    const results = await searchNceiGeoportal({
+      q: "bathymetry",
+      bbox: "",
+      from: 1,
+      max: 20,
+      broad: false,
+    });
+
+    const ids = results.map((r) => r.id);
+    expect(ids).toEqual(["id-new", "id-mid", "id-old", "id-null"]);
+  });
+
+  it("returns an empty array when the upstream has no hits", async () => {
+    const payload = { hits: { total: { value: 0 }, hits: [] } };
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(payload), { status: 200 }),
+    );
+
+    const results = await searchNceiGeoportal({
+      q: "bathymetry",
+      bbox: "",
+      from: 1,
+      max: 20,
+      broad: false,
+    });
+
+    expect(results).toEqual([]);
   });
 });

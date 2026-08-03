@@ -3558,6 +3558,7 @@ export const GetNceiSearchResponseItem = zod.object({
   "maxLon": zod.number(),
   "maxLat": zod.number()
 }),
+  "modified": zod.string().nullish().describe('ISO 8601 date string of the last modification recorded in NCEI metadata (null when not present)'),
   "metadataUrl": zod.string().nullish().describe('Link to the NCEI metadata record or landing page'),
   "wcsAvailable": zod.boolean().describe('True when the result\'s bbox intersects NCEI WCS mosaic coverage\n(BAG Mosaic for US coastal high-res data, DEM Global Mosaic for\nglobal ocean coverage). False means the dataset cannot be\nmaterialised in BathyScan yet.\n')
 }).describe('A bathymetric survey dataset discovered via the NCEI Bathymetry Geoportal')
@@ -3596,6 +3597,7 @@ export const PostNceiSaveBody = zod.object({
   "maxLon": zod.number(),
   "maxLat": zod.number()
 }),
+  "modified": zod.string().nullish().describe('ISO 8601 date string of the last modification recorded in NCEI metadata (null when not present)'),
   "metadataUrl": zod.string().nullish().describe('Link to the NCEI metadata record or landing page'),
   "wcsAvailable": zod.boolean().describe('True when the result\'s bbox intersects NCEI WCS mosaic coverage\n(BAG Mosaic for US coastal high-res data, DEM Global Mosaic for\nglobal ocean coverage). False means the dataset cannot be\nmaterialised in BathyScan yet.\n')
 }).describe('A bathymetric survey dataset discovered via the NCEI Bathymetry Geoportal'),

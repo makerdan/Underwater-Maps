@@ -245,6 +245,7 @@ export interface NceiPortalResult {
   id: string;
   name: string;
   description: string | null;
+  modified: string | null;
   sourceAgency: string;
   resolutionMMin: number | null;
   resolutionMMax: number | null;
@@ -395,6 +396,7 @@ export function normalizeNceiHit(hit: NceiGeoportalHit): NceiPortalResult | null
     id: hit._id,
     name,
     description: (source.abstract ?? source.description)?.trim() ?? null,
+    modified: source.modified?.trim() ?? null,
     sourceAgency: "NOAA/NCEI",
     resolutionMMin: extractResolutionM(source),
     resolutionMMax: extractResolutionM(source),
@@ -478,6 +480,7 @@ export async function searchNceiGeoportal(
     q: opts.q || (opts.broad ? "" : "bathymetry"),
     max: String(opts.max),
     from: String(opts.from),
+    sort: "modified:D",
   });
   if (opts.bbox) params.set("bbox", opts.bbox);
 
@@ -517,9 +520,20 @@ export async function searchNceiGeoportal(
   }
 
   const hits: NceiGeoportalHit[] = raw.hits?.hits ?? [];
-  return hits
+  const results = hits
     .map(normalizeNceiHit)
     .filter((r): r is NceiPortalResult => r !== null);
+
+  // Safety sort: newest-first by modified date (ISO string comparison).
+  // Null/missing modified dates sort last (treated as the earliest possible date).
+  results.sort((a, b) => {
+    const aDate = a.modified ?? "";
+    const bDate = b.modified ?? "";
+    if (aDate === bDate) return 0;
+    return aDate > bDate ? -1 : 1;
+  });
+
+  return results;
 }
 
 // ---------------------------------------------------------------------------
@@ -575,6 +589,7 @@ const NceiPortalResultSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().nullable().optional(),
+  modified: z.string().nullable().optional(),
   sourceAgency: z.string().optional(),
   resolutionMMin: z.number().nullable().optional(),
   resolutionMMax: z.number().nullable().optional(),
@@ -647,6 +662,7 @@ router.post("/ncei/save", requireAuth, validateBody(NceiSaveBodySchema, "POST /a
     id: r.id,
     name: r.name,
     description: r.description ?? null,
+    modified: r.modified ?? null,
     sourceAgency: r.sourceAgency ?? "NOAA/NCEI",
     resolutionMMin: r.resolutionMMin ?? null,
     resolutionMMax: r.resolutionMMax ?? null,
