@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DatasetPanel } from "@/components/DatasetPanel";
 import { usePanelCollapseStore, DEFAULTS } from "@/lib/panelCollapseStore";
+import { useActiveLoadStore } from "@/lib/activeLoadStore";
 
 // ---------------------------------------------------------------------------
 // Shared proxy factory — available to the synchronous vi.mock factory below.
@@ -335,5 +336,49 @@ describe("DatasetPanel — upload-complete ID mismatch", () => {
     });
 
     expect(screen.queryByText(/mismatched dataset IDs/i)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unmount cleanup: activeLoadStore must not stay in loading state after the
+// panel is destroyed mid-load.
+//
+// When DatasetPanel unmounts while a dataset load is in progress the cleanup
+// effect calls `activeLoadStore.fail(id)` so the next mount starts with a
+// clean idle store rather than a stale spinner.
+// ---------------------------------------------------------------------------
+describe("DatasetPanel — unmount cleanup clears activeLoadStore", () => {
+  beforeEach(() => {
+    // Start each test with a clean store.
+    useActiveLoadStore.setState({ active: null, history: {} });
+    try { localStorage.clear(); } catch { /* ignore */ }
+    usePanelCollapseStore.setState({ collapsed: { ...DEFAULTS } });
+  });
+
+  it("clears an in-progress load from activeLoadStore when the component unmounts", () => {
+    const { unmount } = render(<DatasetPanel />);
+
+    // Simulate a load that started before unmount.
+    useActiveLoadStore.getState().start({ datasetId: "loading-id", bucket: "loading-id" });
+    expect(useActiveLoadStore.getState().active).not.toBeNull();
+    expect(useActiveLoadStore.getState().active?.datasetId).toBe("loading-id");
+
+    // Unmount the component mid-load.
+    unmount();
+
+    // The cleanup effect must have called fail(), transitioning the store to idle.
+    expect(useActiveLoadStore.getState().active).toBeNull();
+  });
+
+  it("leaves activeLoadStore untouched when no load is active at unmount", () => {
+    const { unmount } = render(<DatasetPanel />);
+
+    // No active load — store is already idle.
+    expect(useActiveLoadStore.getState().active).toBeNull();
+
+    unmount();
+
+    // Still null — cleanup should be a no-op.
+    expect(useActiveLoadStore.getState().active).toBeNull();
   });
 });

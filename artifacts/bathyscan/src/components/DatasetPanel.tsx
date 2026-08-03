@@ -754,6 +754,18 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     };
   }, []);
 
+  // Unmount cleanup: if a dataset load is still in progress when the panel
+  // is destroyed (route change, panel close), transition activeLoadStore to
+  // idle so the LoadingDial doesn't show a stale spinner on the next mount.
+  useEffect(() => {
+    return () => {
+      const active = useActiveLoadStore.getState().active;
+      if (active) {
+        useActiveLoadStore.getState().fail(active.datasetId);
+      }
+    };
+  }, []);
+
   // Chunked upload session refs — stable across renders, used by retry logic
   const chunkedUploadIdRef = useRef<string | null>(null);
   // Index of the chunk that failed (null = not failed yet, >= totalChunks = finalize failed)

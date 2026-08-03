@@ -128,6 +128,21 @@ async function fetchPreviewWithRetry(datasetId: string): Promise<DatasetPreview>
 }
 
 /**
+ * True while a `requestDatasetSwitch` call is already in flight.
+ * Prevents concurrent calls from racing to write `pending` simultaneously.
+ * Reset in the `finally` block on all exit paths.
+ */
+let _inFlight = false;
+
+/**
+ * Test-only: reset the in-flight guard between test runs.
+ * @internal
+ */
+export function __resetInFlightForTest(): void {
+  _inFlight = false;
+}
+
+/**
  * Centralized entry point for switching the active dataset. Resolves the
  * upstream data source via the preview endpoint; if synthetic (or
  * verification failed), opens the confirmation dialog. Otherwise the switch
@@ -135,6 +150,10 @@ async function fetchPreviewWithRetry(datasetId: string): Promise<DatasetPreview>
  *
  * Pass `silent: true` for startup auto-loads — the dialog is never opened
  * and AbortErrors are treated as "proceed" rather than "unknown source".
+ *
+ * If a switch is already in flight the call returns immediately without
+ * invoking either callback, preventing concurrent requests from overwriting
+ * each other's `onConfirm`/`onCancel` closures.
  */
 export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<void> {
   const { datasetId, onConfirm, silent = false } = args;
@@ -152,53 +171,66 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
     return;
   }
 
-  let preview: DatasetPreview;
+  // In-flight guard: if a switch is already being resolved (awaiting the
+  // preview fetch + possible retry), drop this call entirely rather than
+  // letting two concurrent resolutions race to write `pending`. The caller
+  // can re-try once the first switch settles.
+  if (_inFlight) {
+    return;
+  }
+
+  _inFlight = true;
   try {
-    preview = await fetchPreviewWithRetry(datasetId);
-  } catch (err) {
+    let preview: DatasetPreview;
+    try {
+      preview = await fetchPreviewWithRetry(datasetId);
+    } catch (err) {
+      if (silent) {
+        // For startup auto-loads, any preflight failure (including aborts) is
+        // treated as "proceed" — the in-scene HUD badge communicates synthetic
+        // data once the scene loads.
+        onConfirm();
+        return;
+      }
+      // All retry attempts exhausted — treat as worst-case (do not silently load).
+      preview = {
+        datasetId,
+        name: args.datasetName ?? datasetId,
+        bbox: { minLon: 0, minLat: 0, maxLon: 0, maxLat: 0 },
+        dataSource: "unknown",
+        syntheticReason: `Could not verify data source: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      };
+    }
+
     if (silent) {
-      // For startup auto-loads, any preflight failure (including aborts) is
-      // treated as "proceed" — the in-scene HUD badge communicates synthetic
-      // data once the scene loads.
+      // Silent mode: never open the dialog regardless of dataSource.
       onConfirm();
       return;
     }
-    // All retry attempts exhausted — treat as worst-case (do not silently load).
-    preview = {
-      datasetId,
-      name: args.datasetName ?? datasetId,
-      bbox: { minLon: 0, minLat: 0, maxLon: 0, maxLat: 0 },
-      dataSource: "unknown",
-      syntheticReason: `Could not verify data source: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    };
-  }
 
-  if (silent) {
-    // Silent mode: never open the dialog regardless of dataSource.
-    onConfirm();
-    return;
-  }
-
-  const needsWarning = preview.dataSource === "unknown";
-  if (!needsWarning || suppressed) {
-    onConfirm();
-    return;
-  }
-
-  setPending({
-    datasetId,
-    datasetName: args.datasetName ?? preview.name ?? datasetId,
-    preview,
-    isStartup: args.isStartup,
-    onConfirm: () => {
-      setPending(null);
+    const needsWarning = preview.dataSource === "unknown";
+    if (!needsWarning || suppressed) {
       onConfirm();
-    },
-    onCancel: () => {
-      setPending(null);
-      onCancel();
-    },
-  });
+      return;
+    }
+
+    setPending({
+      datasetId,
+      datasetName: args.datasetName ?? preview.name ?? datasetId,
+      preview,
+      isStartup: args.isStartup,
+      onConfirm: () => {
+        setPending(null);
+        onConfirm();
+      },
+      onCancel: () => {
+        setPending(null);
+        onCancel();
+      },
+    });
+  } finally {
+    _inFlight = false;
+  }
 }
