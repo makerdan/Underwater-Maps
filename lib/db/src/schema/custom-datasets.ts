@@ -1,5 +1,6 @@
 import { pgTable, text, real, timestamp, uuid, jsonb, index } from "drizzle-orm/pg-core";
 import { datasetFoldersTable } from "./dataset-folders.js";
+import { z } from "zod";
 
 /**
  * Shape of the terrain/overview JSON blobs stored in custom_datasets.
@@ -51,6 +52,57 @@ export interface StoredTerrainJson {
     metadata?: Record<string, unknown>;
   };
 }
+
+/**
+ * Zod schema mirroring the `StoredTerrainJson` interface.
+ * Use this to validate worker/gridPoints output before any DB write so that
+ * shape drift surfaces as a clear `terrain_schema_mismatch` error rather than
+ * silently storing corrupt data.
+ */
+const _terrainDataSourceEnum = z.enum([
+  "ncei", "gebco", "twdb", "usace", "usgs-3dep",
+  "usgs-sciencebase", "noaa-great-lakes", "nysdec", "mn-dnr",
+]);
+
+export const StoredTerrainJsonSchema = z.object({
+  datasetId: z.string(),
+  name: z.string(),
+  waterType: z.enum(["saltwater", "freshwater"]),
+  resolution: z.number(),
+  width: z.number(),
+  height: z.number(),
+  depths: z.array(z.number()),
+  minDepth: z.number(),
+  maxDepth: z.number(),
+  minLon: z.number(),
+  maxLon: z.number(),
+  minLat: z.number(),
+  maxLat: z.number(),
+  centerLon: z.number(),
+  centerLat: z.number(),
+  topography: z.array(z.number()).optional(),
+  hasTopography: z.boolean().optional(),
+  dataSource: _terrainDataSourceEnum.optional(),
+  bathymetrySource: _terrainDataSourceEnum.optional(),
+  topographySource: _terrainDataSourceEnum.optional(),
+  bathymetrySourceLabel: z.string().optional(),
+  topographySourceLabel: z.string().optional(),
+  bathymetryCreditUrl: z.string().optional(),
+  topographyCreditUrl: z.string().optional(),
+  habitatPolygons: z
+    .object({
+      type: z.literal("FeatureCollection"),
+      features: z.array(
+        z.object({
+          type: z.literal("Feature"),
+          properties: z.record(z.unknown()),
+          geometry: z.record(z.unknown()),
+        }),
+      ),
+      metadata: z.record(z.unknown()).optional(),
+    })
+    .optional(),
+});
 
 /** A single HYD93 cartographic annotation point stored alongside a dataset. */
 export interface StoredHyd93Feature {

@@ -9,7 +9,7 @@ import multer from "multer";
 import { eq, and, inArray, or, lt } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { z } from "zod";
-import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable, uploadCalibrationTable, type StoredTerrainJson, type StoredTideStation } from "@workspace/db";
+import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable, uploadCalibrationTable, StoredTerrainJsonSchema, type StoredTerrainJson, type StoredTideStation } from "@workspace/db";
 import { findNearestTideStation } from "./tides.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
@@ -111,6 +111,32 @@ async function resolveTideStationForTerrain(terrain: {
     logger.warn({ err }, "[datasets] tide-station resolution failed (non-fatal)");
     return null;
   }
+}
+
+/**
+ * Validates a terrain or overview object against `StoredTerrainJsonSchema`
+ * immediately before a DB write.  Throws with `code: "terrain_schema_mismatch"`
+ * when required bbox/grid fields are missing or have the wrong type so that
+ * worker output drift is caught at the write boundary rather than silently
+ * stored as corrupt JSON.
+ *
+ * Job-path callers (processUploadJob) let the error propagate to the outer
+ * catch which sets `job.status = "error"`.  HTTP-path callers must catch it and
+ * return an explicit 500.
+ */
+export function validateTerrainForDb(terrain: unknown, context: string): StoredTerrainJson {
+  const result = StoredTerrainJsonSchema.safeParse(terrain);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
+      .join("; ");
+    logger.error({ context, issues }, "[datasets] terrain schema mismatch — aborting DB write");
+    throw Object.assign(
+      new Error(`terrain_schema_mismatch: ${issues}`),
+      { code: "terrain_schema_mismatch" },
+    );
+  }
+  return terrain as StoredTerrainJson;
 }
 
 // ─── Chunked-upload session + job stores ──────────────────────────────────────
@@ -1171,6 +1197,11 @@ async function processUploadJob(
           onProgress: (p) => { updateProgressWithEta(job, p); },
         });
 
+        // Validate worker output before writing to DB — prevents silent corrupt
+        // rows if the parse worker's output shape ever drifts from StoredTerrainJson.
+        validateTerrainForDb(terrain, "[tar-job]:terrain");
+        validateTerrainForDb(overview, "[tar-job]:overview");
+
         // Encode the ungeoreferenced smooth-sheet raster for DB storage (if present).
         const pendingRasterGzBase64 = smoothSheetRasterBuffer
           ? smoothSheetRasterBuffer.toString("base64")
@@ -1185,8 +1216,8 @@ async function processUploadJob(
             name: tarDatasetName,
             minDepth: terrain.minDepth,
             maxDepth: terrain.maxDepth,
-            terrainJson: terrain as unknown as StoredTerrainJson,
-            overviewJson: overview as unknown as StoredTerrainJson,
+            terrainJson: terrain as StoredTerrainJson,
+            overviewJson: overview as StoredTerrainJson,
             noaaSubstrateSamplesJson: tarSubstratePoints.length > 0 ? tarSubstratePoints : null,
             hyd93FeaturesJson: tarHyd93Features.length > 0 ? tarHyd93Features : null,
             needsGeoreferencing: needsGeoreferencing ?? null,
@@ -1241,6 +1272,11 @@ async function processUploadJob(
       onProgress: (p) => { updateProgressWithEta(job, p); },
     });
 
+    // Validate worker output before writing to DB — prevents silent corrupt
+    // rows if the parse worker's output shape ever drifts from StoredTerrainJson.
+    validateTerrainForDb(terrain, "[chunk-job]:terrain");
+    validateTerrainForDb(overview, "[chunk-job]:overview");
+
     const [saved] = await db
       .insert(customDatasetsTable)
       .values({
@@ -1249,8 +1285,8 @@ async function processUploadJob(
         name: datasetName,
         minDepth: terrain.minDepth,
         maxDepth: terrain.maxDepth,
-        terrainJson: terrain as unknown as StoredTerrainJson,
-        overviewJson: overview as unknown as StoredTerrainJson,
+        terrainJson: terrain as StoredTerrainJson,
+        overviewJson: overview as StoredTerrainJson,
         tideStationJson: await resolveTideStationForTerrain(terrain),
       })
       .returning({ id: customDatasetsTable.id });
@@ -2217,6 +2253,22 @@ router.post(
 
     const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
 
+    // Validate gridPoints output before DB write — prevents silent corrupt rows
+    // if the gridder's output shape ever drifts from StoredTerrainJson.
+    {
+      const terrainCheck = StoredTerrainJsonSchema.safeParse(terrain);
+      const overviewCheck = StoredTerrainJsonSchema.safeParse(overview);
+      if (!terrainCheck.success || !overviewCheck.success) {
+        const failedCheck = terrainCheck.success ? overviewCheck : terrainCheck;
+        const issues = failedCheck.error!.issues
+          .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
+          .join("; ");
+        logger.error({ issues, userId: effectiveUserId, datasetName }, "[direct-upload] terrain schema mismatch");
+        res.status(500).json({ error: "terrain_schema_mismatch", details: issues });
+        return;
+      }
+    }
+
     // H-2: treat dataset DB save failure as a hard error — never return a
     // false-positive success when the row was not actually persisted.
     let savedDatasetId: string;
@@ -2231,8 +2283,8 @@ router.post(
           name: datasetName,
           minDepth: terrain.minDepth,
           maxDepth: terrain.maxDepth,
-          terrainJson: terrain as unknown as StoredTerrainJson,
-          overviewJson: overview as unknown as StoredTerrainJson,
+          terrainJson: terrain as StoredTerrainJson,
+          overviewJson: overview as StoredTerrainJson,
           tideStationJson: await resolveTideStationForTerrain(terrain),
         })
         .returning({
@@ -2442,6 +2494,22 @@ router.post(
     const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
     const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
 
+    // Validate gridPoints output before DB write — prevents silent corrupt rows
+    // if the gridder's output shape ever drifts from StoredTerrainJson.
+    {
+      const terrainCheck = StoredTerrainJsonSchema.safeParse(terrain);
+      const overviewCheck = StoredTerrainJsonSchema.safeParse(overview);
+      if (!terrainCheck.success || !overviewCheck.success) {
+        const failedCheck = terrainCheck.success ? overviewCheck : terrainCheck;
+        const issues = failedCheck.error!.issues
+          .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
+          .join("; ");
+        logger.error({ issues, userId: effectiveUserId, datasetName }, "[raster-commit] terrain schema mismatch");
+        res.status(500).json({ error: "terrain_schema_mismatch", details: issues });
+        return;
+      }
+    }
+
     // H-2: treat dataset DB save failure as a hard error — never return a
     // false-positive success when the row was not actually persisted.
     let savedDatasetId: string;
@@ -2456,8 +2524,8 @@ router.post(
           name: datasetName,
           minDepth: terrain.minDepth,
           maxDepth: terrain.maxDepth,
-          terrainJson: terrain as unknown as StoredTerrainJson,
-          overviewJson: overview as unknown as StoredTerrainJson,
+          terrainJson: terrain as StoredTerrainJson,
+          overviewJson: overview as StoredTerrainJson,
           tideStationJson: await resolveTideStationForTerrain(terrain),
         })
         .returning({
