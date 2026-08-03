@@ -2724,8 +2724,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         datasetId: previewId,
         datasetName,
         onConfirm: () => {
-          setPendingExternalUserDatasetId(save.datasetId!);
-          setCatalogSourcedAt({ forDatasetId: save.datasetId!, date: save.catalog?.createdAt ?? null });
+          // datasetId is nullable in the DB schema (notNull() migration pending).
+          // Guard here prevents a null string from reaching setPendingExternalUserDatasetId.
+          if (!save.datasetId) return;
+          setPendingExternalUserDatasetId(save.datasetId);
+          setCatalogSourcedAt({ forDatasetId: save.datasetId, date: save.catalog?.createdAt ?? null });
         },
       });
     },

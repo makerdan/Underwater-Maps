@@ -260,7 +260,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
             lineHeight: 1.3,
           }}
         >
-          {result.name}
+          {result.name ?? "Untitled"}
         </div>
         <div
           style={{
@@ -270,7 +270,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
             textTransform: "uppercase",
           }}
         >
-          bathymetry · {result.sourceAgency}
+          bathymetry · {result.sourceAgency ?? "Unknown"}
         </div>
       </div>
       {!result.wcsAvailable && (
@@ -295,14 +295,23 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
       </div>
     )}
 
-    <BboxPreviewMap bbox={result.coverageBbox} />
-
-    <div
-      style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}
-    >
-      {result.coverageBbox.minLon.toFixed(1)}°,{result.coverageBbox.minLat.toFixed(1)}° →{" "}
-      {result.coverageBbox.maxLon.toFixed(1)}°,{result.coverageBbox.maxLat.toFixed(1)}°
-    </div>
+    {result.coverageBbox ? (
+      <>
+        <BboxPreviewMap bbox={result.coverageBbox} />
+        <div
+          style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}
+        >
+          {result.coverageBbox.minLon.toFixed(1)}°,{result.coverageBbox.minLat.toFixed(1)}° →{" "}
+          {result.coverageBbox.maxLon.toFixed(1)}°,{result.coverageBbox.maxLat.toFixed(1)}°
+        </div>
+      </>
+    ) : (
+      <div
+        style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#475569", marginBottom: 4, fontStyle: "italic" }}
+      >
+        No location data
+      </div>
+    )}
 
     <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 6 }}>
       {result.resolutionMMin != null
