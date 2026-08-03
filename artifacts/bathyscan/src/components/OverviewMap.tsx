@@ -1513,17 +1513,21 @@ export const OverviewMap: React.FC = () => {
       // Intertidal band fill — teal/amber depth zones that mirror the 3D terrain
       // shader.  Drawn BEFORE contour lines so contour lines and their labels
       // remain fully legible on top of the semi-transparent fill.
-      // `worldGrid` is passed so the overlay is positioned correctly in both
-      // single-dataset (worldGrid === grid) and multi-dataset bbox-aware modes.
+      // In multi-dataset mode each visible dataset's own grid is used so the
+      // bands are aligned to the correct bbox (same pattern as renderContourLines).
       if (intertidalMhwFtRef.current !== null) {
-        renderIntertidalBand(
-          ctx,
-          grid,
-          worldGrid,
-          t,
-          intertidalMhwFtRef.current,
-          intertidalMhhwFtRef.current,
-        );
+        for (const v of visibleNow) {
+          const og = v.overviewGrid;
+          if (!og) continue;
+          renderIntertidalBand(
+            ctx,
+            og,
+            worldGrid,
+            t,
+            intertidalMhwFtRef.current,
+            intertidalMhhwFtRef.current,
+          );
+        }
       }
 
       // Survey-boundary indicators — dashed grey strokes at the edge of null
