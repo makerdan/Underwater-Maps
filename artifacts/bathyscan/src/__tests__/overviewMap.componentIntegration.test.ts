@@ -1287,3 +1287,181 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
     buildSpy.mockRestore();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6. Recency sort — newer dataUpdatedAt bitmap drawn last (on top)
+//
+// When two datasets overlap in the Overview Map, the one with the more recent
+// `dataUpdatedAt` should be drawn last so it paints over the older one.
+//
+// Setup: dataset A (2022-01-01) and dataset B (2024-01-01) both have loaded
+// overview grids that share the same bounding box (maximum overlap).  After
+// the rAF draw loop runs, ctx.drawImage should be called with B's bitmap AFTER
+// A's bitmap.
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — recency sort draws older bitmap before newer bitmap", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("dataset with earlier dataUpdatedAt is drawn before dataset with later dataUpdatedAt", async () => {
+    Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
+
+    // -----------------------------------------------------------------------
+    // Track drawImage calls in order, recording the ImageBitmap source.
+    // -----------------------------------------------------------------------
+    const drawImageOrder: unknown[] = [];
+    const mockCtx = new Proxy(
+      {
+        canvas: { width: CANVAS_W, height: CANVAS_H },
+        fillRect: vi.fn(),
+        fillStyle: "" as string | CanvasGradient | CanvasPattern,
+        font: "",
+        textAlign: "start" as CanvasTextAlign,
+        textBaseline: "alphabetic" as CanvasTextBaseline,
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 50 })),
+        drawImage: vi.fn((bitmap: unknown) => {
+          drawImageOrder.push(bitmap);
+        }),
+        save: vi.fn(),
+        restore: vi.fn(),
+        beginPath: vi.fn(),
+        closePath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fill: vi.fn(),
+        translate: vi.fn(),
+        rotate: vi.fn(),
+        scale: vi.fn(),
+        setLineDash: vi.fn(),
+        strokeStyle: "",
+        lineWidth: 1,
+        globalAlpha: 1,
+        imageSmoothingEnabled: true,
+        shadowColor: "",
+        shadowBlur: 0,
+        strokeRect: vi.fn(),
+        roundRect: vi.fn(),
+        clip: vi.fn(),
+        createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+        createImageData: vi.fn((w: number, h: number) => ({
+          data: new Uint8ClampedArray(w * h * 4),
+          width: w,
+          height: h,
+        })),
+        putImageData: vi.fn(),
+      } as Record<string, unknown>,
+      {
+        set(target, prop: string, value: unknown) { target[prop] = value; return true; },
+      },
+    );
+
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(mockCtx as unknown as CanvasRenderingContext2D);
+
+    // Two datasets sharing the same bbox (maximum overlap).
+    const N = 4;
+    const makeGrid = (id: string) => ({
+      datasetId: id,
+      name: id,
+      resolution: N,
+      width: N,
+      height: N,
+      depths: new Array(N * N).fill(0).map((_, i) => 10 + i * 5),
+      minDepth: 10,
+      maxDepth: 10 + (N * N - 1) * 5,
+      minLon: -122,
+      maxLon: -119,
+      minLat: 47,
+      maxLat: 49,
+      centerLon: -120.5,
+      centerLat: 48.0,
+      waterType: "saltwater" as const,
+    } as unknown as import("@workspace/api-client-react").TerrainData);
+
+    const gridA = makeGrid("ds-older"); // 2022-01-01 — older
+    const gridB = makeGrid("ds-newer"); // 2024-01-01 — newer
+
+    // Two distinct sentinel ImageBitmap-like objects so we can tell them apart
+    // in the drawImage call list.
+    const bitmapA = { _id: "bitmap-A" };
+    const bitmapB = { _id: "bitmap-B" };
+
+    // buildHeatmapBitmap is called by the rAF loop to generate the heatmap bitmaps.
+    // Use a call counter so the first call returns bitmapA (primary gridA) and
+    // subsequent calls return bitmapB (secondary gridB).
+    let buildCallCount = 0;
+    const buildSpy = vi
+      .spyOn(await import("@/lib/overviewRenderer"), "buildHeatmapBitmap")
+      .mockImplementation(() => {
+        buildCallCount += 1;
+        return (buildCallCount === 1 ? bitmapA : bitmapB) as unknown as ImageBitmap;
+      });
+
+    // Seed the store with A (older, 2022) as primary and B (newer, 2024) as secondary.
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null, dataUpdatedAt: "2022-01-01" },
+        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null, dataUpdatedAt: "2024-01-01" },
+      ],
+      primaryDatasetId: gridA.datasetId,
+      overviewGrid: gridA,
+      activeGrid: null,
+    });
+
+    useUiStore.setState({
+      substrateColorMode: false,
+      selectedSubstrate: null,
+      efhOverlayEnabled: false,
+      overviewOpen: true,
+      pendingDropIn: null,
+    });
+
+    useCameraStore.setState({
+      cameraPosition: { known: true, lon: -120.5, lat: 48.0 },
+      heading: 0,
+      cameraDepth: 50,
+      cameraAltitude: 30,
+    });
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // Wait for the rAF draw loop to complete at least one full pass.
+    await waitFor(
+      () => {
+        if (drawImageOrder.length < 2) throw new Error("Waiting for 2 drawImage calls");
+      },
+      { timeout: 4000 },
+    );
+
+    // drawImageOrder[0] should be bitmapA (older, drawn first/behind),
+    // drawImageOrder[last] should be bitmapB (newer, drawn last/on top).
+    const firstBitmap  = drawImageOrder[0];
+    const secondBitmap = drawImageOrder.find((b) => b !== firstBitmap);
+
+    // We verify ordering: the older dataset's bitmap is drawn before the newer one.
+    // Since both use the same bbox grid, the sort is purely date-driven.
+    const firstCallIdx  = drawImageOrder.findIndex((b) => b === bitmapA);
+    const secondCallIdx = drawImageOrder.findIndex((b) => b === bitmapB);
+
+    // Both bitmaps must appear in the draw list.
+    expect(firstCallIdx).toBeGreaterThanOrEqual(0);
+    expect(secondCallIdx).toBeGreaterThanOrEqual(0);
+
+    // Older (A, 2022) must be drawn before newer (B, 2024).
+    expect(firstCallIdx).toBeLessThan(secondCallIdx);
+
+    buildSpy.mockRestore();
+    getContextSpy.mockRestore();
+    // Mark firstBitmap/secondBitmap as used to avoid lint warnings.
+    void firstBitmap; void secondBitmap;
+  });
+});

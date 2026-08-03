@@ -24,7 +24,7 @@ import type {
 } from "@workspace/api-client-react";
 import { OtherDataSection } from "@/components/OtherDataSection";
 import { useAppState } from "@/lib/context";
-import { useTerrainStore } from "@/lib/terrainStore";
+import { useTerrainStore, sortByRecency } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore, useTimelineVisible } from "@/lib/uiStore";
 import type { SelectedHotspot } from "@/lib/uiStore";
@@ -1384,44 +1384,57 @@ export const OverviewMap: React.FC = () => {
         lastViewKey = viewKey;
       }
 
-      // Multi-dataset heatmap rendering:
-      //   1. Secondary datasets (behind, in dataset order)
-      //   2. Primary dataset (on top so it is never obscured)
+      // Multi-dataset heatmap rendering — sorted by survey recency so the
+      // dataset with the most recent `dataUpdatedAt` is drawn last (on top).
+      // The primary dataset acts as a tiebreaker for equal/unknown dates.
       //
       // When only one dataset is loaded this collapses to the same single
       // renderHeatmap call that existed before.
       ctx.globalAlpha = 1.0;
 
-      // Secondary heatmaps — rendered first so the primary sits on top.
-      // `visibleNow` is already declared above (for the empty-state check).
       const primIdNow = primaryDatasetIdRef.current;
       if (visibleNow.length > 1) {
-        for (const v of visibleNow) {
-          if (v.datasetId === primIdNow) continue;
-          const og = v.overviewGrid;
-          const secBitmap = og ? secondaryBitmapsRef.current.get(v.datasetId) : undefined;
-          if (!og || !secBitmap) continue;
-          renderHeatmapAtBbox(ctx, secBitmap, og, worldGrid, t);
+        // Sort oldest-first so the newest survey data is always on top.
+        const sorted = sortByRecency(visibleNow);
+        for (const v of sorted) {
+          if (v.datasetId === primIdNow) {
+            // Primary heatmap — Topaz-upscaled when available, otherwise raw bitmap.
+            const upscaled = upscaledBitmapRef.current;
+            if (upscaled) {
+              const [px0, py0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
+              const [px1, py1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
+              ctx.imageSmoothingEnabled = false;
+              ctx.drawImage(upscaled, px0, py0, px1 - px0, py1 - py0);
+              ctx.imageSmoothingEnabled = true;
+            } else {
+              renderHeatmapAtBbox(ctx, bitmap, grid, worldGrid, t);
+            }
+          } else {
+            const og = v.overviewGrid;
+            const secBitmap = og ? secondaryBitmapsRef.current.get(v.datasetId) : undefined;
+            if (!og || !secBitmap) continue;
+            renderHeatmapAtBbox(ctx, secBitmap, og, worldGrid, t);
+          }
         }
-      }
-
-      // Primary heatmap — Topaz-upscaled when available, otherwise raw bitmap.
-      const upscaled = upscaledBitmapRef.current;
-      if (upscaled) {
-        // Upscaled image covers the primary grid's bbox within world space.
-        const [px0, py0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
-        const [px1, py1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(upscaled, px0, py0, px1 - px0, py1 - py0);
-        ctx.imageSmoothingEnabled = true;
       } else {
-        // Single-dataset fast path: renderHeatmap uses the legacy
-        // (offsetX/offsetY) coordinates which equal lonLatToCanvas on the
-        // primary grid.  For multi-dataset mode we position via bbox.
-        if (worldGridRef.current) {
-          renderHeatmapAtBbox(ctx, bitmap, grid, worldGrid, t);
+        // Primary heatmap — Topaz-upscaled when available, otherwise raw bitmap.
+        const upscaled = upscaledBitmapRef.current;
+        if (upscaled) {
+          // Upscaled image covers the primary grid's bbox within world space.
+          const [px0, py0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
+          const [px1, py1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(upscaled, px0, py0, px1 - px0, py1 - py0);
+          ctx.imageSmoothingEnabled = true;
         } else {
-          renderHeatmap(ctx, bitmap, grid, t);
+          // Single-dataset fast path: renderHeatmap uses the legacy
+          // (offsetX/offsetY) coordinates which equal lonLatToCanvas on the
+          // primary grid.  For multi-dataset mode we position via bbox.
+          if (worldGridRef.current) {
+            renderHeatmapAtBbox(ctx, bitmap, grid, worldGrid, t);
+          } else {
+            renderHeatmap(ctx, bitmap, grid, t);
+          }
         }
       }
       ctx.globalAlpha = 1.0;

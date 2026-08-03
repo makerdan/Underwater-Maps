@@ -403,8 +403,8 @@ interface CatalogCardProps {
   inView: boolean;
   /** True when the terrain store has reached MAX_ACTIVE_DATASETS. */
   atCap: boolean;
-  /** Called with the presetId when the user clicks ADD. */
-  onAddToView: (presetId: string) => void;
+  /** Called with the presetId and optional survey date when the user clicks ADD. */
+  onAddToView: (presetId: string, dataUpdatedAt?: string | null) => void;
 }
 
 const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, canSave, presetId, onLoad, hasPrimary, inView, atCap, onAddToView }) => {
@@ -510,7 +510,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
           >
             <button
               data-testid={`catalog-add-to-view-${entry.id}`}
-              onClick={() => !inView && !atCap && onAddToView(presetId)}
+              onClick={() => !inView && !atCap && onAddToView(presetId!, entry.lastUpdated ?? null)}
               disabled={inView || atCap}
               style={{
                 fontSize: "calc(12px * var(--bs-font-scale, 1))",
@@ -876,9 +876,9 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     [terrainVisibleDatasets, terrainSelectedIds],
   );
 
-  const handleCatalogAddToView = useCallback((presetId: string) => {
+  const handleCatalogAddToView = useCallback((presetId: string, dataUpdatedAt?: string | null) => {
     const state = useTerrainStore.getState();
-    state.addSelected(presetId, "preset");
+    state.addSelected(presetId, "preset", dataUpdatedAt);
   }, []);
 
   // Debounce search query

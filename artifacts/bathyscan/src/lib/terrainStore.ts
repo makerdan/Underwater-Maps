@@ -28,6 +28,42 @@ export interface VisibleDataset {
   activeGrid: TerrainData | null;
   /** Low-resolution overview grid (rendered in Overview Map). May be null while loading. */
   overviewGrid: TerrainData | null;
+  /**
+   * ISO date string for the survey/data currency of this dataset (catalog
+   * `lastUpdated`).  Used to sort draw order in the Overview Map so the most
+   * recently surveyed dataset is always drawn on top.  Null/undefined for
+   * user-uploaded datasets that have no catalog entry.
+   */
+  dataUpdatedAt?: string | null;
+}
+
+/**
+ * Sort a list of VisibleDatasets oldest-first so the newest entry is painted
+ * last (on top) in the Overview Map canvas.
+ *
+ * Rules:
+ *   - Entries with a known `dataUpdatedAt` sort by that date, oldest first.
+ *   - Entries with null/undefined `dataUpdatedAt` are treated as epoch 0
+ *     (they go underneath all dated entries).
+ *   - The sort is stable: entries with equal or both-unknown dates preserve
+ *     their original relative order (primary entry retains its position as
+ *     a natural tiebreaker when dates match).
+ */
+export function sortByRecency(datasets: VisibleDataset[]): VisibleDataset[] {
+  // Assign a numeric timestamp for comparison; null/undefined → 0 (epoch).
+  const ts = (d: VisibleDataset): number => {
+    if (!d.dataUpdatedAt) return 0;
+    const t = Date.parse(d.dataUpdatedAt);
+    return isNaN(t) ? 0 : t;
+  };
+  // Stable sort: copy array first, then sort with index tiebreaker.
+  return datasets
+    .map((d, i) => ({ d, i }))
+    .sort((a, b) => {
+      const diff = ts(a.d) - ts(b.d);
+      return diff !== 0 ? diff : a.i - b.i;
+    })
+    .map(({ d }) => d);
 }
 
 /**
@@ -113,7 +149,7 @@ interface TerrainStore {
    * In multi-primary mode this does not change which datasets are "primary" —
    * it only affects the first-entry alias used by legacy callers.
    */
-  setPrimary: (datasetId: string, source?: DatasetSource) => void;
+  setPrimary: (datasetId: string, source?: DatasetSource, dataUpdatedAt?: string | null) => void;
 
   /**
    * Toggle a dataset's visibility.
@@ -122,14 +158,14 @@ interface TerrainStore {
    *   Never evicts an existing dataset — the streaming engine does that.
    * REMOVING: removes from both selectedIds AND visibleDatasets (full deselect).
    */
-  toggleVisible: (entry: { datasetId: string; source: DatasetSource }) => void;
+  toggleVisible: (entry: { datasetId: string; source: DatasetSource; dataUpdatedAt?: string | null }) => void;
 
   /**
    * Add a dataset to the "selected" pool (user intent).
    * If there is room in active slots (visibleDatasets.length < MAX_ACTIVE_DATASETS),
    * the dataset is immediately activated. Otherwise it waits for proximity streaming.
    */
-  addSelected: (datasetId: string, source: DatasetSource) => void;
+  addSelected: (datasetId: string, source: DatasetSource, dataUpdatedAt?: string | null) => void;
 
   /**
    * Remove a dataset from the selected pool AND from active visibleDatasets.
@@ -323,7 +359,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       };
     }),
 
-  setPrimary: (datasetId, source) =>
+  setPrimary: (datasetId, source, dataUpdatedAt) =>
     set((prev) => {
       const existing = prev.visibleDatasets.find((v) => v.datasetId === datasetId);
       let nextVisible = prev.visibleDatasets;
@@ -336,6 +372,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
           source: source ?? "preset",
           activeGrid: null,
           overviewGrid: null,
+          dataUpdatedAt: dataUpdatedAt ?? null,
         };
         if (nextVisible.length >= MAX_ACTIVE_DATASETS) {
           // Evict oldest non-first entry.
@@ -367,7 +404,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       };
     }),
 
-  toggleVisible: ({ datasetId, source }) =>
+  toggleVisible: ({ datasetId, source, dataUpdatedAt }) =>
     set((prev) => {
       const existingVisible = prev.visibleDatasets.find((v) => v.datasetId === datasetId);
       if (existingVisible) {
@@ -401,6 +438,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
           source,
           activeGrid: null,
           overviewGrid: null,
+          dataUpdatedAt: dataUpdatedAt ?? null,
         };
         const nextVisible = [...prev.visibleDatasets, entry];
         return {
@@ -422,7 +460,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       };
     }),
 
-  addSelected: (datasetId, source) =>
+  addSelected: (datasetId, source, dataUpdatedAt) =>
     set((prev) => {
       // Already selected — just update source and activate if room.
       const alreadySelected = prev.selectedIds.includes(datasetId);
@@ -440,6 +478,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
           source,
           activeGrid: null,
           overviewGrid: null,
+          dataUpdatedAt: dataUpdatedAt ?? null,
         };
         const nextVisible = [...prev.visibleDatasets, entry];
         return {
