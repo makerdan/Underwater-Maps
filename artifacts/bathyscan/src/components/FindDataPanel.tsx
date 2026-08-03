@@ -49,15 +49,13 @@ import { CoordinateSearchForm } from "@/components/CoordinateSearchForm";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
-import { MySavesSection } from "@/components/MySavesSection";
 
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-// "saves" tab hosts MySavesSection — see FindDataPanel.myUploads.test.tsx
-type Tab = "search" | "ncei" | "saves";
+type Tab = "search" | "ncei";
 
 const DATA_TYPE_ICONS: Record<string, string> = {
   bathymetry: "🌊",
@@ -859,7 +857,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const nceiFromRef = useRef(1);
   const [nceiAccumulated, setNceiAccumulated] = useState<NceiPortalResult[]>([]);
   const prevNceiPageRef = useRef<NceiPortalResult[] | undefined>(undefined);
-  const { setDatasetId, setCatalogSourcedAt, datasetId: currentDatasetId, setPendingExternalUserDatasetId } = useAppState();
+  const { setDatasetId, setCatalogSourcedAt, datasetId: currentDatasetId } = useAppState();
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
 
@@ -1285,32 +1283,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     [setDatasetId, setCatalogSourcedAt, searchResults, onClose],
   );
 
-  const handleLoadUserDataset = useCallback(
-    (id: string) => {
-      requestDatasetSwitch({
-        datasetId: id,
-        onConfirm: () => {
-          setPendingExternalUserDatasetId(id);
-          onClose();
-        },
-      });
-    },
-    [setPendingExternalUserDatasetId, onClose],
-  );
-
-  const handleLoadCatalogSave = useCallback(
-    (save: import("@workspace/api-client-react").UserCatalogSave) => {
-      if (!save.datasetId) return;
-      requestDatasetSwitch({
-        datasetId: save.datasetId,
-        onConfirm: () => {
-          onClose();
-        },
-      });
-    },
-    [onClose],
-  );
-
   return (
     <div style={PANEL} role="dialog" aria-label="Find Data panel">
       {/* Header */}
@@ -1347,11 +1319,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         <ViewscreenTooltip label="Browse the NOAA/NCEI Bathymetry Geoportal" side="bottom">
           <button style={tabStyle(tab === "ncei")} onClick={() => { hasUserInteractedRef.current = true; setTab("ncei"); }}>
             NCEI Portal
-          </button>
-        </ViewscreenTooltip>
-        <ViewscreenTooltip label="View your saved datasets and uploads" side="bottom">
-          <button style={tabStyle(tab === "saves")} onClick={() => { hasUserInteractedRef.current = true; setTab("saves"); }}>
-            My Saves
           </button>
         </ViewscreenTooltip>
       </div>
@@ -1653,18 +1620,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               </button>
             )}
           </div>
-        </div>
-      )}
-
-      {/* My Saves tab */}
-      {tab === "saves" && (
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-          <MySavesSection
-            onLoadCatalogSave={handleLoadCatalogSave}
-            onLoadUserDataset={handleLoadUserDataset}
-            onDatasetsRemoved={undefined}
-            onBrowseDatasets={() => setTab("search")}
-          />
         </div>
       )}
 
