@@ -199,8 +199,8 @@ export const OverviewMap: React.FC = () => {
   const savedTrailsRef = useRef<CanvasSavedTrail[]>([]);
   const rafRef = useRef<number>(0);
   const efhFeaturesRef = useRef<EfhFeature[]>([]);
-  /** Pre-built contour segments, rebuilt when grid or interval changes. */
-  const contourSegmentsRef = useRef<ContourSegment[]>([]);
+  /** Pre-built contour segments keyed by datasetId, rebuilt when any dataset's grid or interval changes. */
+  const contourSegmentsRef = useRef<Map<string, ContourSegment[]>>(new Map());
   /** Pre-built no-data boundary segments keyed by datasetId, rebuilt when each dataset's grid changes. */
   const nodataBoundarySegmentsRef = useRef<Map<string, NodataBoundarySegment[]>>(new Map());
   const showNodataBoundary = useUiStore((s) => s.showNodataBoundary);
@@ -1048,10 +1048,11 @@ export const OverviewMap: React.FC = () => {
     dirtyRef.current = true;
   }, [overviewGrid]);
 
-  // Rebuild contour segments whenever the grid, contour interval, or units change.
+  // Rebuild contour segments for all visible datasets whenever the visible set,
+  // contour interval, units, or enabled flag changes.
   useEffect(() => {
-    if (!overviewGrid || !contoursEnabled) {
-      contourSegmentsRef.current = [];
+    if (!contoursEnabled) {
+      contourSegmentsRef.current.clear();
       dirtyRef.current = true;
       return;
     }
@@ -1063,9 +1064,22 @@ export const OverviewMap: React.FC = () => {
       unitsForUi === "metric"   ? contourInterval :
       unitsForUi === "nautical" ? contourInterval * 1.8288 :
                                   contourInterval / 3.28084;
-    contourSegmentsRef.current = buildContourLines(overviewGrid, intervalMetres);
+
+    // Remove segments for datasets that are no longer visible.
+    const visibleIds = new Set(visibleDatasets.filter((v) => !!v.overviewGrid).map((v) => v.datasetId));
+    for (const id of contourSegmentsRef.current.keys()) {
+      if (!visibleIds.has(id)) contourSegmentsRef.current.delete(id);
+    }
+
+    // Build/rebuild segments for every visible dataset that has a grid.
+    for (const v of visibleDatasets) {
+      const og = v.overviewGrid;
+      if (!og) continue;
+      contourSegmentsRef.current.set(v.datasetId, buildContourLines(og, intervalMetres));
+    }
+
     dirtyRef.current = true;
-  }, [overviewGrid, contourInterval, contoursEnabled, unitsForUi]);
+  }, [visibleDatasets, contourInterval, contoursEnabled, unitsForUi]);
 
   // Build offscreen bitmap whenever overviewGrid, palette, or colormap theme changes.
   // Also invalidates any cached upscaled bitmap so the new data re-triggers
@@ -1530,12 +1544,21 @@ export const OverviewMap: React.FC = () => {
 
       // Contour lines — drawn over the heatmap and intertidal fill, under the
       // geographic grid and markers, so depth labels stay crisp.
+      // In multi-dataset mode each visible dataset's own contour lines are
+      // rendered using its own grid so segment positions are correct.
       const { overviewShowGrid, units, colormapTheme: activeTheme } = useSettingsStore.getState();
-      if (contoursEnabledRef.current && contourSegmentsRef.current.length > 0) {
-        // renderContourLines uses grid.width/height/minDepth/maxDepth for the
-        // primary dataset's own grid, but must project lon/lat coords onto the
-        // shared worldGrid canvas layout (same anchor used by renderHeatmapAtBbox).
-        renderContourLines(ctx, contourSegmentsRef.current, grid, t, units, activeTheme, worldGrid);
+      if (contoursEnabledRef.current && contourSegmentsRef.current.size > 0) {
+        for (const v of visibleNow) {
+          const og = v.overviewGrid;
+          if (!og) continue;
+          const segs = contourSegmentsRef.current.get(og.datasetId);
+          if (segs && segs.length > 0) {
+            // renderContourLines uses og.width/height/minDepth/maxDepth for the
+            // dataset's own grid, but projects lon/lat coords onto the shared
+            // worldGrid canvas layout (same anchor used by renderHeatmapAtBbox).
+            renderContourLines(ctx, segs, og, t, units, activeTheme, worldGrid);
+          }
+        }
       }
 
       // Lat/lon grid (gated by user setting; renderGridLines also checks scale ≥ 2 internally)

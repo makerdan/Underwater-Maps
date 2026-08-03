@@ -1640,6 +1640,58 @@ describe("renderContourLines — worldGrid canvas projection in multi-dataset mo
     expect(hasPrimaryPoint).toBe(true);
     expect(hasWorldPoint).toBe(false);
   });
+
+  it("calling renderContourLines once per dataset draws contours from both datasets in worldGrid space", () => {
+    // Secondary dataset: 2×2 grid with the same depth crossing (0→20 m),
+    // placed south-west of the primary so the two contour positions are distinct.
+    const secondaryGrid = makeGrid({
+      width: 2,
+      height: 2,
+      depths: [0, 0, 20, 20],
+      minDepth: 0,
+      maxDepth: 20,
+      minLon: -121,
+      maxLon: -120,
+      minLat: 46,
+      maxLat: 47,
+      datasetId: "secondary",
+    });
+
+    const primarySegs = buildContourLines(primaryGrid, 10);
+    const secondarySegs = buildContourLines(secondaryGrid, 10);
+
+    expect(primarySegs.length).toBeGreaterThan(0);
+    expect(secondarySegs.length).toBeGreaterThan(0);
+
+    // Render primary segments using its own grid + worldGrid as coordinate frame.
+    const ctx1 = makeCtxWithCanvas();
+    renderContourLines(ctx1, primarySegs, primaryGrid, t, "metric", "ocean", worldGrid);
+
+    // Render secondary segments using its own grid + worldGrid as coordinate frame.
+    const ctx2 = makeCtxWithCanvas();
+    renderContourLines(ctx2, secondarySegs, secondaryGrid, t, "metric", "ocean", worldGrid);
+
+    // Both calls must produce stroke paths (neither is a no-op).
+    expect((ctx1.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+    expect((ctx2.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+
+    // The two contour lines should project to different canvas Y positions.
+    // Primary grid is north (lat 47–48), secondary is south (lat 46–47).
+    // North-up canvas: primary contours (lat≈47.5) → smaller Y; secondary (lat≈46.5) → larger Y.
+    const primaryMoveY = (ctx1.moveTo as ReturnType<typeof vi.fn>).mock.calls
+      .map(([, y]: [number, number]) => y);
+    const secondaryMoveY = (ctx2.moveTo as ReturnType<typeof vi.fn>).mock.calls
+      .map(([, y]: [number, number]) => y);
+
+    expect(primaryMoveY.length).toBeGreaterThan(0);
+    expect(secondaryMoveY.length).toBeGreaterThan(0);
+
+    const primaryMidY = primaryMoveY.reduce((a: number, b: number) => a + b, 0) / primaryMoveY.length;
+    const secondaryMidY = secondaryMoveY.reduce((a: number, b: number) => a + b, 0) / secondaryMoveY.length;
+
+    // Primary (north) must render higher on canvas (smaller Y) than secondary (south).
+    expect(primaryMidY).toBeLessThan(secondaryMidY);
+  });
 });
 
 // ---------------------------------------------------------------------------
