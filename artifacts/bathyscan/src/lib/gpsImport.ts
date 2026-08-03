@@ -791,6 +791,49 @@ export function partitionByBounds(
 }
 
 // ---------------------------------------------------------------------------
+// Bbox helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the bounding box that encloses all waypoints and route/track points
+ * in a ParseResult. Returns null when the result contains no points at all.
+ */
+export function computeResultBbox(result: ParseResult): Bounds | null {
+  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  let hasAny = false;
+  for (const w of result.waypoints) {
+    if (w.lon < minLon) minLon = w.lon;
+    if (w.lat < minLat) minLat = w.lat;
+    if (w.lon > maxLon) maxLon = w.lon;
+    if (w.lat > maxLat) maxLat = w.lat;
+    hasAny = true;
+  }
+  for (const r of result.routes) {
+    for (const p of r.points) {
+      if (p.lon < minLon) minLon = p.lon;
+      if (p.lat < minLat) minLat = p.lat;
+      if (p.lon > maxLon) maxLon = p.lon;
+      if (p.lat > maxLat) maxLat = p.lat;
+      hasAny = true;
+    }
+  }
+  return hasAny ? { minLon, minLat, maxLon, maxLat } : null;
+}
+
+/**
+ * Returns true when two bounding boxes intersect. Touching edges count as
+ * overlap so a single-point result on the boundary of a save is still matched.
+ */
+export function bboxIntersects(a: Bounds, b: Bounds): boolean {
+  return (
+    a.minLon <= b.maxLon &&
+    a.maxLon >= b.minLon &&
+    a.minLat <= b.maxLat &&
+    a.maxLat >= b.minLat
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

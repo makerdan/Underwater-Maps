@@ -27,10 +27,15 @@ import {
   usePostMarkers,
   usePostTrollingPresets,
   useDeleteMarkersId,
+  useGetDatasetsMySaves,
+  useGetMarkers,
+  usePatchMarkersId,
   getGetMarkersQueryKey,
+  getGetDatasetsMySavesQueryKey,
   getGetTrollingPresetsQueryKey,
   MarkerInputType,
   type TerrainData,
+  type UserCatalogSave,
 } from "@workspace/api-client-react";
 import {
   parseGpsFile,
@@ -38,6 +43,8 @@ import {
   applyColumnAssignment,
   countPoints,
   isInBounds,
+  computeResultBbox,
+  bboxIntersects,
   type Bounds,
   type ParseResult,
   type ParsedRoute,
@@ -152,6 +159,54 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   );
   const [importWaypoints, setImportWaypoints] = useState(true);
   const [importRoutes, setImportRoutes] = useState(true);
+
+  // Dataset matcher state (dataset-free import only)
+  const [matchedSave, setMatchedSave] = useState<UserCatalogSave | null>(null);
+  const [reassignExisting, setReassignExisting] = useState(true);
+
+  // Fetch the user's saved catalog datasets (only when no active terrain)
+  const { data: mySavesData, isLoading: mySavesLoading } = useGetDatasetsMySaves({
+    query: { queryKey: getGetDatasetsMySavesQueryKey(), enabled: !terrain, staleTime: 60_000 },
+  });
+  const mySaves = useMemo(() => mySavesData ?? [], [mySavesData]);
+
+  // Bbox of the currently-imported points (preview phase only)
+  const pointsBbox = useMemo(() => {
+    if (phase.kind !== "preview") return null;
+    return computeResultBbox(phase.parsed);
+  }, [phase]);
+
+  // Saves whose coverage intersects the imported points bbox
+  const matchingSaves = useMemo(() => {
+    if (terrain || !mySaves.length || !pointsBbox) return [];
+    return mySaves.filter(
+      (s) =>
+        s.status === "ready" &&
+        s.catalog?.coverageBbox != null &&
+        bboxIntersects(pointsBbox, s.catalog.coverageBbox),
+    );
+  }, [terrain, mySaves, pointsBbox]);
+
+  // Unassigned markers in the matched save's coverage area
+  const matchedBbox = matchedSave?.catalog?.coverageBbox ?? null;
+  const { data: existingUnassigned } = useGetMarkers(
+    matchedBbox
+      ? {
+          minLat: matchedBbox.minLat,
+          minLon: matchedBbox.minLon,
+          maxLat: matchedBbox.maxLat,
+          maxLon: matchedBbox.maxLon,
+        }
+      : undefined,
+    { query: { queryKey: getGetMarkersQueryKey(matchedBbox ? { minLat: matchedBbox.minLat, minLon: matchedBbox.minLon, maxLat: matchedBbox.maxLat, maxLon: matchedBbox.maxLon } : undefined), enabled: !!matchedBbox } },
+  );
+  const existingUnassignedCount = existingUnassigned?.length ?? 0;
+  const patchMarkersId = usePatchMarkersId();
+
+  // Reset reassign toggle whenever a different save is selected
+  useEffect(() => {
+    setReassignExisting(true);
+  }, [matchedSave]);
   const [headingDeg, setHeadingDeg] = useState<number>(DEFAULT_HEADING_DEG);
   const [speedKnots, setSpeedKnots] = useState<number>(DEFAULT_SPEED_KNOTS);
   const [isImporting, setIsImporting] = useState(false);
@@ -217,6 +272,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       const part = bounds
         ? partitionByBounds(result, bounds)
         : { inside: result, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
+      setMatchedSave(null);
       setPhase({
         kind: "preview",
         fileName,
@@ -263,6 +319,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       const part = bounds
         ? partitionByBounds(result, bounds)
         : { inside: result, outsideWaypoints: 0, outsideRoutes: 0, outsideRoutePoints: 0 };
+      setMatchedSave(null);
       setPhase({
         kind: "preview",
         fileName,
@@ -414,7 +471,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       try {
         const created = await postMarkers.mutateAsync({
           data: {
-            datasetId: terrain ? terrain.datasetId : null,
+            datasetId: terrain ? terrain.datasetId : (matchedSave?.datasetId ?? null),
             lon: w.lon,
             lat: w.lat,
             depth,
@@ -453,9 +510,13 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     for (let ri = 0; ri < routesToImport.length; ri++) {
       if (cancelRequestedRef.current) break;
       const r = routesToImport[ri]!;
-      // When a dataset is active, re-assert in-bounds as defence in depth.
-      // When no dataset (dataset-free import), keep all route points.
-      let pts = bounds ? r.points.filter((p) => isInBounds(p.lon, p.lat, bounds)) : r.points;
+      // Re-assert in-bounds as defence in depth when bounds are available.
+      // Prefer active-terrain bounds; fall back to matched save's coverage bbox.
+      const effectiveBounds: Bounds | null =
+        bounds ?? (matchedBbox ? { ...matchedBbox } : null);
+      let pts = effectiveBounds
+        ? r.points.filter((p) => isInBounds(p.lon, p.lat, effectiveBounds))
+        : r.points;
       if (pts.length < 2) {
         presetsFail++;
         setImportProgress((prev) =>
@@ -495,9 +556,48 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         void qc.invalidateQueries({
           queryKey: getGetMarkersQueryKey({ datasetId: terrain.datasetId }),
         });
-      } else {
-        // Dataset-free: invalidate unassigned markers query.
+      } else if (matchedSave?.datasetId) {
+        // Assigned to a saved dataset — refresh that dataset's markers.
+        void qc.invalidateQueries({
+          queryKey: getGetMarkersQueryKey({ datasetId: matchedSave.datasetId }),
+        });
+        // Also refresh the generic unassigned query in case any UI depends on it.
         void qc.invalidateQueries({ queryKey: getGetMarkersQueryKey({}) });
+      } else {
+        // Fully dataset-free: invalidate unassigned markers query.
+        void qc.invalidateQueries({ queryKey: getGetMarkersQueryKey({}) });
+      }
+    }
+
+    // Reassign existing unassigned markers in the matched save's coverage area.
+    if (
+      !cancelRequestedRef.current &&
+      matchedSave?.datasetId &&
+      reassignExisting &&
+      existingUnassigned &&
+      existingUnassigned.length > 0
+    ) {
+      for (const marker of existingUnassigned) {
+        if (cancelRequestedRef.current) break;
+        try {
+          await patchMarkersId.mutateAsync({
+            id: marker.id,
+            data: { datasetId: matchedSave.datasetId },
+          });
+        } catch {
+          // best-effort: continue on individual failures
+        }
+      }
+      // Invalidate the bbox query that fed the count so it re-fetches.
+      if (matchedBbox) {
+        void qc.invalidateQueries({
+          queryKey: getGetMarkersQueryKey({
+            minLat: matchedBbox.minLat,
+            minLon: matchedBbox.minLon,
+            maxLat: matchedBbox.maxLat,
+            maxLon: matchedBbox.maxLon,
+          }),
+        });
       }
     }
     if (presetsOk > 0) {
@@ -575,6 +675,11 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     onClose,
     postMarkers,
     postTrollingPresets,
+    matchedSave,
+    matchedBbox,
+    reassignExisting,
+    existingUnassigned,
+    patchMarkersId,
   ]);
 
   const body = (
@@ -671,7 +776,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                 Pick a <strong style={{ color: "#cbd5e1" }}>.gpx, .kml, .kmz, .csv, or .xlsx</strong> file <span style={{ color: "#94a3b8", fontWeight: 400 }}>(legacy .xls not supported)</span>.{" "}
                 {bounds
                   ? "Points outside this dataset's bounding box will be skipped automatically."
-                  : "All points will be saved as unassigned markers (no active dataset)."}
+                  : "All points will be saved as unassigned markers. After parsing, matching datasets from your library will be suggested."}
               </p>
               <input
                 ref={fileInputRef}
@@ -753,6 +858,13 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               onConfirm={() => void doImport()}
               isImporting={isImporting}
               onEditMapping={phase.meta.columns.length > 0 ? onEditMapping : undefined}
+              matchingSaves={matchingSaves}
+              mySavesLoading={mySavesLoading}
+              matchedSave={matchedSave}
+              setMatchedSave={setMatchedSave}
+              existingUnassignedCount={existingUnassignedCount}
+              reassignExisting={reassignExisting}
+              setReassignExisting={setReassignExisting}
             />
           )}
 
@@ -890,6 +1002,14 @@ interface PreviewPanelProps {
   isImporting: boolean;
   /** Present only for CSV/Excel imports; opens the column-mapping step. */
   onEditMapping?: () => void;
+  /** Dataset-free mode: saves whose coverage overlaps the imported points. */
+  matchingSaves?: UserCatalogSave[];
+  mySavesLoading?: boolean;
+  matchedSave?: UserCatalogSave | null;
+  setMatchedSave?: (s: UserCatalogSave | null) => void;
+  existingUnassignedCount?: number;
+  reassignExisting?: boolean;
+  setReassignExisting?: (v: boolean) => void;
 }
 
 const PreviewPanel: React.FC<PreviewPanelProps> = ({
@@ -914,6 +1034,13 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
   onConfirm,
   isImporting,
   onEditMapping,
+  matchingSaves,
+  mySavesLoading,
+  matchedSave,
+  setMatchedSave,
+  existingUnassignedCount,
+  reassignExisting,
+  setReassignExisting,
 }) => {
   const { parsed, original } = phase;
   const insideWpCount = parsed.waypoints.length;
@@ -1001,6 +1128,18 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
           </div>
         )}
       </div>
+
+      {!bounds && (
+        <DatasetMatcherSection
+          matchingSaves={matchingSaves ?? []}
+          loading={mySavesLoading ?? false}
+          matchedSave={matchedSave ?? null}
+          onSelect={setMatchedSave ?? (() => {})}
+          existingUnassignedCount={existingUnassignedCount ?? 0}
+          reassignExisting={reassignExisting ?? true}
+          setReassignExisting={setReassignExisting ?? (() => {})}
+        />
+      )}
 
       {insideWpCount > 0 && (
         <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -1210,6 +1349,143 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
         </button>
       </div>
     </>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Dataset matcher section (dataset-free import only)
+// ---------------------------------------------------------------------------
+
+const DatasetMatcherSection: React.FC<{
+  matchingSaves: UserCatalogSave[];
+  loading: boolean;
+  matchedSave: UserCatalogSave | null;
+  onSelect: (save: UserCatalogSave | null) => void;
+  existingUnassignedCount: number;
+  reassignExisting: boolean;
+  setReassignExisting: (v: boolean) => void;
+}> = ({
+  matchingSaves,
+  loading,
+  matchedSave,
+  onSelect,
+  existingUnassignedCount,
+  reassignExisting,
+  setReassignExisting,
+}) => {
+  return (
+    <details
+      open
+      data-testid="gps-import-dataset-matcher"
+      style={{
+        border: "1px solid rgba(0,229,255,0.18)",
+        borderRadius: 4,
+        marginBottom: 12,
+        background: "rgba(0,229,255,0.02)",
+      }}
+    >
+      <summary
+        style={{
+          cursor: "pointer",
+          padding: "6px 10px",
+          color: "#67e8f9",
+          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+          letterSpacing: "0.12em",
+        }}
+      >
+        ASSIGN TO A SAVED DATASET
+      </summary>
+      <div style={{ padding: "6px 10px 10px" }}>
+        {loading ? (
+          <div
+            data-testid="gps-import-saves-loading"
+            style={{ color: "#94a3b8", fontSize: "calc(14px * var(--bs-font-scale, 1))" }}
+          >
+            Checking your saved datasets…
+          </div>
+        ) : matchingSaves.length === 0 ? (
+          <div
+            data-testid="gps-import-no-matching-saves"
+            style={{ color: "#94a3b8", fontSize: "calc(14px * var(--bs-font-scale, 1))" }}
+          >
+            No matching saved datasets found — points will be saved as unassigned.
+          </div>
+        ) : (
+          <div role="radiogroup" aria-label="Assign imported points to a saved dataset">
+            {matchingSaves.map((save) => {
+              const name = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
+              return (
+                <label
+                  key={save.id}
+                  data-testid={`gps-import-save-option-${save.id}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 6,
+                    cursor: "pointer",
+                    fontSize: "calc(14px * var(--bs-font-scale, 1))",
+                    color: "#e2e8f0",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="gps-import-save-select"
+                    checked={matchedSave?.id === save.id}
+                    onChange={() => onSelect(save)}
+                    data-testid={`gps-import-save-radio-${save.id}`}
+                  />
+                  {name}
+                </label>
+              );
+            })}
+            <label
+              data-testid="gps-import-save-option-none"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: "pointer",
+                fontSize: "calc(14px * var(--bs-font-scale, 1))",
+                color: "#94a3b8",
+              }}
+            >
+              <input
+                type="radio"
+                name="gps-import-save-select"
+                checked={matchedSave === null}
+                onChange={() => onSelect(null)}
+                data-testid="gps-import-save-radio-none"
+              />
+              None – save as unassigned
+            </label>
+          </div>
+        )}
+
+        {matchedSave !== null && existingUnassignedCount > 0 && (
+          <label
+            data-testid="gps-import-reassign-existing"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 8,
+              cursor: "pointer",
+              fontSize: "calc(14px * var(--bs-font-scale, 1))",
+              color: "#e2e8f0",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={reassignExisting}
+              onChange={(e) => setReassignExisting(e.target.checked)}
+            />
+            Also reassign {existingUnassignedCount} existing unassigned marker
+            {existingUnassignedCount === 1 ? "" : "s"} in this area
+          </label>
+        )}
+      </div>
+    </details>
   );
 };
 

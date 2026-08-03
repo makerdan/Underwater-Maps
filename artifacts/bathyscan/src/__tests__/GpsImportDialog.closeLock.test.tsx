@@ -30,6 +30,9 @@ vi.mock("@workspace/api-client-react", () => ({
   usePostMarkers: () => ({ mutateAsync: mockPostMarkers }),
   usePostTrollingPresets: () => ({ mutateAsync: mockPostTrollingPresets }),
   useDeleteMarkersId: () => ({ mutateAsync: vi.fn() }),
+  usePatchMarkersId: () => ({ mutateAsync: vi.fn() }),
+  useGetDatasetsMySaves: () => ({ data: [], isLoading: false }),
+  useGetMarkers: () => ({ data: [] }),
   getGetMarkersQueryKey: (...a: unknown[]) => ["markers", ...a],
   getGetTrollingPresetsQueryKey: () => ["trollingPresets"],
   MarkerInputType: { custom: "custom" },
@@ -44,6 +47,9 @@ vi.mock("@/lib/gpsImport", () => ({
   partitionByBounds: vi.fn(),
   countPoints: vi.fn(() => 1),
   isInBounds: vi.fn(() => true),
+  computeResultBbox: vi.fn(() => null),
+  bboxIntersects: vi.fn(() => false),
+  applyColumnAssignment: vi.fn(() => ({ waypoints: [], routes: [] })),
 }));
 
 vi.mock("@/lib/settingsStore", () => ({

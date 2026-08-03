@@ -8344,6 +8344,10 @@ components:
     MarkerPatch:
       type: object
       properties:
+        datasetId:
+          type: string
+          nullable: true
+          description: Reassign this marker to a different dataset, or pass null to make it unassigned.
         label:
           type: string
           minLength: 1

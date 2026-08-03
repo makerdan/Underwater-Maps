@@ -3026,6 +3026,8 @@ export const MarkerPatchType = {
 } as const;
 
 export interface MarkerPatch {
+  /** Reassign this marker to a different dataset, or pass null to make it unassigned. */
+  datasetId?: string | null;
   /**
      * @minLength 1
      * @maxLength 200
