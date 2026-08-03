@@ -90,7 +90,7 @@ id = "iSzY6YJd8_VmiWOGIgVxd"
 uri = "file://exports/failure-gate.zip"
 type = "unspecified"
 title = "Failure Gate Skill (updated)"
-description = "The updated Failure Gate SKILL.md (post task #3403: auto-remediate + completeness rules). Drop the failure-gate/ folder into .agents/skills/ in any Replit project to install it."
+description = "Single SKILL.md at the root — rename the file to failure-gate/SKILL.md after extracting, or drop it straight into .agents/skills/failure-gate/."
 
 [[outputs]]
 id = "FSalpYkaizkimC0VKhG1z"
