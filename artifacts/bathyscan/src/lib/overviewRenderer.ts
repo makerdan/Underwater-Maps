@@ -404,7 +404,11 @@ export function buildHeatmapBitmap(
         imageData.data[i]     = NO_DATA_CANVAS_R;
         imageData.data[i + 1] = NO_DATA_CANVAS_G;
         imageData.data[i + 2] = NO_DATA_CANVAS_B;
-        imageData.data[i + 3] = 255;
+        // Fully transparent so a later-drawn dataset's real depth pixels are
+        // not obscured by this survey's gap/padding region.  When only one
+        // dataset is loaded the transparent pixels simply show the dark canvas
+        // background — visually identical to the previous opaque behaviour.
+        imageData.data[i + 3] = 0;
         continue;
       }
 
