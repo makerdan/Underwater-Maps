@@ -1141,7 +1141,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
           data: { result, ...(areaRequest ? { areaRequest } : {}) },
         });
         handleSaveFolderResponse(row);
-        void refetchSaves();
+        void refetchSaves().catch(() => {
+          toast({
+            title: "Saved, but couldn't refresh the list — reload to see it.",
+          });
+        });
       } catch {
         toast({ title: "Failed to save. Please try again.", variant: "destructive" });
       } finally {
@@ -1168,7 +1172,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
           data: { result: item, ...(areaRequest ? { areaRequest } : {}) },
         });
         handleSaveFolderResponse(row);
-        void refetchSaves();
+        void refetchSaves().catch(() => {
+          toast({
+            title: "Saved, but couldn't refresh the list — reload to see it.",
+          });
+        });
       } catch {
         toast({ title: "Failed to save. Please try again.", variant: "destructive" });
       } finally {

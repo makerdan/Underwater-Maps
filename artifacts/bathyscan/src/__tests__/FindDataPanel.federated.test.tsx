@@ -156,6 +156,7 @@ const PER_SOURCE_RESPONSES: Record<string, unknown> = {
 let sourcesEnabled: boolean | undefined;
 const nceiSaveMutateAsync = vi.fn().mockResolvedValue(undefined);
 const federatedSaveMutateAsync = vi.fn().mockResolvedValue(undefined);
+const refetchSavesMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock(
   "@workspace/api-client-react",
@@ -182,7 +183,7 @@ vi.mock(
       useGetDatasetsMySaves: () => ({
         data: [],
         isFetching: false,
-        refetch: vi.fn().mockResolvedValue(undefined),
+        refetch: refetchSavesMock,
       }),
     }),
 );
@@ -262,6 +263,8 @@ describe("FindDataPanel — External sources (federated search)", () => {
     onClose.mockClear();
     nceiSaveMutateAsync.mockClear();
     federatedSaveMutateAsync.mockClear();
+    refetchSavesMock.mockClear();
+    refetchSavesMock.mockResolvedValue(undefined);
     toastSpy.mockClear();
     sourcesEnabled = undefined;
   });
@@ -390,6 +393,45 @@ describe("FindDataPanel — External sources (federated search)", () => {
       expect(within(card).getByTestId("federated-save-button").textContent).toBe(
         "Save & Import",
       ),
+    );
+  });
+
+  it("shows a mild informational toast when save succeeds but refetchSaves rejects (federated)", async () => {
+    refetchSavesMock.mockRejectedValueOnce(new Error("network timeout"));
+    renderPanel();
+    await typeQuery("vermilion");
+
+    const card = screen.getByTestId(`federated-result-${MNDNR_ITEM.id}`);
+    fireEvent.click(within(card).getByTestId("federated-save-button"));
+
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Saved, but couldn't refresh the list — reload to see it.",
+      }),
+    );
+    // Must NOT show the hard error toast
+    expect(toastSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "destructive" }),
+    );
+  });
+
+  it("shows a mild informational toast when save succeeds but refetchSaves rejects (NCEI via federated)", async () => {
+    refetchSavesMock.mockRejectedValueOnce(new Error("network timeout"));
+    renderPanel();
+    await typeQuery("sitka");
+
+    const card = screen.getByTestId(`federated-result-${NCEI_ITEM.id}`);
+    fireEvent.click(within(card).getByTestId("federated-save-button"));
+
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Saved, but couldn't refresh the list — reload to see it.",
+      }),
+    );
+    expect(toastSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "destructive" }),
     );
   });
 });

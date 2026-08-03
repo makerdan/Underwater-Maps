@@ -31,23 +31,37 @@ const SUPPRESS_KEY = "bathyscan:simulatedDataWarn:suppress";
  */
 export const __retryConfig = { delayMs: 1_500 };
 
+/**
+ * In-memory fallback for environments where sessionStorage is unavailable
+ * (certain private-browsing modes, strict iframe sandboxes). Suppression
+ * still works for the rest of the session even when storage is broken.
+ */
+let memorySuppressed = false;
 function readSuppressed(): boolean {
+  if (memorySuppressed) return true;
   try {
     return sessionStorage.getItem(SUPPRESS_KEY) === "true";
-  } catch {
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn("sessionStorage unavailable — using in-memory fallback", err);
     return false;
   }
 }
 
 function writeSuppressed(value: boolean): void {
+  memorySuppressed = value;
   try {
     if (value) sessionStorage.setItem(SUPPRESS_KEY, "true");
     else sessionStorage.removeItem(SUPPRESS_KEY);
-  } catch {
-    // ignore
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn("sessionStorage unavailable — using in-memory fallback", err);
+    // In-memory fallback already set above; ignore storage error.
   }
 }
 
+/** Reset the in-memory fallback. Exposed for unit tests only. */
+export function __resetMemorySuppressed(): void {
+  memorySuppressed = false;
+}
 export interface PendingSwitch {
   datasetId: string;
   datasetName: string;

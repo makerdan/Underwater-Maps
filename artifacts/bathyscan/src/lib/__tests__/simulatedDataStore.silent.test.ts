@@ -21,7 +21,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetDatasetsIdPreviewQueryKey: (id: string) => ["datasets", id, "preview"],
 }));
 
-import { requestDatasetSwitch, useSimulatedDataStore, __retryConfig } from "@/lib/simulatedDataStore";
+import { requestDatasetSwitch, useSimulatedDataStore, __retryConfig, __resetMemorySuppressed } from "@/lib/simulatedDataStore";
 import type { DatasetPreview } from "@workspace/api-client-react";
 
 function makePreview(dataSource: DatasetPreview["dataSource"]): DatasetPreview {
@@ -37,6 +37,7 @@ function makePreview(dataSource: DatasetPreview["dataSource"]): DatasetPreview {
 beforeEach(() => {
   try { sessionStorage.clear(); } catch { /* ignore */ }
   useSimulatedDataStore.setState({ pending: null, suppressed: false });
+  __resetMemorySuppressed();
   fetchQueryMock.mockReset();
   // Zero out the retry delay so these tests don't wait 1.5 s per retry.
   __retryConfig.delayMs = 0;
@@ -120,6 +121,67 @@ describe("requestDatasetSwitch — suppressed mode (session-wide suppress)", () 
 
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(useSimulatedDataStore.getState().pending).toBeNull();
+  });
+});
+
+describe("simulatedDataStore — in-memory sessionStorage fallback", () => {
+  const originalSetItem = Storage.prototype.setItem;
+  const originalGetItem = Storage.prototype.getItem;
+  const originalRemoveItem = Storage.prototype.removeItem;
+
+  afterEach(() => {
+    Storage.prototype.setItem = originalSetItem;
+    Storage.prototype.getItem = originalGetItem;
+    Storage.prototype.removeItem = originalRemoveItem;
+  });
+
+  it("setSuppressed(true) does not throw when sessionStorage.setItem throws", () => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException("storage full", "QuotaExceededError");
+    };
+    expect(() =>
+      useSimulatedDataStore.getState().setSuppressed(true),
+    ).not.toThrow();
+    expect(useSimulatedDataStore.getState().suppressed).toBe(true);
+  });
+
+  it("suppression persists in-session via memorySuppressed even when both storage ops throw", async () => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException("blocked", "SecurityError");
+    };
+    Storage.prototype.getItem = () => {
+      throw new DOMException("blocked", "SecurityError");
+    };
+
+    // setSuppressed sets memorySuppressed=true; storage write fails silently
+    useSimulatedDataStore.getState().setSuppressed(true);
+    expect(useSimulatedDataStore.getState().suppressed).toBe(true);
+
+    // requestDatasetSwitch reads store.suppressed (true) → onConfirm fires immediately
+    fetchQueryMock.mockResolvedValue(makePreview("unknown"));
+    const onConfirm = vi.fn();
+    await requestDatasetSwitch({ datasetId: "ds-test", onConfirm });
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(useSimulatedDataStore.getState().pending).toBeNull();
+  });
+
+  it("setSuppressed(false) resets memorySuppressed so dialog shows again after storage clears", () => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException("blocked", "SecurityError");
+    };
+    Storage.prototype.removeItem = () => {
+      throw new DOMException("blocked", "SecurityError");
+    };
+
+    useSimulatedDataStore.getState().setSuppressed(true);
+    expect(useSimulatedDataStore.getState().suppressed).toBe(true);
+
+    // Unsuppress — storage removeItem fails but memorySuppressed resets to false
+    expect(() =>
+      useSimulatedDataStore.getState().setSuppressed(false),
+    ).not.toThrow();
+    expect(useSimulatedDataStore.getState().suppressed).toBe(false);
   });
 });
 
