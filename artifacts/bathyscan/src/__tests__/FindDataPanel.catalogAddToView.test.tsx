@@ -172,8 +172,9 @@ vi.mock("@/lib/simulatedDataStore", () => ({
   requestDatasetSwitch: vi.fn(),
 }));
 
+const toastMock = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: toastMock }),
 }));
 
 vi.mock("@/components/help/HelpButton", () => ({
@@ -267,6 +268,7 @@ function renderPanel() {
 
 beforeEach(() => {
   onClose.mockClear();
+  toastMock.mockClear();
   catalogResults = [PRESET_ENTRY];
   contextMocks.setPendingExternalUserDatasetId.mockClear();
   contextMocks.setCatalogSourcedAt.mockClear();
@@ -491,5 +493,32 @@ describe("FindDataPanel — handleLoadCatalogSave (My Saves tab)", () => {
 
     expect(contextMocks.setPendingExternalUserDatasetId).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("error path: shows error toast and does NOT call onClose when requestDatasetSwitch throws", async () => {
+    vi.mocked(requestDatasetSwitch).mockRejectedValue(new Error("unexpected preflight failure"));
+
+    renderPanel();
+
+    fireEvent.click(screen.getByTestId("find-data-my-saves-tab"));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-catalog-save-load-btn"));
+    });
+
+    // Toast must fire with the expected message.
+    expect(toastMock).toHaveBeenCalledTimes(1);
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Couldn't load dataset — please try again.",
+        variant: "destructive",
+      }),
+    );
+
+    // Panel must stay open — onClose must NOT have been called.
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Confirm callback must NOT have reached the app state setter.
+    expect(contextMocks.setPendingExternalUserDatasetId).not.toHaveBeenCalled();
   });
 });

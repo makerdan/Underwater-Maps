@@ -1303,35 +1303,50 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   // Mirror of DatasetPanel's handleLoadCatalogSaveFromLeft / handleLoadUserDatasetFromLeft
   // but also calls onClose() so FindDataPanel closes after the load is queued.
 
+  // NOTE: Both load handlers below intentionally catch any error thrown by
+  // `requestDatasetSwitch` (e.g. an uncaught exception escaping its internal
+  // try/catch) and surface it as a toast. `onClose()` is NOT called in the
+  // catch block so the panel stays open and the user can retry.
+  // Future callers of `requestDatasetSwitch` should follow the same pattern —
+  // always wrap in try/catch and show a toast on failure.
+
   const handleLoadCatalogSave = useCallback(
-    (save: UserCatalogSave) => {
+    async (save: UserCatalogSave) => {
       const previewId = save.datasetId ?? save.catalogId;
       const datasetName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
-      void requestDatasetSwitch({
-        datasetId: previewId,
-        datasetName,
-        onConfirm: () => {
-          setPendingExternalUserDatasetId(save.datasetId!);
-          setCatalogSourcedAt({ forDatasetId: save.datasetId!, date: save.catalog?.createdAt ?? null });
-          onClose();
-        },
-      });
+      try {
+        await requestDatasetSwitch({
+          datasetId: previewId,
+          datasetName,
+          onConfirm: () => {
+            setPendingExternalUserDatasetId(save.datasetId!);
+            setCatalogSourcedAt({ forDatasetId: save.datasetId!, date: save.catalog?.createdAt ?? null });
+            onClose();
+          },
+        });
+      } catch {
+        toast({ title: "Couldn't load dataset — please try again.", variant: "destructive" });
+      }
     },
-    [setPendingExternalUserDatasetId, setCatalogSourcedAt, onClose],
+    [setPendingExternalUserDatasetId, setCatalogSourcedAt, onClose, toast],
   );
 
   const handleLoadUserDataset = useCallback(
-    (userDatasetId: string, createdAt?: string | null) => {
-      void requestDatasetSwitch({
-        datasetId: userDatasetId,
-        onConfirm: () => {
-          setPendingExternalUserDatasetId(userDatasetId);
-          setCatalogSourcedAt({ forDatasetId: userDatasetId, date: createdAt ?? null });
-          onClose();
-        },
-      });
+    async (userDatasetId: string, createdAt?: string | null) => {
+      try {
+        await requestDatasetSwitch({
+          datasetId: userDatasetId,
+          onConfirm: () => {
+            setPendingExternalUserDatasetId(userDatasetId);
+            setCatalogSourcedAt({ forDatasetId: userDatasetId, date: createdAt ?? null });
+            onClose();
+          },
+        });
+      } catch {
+        toast({ title: "Couldn't load dataset — please try again.", variant: "destructive" });
+      }
     },
-    [setPendingExternalUserDatasetId, setCatalogSourcedAt, onClose],
+    [setPendingExternalUserDatasetId, setCatalogSourcedAt, onClose, toast],
   );
 
   return (
