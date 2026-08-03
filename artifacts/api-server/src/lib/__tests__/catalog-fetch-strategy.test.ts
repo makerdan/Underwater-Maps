@@ -15,6 +15,7 @@ import {
 import { deriveCatalogFetchStrategy } from "../catalogFetchStrategy.js";
 import { getFetcher } from "../fetchers/index.js";
 import { ALL_PRESET_DATASETS } from "../terrain.js";
+import { computeWcsAvailable } from "../../routes/ncei.js";
 
 const BATHY_ENTRIES = EXTRA_CATALOG_ENTRIES.filter(
   (e) => e.dataType === "bathymetry",
@@ -94,5 +95,118 @@ describe("catalog fetchStrategy rollout guard", () => {
     }
     const mn = deriveCatalogFetchStrategy(byId.get("fw-mille-lacs-lake-mn")!);
     expect(mn).toMatchObject({ kind: "arcgis-rest", dataSource: "mn-dnr" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeWcsAvailable — NCEI WCS mosaic coverage footprint checks
+// ---------------------------------------------------------------------------
+
+describe("computeWcsAvailable — NCEI WCS mosaic coverage footprint", () => {
+  // BAG Mosaic regions
+  it("US West Coast bbox is covered by the BAG Mosaic", () => {
+    expect(
+      computeWcsAvailable({ minLon: -125.5, minLat: 37.0, maxLon: -122.0, maxLat: 40.0 }),
+    ).toBe(true);
+  });
+
+  it("SE Alaska bbox is covered by the BAG Mosaic", () => {
+    expect(
+      computeWcsAvailable({ minLon: -137, minLat: 56, maxLon: -130, maxLat: 60 }),
+    ).toBe(true);
+  });
+
+  it("Hawaii bbox is covered by the BAG Mosaic", () => {
+    expect(
+      computeWcsAvailable({ minLon: -159, minLat: 19, maxLon: -155, maxLat: 22 }),
+    ).toBe(true);
+  });
+
+  // DEM Global Mosaic regions
+  it("Open North Atlantic bbox is covered by the DEM Global Mosaic", () => {
+    expect(
+      computeWcsAvailable({ minLon: -50, minLat: 30, maxLon: -30, maxLat: 50 }),
+    ).toBe(true);
+  });
+
+  it("Indian Ocean bbox is covered by the DEM Global Mosaic", () => {
+    expect(
+      computeWcsAvailable({ minLon: 55, minLat: -15, maxLon: 75, maxLat: 5 }),
+    ).toBe(true);
+  });
+
+  // Landlocked / interior regions — outside all mosaics
+  it("landlocked Central Asian bbox is NOT covered", () => {
+    expect(
+      computeWcsAvailable({ minLon: 60, minLat: 40, maxLon: 80, maxLat: 55 }),
+    ).toBe(false);
+  });
+
+  it("mid-continental US bbox (Kansas) is NOT covered", () => {
+    expect(
+      computeWcsAvailable({ minLon: -100, minLat: 37, maxLon: -95, maxLat: 40 }),
+    ).toBe(false);
+  });
+
+  it("Saharan bbox is NOT covered", () => {
+    expect(
+      computeWcsAvailable({ minLon: 10, minLat: 20, maxLon: 25, maxLat: 28 }),
+    ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Static guard — every NCEI bathymetry entry has a valid coverageBbox and
+// intersects at least one NCEI WCS mosaic coverage region.
+//
+// This guard fails loudly when a new NCEI catalog entry is added with a bogus
+// or landlocked bbox, before that entry ever reaches production.
+// ---------------------------------------------------------------------------
+
+// Static guard — only entries with the `ncei-` id prefix are routed through
+// the NCEI WCS mosaic fetchers by nceiCoverageForEntry / buildCatalogGrids.
+// Freshwater entries that happen to carry sourceAgency "NOAA/NCEI" (e.g.
+// fw-lake-*) use a different code path and must not be included here.
+describe("static NCEI catalog guard — coverageBbox validity and WCS intersection", () => {
+  const nceiEntries = EXTRA_CATALOG_ENTRIES.filter(
+    (e) => e.dataType === "bathymetry" && e.id.startsWith("ncei-"),
+  );
+
+  it("has at least one ncei-prefix bathymetry entry in EXTRA_CATALOG_ENTRIES", () => {
+    expect(nceiEntries.length).toBeGreaterThan(0);
+  });
+
+  it("every ncei-prefix bathymetry entry has a non-zero-area coverageBbox with finite coordinates", () => {
+    const invalid: string[] = [];
+    for (const e of nceiEntries) {
+      const { minLon, minLat, maxLon, maxLat } = e.coverageBbox;
+      if (
+        !isFinite(minLon) ||
+        !isFinite(minLat) ||
+        !isFinite(maxLon) ||
+        !isFinite(maxLat) ||
+        maxLon <= minLon ||
+        maxLat <= minLat
+      ) {
+        invalid.push(e.id);
+      }
+    }
+    expect(
+      invalid,
+      `NCEI entries with invalid coverageBbox: ${invalid.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("every ncei-prefix bathymetry entry's coverageBbox intersects at least one NCEI WCS mosaic coverage region", () => {
+    const notCovered: string[] = [];
+    for (const e of nceiEntries) {
+      if (!computeWcsAvailable(e.coverageBbox)) {
+        notCovered.push(e.id);
+      }
+    }
+    expect(
+      notCovered,
+      `ncei-prefix entries whose coverageBbox doesn't intersect any WCS mosaic — these saves would always fail: ${notCovered.join(", ")}`,
+    ).toEqual([]);
   });
 });

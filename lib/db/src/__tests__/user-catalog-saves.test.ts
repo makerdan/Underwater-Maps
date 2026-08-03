@@ -188,3 +188,116 @@ describe("user_catalog_saves — combined FK nulling on folder delete", () => {
     expect(save!.datasetId).toBe(datasetId);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Unique constraint on (userId, catalogId)
+//
+// The uniqueIndex("user_catalog_saves_user_catalog_uniq") prevents a user
+// from queuing the same catalog entry twice simultaneously. This guard ensures
+// that constraint isn't accidentally removed or weakened in a schema migration.
+// ---------------------------------------------------------------------------
+
+describe("user_catalog_saves — unique constraint on (userId, catalogId)", () => {
+  it("rejects a second insert with the same (userId, catalogId) pair", async () => {
+    // First insert must succeed — unique slot is now occupied.
+    await insertSave();
+
+    // Second insert with the same hardcoded userId="u1", catalogId="cat-123"
+    // must throw a unique constraint violation.
+    await expect(insertSave()).rejects.toThrow();
+  });
+
+  it("allows two saves with the same catalogId for different users", async () => {
+    // userId="u1"
+    const saveId1 = await insertSave();
+
+    // userId="u2" — different user, same catalog entry: must succeed.
+    const [row2] = await ctx.db
+      .insert(userCatalogSavesTable)
+      .values({ userId: "u2", catalogId: "cat-123" })
+      .returning({ id: userCatalogSavesTable.id });
+
+    expect(saveId1).toBeTruthy();
+    expect(row2!.id).toBeTruthy();
+    expect(row2!.id).not.toBe(saveId1);
+  });
+
+  it("allows the same user to save two different catalog entries", async () => {
+    // catalogId="cat-123"
+    const saveId1 = await insertSave();
+
+    // Same userId="u1" but different catalogId — must succeed.
+    const [row2] = await ctx.db
+      .insert(userCatalogSavesTable)
+      .values({ userId: "u1", catalogId: "cat-456" })
+      .returning({ id: userCatalogSavesTable.id });
+
+    expect(saveId1).toBeTruthy();
+    expect(row2!.id).toBeTruthy();
+    expect(row2!.id).not.toBe(saveId1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// areaRequestId — storage and retrieval
+//
+// areaRequestId groups saves that originated from the same area search bbox so
+// the server can auto-create a folder for the request. These tests verify the
+// column accepts arbitrary string ids, persists them faithfully, and allows
+// null (the common case for single-entry saves).
+// ---------------------------------------------------------------------------
+
+describe("user_catalog_saves — areaRequestId storage and retrieval", () => {
+  it("stores and retrieves a non-null areaRequestId", async () => {
+    const [row] = await ctx.db
+      .insert(userCatalogSavesTable)
+      .values({
+        userId: "u1",
+        catalogId: "cat-area-123",
+        areaRequestId: "area-req-abc-001",
+      })
+      .returning({
+        id: userCatalogSavesTable.id,
+        areaRequestId: userCatalogSavesTable.areaRequestId,
+      });
+
+    expect(row!.areaRequestId).toBe("area-req-abc-001");
+
+    // Verify round-trip through a separate SELECT.
+    const [fetched] = await ctx.db
+      .select({ areaRequestId: userCatalogSavesTable.areaRequestId })
+      .from(userCatalogSavesTable)
+      .where(eq(userCatalogSavesTable.id, row!.id));
+
+    expect(fetched!.areaRequestId).toBe("area-req-abc-001");
+  });
+
+  it("defaults areaRequestId to null when not supplied", async () => {
+    const saveId = await insertSave();
+
+    const [fetched] = await ctx.db
+      .select({ areaRequestId: userCatalogSavesTable.areaRequestId })
+      .from(userCatalogSavesTable)
+      .where(eq(userCatalogSavesTable.id, saveId));
+
+    expect(fetched!.areaRequestId).toBeNull();
+  });
+
+  it("allows multiple saves for different catalog entries to share the same areaRequestId", async () => {
+    const sharedAreaId = "area-req-shared-xyz";
+
+    const [rowA] = await ctx.db
+      .insert(userCatalogSavesTable)
+      .values({ userId: "u1", catalogId: "cat-area-a", areaRequestId: sharedAreaId })
+      .returning({ id: userCatalogSavesTable.id, areaRequestId: userCatalogSavesTable.areaRequestId });
+
+    const [rowB] = await ctx.db
+      .insert(userCatalogSavesTable)
+      .values({ userId: "u1", catalogId: "cat-area-b", areaRequestId: sharedAreaId })
+      .returning({ id: userCatalogSavesTable.id, areaRequestId: userCatalogSavesTable.areaRequestId });
+
+    expect(rowA!.areaRequestId).toBe(sharedAreaId);
+    expect(rowB!.areaRequestId).toBe(sharedAreaId);
+    expect(rowA!.id).not.toBe(rowB!.id);
+  });
+});

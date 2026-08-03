@@ -24,6 +24,9 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+// Imported after vi.mock so we receive the mocked version; used for per-test
+// spy overrides in the failure-path test below.
+import * as terrainModule from "../../lib/terrain.js";
 
 // ---------------------------------------------------------------------------
 // In-memory DB, table markers, and shared fixtures — all inside vi.hoisted()
@@ -738,6 +741,50 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
       const ready = await pollUntilReady(saveId);
       expect(ready.status).toBe("ready");
       expect(ready.datasetId).toBeTruthy();
+    },
+    15_000,
+  );
+
+  // --- failure path: terrain fetcher throws --------------------------------
+  //
+  // Regression guard for the bug fixed in Task #3434: when buildNceiTerrainForBbox
+  // throws (e.g. near-flat grid = no depth coverage at the bbox), materializeSave
+  // must write `status: "failed"` and a non-empty `errorMessage` to the save
+  // row rather than leaving it stuck in "processing" forever.
+
+  it(
+    "marks the save row as 'failed' with an errorMessage when the NCEI terrain fetcher throws",
+    async () => {
+      const nceiError = new Error("near-flat grid — no depth coverage at this location");
+
+      // Replace the terrain mock's buildNceiTerrainForBbox with a spy that
+      // throws on every call for the duration of this test.
+      const spy = vi
+        .spyOn(terrainModule, "buildNceiTerrainForBbox")
+        .mockRejectedValue(nceiError);
+
+      try {
+        const saveRes = await request(app)
+          .post("/api/ncei/save")
+          .set("x-e2e-bypass-secret", "vitest-test-secret")
+          .set("x-e2e-user-id", E2E_USER)
+          .send(VALID_SAVE_BODY);
+
+        expect(saveRes.status).toBe(201);
+        const saveId = saveRes.body.id as string;
+
+        // pollUntilReady returns on any terminal status, including "failed".
+        const terminal = await pollUntilReady(saveId);
+        expect(terminal.status).toBe("failed");
+
+        // The save row must carry the error message so the UI can surface it.
+        const saveRow = H.dbState.saves.find((s) => s["id"] === saveId);
+        expect(saveRow).toBeDefined();
+        expect(saveRow!["errorMessage"]).toBeTruthy();
+        expect(String(saveRow!["errorMessage"])).toMatch(/near-flat|no depth coverage/i);
+      } finally {
+        spy.mockRestore();
+      }
     },
     15_000,
   );

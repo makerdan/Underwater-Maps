@@ -407,3 +407,119 @@ describe("buildCatalogGrids", () => {
     30_000,
   );
 });
+
+// ---------------------------------------------------------------------------
+// ncei-portal-* coverage routing
+//
+// nceiCoverageForEntry routes ncei-portal-* ids to either:
+//   - bagMosaic   (multibeam_mosaic WCS) when resolutionMMin ≤ 50 m
+//   - demGlobalMosaic (DEM_global_mosaic WCS) when resolutionMMin > 50 m or null
+//
+// These tests verify the fork by inspecting the WCS URL that fetchNceiGrid
+// calls. ncei-dem-global-mosaic is also covered here.
+// ---------------------------------------------------------------------------
+
+describe("buildCatalogGrids — ncei-portal-* coverage routing", () => {
+  it(
+    "routes a fine-resolution ncei-portal-* entry (resolutionMMin ≤ 50 m) to the BAG Mosaic WCS",
+    async () => {
+      const tiff = makeGeoTiff([-50, -100, -25, 5]);
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async () => makeTiffResponse(tiff));
+      try {
+        const entry = makeEntry({
+          id: "ncei-portal-fine-resolution-test",
+          name: "NCEI Portal — fine resolution (10 m)",
+          sourceAgency: "NOAA/NCEI",
+          resolutionMMin: 10,
+          resolutionMMax: 10,
+          coverageBbox: { minLon: -125.5, minLat: 37.0, maxLon: -122.0, maxLat: 40.0 },
+        });
+        const result = await buildCatalogGrids(entry);
+        expect(result).not.toBeNull();
+        expect(result!.terrain.datasetId).toBe(entry.id);
+        // Fine resolution (≤50 m) → bagMosaic → URL contains "multibeam_mosaic"
+        expect(String(fetchSpy.mock.calls[0]![0])).toContain("multibeam_mosaic");
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    },
+  );
+
+  it(
+    "routes a coarse-resolution ncei-portal-* entry (resolutionMMin > 50 m) to the DEM Global Mosaic WCS",
+    async () => {
+      const tiff = makeGeoTiff([-50, -100, -25, 5]);
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async () => makeTiffResponse(tiff));
+      try {
+        const entry = makeEntry({
+          id: "ncei-portal-coarse-resolution-test",
+          name: "NCEI Portal — coarse resolution (100 m)",
+          sourceAgency: "NOAA/NCEI",
+          resolutionMMin: 100,
+          resolutionMMax: 200,
+          coverageBbox: { minLon: -125.5, minLat: 37.0, maxLon: -122.0, maxLat: 40.0 },
+        });
+        const result = await buildCatalogGrids(entry);
+        expect(result).not.toBeNull();
+        expect(result!.terrain.datasetId).toBe(entry.id);
+        // Coarse resolution (>50 m) → demGlobalMosaic → URL contains "DEM_global_mosaic"
+        expect(String(fetchSpy.mock.calls[0]![0])).toContain("DEM_global_mosaic");
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    },
+  );
+
+  it(
+    "routes a null-resolution ncei-portal-* entry (default = coarse) to the DEM Global Mosaic WCS",
+    async () => {
+      const tiff = makeGeoTiff([-50, -100, -25, 5]);
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async () => makeTiffResponse(tiff));
+      try {
+        const entry = makeEntry({
+          id: "ncei-portal-unknown-resolution-test",
+          name: "NCEI Portal — unknown resolution",
+          sourceAgency: "NOAA/NCEI",
+          resolutionMMin: null,
+          resolutionMMax: null,
+          coverageBbox: { minLon: -125.5, minLat: 37.0, maxLon: -122.0, maxLat: 40.0 },
+        });
+        const result = await buildCatalogGrids(entry);
+        expect(result).not.toBeNull();
+        // null resolutionMMin defaults to 100 (> 50) → demGlobalMosaic
+        expect(String(fetchSpy.mock.calls[0]![0])).toContain("DEM_global_mosaic");
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    },
+  );
+
+  it(
+    "routes the ncei-dem-global-mosaic catalog id directly to the DEM Global Mosaic WCS",
+    async () => {
+      const tiff = makeGeoTiff([-20, -80, -40, -5]);
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async () => makeTiffResponse(tiff));
+      try {
+        const entry = makeEntry({
+          id: "ncei-dem-global-mosaic",
+          name: "NCEI DEM Global Mosaic",
+          sourceAgency: "NOAA/NCEI",
+          coverageBbox: { minLon: -50, minLat: 30, maxLon: -30, maxLat: 50 },
+        });
+        const result = await buildCatalogGrids(entry);
+        expect(result).not.toBeNull();
+        expect(String(fetchSpy.mock.calls[0]![0])).toContain("DEM_global_mosaic");
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    },
+  );
+});

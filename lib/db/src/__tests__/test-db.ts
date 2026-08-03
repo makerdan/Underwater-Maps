@@ -103,7 +103,8 @@ export async function createTestDb(): Promise<TestContext> {
       folder_id         uuid REFERENCES dataset_folders(id) ON DELETE SET NULL,
       area_request_id   text,
       dataset_id        uuid REFERENCES custom_datasets(id) ON DELETE SET NULL,
-      request_bbox_json text
+      request_bbox_json text,
+      CONSTRAINT user_catalog_saves_user_catalog_uniq UNIQUE (user_id, catalog_id)
     );
 
     CREATE TABLE markers (
