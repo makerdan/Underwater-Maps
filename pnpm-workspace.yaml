@@ -57,11 +57,12 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
-  # ── Security overrides (2025-07-17) ─────────────────────────────────────────
+  # ── Security overrides (2025-07-17, updated 2026-08-03) ─────────────────────
   # Intentionally accepted low-severity findings (not overridden):
-  #   • esbuild >=0.27.3 <0.28.1 (GHSA-g7r4-m6w7-qqqr): arbitrary file read on
-  #     Windows dev server only; pinned at 0.27.3 to avoid platform-binary churn;
-  #     Linux-only deployment is not affected.
+  #   • esbuild >=0.27.3 <0.28.1 (GHSA-g7r4-m6w7-qqqr) via vite transitive path:
+  #     arbitrary file read on Windows dev server only; exact vite pin in catalog
+  #     prevents bumping esbuild under vite; Linux-only deployment is not affected.
+  #     api-server direct esbuild dep is bumped to ^0.28.1 in its package.json.
   # All moderate/high/critical findings are resolved via the overrides below.
   # @babel/core <=7.29.0 (GHSA-4x5r-pxfx-6jf8): sourceMappingURL arbitrary file
   # read via eslint-plugin-react-hooks; dev/lint toolchain only. Overridden to
@@ -106,7 +107,6 @@ overrides:
   '@tailwindcss/oxide>@tailwindcss/oxide-linux-x64-musl': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-arm64-msvc': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-x64-msvc': '-'
-  esbuild: 0.27.3
   esbuild>@esbuild/aix-ppc64: '-'
   esbuild>@esbuild/android-arm: '-'
   esbuild>@esbuild/android-arm64: '-'
