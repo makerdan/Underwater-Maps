@@ -1695,7 +1695,7 @@ function Main() {
         )}
 
         {/* Drift Planner timeline — bottom-centre, always shown when planner is active */}
-        {driftPlannerActive && <DriftTimeline />}
+        {driftPlannerActive && <DriftTimeline onClose={() => setDriftPlannerActive(false)} />}
 
         {/* ConditionsLegend has moved into the left sidebar (rendered above
             inside the side-pane flex column, after CurrentsPanel). Leaving

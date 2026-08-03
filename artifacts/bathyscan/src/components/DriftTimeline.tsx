@@ -62,7 +62,11 @@ const FOCUS_RING_STYLE = `
 }
 `;
 
-export const DriftTimeline: React.FC = () => {
+interface DriftTimelineProps {
+  onClose?: () => void;
+}
+
+export const DriftTimeline: React.FC<DriftTimelineProps> = ({ onClose }) => {
   useEffect(() => {
     const id = "drift-chip-focus-style";
     if (!document.getElementById(id)) {
@@ -100,7 +104,7 @@ export const DriftTimeline: React.FC = () => {
   return (
     <div className="drift-timeline" style={PANEL_STYLE}>
       {/* Mode banner */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: 6, position: "relative" }}>
         <span
           data-testid="timeline-drift-mode-badge"
           style={{
@@ -142,6 +146,35 @@ export const DriftTimeline: React.FC = () => {
             LEG {activeLegIdx + 1} {legLabel}
             {typeof legRemaining === "number" ? ` · ${legRemaining.toFixed(2)} km left` : ""}
           </span>
+        )}
+        {onClose && (
+          <button
+            aria-label="Close drift timeline"
+            onClick={onClose}
+            style={{
+              position: "absolute",
+              right: 0,
+              background: "transparent",
+              border: "1px solid transparent",
+              borderRadius: 3,
+              color: "#94a3b8",
+              cursor: "pointer",
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
+              lineHeight: 1,
+              padding: "2px 6px",
+              transition: "border-color 0.15s, color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(0,229,255,0.4)";
+              (e.currentTarget as HTMLButtonElement).style.color = "#00e5ff";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "transparent";
+              (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8";
+            }}
+          >
+            ×
+          </button>
         )}
       </div>
 
