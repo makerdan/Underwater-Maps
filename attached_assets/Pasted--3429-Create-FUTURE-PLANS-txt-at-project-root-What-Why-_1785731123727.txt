@@ -1,0 +1,198 @@
+#3429 - Create FUTURE_PLANS.txt at project root
+What & Why
+The user wants a single plain-text file at the repository root that records the full plans for three upcoming NCEI BAG Mosaic tasks (#3229, #3234, #3239) so they survive as a readable reference alongside the codebase.
+
+Done looks like
+FUTURE_PLANS.txt exists at the repository root.
+It contains all three plans in full, separated by clear section dividers.
+The file is plain text (no markdown rendering required) with human-readable headings.
+Out of scope
+Any code changes.
+Any other tasks or plans beyond the three listed below.
+Steps
+Create FUTURE_PLANS.txt at the repository root with the exact content below. Write the three plans one after another, each prefaced by a banner like: ============================ / TASK #XXXX — <title> / ============================
+
+TASK #3229 — Tier 1: Fix NCEI BAG Mosaic save and load experience (Model A)
+What & Why
+
+The "NCEI Multibeam BAG Mosaic — SE Alaska" catalog entry (ncei-bag-mosaic-alaska) is currently unusable in three distinct ways:
+
+1 — My Saves always fails. The materializer calls buildNceiTerrainForBbox with the full coverageBbox {minLon: -170 … maxLon: -130, minLat: 54 … maxLat: 72} — a 40° × 18° region. The WCS fetch either hits the 20 s timeout or the "near-flat grid (range < 5 m)" guard (surveys only cover narrow coastal corridors; most cells are NoData). The save row lands in failed and can never be loaded.
+
+2 — No-coverage errors are opaque. The raw "NCEI WCS returned near-flat grid" string is exposed directly in the save-card failure message with no guidance on what to do.
+
+3 — WCS resolution is fixed regardless of bbox size. Materialization always requests 256 × 256 (terrain) and 64 × 64 (overview) regardless of how large the bbox is.
+
+This task also adds Model A area selection (multiple area saves per catalog entry, keyed to the active terrain bbox) and auto-folder grouping so the My Saves list stays clean as users accumulate area tiles. The interactive "draw your patch" UI (Model B) is tracked in Task #3234 and builds on the wiring added here.
+
+Done looks like
+
+Saving ncei-bag-mosaic-alaska while a terrain is loaded completes successfully for that terrain's area and shows status "ready" in My Saves as a single card named after the place (e.g. "Ketchikan").
+Saving the same catalog entry a second time (from a different loaded terrain) creates a second area tile. Both tiles are automatically moved into a folder named "NCEI Multibeam BAG Mosaic — SE Alaska". The My Saves list shows one collapsible folder row — not two separate top-level cards.
+Expanding the folder shows each area as a short place-name card ("Ketchikan", "Sitka Sound"), each with its own Load and Delete actions.
+When no terrain is loaded the Save button is disabled with a tooltip: "Load a terrain in this area first, then save to download it."
+When materialization fails because an area has no survey coverage, the save card shows: "No multibeam surveys found here. Try loading a terrain near Ketchikan or Thorne Bay first, then re-save."
+Saving without an active terrain falls back to the sampleBbox (Thorne Bay / Clarence Strait), producing a valid ready save rather than failing on the full bbox.
+Small-area materializations (≤ 1 deg²) request up to 512 × 512 resolution.
+WCS timeout is raised from 20 s to 45 s with one silent retry.
+Out of scope
+
+The interactive "draw your patch" bbox picker (Model B) — Task #3234.
+Viewport-adaptive resolution for live preset pipeline fetches (non-catalog paths).
+Wiring lidar/shapefile/ENC catalog entries to materializers.
+Steps
+
+DB schema: drop unique constraint, add requestBboxJson column — In lib/db/src/schema/user-catalog-saves.ts, remove user_catalog_saves_user_catalog_uniq uniqueIndex and replace it with a plain index on (userId, catalogId). Add a nullable requestBboxJson text column storing the user-supplied bbox as a JSON string. Write a Drizzle migration for both changes.
+
+API: accept requestBbox in the save POST body — Extend CatalogSaveBodySchema in catalog-saves.ts with an optional requestBbox: { minLon, minLat, maxLon, maxLat } field (Zod, finite numbers). Store it serialized into requestBboxJson on the created row.
+
+Add sampleBbox to CatalogSeedEntry — Extend the interface with an optional sampleBbox. Populate it for NCEI WCS entries in EXTRA_CATALOG_ENTRIES: ncei-bag-mosaic-alaska: Thorne Bay / Clarence Strait (minLon: -132.5, maxLon: -131.5, minLat: 55.6, maxLat: 56.4)
+
+requestBbox priority chain in materializeSave — When buildNceiTerrainForBbox is called from materializeSave, use requestBboxJson (if present on the row) as the bbox, else fall back to the entry's sampleBbox, else fall back to coverageBbox.
+
+Raise WCS timeout and add retry — In fetchNceiGrid / fetchWcsGeoTiffGrid, raise the AbortSignal timeout from 20 s to 45 s and add one automatic silent retry on timeout or network error.
+
+Adaptive WCS resolution — Compute a resolution proportional to the bbox area: ≤ 1 deg² → 512 × 512 / 128 × 128 overview 1–10 deg² → 256 × 256 / 64 × 64 overview
+
+10 deg² → 128 × 128 / 32 × 32 overview
+
+Friendly no-coverage error — Map the internal "near-flat grid" error to the human-readable message above when constructing the save card's failureReason.
+
+Auto-naming from requestBbox centroid — When a save completes successfully, call the existing reverse-geocoding utility with the centroid of the used bbox and store the result as displayLabel (short place name only).
+
+applyCatalogSaveGrouping server function — In areaRequestFolders.ts, add applyCatalogSaveGrouping(saves, catalog) mirroring applyAreaRequestGrouping. When a userId + catalogId pair has > 1 saves, wrap them in a folder named after the catalog entry. Threshold is 2 (folder created on the second save, unlike applyAreaRequestGrouping which uses 3).
+
+Client: read activeGrid bbox on save — In FindDataPanel, when the user clicks Save on an NCEI WCS catalog entry, read terrainStore.activeGrid bbox (minLon/maxLon/minLat/maxLat) and include it as requestBbox in the save POST body. If no grid is loaded, omit requestBbox and show the tooltip instead of disabling silently.
+
+SaveCard folder-context display — Pass inCatalogFolder: boolean from SaveFolderSection to SaveCard. When inCatalogFolder is true, show only save.displayLabel. When false (root card), show "[catalog.name] — [displayLabel]".
+
+Static guard: sampleBbox presence — Add a test that asserts every entry in EXTRA_CATALOG_ENTRIES whose id starts with "ncei-" and whose fetch strategy is "ncei-wcs" has a defined sampleBbox forming a valid non-zero-area bbox smaller than coverageBbox. Fails immediately if a new NCEI WCS entry is added without one.
+
+Coverage-grid cache registry guard — Register the module-level Map used to cache coverage-grid results with registerCache. Add a case to cacheRegistry-lint.test.ts that verifies the cache appears in the registry.
+
+Failure gate — Run test-fast before starting to establish the pre-existing baseline. Run test-standard after all changes to confirm the full suite is green. Pre-existing failures in .agents/memory/full-e2e-known-failures.md may be ignored.
+
+Relevant files
+
+artifacts/api-server/src/routes/catalog-saves.ts
+artifacts/api-server/src/lib/terrain.ts
+artifacts/api-server/src/lib/fetchers/nceiWcs.ts
+artifacts/api-server/src/lib/catalogSeeder.ts
+artifacts/api-server/src/lib/areaRequestFolders.ts
+lib/db/src/schema/user-catalog-saves.ts
+artifacts/bathyscan/src/components/FindDataPanel.tsx
+artifacts/bathyscan/src/lib/terrainStore.ts
+TASK #3234 — Tier 1: NCEI BAG Mosaic — draw-your-patch area picker (Model B)
+What & Why
+
+Model A (Task #3229) lets users save an NCEI BAG mosaic area by reading their currently-loaded terrain's bbox — invisible and only works if a terrain is already loaded. Model B replaces this with a large interactive grid-picker modal:
+
+The full SE Alaska coverage area is divided into a grid of selectable cells.
+One server-side WCS call fetches a low-resolution coverage map and colours each cell green (survey data exists) or grey (no data), so users see exactly where the multibeam mosaic has content before selecting anything.
+Users click or click-drag to select cells; the server materializes the union bbox of the selection, exactly as in Model A.
+Multiple area saves for the same dataset are automatically grouped under a single collapsible folder in the My Saves list (established in Task #3229). This task adds the "＋ Add area" entry point on the folder itself and ensures the short place-name label is shown correctly inside the folder after each new area is saved.
+Done looks like
+
+Clicking "Save" on the NCEI BAG Mosaic catalog card opens a large modal (~80 vh, full panel width) titled "Choose your download area".
+The modal fills with a proportionally rendered 2D map of SE Alaska divided into a 40 × 20 grid of cells (1° lon × 0.9° lat each), loaded within ~1–2 s.
+Each cell is coloured by survey availability: Green — multibeam survey data exists in this cell. Light grey — no coverage (part of the declared bbox but no surveys here). Amber shimmer — coverage check still in flight on first open.
+Users click any green cell to select it (highlighted in a distinct accent colour). Click-and-drag selects a rectangular region of cells in one gesture.
+A summary bar at the bottom shows the selected-cell count, the union bbox in coordinates, and an estimated area in km².
+Clicking "Download selected area" fires the save POST with requestBbox equal to the union of selected cells. The modal closes; a toast confirms "Saving [place]…".
+If no cells are selected the confirm button is disabled with label "Select at least one green cell to continue."
+If the user selects only grey (no-data) cells a warning appears inline: "No surveys detected here — try including a green cell."
+The coverage grid is cached server-side for 24 h and client-side for the session, so reopening the modal is instant after the first load.
+In the My Saves list, the NCEI BAG Mosaic folder (auto-created by Task #3229 on the second save) shows a "＋ Add area" button in its folder header. Clicking it opens the same modal with no pre-selection, so the user can add further tiles without loading a terrain first.
+Individual area saves inside the folder show only the short place name (e.g. "Ketchikan") as their title.
+When there is only one area save (still at root, before a folder exists), the save card shows its displayLabel alongside the catalog name, so it reads unambiguously.
+Out of scope
+
+Antimeridian-crossing selections.
+Non-rectangular multi-region selection (the union bbox of disconnected cells is used; the intermediate gap is included in the download area, called out in the summary bar).
+Coverage grids for non-NCEI catalog entries (architecture is reusable but not wired).
+Offline/export flow.
+Steps
+
+Coverage-grid endpoint — Add GET /api/datasets/catalog/:id/coverage-grid in catalog-saves.ts. For NCEI WCS entries, make a single WCS GetCoverage request for the full coverageBbox at WIDTH=40, HEIGHT=20 (800 pixels). Decode each pixel: depth value present → true (green), NoData → false (grey). Return { cols: 40, rows: 20, cells: boolean[800], coverageBbox }. Cache the result in a module-level Map<catalogId, response> for 24 h (TTL by timestamp). Non-NCEI-WCS catalog ids return 404.
+
+BboxGridPickerMap component — New artifacts/bathyscan/src/components/BboxGridPickerMap.tsx. SVG-based grid renderer (reuses the BboxPreviewMap SVG approach): Props: cols, rows, cells (boolean[] | null), selectedCells (Set), onSelectionChange, coverageBbox. Rendering: proportional SVG sized to coverageBbox aspect ratio, each cell a rect filled green (covered), grey (no coverage), or accent (selected). Loading state (cells === null): amber shimmer overlay. Interaction: pointerdown starts selection; pointermove extends to a rectangle; pointerup commits. All indices in the drag rectangle are toggled. Coastline hint: hardcoded 10-15 point polyline tracing the Inside Passage / SE Alaska coastline shape as a faint decorative path.
+
+SaveAreaModal component — New artifacts/bathyscan/src/components/SaveAreaModal.tsx. Modal (~80 vh, full panel width): Fetches /api/datasets/catalog/:id/coverage-grid on mount (with session cache). Renders BboxGridPickerMap with current selection state. Bottom bar: selected-cell count, union bbox coordinates, estimated area in km². "Download selected area" confirm button (disabled when selectedCells.size === 0). "Cancel" button. On mount, fetch the coverage grid and populate cells. Pre-select cells intersecting activeGridBbox if provided (Model A handoff); otherwise start empty.
+
+Union bbox helper — Pure function unionBboxFromCells(selectedCells, cols, rows, coverageBbox) → tight {minLon, minLat, maxLon, maxLat}. Export from SaveAreaModal for unit tests.
+
+Client coverage-grid cache — Module-level Map<catalogId, response> in SaveAreaModal. Populated on first fetch; subsequent opens within the session skip the network call.
+
+Wire modal into FindDataPanel — Gate Save button clicks for NCEI WCS entries through SaveAreaModal instead of directly calling the save mutation. Pass entry.id, entry.coverageBbox, and activeGrid bbox. On confirm, call the save mutation with { requestBbox: unionBbox }.
+
+"＋ Add area" on the catalog-entry folder — In SaveFolderSection, when the folder was auto-created by applyCatalogSaveGrouping (detectable by absence of an areaRequestId on the folder and presence of a homogeneous catalogId across its saves), render a small "＋ Add area" button in the folder header row. Clicking it opens SaveAreaModal with no activeGridBbox. On confirm, fire the save mutation; the new save lands in the same folder via applyCatalogSaveGrouping.
+
+Short place-name display inside folder — In SaveCard, when rendered inside a catalog-entry folder (inCatalogFolder: boolean prop from SaveFolderSection), show save.displayLabel as the primary title. When at root (first save, no folder yet), prepend the catalog name so it reads "[Dataset] — [Place]".
+
+Failure gate — Run test-fast before starting. Unit-test unionBboxFromCells for: empty selection, single cell, contiguous rectangle, non-contiguous cells. BboxGridPickerMap render tests: loading state, all-grey grid, mixed coverage, selection highlight, drag-select rectangle. Pre-existing e2e failures may be ignored.
+
+Relevant files
+
+artifacts/bathyscan/src/components/FindDataPanel.tsx
+artifacts/api-server/src/routes/catalog-saves.ts
+artifacts/api-server/src/lib/terrain.ts (fetchWcsGeoTiffGrid)
+artifacts/api-server/src/lib/fetchers/nceiWcs.ts (NCEI_ENDPOINTS)
+artifacts/api-server/src/lib/areaRequestFolders.ts (applyCatalogSaveGrouping added in Task #3229)
+artifacts/bathyscan/src/tests/
+artifacts/api-server/src/lib/tests/catalogLiveDownload.smoke.test.ts
+TASK #3239 — Tier 3: NCEI BAG Mosaic — regression hardening
+What & Why
+
+Tasks #3229 (Model A save/load fix) and #3234 (Model B area picker) introduce several new code paths that have no dedicated regression coverage: the requestBbox priority chain, the applyCatalogSaveGrouping folder logic, the friendly no-coverage error message, the coverage-grid endpoint and its 24 h cache, the DB schema changes (multiple saves per catalog entry, requestBboxJson round-trip), the static guards (sampleBbox presence, cache registry), the unionBboxFromCells pure function, the BboxGridPickerMap SVG component, and the SaveCard folder-context display rule. This task adds that coverage as a focused hardening pass after both implementation tasks are merged.
+
+Done looks like
+
+All new tests pass in test-standard.
+applyCatalogSaveGrouping has tests for all 6 branches: zero saves, one save (no folder), two saves same catalogId (folder created), three saves same catalogId (still one folder), two saves different catalogIds (no folder), mixed catalogIds.
+requestBbox priority chain has 3 explicit tests: requestBboxJson present → used; requestBboxJson absent but sampleBbox present → sampleBbox used; neither present → coverageBbox used.
+The near-flat grid error produces the exact user-facing string, not the internal one.
+Coverage-grid endpoint: returns boolean[800] for a known NCEI entry; second call does not fire a new WCS request (cache hit).
+DB schema guard: two rows with the same (userId, catalogId) can be inserted without error; requestBboxJson round-trips through insert → select correctly.
+Static sampleBbox guard: every NCEI WCS entry has a defined, valid sampleBbox.
+Cache registry guard: coverage-grid Map cache appears in the registry.
+unionBboxFromCells: 4 cases (empty, single, contiguous 2×2, non-contiguous scatter).
+BboxGridPickerMap: loading state, all-grey, mixed, single selection, pointer click.
+SaveCard: inCatalogFolder=false → catalog name prefix present; inCatalogFolder=true → short label only.
+Out of scope
+
+New features beyond what #3229 and #3234 ship.
+End-to-end Playwright tests for the full save flow (too slow; unit/integration coverage is sufficient here).
+Performance benchmarks for the WCS fetch.
+Steps
+
+applyCatalogSaveGrouping — 6-branch unit test in artifacts/api-server/src/routes/tests/area-request-folders.test.ts covering all folder-creation and non-creation cases. Threshold is 2 (folder at second save).
+
+requestBbox priority chain — 3 explicit unit tests in artifacts/api-server/src/routes/tests/catalog-saves-integration.test.ts or a new materializeSave.test.ts asserting each fallback level is used when the higher-priority value is absent.
+
+Friendly no-coverage error message — Assert that when buildNceiTerrainForBbox throws/returns a near-flat result, the save card's failureReason equals the user-facing string (not the internal one).
+
+Coverage-grid endpoint + cache — Integration test firing GET /api/datasets/catalog/ncei-bag-mosaic-alaska/coverage-grid twice. Assert the response shape ({cols:40, rows:20, cells:boolean[800], coverageBbox}) and that the second call does not trigger a new fetchWcsGeoTiffGrid invocation (spy on it).
+
+DB schema guard — In lib/db/src/tests/user-catalog-saves.test.ts: insert two rows for the same (userId, catalogId) and assert both succeed (no unique-constraint error); insert a row with a non-null requestBboxJson and assert it round-trips correctly through a select.
+
+Static sampleBbox presence guard — For every entry in EXTRA_CATALOG_ENTRIES whose id starts with "ncei-" and whose fetch strategy is "ncei-wcs", assert that entry.sampleBbox is defined and forms a valid non-zero-area bbox smaller than entry.coverageBbox. Fails immediately if a new NCEI WCS entry is added without one.
+
+Cache registry guard — Import the catalog-saves module and verify the coverage-grid Map cache appears in the registry (mirrors cacheRegistry-lint.test.ts pattern).
+
+unionBboxFromCells — 4 unit test cases in artifacts/bathyscan/src/tests/unionBboxFromCells.test.ts: empty selection → throws or returns null (document the contract) single cell at grid corner → bbox equals that cell's exact bounds contiguous 2×2 rectangle → bbox equals the union of all four cell bounds non-contiguous scattered cells → bbox equals the tightest enclosing rectangle
+
+BboxGridPickerMap render tests — In artifacts/bathyscan/src/tests/BboxGridPickerMap.test.tsx: loading state (cells === null) → amber shimmer present; no green or grey rects all-grey grid (cells all false) → zero green rects, 800 grey rects mixed coverage → green and grey rect counts match the cells array single cell selected → that cell's rect has the accent class/fill onSelectionChange called with correct cell index on pointer click
+
+SaveCard folder-context display — Render SaveCard with inCatalogFolder=false and a short displayLabel ("Ketchikan"); assert rendered text includes the catalog name prefix. Render again with inCatalogFolder=true; assert only the short label is shown.
+
+Failure gate — Run test-fast before starting to establish the pre-existing baseline. Run test-standard after all tests are added to confirm the full new suite is green. Pre-existing failures in .agents/memory/full-e2e-known-failures.md may be ignored.
+
+Relevant files
+
+artifacts/api-server/src/routes/tests/area-request-folders.test.ts
+artifacts/api-server/src/routes/tests/catalog-saves-integration.test.ts
+artifacts/api-server/src/lib/tests/catalog-fetch-strategy.test.ts
+lib/db/src/tests/user-catalog-saves.test.ts
+artifacts/bathyscan/src/tests/FindDataPanel.federated.test.tsx (pattern reference)
+artifacts/bathyscan/src/tests/ (new test files land here)
+artifacts/api-server/src/lib/cacheRegistry.ts

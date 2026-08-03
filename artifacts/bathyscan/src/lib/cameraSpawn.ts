@@ -45,7 +45,10 @@ export function applyCameraSpawn(
   const depthRange = maxDepth - minDepth || 1;
   const spawnBehaviour = settings.cameraSpawnBehaviour;
 
-  const setPose = (x: number, y: number, z: number, yaw = 0): void => {
+  // Axis convention: +X = East, +Z = North (maxLat). Heading 0° = +Z.
+  // Default yaw = Math.PI so the camera initially faces North (+Z). Do NOT default to 0 — that
+  // faces South (-Z) and inverts the compass. Inverse formula: euler.y = heading_rad - PI.
+  const setPose = (x: number, y: number, z: number, yaw = Math.PI): void => {
     camera.position.set(x, y, z);
     euler.set(-0.25, yaw, 0);
     camera.quaternion.setFromEuler(euler);
@@ -67,9 +70,9 @@ export function applyCameraSpawn(
       const t = Math.max(0, Math.min(1, (sess.depth - minDepth) / depthRange));
       // Exact restore — no vertical offset.
       const worldY = -t * MAX_DEPTH_WORLD;
-      // Restore heading: yaw = heading * PI / 180 applied as negative
-      // euler.y (camera looks along -Z in Three.js).
-      setPose(x, worldY, z, -(sess.heading * Math.PI) / 180);
+      // Axis convention: +X = East, +Z = North. Heading 0° = North = euler.y PI.
+      // Inverse: euler.y = heading_rad - PI.
+      setPose(x, worldY, z, sess.heading * Math.PI / 180 - Math.PI);
       return;
     }
     // No saved session yet — geographic centroid gives a meaningful

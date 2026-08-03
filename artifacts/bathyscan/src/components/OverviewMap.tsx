@@ -2421,7 +2421,8 @@ export const OverviewMap: React.FC = () => {
               const [cx, cy] = lonLatToCanvas(cameraPosition.lon, cameraPosition.lat, wg, svgTransform);
               if (!inCanvas(cx, cy, 20)) return null;
               const size = 11;
-              const rot = 180 - cameraHeading;
+              // Heading 0° = North = rotate(0) in SVG (arrow defined pointing up).
+              const rot = cameraHeading;
               return (
                 <polygon
                   points={`0,${-size} ${size * 0.6},${size * 0.65} 0,0 ${-size * 0.6},${size * 0.65}`}

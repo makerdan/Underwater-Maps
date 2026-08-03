@@ -303,9 +303,9 @@ export function drawArrow(
   py: number,
   heading: number,
 ) {
-  // North-up convention: heading 180° = North = top of canvas = rotate(0).
-  // Formula: (180 - heading) maps the cameraStore heading to canvas rotation.
-  const rad = (180 - heading) * (Math.PI / 180);
+  // North-up convention: heading 0° = North = top of canvas = rotate(0).
+  // Axis convention: +X = East, +Z = North. Heading 0° directly maps to 0 radians (up).
+  const rad = heading * (Math.PI / 180);
   const size = 7;
 
   ctx.save();

@@ -172,23 +172,22 @@ describe("drawArrow cardinal directions", () => {
     } as unknown as CanvasRenderingContext2D;
   }
 
-  // North-up convention: cameraStore heading 180° = North = top of canvas.
-  // Arrow rotation formula: (180 - heading) * π/180
-  // heading 180 (North) → rotate(0) → arrow points up ✓
-  // heading 0  (South) → rotate(π) → arrow points down ✓
-  // heading 90 (East)  → rotate(π/2) → arrow points right ✓
-  // heading 270 (West) → rotate(-π/2) → arrow points left ✓
-  const cases: [string, number][] = [
-    ["South (heading 0)", 0],
-    ["East (heading 90)", 90],
-    ["North (heading 180)", 180],
-    ["West (heading 270)", 270],
+  // North-up convention: cameraStore heading 0° = North = top of canvas.
+  // Arrow rotation formula: heading * π/180
+  // heading 0   (North) → rotate(0)     → arrow points up ✓
+  // heading 90  (East)  → rotate(π/2)   → arrow points right ✓
+  // heading 180 (South) → rotate(π)     → arrow points down ✓
+  // heading 270 (West)  → rotate(3π/2)  → arrow points left ✓
+  const cases: [string, number, number][] = [
+    ["North (heading 0)",   0,   0],
+    ["East (heading 90)",  90,   Math.PI / 2],
+    ["South (heading 180)", 180, Math.PI],
+    ["West (heading 270)", 270,  3 * Math.PI / 2],
   ];
 
-  it.each(cases)("rotate is called with (180 - heading) * π/180 for %s", (_label, heading) => {
+  it.each(cases)("minimap arrow rotates clockwise from North for %s", (_label, heading, expected) => {
     const ctx = makeCtx();
     drawArrow(ctx, 0, 0, heading);
-    const expected = (180 - heading) * (Math.PI / 180);
     expect(ctx.rotate).toHaveBeenCalledWith(expected);
   });
 });

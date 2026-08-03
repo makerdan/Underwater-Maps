@@ -449,7 +449,8 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       // When heading lock is active, treat yaw input as intentional steering —
       // update lockedBearing so the autopilot adapts to the new course.
       if (dx !== 0 && headingLockedRef.current) {
-        const newBearing = ((-euler.current.y * 180 / Math.PI) % 360 + 360) % 360;
+        // Axis convention: +X = East, +Z = North. heading = (euler.y + PI) * 180/PI mod 360.
+        const newBearing = ((euler.current.y + Math.PI) * 180 / Math.PI % 360 + 360) % 360;
         useDriveBoatStore.getState().setLockedBearing(newBearing);
       }
     };
@@ -862,11 +863,11 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       }
 
       camera.position.set(worldX, targetY, worldZ);
-      // `heading` (bookmark): cameraStore convention → euler.y = heading * PI/180.
+      // `heading` (bookmark): cameraStore heading in degrees (0=North). Inverse: euler.y = heading_rad - PI.
       // `headingDeg` (share link): share-link convention → yaw = -(deg * PI/180) + PI.
       let yaw = 0;
       if (heading !== undefined) {
-        yaw = (heading * Math.PI) / 180;
+        yaw = heading * Math.PI / 180 - Math.PI;
       } else if (headingDeg !== undefined) {
         yaw = -(headingDeg * (Math.PI / 180)) + Math.PI;
       }
@@ -1092,7 +1093,8 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       // mouse look updates lockedBearing so the user still has full control.
       if (isRealistic && headingLockedRef.current && !driveState.followingRoute) {
         euler.current.setFromQuaternion(camera.quaternion);
-        const targetEulerY = -(lockedBearingRef.current * Math.PI) / 180;
+        // Axis convention: +X = East, +Z = North. euler.y = bearing_rad - PI.
+        const targetEulerY = lockedBearingRef.current * Math.PI / 180 - Math.PI;
         const diff = targetEulerY - euler.current.y;
         const normalized =
           ((diff + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
@@ -1146,8 +1148,10 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         grid,
       );
       const camDepth = worldYToMetres(camera.position.y, grid);
+      // Axis convention: +X = East, +Z = North (maxLat). Heading 0° = +Z.
+      // atan2(x, z) maps correctly. Do NOT use atan2(x, −z) — that inverts North/South.
       const heading =
-        (Math.atan2(lookDir.current.x, -lookDir.current.z) * 180 / Math.PI + 360) % 360;
+        (Math.atan2(lookDir.current.x, lookDir.current.z) * 180 / Math.PI + 360) % 360;
       useCameraStore.getState().setCameraGeo({ lon: camLon, lat: camLat, depth: camDepth, heading, altitude: camera.position.y });
     }
 
