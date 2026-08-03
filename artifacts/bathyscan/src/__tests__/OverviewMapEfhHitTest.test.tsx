@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
 import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
+import type { VisibleDataset } from "@/lib/terrainStore";
 
 /**
  * SELF-MAINTAINING API CLIENT MOCK — same Proxy pattern as
@@ -179,7 +180,7 @@ describe("OverviewMap EFH hit-test (click-to-select species)", () => {
     const grid = makeOverviewGrid();
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null },
+        ({ datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: grid.datasetId,
       overviewGrid: grid,

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { TerrainData } from "@workspace/api-client-react";
 import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
+import type { VisibleDataset } from "@/lib/terrainStore";
 
 function makeGrid(datasetId: string): TerrainData {
   return {
@@ -401,9 +402,9 @@ describe("terrainStore multi-dataset", () => {
       selectedIds: ids,
       selectedSources: Object.fromEntries(ids.map((id) => [id, "preset" as const])),
       visibleDatasets: [
-        { datasetId: "a", source: "preset", activeGrid: null, overviewGrid: null },
-        { datasetId: "b", source: "preset", activeGrid: null, overviewGrid: null },
-        { datasetId: "c", source: "preset", activeGrid: null, overviewGrid: null },
+        ({ datasetId: "a", source: "preset", activeGrid: null, overviewGrid: null } satisfies VisibleDataset),
+        ({ datasetId: "b", source: "preset", activeGrid: null, overviewGrid: null } satisfies VisibleDataset),
+        ({ datasetId: "c", source: "preset", activeGrid: null, overviewGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetIds: ["a", "b", "c"],
       primaryDatasetId: "a",

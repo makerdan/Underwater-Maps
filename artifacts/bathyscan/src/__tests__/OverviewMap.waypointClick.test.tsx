@@ -23,6 +23,7 @@ import { fireEvent, screen, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
 import { useTerrainStore } from "@/lib/terrainStore";
+import type { VisibleDataset } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import * as waypointHelpers from "@/lib/waypointHelpers";
 
@@ -219,7 +220,7 @@ describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () =>
     const grid = makeOverviewGrid();
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null },
+        ({ datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: grid.datasetId,
       overviewGrid: grid,
@@ -465,8 +466,8 @@ describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () =>
     // Override store with two-dataset state (runs after beforeEach, before mount).
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null },
-        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null },
+        ({ datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null } satisfies VisibleDataset),
+        ({ datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: gridA.datasetId,
       overviewGrid: gridA,
@@ -578,8 +579,8 @@ describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () =>
 
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null },
-        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null },
+        ({ datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null } satisfies VisibleDataset),
+        ({ datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: gridA.datasetId,
       overviewGrid: gridA,
@@ -795,8 +796,8 @@ describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () =>
     // Seed two-dataset state before mounting.
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null },
-        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null },
+        ({ datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null } satisfies VisibleDataset),
+        ({ datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: gridA.datasetId,
       overviewGrid: gridA,
@@ -873,9 +874,9 @@ describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () =>
     await act(async () => {
       useTerrainStore.setState({
         visibleDatasets: [
-          { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null },
-          { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null },
-          { datasetId: gridC.datasetId, source: "preset", overviewGrid: gridC, activeGrid: null },
+          ({ datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null } satisfies VisibleDataset),
+          ({ datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null } satisfies VisibleDataset),
+          ({ datasetId: gridC.datasetId, source: "preset", overviewGrid: gridC, activeGrid: null } satisfies VisibleDataset),
         ],
         primaryDatasetId: gridA.datasetId,
         overviewGrid: gridA,

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
 import { useUiStore } from "@/lib/uiStore";
 import { useTerrainStore } from "@/lib/terrainStore";
+import type { VisibleDataset } from "@/lib/terrainStore";
 import { substrateCollection } from "./substrateFixture";
 
 /**
@@ -163,7 +164,7 @@ describe("OverviewMap substrate click → uiStore.selectedSubstrate", () => {
     const grid = makeOverviewGrid();
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null },
+        ({ datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: grid.datasetId,
       overviewGrid: grid,

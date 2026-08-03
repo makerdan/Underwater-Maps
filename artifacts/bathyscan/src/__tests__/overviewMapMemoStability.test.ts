@@ -21,6 +21,7 @@ import { act, waitFor, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
 import { useTerrainStore } from "@/lib/terrainStore";
+import type { VisibleDataset } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -158,7 +159,7 @@ function setupStores() {
   const grid = makeOverviewGrid();
   useTerrainStore.setState({
     visibleDatasets: [
-      { datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null },
+      ({ datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null } satisfies VisibleDataset),
     ],
     primaryDatasetId: grid.datasetId,
     overviewGrid: grid,
@@ -243,7 +244,7 @@ describe("OverviewMap — activeEfhFeatures memo stability", () => {
       useTerrainStore.setState({
         overviewGrid: newGrid as unknown as TerrainData,
         visibleDatasets: [
-          { datasetId: newGrid.datasetId, source: "preset", overviewGrid: newGrid, activeGrid: null },
+          ({ datasetId: newGrid.datasetId, source: "preset", overviewGrid: newGrid, activeGrid: null } satisfies VisibleDataset),
         ],
       });
     });

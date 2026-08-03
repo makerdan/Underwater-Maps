@@ -26,6 +26,7 @@ import { act, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
 import { useTerrainStore } from "@/lib/terrainStore";
+import type { VisibleDataset } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import * as overviewRenderer from "@/lib/overviewRenderer";
@@ -165,7 +166,7 @@ function setupStores() {
   const grid = makeOverviewGrid();
   useTerrainStore.setState({
     visibleDatasets: [
-      { datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null },
+      ({ datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null } satisfies VisibleDataset),
     ],
     primaryDatasetId: grid.datasetId,
     overviewGrid: grid,
@@ -561,7 +562,7 @@ describe("OverviewMap — retry button after load timeout", () => {
     // Dataset selected but grid never arrives — simulates a stalled fetch.
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: "slow-ds", source: "preset", overviewGrid: null, activeGrid: null },
+        ({ datasetId: "slow-ds", source: "preset", overviewGrid: null, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: "slow-ds",
       primaryDatasetIds: ["slow-ds"],
@@ -661,7 +662,7 @@ describe("OverviewMap — null overviewGrid in visibleDatasets does not crash", 
 
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: "loading-ds", source: "preset", overviewGrid: null, activeGrid: null },
+        ({ datasetId: "loading-ds", source: "preset", overviewGrid: null, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: "loading-ds",
       overviewGrid: null,
@@ -702,7 +703,7 @@ describe("OverviewMap — null overviewGrid in visibleDatasets does not crash", 
 
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: "loading-ds", source: "preset", overviewGrid: null, activeGrid: null },
+        ({ datasetId: "loading-ds", source: "preset", overviewGrid: null, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: "loading-ds",
       overviewGrid: null,
@@ -817,8 +818,8 @@ describe("OverviewMap — null overviewGrid in visibleDatasets does not crash", 
 
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null },
-        { datasetId: "loading-ds", source: "preset", overviewGrid: null, activeGrid: null },
+        ({ datasetId: grid.datasetId, source: "preset", overviewGrid: grid, activeGrid: null } satisfies VisibleDataset),
+        ({ datasetId: "loading-ds", source: "preset", overviewGrid: null, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: grid.datasetId,
       overviewGrid: grid,
@@ -982,7 +983,7 @@ describe("OverviewMap — empty visibleDatasets shows empty-state hint, not LOAD
     // One dataset selected, grid not yet loaded — grid fetch is in flight.
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: "fetching-ds", source: "preset", overviewGrid: null, activeGrid: null },
+        ({ datasetId: "fetching-ds", source: "preset", overviewGrid: null, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: "fetching-ds",
       primaryDatasetIds: ["fetching-ds"],
@@ -1172,8 +1173,8 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
 
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null },
-        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null },
+        ({ datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null } satisfies VisibleDataset),
+        ({ datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null } satisfies VisibleDataset),
       ],
       primaryDatasetId: gridA.datasetId,
       overviewGrid: gridA,
@@ -1407,8 +1408,8 @@ describe("OverviewMap — recency sort draws older bitmap before newer bitmap", 
     // Seed the store with A (older, 2022) as primary and B (newer, 2024) as secondary.
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null, dataUpdatedAt: "2022-01-01" },
-        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null, dataUpdatedAt: "2024-01-01" },
+        ({ datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null, dataUpdatedAt: "2022-01-01" } satisfies VisibleDataset),
+        ({ datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null, dataUpdatedAt: "2024-01-01" } satisfies VisibleDataset),
       ],
       primaryDatasetId: gridA.datasetId,
       overviewGrid: gridA,
@@ -1565,8 +1566,8 @@ describe("OverviewMap — recency sort draws older bitmap before newer bitmap", 
     // PRIMARY (index 0) = newer, SECONDARY (index 1) = older.
     useTerrainStore.setState({
       visibleDatasets: [
-        { datasetId: gridNewer.datasetId, source: "preset", overviewGrid: gridNewer, activeGrid: null, dataUpdatedAt: "2024-01-01" },
-        { datasetId: gridOlder.datasetId, source: "preset", overviewGrid: gridOlder, activeGrid: null, dataUpdatedAt: "2022-01-01" },
+        ({ datasetId: gridNewer.datasetId, source: "preset", overviewGrid: gridNewer, activeGrid: null, dataUpdatedAt: "2024-01-01" } satisfies VisibleDataset),
+        ({ datasetId: gridOlder.datasetId, source: "preset", overviewGrid: gridOlder, activeGrid: null, dataUpdatedAt: "2022-01-01" } satisfies VisibleDataset),
       ],
       primaryDatasetId: gridNewer.datasetId,
       overviewGrid: gridNewer,
