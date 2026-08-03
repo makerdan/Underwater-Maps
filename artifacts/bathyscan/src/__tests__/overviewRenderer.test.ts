@@ -10,6 +10,7 @@ import { EfhFeatureType } from "@workspace/api-client-react";
 import {
   buildHeatmapBitmap,
   buildContourLines,
+  renderContourLines,
   MAX_CONTOUR_SEGMENTS,
   lonLatToCanvas,
   canvasToLonLat,
@@ -1413,5 +1414,106 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
 
     const isLandGrey = px[12] === 120 && px[13] === 120 && px[14] === 120;
     expect(isLandGrey).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderContourLines — palette staleness and edge-case robustness
+// ---------------------------------------------------------------------------
+
+describe("renderContourLines — palette staleness and edge-case robustness", () => {
+  // 2×2 grid with a depth crossing at 10 m so buildContourLines always returns segments.
+  const grid = makeGrid({
+    width: 2,
+    height: 2,
+    depths: [0, 0, 20, 20],
+    minDepth: 0,
+    maxDepth: 20,
+  });
+  const t = makeTransform({ pxPerDeg: 200, offsetX: 0, offsetY: 0 });
+
+  /** ctx extended with ctx.canvas.{width,height} required by renderContourLines. */
+  function makeCtxWithCanvas() {
+    return {
+      ...makeCtx(),
+      canvas: { width: 400, height: 400 },
+    } as unknown as CanvasRenderingContext2D;
+  }
+
+  /** Read back the last strokeStyle written to the mock ctx. */
+  function lastStrokeStyle(ctx: CanvasRenderingContext2D): string {
+    return (ctx as unknown as { strokeStyle: string }).strokeStyle;
+  }
+
+  beforeEach(() => {
+    usePaletteStore.getState().reset();
+    vi.restoreAllMocks();
+  });
+
+  it("preset theme ('thermal') ignores populated bandColors and uses the colormap-sample path, producing a different color than the band path", () => {
+    // After reset(): DEFAULT_BAND_COLORS[0] = '#00e5ff'.
+    // For depth=10 m, the band path selects band index 0 (10 m < 15.24 m boundary) → rgb(0,229,255).
+    const segments = buildContourLines(grid, 10);
+    expect(segments.length).toBeGreaterThan(0);
+
+    // Control — ocean theme (absolute-depth) must use the band path.
+    // Expected: '#00e5ff' = r=0x00=0, g=0xe5=229, b=0xff=255 → "rgb(0,229,255)".
+    const ctxOcean = makeCtxWithCanvas();
+    renderContourLines(ctxOcean, segments, grid, t, "metric", "ocean");
+    const oceanStyle = lastStrokeStyle(ctxOcean);
+    expect(oceanStyle).toBe("rgb(0,229,255)"); // band[0] colour for depth < 15.24 m
+
+    // Thermal with the same store state must use the colormap-sample path, not the band path.
+    // Expected computation:  thermal is grid-relative → contourDomain = {min:0, max:20}.
+    //   t01 = (10 - 0) / 20 = 0.5
+    //   Thermal stops: t=0.25 → #7b2d8b (r=123,g=45,b=139), t=0.55 → #e8553e (r=232,g=85,b=62).
+    //   0.5 falls in [0.25, 0.55]: alpha = (0.5-0.25)/(0.55-0.25) = 5/6 ≈ 0.8333.
+    //   lerpColors: r=round(123+109*(5/6))=round(213.83)=214,
+    //               g=round(45+40*(5/6))=round(78.33)=78,
+    //               b=round(139-77*(5/6))=round(74.83)=75.
+    //   convertLinearToSRGB() is a no-op in the test mock.
+    const ctxThermal = makeCtxWithCanvas();
+    renderContourLines(ctxThermal, segments, grid, t, "metric", "thermal");
+    const thermalStyle = lastStrokeStyle(ctxThermal);
+    // Must NOT be the band-path colour — proves band data was ignored.
+    expect(thermalStyle).not.toBe(oceanStyle);
+    // Must match the exact colormap-sample result — proves the colormap-sample path was taken.
+    expect(thermalStyle).toBe("rgb(214,78,75)");
+  });
+
+  it("does not crash and still draws contours when bandColors is empty (graceful fallback to colormap sample)", () => {
+    // Force bandColors to empty by bypassing the store's mutation guards.
+    // This simulates a failed migration or corrupt localStorage state.
+    usePaletteStore.setState({ bandColors: [] });
+
+    const segments = buildContourLines(grid, 10);
+    expect(segments.length).toBeGreaterThan(0);
+
+    const ctx = makeCtxWithCanvas();
+    // 'ocean' is an absolute-depth theme (_rcIsBand = true), but the band-path
+    // guard `_rcBandColorsArr.length > 0` fails when bandColors is empty, so the
+    // colormap-sample fallback is used — no crash, contours still drawn.
+    expect(() => renderContourLines(ctx, segments, grid, t, "metric", "ocean")).not.toThrow();
+    expect((ctx.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("does not crash when bandColors and bandBoundaries lengths are mismatched (e.g. after a failed migration)", () => {
+    // Force a mismatch: 3 colours but only 2 boundaries (valid pair requires 4 boundaries
+    // for 3 colours).  This violates the store invariant and cannot happen through normal
+    // UI paths, but can occur when localStorage is corrupt.
+    usePaletteStore.setState({
+      bandColors: ["#00e5ff", "#0288d1", "#283593"],
+      // 2 boundaries defines only 1 band — mismatched with 3 colours above.
+      bandBoundaries: [0, 2000],
+    });
+
+    const segments = buildContourLines(grid, 10);
+    expect(segments.length).toBeGreaterThan(0);
+
+    const ctx = makeCtxWithCanvas();
+    // renderContourLines clamps the band index via Math.min(bi, length-1) so even
+    // with a length mismatch it must not throw and must still produce strokes.
+    expect(() => renderContourLines(ctx, segments, grid, t, "metric", "ocean")).not.toThrow();
+    expect((ctx.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
   });
 });
