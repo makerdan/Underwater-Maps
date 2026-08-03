@@ -61,7 +61,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 32;
+export const SETTINGS_SCHEMA_VERSION = 33;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -125,6 +125,14 @@ export interface LastSession {
   depth: number;
   heading: number;
   datasetId: string;
+  /**
+   * Marks the heading convention used when this session was saved.
+   * "north-up" means heading 0° = North (the current convention).
+   * Absent (legacy) means heading 0° = South (old convention before the
+   * compass fix). Sessions without this field are discarded on restore so
+   * the camera never spawns facing the wrong direction.
+   */
+  headingConvention?: "north-up";
 }
 
 export interface CameraBookmark {
@@ -1830,6 +1838,20 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).overviewHillshading === undefined) {
             migratedHillshading.overviewHillshading = DEFAULT_SETTINGS.overviewHillshading;
           }
+          // v32 → v33: discard any lastSession that was saved under the old
+          // south-up heading convention (0° = South). Sessions saved under the
+          // new north-up convention carry headingConvention: "north-up"; any
+          // session lacking that field used the old convention and must be
+          // cleared so the camera doesn't restore facing the wrong direction.
+          const migratedLastSession: Partial<SettingsState> = {};
+          const storedSession = (rest as Partial<SettingsState>).lastSession;
+          if (
+            storedSession !== null &&
+            storedSession !== undefined &&
+            storedSession.headingConvention !== "north-up"
+          ) {
+            migratedLastSession.lastSession = null;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1851,6 +1873,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedManualConditions,
             ...migratedNodataBoundary,
             ...migratedHillshading,
+            ...migratedLastSession,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

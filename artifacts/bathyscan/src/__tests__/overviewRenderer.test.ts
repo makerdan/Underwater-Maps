@@ -1268,7 +1268,7 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
    *   dataIdx 2 → topo  5 → LAND  (row=0,col=0, i=0)
    *   dataIdx 3 → topo  8 → LAND  (row=0,col=1, i=4)
    */
-  it("land cells (topography > 0) are rendered as a hillshaded neutral gray", () => {
+  it("land cells (topography > 0) are fully transparent (alpha = 0) so they cannot occlude other datasets", () => {
     const W = 2;
     const H = 2;
     const depths = [10, 20, 30, 40];
@@ -1283,20 +1283,12 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
     const px = capturedImageDatas[0]!;
 
     // Canvas pixel 0 → dataIdx 2 (topo=5 → LAND).
-    // Land cells use 120 as the base gray modulated by the hillshade multiplier,
-    // so R=G=B (neutral) but the exact value depends on the local surface normal.
-    expect(px[0]).toBe(px[1]); // R=G — neutral gray
-    expect(px[1]).toBe(px[2]); // G=B — neutral gray
-    expect(px[0]).toBeGreaterThan(50);   // not completely dark
-    expect(px[0]).toBeLessThanOrEqual(120); // never brighter than the base value
-    expect(px[3]).toBe(255);
+    // Land cells are fully transparent (alpha=0) so a later-drawn dataset's
+    // real depth pixels are not occluded by this survey's land region.
+    expect(px[3]).toBe(0); // alpha = 0 (fully transparent)
 
     // Canvas pixel 1 (i=4) → dataIdx 3 (topo=8 → LAND)
-    expect(px[4]).toBe(px[5]);
-    expect(px[5]).toBe(px[6]);
-    expect(px[4]).toBeGreaterThan(50);
-    expect(px[4]).toBeLessThanOrEqual(120);
-    expect(px[7]).toBe(255);
+    expect(px[7]).toBe(0); // alpha = 0 (fully transparent)
   });
 
   it("water cells (topography ≤ 0) use the depth colourmap, not grey", () => {
@@ -1345,7 +1337,7 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
     const withTopo = withTopoData[0]!;
     const noTopo  = noTopoData[0]!;
 
-    // Land pixels (i=0 and i=4) should differ — grey with topo, colourmap without.
+    // Land pixels (i=0 and i=4) should differ — transparent (0,0,0,0) with topo, colourmap without.
     const landPixelsDiffer =
       withTopo[0] !== noTopo[0] ||
       withTopo[4] !== noTopo[4];

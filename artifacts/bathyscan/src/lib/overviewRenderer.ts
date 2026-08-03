@@ -414,17 +414,17 @@ export function buildHeatmapBitmap(
 
       const hs = hillshade[pixelIdx]!;
 
-      // Land cell (above-water elevation > 0 in topography): render as hillshaded
-      // gray matching the 3D shader land colour so inland reservoirs like Lake
-      // Ray Roberts show the surrounding land distinctly from the water.
+      // Land cell (above-water elevation > 0 in topography): render as fully
+      // transparent so a later-drawn dataset's real depth pixels are not
+      // obscured by this dataset's land region.  In single-dataset view the
+      // transparent pixels simply show the dark canvas background — visually
+      // equivalent to the previous opaque-gray behaviour from the user's
+      // perspective, since no other dataset is drawn underneath.
       if (topography && (topography[dataIdx] ?? 0) > 0) {
-        // Base land gray is (120,120,120) in display-sRGB.  Apply hillshade in
-        // sRGB space (acceptable for neutral gray where gamma error is minimal).
-        const v = Math.max(0, Math.min(255, Math.round(120 * hs)));
-        imageData.data[i]     = v;
-        imageData.data[i + 1] = v;
-        imageData.data[i + 2] = v;
-        imageData.data[i + 3] = 255;
+        imageData.data[i]     = 0;
+        imageData.data[i + 1] = 0;
+        imageData.data[i + 2] = 0;
+        imageData.data[i + 3] = 0;
         continue;
       }
 

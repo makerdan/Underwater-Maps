@@ -138,6 +138,96 @@ describe("buildHeatmapBitmap — nodata pixel transparency", () => {
     }
   });
 
+  it("land cells (topography > 0) produce alpha = 0 (fully transparent)", () => {
+    // 2 × 2 grid:
+    //   data row 0: [10, 20]  — real depth
+    //   data row 1: [5, 8]    — also real depth, but above-water land per topography
+    //
+    // After Y-flip (canvas row 0 = northernmost = data row H-1):
+    //   canvas row 0 → data row 1 → land cells → alpha must be 0
+    //   canvas row 1 → data row 0 → depth cells → alpha must be 255
+    const grid = makeGrid(2, 2, [10, 20, 5, 8]);
+    // topography[dataIdx]: positive = land (above-water elevation).
+    // dataIdx for (row=1, col=0) = 1*2+0 = 2; (row=1, col=1) = 3
+    const topography = [0, 0, 10, 15]; // data row 1 cells are land
+
+    const W = grid.width;
+    const H = grid.height;
+    const pixelData = new Uint8ClampedArray(W * H * 4);
+    const fakeImageData = { data: pixelData, width: W, height: H } as ImageData;
+
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementationOnce(
+      function (this: HTMLCanvasElement) {
+        return {
+          canvas: this,
+          createImageData: vi.fn(() => fakeImageData),
+          putImageData: vi.fn(),
+          fillRect: vi.fn(),
+          clearRect: vi.fn(),
+        } as unknown as CanvasRenderingContext2D;
+      },
+    );
+
+    buildHeatmapBitmap(grid, "ocean", topography);
+
+    // Canvas row 0 → data row 1 (land cells) → alpha = 0
+    expect(pixelData[3]).toBe(0);  // canvas pixel (col=0, row=0)
+    expect(pixelData[7]).toBe(0);  // canvas pixel (col=1, row=0)
+
+    // Canvas row 1 → data row 0 (real depth cells) → alpha = 255
+    expect(pixelData[11]).toBe(255); // canvas pixel (col=0, row=1)
+    expect(pixelData[15]).toBe(255); // canvas pixel (col=1, row=1)
+  });
+
+  it("land cells never occlude a second dataset's real depth pixels", () => {
+    // Dataset A: 2 × 2 grid — data row 0 is real depth, data row 1 is land.
+    // After Y-flip: canvas row 0 = land (alpha=0), canvas row 1 = depth (alpha=255).
+    const gridA = makeGrid(2, 2, [10, 20, 5, 8]);
+    const topographyA = [0, 0, 10, 15]; // data row 1 = land
+
+    const W = 2, H = 2;
+    const pixelDataA = new Uint8ClampedArray(W * H * 4);
+    const fakeImageDataA = { data: pixelDataA, width: W, height: H } as ImageData;
+
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementationOnce(
+      function (this: HTMLCanvasElement) {
+        return {
+          canvas: this,
+          createImageData: vi.fn(() => fakeImageDataA),
+          putImageData: vi.fn(),
+          fillRect: vi.fn(),
+          clearRect: vi.fn(),
+        } as unknown as CanvasRenderingContext2D;
+      },
+    );
+
+    buildHeatmapBitmap(gridA, "ocean", topographyA);
+
+    // Dataset B (no topography): entirely real depth.
+    const gridB = makeGrid(2, 2, [30, 40, 50, 60]);
+    const pixelDataB = captureImageData(gridB);
+
+    // A's land cells must be transparent.
+    expect(pixelDataA[3]).toBe(0);  // (col=0, row=0) = land → transparent
+    expect(pixelDataA[7]).toBe(0);  // (col=1, row=0) = land → transparent
+
+    // B's pixels must be opaque.
+    for (let px = 0; px < 4; px++) {
+      expect(pixelDataB[px * 4 + 3]).toBe(255);
+    }
+
+    // Simulate source-over compositing: draw A then B over A's top row (the land row).
+    // Because A's land pixels have alpha=0, B's pixels show through unchanged.
+    for (let px = 0; px < 2; px++) {
+      const aIdx = px * 4;
+      const bIdx = px * 4;
+      const aA = pixelDataA[aIdx + 3]! / 255; // 0 for land cells
+      const bA = pixelDataB[bIdx + 3]! / 255; // 1 for real depth
+      const outA = bA + aA * (1 - bA);
+      expect(Math.round(outA * 255)).toBe(255); // result is opaque
+    }
+  });
+
   it("overlap scenario: A's no-data region cannot occlude B's real pixels", () => {
     // Dataset A: 4 × 4 grid, entirely no-data (simulates the outer survey whose
     // bbox fully contains dataset B).  With alpha = 0, source-over compositing

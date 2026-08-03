@@ -23,19 +23,6 @@ function computeHeading(lookDir: THREE.Vector3): number {
 }
 
 /**
- * Get the world look-direction for a camera placed with the given euler yaw
- * (YXZ order, pitch = 0).
- */
-function _lookDirForYaw(yaw: number): THREE.Vector3 {
-  const cam = new THREE.PerspectiveCamera();
-  const euler = new THREE.Euler(0, yaw, 0, "YXZ");
-  cam.quaternion.setFromEuler(euler);
-  const d = new THREE.Vector3();
-  cam.getWorldDirection(d);
-  return d;
-}
-
-/**
  * Minimal mock canvas context for drawArrow rotation capture.
  */
 function makeCtx(): { rotate: ReturnType<typeof vi.fn> } & Partial<CanvasRenderingContext2D> {
@@ -127,6 +114,7 @@ describe("cameraSpawn heading round-trip", () => {
         lat: 47.5,
         depth: 50,
         heading: headingDeg,
+        headingConvention: "north-up" as const,
       },
       datasetHomePositions: {},
     } as unknown as Parameters<typeof applyCameraSpawn>[3];
@@ -150,6 +138,76 @@ describe("cameraSpawn heading round-trip", () => {
     // Wrap around 360°
     if (error > 180) error = 360 - error;
     expect(error).toBeLessThan(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2b. Legacy-session guard — old-convention sessions must not restore
+// ---------------------------------------------------------------------------
+describe("cameraSpawn legacy-session guard", () => {
+  /** Minimal TerrainData stub — centroid at lon -119.5, lat 47.5 → world ~0, ~0 */
+  const grid = {
+    datasetId: "legacy-test",
+    resolution: 4,
+    width: 4,
+    height: 4,
+    depths: new Array(16).fill(50) as unknown as import("@workspace/api-client-react").DepthsArray,
+    minDepth: 10,
+    maxDepth: 100,
+    minLon: -120,
+    maxLon: -119,
+    minLat: 47,
+    maxLat: 48,
+    waterType: "saltwater" as const,
+  };
+
+  /**
+   * Returns the world position the camera was placed at after applyCameraSpawn.
+   * Pass `null` to simulate "no saved session" (centroid fallback).
+   */
+  function spawnPosition(session: Parameters<typeof applyCameraSpawn>[3]["lastSession"]) {
+    const cam = { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() };
+    const euler = new THREE.Euler(0, 0, 0, "YXZ");
+    const settings = {
+      cameraSpawnBehaviour: "last" as const,
+      lastSession: session,
+      datasetHomePositions: {},
+    } as unknown as Parameters<typeof applyCameraSpawn>[3];
+    applyCameraSpawn(cam as unknown as THREE.PerspectiveCamera, euler, grid as never, settings);
+    return cam.position.clone();
+  }
+
+  it("restores a north-up session to the saved lon/lat (non-centroid position)", () => {
+    // Saved far from centroid — lon -119.9, lat 47.1
+    const pos = spawnPosition({
+      datasetId: "legacy-test",
+      lon: -119.9,
+      lat: 47.1,
+      depth: 50,
+      heading: 90,
+      headingConvention: "north-up",
+    });
+    // World X,Z should be significantly non-zero (not at the centroid)
+    expect(Math.abs(pos.x) + Math.abs(pos.z)).toBeGreaterThan(1);
+  });
+
+  it("ignores a session without headingConvention (old south-up convention) and falls back to centroid", () => {
+    // Centroid reference position (no session at all)
+    const centroidPos = spawnPosition(null);
+
+    // Session saved far from centroid but without headingConvention — old convention
+    const legacyPos = spawnPosition({
+      datasetId: "legacy-test",
+      lon: -119.9,
+      lat: 47.1,
+      depth: 50,
+      heading: 90,
+      // headingConvention intentionally absent — simulates a pre-fix saved session
+    } as Parameters<typeof applyCameraSpawn>[3]["lastSession"]);
+
+    // Legacy spawn must be treated as no-session and match the centroid fallback
+    expect(Math.abs(legacyPos.x - centroidPos.x)).toBeLessThan(0.01);
+    expect(Math.abs(legacyPos.z - centroidPos.z)).toBeLessThan(0.01);
   });
 });
 

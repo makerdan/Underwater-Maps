@@ -66,6 +66,14 @@ export function applyCameraSpawn(
   if (spawnBehaviour === "last") {
     const sess = settings.lastSession;
     if (sess && sess.datasetId === grid.datasetId) {
+      // Belt-and-suspenders: only restore sessions that were saved under the
+      // current north-up convention. Sessions lacking headingConvention were
+      // written before the compass fix (0° = South) and must not be used —
+      // the migration already nulls them, but guard here as a safety net.
+      if (sess.headingConvention !== "north-up") {
+        spawnAtCentroid();
+        return;
+      }
       const { x, z } = lonLatToWorldXZ(sess.lon, sess.lat, grid);
       const t = Math.max(0, Math.min(1, (sess.depth - minDepth) / depthRange));
       // Exact restore — no vertical offset.

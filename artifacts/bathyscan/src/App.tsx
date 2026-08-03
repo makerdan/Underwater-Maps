@@ -752,6 +752,7 @@ function Main() {
         depth: cameraDepth,
         heading,
         datasetId,
+        headingConvention: "north-up",
       });
     };
 
