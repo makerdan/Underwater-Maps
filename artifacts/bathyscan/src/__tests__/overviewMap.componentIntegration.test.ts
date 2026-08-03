@@ -1464,4 +1464,154 @@ describe("OverviewMap — recency sort draws older bitmap before newer bitmap", 
     // Mark firstBitmap/secondBitmap as used to avoid lint warnings.
     void firstBitmap; void secondBitmap;
   });
+
+  it("draw order is independent of visibleDatasets[0] position — newer primary drawn last", async () => {
+    Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
+
+    // -----------------------------------------------------------------------
+    // SWAP: now the PRIMARY (index 0) is the NEWER dataset and the secondary
+    // is older.  The sort must still draw the older one first (the newer one
+    // on top) — recency, not selection order, controls draw position.
+    // -----------------------------------------------------------------------
+    const drawImageOrder: unknown[] = [];
+    const mockCtx = new Proxy(
+      {
+        canvas: { width: CANVAS_W, height: CANVAS_H },
+        fillRect: vi.fn(),
+        fillStyle: "" as string | CanvasGradient | CanvasPattern,
+        font: "",
+        textAlign: "start" as CanvasTextAlign,
+        textBaseline: "alphabetic" as CanvasTextBaseline,
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 50 })),
+        drawImage: vi.fn((bitmap: unknown) => {
+          drawImageOrder.push(bitmap);
+        }),
+        save: vi.fn(),
+        restore: vi.fn(),
+        beginPath: vi.fn(),
+        closePath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fill: vi.fn(),
+        translate: vi.fn(),
+        rotate: vi.fn(),
+        scale: vi.fn(),
+        setLineDash: vi.fn(),
+        strokeStyle: "",
+        lineWidth: 1,
+        globalAlpha: 1,
+        imageSmoothingEnabled: true,
+        shadowColor: "",
+        shadowBlur: 0,
+        strokeRect: vi.fn(),
+        roundRect: vi.fn(),
+        clip: vi.fn(),
+        createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+        createImageData: vi.fn((w: number, h: number) => ({
+          data: new Uint8ClampedArray(w * h * 4),
+          width: w,
+          height: h,
+        })),
+        putImageData: vi.fn(),
+      } as Record<string, unknown>,
+      {
+        set(target, prop: string, value: unknown) { target[prop] = value; return true; },
+      },
+    );
+
+    const getContextSpy2 = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(mockCtx as unknown as CanvasRenderingContext2D);
+
+    const N = 4;
+    const makeGrid2 = (id: string) => ({
+      datasetId: id,
+      name: id,
+      resolution: N,
+      width: N,
+      height: N,
+      depths: new Array(N * N).fill(0).map((_, i) => 10 + i * 5),
+      minDepth: 10,
+      maxDepth: 10 + (N * N - 1) * 5,
+      minLon: -122,
+      maxLon: -119,
+      minLat: 47,
+      maxLat: 49,
+      centerLon: -120.5,
+      centerLat: 48.0,
+      waterType: "saltwater" as const,
+    } as unknown as import("@workspace/api-client-react").TerrainData);
+
+    // SWAPPED: primary (index 0) is the NEWER dataset (2024), secondary is OLDER (2022).
+    const gridNewer = makeGrid2("ds-newer-primary"); // 2024-01-01 — newer, but index 0 (primary)
+    const gridOlder = makeGrid2("ds-older-secondary"); // 2022-01-01 — older, but index 1 (secondary)
+
+    const bitmapNewer = { _id: "bitmap-newer" };
+    const bitmapOlder = { _id: "bitmap-older" };
+
+    let buildCallCount2 = 0;
+    const buildSpy2 = vi
+      .spyOn(await import("@/lib/overviewRenderer"), "buildHeatmapBitmap")
+      .mockImplementation(() => {
+        buildCallCount2 += 1;
+        // First call is for primary (gridNewer), subsequent calls for secondary (gridOlder).
+        return (buildCallCount2 === 1 ? bitmapNewer : bitmapOlder) as unknown as ImageBitmap;
+      });
+
+    // PRIMARY (index 0) = newer, SECONDARY (index 1) = older.
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: gridNewer.datasetId, source: "preset", overviewGrid: gridNewer, activeGrid: null, dataUpdatedAt: "2024-01-01" },
+        { datasetId: gridOlder.datasetId, source: "preset", overviewGrid: gridOlder, activeGrid: null, dataUpdatedAt: "2022-01-01" },
+      ],
+      primaryDatasetId: gridNewer.datasetId,
+      overviewGrid: gridNewer,
+      activeGrid: null,
+    });
+
+    useUiStore.setState({
+      substrateColorMode: false,
+      selectedSubstrate: null,
+      efhOverlayEnabled: false,
+      overviewOpen: true,
+      pendingDropIn: null,
+    });
+
+    useCameraStore.setState({
+      cameraPosition: { known: true, lon: -120.5, lat: 48.0 },
+      heading: 0,
+      cameraDepth: 50,
+      cameraAltitude: 30,
+    });
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    await waitFor(
+      () => {
+        if (drawImageOrder.length < 2) throw new Error("Waiting for 2 drawImage calls");
+      },
+      { timeout: 4000 },
+    );
+
+    const newerIdx = drawImageOrder.findIndex((b) => b === bitmapNewer);
+    const olderIdx = drawImageOrder.findIndex((b) => b === bitmapOlder);
+
+    // Both bitmaps must appear.
+    expect(newerIdx).toBeGreaterThanOrEqual(0);
+    expect(olderIdx).toBeGreaterThanOrEqual(0);
+
+    // Even though the NEWER dataset is visibleDatasets[0] (primary), recency
+    // sort must still draw it LAST (on top).  The older secondary must be drawn
+    // first (behind the newer primary).
+    expect(olderIdx).toBeLessThan(newerIdx);
+
+    buildSpy2.mockRestore();
+    getContextSpy2.mockRestore();
+  });
 });

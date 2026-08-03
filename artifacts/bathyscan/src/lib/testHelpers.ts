@@ -672,7 +672,7 @@ export interface BathyTestApi {
    * have null grids (no 3D rendering) — sufficient for the UI row to render.
    */
   setVisibleDatasets: (
-    items: Array<{ datasetId: string; name: string; source: "preset" | "user" }>,
+    items: Array<{ datasetId: string; name: string; source: "preset" | "user"; dataUpdatedAt?: string | null }>,
   ) => void;
 
   // ── What's Here card ────────────────────────────────────────────────────
@@ -1571,6 +1571,7 @@ export function installTestHelpers(): void {
           source: item.source,
           activeGrid: null,
           overviewGrid: null,
+          dataUpdatedAt: item.dataUpdatedAt ?? null,
         })),
       });
     },
