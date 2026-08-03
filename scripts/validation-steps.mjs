@@ -88,8 +88,10 @@ export function getValidationSteps(logPrefix) {
     { name: "check:duplicate-hooks-registry", resource: null, cmd: "pnpm run check:duplicate-hooks-registry", tiers: FAST },
     // no resource: CI coverage meta-check for check:* scripts, sub-second
     { name: "check:runner-step-sync", resource: null, cmd: "pnpm run check:runner-step-sync", tiers: FAST },
+    // no resource: auto-remediates missing stubs before the strict check runs, sub-second file-write only.
+    { name: "fix:failure-gate-stubs", resource: null, cmd: "node scripts/check-failure-gate.mjs --fix-stub", tiers: FAST },
     // no resource: failure-gate full lint (plan files in .local/tasks/), sub-second.
-    // All 792 plan files are backfilled with required sections; full enforcement is now safe.
+    // All plan files are backfilled with required sections; full enforcement is now safe.
     { name: "check:failure-gate", resource: null, cmd: "pnpm run check:failure-gate", tiers: FAST },
     // no resource: skip-count ratchet guard (static file scan), sub-second
     { name: "check:skip-count", resource: null, cmd: "pnpm run check:skip-count", tiers: FAST },
