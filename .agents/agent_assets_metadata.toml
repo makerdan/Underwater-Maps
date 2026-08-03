@@ -91,3 +91,10 @@ uri = "file://exports/failure-gate.zip"
 type = "unspecified"
 title = "Failure Gate Skill"
 description = "The Failure Gate SKILL.md packaged as a zip — drop the failure-gate/ folder into .agents/skills/ in any Replit project to install it."
+
+[[outputs]]
+id = "FSalpYkaizkimC0VKhG1z"
+uri = "file://exports/task-sorting.zip"
+type = "unspecified"
+title = "Task Sorting Skill"
+description = "The Task Sorting SKILL.md packaged as a zip — drop the task-sorting/ folder into .agents/skills/ in any Replit project to install it."
