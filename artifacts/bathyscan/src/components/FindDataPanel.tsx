@@ -1377,9 +1377,30 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       setSavingIds((s) => new Set(s).add(id));
       try {
         const areaRequest = getAreaRequest();
+
+        // For NCEI WCS catalog entries, read the active terrain's bbox and
+        // send it as requestBbox so the materializer fetches that specific
+        // surveyed corridor rather than the full multi-degree coverage bbox
+        // (which times out or returns a near-flat grid with no coverage).
+        let requestBbox: { minLon: number; minLat: number; maxLon: number; maxLat: number } | undefined;
+        if (id.startsWith("ncei-")) {
+          const grid = useTerrainStore.getState().activeGrid;
+          if (grid && isFinite(grid.minLon) && isFinite(grid.maxLon) && isFinite(grid.minLat) && isFinite(grid.maxLat)) {
+            requestBbox = {
+              minLon: grid.minLon,
+              minLat: grid.minLat,
+              maxLon: grid.maxLon,
+              maxLat: grid.maxLat,
+            };
+          }
+        }
+
         const row = await saveMutation.mutateAsync({
           id,
-          ...(areaRequest ? { data: { areaRequest } } : {}),
+          data: {
+            ...(areaRequest ? { areaRequest } : {}),
+            ...(requestBbox ? { requestBbox } : {}),
+          },
         });
         handleSaveFolderResponse(row);
         setSavedIds((s) => new Set(s).add(id));

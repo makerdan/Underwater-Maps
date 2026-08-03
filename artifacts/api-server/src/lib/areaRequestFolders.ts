@@ -29,8 +29,16 @@ import { logger } from "./logger.js";
 import { placeNameForPoint } from "./reverseGeocode.js";
 import { siblingNameTaken } from "../routes/folders.js";
 
-/** Folder is created when the save count for one request EXCEEDS this. */
+/** Folder is created when the save count for one area-request EXCEEDS this. */
 export const AREA_REQUEST_FOLDER_THRESHOLD = 2;
+
+/**
+ * Folder is created when the save count for one catalog entry EXCEEDS this.
+ * Unlike the area-request threshold (3 saves), catalog grouping kicks in on
+ * the 2nd save so the folder appears the moment the user accumulates more
+ * than one tile from the same dataset.
+ */
+export const CATALOG_FOLDER_THRESHOLD = 1;
 
 /** Max folder-name length (mirrors the folders route's trimName cap). */
 const MAX_FOLDER_NAME = 120;
@@ -159,6 +167,137 @@ export async function applyAreaRequestGrouping(
       { err, userId, areaRequestId: areaRequest.id },
       "[area-request] auto-folder grouping failed (save unaffected)",
     );
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Catalog-save grouping
+// ---------------------------------------------------------------------------
+
+/**
+ * Auto-group a user's saves for one catalog entry into a folder named after
+ * that catalog entry, once the save count exceeds CATALOG_FOLDER_THRESHOLD.
+ *
+ * Uses a synthetic areaRequestId of `catalog-group:<catalogId>` (a text key,
+ * not a UUID) to anchor the folder so it can be found on subsequent saves
+ * without an extra column.
+ *
+ * Returns the folderId when a folder applies, else null. Never throws.
+ */
+export async function applyCatalogSaveGrouping(
+  userId: string,
+  catalogId: string,
+  catalogName: string,
+): Promise<string | null> {
+  try {
+    const syntheticAreaRequestId = `catalog-group:${catalogId}`;
+
+    const saves = await db
+      .select({ id: userCatalogSavesTable.id })
+      .from(userCatalogSavesTable)
+      .where(
+        and(
+          eq(userCatalogSavesTable.userId, userId),
+          eq(userCatalogSavesTable.catalogId, catalogId),
+        ),
+      );
+
+    if (saves.length <= CATALOG_FOLDER_THRESHOLD) return null;
+
+    // Reuse the folder already created for this catalog entry, if any.
+    let folderId = await findRequestFolder(userId, syntheticAreaRequestId);
+
+    if (!folderId) {
+      folderId = await createCatalogFolder(userId, syntheticAreaRequestId, catalogName);
+      if (!folderId) {
+        // Race: re-check
+        folderId = await findRequestFolder(userId, syntheticAreaRequestId);
+      }
+      if (!folderId) return null;
+    }
+
+    // Move every save of this catalog that is still at root into the folder.
+    await db
+      .update(userCatalogSavesTable)
+      .set({ folderId })
+      .where(
+        and(
+          eq(userCatalogSavesTable.userId, userId),
+          eq(userCatalogSavesTable.catalogId, catalogId),
+          isNull(userCatalogSavesTable.folderId),
+        ),
+      );
+
+    // Move already-materialized datasets of this catalog that are still at root.
+    const linked = await db
+      .select({ datasetId: userCatalogSavesTable.datasetId })
+      .from(userCatalogSavesTable)
+      .where(
+        and(
+          eq(userCatalogSavesTable.userId, userId),
+          eq(userCatalogSavesTable.catalogId, catalogId),
+          isNotNull(userCatalogSavesTable.datasetId),
+        ),
+      );
+    const datasetIds = linked
+      .map((r) => r.datasetId)
+      .filter((id): id is string => typeof id === "string");
+    if (datasetIds.length > 0) {
+      await db
+        .update(customDatasetsTable)
+        .set({ folderId })
+        .where(
+          and(
+            eq(customDatasetsTable.userId, userId),
+            inArray(customDatasetsTable.id, datasetIds),
+            isNull(customDatasetsTable.folderId),
+          ),
+        );
+    }
+
+    return folderId;
+  } catch (err) {
+    logger.warn(
+      { err, userId, catalogId },
+      "[catalog-group] auto-folder grouping failed (save unaffected)",
+    );
+    return null;
+  }
+}
+
+/** Create a root folder for a catalog group. Returns null on insert failure. */
+async function createCatalogFolder(
+  userId: string,
+  syntheticAreaRequestId: string,
+  catalogName: string,
+): Promise<string | null> {
+  const base = catalogName.slice(0, MAX_FOLDER_NAME);
+  const existing = await db
+    .select()
+    .from(datasetFoldersTable)
+    .where(eq(datasetFoldersTable.userId, userId));
+
+  let name = base;
+  let suffix = 2;
+  while (siblingNameTaken(existing, null, name)) {
+    const tail = ` ${suffix}`;
+    const head = base.length + tail.length > MAX_FOLDER_NAME
+      ? base.slice(0, MAX_FOLDER_NAME - tail.length).trimEnd()
+      : base;
+    name = `${head}${tail}`;
+    suffix += 1;
+    if (suffix > 500) return null;
+  }
+
+  try {
+    const [created] = await db
+      .insert(datasetFoldersTable)
+      .values({ userId, parentId: null, name, areaRequestId: syntheticAreaRequestId })
+      .returning({ id: datasetFoldersTable.id });
+    return created?.id ?? null;
+  } catch (err) {
+    logger.warn({ err, userId, name }, "[catalog-group] folder insert failed");
     return null;
   }
 }

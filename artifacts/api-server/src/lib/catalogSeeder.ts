@@ -29,6 +29,14 @@ export interface CatalogSeedEntry {
   resolutionMMin: number | null;
   resolutionMMax: number | null;
   coverageBbox: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+  /**
+   * A small, survey-dense example bbox for entries whose coverageBbox is far
+   * too large to materialize directly (e.g. NCEI WCS mosaic covering all of
+   * SE Alaska). When a user saves without supplying their own requestBbox,
+   * the materializer falls back to this bbox instead of the full coverageBbox
+   * so the save always succeeds.
+   */
+  sampleBbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number };
   endpointUrl: string | null;
   accessNotes: string | null;
   description: string | null;
@@ -66,6 +74,10 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     resolutionMMin: 1,
     resolutionMMax: 50,
     coverageBbox: { minLon: -170, minLat: 54, maxLon: -130, maxLat: 72 },
+    // Thorne Bay / Clarence Strait — a survey-dense corridor that reliably
+    // returns real multibeam data. Used as the materializer fallback when the
+    // user saves without an active terrain bbox.
+    sampleBbox: { minLon: -132.5, minLat: 55.6, maxLon: -131.5, maxLat: 56.4 },
     endpointUrl: "https://gis.ngdc.noaa.gov/arcgis/services/multibeam_mosaic/ImageServer/WCSServer",
     accessNotes: "Requires WCS query (coverage: multibeam_mosaic_combined; the old bag_mosaic service was deleted upstream). GeoTIFF output only. Coverage limited to surveyed coastal corridors.",
     description: "High-resolution multibeam echosounder survey composite from NOAA National Centers for Environmental Information (NCEI). Covers Inside Passage and Alaskan coastal waters at 1–50 m resolution where surveys exist.",

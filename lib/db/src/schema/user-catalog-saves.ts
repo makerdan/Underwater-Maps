@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, index } from "drizzle-orm/pg-core";
 import { datasetFoldersTable } from "./dataset-folders.js";
 import { customDatasetsTable } from "./custom-datasets.js";
 
@@ -27,10 +27,19 @@ export const userCatalogSavesTable = pgTable("user_catalog_saves", {
   datasetId: uuid("dataset_id").references(() => customDatasetsTable.id, {
     onDelete: "set null",
   }),
+  // Optional bbox the user supplied at save-time (serialized JSON string:
+  // { minLon, minLat, maxLon, maxLat }). For NCEI WCS entries this narrows
+  // the WCS request to the user's actively loaded terrain area so the
+  // materializer fetches a small, survey-covered tile instead of the full
+  // multi-degree coverage bbox (which always times out or returns a flat grid).
+  requestBboxJson: text("request_bbox_json"),
 }, (table) => [
   index("user_catalog_saves_user_id_idx").on(table.userId),
   index("user_catalog_saves_area_request_idx").on(table.userId, table.areaRequestId),
-  uniqueIndex("user_catalog_saves_user_catalog_uniq").on(table.userId, table.catalogId),
+  // Non-unique: allows multiple saves per (user, catalog) — each keyed to a
+  // different requestBbox (area tile). Replaced the old uniqueIndex so users
+  // can save the same NCEI entry for multiple terrain areas.
+  index("user_catalog_saves_user_catalog_idx").on(table.userId, table.catalogId),
 ]);
 
 export type UserCatalogSave = typeof userCatalogSavesTable.$inferSelect;

@@ -2333,10 +2333,30 @@ export interface AreaRequestContext {
 }
 
 /**
+ * Optional bbox for the area to materialize. For NCEI WCS entries
+this should be the user's actively loaded terrain bbox so the
+materializer fetches a small surveyed corridor rather than the
+full coverage bbox (which times out or returns a near-flat grid).
+
+ */
+export type CatalogSaveBodyRequestBbox = {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+};
+
+/**
  * Optional request body for POST /datasets/catalog/{id}/save
  */
 export interface CatalogSaveBody {
   areaRequest?: AreaRequestContext;
+  /** Optional bbox for the area to materialize. For NCEI WCS entries
+  this should be the user's actively loaded terrain bbox so the
+  materializer fetches a small surveyed corridor rather than the
+  full coverage bbox (which times out or returns a near-flat grid).
+   */
+  requestBbox?: CatalogSaveBodyRequestBbox;
 }
 
 /**

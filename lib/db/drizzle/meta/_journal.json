@@ -141,6 +141,13 @@
       "when": 1785466198037,
       "tag": "0019_add_folder_area_request_id",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785550000000,
+      "tag": "0020_ncei_bag_mosaic_request_bbox",
+      "breakpoints": true
     }
   ]
 }

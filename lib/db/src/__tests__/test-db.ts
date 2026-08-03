@@ -91,18 +91,19 @@ export async function createTestDb(): Promise<TestContext> {
     );
 
     CREATE TABLE user_catalog_saves (
-      id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id      text NOT NULL,
-      catalog_id   text NOT NULL,
-      status       text NOT NULL DEFAULT 'queued',
-      requested_at timestamp NOT NULL DEFAULT now(),
-      ready_at     timestamp,
-      cache_key    text,
-      error_message text,
-      display_label text,
-      folder_id    uuid REFERENCES dataset_folders(id) ON DELETE SET NULL,
-      area_request_id text,
-      dataset_id   uuid REFERENCES custom_datasets(id) ON DELETE SET NULL
+      id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id           text NOT NULL,
+      catalog_id        text NOT NULL,
+      status            text NOT NULL DEFAULT 'queued',
+      requested_at      timestamp NOT NULL DEFAULT now(),
+      ready_at          timestamp,
+      cache_key         text,
+      error_message     text,
+      display_label     text,
+      folder_id         uuid REFERENCES dataset_folders(id) ON DELETE SET NULL,
+      area_request_id   text,
+      dataset_id        uuid REFERENCES custom_datasets(id) ON DELETE SET NULL,
+      request_bbox_json text
     );
 
     CREATE TABLE markers (

@@ -1226,7 +1226,31 @@ async function fetchNceiGrid(
 
   const url = `${cov.url}?${params.toString()}`;
 
-  const { ncols, nrows, nodata, values } = await fetchWcsGeoTiffGrid(url, 20_000, "NCEI WCS");
+  // Raised to 45 s (from 20 s) and wrapped in one silent retry on
+  // timeout or transient network error so intermittent WCS slowness doesn't
+  // immediately fail a catalog save.
+  let wcsResult: Awaited<ReturnType<typeof fetchWcsGeoTiffGrid>>;
+  try {
+    wcsResult = await fetchWcsGeoTiffGrid(url, 45_000, "NCEI WCS");
+  } catch (firstErr) {
+    const isTransient =
+      firstErr instanceof Error &&
+      (firstErr.name === "AbortError" ||
+        firstErr.message.includes("aborted") ||
+        firstErr.message.includes("network") ||
+        firstErr.message.includes("ECONNRESET") ||
+        firstErr.message.includes("ETIMEDOUT"));
+    if (isTransient) {
+      // One silent retry — build a fresh URL / controller (the old controller
+      // is already aborted) and try once more.
+      const retryParams = new URLSearchParams(params);
+      const retryUrl = `${cov.url}?${retryParams.toString()}`;
+      wcsResult = await fetchWcsGeoTiffGrid(retryUrl, 45_000, "NCEI WCS (retry)");
+    } else {
+      throw firstErr;
+    }
+  }
+  const { ncols, nrows, nodata, values } = wcsResult;
   if (!ncols || !nrows || values.length === 0) {
     throw new Error("NCEI WCS returned an empty or invalid grid");
   }

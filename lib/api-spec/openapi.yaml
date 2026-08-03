@@ -7466,6 +7466,27 @@ components:
       properties:
         areaRequest:
           $ref: "#/components/schemas/AreaRequestContext"
+        requestBbox:
+          type: object
+          description: |
+            Optional bbox for the area to materialize. For NCEI WCS entries
+            this should be the user's actively loaded terrain bbox so the
+            materializer fetches a small surveyed corridor rather than the
+            full coverage bbox (which times out or returns a near-flat grid).
+          properties:
+            minLon:
+              type: number
+              format: double
+            minLat:
+              type: number
+              format: double
+            maxLon:
+              type: number
+              format: double
+            maxLat:
+              type: number
+              format: double
+          required: [minLon, minLat, maxLon, maxLat]
     FederatedSaveBody:
       type: object
       description: Request body for POST /search/federated/save

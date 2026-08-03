@@ -26,7 +26,7 @@
  */
 
 import { Router } from "express";
-import { eq, and, lt, desc, asc } from "drizzle-orm";
+import { eq, and, lt, desc, asc, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { CatalogSearchQuerySchema, CatalogIdParamSchema, SaveIdParamSchema } from "./schemas.js";
@@ -56,6 +56,7 @@ import {
 import {
   AreaRequestContextSchema,
   applyAreaRequestGrouping,
+  applyCatalogSaveGrouping,
 } from "../lib/areaRequestFolders.js";
 import {
   buildTerrainGrid,
@@ -421,18 +422,33 @@ router.post("/datasets/point-radius-query", validateBody(PointRadiusQueryBody, "
 // POST /datasets/catalog/:id/save  (auth-gated)
 // ---------------------------------------------------------------------------
 
+// Optional bbox the user supplies at save time. For NCEI WCS entries this
+// narrows the WCS request to the user's actively loaded terrain area so the
+// materializer fetches a small, survey-covered tile instead of the 40° × 18°
+// coverage bbox (which always times out or returns a near-flat grid).
+const RequestBboxSchema = z.object({
+  minLon: z.number().finite(),
+  minLat: z.number().finite(),
+  maxLon: z.number().finite(),
+  maxLat: z.number().finite(),
+});
+
 // Optional body: carries the originating area-request context so the server
-// can auto-group >2 saves from one area search into a folder. Older clients
-// send no body at all, which parses as `undefined`.
+// can auto-group >2 saves from one area search into a folder, plus an
+// optional requestBbox for NCEI WCS entries. Older clients send no body at
+// all, which parses as `undefined`.
 const CatalogSaveBodySchema = z
   .object({
     areaRequest: AreaRequestContextSchema.optional(),
+    requestBbox: RequestBboxSchema.optional(),
   })
   .optional();
 
 router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, validateBody(CatalogSaveBodySchema, "POST /api/datasets/catalog/:id/save"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const areaRequest = (res.locals.parsedBody as z.infer<typeof CatalogSaveBodySchema>)?.areaRequest ?? null;
+  const parsedSaveBody = res.locals.parsedBody as z.infer<typeof CatalogSaveBodySchema>;
+  const areaRequest = parsedSaveBody?.areaRequest ?? null;
+  const requestBbox = parsedSaveBody?.requestBbox ?? null;
   const idParsed = CatalogIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     res.status(400).json({
@@ -451,9 +467,10 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
     return;
   }
 
-  // Idempotent: if the user already has a save row for this catalog entry,
-  // return it as-is. Callers can re-issue a save to retry a failed job via
-  // a separate DELETE + re-POST flow (out of scope here).
+  // Idempotent: if the user already has a save row for this catalog entry
+  // with the same requestBbox, return it as-is. Different bboxes are
+  // different area tiles and are allowed to coexist.
+  const requestBboxJson = requestBbox ? JSON.stringify(requestBbox) : null;
   const existing = await db
     .select()
     .from(userCatalogSavesTable)
@@ -461,6 +478,9 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
       and(
         eq(userCatalogSavesTable.userId, userId),
         eq(userCatalogSavesTable.catalogId, catalogId),
+        requestBboxJson !== null
+          ? eq(userCatalogSavesTable.requestBboxJson, requestBboxJson)
+          : isNull(userCatalogSavesTable.requestBboxJson),
       ),
     );
 
@@ -469,9 +489,9 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
     return;
   }
 
-  // Create new save record in processing state.
-  // onConflictDoNothing handles the rare race where two concurrent requests
-  // both pass the "existing" check above and then race on the insert.
+  // Create new save record in processing state. The unique constraint was
+  // dropped (replaced by a plain index) to allow multiple tiles per catalog
+  // entry, so no onConflictDoNothing needed.
   const [created] = await db
     .insert(userCatalogSavesTable)
     .values({
@@ -479,32 +499,28 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
       catalogId,
       status: "processing",
       areaRequestId: areaRequest?.id ?? null,
+      requestBboxJson,
     })
-    .onConflictDoNothing()
     .returning();
 
   if (!created) {
-    // Race condition: a concurrent request created the row between our SELECT
-    // and this INSERT. Fetch and return the existing row instead of erroring.
-    const [conflicted] = await db
-      .select()
-      .from(userCatalogSavesTable)
-      .where(and(eq(userCatalogSavesTable.userId, userId), eq(userCatalogSavesTable.catalogId, catalogId)));
-    if (!conflicted) {
-      res.status(500).json({ error: "db_error", details: "Failed to create save record" });
-      return;
-    }
-    res.status(200).json(validateResponse(GetDatasetsMySavesResponseItem, formatSaveRow(conflicted, entry), "POST /api/datasets/catalog/:id/save (concurrent)"));
+    res.status(500).json({ error: "db_error", details: "Failed to create save record" });
     return;
   }
 
-  // Auto-folder grouping: when this request now has >2 saves, create (or
+  // Area-request auto-folder: when this request now has >2 saves, create (or
   // reuse) a folder for the area request and move all of its saves into it.
-  // Runs before the materialize kickoff so the dataset row lands in the
-  // folder directly in the common case.
   if (areaRequest) {
     const groupFolderId = await applyAreaRequestGrouping(userId, areaRequest);
     if (groupFolderId && created.folderId == null) created.folderId = groupFolderId;
+  }
+
+  // Catalog auto-folder: when the user now has >1 saves for this catalog
+  // entry (multiple area tiles), group them into a folder named after the
+  // catalog entry. Threshold = 2 so the folder appears on the 2nd tile.
+  if (!created.folderId) {
+    const catalogFolderId = await applyCatalogSaveGrouping(userId, catalogId, entry.name);
+    if (catalogFolderId) created.folderId = catalogFolderId;
   }
 
   // Kick off materialization. Fire-and-forget so the HTTP response returns
@@ -529,6 +545,41 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
  *    handler itself might throw (e.g. the DB update in the catch block failing)
  *    and makes a last-ditch attempt to mark the row `failed`.
  */
+/** Parse a requestBboxJson string into a bbox object, or return null. */
+function parseRequestBbox(
+  json: string | null | undefined,
+): { minLon: number; minLat: number; maxLon: number; maxLat: number } | null {
+  if (!json) return null;
+  try {
+    const p = JSON.parse(json) as unknown;
+    if (
+      typeof p === "object" &&
+      p !== null &&
+      "minLon" in p && "minLat" in p && "maxLon" in p && "maxLat" in p &&
+      typeof (p as Record<string, unknown>).minLon === "number"
+    ) {
+      const b = p as { minLon: number; minLat: number; maxLon: number; maxLat: number };
+      if (isFinite(b.minLon) && isFinite(b.minLat) && isFinite(b.maxLon) && isFinite(b.maxLat)) {
+        return b;
+      }
+    }
+  } catch {
+    /* ignore malformed json */
+  }
+  return null;
+}
+
+/**
+ * Map internal materializer error messages to user-facing text. Raw "near-flat
+ * grid" messages from NCEI WCS are opaque; replace them with a clear guide.
+ */
+function humanizeErrorMessage(raw: string): string {
+  if (raw.includes("near-flat grid")) {
+    return "No multibeam surveys found in this area. Try loading a terrain near Ketchikan or Thorne Bay first, then re-save.";
+  }
+  return raw;
+}
+
 export async function materializeSave(
   saveId: string,
   userId: string,
@@ -536,7 +587,15 @@ export async function materializeSave(
 ): Promise<void> {
   try {
     try {
-      const materialized = await buildCatalogGrids(entry);
+      // Read requestBboxJson from the save row so materializers can use the
+      // user-supplied bbox rather than the full coverage bbox.
+      const [saveRowForBbox] = await db
+        .select({ requestBboxJson: userCatalogSavesTable.requestBboxJson })
+        .from(userCatalogSavesTable)
+        .where(eq(userCatalogSavesTable.id, saveId));
+      const requestBbox = parseRequestBbox(saveRowForBbox?.requestBboxJson);
+
+      const materialized = await buildCatalogGrids(entry, requestBbox);
       if (!materialized) {
         throw new Error(
           `Materialization is not yet implemented for catalog entries of type '${entry.dataType}' ` +
@@ -616,8 +675,9 @@ export async function materializeSave(
           .where(eq(customDatasetsTable.id, created.id));
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Materialization failed";
-      logger.warn({ saveId, entryId: entry.id, message }, `[catalog-saves] materialize ${saveId} (${entry.id}) failed: ${message}`);
+      const rawMessage = err instanceof Error ? err.message : "Materialization failed";
+      const message = humanizeErrorMessage(rawMessage);
+      logger.warn({ saveId, entryId: entry.id, rawMessage }, `[catalog-saves] materialize ${saveId} (${entry.id}) failed: ${rawMessage}`);
       await db
         .update(userCatalogSavesTable)
         .set({ status: "failed", errorMessage: message })
@@ -654,8 +714,25 @@ export async function materializeSave(
  */
 type TerrainGrid = NonNullable<Awaited<ReturnType<typeof buildTerrainGrid>>>;
 
+/**
+ * Compute terrain and overview resolutions from a bbox area (deg²).
+ *
+ * Small bboxes (≤1 deg²) get the highest resolution because they cover a
+ * narrow surveyed corridor; larger bboxes get lower resolution so the WCS
+ * response stays within the fetch timeout.
+ */
+function adaptiveNceiResolution(bbox: {
+  minLon: number; minLat: number; maxLon: number; maxLat: number;
+}): { terrainRes: number; overviewRes: number } {
+  const area = (bbox.maxLon - bbox.minLon) * (bbox.maxLat - bbox.minLat);
+  if (area <= 1) return { terrainRes: 512, overviewRes: 128 };
+  if (area <= 10) return { terrainRes: 256, overviewRes: 64 };
+  return { terrainRes: 128, overviewRes: 32 };
+}
+
 export async function buildCatalogGrids(
   entry: CatalogSeedEntry,
+  requestBbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number } | null,
 ): Promise<{ terrain: TerrainGrid; overview: TerrainGrid } | null> {
   if (entry.id.startsWith("preset-")) {
     const presetId = entry.id.replace(/^preset-/, "");
@@ -742,22 +819,31 @@ export async function buildCatalogGrids(
 
   // NCEI bathymetry entries — high-resolution multibeam (BAG mosaic) and
   // integrated community DEMs (DEM Global Mosaic). Both are fetched from
-  // an NCEI WCS using the entry's `coverageBbox`. The fetcher already
-  // throws a clear "coverage unavailable" / "near-flat grid — likely no
-  // coverage" error when the bbox falls outside actual NCEI survey
-  // coverage; the materializer catches that and writes it into the save
-  // row's `errorMessage`, producing the "clear failed message" path.
+  // an NCEI WCS.
+  //
+  // Bbox priority: user-supplied requestBbox → entry.sampleBbox → coverageBbox.
+  //
+  // The user-supplied requestBbox narrows the fetch to the terrain area the
+  // user is actively viewing, where real survey data almost certainly exists.
+  // The sampleBbox is a known-good small area for entries (e.g. ncei-bag-mosaic-
+  // alaska) whose coverageBbox is far too large — the full bbox always times
+  // out or returns a near-flat grid because most cells are NoData.
+  //
+  // Resolution is adapted to the chosen bbox area so the WCS response stays
+  // within the fetch timeout even for moderately sized bboxes.
   const nceiCoverageKey = nceiCoverageForEntry(entry);
   if (nceiCoverageKey) {
+    const bbox = requestBbox ?? entry.sampleBbox ?? entry.coverageBbox;
+    const { terrainRes, overviewRes } = adaptiveNceiResolution(bbox);
     const meta = {
       datasetId: entry.id,
       name: entry.name,
       waterType: entry.waterType,
-      bbox: entry.coverageBbox,
+      bbox,
       coverageKey: nceiCoverageKey,
     };
-    const terrain = await buildNceiTerrainForBbox(meta, 256, { smoothing: true });
-    const overview = await buildNceiTerrainForBbox(meta, 64, { smoothing: true });
+    const terrain = await buildNceiTerrainForBbox(meta, terrainRes, { smoothing: true });
+    const overview = await buildNceiTerrainForBbox(meta, overviewRes, { smoothing: true });
     return { terrain, overview };
   }
 

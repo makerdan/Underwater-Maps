@@ -3672,7 +3672,13 @@ export const PostDatasetsCatalogIdSaveBody = zod.object({
   "lat": zod.number().min(postDatasetsCatalogIdSaveBodyAreaRequestCenterLatMin).max(postDatasetsCatalogIdSaveBodyAreaRequestCenterLatMax),
   "lon": zod.number().min(postDatasetsCatalogIdSaveBodyAreaRequestCenterLonMin).max(postDatasetsCatalogIdSaveBodyAreaRequestCenterLonMax)
 }).optional().describe('Optional center point of the searched area. When present, the\nserver attempts to reverse-geocode it to a nearby place name for\nthe auto-created folder, falling back to `label` when no place\nis found. Sent only for coordinate\/viewport-driven searches;\ntext-query searches omit it so the query text names the folder.\n')
-}).optional().describe('Identifies the originating area search (bbox \/ point-radius \/\nfederated \"find data\" request) for a save. All saves issued from one\nsearch share the same client-generated `id`; when more than two saves\ncarry the same id, the server auto-creates a dataset folder named\nafter `label` and routes every save from that request into it.\n')
+}).optional().describe('Identifies the originating area search (bbox \/ point-radius \/\nfederated \"find data\" request) for a save. All saves issued from one\nsearch share the same client-generated `id`; when more than two saves\ncarry the same id, the server auto-creates a dataset folder named\nafter `label` and routes every save from that request into it.\n'),
+  "requestBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).optional().describe('Optional bbox for the area to materialize. For NCEI WCS entries\nthis should be the user\'s actively loaded terrain bbox so the\nmaterializer fetches a small surveyed corridor rather than the\nfull coverage bbox (which times out or returns a near-flat grid).\n')
 }).describe('Optional request body for POST \/datasets\/catalog\/{id}\/save')
 
 
