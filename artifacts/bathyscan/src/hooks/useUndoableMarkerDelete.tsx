@@ -82,7 +82,10 @@ export function useUndoableMarkerDelete() {
           {
             onSuccess: () => {
               mutatingRef.current.delete(marker.id);
-              void qc.invalidateQueries({ queryKey: key });
+              // Invalidate all marker queries (primary + every secondary dataset)
+              // so the minimap reflects the deletion regardless of which dataset
+              // the deleted marker belonged to.
+              void qc.invalidateQueries({ queryKey: getGetMarkersQueryKey() });
             },
             onError: (err) => {
               mutatingRef.current.delete(marker.id);
@@ -94,7 +97,7 @@ export function useUndoableMarkerDelete() {
                   description: "This marker was already deleted from another session.",
                   duration: 4000,
                 });
-                void qc.invalidateQueries({ queryKey: key });
+                void qc.invalidateQueries({ queryKey: getGetMarkersQueryKey() });
                 return;
               }
               if (status === 409) {
@@ -104,7 +107,7 @@ export function useUndoableMarkerDelete() {
                   description: "Changes were not saved due to a conflict — the list has been refreshed.",
                   duration: 4000,
                 });
-                void qc.invalidateQueries({ queryKey: key });
+                void qc.invalidateQueries({ queryKey: getGetMarkersQueryKey() });
                 return;
               }
               // Other error — restore only this marker into the current cache

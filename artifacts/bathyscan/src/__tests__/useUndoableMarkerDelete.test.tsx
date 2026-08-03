@@ -65,10 +65,15 @@ const makeApiClientMock = vi.hoisted(() => {
 });
 
 const deleteMutate = vi.fn();
+// Base query key used when no params are supplied (broad invalidation).
+const MARKERS_BASE_KEY = ["markers"];
+
 vi.mock("@workspace/api-client-react", () =>
   makeApiClientMock({
     useDeleteMarkersId: () => ({ mutate: deleteMutate }),
-    getGetMarkersQueryKey: ({ datasetId }: { datasetId: string }) => ["markers", datasetId],
+    // Mirror the real generated helper: no params → base key, with params → [base, params].
+    getGetMarkersQueryKey: (params?: { datasetId?: string }) =>
+      params != null ? ["markers", params.datasetId] : MARKERS_BASE_KEY,
   }),
 );
 
@@ -186,7 +191,7 @@ describe("useUndoableMarkerDelete", () => {
     expect(deleteMutate.mock.calls[0]![0]).toEqual({ id: "m1" });
   });
 
-  it("invalidates the marker query on successful DELETE", () => {
+  it("invalidates ALL marker queries (broad base key) on successful DELETE", () => {
     const { result } = renderHook(() => useUndoableMarkerDelete());
 
     act(() => {
@@ -202,8 +207,40 @@ describe("useUndoableMarkerDelete", () => {
       opts.onSuccess();
     });
 
+    // Must use the no-params base key so React Query's prefix-matching
+    // invalidates all per-dataset marker queries (primary + secondaries),
+    // keeping the minimap in sync in multi-dataset mode.
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: MARKERS_KEY,
+      queryKey: MARKERS_BASE_KEY,
+    });
+  });
+
+  it("invalidates ALL marker queries when DELETE targets a secondary dataset", () => {
+    // Seed a secondary dataset's cache with a marker.
+    const SECONDARY_MARKERS_KEY = ["markers", "ds-secondary"];
+    fakeCache.set(JSON.stringify(SECONDARY_MARKERS_KEY), [
+      { id: "ms1", label: "Secondary marker" },
+    ]);
+
+    const { result } = renderHook(() => useUndoableMarkerDelete());
+
+    act(() => {
+      result.current.requestDelete({ id: "ms1", label: "Secondary marker" }, "ds-secondary");
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
+
+    const opts = deleteMutate.mock.calls[0]![1] as { onSuccess: () => void };
+    act(() => {
+      opts.onSuccess();
+    });
+
+    // The broad base key must be used so the Minimap's query for "ds-secondary"
+    // (and any other loaded datasets) gets invalidated — not just the primary one.
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: MARKERS_BASE_KEY,
     });
   });
 

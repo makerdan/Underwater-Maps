@@ -928,7 +928,7 @@ export function installTestHelpers(): void {
 
   const buildProductionMarkerMenuItems = (
     marker: Marker,
-    capturedDatasetId: string,
+    _capturedDatasetId: string,
   ): ContextMenuItem[] => [
     { label: "Fly to marker", icon: "✈️", onClick: () => {} },
     {
@@ -952,7 +952,6 @@ export function installTestHelpers(): void {
         // runMarkerDelete helper that production code uses.
         runMarkerDelete({
           marker,
-          datasetId: capturedDatasetId,
           queryClient,
           mutation: {
             mutate: ((vars: { id: string }, opts?: {

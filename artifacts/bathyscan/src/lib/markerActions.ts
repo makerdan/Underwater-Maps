@@ -18,24 +18,17 @@ export type DeleteMarkerMutation = Pick<
 
 export interface RunMarkerDeleteArgs {
   marker: Pick<Marker, "id">;
-  /**
-   * The dataset whose marker list should be invalidated. Captured at action
-   * time by the caller so a mid-flight dataset switch can't redirect the
-   * invalidation to the wrong query key.
-   */
-  datasetId: string;
   queryClient: QueryClient;
   mutation: DeleteMarkerMutation;
 }
 
 /**
- * Fire the real DELETE /markers/:id mutation and, on success, invalidate the
- * marker list query for the captured dataset. Mirrors the production onClick
- * inside `useFlyControls.buildMarkerMenuItems`.
+ * Fire the real DELETE /markers/:id mutation and, on success, invalidate all
+ * marker list queries so the minimap stays in sync across every loaded dataset.
+ * Mirrors the production onClick inside `useFlyControls.buildMarkerMenuItems`.
  */
 export function runMarkerDelete({
   marker,
-  datasetId,
   queryClient,
   mutation,
 }: RunMarkerDeleteArgs): void {
@@ -43,11 +36,12 @@ export function runMarkerDelete({
     { id: marker.id },
     {
       onSuccess: () => {
-        if (datasetId) {
-          queryClient.invalidateQueries({
-            queryKey: getGetMarkersQueryKey({ datasetId }),
-          });
-        }
+        // Invalidate all marker queries (primary + every secondary dataset) so
+        // the minimap reflects the deletion regardless of which dataset this
+        // marker belonged to.
+        queryClient.invalidateQueries({
+          queryKey: getGetMarkersQueryKey(),
+        });
       },
     },
   );

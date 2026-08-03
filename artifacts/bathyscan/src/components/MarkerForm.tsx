@@ -253,8 +253,11 @@ export const MarkerForm: React.FC = () => {
         },
         {
           onSuccess: () => {
+            // Invalidate all marker queries (primary + every secondary dataset)
+            // so the minimap reflects the edit regardless of which dataset this
+            // marker belongs to.
             void qc.invalidateQueries({
-              queryKey: getGetMarkersQueryKey({ datasetId: editMarker.datasetId ?? undefined }),
+              queryKey: getGetMarkersQueryKey(),
             });
             closeEdit();
           },
@@ -267,7 +270,7 @@ export const MarkerForm: React.FC = () => {
                 variant: "destructive",
               });
               void qc.invalidateQueries({
-                queryKey: getGetMarkersQueryKey({ datasetId: editMarker.datasetId ?? undefined }),
+                queryKey: getGetMarkersQueryKey(),
               });
               closeEdit();
             }
@@ -321,8 +324,10 @@ export const MarkerForm: React.FC = () => {
       { data: markerBody },
       {
         onSuccess: (created) => {
+          // Invalidate all marker queries so the minimap picks up the new
+          // marker on every visible dataset's query, not just the primary one.
           void qc.invalidateQueries({
-            queryKey: getGetMarkersQueryKey({ datasetId: terrain.datasetId }),
+            queryKey: getGetMarkersQueryKey(),
           });
           setMarkerFormOpen(false);
           // "Log a catch here" flow: the terrain context menu set this flag
