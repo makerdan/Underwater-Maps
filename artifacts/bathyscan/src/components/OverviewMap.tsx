@@ -1519,9 +1519,10 @@ export const OverviewMap: React.FC = () => {
       // geographic grid and markers, so depth labels stay crisp.
       const { overviewShowGrid, units, colormapTheme: activeTheme } = useSettingsStore.getState();
       if (contoursEnabledRef.current && contourSegmentsRef.current.length > 0) {
-        // renderContourLines uses grid.width/height/minDepth/maxDepth and its own
-        // internal lonLatToCanvas — must stay on the primary dataset's overviewGrid.
-        renderContourLines(ctx, contourSegmentsRef.current, grid, t, units, activeTheme);
+        // renderContourLines uses grid.width/height/minDepth/maxDepth for the
+        // primary dataset's own grid, but must project lon/lat coords onto the
+        // shared worldGrid canvas layout (same anchor used by renderHeatmapAtBbox).
+        renderContourLines(ctx, contourSegmentsRef.current, grid, t, units, activeTheme, worldGrid);
       }
 
       // Lat/lon grid (gated by user setting; renderGridLines also checks scale ≥ 2 internally)

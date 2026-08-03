@@ -1517,3 +1517,123 @@ describe("renderContourLines — palette staleness and edge-case robustness", ()
     expect((ctx.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// renderContourLines — worldGrid canvas projection (multi-dataset regression)
+// ---------------------------------------------------------------------------
+
+describe("renderContourLines — worldGrid canvas projection in multi-dataset mode", () => {
+  // Primary dataset: small patch, 2×2, depths [0,0,20,20].
+  // The contour at 10 m lies at gy=0.5, gx=0..1:
+  //   lon = minLon + (gx/(W-1)) * lonRange  →  gx=0 → -120, gx=1 → -119
+  //   lat = minLat + (gy/(H-1)) * latRange  →  gy=0.5 → 47.5
+  const primaryGrid = makeGrid({
+    width: 2,
+    height: 2,
+    depths: [0, 0, 20, 20],
+    minDepth: 0,
+    maxDepth: 20,
+    minLon: -120,
+    maxLon: -119,
+    minLat: 47,
+    maxLat: 48,
+  });
+
+  // World grid: larger bbox (extends 1° west, 1° south, 1° north).
+  // maxLat differs from primaryGrid so Y coords diverge between the two projections.
+  const worldGrid = makeGrid({
+    width: 2,
+    height: 2,
+    depths: [0, 0, 20, 20],
+    minDepth: 0,
+    maxDepth: 20,
+    minLon: -121,
+    maxLon: -119,
+    minLat: 46,
+    maxLat: 49,
+  });
+
+  const t = makeTransform({ pxPerDeg: 200, offsetX: 0, offsetY: 0 });
+
+  // Contour at depth=10 is at gy=0.5, gx spans 0..1 → lon=-120..-119, lat=47.5.
+  // Use the western endpoint (gx=0) as the representative point.
+  const contourLon = primaryGrid.minLon; // -120
+  const contourLat = primaryGrid.minLat + 0.5 * (primaryGrid.maxLat - primaryGrid.minLat); // 47.5
+
+  function makeCtxWithCanvas() {
+    return {
+      ...makeCtx(),
+      canvas: { width: 800, height: 800 },
+    } as unknown as CanvasRenderingContext2D;
+  }
+
+  beforeEach(() => {
+    usePaletteStore.getState().reset();
+    vi.restoreAllMocks();
+  });
+
+  it("contour points use worldGrid for canvas projection — not primaryGrid", () => {
+    const segments = buildContourLines(primaryGrid, 10);
+    expect(segments.length).toBeGreaterThan(0);
+
+    // Expected canvas position when worldGrid is the reference.
+    const [expectedX, expectedY] = lonLatToCanvas(contourLon, contourLat, worldGrid, t);
+
+    // Wrong position — what the old code produced (primaryGrid as reference).
+    const [wrongX, wrongY] = lonLatToCanvas(contourLon, contourLat, primaryGrid, t);
+
+    // Sanity: the two projections must differ in both axes so the test is meaningful.
+    expect(expectedX).not.toBeCloseTo(wrongX, 1);
+    expect(expectedY).not.toBeCloseTo(wrongY, 1);
+
+    // Render with worldGrid and capture stroke paths.
+    const ctx = makeCtxWithCanvas();
+    renderContourLines(ctx, segments, primaryGrid, t, "metric", "ocean", worldGrid);
+
+    const moveToArgs = (ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
+    const lineToArgs = (ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
+    const allPoints = [...moveToArgs, ...lineToArgs];
+    expect(allPoints.length).toBeGreaterThan(0);
+
+    // At least one point must be close to the worldGrid-projected position.
+    const TOLERANCE = 2;
+    const hasWorldGridPoint = allPoints.some(
+      ([px, py]) => Math.abs(px - expectedX) < TOLERANCE && Math.abs(py - expectedY) < TOLERANCE,
+    );
+    // No point should land at the (wrong) primaryGrid-projected position.
+    const hasWrongGridPoint = allPoints.some(
+      ([px, py]) => Math.abs(px - wrongX) < TOLERANCE && Math.abs(py - wrongY) < TOLERANCE,
+    );
+
+    expect(hasWorldGridPoint).toBe(true);
+    expect(hasWrongGridPoint).toBe(false);
+  });
+
+  it("without worldGrid argument canvas coords stay in primaryGrid space — single-dataset backward compat", () => {
+    const segments = buildContourLines(primaryGrid, 10);
+    expect(segments.length).toBeGreaterThan(0);
+
+    // Without worldGrid the reference grid is primaryGrid.
+    const [expectedX, expectedY] = lonLatToCanvas(contourLon, contourLat, primaryGrid, t);
+    const [worldX, worldY] = lonLatToCanvas(contourLon, contourLat, worldGrid, t);
+
+    const ctx = makeCtxWithCanvas();
+    renderContourLines(ctx, segments, primaryGrid, t, "metric", "ocean");
+
+    const moveToArgs = (ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
+    const lineToArgs = (ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
+    const allPoints = [...moveToArgs, ...lineToArgs];
+    expect(allPoints.length).toBeGreaterThan(0);
+
+    const TOLERANCE = 2;
+    const hasPrimaryPoint = allPoints.some(
+      ([px, py]) => Math.abs(px - expectedX) < TOLERANCE && Math.abs(py - expectedY) < TOLERANCE,
+    );
+    const hasWorldPoint = allPoints.some(
+      ([px, py]) => Math.abs(px - worldX) < TOLERANCE && Math.abs(py - worldY) < TOLERANCE,
+    );
+
+    expect(hasPrimaryPoint).toBe(true);
+    expect(hasWorldPoint).toBe(false);
+  });
+});

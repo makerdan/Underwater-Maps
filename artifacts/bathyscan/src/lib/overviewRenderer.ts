@@ -1627,6 +1627,7 @@ export function renderContourLines(
   t: OverviewTransform,
   units: UnitsSystem,
   colormapTheme: ColormapTheme,
+  worldGrid?: TerrainData,
 ): void {
   if (!segments.length) return;
 
@@ -1641,7 +1642,7 @@ export function renderContourLines(
   const toCanvas = (gx: number, gy: number): [number, number] => {
     const lon = grid.minLon + (gx / Math.max(W - 1, 1)) * lonRange;
     const lat = grid.minLat + (gy / Math.max(H - 1, 1)) * latRange;
-    return lonLatToCanvas(lon, lat, grid, t);
+    return lonLatToCanvas(lon, lat, worldGrid ?? grid, t);
   };
 
   // At scale=1 (initial zoomed-out view) lines are drawn at minimum width so
