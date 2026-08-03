@@ -11,7 +11,9 @@ import type {
 } from "@workspace/api-client-react";
 import type { UnitsSystem, ColormapTheme } from "./settingsStore";
 import type { SelectedHotspot } from "./uiStore";
-import { getColormap, getColormapDepthDomain } from "./colormap";
+import * as THREE from "three";
+import { getColormap, getColormapDepthDomain, isAbsoluteDepthTheme } from "./colormap";
+import { usePaletteStore } from "./paletteStore";
 import { formatDepth } from "./units";
 import { NO_DATA_COLOR } from "./terrain";
 
@@ -301,7 +303,14 @@ export function buildHillshadeLayer(grid: TerrainData): Float32Array {
       const mag = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
       const dot = (nx / mag) * HS_SUN_X + (ny / mag) * HS_SUN_Y + (nz / mag) * HS_SUN_Z;
 
-      result[pixelIdx] = Math.min(HS_AMBIENT + HS_DIFFUSE * Math.max(0, dot), 1.2);
+      const rawIntensity = Math.min(HS_AMBIENT + HS_DIFFUSE * Math.max(0, dot), 1.2);
+      // Slope-magnitude darkening: steep terrain slopes receive a subtle dark-ink
+      // edge on top of the existing directional hillshade, giving ridges and drop-offs
+      // stronger visual definition.  The horizontal gradient magnitude in world space
+      // (unnormalised nx, nz) is clamped to [0, 1] so very steep terrain does not
+      // over-darken.  Flat areas (nx = nz = 0) are unaffected.
+      const slopeMag = Math.min(1, Math.sqrt(nx * nx + nz * nz));
+      result[pixelIdx] = rawIntensity * (1 - 0.18 * slopeMag);
     }
   }
 
@@ -359,6 +368,19 @@ export function buildHeatmapBitmap(
   // mirroring the GLSL `fragColor = paletteColor * lighting` in terrainShader.ts.
   const hillshade = buildHillshadeLayer(grid);
 
+  // Depth-band hypsometric tinting: blend each pixel's palette band colour at
+  // 0.28 alpha before hillshade multiplication so depth zones have a subtle
+  // tonal fill baked into every dataset bitmap.  Only active for ocean/custom
+  // absolute-depth themes; preset themes have no named band colours.
+  const _isBandFill = isAbsoluteDepthTheme(colormapTheme);
+  const _paletteSnap = _isBandFill ? usePaletteStore.getState() : null;
+  const _bandColorsArr = (_paletteSnap?.bandColors ?? []) as readonly string[];
+  const _bandBoundariesM: number[] =
+    _isBandFill && (_paletteSnap?.bandBoundaries?.length ?? 0) > 1
+      ? (_paletteSnap!.bandBoundaries as readonly number[]).map((ft) => ft * 0.3048)
+      : [];
+  const BAND_BLEND_ALPHA = 0.28;
+
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -405,10 +427,29 @@ export function buildHeatmapBitmap(
       const t = Math.max(0, Math.min(1, (rawDepth - domain.min) / domainRange));
       // Get the palette colour in linear-sRGB space (THREE.Color with
       // ColorManagement enabled stores values in linear space).
+      const lin = toColor(t);
+
+      // Depth-band hypsometric fill: blend the palette band colour at ~0.28 alpha
+      // before hillshade so depth zones have subtle tonal separation.
+      if (_isBandFill && _bandBoundariesM.length > 1 && _bandColorsArr.length > 0) {
+        const depth = rawDepth as number;
+        let bandIdx = _bandColorsArr.length - 1;
+        for (let bi = 0; bi < _bandBoundariesM.length - 1; bi++) {
+          if (depth < (_bandBoundariesM[bi + 1] ?? Infinity)) {
+            bandIdx = Math.min(bi, _bandColorsArr.length - 1);
+            break;
+          }
+        }
+        const bandHex = (_bandColorsArr[bandIdx] ?? _bandColorsArr[_bandColorsArr.length - 1]) as string;
+        const bandLin = new THREE.Color(bandHex);
+        lin.r = lin.r * (1 - BAND_BLEND_ALPHA) + bandLin.r * BAND_BLEND_ALPHA;
+        lin.g = lin.g * (1 - BAND_BLEND_ALPHA) + bandLin.g * BAND_BLEND_ALPHA;
+        lin.b = lin.b * (1 - BAND_BLEND_ALPHA) + bandLin.b * BAND_BLEND_ALPHA;
+      }
+
       // Multiply by the hillshade factor BEFORE sRGB conversion so the
       // lighting is physically correct, exactly matching the GLSL path:
       //   finalColor = paletteColor * lighting
-      const lin = toColor(t);
       lin.r *= hs;
       lin.g *= hs;
       lin.b *= hs;
@@ -1666,15 +1707,50 @@ export function renderContourLines(
     return false;
   };
 
-  for (const [depth, segs] of byDepth) {
-    const t01 = Math.max(0, Math.min(1, (depth - contourDomain.min) / contourDomainRange));
-    const col = toColor(t01).clone().convertLinearToSRGB();
-    const r = Math.max(0, Math.min(255, Math.round(col.r * 255)));
-    const g = Math.max(0, Math.min(255, Math.round(col.g * 255)));
-    const b = Math.max(0, Math.min(255, Math.round(col.b * 255)));
+  // Band-colour lookup for ocean/custom themes (mirrors drawMinimapContours in Minimap.tsx).
+  // Pre-computed outside the loop so the store is only read once.
+  const _rcIsBand = isAbsoluteDepthTheme(colormapTheme);
+  const _rcPalette = _rcIsBand ? usePaletteStore.getState() : null;
+  const _rcBandColorsArr = (_rcPalette?.bandColors ?? []) as readonly string[];
+  const _rcBandBoundariesM: number[] =
+    _rcIsBand && (_rcPalette?.bandBoundaries?.length ?? 0) > 1
+      ? (_rcPalette!.bandBoundaries as readonly number[]).map((ft) => ft * 0.3048)
+      : [];
 
-    ctx.strokeStyle = `rgba(${r},${g},${b},0.60)`;
+  for (const [depth, segs] of byDepth) {
+    // Colour source: band colour for ocean/custom (warm, palette-consistent look
+    // matching the Minimap); colormap sample at t for fixed preset themes.
+    let r: number;
+    let g: number;
+    let b: number;
+
+    if (_rcIsBand && _rcBandBoundariesM.length > 1 && _rcBandColorsArr.length > 0) {
+      // Ocean/custom: find the band containing this depth and use its palette colour.
+      let bandIdx = _rcBandColorsArr.length - 1;
+      for (let bi = 0; bi < _rcBandBoundariesM.length - 1; bi++) {
+        if (depth < (_rcBandBoundariesM[bi + 1] ?? Infinity)) {
+          bandIdx = Math.min(bi, _rcBandColorsArr.length - 1);
+          break;
+        }
+      }
+      const bandHex = (_rcBandColorsArr[bandIdx] ?? _rcBandColorsArr[_rcBandColorsArr.length - 1]) as string;
+      r = parseInt(bandHex.slice(1, 3), 16);
+      g = parseInt(bandHex.slice(3, 5), 16);
+      b = parseInt(bandHex.slice(5, 7), 16);
+    } else {
+      // Preset themes: sample the colormap at this depth's t-position.
+      const t01 = Math.max(0, Math.min(1, (depth - contourDomain.min) / contourDomainRange));
+      const col = toColor(t01).clone().convertLinearToSRGB();
+      r = Math.max(0, Math.min(255, Math.round(col.r * 255)));
+      g = Math.max(0, Math.min(255, Math.round(col.g * 255)));
+      b = Math.max(0, Math.min(255, Math.round(col.b * 255)));
+    }
+
+    ctx.strokeStyle = `rgb(${r},${g},${b})`;
     ctx.lineWidth = lineW;
+    // Soft alpha matches the Minimap's contour appearance (0.65 instead of the
+    // previous higher-contrast value baked into the rgba stroke string).
+    ctx.globalAlpha = 0.65;
 
     // Draw all segments for this level in a single path batch
     ctx.beginPath();
@@ -1685,6 +1761,7 @@ export function renderContourLines(
       ctx.lineTo(cx1, cy1);
     }
     ctx.stroke();
+    ctx.globalAlpha = 1.0; // reset before label drawing
 
     if (!showLabels || segs.length === 0) continue;
 

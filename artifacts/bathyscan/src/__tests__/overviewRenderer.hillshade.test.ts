@@ -161,10 +161,14 @@ describe("buildHillshadeLayer — slopes", () => {
    * A surface that deepens toward the NW tilts the normal toward SE (+X, +Z),
    * increasing the dot product with the sun → brighter than flat.
    */
-  it("a slope deepening eastward (col-wise) gives brighter pixels than flat", () => {
+  it("a slope deepening eastward (col-wise) is well-lit (above ambient) but may be darkened below flat by the slope-magnitude term", () => {
     const W = 5;
     const H = 5;
-    // Depth increases 10 m per column: 0, 10, 20, 30, 40 (repeated each row)
+    // Depth increases 10 m per column: 0, 10, 20, 30, 40 (repeated each row).
+    // This east-facing slope aligns with the sun's +X component, so the raw
+    // directional lighting is above FLAT_GRID_LIGHTING.  However, the slope-
+    // magnitude darkening (slopeMag ≈ 0.5 → factor ≈ 0.91) can reduce the
+    // final value below FLAT_GRID_LIGHTING — the "ink edge" effect is intentional.
     const depths: number[] = [];
     for (let r = 0; r < H; r++) {
       for (let c = 0; c < W; c++) {
@@ -176,13 +180,18 @@ describe("buildHillshadeLayer — slopes", () => {
 
     // Centre pixel: interior cell, not at edge
     const centrePixelIdx = (Math.floor(H / 2)) * W + Math.floor(W / 2);
-    expect(layer[centrePixelIdx]!).toBeGreaterThan(FLAT_GRID_LIGHTING);
+    // Must still be well above the ambient floor (0.55) — the slope is lit, not black.
+    expect(layer[centrePixelIdx]!).toBeGreaterThan(0.55 + 0.1);
+    // Must not exceed the shader cap (1.2).
+    expect(layer[centrePixelIdx]!).toBeLessThanOrEqual(1.2);
   });
 
-  it("a slope deepening southward (row-wise) gives brighter pixels than flat", () => {
+  it("a slope deepening southward (row-wise) is well-lit (above ambient) — slope-magnitude ink edge applies", () => {
     const W = 5;
     const H = 5;
-    // Depth increases 10 m per data row: row 0 = 0 m, row 4 = 40 m
+    // Depth increases 10 m per data row: row 0 = 0 m, row 4 = 40 m.
+    // This southward slope aligns with the sun's +Z component.  The slope-
+    // magnitude term applies here too; the final value may be below FLAT_GRID_LIGHTING.
     const depths: number[] = [];
     for (let r = 0; r < H; r++) {
       for (let c = 0; c < W; c++) {
@@ -194,7 +203,9 @@ describe("buildHillshadeLayer — slopes", () => {
 
     // Centre interior pixel
     const centrePixelIdx = (Math.floor(H / 2)) * W + Math.floor(W / 2);
-    expect(layer[centrePixelIdx]!).toBeGreaterThan(FLAT_GRID_LIGHTING);
+    // Well above ambient floor — the slope is lit.
+    expect(layer[centrePixelIdx]!).toBeGreaterThan(0.55 + 0.1);
+    expect(layer[centrePixelIdx]!).toBeLessThanOrEqual(1.2);
   });
 
   it("a slope deepening strongly westward tilts normal away from sun → not brighter than flat", () => {
@@ -342,5 +353,56 @@ describe("buildHeatmapBitmap — hillshade regression", () => {
     // the full gradient.
     const diff = Math.abs(ns[0]! - ws[0]!) + Math.abs(ns[1]! - ws[1]!) + Math.abs(ns[2]! - ws[2]!);
     expect(diff).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildHillshadeLayer — slope-magnitude darkening (step 2 of task)
+// ---------------------------------------------------------------------------
+
+describe("buildHillshadeLayer — slope-magnitude darkening", () => {
+  it("flat grid (ddCol = ddRow = 0) produces same intensity as existing directional lighting — slope term is zero", () => {
+    // Uniform depth → zero finite differences → slopeMag = 0 → factor (1 − 0.18×0) = 1.
+    // Output must equal the flat-grid directional lighting value exactly.
+    const grid = makeGrid({ minDepth: 100, maxDepth: 100 });
+    const layer = buildHillshadeLayer(grid);
+    for (let i = 0; i < layer.length; i++) {
+      expect(layer[i]!).toBeCloseTo(FLAT_GRID_LIGHTING, 5);
+    }
+  });
+
+  it("steep grid: interior cell intensity is measurably lower than flat-grid baseline", () => {
+    // East-sloping grid: depth increases 200 m per column, creating significant
+    // world-space slope → slopeMag ≈ 0.5 → ~9% darkening on top of directional lighting.
+    const W = 5;
+    const H = 5;
+    const depths: number[] = [];
+    for (let r = 0; r < H; r++) {
+      for (let c = 0; c < W; c++) {
+        depths.push(c * 200);
+      }
+    }
+    const grid = makeGrid({ width: W, height: H, depths, minDepth: 0, maxDepth: 800 });
+    const layer = buildHillshadeLayer(grid);
+
+    // Interior centre canvas pixel: canvasRow = floor(H/2), col = floor(W/2)
+    const centreIdx = Math.floor(H / 2) * W + Math.floor(W / 2);
+    // With the slope term applied (slopeMag ≈ 0.5), final intensity ≈ 0.847 which
+    // is measurably below FLAT_GRID_LIGHTING ≈ 0.895 (gap > 0.02).
+    expect(layer[centreIdx]!).toBeLessThan(FLAT_GRID_LIGHTING - 0.02);
+  });
+
+  it("slope darkening does not apply when there is no slope (hillshade-off parity guard)", () => {
+    // Guard: on a flat grid the slope term (1 − 0.18 × slopeMag) equals exactly 1,
+    // so the output is identical to the pre-slope-term behaviour.
+    // This confirms the slope path never darkens areas that are already flat.
+    const W = 4;
+    const H = 4;
+    const depths = Array.from({ length: W * H }, () => 200);
+    const grid = makeGrid({ width: W, height: H, depths, minDepth: 200, maxDepth: 200 });
+    const layer = buildHillshadeLayer(grid);
+    for (let i = 0; i < layer.length; i++) {
+      expect(layer[i]!).toBeCloseTo(FLAT_GRID_LIGHTING, 5);
+    }
   });
 });
