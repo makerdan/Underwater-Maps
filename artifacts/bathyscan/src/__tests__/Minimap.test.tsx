@@ -67,8 +67,21 @@ vi.mock("@workspace/api-client-react", () =>
   makeApiClientMock({
     useGetMarkers: () => ({ data: mockMarkersOverride ?? [] }),
     getGetMarkersQueryKey: (p: unknown) => ["markers", p],
+    getMarkers: async () => mockMarkersOverride ?? [],
   }),
 );
+
+// Mock useQueries so the Minimap's multi-dataset marker fetching works without
+// a real QueryClient.  Returns mockMarkersOverride for every query slot —
+// matching each datasetId query — and deduplication in Minimap collapses them.
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useQueries: ({ queries }: { queries: unknown[] }) =>
+      queries.map(() => ({ data: mockMarkersOverride ?? [], dataUpdatedAt: 0 })),
+  };
+});
 
 describe("Minimap", () => {
   beforeEach(() => {
@@ -807,11 +820,13 @@ describe("Minimap — marker dots use union bbox when multiple datasets are load
       centerLat: 45.5,
     };
 
-    // Inject a marker into the component via the mocked useGetMarkers hook.
+    // Inject a marker saved under the SECONDARY dataset's ID — this is the key
+    // scenario: the marker's datasetId is not the primary terrain, so the old
+    // single-query code would never have fetched it.
     mockMarkersOverride = [
       {
         id: 1,
-        datasetId: mockTerrain.datasetId,
+        datasetId: "ds-secondary-marker-test",
         lon: -117.5,
         lat: 45.5,
         type: "waypoint",

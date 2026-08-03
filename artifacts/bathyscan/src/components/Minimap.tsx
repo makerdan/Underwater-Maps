@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useMemo, useState, useCallback } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { useAppState } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
-import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
+import { getGetMarkersQueryKey, getMarkers } from "@workspace/api-client-react";
 import type { Marker } from "@workspace/api-client-react";
 import { getColormap, getColormapDepthDomain, colormapCssGradient, getColormapTRange, getColormapStops } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
@@ -499,16 +500,53 @@ export const Minimap: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers; including them would re-run the effect every render
   }, [tileUrl]);
 
-  const datasetId = terrain?.datasetId ?? "";
-  const { data: markers } = useGetMarkers(
-    { datasetId },
-    { query: { enabled: !!datasetId, queryKey: getGetMarkersQueryKey({ datasetId }) } },
-  );
+  // Collect every unique datasetId present in visibleDatasets (plus the primary
+  // terrain) so markers saved against any loaded dataset are fetched.
+  const allDatasetIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (terrain?.datasetId) ids.add(terrain.datasetId);
+    for (const v of visibleDatasets) {
+      if (v.datasetId) ids.add(v.datasetId);
+    }
+    // Sort for stable ordering so useQueries receives a deterministic list.
+    return Array.from(ids).sort();
+  }, [terrain?.datasetId, visibleDatasets]);
 
-  // Keep markers ref in sync
+  const markerQueries = useQueries({
+    queries: allDatasetIds.map((id) => ({
+      queryKey: getGetMarkersQueryKey({ datasetId: id }),
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        getMarkers({ datasetId: id }, { signal }),
+      enabled: true,
+    })),
+  });
+
+  // Combine and deduplicate markers from all dataset queries into the markers
+  // ref whenever any query's data timestamp changes (stable dep fingerprint).
+  // Also re-triggers the static-layer rebuild so new/removed markers are shown.
   useEffect(() => {
-    markersRef.current = markers ?? [];
-  }, [markers]);
+    const seen = new Set<number | string>();
+    const combined: Marker[] = [];
+    for (const q of markerQueries) {
+      for (const m of q.data ?? []) {
+        if (!seen.has(m.id)) {
+          seen.add(m.id);
+          combined.push(m);
+        }
+      }
+    }
+    markersRef.current = combined;
+
+    const canvas = canvasRef.current;
+    if (!canvas || !terrain) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    rebuildStaticLayer(terrain);
+    const camState = useCameraStore.getState();
+    const cp3 = camState.cameraPosition;
+    compositeFrame(ctx, cp3.known ? cp3.lon : null, cp3.known ? cp3.lat : null, camState.heading, terrain);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fingerprinted by per-query dataUpdatedAt timestamps so the effect only fires when actual data changes, not on every render; rebuildStaticLayer/compositeFrame are render-scope helpers
+  }, [terrain, markerQueries.map((q) => q.dataUpdatedAt).join(",")]);
 
   // Rebuild the static layer (bg + satellite + heatmap + marker dots) onto an
   // offscreen canvas. Called whenever data changes. The camera-tick path just
@@ -725,18 +763,6 @@ export const Minimap: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- compositeFrame is a render-scope helper; re-subscribing only on terrain change is intentional
   }, [terrain]);
 
-  // Rebuild static layer whenever markers change (new dots without camera move)
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !terrain) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    rebuildStaticLayer(terrain);
-    const camState = useCameraStore.getState();
-    const cp3 = camState.cameraPosition;
-    compositeFrame(ctx, cp3.known ? cp3.lon : null, cp3.known ? cp3.lat : null, camState.heading, terrain);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers; data deps (markers, terrain) are listed explicitly
-  }, [markers, terrain]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!terrain) return;
