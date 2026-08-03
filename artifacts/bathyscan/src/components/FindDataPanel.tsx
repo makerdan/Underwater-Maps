@@ -639,6 +639,41 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
 // Federated (multi-source) search — external result card + sources summary
 // ---------------------------------------------------------------------------
 
+/**
+ * Mirror of the server-side `sanitizeFederatedId` / `sanitizeNceiId`
+ * functions (both identical). Converts any string into a URL/DB-safe slug.
+ *
+ * Must stay in sync with:
+ *   artifacts/api-server/src/routes/search-federated.ts  → sanitizeFederatedId
+ *   artifacts/api-server/src/routes/ncei.ts              → sanitizeNceiId
+ */
+function sanitizeFederatedSlug(id: string): string {
+  return id
+    .toLowerCase()
+    .replace(/[^a-z0-9:.-]/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/**
+ * Derive the catalog ID that the server will have persisted for a federated
+ * search result, mirroring the server's upsert logic:
+ *   - NCEI items (sourceId = "ncei-geoportal") → POST /ncei/save strips the
+ *     "ncei-geoportal:" prefix then prefixes with "ncei-portal-".
+ *   - All other sources → POST /search/federated/save prefixes with "fed-"
+ *     using the full item.id.
+ *
+ * Used by `federatedMaterializedMap` to correlate a search card with its
+ * ready mySave entry so the ADD button can be shown.
+ */
+function federatedItemToCatalogId(item: FederatedSearchResult): string {
+  if (item.sourceId === "ncei-geoportal") {
+    const stripped = item.id.replace(/^ncei-geoportal:/, "");
+    return `ncei-portal-${sanitizeFederatedSlug(stripped)}`;
+  }
+  return `fed-${sanitizeFederatedSlug(item.id)}`;
+}
+
 /** Rebuild an NceiPortalResult from a federated NCEI item so the existing
  *  NCEI save flow (POST /ncei/save) can be reused verbatim. */
 function federatedToNceiResult(item: FederatedSearchResult): NceiPortalResult | null {
@@ -662,7 +697,15 @@ const FederatedResultCard: React.FC<{
   saving: boolean;
   onSaveNcei: (result: NceiPortalResult) => void;
   onSaveFederated: (item: FederatedSearchResult) => void;
-}> = ({ item, canSave, saving, onSaveNcei, onSaveFederated }) => {
+  /** When provided (and addDsId is non-null), renders an ADD / IN VIEW button. */
+  onAddToView?: (dsId: string) => void;
+  /** The materialized user-dataset id for this federated item, or null if not yet ready. */
+  addDsId?: string | null;
+  /** True when addDsId is already in the terrain store's selected/visible pool. */
+  inView?: boolean;
+  /** True when the terrain store has reached MAX_ACTIVE_DATASETS. */
+  atViewCap?: boolean;
+}> = ({ item, canSave, saving, onSaveNcei, onSaveFederated, onAddToView, addDsId, inView = false, atViewCap = false }) => {
   const nceiResult = item.importable ? federatedToNceiResult(item) : null;
   // Every importable result gets a save action: NCEI results reuse the
   // existing /ncei/save flow; all other sources go through the generic
@@ -748,6 +791,42 @@ const FederatedResultCard: React.FC<{
           >
             {saving ? "Saving…" : "Save & Import"}
           </button>
+        )}
+        {onAddToView && addDsId && (
+          <ViewscreenTooltip
+            label={
+              inView
+                ? "Remove from 3D view"
+                : atViewCap
+                  ? `View limit reached`
+                  : "Add alongside current dataset in 3D view"
+            }
+            side="top"
+          >
+            <button
+              data-testid={`federated-add-to-view-${item.id}`}
+              onClick={() => onAddToView(addDsId)}
+              disabled={atViewCap && !inView}
+              style={{
+                fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                padding: "4px 10px",
+                borderRadius: 4,
+                border: inView
+                  ? "1px solid rgba(0,229,255,0.5)"
+                  : atViewCap
+                    ? "1px solid rgba(100,116,139,0.3)"
+                    : "1px solid rgba(0,229,255,0.3)",
+                background: inView ? "rgba(0,229,255,0.15)" : "rgba(0,229,255,0.06)",
+                color: inView ? "#00e5ff" : atViewCap ? "#64748b" : "#67e8f9",
+                cursor: atViewCap && !inView ? "not-allowed" : "pointer",
+                opacity: atViewCap && !inView ? 0.4 : 1,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              {inView ? "IN VIEW" : "ADD"}
+            </button>
+          </ViewscreenTooltip>
         )}
         {item.url && (
           <a
@@ -893,6 +972,19 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     state.addSelected(presetId, "preset", dataUpdatedAt);
   }, []);
 
+  // ADD-to-view handler for materialized federated results (user datasets).
+  // Mirrors DatasetPanel.handleAddToView: toggle-removes when already visible,
+  // otherwise adds alongside the current primary.
+  const handleFederatedAddToView = useCallback((dsId: string) => {
+    const state = useTerrainStore.getState();
+    const alreadyVisible = state.visibleDatasets.some((v) => v.datasetId === dsId);
+    if (alreadyVisible) {
+      state.toggleVisible({ datasetId: dsId, source: "user" });
+    } else {
+      state.addSelected(dsId, "user");
+    }
+  }, []);
+
   // Debounce search query
   const handleQueryChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -977,6 +1069,20 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     () => new Set(mySaves.filter((s) => s.status !== "failed").map((s) => s.catalogId)),
     [mySaves],
   );
+
+  // Map from federated item.id → materialized user datasetId for any save that
+  // has completed (status="ready" with a datasetId). Drives the ADD / IN VIEW
+  // button on FederatedResultCard — only items already in the library can be
+  // added alongside an active dataset in the viewer.
+  const federatedMaterializedMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const save of mySaves) {
+      if (save.status === "ready" && save.datasetId && save.catalogId) {
+        m.set(save.catalogId, save.datasetId);
+      }
+    }
+    return m;
+  }, [mySaves]);
 
   // Derive the viewport bbox from the currently loaded dataset's catalog entry.
   // We match the active userDatasetId against the mySaves list (each save
@@ -1562,19 +1668,27 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                         No external results for this query.
                       </div>
                     )}
-                    {federatedExternalResults.map((item) => (
-                      <FederatedResultCard
-                        key={item.id}
-                        item={item}
-                        canSave={!!isSignedIn}
-                        saving={
-                          nceiSavingIds.has(item.id.replace(/^ncei-geoportal:/, "")) ||
-                          nceiSavingIds.has(item.id)
-                        }
-                        onSaveNcei={handleNceiSave}
-                        onSaveFederated={handleFederatedSave}
-                      />
-                    ))}
+                    {federatedExternalResults.map((item) => {
+                      const addDsId = federatedMaterializedMap.get(federatedItemToCatalogId(item)) ?? null;
+                      const itemInView = addDsId ? catalogSelectedIdSet.has(addDsId) : false;
+                      return (
+                        <FederatedResultCard
+                          key={item.id}
+                          item={item}
+                          canSave={!!isSignedIn}
+                          saving={
+                            nceiSavingIds.has(item.id.replace(/^ncei-geoportal:/, "")) ||
+                            nceiSavingIds.has(item.id)
+                          }
+                          onSaveNcei={handleNceiSave}
+                          onSaveFederated={handleFederatedSave}
+                          onAddToView={hasCatalogPrimary ? handleFederatedAddToView : undefined}
+                          addDsId={addDsId}
+                          inView={itemInView}
+                          atViewCap={atCatalogCap}
+                        />
+                      );
+                    })}
                   </>
                 )}
               </div>

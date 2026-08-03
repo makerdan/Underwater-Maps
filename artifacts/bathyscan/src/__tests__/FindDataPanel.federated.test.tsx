@@ -18,10 +18,12 @@
  *   6. Importable non-NCEI results save through the generic
  *      POST /search/federated/save endpoint.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { FindDataPanel } from "@/components/FindDataPanel";
+import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
+import type { VisibleDataset } from "@/lib/terrainStore";
 
 const makeApiClientMock = vi.hoisted(() => {
   function noop() {}
@@ -157,6 +159,8 @@ let sourcesEnabled: boolean | undefined;
 const nceiSaveMutateAsync = vi.fn().mockResolvedValue(undefined);
 const federatedSaveMutateAsync = vi.fn().mockResolvedValue(undefined);
 const refetchSavesMock = vi.fn().mockResolvedValue(undefined);
+// Mutable list — individual tests can swap in ready-save fixtures to drive ADD-to-view tests.
+let mySavesList: unknown[] = [];
 
 vi.mock(
   "@workspace/api-client-react",
@@ -181,7 +185,7 @@ vi.mock(
       }),
       useGetDatasetsCatalogSearch: () => ({ data: [], isFetching: false }),
       useGetDatasetsMySaves: () => ({
-        data: [],
+        data: mySavesList,
         isFetching: false,
         refetch: refetchSavesMock,
       }),
@@ -267,6 +271,7 @@ describe("FindDataPanel — External sources (federated search)", () => {
     refetchSavesMock.mockResolvedValue(undefined);
     toastSpy.mockClear();
     sourcesEnabled = undefined;
+    mySavesList = [];
   });
 
   it("hides the section (and disables the registry query) until the user types", () => {
@@ -433,5 +438,212 @@ describe("FindDataPanel — External sources (federated search)", () => {
     expect(toastSpy).not.toHaveBeenCalledWith(
       expect.objectContaining({ variant: "destructive" }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Terrain store helpers — reuse the same pattern as FindDataPanel.catalogAddToView.test.tsx
+// ---------------------------------------------------------------------------
+
+const BLANK_TERRAIN_STATE = {
+  visibleDatasets: [] as VisibleDataset[],
+  primaryDatasetIds: [] as string[],
+  primaryDatasetId: null as string | null,
+  activeGrid: null,
+  overviewGrid: null,
+  selectedIds: [] as string[],
+  selectedSources: {} as Record<string, "preset" | "user">,
+  evictedId: null as string | null,
+  autoEvictedId: null as string | null,
+  multiDatasetMode: false,
+};
+
+function makePrimaryState(datasetId = "existing-primary-abc"): Partial<typeof BLANK_TERRAIN_STATE> {
+  const entry: VisibleDataset = { datasetId, source: "preset", activeGrid: null, overviewGrid: null };
+  return {
+    visibleDatasets: [entry],
+    primaryDatasetIds: [datasetId],
+    primaryDatasetId: datasetId,
+    selectedIds: [datasetId],
+    selectedSources: { [datasetId]: "preset" },
+  };
+}
+
+function makeAtCapState(): Partial<typeof BLANK_TERRAIN_STATE> {
+  // Fill selectedIds to MAX_ACTIVE_DATASETS so atCatalogCap is true.
+  const ids = Array.from({ length: MAX_ACTIVE_DATASETS }, (_, i) => `cap-ds-${i}`);
+  const visible: VisibleDataset[] = ids.map((id) => ({
+    datasetId: id,
+    source: "preset" as const,
+    activeGrid: null,
+    overviewGrid: null,
+  }));
+  return {
+    visibleDatasets: visible,
+    primaryDatasetIds: ids,
+    primaryDatasetId: ids[0]!,
+    selectedIds: ids,
+    selectedSources: Object.fromEntries(ids.map((id) => [id, "preset" as const])),
+  };
+}
+
+function makePrimaryWithDs(
+  primaryId = "existing-primary-abc",
+  extraId: string,
+): Partial<typeof BLANK_TERRAIN_STATE> {
+  const entries: VisibleDataset[] = [primaryId, extraId].map((id) => ({
+    datasetId: id,
+    source: "preset" as const,
+    activeGrid: null,
+    overviewGrid: null,
+  }));
+  return {
+    visibleDatasets: entries,
+    primaryDatasetIds: [primaryId, extraId],
+    primaryDatasetId: primaryId,
+    selectedIds: [primaryId, extraId],
+    selectedSources: { [primaryId]: "preset", [extraId]: "user" },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// ADD-to-view tests for FederatedResultCard
+// ---------------------------------------------------------------------------
+
+const NCEI_DS_ID = "user-ds-ncei-sitka-001";
+const MNDNR_DS_ID = "user-ds-mndnr-vermilion-001";
+
+// The server generates catalog IDs by:
+//   - NCEI (sourceId="ncei-geoportal"): strip "ncei-geoportal:" prefix → sanitize → prepend "ncei-portal-"
+//   - Other federated sources: sanitize full item.id → prepend "fed-"
+// Sanitize = toLowerCase, replace /[^a-z0-9:.-]/g → "-", collapse "--", trim leading/trailing "-"
+//
+// NCEI_ITEM.id = "ncei-geoportal:gov.noaa:sitka-123"  →  "ncei-portal-gov.noaa:sitka-123"
+// MNDNR_ITEM.id = "portal-mndnr:lake-vermilion-42"    →  "fed-portal-mndnr:lake-vermilion-42"
+const NCEI_CATALOG_ID = "ncei-portal-gov.noaa:sitka-123";
+const MNDNR_CATALOG_ID = "fed-portal-mndnr:lake-vermilion-42";
+
+const READY_NCEI_SAVE = {
+  id: "save-federated-ncei-1",
+  catalogId: NCEI_CATALOG_ID,
+  datasetId: NCEI_DS_ID,
+  status: "ready",
+  displayLabel: null,
+  catalog: {
+    name: "Sitka Sound Multibeam Survey",
+    sourceAgency: "NOAA NCEI",
+    createdAt: "2024-01-01T00:00:00Z",
+  },
+};
+
+const READY_MNDNR_SAVE = {
+  id: "save-federated-mndnr-1",
+  catalogId: MNDNR_CATALOG_ID,
+  datasetId: MNDNR_DS_ID,
+  status: "ready",
+  displayLabel: null,
+  catalog: {
+    name: "Lake Vermilion Bathymetry",
+    sourceAgency: "Minnesota DNR",
+    createdAt: "2024-01-01T00:00:00Z",
+  },
+};
+
+describe("FindDataPanel — FederatedResultCard ADD to view", () => {
+  beforeEach(() => {
+    onClose.mockClear();
+    toastSpy.mockClear();
+    sourcesEnabled = undefined;
+    // Reset terrain store and mySaves for each test.
+    useTerrainStore.setState({ ...BLANK_TERRAIN_STATE });
+    mySavesList = [];
+  });
+
+  afterEach(() => {
+    useTerrainStore.setState({ ...BLANK_TERRAIN_STATE });
+    mySavesList = [];
+  });
+
+  it("ADD button is hidden when no primary dataset is loaded even if item is materialized", async () => {
+    mySavesList = [READY_NCEI_SAVE];
+    // No primary in terrain store — hasCatalogPrimary is false
+    renderPanel();
+    await typeQuery("sitka");
+    expect(
+      screen.queryByTestId(`federated-add-to-view-${NCEI_ITEM.id}`),
+    ).toBeNull();
+  });
+
+  it("ADD button appears when a primary is loaded and the item has been materialized", async () => {
+    mySavesList = [READY_NCEI_SAVE];
+    useTerrainStore.setState(makePrimaryState());
+    renderPanel();
+    await typeQuery("sitka");
+    const btn = screen.getByTestId(`federated-add-to-view-${NCEI_ITEM.id}`);
+    expect(btn).toBeInTheDocument();
+    expect(btn.textContent).toBe("ADD");
+  });
+
+  it("ADD button is hidden for items that are not yet materialized (no ready save)", async () => {
+    // MNDNR_ITEM has no entry in mySavesList
+    mySavesList = [READY_NCEI_SAVE];
+    useTerrainStore.setState(makePrimaryState());
+    renderPanel();
+    await typeQuery("vermilion");
+    expect(
+      screen.queryByTestId(`federated-add-to-view-${MNDNR_ITEM.id}`),
+    ).toBeNull();
+  });
+
+  it("clicking ADD calls addSelected with the materialized datasetId", async () => {
+    mySavesList = [READY_NCEI_SAVE];
+    useTerrainStore.setState(makePrimaryState());
+    const addSelectedSpy = vi.spyOn(useTerrainStore.getState(), "addSelected");
+    renderPanel();
+    await typeQuery("sitka");
+    fireEvent.click(screen.getByTestId(`federated-add-to-view-${NCEI_ITEM.id}`));
+    expect(addSelectedSpy).toHaveBeenCalledWith(NCEI_DS_ID, "user");
+  });
+
+  it("ADD button is disabled when the view is at capacity and the item is not yet in view", async () => {
+    mySavesList = [READY_NCEI_SAVE];
+    useTerrainStore.setState(makeAtCapState());
+    renderPanel();
+    await typeQuery("sitka");
+    const btn = screen.getByTestId(`federated-add-to-view-${NCEI_ITEM.id}`);
+    expect(btn).toBeDisabled();
+    expect(btn.textContent).toBe("ADD");
+  });
+
+  it("button shows IN VIEW when the materialized dataset is already active in the terrain store", async () => {
+    mySavesList = [READY_NCEI_SAVE];
+    useTerrainStore.setState(makePrimaryWithDs("existing-primary-abc", NCEI_DS_ID));
+    renderPanel();
+    await typeQuery("sitka");
+    expect(
+      screen.getByTestId(`federated-add-to-view-${NCEI_ITEM.id}`).textContent,
+    ).toBe("IN VIEW");
+  });
+
+  it("ADD button appears for a non-NCEI result (fed-* catalog ID path) when that item is materialized", async () => {
+    // MNDNR_ITEM is a non-NCEI federated result; its server catalogId is
+    // "fed-portal-mndnr:lake-vermilion-42" — the fed- prefix + sanitized item.id.
+    mySavesList = [READY_MNDNR_SAVE];
+    useTerrainStore.setState(makePrimaryState());
+    renderPanel();
+    await typeQuery("vermilion");
+    const btn = screen.getByTestId(`federated-add-to-view-${MNDNR_ITEM.id}`);
+    expect(btn).toBeInTheDocument();
+    expect(btn.textContent).toBe("ADD");
+  });
+
+  it("clicking ADD on a non-NCEI result calls addSelected with its materialized datasetId", async () => {
+    mySavesList = [READY_MNDNR_SAVE];
+    useTerrainStore.setState(makePrimaryState());
+    const addSelectedSpy = vi.spyOn(useTerrainStore.getState(), "addSelected");
+    renderPanel();
+    await typeQuery("vermilion");
+    fireEvent.click(screen.getByTestId(`federated-add-to-view-${MNDNR_ITEM.id}`));
+    expect(addSelectedSpy).toHaveBeenCalledWith(MNDNR_DS_ID, "user");
   });
 });
