@@ -25,15 +25,39 @@ Both actors must follow this skill. The skill is always loaded.
 
 ## Enforcement architecture
 
-This rule is enforced at three independent layers — all three must stay in sync:
+This rule is enforced at four independent layers — all four must stay in sync:
 
 | Layer | File | What it does |
 |---|---|---|
 | 0 — Session mandate | the project's session mandate (e.g. `replit.md` § "Agent rules") | Loaded at every Planner session start; contains the project's hard-gate checklist and any project-specific known-flaky patterns |
 | 1 — Skill definition | `.agents/skills/failure-gate/SKILL.md` (this file) | Defines discovery checklist, templates, decision tree |
-| 2 — Lint guard | the project's plan-file lint guard (e.g. `scripts/check-failure-gate.mjs`) | Scans the plan directory and fails if any plan omits a required section |
+| 2 — Lint guard | the project's plan-file lint guard (e.g. `scripts/check-failure-gate.mjs`) | Scans the plan directory and fails if any plan omits a required section or has an incomplete `## Validation` section |
+| 3 — Auto-remediate runner step | the project's validation runner (e.g. `scripts/validation-steps.mjs`) | Runs the lint guard in `--fix-stub` mode unconditionally before every strict lint step; the strict step then only fires on genuinely unfixable issues |
 
-A change to the rule must be applied to all three layers in the same task.
+A change to the rule must be applied to all relevant layers in the same task.
+
+---
+
+### Lint guard modes
+
+The project's plan-file lint guard should support three operating modes:
+
+- **Strict (default)** — Scans all plan files for required sections and compliant
+  `## Validation` content. Reports every non-compliant file and exits 1. This is
+  the formal CI gate; a non-zero exit blocks the validation run.
+
+- **`--fix-stub`** — For any plan file missing a required section, appends the
+  appropriate stub. For any `## Validation` section that is present but incomplete,
+  inserts the missing required inner lines (`**Command:**`, `**Why:**`,
+  `**Do not escalate:**`). Cannot fix invalid tier values or unfilled placeholder
+  text — those require human intervention. Always exits 0. When all files are
+  already compliant, this mode is a no-op and safe to run unconditionally.
+
+- **`--stubs-only`** — Skips the required-headings check entirely. Only reports
+  unfilled placeholder text and missing required inner lines within existing
+  `## Validation` sections. Useful when grandfathering a large archive of older
+  plan files that predate the required-sections mandate, without permanently
+  breaking CI on every run.
 
 ---
 
@@ -143,6 +167,57 @@ handled above — they are never a reason to run a heavier tier.
 
 ---
 
+### Validation section completeness
+
+A `## Validation` section is **compliant** only when all three required inner
+lines are present and filled:
+
+1. **`**Command:**`** — must be present and its value must be one of the
+   project's registered valid tier names. The lint guard, not the agent, is the
+   authority on valid tier names; consult the project's registered validation
+   commands when in doubt.
+
+2. **`**Why:**`** — must be present and must not contain the auto-generated
+   placeholder text (e.g. `<replace with one-line justification>`).
+
+3. **`**Do not escalate:**`** — must be present and must not contain placeholder
+   text.
+
+A `## Validation` section that is present but fails either of the following
+conditions is treated as non-compliant by the strict lint check:
+
+- `**Command:**` is missing, or its value is not one of the project's registered
+  valid tier names.
+- `**Why:**` or `**Do not escalate:**` is absent or still contains
+  auto-generated placeholder text.
+
+The `--fix-stub` mode inserts missing required inner lines but cannot repair an
+invalid tier value or fill in placeholder text — those always require a human.
+
+---
+
+### Pre-write guard (recommended hardening)
+
+Two complementary patterns eliminate the round-trip to CI entirely by ensuring
+every new plan file is born compliant:
+
+- **Scaffolding helper** — A helper function or script that the agent calls when
+  creating a new plan file pre-fills both required sections (`## Pre-existing
+  failures to ignore` and `## Validation`) with valid stubs before writing the
+  file to disk. No plan file is ever created without the required structure.
+
+- **Post-write hook** — Immediately after writing any plan file, the agent (or
+  a commit hook) runs the lint guard in `--fix-stub` mode on that file. Any
+  missing sections or incomplete `## Validation` inner lines are repaired in the
+  same operation before the file is committed.
+
+Both patterns reduce the surface for stub-less files to accumulate between
+sessions. They are most valuable in projects where many plan files are created
+per session. Use whichever fits the project's workflow; using both provides
+defense in depth.
+
+---
+
 ## Part 2 — Execute-time (Build agent)
 
 <HARD-GATE>
@@ -241,8 +316,33 @@ safe-direction fallback — before any other work. This means:
   conservative, not permissive
 - Self-classification logs give the Planner the data to improve future plans
 
-Compliance spot-checks (verifying that merged plans contain both sections) are
-handled by the task-triage skill and dedicated audit tasks.
+### Auto-remediate pipeline wiring
+
+Wire a `--fix-stub` step unconditionally before the strict lint step in every
+validation tier of the project's validation runner. The sequence is:
+
+1. **Auto-remediate** — run the lint guard with `--fix-stub` (always exits 0;
+   appends missing stubs and inserts missing required inner lines).
+2. **Strict check** — run the lint guard in default (strict) mode. This now only
+   fires on genuinely unfixable issues: invalid tier values or unfilled placeholder
+   text that require human intervention.
+
+Because `--fix-stub` is a no-op when all files are already compliant, this
+wiring is safe to run unconditionally on every tier without side effects.
+
+**Bulk remediation:** If a backlog of stub-less plan files is blocking CI (e.g.
+after adopting the lint guard on an existing archive of plans), run `--fix-stub`
+in bulk across the plan directory first, commit the result, then address any
+remaining invalid-tier or unfilled-placeholder failures manually. Do not attempt
+to fix hundreds of files by hand before enabling the strict check.
+
+### Secondary mechanisms
+
+Task-triage spot-checks (verifying that merged plans contain both sections and
+that `## Validation` content is meaningful) remain a secondary mechanism for
+plan quality review — useful for catching files that slipped through before the
+lint guard was wired. They are not the primary guard; the auto-remediate + strict
+pipeline is.
 
 ---
 
