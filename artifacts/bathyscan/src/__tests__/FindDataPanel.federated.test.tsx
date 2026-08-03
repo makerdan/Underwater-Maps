@@ -227,8 +227,9 @@ vi.mock("@/lib/simulatedDataStore", () => ({
   requestDatasetSwitch: vi.fn(),
 }));
 
+const toastSpy = vi.fn();
 vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: toastSpy }),
 }));
 
 vi.mock("@/components/help/HelpButton", () => ({
@@ -261,6 +262,7 @@ describe("FindDataPanel — External sources (federated search)", () => {
     onClose.mockClear();
     nceiSaveMutateAsync.mockClear();
     federatedSaveMutateAsync.mockClear();
+    toastSpy.mockClear();
     sourcesEnabled = undefined;
   });
 
@@ -347,5 +349,47 @@ describe("FindDataPanel — External sources (federated search)", () => {
       },
     });
     expect(nceiSaveMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("shows an error toast and clears the spinner when handleFederatedSave throws", async () => {
+    federatedSaveMutateAsync.mockRejectedValueOnce(new Error("network failure"));
+    renderPanel();
+    await typeQuery("vermilion");
+
+    const card = screen.getByTestId(`federated-result-${MNDNR_ITEM.id}`);
+    fireEvent.click(within(card).getByTestId("federated-save-button"));
+
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Failed to save. Please try again." }),
+    );
+
+    // Spinner must clear: the save button text reverts to "Save & Import"
+    await waitFor(() =>
+      expect(within(card).getByTestId("federated-save-button").textContent).toBe(
+        "Save & Import",
+      ),
+    );
+  });
+
+  it("shows an error toast and clears the spinner when handleNceiSave (via federated) throws", async () => {
+    nceiSaveMutateAsync.mockRejectedValueOnce(new Error("server 500"));
+    renderPanel();
+    await typeQuery("sitka");
+
+    const card = screen.getByTestId(`federated-result-${NCEI_ITEM.id}`);
+    fireEvent.click(within(card).getByTestId("federated-save-button"));
+
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Failed to save. Please try again." }),
+    );
+
+    // Spinner must clear
+    await waitFor(() =>
+      expect(within(card).getByTestId("federated-save-button").textContent).toBe(
+        "Save & Import",
+      ),
+    );
   });
 });

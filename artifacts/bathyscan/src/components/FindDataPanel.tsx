@@ -49,6 +49,7 @@ import { CoordinateSearchForm } from "@/components/CoordinateSearchForm";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
+import { useToast } from "@/hooks/use-toast";
 
 
 // ---------------------------------------------------------------------------
@@ -860,6 +861,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const { setDatasetId, setCatalogSourcedAt, datasetId: currentDatasetId } = useAppState();
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
+  const { toast } = useToast();
 
   // Terrain store — used to derive "Add to View" state for catalog cards.
   const terrainVisibleDatasets = useTerrainStore((s) => s.visibleDatasets);
@@ -1130,6 +1132,8 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         });
         handleSaveFolderResponse(row);
         void refetchSaves();
+      } catch {
+        toast({ title: "Failed to save. Please try again.", variant: "destructive" });
       } finally {
         setNceiSavingIds((s) => {
           const next = new Set(s);
@@ -1138,7 +1142,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         });
       }
     },
-    [isSignedIn, nceiSaveMutation, refetchSaves, getAreaRequest, handleSaveFolderResponse],
+    [isSignedIn, nceiSaveMutation, refetchSaves, getAreaRequest, handleSaveFolderResponse, toast],
   );
 
   // Generic save for importable non-NCEI federated results — goes through
@@ -1155,6 +1159,8 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         });
         handleSaveFolderResponse(row);
         void refetchSaves();
+      } catch {
+        toast({ title: "Failed to save. Please try again.", variant: "destructive" });
       } finally {
         setNceiSavingIds((s) => {
           const next = new Set(s);
@@ -1163,7 +1169,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         });
       }
     },
-    [isSignedIn, federatedSaveMutation, refetchSaves, getAreaRequest, handleSaveFolderResponse],
+    [isSignedIn, federatedSaveMutation, refetchSaves, getAreaRequest, handleSaveFolderResponse, toast],
   );
 
   // Federated multi-source search (Search tab, "External sources" section).
