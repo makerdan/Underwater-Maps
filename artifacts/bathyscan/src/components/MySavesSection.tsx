@@ -96,7 +96,10 @@ const SaveCard: React.FC<{
   onDelete: (save: UserCatalogSave) => void;
   deleting: boolean;
   onRename: (saveId: string, displayLabel: string | null) => Promise<void>;
-}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename }) => {
+  onAddToView?: (dsId: string) => void;
+  atViewCap?: boolean;
+  visibleDatasetIds?: Set<string>;
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onAddToView, atViewCap = false, visibleDatasetIds }) => {
   const statusColor = STATUS_COLORS[save.status] ?? "#e2e8f0";
   const icon = save.catalog ? (DATA_TYPE_ICONS[save.catalog.dataType] ?? "📦") : "📦";
   const displayName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
@@ -240,7 +243,7 @@ const SaveCard: React.FC<{
         </div>
       )}
       {save.status === "ready" && save.datasetId && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.1em", textTransform: "uppercase", color: statusColor }}>
             {save.status}
           </span>
@@ -250,6 +253,33 @@ const SaveCard: React.FC<{
               style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 12px", background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#00e5ff", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
             >Load into viewer</button>
           </ViewscreenTooltip>
+          {onAddToView && (() => {
+            const isAlreadyInView = visibleDatasetIds?.has(save.datasetId!) ?? false;
+            return (
+              <ViewscreenTooltip
+                label={isAlreadyInView ? "Remove from 3D view" : atViewCap ? "View limit reached" : "Add alongside current dataset in 3D view"}
+                side="top"
+              >
+                <button
+                  onClick={() => onAddToView(save.datasetId!)}
+                  data-testid={`btn-add-to-view-save-${save.id}`}
+                  disabled={atViewCap && !isAlreadyInView}
+                  style={{
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                    padding: "3px 10px",
+                    background: isAlreadyInView ? "rgba(0,229,255,0.15)" : "rgba(0,229,255,0.06)",
+                    border: isAlreadyInView ? "1px solid rgba(0,229,255,0.5)" : "1px solid rgba(0,229,255,0.3)",
+                    borderRadius: 3,
+                    color: isAlreadyInView ? "#00e5ff" : "#67e8f9",
+                    cursor: (atViewCap && !isAlreadyInView) ? "not-allowed" : "pointer",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    opacity: (atViewCap && !isAlreadyInView) ? 0.4 : 1,
+                  }}
+                >{isAlreadyInView ? "IN VIEW" : "ADD"}</button>
+              </ViewscreenTooltip>
+            );
+          })()}
         </div>
       )}
       {save.status === "failed" && (
@@ -508,7 +538,10 @@ const DraggableSaveCard: React.FC<{
   deleting: boolean;
   onRename: (id: string, label: string | null) => Promise<void>;
   onMoveTo: (save: UserCatalogSave) => void;
-}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo }) => {
+  onAddToView?: (dsId: string) => void;
+  atViewCap?: boolean;
+  visibleDatasetIds?: Set<string>;
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo, onAddToView, atViewCap, visibleDatasetIds }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `save-${save.id}`,
     data: { kind: "save", saveId: save.id },
@@ -525,6 +558,7 @@ const DraggableSaveCard: React.FC<{
       <SaveCard
         save={save} onLoadUserDataset={onLoadUserDataset} onRetry={onRetry}
         retrying={retrying} onDelete={onDelete} deleting={deleting} onRename={onRename}
+        onAddToView={onAddToView} atViewCap={atViewCap} visibleDatasetIds={visibleDatasetIds}
       />
     </div>
   );
@@ -1030,6 +1064,9 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
         deleting={deletingIds.has(item.save.id)}
         onRename={handleRenameSave}
         onMoveTo={(s) => setMoveTarget({ kind: "save", save: s })}
+        onAddToView={onAddToView}
+        atViewCap={atViewCap}
+        visibleDatasetIds={visibleDatasetIds}
       />
     ) : (
       <DraggableUploadCard

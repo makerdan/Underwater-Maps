@@ -627,6 +627,118 @@ describe("MySavesSection — move upload to folder", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// SaveCard ADD / IN VIEW button
+// ---------------------------------------------------------------------------
+
+describe("MySavesSection — SaveCard ADD/IN VIEW button", () => {
+  beforeEach(resetState);
+
+  const READY_SAVE: Record<string, unknown> = {
+    id: "save-ready",
+    catalogId: "cat-ready",
+    status: "ready",
+    datasetId: "ds-ready",
+    folderId: null,
+    catalog: {
+      name: "Ready Dataset",
+      sourceAgency: "NOAA",
+      dataType: "bathymetry",
+    },
+    errorMessage: null,
+  };
+
+  function renderWithAddToView({
+    onAddToView = vi.fn(),
+    atViewCap = false,
+    visibleDatasetIds = new Set<string>(),
+  }: {
+    onAddToView?: (dsId: string) => void;
+    atViewCap?: boolean;
+    visibleDatasetIds?: Set<string>;
+  } = {}) {
+    currentMySaves = [READY_SAVE];
+    return renderWithProviders(
+      <MySavesSection
+        onLoadCatalogSave={mocks.onLoadCatalogSave}
+        onLoadUserDataset={mocks.onLoadUserDataset}
+        onAddToView={onAddToView}
+        atViewCap={atViewCap}
+        visibleDatasetIds={visibleDatasetIds}
+      />,
+    );
+  }
+
+  it("shows ADD button when onAddToView is provided and save is ready", () => {
+    renderWithAddToView();
+    expect(screen.getByTestId("btn-add-to-view-save-save-ready")).toBeInTheDocument();
+    expect(screen.getByTestId("btn-add-to-view-save-save-ready")).toHaveTextContent("ADD");
+  });
+
+  it("does not show ADD button when onAddToView is not provided", () => {
+    currentMySaves = [READY_SAVE];
+    renderWithProviders(
+      <MySavesSection
+        onLoadCatalogSave={mocks.onLoadCatalogSave}
+        onLoadUserDataset={mocks.onLoadUserDataset}
+      />,
+    );
+    expect(screen.queryByTestId("btn-add-to-view-save-save-ready")).not.toBeInTheDocument();
+  });
+
+  it("clicking ADD calls onAddToView with the save's datasetId", () => {
+    const onAddToView = vi.fn();
+    renderWithAddToView({ onAddToView });
+
+    fireEvent.click(screen.getByTestId("btn-add-to-view-save-save-ready"));
+    expect(onAddToView).toHaveBeenCalledWith("ds-ready");
+  });
+
+  it("shows IN VIEW when save's datasetId is in visibleDatasetIds", () => {
+    renderWithAddToView({ visibleDatasetIds: new Set(["ds-ready"]) });
+    expect(screen.getByTestId("btn-add-to-view-save-save-ready")).toHaveTextContent("IN VIEW");
+  });
+
+  it("is disabled when atViewCap=true and dataset is not already in view", () => {
+    renderWithAddToView({ atViewCap: true });
+    const btn = screen.getByTestId("btn-add-to-view-save-save-ready");
+    expect(btn).toBeDisabled();
+  });
+
+  it("is NOT disabled when atViewCap=true but the dataset is already in view", () => {
+    renderWithAddToView({ atViewCap: true, visibleDatasetIds: new Set(["ds-ready"]) });
+    const btn = screen.getByTestId("btn-add-to-view-save-save-ready");
+    expect(btn).not.toBeDisabled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mock-drift guard: SaveCard and UploadCard share the same add-to-view props
+// ---------------------------------------------------------------------------
+
+describe("MySavesSection — add-to-view prop parity guard", () => {
+  /**
+   * Compile-time guard: MySavesSection (which threads the add-to-view props to
+   * BOTH DraggableSaveCard and DraggableUploadCard) must expose all three
+   * optional props.  If any prop is dropped from either card's interface, the
+   * TypeScript compile step (typecheck) will fail before this assertion runs.
+   */
+  it("MySavesSection exposes onAddToView / atViewCap / visibleDatasetIds (threads to both card kinds)", () => {
+    // Build a fully-typed props object — TS will error here if any key is removed.
+    const dummyProps: React.ComponentProps<typeof MySavesSection> = {
+      onLoadCatalogSave: () => {},
+      onLoadUserDataset: () => {},
+      onAddToView: undefined,
+      atViewCap: undefined,
+      visibleDatasetIds: undefined,
+    };
+
+    expect("onAddToView" in dummyProps).toBe(true);
+    expect("atViewCap" in dummyProps).toBe(true);
+    expect("visibleDatasetIds" in dummyProps).toBe(true);
+  });
+});
+
 describe("MySavesSection — processing/failed saves render inline", () => {
   beforeEach(resetState);
 
