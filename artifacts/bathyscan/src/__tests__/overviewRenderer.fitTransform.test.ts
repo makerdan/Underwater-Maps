@@ -14,7 +14,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { computeFitTransform } from "../lib/overviewRenderer";
+import { computeFitTransform, computeInitialTransform, lonLatToCanvas } from "../lib/overviewRenderer";
+import type { TerrainData } from "@workspace/api-client-react";
 
 const CW = 400;
 const CH = 300;
@@ -159,5 +160,158 @@ describe("computeFitTransform — degenerate zero-range bbox", () => {
     expect(isFinite(t.offsetX)).toBe(true);
     expect(isFinite(t.offsetY)).toBe(true);
     expect(t.pxPerDeg).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeInitialTransform + lonLatToCanvas — union-bbox regression hardening
+//
+// These tests verify that when OverviewMap synthesises a "world grid" from the
+// union of two datasets' bboxes (e.g. minLon=-122, maxLon=-85, minLat=41,
+// maxLat=49), computeInitialTransform produces the right transform and
+// lonLatToCanvas places each dataset's corners at geographically correct,
+// distinct pixel positions within the canvas.
+//
+// Dataset A: -122..-119 lon, 47..49 lat   (Pacific coast)
+// Dataset B:  -88..-85  lon, 41..43 lat   (Great Lakes region)
+// Union bbox: -122..-85  lon, 41..49 lat  (37° × 8°)
+// ---------------------------------------------------------------------------
+
+/** Minimal synthetic TerrainData carrying only the bbox fields. */
+function makeSyntheticGrid(
+  minLon: number, maxLon: number,
+  minLat: number, maxLat: number,
+): TerrainData {
+  return { minLon, maxLon, minLat, maxLat } as unknown as TerrainData;
+}
+
+const UNION = makeSyntheticGrid(-122, -85, 41, 49); // 37° × 8°
+const GRID_A = makeSyntheticGrid(-122, -119, 47, 49); // 3° × 2° (within union)
+const GRID_B = makeSyntheticGrid(-88,  -85, 41, 43);  // 3° × 2° (within union)
+
+describe("computeInitialTransform — union-bbox produces correct pxPerDeg and offsets", () => {
+  it("pxPerDeg is constrained by the wider lon dimension (37° vs 8°) at 88% fill", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    // lonRange=37, latRange=8 → width-constrained: pxPerDeg = (CW*0.88)/37
+    const expected = (CW * 0.88) / 37;
+    expect(t.pxPerDeg).toBeCloseTo(expected, 5);
+  });
+
+  it("scale is always 1", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    expect(t.scale).toBe(1);
+  });
+
+  it("terrain width fills ≈ 88% of canvas width (the constraining dimension)", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    const terrainW = t.pxPerDeg * 37;
+    expect(terrainW / CW).toBeCloseTo(0.88, 3);
+  });
+
+  it("offsetX centres the union terrain horizontally", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    const terrainW = t.pxPerDeg * 37;
+    expect(t.offsetX).toBeCloseTo((CW - terrainW) / 2, 5);
+  });
+
+  it("offsetY centres the union terrain vertically", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    const terrainH = t.pxPerDeg * 8;
+    expect(t.offsetY).toBeCloseTo((CH - terrainH) / 2, 5);
+  });
+});
+
+describe("lonLatToCanvas — union transform places each dataset at correct pixel position", () => {
+  it("dataset A NW corner (-122, 49) lands near the left edge of the canvas", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    const [x] = lonLatToCanvas(-122, 49, UNION, t);
+    // A's western edge = union's western edge → x ≈ offsetX
+    expect(x).toBeCloseTo(t.offsetX, 1);
+  });
+
+  it("dataset A NW corner (-122, 49) lands near the top edge of the canvas", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    const [, y] = lonLatToCanvas(-122, 49, UNION, t);
+    // A's northern edge = union's northern edge → y ≈ offsetY
+    expect(y).toBeCloseTo(t.offsetY, 1);
+  });
+
+  it("dataset B NW corner (-88, 43) is to the right of A's NW corner", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    const [xA] = lonLatToCanvas(-122, 49, UNION, t);
+    const [xB] = lonLatToCanvas(-88,  43, UNION, t);
+    expect(xB).toBeGreaterThan(xA);
+  });
+
+  it("dataset B NW corner (-88, 43) is below A's NW corner (south = larger Y)", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    const [, yA] = lonLatToCanvas(-122, 49, UNION, t);
+    const [, yB] = lonLatToCanvas(-88,  43, UNION, t);
+    expect(yB).toBeGreaterThan(yA);
+  });
+
+  it("pixel distance between A and B NW corners matches expected lon offset", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    const [xA] = lonLatToCanvas(-122, 49, UNION, t);
+    const [xB] = lonLatToCanvas(-88,  43, UNION, t);
+    // B is 34° east of A within a 37° total span
+    const expectedDx = (34 / 37) * t.pxPerDeg * 37;
+    expect(xB - xA).toBeCloseTo(expectedDx, 1);
+  });
+
+  it("all four corners of dataset A map to pixel positions inside the canvas", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    const corners: Array<[number, number]> = [
+      [-122, 49], [-119, 49], [-122, 47], [-119, 47],
+    ];
+    for (const [lon, lat] of corners) {
+      const [x, y] = lonLatToCanvas(lon, lat, UNION, t);
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(CW);
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(y).toBeLessThanOrEqual(CH);
+    }
+  });
+
+  it("all four corners of dataset B map to pixel positions inside the canvas", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    const corners: Array<[number, number]> = [
+      [-88, 43], [-85, 43], [-88, 41], [-85, 41],
+    ];
+    for (const [lon, lat] of corners) {
+      const [x, y] = lonLatToCanvas(lon, lat, UNION, t);
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(CW);
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(y).toBeLessThanOrEqual(CH);
+    }
+  });
+
+  it("A and B SE corners are at distinct pixel positions (non-overlapping datasets)", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    // SE corner of A: maxLon=-119, minLat=47
+    const [xASE, yASE] = lonLatToCanvas(-119, 47, UNION, t);
+    // NW corner of B: minLon=-88, maxLat=43
+    const [xBNW, yBNW] = lonLatToCanvas(-88, 43, UNION, t);
+    // B starts well to the right of where A ends
+    expect(xBNW).toBeGreaterThan(xASE + 1);
+    // B starts below A (larger Y)
+    expect(yBNW).toBeGreaterThan(yASE);
+  });
+
+  it("GRID_A and GRID_B each render to a different horizontal band of the canvas", () => {
+    const t = computeInitialTransform(UNION, CW, CH);
+    // Midpoint of each dataset's horizontal span
+    const [xAMid] = lonLatToCanvas(-120.5, 48, UNION, t); // A centre lon
+    const [xBMid] = lonLatToCanvas(-86.5,  42, UNION, t); // B centre lon
+    // They should be clearly separated — well over half the canvas width apart
+    expect(Math.abs(xBMid - xAMid)).toBeGreaterThan(CW * 0.4);
+  });
+
+  // Unused import suppression: reference the grid vars so TS/vitest doesn't
+  // complain about declared-but-not-used module-level constants.
+  it("GRID_A and GRID_B synthetic grids carry correct bbox fields", () => {
+    expect(GRID_A.minLon).toBe(-122);
+    expect(GRID_B.minLon).toBe(-88);
   });
 });

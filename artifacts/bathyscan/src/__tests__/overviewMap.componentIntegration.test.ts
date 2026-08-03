@@ -21,7 +21,7 @@
  */
 
 import React from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
@@ -1029,5 +1029,261 @@ describe("OverviewMap — empty visibleDatasets shows empty-state hint, not LOAD
       fillTextCalls.some((t) => t.includes("No datasets selected")),
       `Expected "No datasets selected" to be absent when a dataset is selected. Got: ${JSON.stringify(fillTextCalls)}`,
     ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. Multi-dataset drawImage — both heatmaps placed at correct canvas positions
+//
+// When two non-overlapping datasets are loaded the rAF loop must call
+// ctx.drawImage twice: once for the secondary bitmap (via renderHeatmapAtBbox)
+// and once for the primary bitmap (also via renderHeatmapAtBbox when
+// worldGridRef is non-null).  Both drawImage calls must use canvas pixel
+// origins derived from the union-bbox transform, so the positions reflect
+// each dataset's actual geographic location.
+//
+// Datasets:
+//   A (primary)  : -122..-119 lon, 47..49 lat  (id = "test-ds")
+//   B (secondary): -88..-85  lon, 41..43 lat   (id = "ds-b")
+//   Union bbox   : -122..-85 lon, 41..49 lat   (37° × 8°)
+//
+// Expected canvas positions (canvas 1024×768, 88% fill):
+//   pxPerDeg = (1024 * 0.88) / 37 ≈ 24.355
+//   offsetX  = (1024 - pxPerDeg*37) / 2 ≈ 61.44
+//   offsetY  = (768  - pxPerDeg*8)  / 2 ≈ 286.58
+//
+//   NW corner of A (-122, 49): x ≈ offsetX, y ≈ offsetY
+//   NW corner of B (-88,  43): x ≈ offsetX + (34/37)*pxPerDeg*37
+//                               y ≈ offsetY + (1 - 2/8)*pxPerDeg*8
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positions", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("ctx.drawImage is called with each dataset's bitmap at its geographically correct canvas origin (±2 px)", async () => {
+    Object.defineProperty(window, "innerWidth",  { value: CANVAS_W, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: CANVAS_H, configurable: true });
+
+    // -----------------------------------------------------------------------
+    // Fake canvases — distinct object identities so we can trace which drawImage
+    // call belongs to which dataset.
+    // -----------------------------------------------------------------------
+    const fakeCanvasA = { __id: "bitmap-A" } as unknown as HTMLCanvasElement;
+    const fakeCanvasB = { __id: "bitmap-B" } as unknown as HTMLCanvasElement;
+
+    // buildHeatmapBitmap: first call → primary dataset A, second → secondary B.
+    const buildSpy = vi
+      .spyOn(overviewRenderer, "buildHeatmapBitmap")
+      .mockReturnValueOnce(fakeCanvasA)  // primary (line ~1080 of OverviewMap.tsx)
+      .mockReturnValueOnce(fakeCanvasB); // secondary (line ~1104)
+
+    // -----------------------------------------------------------------------
+    // Canvas 2D context mock — captures every drawImage call.
+    // -----------------------------------------------------------------------
+    type DrawImageCall = { bitmap: unknown; x: number; y: number; w: number; h: number };
+    const drawImageCalls: DrawImageCall[] = [];
+
+    const mockCtx = new Proxy(
+      {
+        // Required by renderContourLines / renderScaleBar which read ctx.canvas.width/height.
+        canvas: { width: CANVAS_W, height: CANVAS_H },
+        fillRect: vi.fn(),
+        fillStyle: "" as string | CanvasGradient | CanvasPattern,
+        font: "",
+        textAlign: "start" as CanvasTextAlign,
+        textBaseline: "alphabetic" as CanvasTextBaseline,
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 50 })),
+        drawImage: vi.fn((
+          bitmap: unknown,
+          x: number,
+          y: number,
+          w: number,
+          h: number,
+        ) => {
+          drawImageCalls.push({ bitmap, x, y, w, h });
+        }),
+        save: vi.fn(),
+        restore: vi.fn(),
+        beginPath: vi.fn(),
+        closePath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fill: vi.fn(),
+        translate: vi.fn(),
+        rotate: vi.fn(),
+        scale: vi.fn(),
+        setLineDash: vi.fn(),
+        strokeStyle: "",
+        lineWidth: 1,
+        globalAlpha: 1,
+        imageSmoothingEnabled: true,
+        shadowColor: "",
+        shadowBlur: 0,
+        strokeRect: vi.fn(),
+        roundRect: vi.fn(),
+        clip: vi.fn(),
+        createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+        createImageData: vi.fn((w: number, h: number) => ({
+          data: new Uint8ClampedArray(w * h * 4),
+          width: w,
+          height: h,
+        })),
+        putImageData: vi.fn(),
+      },
+      {
+        set(target: Record<string, unknown>, prop: string, value: unknown) {
+          target[prop] = value;
+          return true;
+        },
+      },
+    );
+
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(mockCtx as unknown as CanvasRenderingContext2D);
+
+    // -----------------------------------------------------------------------
+    // Seed the store with two fully-loaded datasets.
+    // -----------------------------------------------------------------------
+    const gridA = makeOverviewGrid(); // -122..-119, 47..49, id="test-ds"
+    const N = 4;
+    const gridB = {
+      datasetId: "ds-b",
+      name: "Dataset B",
+      resolution: N,
+      width: N,
+      height: N,
+      depths: new Array(N * N).fill(0).map((_, i) => 20 + i * 3),
+      minDepth: 20,
+      maxDepth: 20 + (N * N - 1) * 3,
+      minLon: -88,
+      maxLon: -85,
+      minLat: 41,
+      maxLat: 43,
+      centerLon: -86.5,
+      centerLat: 42.0,
+      waterType: "saltwater" as const,
+    } as unknown as import("@workspace/api-client-react").TerrainData;
+
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: gridA.datasetId, source: "preset", overviewGrid: gridA, activeGrid: null },
+        { datasetId: gridB.datasetId, source: "preset", overviewGrid: gridB, activeGrid: null },
+      ],
+      primaryDatasetId: gridA.datasetId,
+      overviewGrid: gridA,
+      activeGrid: null,
+    });
+
+    useUiStore.setState({
+      substrateColorMode: false,
+      selectedSubstrate: null,
+      efhOverlayEnabled: false,
+      overviewOpen: true,
+      pendingDropIn: null,
+    });
+
+    useCameraStore.setState({
+      cameraPosition: { known: true, lon: -105.0, lat: 45.0 },
+      heading: 0,
+      cameraDepth: 50,
+      cameraAltitude: 30,
+    });
+
+    // -----------------------------------------------------------------------
+    // Mount and wait for the rAF draw loop to fire.
+    // -----------------------------------------------------------------------
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // The camera-arrow polygon is set by the rAF loop after a successful draw —
+    // its presence guarantees at least one full draw frame has completed.
+    await waitForCameraArrow();
+
+    getContextSpy.mockRestore();
+
+    // -----------------------------------------------------------------------
+    // Verify drawImage was called for both datasets.
+    // -----------------------------------------------------------------------
+    const callA = drawImageCalls.find((c) => c.bitmap === fakeCanvasA);
+    const callB = drawImageCalls.find((c) => c.bitmap === fakeCanvasB);
+
+    expect(
+      callA,
+      `Expected ctx.drawImage to be called with fakeCanvasA (dataset A). ` +
+      `Calls: ${drawImageCalls.map((c) => String((c.bitmap as { __id?: string }).__id)).join(", ")}`,
+    ).toBeDefined();
+    expect(
+      callB,
+      `Expected ctx.drawImage to be called with fakeCanvasB (dataset B). ` +
+      `Calls: ${drawImageCalls.map((c) => String((c.bitmap as { __id?: string }).__id)).join(", ")}`,
+    ).toBeDefined();
+
+    // -----------------------------------------------------------------------
+    // Verify geographically correct pixel origins within the union-bbox transform.
+    //
+    // Union bbox: minLon=-122, maxLon=-85, minLat=41, maxLat=49 (37° × 8°)
+    // Canvas: 1024 × 768, 88% fill.
+    // -----------------------------------------------------------------------
+    const UNION_MIN_LON = -122;
+    const UNION_MAX_LON = -85;
+    const UNION_MIN_LAT = 41;
+    const UNION_MAX_LAT = 49;
+    const unionLonRange = UNION_MAX_LON - UNION_MIN_LON; // 37
+    const unionLatRange = UNION_MAX_LAT - UNION_MIN_LAT; // 8
+
+    const pxPerDeg = Math.min(
+      (CANVAS_W * 0.88) / unionLonRange,
+      (CANVAS_H * 0.88) / unionLatRange,
+    );
+    const terrainW = pxPerDeg * unionLonRange;
+    const terrainH = pxPerDeg * unionLatRange;
+    const offsetX = (CANVAS_W - terrainW) / 2;
+    const offsetY = (CANVAS_H - terrainH) / 2;
+
+    // NW corner of A (minLon=-122, maxLat=49) in union frame:
+    const expectedXA = offsetX + ((-122 - UNION_MIN_LON) / unionLonRange) * terrainW;
+    const expectedYA = offsetY + (1 - (49 - UNION_MIN_LAT) / unionLatRange) * terrainH;
+
+    // NW corner of B (minLon=-88, maxLat=43) in union frame:
+    const expectedXB = offsetX + ((-88 - UNION_MIN_LON) / unionLonRange) * terrainW;
+    const expectedYB = offsetY + (1 - (43 - UNION_MIN_LAT) / unionLatRange) * terrainH;
+
+    const TOL = 2; // ±2 px tolerance
+
+    expect(callA!.x).toBeCloseTo(expectedXA, 0);
+    expect(Math.abs(callA!.x - expectedXA)).toBeLessThan(TOL);
+
+    expect(callA!.y).toBeCloseTo(expectedYA, 0);
+    expect(Math.abs(callA!.y - expectedYA)).toBeLessThan(TOL);
+
+    expect(callB!.x).toBeCloseTo(expectedXB, 0);
+    expect(Math.abs(callB!.x - expectedXB)).toBeLessThan(TOL);
+
+    expect(callB!.y).toBeCloseTo(expectedYB, 0);
+    expect(Math.abs(callB!.y - expectedYB)).toBeLessThan(TOL);
+
+    // -----------------------------------------------------------------------
+    // Verify the two origins are separated by the expected pixel distance.
+    // -----------------------------------------------------------------------
+    const expectedDx = expectedXB - expectedXA; // ≈ 827.9 px
+    const expectedDy = expectedYB - expectedYA; // ≈ 146.1 px
+    const actualDx   = callB!.x - callA!.x;
+    const actualDy   = callB!.y - callA!.y;
+
+    expect(Math.abs(actualDx - expectedDx)).toBeLessThan(TOL);
+    expect(Math.abs(actualDy - expectedDy)).toBeLessThan(TOL);
+
+    // B must be to the right of and below A (east + south).
+    expect(actualDx).toBeGreaterThan(0);
+    expect(actualDy).toBeGreaterThan(0);
+
+    buildSpy.mockRestore();
   });
 });
