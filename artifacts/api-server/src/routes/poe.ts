@@ -2350,6 +2350,26 @@ const UPSCALE_CACHE_MAX_BYTES: number = parsePositiveIntEnv(
 );
 
 /**
+ * Maximum base64 string length accepted for the `imageBase64` field on the
+ * POST /api/poe/upscale route.  6 MB of base64 encodes ~4.5 MB of raw PNG,
+ * which comfortably covers a 2160 × 2160 RGBA image.  Requests carrying a
+ * larger payload are rejected with a 400 `payload_too_large` error before any
+ * hashing or Poe call is attempted.
+ */
+export const MAX_UPSCALE_IMAGE_BYTES = 6 * 1024 * 1024; // 6 MB base64
+
+/**
+ * Zod schema for the POST /api/poe/upscale request body.
+ */
+const UpscaleBodySchema = z.object({
+  imageBase64: z
+    .string({ required_error: "imageBase64 is required" })
+    .max(MAX_UPSCALE_IMAGE_BYTES, "payload_too_large"),
+  upscaleFactor: z.union([z.literal(2), z.literal(4)]).optional(),
+  generated: z.boolean().optional(),
+});
+
+/**
  * Strict allow-list for upscale-cache filenames: exactly 64 lowercase hex
  * chars (sha256 digest). Rejects any path traversal attempt before FS access.
  */
@@ -2713,21 +2733,16 @@ function extractDataUrlFromModelResponse(
   return null;
 }
 
-router.post("/upscale", asyncHandler(async (req, res) => {
+router.post("/upscale", validateBody(UpscaleBodySchema, "POST /api/poe/upscale"), asyncHandler(async (req, res) => {
   const userId = getAuthenticatedUserId(req);
 
   // `generated` is accepted for spec alignment (reserved for future use by
   // Topaz-specific prompting); `upscaleFactor` is the primary control (2 or 4).
-  const { imageBase64, upscaleFactor, generated: _generated } = req.body as {
-    imageBase64?: string;
-    upscaleFactor?: number;
+  const { imageBase64, upscaleFactor, generated: _generated } = res.locals.parsedBody as {
+    imageBase64: string;
+    upscaleFactor?: 2 | 4;
     generated?: boolean;
   };
-
-  if (!imageBase64) {
-    res.status(400).json({ error: "missing_field", details: "imageBase64 is required" });
-    return;
-  }
 
   const factor = upscaleFactor === 4 ? 4 : 2;
   const cacheKey = upscaleCacheKey(imageBase64, factor);

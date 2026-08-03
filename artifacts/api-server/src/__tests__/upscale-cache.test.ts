@@ -149,6 +149,7 @@ import {
   upscaleMemCache,
   upscaleCacheKey,
   UPSCALE_CACHE_TTL_MS,
+  MAX_UPSCALE_IMAGE_BYTES,
   __resetUpscaleCacheCounters,
 } from "../routes/poe.js";
 
@@ -249,6 +250,51 @@ describe("upscale cache — server-side", () => {
   it("uses different cache keys for different upscale factors", () => {
     const imageBase64 = "data:image/png;base64,abc123";
     expect(upscaleCacheKey(imageBase64, 2)).not.toBe(upscaleCacheKey(imageBase64, 4));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Zod body validation — rejection cases
+// ---------------------------------------------------------------------------
+
+describe("upscale route — Zod body validation", () => {
+  beforeEach(() => {
+    __resetRateLimitMemory();
+    upscaleMemCache.clear();
+    mockCreate.mockReset();
+    __resetUpscaleCacheCounters();
+  });
+
+  it("returns 400 when imageBase64 is missing", async () => {
+    const res = await request(app)
+      .post("/api/poe/upscale")
+      .send({ upscaleFactor: 2 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when imageBase64 exceeds MAX_UPSCALE_IMAGE_BYTES", async () => {
+    // Build a string one byte longer than the allowed maximum
+    const oversized = "A".repeat(MAX_UPSCALE_IMAGE_BYTES + 1);
+    const res = await request(app)
+      .post("/api/poe/upscale")
+      .send({ imageBase64: oversized, upscaleFactor: 2 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when upscaleFactor is not 2 or 4", async () => {
+    const res = await request(app)
+      .post("/api/poe/upscale")
+      .send({ imageBase64: "data:image/png;base64,abc123", upscaleFactor: "eight" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 });
 
