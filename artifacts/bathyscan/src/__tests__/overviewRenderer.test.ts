@@ -11,6 +11,8 @@ import {
   buildHeatmapBitmap,
   buildContourLines,
   renderContourLines,
+  buildNodataBoundarySegments,
+  renderNodataBoundary,
   MAX_CONTOUR_SEGMENTS,
   lonLatToCanvas,
   canvasToLonLat,
@@ -1621,6 +1623,128 @@ describe("renderContourLines — worldGrid canvas projection in multi-dataset mo
 
     const ctx = makeCtxWithCanvas();
     renderContourLines(ctx, segments, primaryGrid, t, "metric", "ocean");
+
+    const moveToArgs = (ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
+    const lineToArgs = (ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
+    const allPoints = [...moveToArgs, ...lineToArgs];
+    expect(allPoints.length).toBeGreaterThan(0);
+
+    const TOLERANCE = 2;
+    const hasPrimaryPoint = allPoints.some(
+      ([px, py]) => Math.abs(px - expectedX) < TOLERANCE && Math.abs(py - expectedY) < TOLERANCE,
+    );
+    const hasWorldPoint = allPoints.some(
+      ([px, py]) => Math.abs(px - worldX) < TOLERANCE && Math.abs(py - worldY) < TOLERANCE,
+    );
+
+    expect(hasPrimaryPoint).toBe(true);
+    expect(hasWorldPoint).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderNodataBoundary — worldGrid canvas projection (multi-dataset regression)
+// ---------------------------------------------------------------------------
+
+describe("renderNodataBoundary — worldGrid canvas projection in multi-dataset mode", () => {
+  // Primary dataset: 2×2 grid where the top row is null (nodata) and bottom
+  // row has real depth values.  The boundary between the two rows produces
+  // horizontal segments at gy=1 spanning gx=0..2.
+  //
+  // With W=2, the toCanvas formula converts:
+  //   lon = grid.minLon + (gx / max(W,1)) * lonRange = minLon + gx/2 * lonRange
+  //   lat = grid.minLat + (gy / max(H,1)) * latRange = minLat + gy/2 * latRange
+  // So gy=1 → lat = minLat + 0.5 * latRange = midpoint latitude = 47.5
+  //    gx=1 → lon = -120 + 0.5 * 1 = -119.5  (mid-segment point)
+  const primaryGrid = makeGrid({
+    width: 2,
+    height: 2,
+    depths: [null as unknown as number, null as unknown as number, 10, 10],
+    minDepth: 10,
+    maxDepth: 10,
+    minLon: -120,
+    maxLon: -119,
+    minLat: 47,
+    maxLat: 48,
+  });
+
+  // World grid: larger bbox (extends 1° west, 1° south, 1° north) so that
+  // the two projections produce meaningfully different canvas coordinates.
+  const worldGrid = makeGrid({
+    width: 2,
+    height: 2,
+    depths: [0, 0, 20, 20],
+    minDepth: 0,
+    maxDepth: 20,
+    minLon: -121,
+    maxLon: -119,
+    minLat: 46,
+    maxLat: 49,
+  });
+
+  const t = makeTransform({ pxPerDeg: 200, offsetX: 0, offsetY: 0 });
+
+  // The horizontal boundary segment has gy=1, gx=0..2.
+  // Use the mid-segment lon/lat as the representative point for projection checks.
+  const boundaryLon = primaryGrid.minLon + 0.5 * (primaryGrid.maxLon - primaryGrid.minLon); // -119.5
+  const boundaryLat = primaryGrid.minLat + 0.5 * (primaryGrid.maxLat - primaryGrid.minLat); // 47.5
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("boundary segments are built from the null-vs-data boundary in the primary grid", () => {
+    const segments = buildNodataBoundarySegments(primaryGrid);
+    expect(segments.length).toBeGreaterThan(0);
+  });
+
+  it("boundary points use worldGrid for canvas projection — not primaryGrid", () => {
+    const segments = buildNodataBoundarySegments(primaryGrid);
+    expect(segments.length).toBeGreaterThan(0);
+
+    // Expected canvas position when worldGrid is the reference frame.
+    const [expectedX, expectedY] = lonLatToCanvas(boundaryLon, boundaryLat, worldGrid, t);
+
+    // Wrong position — what the old code produced (primaryGrid as reference).
+    const [wrongX, wrongY] = lonLatToCanvas(boundaryLon, boundaryLat, primaryGrid, t);
+
+    // Sanity: the two projections must differ so the test is meaningful.
+    expect(expectedX).not.toBeCloseTo(wrongX, 1);
+    expect(expectedY).not.toBeCloseTo(wrongY, 1);
+
+    // Render with worldGrid and capture stroke paths.
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderNodataBoundary(ctx, segments, primaryGrid, t, worldGrid);
+
+    const moveToArgs = (ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
+    const lineToArgs = (ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
+    const allPoints = [...moveToArgs, ...lineToArgs];
+    expect(allPoints.length).toBeGreaterThan(0);
+
+    // At least one rendered point must be close to the worldGrid-projected position.
+    const TOLERANCE = 2;
+    const hasWorldGridPoint = allPoints.some(
+      ([px, py]) => Math.abs(px - expectedX) < TOLERANCE && Math.abs(py - expectedY) < TOLERANCE,
+    );
+    // No point should land at the (wrong) primaryGrid-projected position.
+    const hasWrongGridPoint = allPoints.some(
+      ([px, py]) => Math.abs(px - wrongX) < TOLERANCE && Math.abs(py - wrongY) < TOLERANCE,
+    );
+
+    expect(hasWorldGridPoint).toBe(true);
+    expect(hasWrongGridPoint).toBe(false);
+  });
+
+  it("without worldGrid argument canvas coords stay in primaryGrid space — single-dataset backward compat", () => {
+    const segments = buildNodataBoundarySegments(primaryGrid);
+    expect(segments.length).toBeGreaterThan(0);
+
+    // Without worldGrid the reference grid is primaryGrid.
+    const [expectedX, expectedY] = lonLatToCanvas(boundaryLon, boundaryLat, primaryGrid, t);
+    const [worldX, worldY] = lonLatToCanvas(boundaryLon, boundaryLat, worldGrid, t);
+
+    const ctx = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderNodataBoundary(ctx, segments, primaryGrid, t);
 
     const moveToArgs = (ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
     const lineToArgs = (ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];

@@ -1461,6 +1461,7 @@ export function renderNodataBoundary(
   segments: NodataBoundarySegment[],
   grid: TerrainData,
   t: OverviewTransform,
+  worldGrid?: TerrainData,
 ): void {
   if (!segments.length) return;
 
@@ -1468,11 +1469,15 @@ export function renderNodataBoundary(
   const lonRange = lonRangeOf(grid);
   const latRange = grid.maxLat - grid.minLat || 1;
 
-  /** Convert fractional grid coords (gx, gy) to canvas pixel coords. */
+  /** Convert fractional grid coords (gx, gy) to canvas pixel coords.
+   *  Uses worldGrid (when present) as the coordinate frame so nodata
+   *  boundary segments are placed correctly in multi-dataset mode where
+   *  the transform is derived from the union bbox rather than this grid's
+   *  own bbox (same pattern as renderContourLines). */
   const toCanvas = (gx: number, gy: number): [number, number] => {
     const lon = grid.minLon + (gx / Math.max(W, 1)) * lonRange;
     const lat = grid.minLat + (gy / Math.max(H, 1)) * latRange;
-    return lonLatToCanvas(lon, lat, grid, t);
+    return lonLatToCanvas(lon, lat, worldGrid ?? grid, t);
   };
 
   ctx.save();

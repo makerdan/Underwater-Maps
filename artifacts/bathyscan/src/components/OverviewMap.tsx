@@ -1512,7 +1512,7 @@ export const OverviewMap: React.FC = () => {
       // (no-data) zones so users understand where coverage ends.  Drawn above
       // the heatmap/intertidal fill but below contour lines and labels.
       if (showNodataBoundaryRef.current && nodataBoundarySegmentsRef.current.length > 0) {
-        renderNodataBoundary(ctx, nodataBoundarySegmentsRef.current, grid, t);
+        renderNodataBoundary(ctx, nodataBoundarySegmentsRef.current, grid, t, worldGrid);
       }
 
       // Contour lines — drawn over the heatmap and intertidal fill, under the
