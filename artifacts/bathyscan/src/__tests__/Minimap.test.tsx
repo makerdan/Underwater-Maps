@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { fireEvent } from "@testing-library/react";
 import { renderWithProviders as render } from "./setup";
+import type { Marker as MarkerType } from "@workspace/api-client-react";
+
+// Mutable override used by the per-test marker injection below.
+// Tests that don't set this get the default empty array.
+let mockMarkersOverride: MarkerType[] | null = null;
 
 const makeApiClientMock = vi.hoisted(() => {
   function noop() {}
@@ -60,7 +65,7 @@ vi.mock("@/lib/context", () => ({
 
 vi.mock("@workspace/api-client-react", () =>
   makeApiClientMock({
-    useGetMarkers: () => ({ data: [] }),
+    useGetMarkers: () => ({ data: mockMarkersOverride ?? [] }),
     getGetMarkersQueryKey: (p: unknown) => ["markers", p],
   }),
 );
@@ -694,5 +699,167 @@ describe("Minimap — rebuildStaticLayer draws one bitmap per loaded dataset", (
     // All args[0] that are HTMLCanvasElement instances are heatmap/bitmap draws.
     const canvasDraws = drawImageCalls.filter((a) => a[0] instanceof HTMLCanvasElement);
     expect(canvasDraws.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Minimap — marker dots use union bbox for secondary-dataset markers
+// ---------------------------------------------------------------------------
+
+describe("Minimap — marker dots use union bbox when multiple datasets are loaded", () => {
+  // Track arc() calls so we can verify the canvas pixel position of each dot.
+  type Ctx2D = CanvasRenderingContext2D;
+  const arcCalls: [number, number, number][] = []; // [x, y, radius]
+
+  let origGetContext: typeof HTMLCanvasElement.prototype.getContext;
+
+  beforeAll(() => {
+    origGetContext = HTMLCanvasElement.prototype.getContext;
+    // @ts-expect-error -- override prototype for jsdom canvas tests
+    HTMLCanvasElement.prototype.getContext = function (_type: string) {
+      return {
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+        shadowColor: "",
+        shadowBlur: 0,
+        globalAlpha: 1,
+        imageSmoothingEnabled: false,
+        fillRect: vi.fn() as Ctx2D["fillRect"],
+        drawImage: vi.fn() as unknown as Ctx2D["drawImage"],
+        putImageData: vi.fn() as Ctx2D["putImageData"],
+        createImageData: vi.fn((_w: number, _h: number) => ({
+          data: new Uint8ClampedArray(_w * _h * 4),
+          width: _w,
+          height: _h,
+        })) as unknown as Ctx2D["createImageData"],
+        save: vi.fn() as Ctx2D["save"],
+        restore: vi.fn() as Ctx2D["restore"],
+        translate: vi.fn() as Ctx2D["translate"],
+        rotate: vi.fn() as Ctx2D["rotate"],
+        beginPath: vi.fn() as Ctx2D["beginPath"],
+        moveTo: vi.fn() as Ctx2D["moveTo"],
+        lineTo: vi.fn() as Ctx2D["lineTo"],
+        closePath: vi.fn() as Ctx2D["closePath"],
+        arc: vi.fn((x: number, y: number, r: number) => {
+          arcCalls.push([x, y, r]);
+        }) as unknown as Ctx2D["arc"],
+        fill: vi.fn() as Ctx2D["fill"],
+        stroke: vi.fn() as Ctx2D["stroke"],
+        strokeRect: vi.fn() as Ctx2D["strokeRect"],
+      } as unknown as Ctx2D;
+    };
+  });
+
+  afterAll(() => {
+    HTMLCanvasElement.prototype.getContext = origGetContext;
+  });
+
+  beforeEach(() => {
+    terrain = mockTerrain;
+    arcCalls.length = 0;
+    mockMarkersOverride = null;
+    useUiStore.setState({ pendingDropIn: null, overviewOpen: false });
+    useTerrainStore.setState({
+      visibleDatasets: [],
+      primaryDatasetIds: [],
+      primaryDatasetId: null,
+      activeGrid: null,
+      overviewGrid: null,
+    });
+  });
+
+  afterEach(() => {
+    mockMarkersOverride = null;
+    useTerrainStore.setState({
+      visibleDatasets: [],
+      primaryDatasetIds: [],
+      primaryDatasetId: null,
+      activeGrid: null,
+      overviewGrid: null,
+    });
+  });
+
+  it("marker inside secondary dataset bbox is drawn at union-bbox canvas position, not skipped by primary bbox", () => {
+    // Setup:
+    //   Primary terrain:   lon [-120, -119], lat [47, 48]  (mockTerrain)
+    //   Secondary terrain: lon [-118, -117], lat [45, 46]
+    //   Union bbox:        lon [-120, -117], lat [45, 48]  (3° × 3°)
+    //
+    // Marker at lon = -117.5, lat = 45.5 — inside the secondary bbox.
+    //
+    // With union bbox (correct):
+    //   px = ((-117.5 - (-120)) / 3) * 180 = (2.5 / 3) * 180 ≈ 150
+    //   py = 180 - ((45.5 - 45) / 3) * 180 = 180 - 30 = 150
+    //
+    // With primary bbox only (wrong / old behaviour):
+    //   lonRange = 1,  px = ((-117.5 + 120) / 1) * 180 = 450  → out of canvas → skipped
+    //   The marker would never appear at all.
+
+    const secondOverviewGrid = {
+      ...mockTerrain,
+      datasetId: "ds-secondary-marker-test",
+      name: "secondary-marker-test",
+      minLon: -118,
+      maxLon: -117,
+      minLat: 45,
+      maxLat: 46,
+      centerLon: -117.5,
+      centerLat: 45.5,
+    };
+
+    // Inject a marker into the component via the mocked useGetMarkers hook.
+    mockMarkersOverride = [
+      {
+        id: 1,
+        datasetId: mockTerrain.datasetId,
+        lon: -117.5,
+        lat: 45.5,
+        type: "waypoint",
+        label: null,
+        notes: null,
+        createdAt: new Date().toISOString(),
+      } as unknown as MarkerType,
+    ];
+
+    useTerrainStore.setState({
+      visibleDatasets: [
+        {
+          datasetId: mockTerrain.datasetId,
+          source: "preset" as const,
+          activeGrid: null,
+          overviewGrid: mockTerrain,
+        },
+        {
+          datasetId: "ds-secondary-marker-test",
+          source: "preset" as const,
+          activeGrid: null,
+          overviewGrid: secondOverviewGrid,
+        },
+      ],
+    });
+
+    render(<Minimap />);
+
+    // Union bbox coordinate transform:
+    const unionMinLon = -120;
+    const unionLonRange = 3;  // -117 - (-120)
+    const unionMinLat = 45;
+    const unionLatRange = 3;  // 48 - 45
+    const expectedPx = ((-117.5 - unionMinLon) / unionLonRange) * 180; // ≈ 150
+    const expectedPy = 180 - ((45.5 - unionMinLat) / unionLatRange) * 180; // = 150
+
+    // drawMarkerDots calls ctx.arc(px, py, radius, 0, 2π) for each marker dot.
+    // Find any arc call landing within 2px of the expected union-bbox position.
+    const markerArc = arcCalls.find(
+      ([x, y]) => Math.abs(x - expectedPx) < 2 && Math.abs(y - expectedPy) < 2,
+    );
+
+    expect(markerArc).toBeDefined();
+
+    // Sanity check: the primary-bbox-only position (px≈450) must NOT appear —
+    // that would mean the old (incorrect) code path was used.
+    const wrongArc = arcCalls.find(([x]) => x > 400);
+    expect(wrongArc).toBeUndefined();
   });
 });
