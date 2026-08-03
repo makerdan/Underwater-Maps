@@ -416,9 +416,15 @@ interface CatalogCardProps {
   atCap: boolean;
   /** Called with the presetId and optional survey date when the user clicks ADD. */
   onAddToView: (presetId: string, dataUpdatedAt?: string | null) => void;
+  /**
+   * When set, the Save button is disabled regardless of `canSave` and this
+   * message is shown as the tooltip reason. Used to block NCEI WCS saves
+   * when no terrain area is currently loaded in the viewer.
+   */
+  saveBlockedReason?: string;
 }
 
-const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, canSave, presetId, onLoad, hasPrimary, inView, atCap, onAddToView }) => {
+const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, canSave, presetId, onLoad, hasPrimary, inView, atCap, onAddToView, saveBlockedReason }) => {
   const icon = DATA_TYPE_ICONS[entry.dataType] ?? "📦";
   const color = DATA_TYPE_COLORS[entry.dataType] ?? "#e2e8f0";
   const isIntertidal = INTERTIDAL_CATALOG_IDS.has(entry.id);
@@ -564,28 +570,30 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
         )}
         <ViewscreenTooltip
           label={
-            !canSave
-              ? "Sign in to save datasets to your library"
-              : saved
-                ? "Already in your saved list"
-                : "Save to your library"
+            saveBlockedReason
+              ? saveBlockedReason
+              : !canSave
+                ? "Sign in to save datasets to your library"
+                : saved
+                  ? "Already in your saved list"
+                  : "Save to your library"
           }
           side="top"
         >
           <button
-            onClick={() => canSave && !saved && !saving && onSave(entry.id)}
-            disabled={!canSave || saved || saving}
+            onClick={() => !saveBlockedReason && canSave && !saved && !saving && onSave(entry.id)}
+            disabled={!!saveBlockedReason || !canSave || saved || saving}
             style={{
               fontSize: "calc(12px * var(--bs-font-scale, 1))",
               padding: "3px 10px",
               background: saved ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.04)",
               border: `1px solid ${saved ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"}`,
               borderRadius: 3,
-              color: !canSave ? "#64748b" : saved ? "#4ade80" : "#cbd5e1",
-              cursor: !canSave || saved ? "default" : "pointer",
+              color: (!!saveBlockedReason || !canSave) ? "#64748b" : saved ? "#4ade80" : "#cbd5e1",
+              cursor: (!!saveBlockedReason || !canSave || saved) ? "default" : "pointer",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              opacity: !canSave ? 0.6 : 1,
+              opacity: (!!saveBlockedReason || !canSave) ? 0.6 : 1,
             }}
           >
             {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
@@ -952,9 +960,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  // Terrain store — used to derive "Add to View" state for catalog cards.
+  // Terrain store — used to derive "Add to View" state for catalog cards and
+  // to gate NCEI WCS saves (which require an active terrain area bbox).
   const terrainVisibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const terrainSelectedIds = useTerrainStore((s) => s.selectedIds);
+  const terrainActiveGrid = useTerrainStore((s) => s.activeGrid);
 
   const hasCatalogPrimary = terrainVisibleDatasets.length > 0;
   const atCatalogCap = terrainSelectedIds.length >= MAX_ACTIVE_DATASETS;
@@ -1635,6 +1645,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             )}
             {searchResults.map((entry) => {
               const presetId = entry.id.startsWith("preset-") ? entry.id.replace("preset-", "") : null;
+              // NCEI WCS catalog entries require an active terrain bbox to materialise
+              // a meaningful survey corridor.  Disable Save when no terrain is loaded.
+              const isNceiWcsEntry = entry.id.startsWith("ncei-");
+              const saveBlockedReason =
+                isNceiWcsEntry && !terrainActiveGrid
+                  ? "Load a terrain in this area first, then save to download it."
+                  : undefined;
               return (
                 <CatalogCard
                   key={entry.id}
@@ -1649,6 +1666,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                   inView={presetId !== null && catalogSelectedIdSet.has(presetId)}
                   atCap={atCatalogCap}
                   onAddToView={handleCatalogAddToView}
+                  saveBlockedReason={saveBlockedReason}
                 />
               );
             })}
