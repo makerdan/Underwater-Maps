@@ -201,8 +201,8 @@ export const OverviewMap: React.FC = () => {
   const efhFeaturesRef = useRef<EfhFeature[]>([]);
   /** Pre-built contour segments, rebuilt when grid or interval changes. */
   const contourSegmentsRef = useRef<ContourSegment[]>([]);
-  /** Pre-built no-data boundary segments, rebuilt when grid changes. */
-  const nodataBoundarySegmentsRef = useRef<NodataBoundarySegment[]>([]);
+  /** Pre-built no-data boundary segments keyed by datasetId, rebuilt when each dataset's grid changes. */
+  const nodataBoundarySegmentsRef = useRef<Map<string, NodataBoundarySegment[]>>(new Map());
   const showNodataBoundary = useUiStore((s) => s.showNodataBoundary);
   const showNodataBoundaryRef = useRef(showNodataBoundary);
   useEffect(() => {
@@ -1037,14 +1037,14 @@ export const OverviewMap: React.FC = () => {
     };
   }, [trailsData]);
 
-  // Rebuild no-data boundary segments whenever the overview grid changes.
+  // Rebuild no-data boundary segments for the primary dataset whenever its grid changes.
+  // Secondary dataset segments are kept in sync inside the secondary-bitmaps effect below.
   useEffect(() => {
     if (!overviewGrid) {
-      nodataBoundarySegmentsRef.current = [];
       dirtyRef.current = true;
       return;
     }
-    nodataBoundarySegmentsRef.current = buildNodataBoundarySegments(overviewGrid);
+    nodataBoundarySegmentsRef.current.set(overviewGrid.datasetId, buildNodataBoundarySegments(overviewGrid));
     dirtyRef.current = true;
   }, [overviewGrid]);
 
@@ -1090,18 +1090,22 @@ export const OverviewMap: React.FC = () => {
     const withGrid = visibleDatasets.filter((v) => !!v.overviewGrid);
     const primaryId = visibleDatasets[0]?.datasetId ?? null;
 
-    // Remove bitmaps for datasets that are no longer visible.
+    // Remove bitmaps and nodata segments for datasets that are no longer visible.
     const visibleIds = new Set(withGrid.map((v) => v.datasetId));
     for (const id of secondaryBitmapsRef.current.keys()) {
       if (!visibleIds.has(id)) secondaryBitmapsRef.current.delete(id);
     }
+    for (const id of nodataBoundarySegmentsRef.current.keys()) {
+      if (!visibleIds.has(id)) nodataBoundarySegmentsRef.current.delete(id);
+    }
 
-    // Build/rebuild bitmaps for every secondary (non-first) visible dataset.
+    // Build/rebuild bitmaps and nodata segments for every secondary (non-first) visible dataset.
     for (const v of withGrid) {
       if (v.datasetId === primaryId) continue; // primary handled by the effect above
       const og = v.overviewGrid;
       if (!og) continue;
       secondaryBitmapsRef.current.set(v.datasetId, buildHeatmapBitmap(og, colormapTheme, og.topography));
+      nodataBoundarySegmentsRef.current.set(v.datasetId, buildNodataBoundarySegments(og));
     }
 
     // Compute the combined bbox when 2+ datasets have overview grids loaded.
@@ -1511,8 +1515,17 @@ export const OverviewMap: React.FC = () => {
       // Survey-boundary indicators — dashed grey strokes at the edge of null
       // (no-data) zones so users understand where coverage ends.  Drawn above
       // the heatmap/intertidal fill but below contour lines and labels.
-      if (showNodataBoundaryRef.current && nodataBoundarySegmentsRef.current.length > 0) {
-        renderNodataBoundary(ctx, nodataBoundarySegmentsRef.current, grid, t, worldGrid);
+      // In multi-dataset mode each visible dataset's own nodata boundary is
+      // rendered using its own grid so segment positions are correct.
+      if (showNodataBoundaryRef.current && nodataBoundarySegmentsRef.current.size > 0) {
+        for (const v of visibleNow) {
+          const og = v.overviewGrid;
+          if (!og) continue;
+          const segs = nodataBoundarySegmentsRef.current.get(og.datasetId);
+          if (segs && segs.length > 0) {
+            renderNodataBoundary(ctx, segs, og, t, worldGrid);
+          }
+        }
       }
 
       // Contour lines — drawn over the heatmap and intertidal fill, under the

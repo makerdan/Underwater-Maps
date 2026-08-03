@@ -1735,6 +1735,53 @@ describe("renderNodataBoundary — worldGrid canvas projection in multi-dataset 
     expect(hasWrongGridPoint).toBe(false);
   });
 
+  it("calling renderNodataBoundary once per dataset draws segments from both datasets in worldGrid space", () => {
+    // Secondary dataset: 2×2 grid offset further south-west, where the bottom
+    // row is null (nodata) and the top row has real depth values.
+    const secondaryGrid = makeGrid({
+      width: 2,
+      height: 2,
+      depths: [10, 10, null as unknown as number, null as unknown as number],
+      minDepth: 10,
+      maxDepth: 10,
+      minLon: -121,
+      maxLon: -120,
+      minLat: 46,
+      maxLat: 47,
+      datasetId: "secondary",
+    });
+
+    const primarySegs = buildNodataBoundarySegments(primaryGrid);
+    const secondarySegs = buildNodataBoundarySegments(secondaryGrid);
+
+    expect(primarySegs.length).toBeGreaterThan(0);
+    expect(secondarySegs.length).toBeGreaterThan(0);
+
+    // Render primary segments using its own grid + worldGrid as coordinate frame.
+    const ctx1 = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderNodataBoundary(ctx1, primarySegs, primaryGrid, t, worldGrid);
+
+    // Render secondary segments using its own grid + worldGrid as coordinate frame.
+    const ctx2 = makeCtx() as unknown as CanvasRenderingContext2D;
+    renderNodataBoundary(ctx2, secondarySegs, secondaryGrid, t, worldGrid);
+
+    // Both calls should produce stroke paths (neither is a no-op).
+    const primaryMoves = (ctx1.moveTo as ReturnType<typeof vi.fn>).mock.calls.length;
+    const secondaryMoves = (ctx2.moveTo as ReturnType<typeof vi.fn>).mock.calls.length;
+    expect(primaryMoves).toBeGreaterThan(0);
+    expect(secondaryMoves).toBeGreaterThan(0);
+
+    // The two sets of segments should project to distinct canvas regions.
+    // Primary boundary (gy=1 in primaryGrid) maps to lat≈47.5.
+    // Secondary boundary (gy=1 in secondaryGrid) maps to lat≈46.5.
+    // North-up: primary boundary is further north → smaller Y; secondary is further south → larger Y.
+    const primaryYVals = (ctx1.moveTo as ReturnType<typeof vi.fn>).mock.calls.map(([, y]: [number, number]) => y);
+    const secondaryYVals = (ctx2.moveTo as ReturnType<typeof vi.fn>).mock.calls.map(([, y]: [number, number]) => y);
+    const primaryMidY = primaryYVals.reduce((a: number, b: number) => a + b, 0) / primaryYVals.length;
+    const secondaryMidY = secondaryYVals.reduce((a: number, b: number) => a + b, 0) / secondaryYVals.length;
+    expect(primaryMidY).toBeLessThan(secondaryMidY);
+  });
+
   it("without worldGrid argument canvas coords stay in primaryGrid space — single-dataset backward compat", () => {
     const segments = buildNodataBoundarySegments(primaryGrid);
     expect(segments.length).toBeGreaterThan(0);
