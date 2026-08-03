@@ -1380,10 +1380,11 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
     const noDataByte = expectedNoDataByte();
 
     // Canvas pixel 2 (i=8) → dataIdx 0 → null depth → NO_DATA colour, not grey.
+    // Alpha is 0 (transparent) so overlapping datasets show through in multi-dataset mode.
     expect(px[8]).toBe(noDataByte);
     expect(px[9]).toBe(noDataByte);
     expect(px[10]).toBe(noDataByte);
-    expect(px[11]).toBe(255);
+    expect(px[11]).toBe(0);
 
     // Must NOT be the land grey.
     const isLandGrey = px[8] === 120 && px[9] === 120 && px[10] === 120;
@@ -1407,10 +1408,11 @@ describe("buildHeatmapBitmap — topography array: land cells rendered as grey",
     const noDataByte = expectedNoDataByte();
 
     // Canvas pixel 3 (i=12) → dataIdx 1 → NaN depth → NO_DATA colour.
+    // Alpha is 0 (transparent) so overlapping datasets show through in multi-dataset mode.
     expect(px[12]).toBe(noDataByte);
     expect(px[13]).toBe(noDataByte);
     expect(px[14]).toBe(noDataByte);
-    expect(px[15]).toBe(255);
+    expect(px[15]).toBe(0);
 
     const isLandGrey = px[12] === 120 && px[13] === 120 && px[14] === 120;
     expect(isLandGrey).toBe(false);

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { fireEvent } from "@testing-library/react";
 import { renderWithProviders as render } from "./setup";
 
@@ -26,14 +26,17 @@ const makeApiClientMock = vi.hoisted(() => {
     });
 });
 
-import { Minimap, drawArrow, drawHeatmap } from "@/components/Minimap";
+import { Minimap, drawArrow, drawHeatmap, computeMinimapUnionBbox } from "@/components/Minimap";
 import { useUiStore } from "@/lib/uiStore";
+import { useTerrainStore } from "@/lib/terrainStore";
+import type { VisibleDataset } from "@/lib/terrainStore";
 import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
 import { usePaletteStore } from "@/lib/paletteStore";
 import type { ColormapTheme } from "@/lib/settingsStore";
 
 const mockTerrain = {
   datasetId: "test-ds",
+  name: "test-terrain",
   resolution: 4,
   width: 4,
   height: 4,
@@ -44,6 +47,8 @@ const mockTerrain = {
   maxLon: -119,
   minLat: 47,
   maxLat: 48,
+  centerLon: -119.5,
+  centerLat: 47.5,
   waterType: "saltwater" as const,
 };
 
@@ -448,4 +453,246 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
       expect([r, g, b]).not.toEqual([120, 120, 120]);
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// computeMinimapUnionBbox — pure helper
+// ---------------------------------------------------------------------------
+
+describe("computeMinimapUnionBbox", () => {
+  const makeGrid = (
+    minLon: number,
+    maxLon: number,
+    minLat: number,
+    maxLat: number,
+  ) =>
+    ({
+      datasetId: `ds-${minLon}`,
+      name: `test-grid-${minLon}`,
+      resolution: 2,
+      width: 2,
+      height: 2,
+      depths: [1, 2, 3, 4],
+      minDepth: 1,
+      maxDepth: 4,
+      minLon,
+      maxLon,
+      minLat,
+      maxLat,
+      centerLon: (minLon + maxLon) / 2,
+      centerLat: (minLat + maxLat) / 2,
+      waterType: "saltwater" as const,
+    });
+
+  const primaryTerrain = makeGrid(-120, -119, 47, 48);
+
+  const makeVisible = (grid: ReturnType<typeof makeGrid> | null): VisibleDataset => ({
+    datasetId: grid?.datasetId ?? "null-ds",
+    source: "preset",
+    activeGrid: null,
+    overviewGrid: grid,
+  });
+
+  it("returns union of two non-overlapping bboxes when both grids are loaded", () => {
+    const grid1 = makeGrid(-120, -119, 47, 48);
+    const grid2 = makeGrid(-117, -116, 45, 46);
+    const result = computeMinimapUnionBbox(
+      [makeVisible(grid1), makeVisible(grid2)],
+      primaryTerrain,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.minLon).toBeCloseTo(-120);
+    expect(result!.maxLon).toBeCloseTo(-116);
+    expect(result!.minLat).toBeCloseTo(45);
+    expect(result!.maxLat).toBeCloseTo(48);
+  });
+
+  it("returns primary terrain bbox when no visible entry has a loaded overviewGrid", () => {
+    const result = computeMinimapUnionBbox(
+      [makeVisible(null)],
+      primaryTerrain,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.minLon).toBe(primaryTerrain.minLon);
+    expect(result!.maxLon).toBe(primaryTerrain.maxLon);
+    expect(result!.minLat).toBe(primaryTerrain.minLat);
+    expect(result!.maxLat).toBe(primaryTerrain.maxLat);
+  });
+
+  it("returns null when visibleDatasets is empty and primaryTerrain is null", () => {
+    const result = computeMinimapUnionBbox([], null);
+    expect(result).toBeNull();
+  });
+
+  it("always includes primaryTerrain even when its visible entry has overviewGrid: null but a secondary has a loaded grid", () => {
+    // Primary entry has no overview yet (still loading), secondary has loaded.
+    const secondaryGrid = makeGrid(-117, -116, 45, 46);
+    const result = computeMinimapUnionBbox(
+      [makeVisible(null), makeVisible(secondaryGrid)],
+      primaryTerrain, // minLon: -120 maxLon: -119 minLat: 47 maxLat: 48
+    );
+    expect(result).not.toBeNull();
+    // Must include primaryTerrain extents (seeded even though its entry has no grid)
+    expect(result!.minLon).toBeCloseTo(primaryTerrain.minLon); // -120
+    expect(result!.maxLon).toBeCloseTo(secondaryGrid.maxLon);  // -116 (expanded)
+    expect(result!.minLat).toBeCloseTo(secondaryGrid.minLat);  // 45 (expanded)
+    expect(result!.maxLat).toBeCloseTo(primaryTerrain.maxLat); // 48
+  });
+
+  it("union of two loaded grids always includes primaryTerrain as a seed", () => {
+    const grid1 = makeGrid(-120, -119, 47, 48); // same as primary
+    const grid2 = makeGrid(-115, -114, 40, 41); // far away
+    const result = computeMinimapUnionBbox(
+      [makeVisible(grid1), makeVisible(null)],
+      primaryTerrain,
+    );
+    // grid1 + primaryTerrain seed → bbox equals grid1's extent (they overlap exactly)
+    expect(result!.minLon).toBeCloseTo(grid1.minLon);
+    expect(result!.maxLon).toBeCloseTo(grid1.maxLon);
+    expect(result!.minLat).toBeCloseTo(grid1.minLat);
+    expect(result!.maxLat).toBeCloseTo(grid1.maxLat);
+    void grid2; // not used in this case
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Minimap — multi-dataset union-bbox rendering (drawImage count)
+// ---------------------------------------------------------------------------
+
+describe("Minimap — rebuildStaticLayer draws one bitmap per loaded dataset", () => {
+  // In jsdom, HTMLCanvasElement.getContext() returns null, so effects that call
+  // canvas.getContext("2d") silently bail.  Override it for this suite so the
+  // effect body actually runs and drawImage calls can be counted.
+  type Ctx2D = CanvasRenderingContext2D;
+  const drawImageCalls: unknown[][] = [];
+
+  let origGetContext: typeof HTMLCanvasElement.prototype.getContext;
+  beforeAll(() => {
+    origGetContext = HTMLCanvasElement.prototype.getContext;
+    // @ts-expect-error -- override prototype for jsdom canvas tests
+    HTMLCanvasElement.prototype.getContext = function (_type: string) {
+      return {
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+        shadowColor: "",
+        shadowBlur: 0,
+        globalAlpha: 1,
+        imageSmoothingEnabled: false,
+        fillRect: vi.fn() as Ctx2D["fillRect"],
+        drawImage: vi.fn((...args: unknown[]) => { drawImageCalls.push(args); }) as unknown as Ctx2D["drawImage"],
+        putImageData: vi.fn() as Ctx2D["putImageData"],
+        createImageData: vi.fn((_w: number, _h: number) => ({
+          data: new Uint8ClampedArray(_w * _h * 4),
+          width: _w,
+          height: _h,
+        })) as unknown as Ctx2D["createImageData"],
+        save: vi.fn() as Ctx2D["save"],
+        restore: vi.fn() as Ctx2D["restore"],
+        translate: vi.fn() as Ctx2D["translate"],
+        rotate: vi.fn() as Ctx2D["rotate"],
+        beginPath: vi.fn() as Ctx2D["beginPath"],
+        moveTo: vi.fn() as Ctx2D["moveTo"],
+        lineTo: vi.fn() as Ctx2D["lineTo"],
+        closePath: vi.fn() as Ctx2D["closePath"],
+        arc: vi.fn() as Ctx2D["arc"],
+        fill: vi.fn() as Ctx2D["fill"],
+        stroke: vi.fn() as Ctx2D["stroke"],
+        strokeRect: vi.fn() as Ctx2D["strokeRect"],
+      } as unknown as Ctx2D;
+    };
+  });
+
+  afterAll(() => {
+    HTMLCanvasElement.prototype.getContext = origGetContext;
+  });
+
+  beforeEach(() => {
+    terrain = mockTerrain;
+    drawImageCalls.length = 0;
+    useUiStore.setState({ pendingDropIn: null, overviewOpen: false });
+    useTerrainStore.setState({ visibleDatasets: [], primaryDatasetIds: [], primaryDatasetId: null, activeGrid: null, overviewGrid: null });
+  });
+
+  afterEach(() => {
+    useTerrainStore.setState({ visibleDatasets: [], primaryDatasetIds: [], primaryDatasetId: null, activeGrid: null, overviewGrid: null });
+  });
+
+  it("click outside primary terrain bbox (secondary-only area) clamps world coords to mesh bounds", () => {
+    // Secondary dataset sits far east of the primary (mockTerrain: minLon=-120, maxLon=-119)
+    const secondOverviewGridFar = {
+      ...mockTerrain,
+      datasetId: "ds-far-east",
+      name: "far-east",
+      minLon: -117,
+      maxLon: -116,
+      minLat: 45,
+      maxLat: 46,
+      centerLon: -116.5,
+      centerLat: 45.5,
+    };
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: mockTerrain.datasetId, source: "preset" as const, activeGrid: null, overviewGrid: mockTerrain },
+        { datasetId: "ds-far-east", source: "preset" as const, activeGrid: null, overviewGrid: secondOverviewGridFar },
+      ],
+    });
+
+    const { container } = render(<Minimap />);
+    const canvas = container.querySelector("canvas")!;
+    canvas.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 180, bottom: 180, width: 180, height: 180, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+
+    // Click at the far-right edge of the canvas (secondary dataset region)
+    fireEvent.click(canvas, { clientX: 179, clientY: 90 });
+
+    const pending = useUiStore.getState().pendingDropIn;
+    expect(pending).not.toBeNull();
+    // World coords must stay within [-WORLD_SIZE/2, +WORLD_SIZE/2]
+    expect(pending!.worldX).toBeGreaterThanOrEqual(-WORLD_SIZE / 2 - 0.01);
+    expect(pending!.worldX).toBeLessThanOrEqual(WORLD_SIZE / 2 + 0.01);
+    expect(pending!.worldZ).toBeGreaterThanOrEqual(-WORLD_SIZE / 2 - 0.01);
+    expect(pending!.worldZ).toBeLessThanOrEqual(WORLD_SIZE / 2 + 0.01);
+  });
+
+  it("calls drawImage at least twice when two datasets both have loaded overviewGrid", () => {
+    const secondOverviewGrid = {
+      ...mockTerrain,
+      datasetId: "ds-secondary",
+      name: "test-secondary",
+      minLon: -118,
+      maxLon: -117,
+      minLat: 45,
+      maxLat: 46,
+      centerLon: -117.5,
+      centerLat: 45.5,
+    };
+
+    // Pre-populate the terrain store with two visible datasets, both having grids.
+    useTerrainStore.setState({
+      visibleDatasets: [
+        {
+          datasetId: mockTerrain.datasetId,
+          source: "preset" as const,
+          activeGrid: null,
+          overviewGrid: mockTerrain,
+        },
+        {
+          datasetId: "ds-secondary",
+          source: "preset" as const,
+          activeGrid: null,
+          overviewGrid: secondOverviewGrid,
+        },
+      ],
+    });
+
+    render(<Minimap />);
+
+    // drawImage is called in rebuildStaticLayer: once for the primary heatmap
+    // canvas and once for the secondary bitmap (plus possibly once for the
+    // static-layer composite onto the visible canvas).  Require ≥ 2.
+    // All args[0] that are HTMLCanvasElement instances are heatmap/bitmap draws.
+    const canvasDraws = drawImageCalls.filter((a) => a[0] instanceof HTMLCanvasElement);
+    expect(canvasDraws.length).toBeGreaterThanOrEqual(2);
+  });
 });

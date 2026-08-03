@@ -11,7 +11,9 @@ import type { ColormapTheme } from "@/lib/settingsStore";
 import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
 import type { DepthsArray } from "@workspace/api-client-react";
 import type { TerrainData } from "@workspace/api-client-react";
-import { buildHillshadeLayer } from "@/lib/overviewRenderer";
+import { buildHillshadeLayer, buildHeatmapBitmap } from "@/lib/overviewRenderer";
+import { useTerrainStore } from "@/lib/terrainStore";
+import type { VisibleDataset } from "@/lib/terrainStore";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { loadMarkerIconImage, peekMarkerIconImage } from "@/lib/markerIcons";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -32,6 +34,68 @@ const ND_G = linToSRGBByte(NO_DATA_COLOR.g);
 const ND_B = linToSRGBByte(NO_DATA_COLOR.b);
 
 const MINIMAP_FT_TO_M = 0.3048;
+
+// ---------------------------------------------------------------------------
+// Union-bbox helpers (exported for unit tests)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the union bounding box of all visible datasets that have a loaded
+ * `overviewGrid`, always seeded with `primaryTerrain`'s bbox so the primary
+ * survey is never excluded even when its overview grid hasn't loaded yet.
+ *
+ * This prevents a race where the primary entry's `overviewGrid` is still null
+ * (loading lag / overview fetch failure) while a secondary entry has already
+ * loaded: without the seed, the union would omit the primary bbox entirely,
+ * misplacing the heatmap and invalidating camera-arrow and click mapping.
+ *
+ * Returns null only when `primaryTerrain` is null/undefined and no
+ * `visibleDatasets` entry has a loaded overviewGrid.
+ */
+export function computeMinimapUnionBbox(
+  visibleDatasets: VisibleDataset[],
+  primaryTerrain: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null | undefined,
+): { minLon: number; maxLon: number; minLat: number; maxLat: number } | null {
+  // Always start from the primary terrain's bbox if available, so the primary
+  // heatmap is never clipped out of the canvas during secondary overview loading.
+  let minLon = primaryTerrain ? primaryTerrain.minLon : Infinity;
+  let maxLon = primaryTerrain ? primaryTerrain.maxLon : -Infinity;
+  let minLat = primaryTerrain ? primaryTerrain.minLat : Infinity;
+  let maxLat = primaryTerrain ? primaryTerrain.maxLat : -Infinity;
+
+  // Expand the bbox with any secondary (or primary) overviewGrid extents.
+  for (const v of visibleDatasets) {
+    const g = v.overviewGrid;
+    if (!g) continue;
+    if (g.minLon < minLon) minLon = g.minLon;
+    if (g.maxLon > maxLon) maxLon = g.maxLon;
+    if (g.minLat < minLat) minLat = g.minLat;
+    if (g.maxLat > maxLat) maxLat = g.maxLat;
+  }
+
+  if (!isFinite(minLon) || !isFinite(maxLon) || !isFinite(minLat) || !isFinite(maxLat)) {
+    return null;
+  }
+  return { minLon, maxLon, minLat, maxLat };
+}
+
+/**
+ * Compute the sub-rectangle of the 180×180 minimap canvas that a given dataset
+ * bbox occupies within the union bbox (North-up, linear scaling).
+ */
+function datasetCanvasRect(
+  dataBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+  unionBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+): { x: number; y: number; w: number; h: number } {
+  const lonRange = unionBbox.maxLon - unionBbox.minLon || 1;
+  const latRange = unionBbox.maxLat - unionBbox.minLat || 1;
+  const x0 = ((dataBbox.minLon - unionBbox.minLon) / lonRange) * W;
+  const x1 = ((dataBbox.maxLon - unionBbox.minLon) / lonRange) * W;
+  // North-up: maxLat maps to small y (top), minLat maps to large y (bottom)
+  const y0 = H - ((dataBbox.maxLat - unionBbox.minLat) / latRange) * H;
+  const y1 = H - ((dataBbox.minLat - unionBbox.minLat) / latRange) * H;
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
 
 /**
  * Draw depth-band contour lines on the minimap canvas at each band boundary.
@@ -326,12 +390,18 @@ const tileImageCache = new Map<string, HTMLImageElement>();
 
 export const Minimap: React.FC = () => {
   const { terrain } = useAppState();
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Coalesces marker-icon load completions into a single static-layer rebuild.
   const iconRebuildScheduledRef = useRef(false);
   // Stored as an offscreen canvas so we can drawImage with globalAlpha for
   // satellite compositing (putImageData ignores globalAlpha).
   const heatmapCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Pre-built bitmaps for secondary (non-primary) datasets keyed by datasetId.
+  const secondaryBitmapsRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
+  // Current union bbox — kept in a ref so click/hover handlers always read the
+  // latest value without needing to be re-created on every render.
+  const unionBboxRef = useRef<{ minLon: number; maxLon: number; minLat: number; maxLat: number } | null>(null);
   // Static layer: bg + satellite + heatmap + marker dots. Rebuilt only when
   // data changes so the camera-tick path only composites this + the arrow.
   const staticLayerRef = useRef<HTMLCanvasElement | null>(null);
@@ -446,6 +516,13 @@ export const Minimap: React.FC = () => {
   const rebuildStaticLayer = (currentTerrain: typeof terrain) => {
     if (!currentTerrain) return;
 
+    // Compute the union bbox from all visible datasets with loaded overview
+    // grids, falling back to the primary terrain's bbox when no grid is ready.
+    const unionBbox = computeMinimapUnionBbox(visibleDatasets, currentTerrain);
+    if (!unionBbox) return;
+    // Store for use in click/hover handlers (which are closures over the ref).
+    unionBboxRef.current = unionBbox;
+
     // Allocate or reuse the offscreen static canvas.
     if (!staticLayerRef.current) {
       const c = document.createElement("canvas");
@@ -466,22 +543,38 @@ export const Minimap: React.FC = () => {
       sCtx.drawImage(satelliteImgRef.current, 0, 0, W, H);
     }
 
-    // 3. Depth heatmap — semi-transparent so satellite shows through
+    // 3. Depth heatmap bitmaps — one per dataset, each positioned at its
+    //    sub-rectangle within the union bbox. Semi-transparent over satellite.
+    const alpha = satelliteImgRef.current ? 0.65 : 1.0;
+    sCtx.globalAlpha = alpha;
+
+    // 3a. Primary heatmap (always uses currentTerrain's bbox as its data bbox)
     if (heatmapCanvasRef.current) {
-      sCtx.globalAlpha = satelliteImgRef.current ? 0.65 : 1.0;
-      sCtx.drawImage(heatmapCanvasRef.current, 0, 0);
-      sCtx.globalAlpha = 1.0;
+      const rect = datasetCanvasRect(currentTerrain, unionBbox);
+      sCtx.drawImage(heatmapCanvasRef.current, rect.x, rect.y, rect.w, rect.h);
     }
 
-    // 4. Marker symbols (fallback dots until icon rasters finish loading —
-    //    onIconReady schedules exactly one rebuild+repaint once they do)
+    // 3b. Secondary dataset bitmaps
+    for (const [datasetId, bitmap] of secondaryBitmapsRef.current.entries()) {
+      // Find this dataset's overviewGrid to get its geographic bbox.
+      const entry = visibleDatasets.find((v) => v.datasetId === datasetId);
+      const grid = entry?.overviewGrid;
+      if (!grid) continue;
+      const rect = datasetCanvasRect(grid, unionBbox);
+      sCtx.drawImage(bitmap, rect.x, rect.y, rect.w, rect.h);
+    }
+
+    sCtx.globalAlpha = 1.0;
+
+    // 4. Marker symbols — positioned using the union bbox so they land in the
+    //    correct spot even when the primary terrain is offset within the canvas.
     drawMarkerDots(
       sCtx,
       markersRef.current,
-      currentTerrain.minLon,
-      currentTerrain.maxLon,
-      currentTerrain.minLat,
-      currentTerrain.maxLat,
+      unionBbox.minLon,
+      unionBbox.maxLon,
+      unionBbox.minLat,
+      unionBbox.maxLat,
       handleMarkerIconReady,
     );
   };
@@ -524,25 +617,32 @@ export const Minimap: React.FC = () => {
       ctx.fillRect(0, 0, W, H);
     }
 
-    // 2. Camera arrow — the only element that changes on every camera tick
+    // 2. Camera arrow — the only element that changes on every camera tick.
+    //    Use the union bbox for positioning so the arrow is correct even when
+    //    the primary terrain is offset within the canvas.
     if (camLon !== null && camLat !== null) {
-      const px = ((camLon - currentTerrain.minLon) / (currentTerrain.maxLon - currentTerrain.minLon)) * W;
+      const bbox = unionBboxRef.current ?? currentTerrain;
+      const lonRange = bbox.maxLon - bbox.minLon || 1;
+      const latRange = bbox.maxLat - bbox.minLat || 1;
+      const px = ((camLon - bbox.minLon) / lonRange) * W;
       // North-up: invert y so high-lat (North) is at top.
-      const py = H - ((camLat - currentTerrain.minLat) / (currentTerrain.maxLat - currentTerrain.minLat)) * H;
+      const py = H - ((camLat - bbox.minLat) / latRange) * H;
       if (px >= 0 && px <= W && py >= 0 && py <= H) {
         drawArrow(ctx, px, py, heading);
       }
     }
   };
 
-  // Rebuild heatmap offscreen canvas when terrain, colormap theme, or palette changes.
+  // Rebuild heatmap offscreen canvas when terrain, colormap theme, palette, or
+  // visibleDatasets changes (new dataset added / removed / grids loaded).
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !terrain) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Build offscreen heatmap canvas so it can be drawImage'd with globalAlpha.
+    // Build offscreen heatmap canvas for the primary terrain so it can be
+    // drawImage'd with globalAlpha onto the static layer.
     const offscreen = document.createElement("canvas");
     offscreen.width = W;
     offscreen.height = H;
@@ -575,12 +675,27 @@ export const Minimap: React.FC = () => {
     );
     heatmapCanvasRef.current = offscreen;
 
+    // Rebuild bitmaps for secondary datasets (all visibleDatasets entries whose
+    // datasetId != primary terrain's datasetId and whose overviewGrid is loaded).
+    const primaryId = terrain.datasetId;
+    const nextBitmaps = new Map<string, HTMLCanvasElement>();
+    for (const v of visibleDatasets) {
+      if (v.datasetId === primaryId) continue;
+      if (!v.overviewGrid) continue;
+      nextBitmaps.set(
+        v.datasetId,
+        buildHeatmapBitmap(v.overviewGrid, colormapTheme),
+      );
+    }
+    // Evict stale entries from the previous render by replacing the whole map.
+    secondaryBitmapsRef.current = nextBitmaps;
+
     rebuildStaticLayer(terrain);
     const camState = useCameraStore.getState();
     const cp0 = camState.cameraPosition;
     compositeFrame(ctx, cp0.known ? cp0.lon : null, cp0.known ? cp0.lat : null, camState.heading, terrain);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers that change every render; data deps are listed explicitly
-  }, [terrain, colormapTheme, overviewHillshading, shallow, deep, bandColors, customStops, bandBoundaries]);
+  }, [terrain, colormapTheme, overviewHillshading, shallow, deep, bandColors, customStops, bandBoundaries, visibleDatasets]);
 
   // Re-composite when satellite image loads (tileUrl changed)
   useEffect(() => {
@@ -624,12 +739,31 @@ export const Minimap: React.FC = () => {
   }, [markers, terrain]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!terrain) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
-    const worldX = (px / W) * WORLD_SIZE - WORLD_SIZE / 2;
-    // North-up: top of canvas = North = high worldZ; invert y.
-    const worldZ = WORLD_SIZE / 2 - (py / H) * WORLD_SIZE;
+
+    // Two-step conversion: canvas px/py → lon/lat via union bbox, then
+    // lon/lat → world coords via the primary terrain bbox so teleport targets
+    // always land within the loaded 3D mesh.
+    const bbox = unionBboxRef.current ?? terrain;
+    const bboxLonRange = bbox.maxLon - bbox.minLon || 1;
+    const bboxLatRange = bbox.maxLat - bbox.minLat || 1;
+    const lon = bbox.minLon + (px / W) * bboxLonRange;
+    // North-up: py=0 → maxLat (North), py=H → minLat (South)
+    const lat = bbox.minLat + (1 - py / H) * bboxLatRange;
+
+    // Clamp lon/lat to the primary terrain's geographic extent so clicks on
+    // secondary-only regions of the union bbox still teleport within the loaded
+    // 3D mesh rather than producing out-of-range world coordinates.
+    const clampedLon = Math.max(terrain.minLon, Math.min(terrain.maxLon, lon));
+    const clampedLat = Math.max(terrain.minLat, Math.min(terrain.maxLat, lat));
+
+    const terrLonRange = terrain.maxLon - terrain.minLon || 1;
+    const terrLatRange = terrain.maxLat - terrain.minLat || 1;
+    const worldX = ((clampedLon - terrain.minLon) / terrLonRange) * WORLD_SIZE - WORLD_SIZE / 2;
+    const worldZ = ((clampedLat - terrain.minLat) / terrLatRange) * WORLD_SIZE - WORLD_SIZE / 2;
     useUiStore.getState().setPendingDropIn({ worldX, worldZ });
   };
 
@@ -653,9 +787,28 @@ export const Minimap: React.FC = () => {
       const px = (e.clientX - rect.left) * scaleX;
       const py = (e.clientY - rect.top) * scaleY;
 
-      // Mirror drawHeatmap's grid-lookup: py=0 (top) maps to North (high gy).
-      const gx = Math.min(terrain.width - 1, Math.floor((px / W) * terrain.width));
-      const gy = (terrain.height - 1) - Math.min(terrain.height - 1, Math.floor((py / H) * terrain.height));
+      // Map canvas px/py → lon/lat via union bbox, then lon/lat → primary
+      // terrain grid coordinates so the survey-gap check is accurate even
+      // when the primary terrain is offset within the union-bbox canvas.
+      const bbox = unionBboxRef.current ?? terrain;
+      const bboxLonRange = bbox.maxLon - bbox.minLon || 1;
+      const bboxLatRange = bbox.maxLat - bbox.minLat || 1;
+      const lon = bbox.minLon + (px / W) * bboxLonRange;
+      const lat = bbox.minLat + (1 - py / H) * bboxLatRange;
+
+      // Only show "Survey gap" when the cursor is inside the primary terrain.
+      if (
+        lon < terrain.minLon || lon > terrain.maxLon ||
+        lat < terrain.minLat || lat > terrain.maxLat
+      ) {
+        setCanvasTooltip("Click to teleport here");
+        return;
+      }
+
+      const terrLonRange = terrain.maxLon - terrain.minLon || 1;
+      const terrLatRange = terrain.maxLat - terrain.minLat || 1;
+      const gx = Math.min(terrain.width - 1, Math.floor(((lon - terrain.minLon) / terrLonRange) * terrain.width));
+      const gy = Math.min(terrain.height - 1, Math.floor(((lat - terrain.minLat) / terrLatRange) * terrain.height));
       const depth = terrain.depths[gy * terrain.width + gx];
       const isNull = depth === null || depth === undefined || isNaN(depth as number);
 
