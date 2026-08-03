@@ -1,5 +1,6 @@
 /**
- * Tests for the "ADD" / "IN VIEW" secondary action on catalog cards in FindDataPanel.
+ * Tests for the "ADD" / "IN VIEW" secondary action on catalog cards in FindDataPanel,
+ * and for the "Load Into Viewer" action on catalog saves in the My Saves tab.
  *
  * Coverage:
  *   1. ADD button is hidden when no primary dataset is loaded.
@@ -10,13 +11,17 @@
  *      shows "IN VIEW" and is disabled (cannot re-add).
  *   6. When selectedIds.length >= MAX_ACTIVE_DATASETS the button is disabled even
  *      though the entry is not yet in view (view is full).
+ *   7. handleLoadCatalogSave calls setPendingExternalUserDatasetId with the save's
+ *      datasetId and calls onClose when its onConfirm fires.
  */
+import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, act } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { FindDataPanel } from "@/components/FindDataPanel";
 import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
 import type { VisibleDataset } from "@/lib/terrainStore";
+import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 
 // ---------------------------------------------------------------------------
 // Hoisted proxy factory — identical pattern to the other FindDataPanel tests.
@@ -113,6 +118,16 @@ const NON_PRESET_ENTRY = {
   coverageBbox: null,
 };
 
+// ---------------------------------------------------------------------------
+// Stable hoisted spies — shared across all describe blocks so each test can
+// inspect call history without re-creating vi.fn() on every useAppState() call.
+// ---------------------------------------------------------------------------
+const contextMocks = vi.hoisted(() => ({
+  setPendingExternalUserDatasetId: vi.fn(),
+  setCatalogSourcedAt: vi.fn(),
+  setDatasetId: vi.fn(),
+}));
+
 // Mutable: individual tests swap this to control which results the API returns.
 let catalogResults: unknown[] = [PRESET_ENTRY];
 
@@ -136,9 +151,9 @@ vi.mock(
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({
     datasetId: null,
-    setDatasetId: vi.fn(),
-    setPendingExternalUserDatasetId: vi.fn(),
-    setCatalogSourcedAt: vi.fn(),
+    setDatasetId: contextMocks.setDatasetId,
+    setPendingExternalUserDatasetId: contextMocks.setPendingExternalUserDatasetId,
+    setCatalogSourcedAt: contextMocks.setCatalogSourcedAt,
   }),
 }));
 
@@ -167,6 +182,44 @@ vi.mock("@/components/help/HelpButton", () => ({
 
 vi.mock("@/components/ViewscreenTooltip", () => ({
   ViewscreenTooltip: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+// MySavesSection mock — renders a single "Load into viewer" button that fires
+// onLoadCatalogSave with a ready catalog save fixture. The existing ADD-button
+// tests never reach the My Saves tab so this mock has no effect on them.
+vi.mock("@/components/MySavesSection", () => ({
+  MySavesSection: ({
+    onLoadCatalogSave,
+  }: {
+    onLoadCatalogSave?: (save: {
+      id: string;
+      datasetId: string;
+      catalogId: string;
+      status: string;
+      displayLabel: null;
+      catalog: { name: string; sourceAgency: string; createdAt: string };
+    }) => void;
+  }) =>
+    React.createElement(
+      "button",
+      {
+        "data-testid": "mock-catalog-save-load-btn",
+        onClick: () =>
+          onLoadCatalogSave?.({
+            id: "save-ncei-1",
+            datasetId: "user-ds-abc-123",
+            catalogId: "ncei-portal-test-survey",
+            status: "ready",
+            displayLabel: null,
+            catalog: {
+              name: "Test NCEI Survey",
+              sourceAgency: "NOAA NCEI",
+              createdAt: "2026-01-15T00:00:00Z",
+            },
+          }),
+      },
+      "Load into viewer",
+    ),
 }));
 
 // ---------------------------------------------------------------------------
@@ -215,6 +268,11 @@ function renderPanel() {
 beforeEach(() => {
   onClose.mockClear();
   catalogResults = [PRESET_ENTRY];
+  contextMocks.setPendingExternalUserDatasetId.mockClear();
+  contextMocks.setCatalogSourcedAt.mockClear();
+  contextMocks.setDatasetId.mockClear();
+  // Reset requestDatasetSwitch to a no-op between tests (My Saves tests override it).
+  vi.mocked(requestDatasetSwitch).mockReset();
   // Reset terrain store to empty state before each test.
   useTerrainStore.setState({ ...BLANK_TERRAIN_STATE });
 });
@@ -264,7 +322,7 @@ describe("FindDataPanel — catalog ADD button", () => {
     fireEvent.click(btn);
 
     expect(addSelectedSpy).toHaveBeenCalledTimes(1);
-    expect(addSelectedSpy).toHaveBeenCalledWith(PRESET_ID, "preset");
+    expect(addSelectedSpy).toHaveBeenCalledWith(PRESET_ID, "preset", PRESET_ENTRY.lastUpdated);
   });
 
   it("shows IN VIEW (disabled) when the preset is already in the selected pool", () => {
@@ -372,5 +430,66 @@ describe("FindDataPanel — catalog ADD button", () => {
     expect(
       screen.queryByTestId(`catalog-add-to-view-${NON_PRESET_ENTRY.id}`),
     ).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleLoadCatalogSave — My Saves tab
+// ---------------------------------------------------------------------------
+
+describe("FindDataPanel — handleLoadCatalogSave (My Saves tab)", () => {
+  beforeEach(() => {
+    // Make requestDatasetSwitch call onConfirm immediately so the test doesn't
+    // depend on the simulated-data preflight fetch.
+    vi.mocked(requestDatasetSwitch).mockImplementation(async (args) => {
+      args.onConfirm();
+    });
+  });
+
+  it("clicking 'Load into viewer' calls setPendingExternalUserDatasetId with the save's datasetId", async () => {
+    renderPanel();
+
+    // Navigate to the My Saves tab.
+    fireEvent.click(screen.getByTestId("find-data-my-saves-tab"));
+
+    // The MySavesSection mock renders a single "Load into viewer" button.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-catalog-save-load-btn"));
+    });
+
+    expect(contextMocks.setPendingExternalUserDatasetId).toHaveBeenCalledTimes(1);
+    expect(contextMocks.setPendingExternalUserDatasetId).toHaveBeenCalledWith("user-ds-abc-123");
+  });
+
+  it("clicking 'Load into viewer' calls onClose after setPendingExternalUserDatasetId", async () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByTestId("find-data-my-saves-tab"));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-catalog-save-load-btn"));
+    });
+
+    // Both setPendingExternalUserDatasetId and onClose must have been called.
+    expect(contextMocks.setPendingExternalUserDatasetId).toHaveBeenCalledWith("user-ds-abc-123");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT call setPendingExternalUserDatasetId when requestDatasetSwitch does not call onConfirm (dialog cancelled)", async () => {
+    // Override: onConfirm is never called (simulates user cancelling the dialog).
+    vi.mocked(requestDatasetSwitch).mockImplementation(async () => {
+      // intentionally omit calling onConfirm
+    });
+
+    renderPanel();
+
+    fireEvent.click(screen.getByTestId("find-data-my-saves-tab"));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mock-catalog-save-load-btn"));
+    });
+
+    expect(contextMocks.setPendingExternalUserDatasetId).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

@@ -50,13 +50,14 @@ import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useToast } from "@/hooks/use-toast";
+import { MySavesSection } from "@/components/MySavesSection";
 
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Tab = "search" | "ncei";
+type Tab = "search" | "ncei" | "my-saves";
 
 const DATA_TYPE_ICONS: Record<string, string> = {
   bathymetry: "🌊",
@@ -867,7 +868,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const nceiFromRef = useRef(1);
   const [nceiAccumulated, setNceiAccumulated] = useState<NceiPortalResult[]>([]);
   const prevNceiPageRef = useRef<NceiPortalResult[] | undefined>(undefined);
-  const { setDatasetId, setCatalogSourcedAt, datasetId: currentDatasetId } = useAppState();
+  const { setDatasetId, setCatalogSourcedAt, setPendingExternalUserDatasetId, datasetId: currentDatasetId } = useAppState();
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -1298,6 +1299,41 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     [setDatasetId, setCatalogSourcedAt, searchResults, onClose],
   );
 
+  // ── My Saves tab — load callbacks ─────────────────────────────────────────
+  // Mirror of DatasetPanel's handleLoadCatalogSaveFromLeft / handleLoadUserDatasetFromLeft
+  // but also calls onClose() so FindDataPanel closes after the load is queued.
+
+  const handleLoadCatalogSave = useCallback(
+    (save: UserCatalogSave) => {
+      const previewId = save.datasetId ?? save.catalogId;
+      const datasetName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
+      void requestDatasetSwitch({
+        datasetId: previewId,
+        datasetName,
+        onConfirm: () => {
+          setPendingExternalUserDatasetId(save.datasetId!);
+          setCatalogSourcedAt({ forDatasetId: save.datasetId!, date: save.catalog?.createdAt ?? null });
+          onClose();
+        },
+      });
+    },
+    [setPendingExternalUserDatasetId, setCatalogSourcedAt, onClose],
+  );
+
+  const handleLoadUserDataset = useCallback(
+    (userDatasetId: string, createdAt?: string | null) => {
+      void requestDatasetSwitch({
+        datasetId: userDatasetId,
+        onConfirm: () => {
+          setPendingExternalUserDatasetId(userDatasetId);
+          setCatalogSourcedAt({ forDatasetId: userDatasetId, date: createdAt ?? null });
+          onClose();
+        },
+      });
+    },
+    [setPendingExternalUserDatasetId, setCatalogSourcedAt, onClose],
+  );
+
   return (
     <div style={PANEL} role="dialog" aria-label="Find Data panel">
       {/* Header */}
@@ -1334,6 +1370,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         <ViewscreenTooltip label="Browse the NOAA/NCEI Bathymetry Geoportal" side="bottom">
           <button style={tabStyle(tab === "ncei")} onClick={() => { hasUserInteractedRef.current = true; setTab("ncei"); }}>
             NCEI Portal
+          </button>
+        </ViewscreenTooltip>
+        <ViewscreenTooltip label="Your saved and uploaded datasets" side="bottom">
+          <button style={tabStyle(tab === "my-saves")} onClick={() => setTab("my-saves")} data-testid="find-data-my-saves-tab">
+            My Saves
           </button>
         </ViewscreenTooltip>
       </div>
@@ -1635,6 +1676,18 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* My Saves tab */}
+      {tab === "my-saves" && (
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 14px 14px" }} data-testid="find-data-my-saves-content">
+          <MySavesSection
+            onLoadCatalogSave={handleLoadCatalogSave}
+            onLoadUserDataset={handleLoadUserDataset}
+            onBrowseDatasets={() => setTab("search")}
+            browseLabel="SEARCH DATASETS →"
+          />
         </div>
       )}
 
