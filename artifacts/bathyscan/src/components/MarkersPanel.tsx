@@ -13,6 +13,7 @@ import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-reac
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { GpsImportDialog } from "@/components/GpsImportDialog";
+import { ReassignMarkersDialog } from "@/components/ReassignMarkersDialog";
 
 const PANEL_WIDTH = 300;
 
@@ -48,6 +49,7 @@ export const MarkersPanel: React.FC = () => {
   const { terrain } = useAppState();
   const setMarkersPanelOpen = useUiStore((s) => s.setMarkersPanelOpen);
   const [gpsImportOpen, setGpsImportOpen] = useState(false);
+  const [reassignOpen, setReassignOpen] = useState(false);
 
   const hasDataset = !!terrain?.datasetId;
 
@@ -217,12 +219,15 @@ export const MarkersPanel: React.FC = () => {
           )}
         </div>
 
-        {/* Footer: Import GPS */}
+        {/* Footer: Import GPS + Reassign */}
         <div
           style={{
             padding: "10px 12px",
             borderTop: "1px solid rgba(0,229,255,0.12)",
             flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
           }}
         >
           <button
@@ -243,6 +248,26 @@ export const MarkersPanel: React.FC = () => {
           >
             ▼ IMPORT GPS…
           </button>
+          {!hasDataset && (
+            <button
+              onClick={() => setReassignOpen(true)}
+              data-testid="markers-panel-reassign"
+              style={{
+                width: "100%",
+                padding: "7px 0",
+                background: "rgba(0,229,255,0.05)",
+                border: "1px solid rgba(0,229,255,0.2)",
+                borderRadius: 4,
+                color: "#67e8f9",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                letterSpacing: "0.1em",
+              }}
+            >
+              ↗ REASSIGN TO DATASET…
+            </button>
+          )}
         </div>
       </div>
 
@@ -251,6 +276,9 @@ export const MarkersPanel: React.FC = () => {
           terrain={terrain ?? undefined}
           onClose={() => setGpsImportOpen(false)}
         />
+      )}
+      {reassignOpen && (
+        <ReassignMarkersDialog onClose={() => setReassignOpen(false)} />
       )}
     </>
   );

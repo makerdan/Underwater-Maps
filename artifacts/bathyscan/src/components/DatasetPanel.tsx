@@ -61,6 +61,7 @@ import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { GpsImportDialog } from "@/components/GpsImportDialog";
 import { GpsExportDialog } from "@/components/GpsExportDialog";
+import { ReassignMarkersDialog } from "@/components/ReassignMarkersDialog";
 import { SUPPORTED_EXTENSIONS } from "@/components/FileUpload";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
 import { fetchJsonWithProgress, NoDataAvailableError } from "@/lib/fetchWithProgress";
@@ -2648,6 +2649,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const [markerTypeFilter, setMarkerTypeFilter] = useState<string | null>(null);
   const [gpsImportOpen, setGpsImportOpen] = useState(false);
   const [gpsExportOpen, setGpsExportOpen] = useState(false);
+  const [reassignMarkersOpen, setReassignMarkersOpen] = useState(false);
 
   // Reset search + filter whenever the MARKERS accordion is closed.
   useEffect(() => {
@@ -3018,7 +3020,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 });
                 return (
                 <div style={{ paddingBottom: 4 }}>
-                  <div style={{ padding: "2px 12px 6px", display: "flex", gap: 6 }}>
+                  <div style={{ padding: "2px 12px 6px", display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <ViewscreenTooltip label="Import waypoints/routes from GPX, KML, KMZ, or CSV" side="right">
                       <button
                         onClick={() => setGpsImportOpen(true)}
@@ -3057,6 +3059,26 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                         }}
                       >
                         ▲ EXPORT GPS…
+                      </button>
+                    </ViewscreenTooltip>
+                    <ViewscreenTooltip label="Move existing unassigned markers in this area to this dataset" side="right">
+                      <button
+                        onClick={() => setReassignMarkersOpen(true)}
+                        data-testid="open-reassign-markers"
+                        style={{
+                          flex: 1,
+                          padding: "5px 8px",
+                          background: "rgba(0,229,255,0.04)",
+                          border: "1px solid rgba(0,229,255,0.15)",
+                          borderRadius: 3,
+                          color: "#67e8f9",
+                          fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                          letterSpacing: "0.12em",
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        ↗ REASSIGN…
                       </button>
                     </ViewscreenTooltip>
                   </div>
@@ -3387,6 +3409,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
           {gpsExportOpen && terrain && (
             <GpsExportDialog terrain={terrain} onClose={() => setGpsExportOpen(false)} />
+          )}
+
+          {reassignMarkersOpen && (
+            <ReassignMarkersDialog onClose={() => setReassignMarkersOpen(false)} />
           )}
 
           {/* ── Upload accordion ── */}
