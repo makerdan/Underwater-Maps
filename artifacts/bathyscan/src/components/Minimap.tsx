@@ -722,7 +722,7 @@ export const Minimap: React.FC = () => {
       if (!v.overviewGrid) continue;
       nextBitmaps.set(
         v.datasetId,
-        buildHeatmapBitmap(v.overviewGrid, colormapTheme),
+        buildHeatmapBitmap(v.overviewGrid, colormapTheme, v.overviewGrid.topography),
       );
     }
     // Evict stale entries from the previous render by replacing the whole map.

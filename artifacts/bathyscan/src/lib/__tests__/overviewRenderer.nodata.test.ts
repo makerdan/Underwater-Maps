@@ -179,6 +179,43 @@ describe("buildHeatmapBitmap — nodata pixel transparency", () => {
     expect(pixelData[15]).toBe(255); // canvas pixel (col=1, row=1)
   });
 
+  it("land cells WITHOUT topography are painted opaque — documents the bug fixed in Minimap.tsx", () => {
+    // When topography is NOT passed, buildHeatmapBitmap has no way to detect
+    // land cells.  The same grid cells that would be transparent with topography
+    // become fully opaque palette-coloured pixels — the root cause of the
+    // "solid red top" minimap artifact when a second dataset was added.
+    //
+    // 2 × 2 grid: data row 1 contains cells that are land per topography,
+    // but without topography the function cannot know that.
+    // After Y-flip: canvas row 0 → data row 1 (would-be land cells).
+    const grid = makeGrid(2, 2, [10, 20, 5, 8]);
+
+    const W = grid.width;
+    const H = grid.height;
+    const pixelData = new Uint8ClampedArray(W * H * 4);
+    const fakeImageData = { data: pixelData, width: W, height: H } as ImageData;
+
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementationOnce(
+      function (this: HTMLCanvasElement) {
+        return {
+          canvas: this,
+          createImageData: vi.fn(() => fakeImageData),
+          putImageData: vi.fn(),
+          fillRect: vi.fn(),
+          clearRect: vi.fn(),
+        } as unknown as CanvasRenderingContext2D;
+      },
+    );
+
+    // Call WITHOUT topography — no third argument.
+    buildHeatmapBitmap(grid, "ocean");
+
+    // Canvas row 0 → data row 1 — without topography these are treated as
+    // valid depth cells and painted opaque (alpha=255), demonstrating the bug.
+    expect(pixelData[3]).toBe(255);  // canvas pixel (col=0, row=0)
+    expect(pixelData[7]).toBe(255);  // canvas pixel (col=1, row=0)
+  });
+
   it("land cells never occlude a second dataset's real depth pixels", () => {
     // Dataset A: 2 × 2 grid — data row 0 is real depth, data row 1 is land.
     // After Y-flip: canvas row 0 = land (alpha=0), canvas row 1 = depth (alpha=255).
