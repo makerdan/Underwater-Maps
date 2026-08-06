@@ -69,8 +69,15 @@ export async function createTestDb(): Promise<TestContext> {
       updated_at  timestamp NOT NULL DEFAULT now()
     );
 
-    CREATE UNIQUE INDEX dataset_folders_unique_sibling_name
-      ON dataset_folders (user_id, parent_id, lower(name));
+    -- Root-level folders (parent_id IS NULL): unique by (user_id, lower(name)).
+    CREATE UNIQUE INDEX dataset_folders_root_name_uniq
+      ON dataset_folders (user_id, lower(name))
+      WHERE parent_id IS NULL;
+
+    -- Non-root folders: unique by (user_id, parent_id, lower(name)).
+    CREATE UNIQUE INDEX dataset_folders_child_name_uniq
+      ON dataset_folders (user_id, parent_id, lower(name))
+      WHERE parent_id IS NOT NULL;
 
     CREATE TABLE custom_datasets (
       id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -103,9 +110,14 @@ export async function createTestDb(): Promise<TestContext> {
       folder_id         uuid REFERENCES dataset_folders(id) ON DELETE SET NULL,
       area_request_id   text,
       dataset_id        uuid REFERENCES custom_datasets(id) ON DELETE SET NULL,
-      request_bbox_json text,
-      CONSTRAINT user_catalog_saves_user_catalog_uniq UNIQUE (user_id, catalog_id)
+      request_bbox_json text
     );
+
+    -- Non-unique: mirrors the schema's index("user_catalog_saves_user_catalog_idx")
+    -- which was intentionally changed from uniqueIndex so a user can save the same
+    -- catalog entry for multiple terrain areas (different requestBboxJson tiles).
+    CREATE INDEX user_catalog_saves_user_catalog_idx
+      ON user_catalog_saves (user_id, catalog_id);
 
     CREATE TABLE markers (
       id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

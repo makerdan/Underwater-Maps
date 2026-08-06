@@ -7,13 +7,12 @@
  *  - Self-referential ON DELETE CASCADE from parent to children
  *  - Siblings under different parents may share a name
  *
- * Note on root-folder uniqueness: the unique index is defined on
- * (user_id, parent_id, lower(name)).  PostgreSQL standard behaviour treats
- * NULL != NULL in unique indexes (each NULL is "distinct"), so two root-level
- * folders (parent_id IS NULL) belonging to the same user with the same name
- * are *not* blocked at the DB level — that guard lives in the application
- * layer (siblingNameTaken()).  The tests below reflect this by exercising the
- * constraint with an explicit parent (non-null parentId).
+ * The schema defines two partial unique indexes:
+ *   dataset_folders_root_name_uniq  — (user_id, lower(name)) WHERE parent_id IS NULL
+ *   dataset_folders_child_name_uniq — (user_id, parent_id, lower(name)) WHERE parent_id IS NOT NULL
+ *
+ * Both root-level and child-level duplicate names are therefore enforced at
+ * the DB level.  Tests below cover both cases.
  *
  * Error-checking note: drizzle-orm wraps PG errors into a DrizzleError whose
  * `.message` is "Failed query: ...".  The underlying constraint violation is
@@ -65,7 +64,42 @@ async function expectUniqueViolation(promise: Promise<unknown>): Promise<void> {
   ).toBe("23505");
 }
 
-describe("dataset_folders — unique sibling-name constraint", () => {
+describe("dataset_folders — unique root-name constraint (dataset_folders_root_name_uniq)", () => {
+  it("rejects two root-level folders with the same name (exact case) for the same user", async () => {
+    await ctx.db
+      .insert(datasetFoldersTable)
+      .values(makeFolder({ userId: "u1", name: "Lakes" }));
+
+    await expectUniqueViolation(
+      ctx.db
+        .insert(datasetFoldersTable)
+        .values(makeFolder({ userId: "u1", name: "Lakes" })),
+    );
+  });
+
+  it("rejects two root-level folders with the same name in different case for the same user", async () => {
+    await ctx.db
+      .insert(datasetFoldersTable)
+      .values(makeFolder({ userId: "u1", name: "Rivers" }));
+
+    await expectUniqueViolation(
+      ctx.db
+        .insert(datasetFoldersTable)
+        .values(makeFolder({ userId: "u1", name: "RIVERS" })),
+    );
+  });
+
+  it("allows two root-level folders with the same name for different users", async () => {
+    await expect(
+      ctx.db.insert(datasetFoldersTable).values([
+        makeFolder({ userId: "u1", name: "Oceans" }),
+        makeFolder({ userId: "u2", name: "Oceans" }),
+      ]),
+    ).resolves.not.toThrow();
+  });
+});
+
+describe("dataset_folders — unique child-name constraint (dataset_folders_child_name_uniq)", () => {
   it("rejects two siblings with the same name (exact case) under the same parent", async () => {
     const parent = await ctx.db
       .insert(datasetFoldersTable)

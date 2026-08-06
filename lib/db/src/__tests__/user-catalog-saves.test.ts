@@ -190,28 +190,35 @@ describe("user_catalog_saves — combined FK nulling on folder delete", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Unique constraint on (userId, catalogId)
+// (userId, catalogId) index — non-unique by design
 //
-// The uniqueIndex("user_catalog_saves_user_catalog_uniq") prevents a user
-// from queuing the same catalog entry twice simultaneously. This guard ensures
-// that constraint isn't accidentally removed or weakened in a schema migration.
+// The schema intentionally uses a plain index (not uniqueIndex) on
+// (user_id, catalog_id) so a user can save the same catalog entry for
+// multiple terrain areas, each distinguished by a different requestBboxJson.
+// These tests verify that duplicates are accepted and the column semantics
+// are correct.
 // ---------------------------------------------------------------------------
 
-describe("user_catalog_saves — unique constraint on (userId, catalogId)", () => {
-  it("rejects a second insert with the same (userId, catalogId) pair", async () => {
-    // First insert must succeed — unique slot is now occupied.
-    await insertSave();
+describe("user_catalog_saves — (userId, catalogId) is non-unique", () => {
+  it("allows two saves with the same (userId, catalogId) pair", async () => {
+    // First insert: userId="u1", catalogId="cat-123"
+    const saveId1 = await insertSave();
 
-    // Second insert with the same hardcoded userId="u1", catalogId="cat-123"
-    // must throw a unique constraint violation.
-    await expect(insertSave()).rejects.toThrow();
+    // Second insert with identical userId + catalogId must also succeed
+    // (the schema has a plain index, not a unique constraint).
+    const [row2] = await ctx.db
+      .insert(userCatalogSavesTable)
+      .values({ userId: "u1", catalogId: "cat-123" })
+      .returning({ id: userCatalogSavesTable.id });
+
+    expect(saveId1).toBeTruthy();
+    expect(row2!.id).toBeTruthy();
+    expect(row2!.id).not.toBe(saveId1);
   });
 
   it("allows two saves with the same catalogId for different users", async () => {
-    // userId="u1"
-    const saveId1 = await insertSave();
+    const saveId1 = await insertSave(); // userId="u1"
 
-    // userId="u2" — different user, same catalog entry: must succeed.
     const [row2] = await ctx.db
       .insert(userCatalogSavesTable)
       .values({ userId: "u2", catalogId: "cat-123" })
@@ -223,10 +230,8 @@ describe("user_catalog_saves — unique constraint on (userId, catalogId)", () =
   });
 
   it("allows the same user to save two different catalog entries", async () => {
-    // catalogId="cat-123"
-    const saveId1 = await insertSave();
+    const saveId1 = await insertSave(); // catalogId="cat-123"
 
-    // Same userId="u1" but different catalogId — must succeed.
     const [row2] = await ctx.db
       .insert(userCatalogSavesTable)
       .values({ userId: "u1", catalogId: "cat-456" })

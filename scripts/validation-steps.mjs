@@ -95,6 +95,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:failure-gate", resource: null, cmd: "pnpm run check:failure-gate", tiers: FAST },
     // no resource: skip-count ratchet guard (static file scan), sub-second
     { name: "check:skip-count", resource: null, cmd: "pnpm run check:skip-count", tiers: FAST },
+    // no resource: static regex scan of schema/*.ts vs test-db.ts DDL string, sub-second
+    { name: "check:testdb-schema-drift", resource: null, cmd: "pnpm run check:testdb-schema-drift", tiers: FAST },
     // unit-cpu resource: prevents CPU saturation / budget breach
     { name: "test:unit", resource: "unit-cpu", cmd: "pnpm run test:unit", tiers: STANDARD },
     // all check:* steps are lightweight; no resource needed
