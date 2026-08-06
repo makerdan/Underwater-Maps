@@ -20,6 +20,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 function resetStore() {
   useTerrainStore.setState({
@@ -338,5 +339,89 @@ describe("terrainStore — proximity edge cases", () => {
     useTerrainStore.getState().autoEvict("ds-a");
     useTerrainStore.getState().clearAutoEviction();
     expect(useTerrainStore.getState().autoEvictedId).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cap-change eviction via settingsStore.setMaxActiveDatasets
+// ---------------------------------------------------------------------------
+
+describe("terrainStore — cap-change eviction via setMaxActiveDatasets", () => {
+  beforeEach(() => {
+    // Ensure settingsStore starts at the default cap of 3.
+    useSettingsStore.setState({ maxActiveDatasets: 3 });
+    resetStore();
+  });
+
+  it("lowering the cap from 3 to 1 while 3 are active evicts the excess 2", () => {
+    // Seed 3 visible datasets at the default cap.
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: "ds-a", source: "preset", activeGrid: null, overviewGrid: null },
+        { datasetId: "ds-b", source: "preset", activeGrid: null, overviewGrid: null },
+        { datasetId: "ds-c", source: "preset", activeGrid: null, overviewGrid: null },
+      ],
+      selectedIds: ["ds-a", "ds-b", "ds-c"],
+      selectedSources: { "ds-a": "preset", "ds-b": "preset", "ds-c": "preset" },
+    });
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(3);
+
+    // Lower the cap — should auto-evict the 2 excess (oldest-first, keep first entry).
+    useSettingsStore.getState().setMaxActiveDatasets(1);
+
+    const { visibleDatasets } = useTerrainStore.getState();
+    expect(visibleDatasets).toHaveLength(1);
+    expect(visibleDatasets[0]!.datasetId).toBe("ds-a");
+  });
+
+  it("lowering the cap from 3 to 2 while 3 are active evicts exactly 1", () => {
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: "ds-x", source: "preset", activeGrid: null, overviewGrid: null },
+        { datasetId: "ds-y", source: "preset", activeGrid: null, overviewGrid: null },
+        { datasetId: "ds-z", source: "preset", activeGrid: null, overviewGrid: null },
+      ],
+      selectedIds: ["ds-x", "ds-y", "ds-z"],
+      selectedSources: { "ds-x": "preset", "ds-y": "preset", "ds-z": "preset" },
+    });
+
+    useSettingsStore.getState().setMaxActiveDatasets(2);
+
+    const { visibleDatasets } = useTerrainStore.getState();
+    expect(visibleDatasets).toHaveLength(2);
+    expect(visibleDatasets.map((v) => v.datasetId)).toEqual(["ds-x", "ds-y"]);
+  });
+
+  it("raising the cap allows addSelected to immediately activate a previously-queued dataset", () => {
+    // Fill to cap of 1 by reducing the cap first, then seeding.
+    useSettingsStore.setState({ maxActiveDatasets: 1 });
+    useTerrainStore.getState().addSelected("ds-a", "preset");
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(1);
+
+    // At cap — next addSelected queues rather than activates.
+    useTerrainStore.getState().addSelected("ds-b", "preset");
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(1);
+    expect(useTerrainStore.getState().selectedIds).toContain("ds-b");
+
+    // Raise the cap — now autoActivate should be able to activate ds-b.
+    useSettingsStore.setState({ maxActiveDatasets: 2 });
+    useTerrainStore.getState().autoActivate("ds-b");
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(2);
+    expect(useTerrainStore.getState().visibleDatasets.some((v) => v.datasetId === "ds-b")).toBe(true);
+  });
+
+  it("setting the cap to the same value as active count does not evict any datasets", () => {
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: "ds-a", source: "preset", activeGrid: null, overviewGrid: null },
+        { datasetId: "ds-b", source: "preset", activeGrid: null, overviewGrid: null },
+      ],
+      selectedIds: ["ds-a", "ds-b"],
+      selectedSources: { "ds-a": "preset", "ds-b": "preset" },
+    });
+
+    useSettingsStore.getState().setMaxActiveDatasets(2);
+
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(2);
   });
 });

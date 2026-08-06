@@ -15,7 +15,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatFreshness } from "@/lib/freshnessUtils";
-import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
+import { useTerrainStore } from "@/lib/terrainStore";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
 import { useQueryClient, useQueries } from "@tanstack/react-query";
 import {
@@ -424,6 +424,7 @@ interface CatalogCardProps {
 }
 
 const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved, canSave, presetId, onLoad, hasPrimary, inView, atCap, onAddToView, saveBlockedReason }) => {
+  const maxActiveCap = useSettingsStore((s) => s.maxActiveDatasets ?? 3);
   const icon = DATA_TYPE_ICONS[entry.dataType] ?? "📦";
   const color = DATA_TYPE_COLORS[entry.dataType] ?? "#e2e8f0";
   const isIntertidal = INTERTIDAL_CATALOG_IDS.has(entry.id);
@@ -519,7 +520,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
               inView
                 ? "Already added to the 3D view"
                 : atCap
-                  ? `View is full (max ${MAX_ACTIVE_DATASETS} datasets)`
+                  ? `View is full (max ${maxActiveCap} datasets)`
                   : "Add this dataset alongside the current view"
             }
             side="top"
@@ -965,8 +966,9 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const terrainSelectedIds = useTerrainStore((s) => s.selectedIds);
   const terrainActiveGrid = useTerrainStore((s) => s.activeGrid);
 
+  const maxActiveDatasets = useSettingsStore((s) => s.maxActiveDatasets ?? 3);
   const hasCatalogPrimary = terrainVisibleDatasets.length > 0;
-  const atCatalogCap = terrainSelectedIds.length >= MAX_ACTIVE_DATASETS;
+  const atCatalogCap = terrainSelectedIds.length >= maxActiveDatasets;
   // Set of all dataset IDs currently selected (active or queued) — for "IN VIEW" state.
   const catalogSelectedIdSet = useMemo(
     () => new Set([

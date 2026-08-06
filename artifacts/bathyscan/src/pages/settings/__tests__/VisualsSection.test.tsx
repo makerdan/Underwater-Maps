@@ -15,8 +15,9 @@ const h = vi.hoisted(() => {
   const resetSection = vi.fn();
   const setIntertidalMhwOverrideFt = vi.fn();
   const setIntertidalMhhwOverrideFt = vi.fn();
+  const setMaxActiveDatasets = vi.fn();
   const stateOverrides: Record<string, unknown> = {};
-  return { resetSection, setIntertidalMhwOverrideFt, setIntertidalMhhwOverrideFt, stateOverrides };
+  return { resetSection, setIntertidalMhwOverrideFt, setIntertidalMhhwOverrideFt, setMaxActiveDatasets, stateOverrides };
 });
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
@@ -81,6 +82,8 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     setIntertidalMhhwOverrideFt: h.setIntertidalMhhwOverrideFt,
     brightDaylight: false,
     colormapUserSet: false,
+    maxActiveDatasets: 3,
+    setMaxActiveDatasets: h.setMaxActiveDatasets,
     ...h.stateOverrides,
   });
 
@@ -226,6 +229,52 @@ describe("VisualsSection", () => {
     const advanced = screen.getByTestId("advanced-disclosure");
     const { getByText } = within(advanced);
     expect(getByText("Smooth terrain spikes")).toBeInTheDocument();
+  });
+
+  it("renders the PERFORMANCE card header", () => {
+    render(<VisualsSection />);
+    expect(screen.getByText("PERFORMANCE")).toBeInTheDocument();
+  });
+
+  it("renders the Max active datasets label", () => {
+    render(<VisualsSection />);
+    expect(screen.getByText("Max active datasets")).toBeInTheDocument();
+  });
+
+  it("renders the Max active datasets select with options 1–6", () => {
+    render(<VisualsSection />);
+    // SelectRow renders a <select> with the options
+    const selects = screen.getAllByRole("combobox");
+    // Find the one for max active datasets by looking for options 1–6
+    const maxDsSelect = selects.find((s) => {
+      const opts = Array.from(s.querySelectorAll("option")).map((o) => o.value);
+      return opts.includes("1") && opts.includes("6");
+    });
+    expect(maxDsSelect).toBeDefined();
+    const optValues = Array.from(maxDsSelect!.querySelectorAll("option")).map((o) => o.value);
+    expect(optValues).toEqual(["1", "2", "3", "4", "5", "6"]);
+  });
+
+  it("reflects the current maxActiveDatasets value in the select", () => {
+    h.stateOverrides.maxActiveDatasets = 4;
+    render(<VisualsSection />);
+    const selects = screen.getAllByRole("combobox");
+    const maxDsSelect = selects.find((s) =>
+      Array.from(s.querySelectorAll("option")).some((o) => o.value === "6"),
+    );
+    expect(maxDsSelect).toBeDefined();
+    expect((maxDsSelect as HTMLSelectElement).value).toBe("4");
+  });
+
+  it("calls setMaxActiveDatasets when the select changes", () => {
+    render(<VisualsSection />);
+    const selects = screen.getAllByRole("combobox");
+    const maxDsSelect = selects.find((s) =>
+      Array.from(s.querySelectorAll("option")).some((o) => o.value === "6"),
+    );
+    expect(maxDsSelect).toBeDefined();
+    fireEvent.change(maxDsSelect!, { target: { value: "5" } });
+    expect(h.setMaxActiveDatasets).toHaveBeenCalledWith(5);
   });
 
   it("renders nested EFFECTS card header", () => {

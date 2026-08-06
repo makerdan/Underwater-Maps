@@ -17,7 +17,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Marker, CatchEntry } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
-import { useTerrainStore, VISIBLE_DATASETS_CAP } from "@/lib/terrainStore";
+import { useTerrainStore } from "@/lib/terrainStore";
 import { MarkerSprite } from "./MarkerSprite";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
@@ -49,9 +49,10 @@ function useAllDatasetMarkers(): Marker[] {
     { datasetId: id2 },
     { query: { enabled: !!id2, queryKey: getGetMarkersQueryKey({ datasetId: id2 }) } },
   );
+  const maxActiveDatasets = useSettingsStore((s) => s.maxActiveDatasets ?? 3);
   const { data: m3 } = useGetMarkers(
     { datasetId: id3 },
-    { query: { enabled: !!id3 && VISIBLE_DATASETS_CAP >= 4, queryKey: getGetMarkersQueryKey({ datasetId: id3 }) } },
+    { query: { enabled: !!id3 && maxActiveDatasets >= 4, queryKey: getGetMarkersQueryKey({ datasetId: id3 }) } },
   );
 
   const merged: Marker[] = [
@@ -77,6 +78,7 @@ function useAllDatasetMarkers(): Marker[] {
  */
 export function useCatchSymbolsByMarker(): Map<string, string[]> {
   const visible = useTerrainStore((s) => s.visibleDatasets);
+  const maxActiveDatasets = useSettingsStore((s) => s.maxActiveDatasets ?? 3);
 
   const id0 = visible[0]?.datasetId ?? "";
   const id1 = visible[1]?.datasetId ?? "";
@@ -97,7 +99,7 @@ export function useCatchSymbolsByMarker(): Map<string, string[]> {
   );
   const { data: c3 } = useGetCatches(
     { datasetId: id3 },
-    { query: { enabled: !!id3 && VISIBLE_DATASETS_CAP >= 4, queryKey: getGetCatchesQueryKey({ datasetId: id3 }) } },
+    { query: { enabled: !!id3 && maxActiveDatasets >= 4, queryKey: getGetCatchesQueryKey({ datasetId: id3 }) } },
   );
 
   return useMemo(() => {

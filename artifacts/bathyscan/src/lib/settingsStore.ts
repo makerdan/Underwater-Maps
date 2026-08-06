@@ -53,6 +53,11 @@ import {
   type ShortcutActionId,
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
+// NOTE: terrainStore also imports settingsStore — intentional circular ESM
+// import.  Both accesses (getActiveCap in terrainStore, autoEvict call in
+// setMaxActiveDatasets here) live inside action/function bodies, never in
+// module-init code, so the live binding is populated by the time either runs.
+import { useTerrainStore } from "./terrainStore";
 import type { MarkerTypeValue } from "./markerConstants";
 import {
   toValidJoystickMode,
@@ -61,7 +66,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 33;
+export const SETTINGS_SCHEMA_VERSION = 34;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -603,6 +608,15 @@ export interface SettingsState {
    * Persisted so the user's last mode survives page reloads.
    */
   sidebarMode: SidebarMode;
+
+  // ── Performance / Viewer ──────────────────────────────────────────────
+  /**
+   * Maximum number of datasets that can be simultaneously active
+   * (in GPU memory / rendered in the 3D scene). Range 1–6, default 3.
+   * Users with powerful hardware can raise this for more side-by-side
+   * context; users on low-end devices can lower it to reduce GPU load.
+   */
+  maxActiveDatasets: number;
 }
 
 interface SettingsActions {
@@ -798,6 +812,9 @@ interface SettingsActions {
   setCrosshairMenuGamepadButton: (v: number | null) => void;
 
   setSidebarMode: (v: SidebarMode) => void;
+
+  /** Set the max active datasets cap (1–6). Auto-evicts excess if lowered. */
+  setMaxActiveDatasets: (v: number) => void;
 
   /** Hydrate the entire settings state from the server response. */
   hydrateFromServer: (partial: Partial<SettingsState>) => void;
@@ -1087,6 +1104,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   timelineRange: null,
 
   sidebarMode: 'explore',
+
+  maxActiveDatasets: 3,
 };
 
 export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
@@ -1102,6 +1121,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
     "showWaterSurface", "showWaterTempLayer", "showLandmass", "landmassStyle", "satelliteImagery", "colormapUserSet",
     "contoursEnabled", "contourInterval", "showNodataBoundary",
+    "maxActiveDatasets",
   ],
   hud: [
     "hudOpacity", "showCrosshairGps", "showCameraPosition",
@@ -1457,6 +1477,20 @@ export const useSettingsStore = create<SettingsStore>()(
         setShowNodataBoundary: setter("showNodataBoundary"),
 
         setSidebarMode: setter("sidebarMode"),
+
+        setMaxActiveDatasets: (v) => {
+          const cap = Math.max(1, Math.min(6, Math.round(v)));
+          set({ maxActiveDatasets: cap });
+          // Auto-evict excess active datasets when the cap is lowered.
+          const { visibleDatasets } = useTerrainStore.getState();
+          if (visibleDatasets.length > cap) {
+            // Evict non-first entries oldest-first until we're within the new cap.
+            const toEvict = visibleDatasets.slice(cap);
+            for (const entry of toEvict) {
+              useTerrainStore.getState().autoEvict(entry.datasetId);
+            }
+          }
+        },
 
         // Manual conditions
         setDatasetManualConditions: (datasetId, conditions) => {
@@ -1852,6 +1886,11 @@ export const useSettingsStore = create<SettingsStore>()(
           ) {
             migratedLastSession.lastSession = null;
           }
+          // v33 → v34: inject maxActiveDatasets default (3) for existing users.
+          const migratedMaxActiveDatasets: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).maxActiveDatasets === undefined) {
+            migratedMaxActiveDatasets.maxActiveDatasets = DEFAULT_SETTINGS.maxActiveDatasets;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1874,6 +1913,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedNodataBoundary,
             ...migratedHillshading,
             ...migratedLastSession,
+            ...migratedMaxActiveDatasets,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

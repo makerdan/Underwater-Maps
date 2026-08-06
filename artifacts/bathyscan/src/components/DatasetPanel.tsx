@@ -31,7 +31,7 @@ import type { UserDatasetMeta, UserCatalogSave } from "@workspace/api-client-rea
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { useAppState } from "@/lib/context";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
-import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
+import { useTerrainStore } from "@/lib/terrainStore";
 import type { DatasetSource } from "@/lib/terrainStore";
 import { useDatasetProximityStreaming } from "@/hooks/useDatasetProximityStreaming";
 import type { DatasetBbox } from "@/hooks/useDatasetProximityStreaming";
@@ -210,8 +210,9 @@ const VisibleDatasetsHeader: React.FC<{
 }> = ({ onHideAllOthers }) => {
   const activeCount = useTerrainStore((s) => s.visibleDatasets.length);
   const selectedCount = useTerrainStore((s) => s.selectedIds.length);
+  const maxActiveDatasets = useSettingsStore((s) => s.maxActiveDatasets ?? 3);
   if (activeCount <= 1 && selectedCount <= 1) return null;
-  const atCap = activeCount >= MAX_ACTIVE_DATASETS;
+  const atCap = activeCount >= maxActiveDatasets;
   const streamingMode = selectedCount > activeCount;
   return (
     <div
@@ -723,6 +724,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const evictedId = useTerrainStore((s) => s.evictedId);
   const clearEviction = useTerrainStore((s) => s.clearEviction);
   const visibleDatasetsForToast = useTerrainStore((s) => s.visibleDatasets);
+  const maxActiveDatasets = useSettingsStore((s) => s.maxActiveDatasets ?? 3);
 
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.datasets);
   const collapsed = embedded ? false : storeCollapsed;
@@ -929,7 +931,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     () => new Set(visibleDatasetsForToast.map((v) => v.datasetId)),
     [visibleDatasetsForToast],
   );
-  const atViewCap = visibleDatasetsForToast.length >= MAX_ACTIVE_DATASETS;
+  const atViewCap = visibleDatasetsForToast.length >= maxActiveDatasets;
 
   // ─── Proximity streaming ──────────────────────────────────────────────────
   // Build a map from datasetId → bbox for preset catalog datasets that have a

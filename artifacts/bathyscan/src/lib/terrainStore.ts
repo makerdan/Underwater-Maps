@@ -1,20 +1,35 @@
 import { create } from "zustand";
 import type { TerrainData } from "@workspace/api-client-react";
+// Circular import: settingsStore imports terrainStore (for eviction) and
+// terrainStore imports settingsStore (for getActiveCap). Both accesses happen
+// only inside zustand action bodies (not during module init), so the cycle is
+// safe — ESM live bindings ensure the reference is populated by call time.
+import { useSettingsStore } from "./settingsStore";
 
 /**
- * Alias for MAX_ACTIVE_DATASETS. All mutation paths (setGrids, setPrimary,
- * toggleVisible) enforce a single unified cap of MAX_ACTIVE_DATASETS = 3.
- * @deprecated Use MAX_ACTIVE_DATASETS directly. Kept for import compatibility.
- */
-export const VISIBLE_DATASETS_CAP = 3;
-
-/**
- * Maximum number of datasets that can be simultaneously ACTIVE (in GPU memory
- * / rendered in the 3D scene). The proximity streaming logic enforces this;
- * users may SELECT any number of datasets and the streaming engine decides
- * which MAX_ACTIVE_DATASETS are rendered based on camera distance.
+ * Default / fallback active-dataset cap. Kept for import compatibility in
+ * tests and legacy callers. The actual runtime cap is read from settingsStore
+ * via getActiveCap() so it respects the user's "Max active datasets" setting.
  */
 export const MAX_ACTIVE_DATASETS = 3;
+
+/**
+ * @deprecated Use MAX_ACTIVE_DATASETS or getActiveCap(). Kept for import compatibility.
+ */
+export const VISIBLE_DATASETS_CAP = MAX_ACTIVE_DATASETS;
+
+/**
+ * Read the active-dataset cap from settingsStore at call time.
+ * Falls back to MAX_ACTIVE_DATASETS (3) when the store is not yet hydrated or
+ * maxActiveDatasets is absent (e.g. in tests that don't mock the store).
+ */
+function getActiveCap(): number {
+  try {
+    return useSettingsStore.getState().maxActiveDatasets ?? MAX_ACTIVE_DATASETS;
+  } catch {
+    return MAX_ACTIVE_DATASETS;
+  }
+}
 
 export type DatasetSource = "preset" | "user";
 
@@ -307,7 +322,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       } else {
         // Cap-evict oldest non-first entry when adding a new visible dataset.
         let base = prev.visibleDatasets;
-        if (base.length >= MAX_ACTIVE_DATASETS) {
+        if (base.length >= getActiveCap()) {
           // Evict the oldest entry that is NOT currently first (legacy alias).
           const firstId = base[0]?.datasetId ?? null;
           const evictIdx = base.findIndex((v) => v.datasetId !== firstId);
@@ -374,7 +389,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
           overviewGrid: null,
           dataUpdatedAt: dataUpdatedAt ?? null,
         };
-        if (nextVisible.length >= MAX_ACTIVE_DATASETS) {
+        if (nextVisible.length >= getActiveCap()) {
           // Evict oldest non-first entry.
           const firstId = nextVisible[0]?.datasetId ?? null;
           const evictIdx = nextVisible.findIndex((v) => v.datasetId !== firstId);
@@ -431,7 +446,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         : [...prev.selectedIds, datasetId];
       const nextSelectedSources = { ...prev.selectedSources, [datasetId]: source };
 
-      if (prev.visibleDatasets.length < MAX_ACTIVE_DATASETS) {
+      if (prev.visibleDatasets.length < getActiveCap()) {
         // Room available — activate immediately.
         const entry: VisibleDataset = {
           datasetId,
@@ -471,7 +486,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         : [...prev.selectedIds, datasetId];
       const nextSelectedSources = { ...prev.selectedSources, [datasetId]: source };
 
-      if (!alreadyVisible && prev.visibleDatasets.length < MAX_ACTIVE_DATASETS) {
+      if (!alreadyVisible && prev.visibleDatasets.length < getActiveCap()) {
         // Room available — activate immediately.
         const entry: VisibleDataset = {
           datasetId,
@@ -520,10 +535,11 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       // Must be in selectedIds but NOT in visibleDatasets.
       if (!prev.selectedIds.includes(datasetId)) return prev;
       if (prev.visibleDatasets.some((v) => v.datasetId === datasetId)) return prev;
-      // Cap is enforced here — callers cannot exceed MAX_ACTIVE_DATASETS regardless
+      // Cap is enforced here — callers cannot exceed the active cap regardless
       // of call ordering or timing. Re-reading visibleDatasets.length inside the
       // functional updater ensures concurrent calls each see up-to-date state.
-      if (prev.visibleDatasets.length >= MAX_ACTIVE_DATASETS) return prev;
+      const activeCap = getActiveCap();
+      if (prev.visibleDatasets.length >= activeCap) return prev;
       const source = prev.selectedSources[datasetId] ?? "preset";
       const entry: VisibleDataset = {
         datasetId,
@@ -534,8 +550,8 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       const nextVisible = [...prev.visibleDatasets, entry];
       if (process.env.NODE_ENV === "development") {
         console.assert(
-          nextVisible.length <= MAX_ACTIVE_DATASETS,
-          `[terrainStore] autoActivate: visibleDatasets exceeded MAX_ACTIVE_DATASETS (${nextVisible.length} > ${MAX_ACTIVE_DATASETS})`,
+          nextVisible.length <= activeCap,
+          `[terrainStore] autoActivate: visibleDatasets exceeded cap (${nextVisible.length} > ${activeCap})`,
         );
       }
       return {
@@ -550,9 +566,10 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       if (!prev.visibleDatasets.some((v) => v.datasetId === datasetId)) return prev;
       const nextVisible = prev.visibleDatasets.filter((v) => v.datasetId !== datasetId);
       if (process.env.NODE_ENV === "development") {
+        const cap = getActiveCap();
         console.assert(
-          nextVisible.length <= MAX_ACTIVE_DATASETS,
-          `[terrainStore] autoEvict: visibleDatasets exceeded MAX_ACTIVE_DATASETS (${nextVisible.length} > ${MAX_ACTIVE_DATASETS})`,
+          nextVisible.length <= cap,
+          `[terrainStore] autoEvict: visibleDatasets exceeded cap (${nextVisible.length} > ${cap})`,
         );
       }
       return {

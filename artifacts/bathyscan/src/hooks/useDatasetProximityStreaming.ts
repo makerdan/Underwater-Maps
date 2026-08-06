@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
-import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
+import { useTerrainStore } from "@/lib/terrainStore";
 import type { DatasetSource } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 /** Bounding box in geographic coordinates. */
 export interface DatasetBbox {
@@ -186,13 +187,14 @@ export function useDatasetProximityStreaming({
       for (const candidate of inactiveNearby) {
         const currentVisible = useTerrainStore.getState().visibleDatasets;
 
-        if (currentVisible.length >= MAX_ACTIVE_DATASETS) {
+        const activeCap = useSettingsStore.getState().maxActiveDatasets ?? 3;
+        if (currentVisible.length >= activeCap) {
           // Lightweight pre-check: evict the farthest active dataset to open a
           // slot before calling onActivate. This is an optimisation, not a
-          // correctness gate — autoActivate enforces MAX_ACTIVE_DATASETS
-          // internally and will silently no-op if the slot isn't free. Scan ALL
-          // active entries in withBbox (including non-selected ones) so pinned
-          // datasets don't block streaming capacity.
+          // correctness gate — autoActivate enforces the cap internally and
+          // will silently no-op if the slot isn't free. Scan ALL active entries
+          // in withBbox (including non-selected ones) so pinned datasets don't
+          // block streaming capacity.
           const activeWithBbox = withBbox.filter((e) =>
             currentVisible.some((v) => v.datasetId === e.id),
           );
@@ -224,7 +226,7 @@ export function useDatasetProximityStreaming({
       for (const id of withoutBbox) {
         const currentVisible = useTerrainStore.getState().visibleDatasets;
         if (currentVisible.some((v) => v.datasetId === id)) continue; // race guard
-        if (currentVisible.length >= MAX_ACTIVE_DATASETS) break;
+        if (currentVisible.length >= (useSettingsStore.getState().maxActiveDatasets ?? 3)) break;
         const source = selectedSources[id] ?? "user";
         onActivateRef.current(id, source as DatasetSource);
       }

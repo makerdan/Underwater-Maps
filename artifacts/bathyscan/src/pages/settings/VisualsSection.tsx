@@ -185,6 +185,25 @@ export function VisualsSection() {
         />
       </div>
 
+      {/* Performance — Dataset Limit */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>PERFORMANCE</div>
+        <SelectRow
+          label="Max active datasets"
+          sublabel="How many datasets render simultaneously in the 3D scene. Lower this on slow devices to reduce GPU load."
+          value={String(s.maxActiveDatasets ?? 3)}
+          onChange={(v) => s.setMaxActiveDatasets(Number(v))}
+          options={[
+            { value: "1", label: "1" },
+            { value: "2", label: "2" },
+            { value: "3", label: "3  (default)" },
+            { value: "4", label: "4" },
+            { value: "5", label: "5" },
+            { value: "6", label: "6" },
+          ]}
+        />
+      </div>
+
       {/* Effects */}
       <div style={S.card}>
         <div style={S.cardHeader}>EFFECTS</div>

@@ -206,6 +206,7 @@ export const DEFAULT_SETTINGS = {
   timelineCurrentTime: null as string | null,
   timelineRange: null as { start: string; end: string } | null,
   sidebarMode: "explore" as "explore" | "plan" | "analyze" | "live",
+  maxActiveDatasets: 3,
 };
 
 /**
