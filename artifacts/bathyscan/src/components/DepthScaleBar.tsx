@@ -5,6 +5,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
+import { useTerrainStore } from "@/lib/terrainStore";
 
 const FT_TO_M = 0.3048;
 
@@ -14,12 +15,17 @@ const FT_TO_M = 0.3048;
  *
  * Collapsed (default): a single horizontal swatch + "DEPTH" label + chevron.
  * Expanded: the full vertical depth ramp (200 px) with tick labels at each of
- * the 10 band boundaries that fall within the dataset's actual depth range.
+ * the 10 band boundaries that fall within the dataset's actual depth range,
+ * plus always-present pinned ticks at the actual min/max depths.
+ *
+ * When multiple datasets are simultaneously active the legend endpoints extend
+ * to cover the union of all active grids' depth ranges.
  *
  * Open/closed state is purely component-local (not persisted).
  */
 export const DepthScaleBar: React.FC = () => {
   const { terrain } = useAppState();
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const expandedImgRef = useRef<HTMLImageElement>(null);
   const collapsedImgRef = useRef<HTMLImageElement>(null);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
@@ -31,12 +37,29 @@ export const DepthScaleBar: React.FC = () => {
   const blendBands = usePaletteStore((s) => s.blendBands);
   const [expanded, setExpanded] = useState(false);
 
+  // Compute union depth range across all active grids with loaded data.
+  // Falls back to the primary terrain's own depth range when no secondary
+  // datasets are active or none have loaded grids yet.
+  const { unionMinDepth, unionMaxDepth } = React.useMemo(() => {
+    const loadedGrids = visibleDatasets
+      .map((d) => d.activeGrid)
+      .filter((g): g is NonNullable<typeof g> => g !== null);
+    if (loadedGrids.length === 0) {
+      return {
+        unionMinDepth: terrain?.minDepth ?? 0,
+        unionMaxDepth: terrain?.maxDepth ?? 0,
+      };
+    }
+    const minDepth = Math.min(...loadedGrids.map((g) => g.minDepth));
+    const maxDepth = Math.max(...loadedGrids.map((g) => g.maxDepth));
+    return { unionMinDepth: minDepth, unionMaxDepth: maxDepth };
+  }, [visibleDatasets, terrain]);
+
   useEffect(() => {
     if (!terrain) return;
-    // Crop the canvas ramp to the absolute depth slice the dataset occupies
-    // so the gradient matches the terrain vertex colours (ocean/custom use an
-    // absolute 0–2000 ft scale; fixed themes always span the full ramp).
-    const tRange = getColormapTRange(colormapTheme, terrain.minDepth, terrain.maxDepth);
+    // Crop the canvas ramp to the union depth slice so the gradient matches
+    // the terrain vertex colours across all active datasets.
+    const tRange = getColormapTRange(colormapTheme, unionMinDepth, unionMaxDepth);
     // Vertical ramp for the expanded view. Generated even while collapsed so
     // expanding the legend doesn't show a one-frame blank — and so the
     // colormap canvas is exercised with its canonical 200px height for tests.
@@ -49,27 +72,44 @@ export const DepthScaleBar: React.FC = () => {
       const canvas = colormapCanvas(20, 80, colormapTheme, undefined, tRange);
       collapsedImgRef.current.src = canvas.toDataURL();
     }
-  }, [colormapTheme, shallow, deep, bandColorsKey, bandBoundaries, blendBands, terrain, expanded]);
+  }, [colormapTheme, shallow, deep, bandColorsKey, bandBoundaries, blendBands, terrain, expanded, unionMinDepth, unionMaxDepth]);
 
   if (!terrain) return null;
 
   const rampHeight = 200;
 
-  // Build tick list: convert each band boundary from feet to metres,
-  // compute its normalised position, and discard anything outside [0, 1].
-  // Guard against a flat dataset (all points at the same depth).
+  // Build intermediate tick list: convert each band boundary from feet to
+  // metres, compute its normalised position within the union depth range, and
+  // discard anything outside [0, 1].
   const activeBoundaries = Array.isArray(bandBoundaries) && bandBoundaries.length >= 3
     ? bandBoundaries
     : [];
-  const depthSpan = terrain.maxDepth - terrain.minDepth;
-  const ticks = depthSpan <= 0
+  const depthSpan = unionMaxDepth - unionMinDepth;
+
+  const intermediateTicks = depthSpan <= 0
     ? []
     : activeBoundaries.flatMap((boundaryFt) => {
         const boundaryM = boundaryFt * FT_TO_M;
-        const pos = (boundaryM - terrain.minDepth) / depthSpan;
+        const pos = (boundaryM - unionMinDepth) / depthSpan;
         if (pos < 0 || pos > 1) return [];
-        return [{ label: formatDepth(boundaryM, { units }), pos }];
+        return [{ key: `boundary-${boundaryFt}`, label: formatDepth(boundaryM, { units }), pos }];
       });
+
+  // Always-present pinned endpoint ticks at the actual min/max depths.
+  const minTick = { key: "__min", label: formatDepth(unionMinDepth, { units }), pos: 0 };
+  const maxTick = { key: "__max", label: formatDepth(unionMaxDepth, { units }), pos: 1 };
+
+  // Suppress intermediate ticks that fall within 8 % of the endpoints so
+  // labels don't collide with the pinned min/max ticks.
+  const ENDPOINT_GUARD = 0.08;
+  const filteredIntermediate = intermediateTicks.filter(
+    ({ pos }) => pos > ENDPOINT_GUARD && pos < 1 - ENDPOINT_GUARD,
+  );
+
+  // Combine endpoint + filtered intermediate ticks; sort top-to-bottom.
+  const ticks = [minTick, ...filteredIntermediate, maxTick].sort(
+    (a, b) => a.pos - b.pos,
+  );
 
   return (
     <div
@@ -154,9 +194,9 @@ export const DepthScaleBar: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            {ticks.map(({ label, pos }) => (
+            {ticks.map(({ key, label, pos }) => (
               <span
-                key={label}
+                key={key}
                 data-testid="depth-tick"
                 style={{
                   position: "absolute",
