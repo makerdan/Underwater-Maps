@@ -38,6 +38,13 @@ interface CameraStore {
   setCrosshairGps: (gps: GpsPoint | null) => void;
   setLastClickedGps: (gps: GpsPoint | null) => void;
 
+  /**
+   * Turbo mode is active when true.  Transient state — not persisted between
+   * sessions; resets to false on page load.
+   */
+  turboActive: boolean;
+  setTurboActive: (v: boolean) => void;
+
   /** Camera geographic position (unknown until the first render frame fires). */
   cameraPosition: CameraPosition;
   cameraDepth: number | null;
@@ -89,6 +96,9 @@ export const useCameraStore = create<CameraStore>((set) => ({
   lastClickedGps: null,
   setCrosshairGps: (gps) => set({ crosshairGps: gps }),
   setLastClickedGps: (gps) => set({ lastClickedGps: gps }),
+
+  turboActive: false,
+  setTurboActive: (v) => set({ turboActive: v }),
 
   cameraPosition: { known: false },
   cameraDepth: null,

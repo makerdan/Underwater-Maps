@@ -97,6 +97,13 @@ export const FLY_FALLBACK_MPU = 200;
 export const FLY_MAX_FRAME_WU = 20;
 
 /**
+ * Turbo mode speed multiplier.  When turbo is active, both the computed
+ * world-units-per-second and the per-frame displacement cap are scaled by
+ * this factor so the cap does not swallow the boost.
+ */
+export const TURBO_MULTIPLIER = 10;
+
+/**
  * Fly-mode MPU derivation helper.
  *
  * Unlike `computeMetersPerWorldUnit`, which returns `1` as a sentinel for a
@@ -146,13 +153,23 @@ export function smoothMpuStep(current: number, targetMpu: number, delta: number)
  *  - speedIndex is clamped to [0, FLY_SPEEDS_MPH.length - 1] so out-of-range
  *    values never throw or produce undefined.
  *  - mpu ≤ 0 or non-finite falls back to FLY_FALLBACK_MPU.
- *  - result is capped at FLY_MAX_FRAME_WU so a tiny-dataset mpu can never
- *    teleport the camera.
+ *  - result is capped at FLY_MAX_FRAME_WU (or FLY_MAX_FRAME_WU × TURBO_MULTIPLIER
+ *    when turbo is true) so a tiny-dataset mpu can never teleport the camera.
+ *  - When turbo is true, the computed speed is scaled by TURBO_MULTIPLIER and
+ *    the per-frame cap is raised proportionally so the cap does not swallow
+ *    the boost.
  */
-export function computeFlyScaledSpeed(speedIndex: number, mpu: number, delta: number): number {
+export function computeFlyScaledSpeed(
+  speedIndex: number,
+  mpu: number,
+  delta: number,
+  turbo?: boolean,
+): number {
   const clampedIndex = Math.max(0, Math.min(FLY_SPEEDS_MPH.length - 1, Math.trunc(speedIndex)));
   const mph = FLY_SPEEDS_MPH[clampedIndex] ?? FLY_SPEEDS_MPH[0]!;
   const safeMpu = mpu > 0 && isFinite(mpu) ? mpu : FLY_FALLBACK_MPU;
   const wups = boatMphToWorldUnitsPerSecond(mph, safeMpu);
-  return Math.min(wups * delta, FLY_MAX_FRAME_WU);
+  const multiplier = turbo ? TURBO_MULTIPLIER : 1;
+  const cap = FLY_MAX_FRAME_WU * multiplier;
+  return Math.min(wups * delta * multiplier, cap);
 }

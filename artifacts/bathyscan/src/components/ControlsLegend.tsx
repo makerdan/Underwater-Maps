@@ -6,12 +6,15 @@ import { formatKeyCode, formatGamepadButton } from "@/lib/keyLabel";
 export const ControlsLegend: React.FC = () => {
   const [open, setOpen] = useState(false);
   const crosshairMenuKey = useSettingsStore((s) => s.keyBindings.crosshairMenu);
+  const turboKey = useSettingsStore((s) => s.keyBindings.toggleTurbo);
   const crosshairMenuGamepadButton = useSettingsStore((s) => s.crosshairMenuGamepadButton);
 
   const crosshairActionLabel =
     crosshairMenuGamepadButton !== null
       ? `${formatKeyCode(crosshairMenuKey).toUpperCase()} / ${formatGamepadButton(crosshairMenuGamepadButton)}`
       : formatKeyCode(crosshairMenuKey).toUpperCase();
+
+  const turboLabel = formatKeyCode(turboKey).toUpperCase();
 
   const BINDINGS = [
     { key: "Click", action: "Lock mouse / enter fly mode" },
@@ -21,6 +24,7 @@ export const ControlsLegend: React.FC = () => {
     { key: "Scroll", action: "Zoom in / out" },
     { key: "Shift + Scroll", action: "Change speed tier" },
     { key: "+ / −", action: "Change speed tier" },
+    { key: turboLabel, action: "Toggle turbo speed (10×)" },
     { key: "Pinch", action: "Zoom in / out (touch)" },
     { key: "R-drag / Ctrl-drag", action: "Orbit around point under cursor" },
     { key: "2-finger drag", action: "Orbit around midpoint (touch)" },

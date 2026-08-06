@@ -711,6 +711,41 @@ const ErrorOverlay: React.FC<ErrorOverlayProps> = ({ message, onRetry }) => (
 );
 
 // ---------------------------------------------------------------------------
+// TurboHudBadge — shows a small indicator while turbo mode is active
+// ---------------------------------------------------------------------------
+const TurboHudBadge: React.FC = () => {
+  const turboActive = useCameraStore((s) => s.turboActive);
+  if (!turboActive) return null;
+  return (
+    <div
+      aria-label="Turbo mode active"
+      data-testid="turbo-hud-badge"
+      style={{
+        position: "absolute",
+        top: 12,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 30,
+        background: "rgba(255, 200, 0, 0.15)",
+        border: "1px solid rgba(255, 200, 0, 0.6)",
+        borderRadius: 4,
+        padding: "2px 10px",
+        fontFamily: "monospace",
+        fontSize: 13,
+        fontWeight: 700,
+        letterSpacing: "0.15em",
+        color: "#ffd700",
+        pointerEvents: "none",
+        userSelect: "none",
+        textTransform: "uppercase",
+      }}
+    >
+      ⚡ TURBO
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // CanvasAriaAnnouncer — screen-reader live region for depth / coordinates
 // ---------------------------------------------------------------------------
 /**
@@ -926,6 +961,9 @@ export const TourScene: React.FC<TourSceneProps> = ({
       {/* Screen-reader live region: announces depth and coordinates as the
           camera moves. Visually hidden but read by AT on content change. */}
       <CanvasAriaAnnouncer />
+
+      {/* Turbo mode HUD badge — visible while T is held / toggled on */}
+      <TurboHudBadge />
 
       {/* near = WORLD_SIZE / 10_000 = 0.01 world units.
           Setting an explicit near plane concentrates 24-bit depth-buffer

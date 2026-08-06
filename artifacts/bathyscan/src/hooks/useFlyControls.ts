@@ -160,6 +160,14 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
   // Sync speedIndex to cameraStore for HUD reads
   useEffect(() => { useCameraStore.getState().setSpeedIndex(speedIndex); }, [speedIndex]);
 
+  // Turbo mode — transient, not persisted. Ref avoids stale closure in keyDown.
+  const turboActiveRef = useRef(false);
+  useEffect(() =>
+    useCameraStore.subscribe((s) => {
+      turboActiveRef.current = s.turboActive;
+    }),
+  []);
+
   const keys = useRef<Record<string, boolean>>({});
   const isLocked = useRef(false);
   const euler = useRef(new THREE.Euler(0, 0, 0, "YXZ"));
@@ -293,6 +301,12 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         if (e.code === getBoundKey(bindings, "speedDown") || e.code === "NumpadSubtract") {
           e.preventDefault();
           setSpeedIndex(Math.max(0, speedIndexRef.current - 1));
+          return;
+        }
+        // Toggle turbo mode
+        if (e.code === getBoundKey(bindings, "toggleTurbo")) {
+          e.preventDefault();
+          useCameraStore.getState().setTurboActive(!turboActiveRef.current);
           return;
         }
       }
@@ -944,7 +958,7 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
         } else {
           smoothedFlyMpuRef.current = smoothMpuStep(smoothedFlyMpuRef.current, targetFlyMpu, delta);
         }
-        scaledSpeed = computeFlyScaledSpeed(speedIndexRef.current, smoothedFlyMpuRef.current, delta);
+        scaledSpeed = computeFlyScaledSpeed(speedIndexRef.current, smoothedFlyMpuRef.current, delta, turboActiveRef.current);
       }
 
       camera.getWorldDirection(moveDir.current);

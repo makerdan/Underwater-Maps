@@ -13,6 +13,7 @@ import {
   FLY_SPEEDS_MPH,
   FLY_FALLBACK_MPU,
   FLY_MAX_FRAME_WU,
+  TURBO_MULTIPLIER,
 } from "@/lib/boatSpeed";
 import { WORLD_SIZE } from "@/lib/terrain";
 
@@ -376,5 +377,48 @@ describe("smoothMpuStep", () => {
     expect(isFinite(result)).toBe(true);
     // t = 1 - exp(0) = 0 → current unchanged
     expect(result).toBeCloseTo(100, 10);
+  });
+});
+
+// ── computeFlyScaledSpeed — turbo mode path ───────────────────────────────────
+
+describe("computeFlyScaledSpeed — turbo mode", () => {
+  const mpu = 200; // FLY_FALLBACK_MPU — clean reference
+
+  it("turbo=true produces exactly TURBO_MULTIPLIER× the normal result when below cap", () => {
+    const normal = computeFlyScaledSpeed(0, mpu, 1, false);
+    const turbo = computeFlyScaledSpeed(0, mpu, 1, true);
+    // Speed tier 0 (30 mph) with mpu=200 is well below the base cap (20 wu).
+    // Verify turbo output is exactly TURBO_MULTIPLIER× normal.
+    expect(turbo).toBeCloseTo(normal * TURBO_MULTIPLIER, 8);
+  });
+
+  it("turbo=undefined behaves identically to turbo=false", () => {
+    const omitted = computeFlyScaledSpeed(1, mpu, 1);
+    const explicit = computeFlyScaledSpeed(1, mpu, 1, false);
+    expect(omitted).toBeCloseTo(explicit, 12);
+  });
+
+  it("the turbo cap is TURBO_MULTIPLIER × FLY_MAX_FRAME_WU, not the normal cap", () => {
+    // Use a tiny mpu so the raw speed exceeds the base cap.
+    // With turbo=true the cap must be TURBO_MULTIPLIER × FLY_MAX_FRAME_WU.
+    const result = computeFlyScaledSpeed(4, 0.001, 1, true);
+    expect(result).toBeLessThanOrEqual(FLY_MAX_FRAME_WU * TURBO_MULTIPLIER);
+    expect(result).toBeGreaterThan(FLY_MAX_FRAME_WU); // exceeds the base cap
+  });
+
+  it("turbo result is always finite and positive", () => {
+    const result = computeFlyScaledSpeed(2, mpu, 0.016, true);
+    expect(isFinite(result)).toBe(true);
+    expect(result).toBeGreaterThan(0);
+  });
+
+  it("existing tests: turbo=false results are unchanged from pre-turbo behaviour", () => {
+    // The FLY_FALLBACK_MPU / tier-1 result must be identical to the original.
+    const result = computeFlyScaledSpeed(1, FLY_FALLBACK_MPU, 1, false);
+    const mph = FLY_SPEEDS_MPH[1]!;
+    const expectedWups = (mph * MPH_TO_MS) / FLY_FALLBACK_MPU;
+    const expected = Math.min(expectedWups, FLY_MAX_FRAME_WU);
+    expect(result).toBeCloseTo(expected, 8);
   });
 });

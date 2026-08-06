@@ -19,6 +19,7 @@ export type ShortcutActionId =
   | "descend"
   | "speedUp"
   | "speedDown"
+  | "toggleTurbo"
   | "dropGpsPin"
   | "crosshairMenu"
   | "toggleOverview"
@@ -57,6 +58,7 @@ export const SHORTCUT_ACTIONS: ShortcutActionDef[] = [
 
   { id: "speedUp",        label: "Increase speed tier", description: "Speed up the fly camera",                defaultCode: "Equal",     group: "speed" },
   { id: "speedDown",      label: "Decrease speed tier", description: "Slow down the fly camera",               defaultCode: "Minus",     group: "speed" },
+  { id: "toggleTurbo",   label: "Toggle turbo speed",  description: "Toggle 10× turbo speed multiplier",      defaultCode: "KeyT",      group: "speed" },
 
   { id: "dropGpsPin",     label: "Drop GPS pin",        description: "Drop a marker at the crosshair",         defaultCode: "KeyG",      group: "actions" },
   { id: "crosshairMenu",  label: "Crosshair action menu", description: "Open the terrain action menu at the crosshair", defaultCode: "KeyQ", group: "actions" },
