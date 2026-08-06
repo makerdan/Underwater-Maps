@@ -50,14 +50,13 @@ import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useToast } from "@/hooks/use-toast";
-import { MySavesSection } from "@/components/MySavesSection";
 
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Tab = "search" | "ncei" | "my-saves";
+type Tab = "search" | "ncei";
 
 const DATA_TYPE_ICONS: Record<string, string> = {
   bathymetry: "🌊",
@@ -955,7 +954,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const nceiFromRef = useRef(1);
   const [nceiAccumulated, setNceiAccumulated] = useState<NceiPortalResult[]>([]);
   const prevNceiPageRef = useRef<NceiPortalResult[] | undefined>(undefined);
-  const { setDatasetId, setCatalogSourcedAt, setPendingExternalUserDatasetId, datasetId: currentDatasetId } = useAppState();
+  const { setDatasetId, setCatalogSourcedAt, datasetId: currentDatasetId } = useAppState();
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -1444,56 +1443,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     [setDatasetId, setCatalogSourcedAt, searchResults, onClose],
   );
 
-  // ── My Saves tab — load callbacks ─────────────────────────────────────────
-  // Mirror of DatasetPanel's handleLoadCatalogSaveFromLeft / handleLoadUserDatasetFromLeft
-  // but also calls onClose() so FindDataPanel closes after the load is queued.
-
-  // NOTE: Both load handlers below intentionally catch any error thrown by
-  // `requestDatasetSwitch` (e.g. an uncaught exception escaping its internal
-  // try/catch) and surface it as a toast. `onClose()` is NOT called in the
-  // catch block so the panel stays open and the user can retry.
-  // Future callers of `requestDatasetSwitch` should follow the same pattern —
-  // always wrap in try/catch and show a toast on failure.
-
-  const handleLoadCatalogSave = useCallback(
-    async (save: UserCatalogSave) => {
-      const previewId = save.datasetId ?? save.catalogId;
-      const datasetName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
-      try {
-        await requestDatasetSwitch({
-          datasetId: previewId,
-          datasetName,
-          onConfirm: () => {
-            setPendingExternalUserDatasetId(save.datasetId!);
-            setCatalogSourcedAt({ forDatasetId: save.datasetId!, date: save.catalog?.createdAt ?? null });
-            onClose();
-          },
-        });
-      } catch {
-        toast({ title: "Couldn't load dataset — please try again.", variant: "destructive" });
-      }
-    },
-    [setPendingExternalUserDatasetId, setCatalogSourcedAt, onClose, toast],
-  );
-
-  const handleLoadUserDataset = useCallback(
-    async (userDatasetId: string, createdAt?: string | null) => {
-      try {
-        await requestDatasetSwitch({
-          datasetId: userDatasetId,
-          onConfirm: () => {
-            setPendingExternalUserDatasetId(userDatasetId);
-            setCatalogSourcedAt({ forDatasetId: userDatasetId, date: createdAt ?? null });
-            onClose();
-          },
-        });
-      } catch {
-        toast({ title: "Couldn't load dataset — please try again.", variant: "destructive" });
-      }
-    },
-    [setPendingExternalUserDatasetId, setCatalogSourcedAt, onClose, toast],
-  );
-
   return (
     <div style={PANEL} role="dialog" aria-label="Find Data panel">
       {/* Header */}
@@ -1523,18 +1472,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       {/* Tabs */}
       <div style={TAB_BAR}>
         <ViewscreenTooltip label="Search the dataset catalog" side="bottom">
-          <button style={tabStyle(tab === "search")} onClick={() => { hasUserInteractedRef.current = true; setTab("search"); }}>
+          <button data-testid="find-data-search-tab" style={tabStyle(tab === "search")} onClick={() => { hasUserInteractedRef.current = true; setTab("search"); }}>
             Search
           </button>
         </ViewscreenTooltip>
         <ViewscreenTooltip label="Browse the NOAA/NCEI Bathymetry Geoportal" side="bottom">
-          <button style={tabStyle(tab === "ncei")} onClick={() => { hasUserInteractedRef.current = true; setTab("ncei"); }}>
+          <button data-testid="find-data-ncei-tab" style={tabStyle(tab === "ncei")} onClick={() => { hasUserInteractedRef.current = true; setTab("ncei"); }}>
             NCEI Portal
-          </button>
-        </ViewscreenTooltip>
-        <ViewscreenTooltip label="Your saved and uploaded datasets" side="bottom">
-          <button style={tabStyle(tab === "my-saves")} onClick={() => setTab("my-saves")} data-testid="find-data-my-saves-tab">
-            My Saves
           </button>
         </ViewscreenTooltip>
       </div>
@@ -1853,18 +1797,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               </button>
             )}
           </div>
-        </div>
-      )}
-
-      {/* My Saves tab */}
-      {tab === "my-saves" && (
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 14px 14px" }} data-testid="find-data-my-saves-content">
-          <MySavesSection
-            onLoadCatalogSave={handleLoadCatalogSave}
-            onLoadUserDataset={handleLoadUserDataset}
-            onBrowseDatasets={() => setTab("search")}
-            browseLabel="SEARCH DATASETS →"
-          />
         </div>
       )}
 

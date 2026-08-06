@@ -16,7 +16,7 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, fireEvent, act } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { FindDataPanel } from "@/components/FindDataPanel";
 import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
@@ -435,90 +435,6 @@ describe("FindDataPanel — catalog ADD button", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// handleLoadCatalogSave — My Saves tab
-// ---------------------------------------------------------------------------
-
-describe("FindDataPanel — handleLoadCatalogSave (My Saves tab)", () => {
-  beforeEach(() => {
-    // Make requestDatasetSwitch call onConfirm immediately so the test doesn't
-    // depend on the simulated-data preflight fetch.
-    vi.mocked(requestDatasetSwitch).mockImplementation(async (args) => {
-      args.onConfirm();
-    });
-  });
-
-  it("clicking 'Load into viewer' calls setPendingExternalUserDatasetId with the save's datasetId", async () => {
-    renderPanel();
-
-    // Navigate to the My Saves tab.
-    fireEvent.click(screen.getByTestId("find-data-my-saves-tab"));
-
-    // The MySavesSection mock renders a single "Load into viewer" button.
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("mock-catalog-save-load-btn"));
-    });
-
-    expect(contextMocks.setPendingExternalUserDatasetId).toHaveBeenCalledTimes(1);
-    expect(contextMocks.setPendingExternalUserDatasetId).toHaveBeenCalledWith("user-ds-abc-123");
-  });
-
-  it("clicking 'Load into viewer' calls onClose after setPendingExternalUserDatasetId", async () => {
-    renderPanel();
-
-    fireEvent.click(screen.getByTestId("find-data-my-saves-tab"));
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("mock-catalog-save-load-btn"));
-    });
-
-    // Both setPendingExternalUserDatasetId and onClose must have been called.
-    expect(contextMocks.setPendingExternalUserDatasetId).toHaveBeenCalledWith("user-ds-abc-123");
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("does NOT call setPendingExternalUserDatasetId when requestDatasetSwitch does not call onConfirm (dialog cancelled)", async () => {
-    // Override: onConfirm is never called (simulates user cancelling the dialog).
-    vi.mocked(requestDatasetSwitch).mockImplementation(async () => {
-      // intentionally omit calling onConfirm
-    });
-
-    renderPanel();
-
-    fireEvent.click(screen.getByTestId("find-data-my-saves-tab"));
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("mock-catalog-save-load-btn"));
-    });
-
-    expect(contextMocks.setPendingExternalUserDatasetId).not.toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it("error path: shows error toast and does NOT call onClose when requestDatasetSwitch throws", async () => {
-    vi.mocked(requestDatasetSwitch).mockRejectedValue(new Error("unexpected preflight failure"));
-
-    renderPanel();
-
-    fireEvent.click(screen.getByTestId("find-data-my-saves-tab"));
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("mock-catalog-save-load-btn"));
-    });
-
-    // Toast must fire with the expected message.
-    expect(toastMock).toHaveBeenCalledTimes(1);
-    expect(toastMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Couldn't load dataset — please try again.",
-        variant: "destructive",
-      }),
-    );
-
-    // Panel must stay open — onClose must NOT have been called.
-    expect(onClose).not.toHaveBeenCalled();
-
-    // Confirm callback must NOT have reached the app state setter.
-    expect(contextMocks.setPendingExternalUserDatasetId).not.toHaveBeenCalled();
-  });
-});
+// (My Saves tab removed from FindDataPanel — tests removed per product decision)
+// The My Saves tab now lives exclusively in the left-side DatasetPanel.
+// See FindDataPanel.noMySavesTab.test.tsx for the regression guard.
