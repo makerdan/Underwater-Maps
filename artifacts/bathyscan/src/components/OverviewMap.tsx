@@ -490,6 +490,10 @@ export const OverviewMap: React.FC = () => {
   // Currently selected puzzle tile (datasetId) and drag sub-mode.
   const puzzleSelectedRef = useRef<string | null>(null);
   const puzzleDragSubModeRef = useRef<"translate" | "rotate" | null>(null);
+  // Which edge handle was hit at mousedown (for click-nudge detection).
+  const puzzleHandleEdgeRef = useRef<"top" | "right" | "bottom" | "left" | null>(null);
+  // Whether the pointer actually moved during a rotate drag (distinguishes click from drag).
+  const puzzleRotateActuallyDraggedRef = useRef(false);
   // Context captured at drag start for incremental delta computation.
   const puzzleDragStartRef = useRef<{
     mx: number; my: number;
@@ -1500,14 +1504,24 @@ export const OverviewMap: React.FC = () => {
           ctx.setLineDash([5, 3]);
           ctx.strokeRect(bx0, by0, bx1 - bx0, by1 - by0);
           ctx.setLineDash([]);
-          // Rotation handle: small circle above the tile's top-center.
-          ctx.beginPath();
-          ctx.arc(tcx, by0 - HANDLE_OFFSET, 6, 0, Math.PI * 2);
-          ctx.fillStyle = "#00e5ff";
-          ctx.fill();
-          ctx.strokeStyle = "rgba(255,255,255,0.85)";
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
+          // Four rotation handles: one at each edge midpoint, offset outward 16 px.
+          // Coordinates are in the tile's local (rotated) canvas space, so drawing
+          // at these points produces the correct rotated positions automatically.
+          const edgeHandles = [
+            { x: tcx,                  y: by0 - HANDLE_OFFSET }, // top
+            { x: bx1 + HANDLE_OFFSET,  y: tcy                 }, // right
+            { x: tcx,                  y: by1 + HANDLE_OFFSET }, // bottom
+            { x: bx0 - HANDLE_OFFSET,  y: tcy                 }, // left
+          ];
+          for (const h of edgeHandles) {
+            ctx.beginPath();
+            ctx.arc(h.x, h.y, 7, 0, Math.PI * 2);
+            ctx.fillStyle = "#00e5ff";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(255,255,255,0.85)";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
           ctx.restore();
         }
 
@@ -1965,7 +1979,8 @@ export const OverviewMap: React.FC = () => {
         const HANDLE_RADIUS = 10; // px hit area for rotation handle
         const HANDLE_OFFSET = 16; // px above top-center of tile
 
-        // Check rotation handle for the currently selected tile first.
+        // Check rotation handles for the currently selected tile first.
+        // Each of the four edge-midpoint handles is tested in screen space.
         const selId = puzzleSelectedRef.current;
         if (selId) {
           const selV = visibleDatasetsRef.current.find((v) => v.datasetId === selId);
@@ -1979,17 +1994,28 @@ export const OverviewMap: React.FC = () => {
             const ptx = pxform?.tx ?? 0;
             const pty = pxform?.ty ?? 0;
             const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
-            // Handle local position (before rotation): top-center of tile.
-            const hLocalDx = tcx - tcx; // = 0
-            const hLocalDy = (by0 - HANDLE_OFFSET) - tcy;
-            // Rotate into screen space then apply puzzle translation.
-            const hsx =
-              tcx + ptx +
-              hLocalDx * Math.cos(pAngleRad) - hLocalDy * Math.sin(pAngleRad);
-            const hsy =
-              tcy + pty +
-              hLocalDx * Math.sin(pAngleRad) + hLocalDy * Math.cos(pAngleRad);
-            if (Math.sqrt((mx - hsx) ** 2 + (my - hsy) ** 2) <= HANDLE_RADIUS) {
+
+            // Four handles: local offsets from tile center (in unrotated tile space).
+            const edgeLocalOffsets: Array<{ ldx: number; ldy: number; edge: "top" | "right" | "bottom" | "left" }> = [
+              { ldx: 0,                           ldy: (by0 - HANDLE_OFFSET) - tcy, edge: "top"    },
+              { ldx: (bx1 + HANDLE_OFFSET) - tcx, ldy: 0,                           edge: "right"  },
+              { ldx: 0,                           ldy: (by1 + HANDLE_OFFSET) - tcy, edge: "bottom" },
+              { ldx: (bx0 - HANDLE_OFFSET) - tcx, ldy: 0,                           edge: "left"   },
+            ];
+
+            let hitEdge: "top" | "right" | "bottom" | "left" | null = null;
+            for (const { ldx, ldy, edge } of edgeLocalOffsets) {
+              const hsx = tcx + ptx + ldx * Math.cos(pAngleRad) - ldy * Math.sin(pAngleRad);
+              const hsy = tcy + pty + ldx * Math.sin(pAngleRad) + ldy * Math.cos(pAngleRad);
+              if (Math.sqrt((mx - hsx) ** 2 + (my - hsy) ** 2) <= HANDLE_RADIUS) {
+                hitEdge = edge;
+                break;
+              }
+            }
+
+            if (hitEdge !== null) {
+              puzzleHandleEdgeRef.current = hitEdge;
+              puzzleRotateActuallyDraggedRef.current = false;
               puzzleDragSubModeRef.current = "rotate";
               puzzleDragStartRef.current = {
                 mx, my,
@@ -2123,11 +2149,13 @@ export const OverviewMap: React.FC = () => {
 
         if (subMode === "rotate" && selId) {
           hasDraggedRef.current = true;
+          puzzleRotateActuallyDraggedRef.current = true;
           const start = puzzleDragStartRef.current;
           // Angle from tile center to pointer — atan2(dx, -dy) gives north-up 0°.
           const dx2 = mx - start.cx;
           const dy2 = my - start.cy;
-          const angleDeg = Math.atan2(dx2, -dy2) * (180 / Math.PI);
+          // Snap to nearest integer degree for precise alignment.
+          const angleDeg = Math.round(Math.atan2(dx2, -dy2) * (180 / Math.PI));
           setPuzzleTransforms((prev) => {
             const next = new Map(prev);
             const existing = prev.get(selId);
@@ -2138,36 +2166,74 @@ export const OverviewMap: React.FC = () => {
           return;
         }
 
-        // Not dragging — show hover cursor based on whether pointer is over a tile.
+        // Not dragging — show hover cursor based on whether pointer is over a handle or tile.
         const t = transformRef.current;
         if (t && overviewGrid) {
           const worldGrid = worldGridRef.current ?? overviewGrid;
           const visibleNow = visibleDatasetsRef.current;
+          const HOVER_HANDLE_RADIUS = 10;
+          const HOVER_HANDLE_OFFSET = 16;
+          let overHandle = false;
           let overTile = false;
-          for (const v of visibleNow) {
-            const og =
-              v.datasetId === primaryDatasetIdRef.current
-                ? overviewGrid
-                : v.overviewGrid;
-            if (!og) continue;
-            const [bx0, by0] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
-            const [bx1, by1] = lonLatToCanvas(og.maxLon, og.minLat, worldGrid, t);
-            const tcx = (bx0 + bx1) / 2;
-            const tcy = (by0 + by1) / 2;
-            const pxform = puzzleTransformsRef.current.get(v.datasetId);
-            const ptx = pxform?.tx ?? 0;
-            const pty = pxform?.ty ?? 0;
-            const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
-            const pdx = mx - (tcx + ptx);
-            const pdy = my - (tcy + pty);
-            const localX = tcx + pdx * Math.cos(-pAngleRad) - pdy * Math.sin(-pAngleRad);
-            const localY = tcy + pdx * Math.sin(-pAngleRad) + pdy * Math.cos(-pAngleRad);
-            if (localX >= bx0 && localX <= bx1 && localY >= by0 && localY <= by1) {
-              overTile = true;
-              break;
+
+          // Check selected tile's four edge handles first.
+          const hovSelId = puzzleSelectedRef.current;
+          if (hovSelId) {
+            const hovSelV = visibleNow.find((v) => v.datasetId === hovSelId);
+            const hovSelOg = hovSelId === primaryDatasetIdRef.current ? overviewGrid : hovSelV?.overviewGrid;
+            if (hovSelOg) {
+              const [hbx0, hby0] = lonLatToCanvas(hovSelOg.minLon, hovSelOg.maxLat, worldGrid, t);
+              const [hbx1, hby1] = lonLatToCanvas(hovSelOg.maxLon, hovSelOg.minLat, worldGrid, t);
+              const htcx = (hbx0 + hbx1) / 2;
+              const htcy = (hby0 + hby1) / 2;
+              const hpxform = puzzleTransformsRef.current.get(hovSelId);
+              const hptx = hpxform?.tx ?? 0;
+              const hpty = hpxform?.ty ?? 0;
+              const hpAngleRad = ((hpxform?.angleDeg ?? 0) * Math.PI) / 180;
+              const hovHandles = [
+                { ldx: 0,                                   ldy: (hby0 - HOVER_HANDLE_OFFSET) - htcy },
+                { ldx: (hbx1 + HOVER_HANDLE_OFFSET) - htcx, ldy: 0                                   },
+                { ldx: 0,                                   ldy: (hby1 + HOVER_HANDLE_OFFSET) - htcy },
+                { ldx: (hbx0 - HOVER_HANDLE_OFFSET) - htcx, ldy: 0                                   },
+              ];
+              for (const { ldx, ldy } of hovHandles) {
+                const hsx = htcx + hptx + ldx * Math.cos(hpAngleRad) - ldy * Math.sin(hpAngleRad);
+                const hsy = htcy + hpty + ldx * Math.sin(hpAngleRad) + ldy * Math.cos(hpAngleRad);
+                if (Math.sqrt((mx - hsx) ** 2 + (my - hsy) ** 2) <= HOVER_HANDLE_RADIUS) {
+                  overHandle = true;
+                  break;
+                }
+              }
             }
           }
-          canvas.style.cursor = overTile ? "grab" : "crosshair";
+
+          if (!overHandle) {
+            for (const v of visibleNow) {
+              const og =
+                v.datasetId === primaryDatasetIdRef.current
+                  ? overviewGrid
+                  : v.overviewGrid;
+              if (!og) continue;
+              const [bx0, by0] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
+              const [bx1, by1] = lonLatToCanvas(og.maxLon, og.minLat, worldGrid, t);
+              const tcx = (bx0 + bx1) / 2;
+              const tcy = (by0 + by1) / 2;
+              const pxform = puzzleTransformsRef.current.get(v.datasetId);
+              const ptx = pxform?.tx ?? 0;
+              const pty = pxform?.ty ?? 0;
+              const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
+              const pdx = mx - (tcx + ptx);
+              const pdy = my - (tcy + pty);
+              const localX = tcx + pdx * Math.cos(-pAngleRad) - pdy * Math.sin(-pAngleRad);
+              const localY = tcy + pdx * Math.sin(-pAngleRad) + pdy * Math.cos(-pAngleRad);
+              if (localX >= bx0 && localX <= bx1 && localY >= by0 && localY <= by1) {
+                overTile = true;
+                break;
+              }
+            }
+          }
+
+          canvas.style.cursor = overHandle ? "crosshair" : overTile ? "grab" : "crosshair";
         } else {
           canvas.style.cursor = "crosshair";
         }
@@ -2216,6 +2282,28 @@ export const OverviewMap: React.FC = () => {
     const handleMouseUp = () => {
       // End any active puzzle drag.
       if (puzzleModeRef.current) {
+        // Click-without-drag on a rotation handle → ±1° nudge.
+        if (
+          puzzleDragSubModeRef.current === "rotate" &&
+          !puzzleRotateActuallyDraggedRef.current &&
+          puzzleHandleEdgeRef.current !== null
+        ) {
+          const nudgeEdge = puzzleHandleEdgeRef.current;
+          const nudgeId = puzzleSelectedRef.current;
+          if (nudgeId) {
+            const delta = nudgeEdge === "top" || nudgeEdge === "right" ? 1 : -1;
+            setPuzzleTransforms((prev) => {
+              const next = new Map(prev);
+              const existing = prev.get(nudgeId);
+              const current = existing?.angleDeg ?? 0;
+              next.set(nudgeId, { ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }), angleDeg: current + delta });
+              return next;
+            });
+            dirtyRef.current = true;
+          }
+        }
+        puzzleHandleEdgeRef.current = null;
+        puzzleRotateActuallyDraggedRef.current = false;
         puzzleDragSubModeRef.current = null;
         return;
       }
@@ -2257,6 +2345,8 @@ export const OverviewMap: React.FC = () => {
     const handleMouseLeave = () => {
       isDraggingRef.current = false;
       puzzleDragSubModeRef.current = null;
+      puzzleHandleEdgeRef.current = null;
+      puzzleRotateActuallyDraggedRef.current = false;
       mousePosRef.current = { x: -1, y: -1 };
       setTooltip((prev) => (prev.visible ? { ...prev, visible: false } : prev));
     };
