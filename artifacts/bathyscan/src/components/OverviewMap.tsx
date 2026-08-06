@@ -452,6 +452,35 @@ export const OverviewMap: React.FC = () => {
     );
   }, [overviewGrid, cancelFlyThrough]);
 
+  // --- Puzzle mode state -------------------------------------------------
+  // When active, users can drag and rotate individual dataset heatmap tiles
+  // like puzzle pieces to visually align overlapping surveys. Session-only —
+  // does not affect bbox, contours, markers, or any persisted data.
+  const [puzzleMode, setPuzzleMode] = useState(false);
+  const puzzleModeRef = useRef(false);
+  useEffect(() => { puzzleModeRef.current = puzzleMode; }, [puzzleMode]);
+
+  // Per-dataset spatial offsets (canvas pixels). Persists for the lifetime of
+  // the session — toggling puzzle mode OFF leaves tiles where they were placed.
+  const [puzzleTransforms, setPuzzleTransforms] = useState<
+    Map<string, { tx: number; ty: number; angleDeg: number }>
+  >(new Map());
+  const puzzleTransformsRef = useRef<Map<string, { tx: number; ty: number; angleDeg: number }>>(new Map());
+  useEffect(() => {
+    puzzleTransformsRef.current = puzzleTransforms;
+    dirtyRef.current = true;
+  }, [puzzleTransforms]);
+
+  // Currently selected puzzle tile (datasetId) and drag sub-mode.
+  const puzzleSelectedRef = useRef<string | null>(null);
+  const puzzleDragSubModeRef = useRef<"translate" | "rotate" | null>(null);
+  // Context captured at drag start for incremental delta computation.
+  const puzzleDragStartRef = useRef<{
+    mx: number; my: number;
+    tx: number; ty: number; angleDeg: number;
+    cx: number; cy: number;
+  }>({ mx: 0, my: 0, tx: 0, ty: 0, angleDeg: 0, cx: 0, cy: 0 });
+
   // Hit rect for the "Find Data" link rendered in the empty-state canvas.
   // Updated each rAF frame when no datasets are selected; used by handleClick
   // and handleMouseMove to make the link interactive without an SVG overlay.
@@ -753,6 +782,14 @@ export const OverviewMap: React.FC = () => {
     () => visibleDatasets.filter((v) => !!v.overviewGrid),
     [visibleDatasets],
   );
+
+  // True when at least one tile has been moved/rotated — controls Reset button.
+  const hasPuzzleTransforms = useMemo(() => {
+    for (const v of puzzleTransforms.values()) {
+      if (v.tx !== 0 || v.ty !== 0 || v.angleDeg !== 0) return true;
+    }
+    return false;
+  }, [puzzleTransforms]);
   // Only hit /efh for preset datasets — user-saved EFH datasets have polygons
   // already embedded in overviewGrid.habitatPolygons.
   const { data: efhData } = useGetEfh(
@@ -1411,6 +1448,56 @@ export const OverviewMap: React.FC = () => {
       ctx.globalAlpha = 1.0;
 
       const primIdNow = primaryDatasetIdRef.current;
+
+      // Helper: apply puzzle transform for a tile and draw selection affordances.
+      // Called inside the tile loop for each dataset to draw; wraps the actual
+      // drawImage calls in ctx.save()/restore() with per-tile rotation+translation.
+      const drawPuzzleTile = (
+        drawFn: () => void,
+        tileDatasetId: string,
+        tileBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+      ) => {
+        const [bx0, by0] = lonLatToCanvas(tileBbox.minLon, tileBbox.maxLat, worldGrid, t);
+        const [bx1, by1] = lonLatToCanvas(tileBbox.maxLon, tileBbox.minLat, worldGrid, t);
+        const tcx = (bx0 + bx1) / 2;
+        const tcy = (by0 + by1) / 2;
+        const pxform = puzzleTransformsRef.current.get(tileDatasetId);
+        const ptx = pxform?.tx ?? 0;
+        const pty = pxform?.ty ?? 0;
+        const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
+
+        ctx.save();
+        // Rotate around tile center, then translate.
+        ctx.translate(tcx + ptx, tcy + pty);
+        ctx.rotate(pAngleRad);
+        ctx.translate(-tcx, -tcy);
+
+        drawFn();
+
+        // Selection affordances — only visible in puzzle mode for the selected tile.
+        if (puzzleModeRef.current && puzzleSelectedRef.current === tileDatasetId) {
+          const HANDLE_OFFSET = 16;
+          // Dashed teal selection rectangle at the tile's canonical canvas bounds.
+          ctx.save();
+          ctx.strokeStyle = "rgba(0,229,255,0.92)";
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([5, 3]);
+          ctx.strokeRect(bx0, by0, bx1 - bx0, by1 - by0);
+          ctx.setLineDash([]);
+          // Rotation handle: small circle above the tile's top-center.
+          ctx.beginPath();
+          ctx.arc(tcx, by0 - HANDLE_OFFSET, 6, 0, Math.PI * 2);
+          ctx.fillStyle = "#00e5ff";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,0.85)";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        ctx.restore();
+      };
+
       if (visibleNow.length > 1) {
         // Sort oldest-first so the newest survey data is always on top.
         const sorted = sortByRecency(visibleNow);
@@ -1418,42 +1505,58 @@ export const OverviewMap: React.FC = () => {
           if (v.datasetId === primIdNow) {
             // Primary heatmap — Topaz-upscaled when available, otherwise raw bitmap.
             const upscaled = upscaledBitmapRef.current;
+            drawPuzzleTile(
+              () => {
+                if (upscaled) {
+                  const [px0, py0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
+                  const [px1, py1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
+                  ctx.imageSmoothingEnabled = false;
+                  ctx.drawImage(upscaled, px0, py0, px1 - px0, py1 - py0);
+                  ctx.imageSmoothingEnabled = true;
+                } else {
+                  renderHeatmapAtBbox(ctx, bitmap, grid, worldGrid, t);
+                }
+              },
+              v.datasetId,
+              { minLon: grid.minLon, maxLon: grid.maxLon, minLat: grid.minLat, maxLat: grid.maxLat },
+            );
+          } else {
+            const og = v.overviewGrid;
+            const secBitmap = og ? secondaryBitmapsRef.current.get(v.datasetId) : undefined;
+            if (!og || !secBitmap) continue;
+            drawPuzzleTile(
+              () => { renderHeatmapAtBbox(ctx, secBitmap, og, worldGrid, t); },
+              v.datasetId,
+              { minLon: og.minLon, maxLon: og.maxLon, minLat: og.minLat, maxLat: og.maxLat },
+            );
+          }
+        }
+      } else {
+        // Primary heatmap — Topaz-upscaled when available, otherwise raw bitmap.
+        const upscaled = upscaledBitmapRef.current;
+        drawPuzzleTile(
+          () => {
             if (upscaled) {
+              // Upscaled image covers the primary grid's bbox within world space.
               const [px0, py0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
               const [px1, py1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
               ctx.imageSmoothingEnabled = false;
               ctx.drawImage(upscaled, px0, py0, px1 - px0, py1 - py0);
               ctx.imageSmoothingEnabled = true;
             } else {
-              renderHeatmapAtBbox(ctx, bitmap, grid, worldGrid, t);
+              // Single-dataset fast path: renderHeatmap uses the legacy
+              // (offsetX/offsetY) coordinates which equal lonLatToCanvas on the
+              // primary grid.  For multi-dataset mode we position via bbox.
+              if (worldGridRef.current) {
+                renderHeatmapAtBbox(ctx, bitmap, grid, worldGrid, t);
+              } else {
+                renderHeatmap(ctx, bitmap, grid, t);
+              }
             }
-          } else {
-            const og = v.overviewGrid;
-            const secBitmap = og ? secondaryBitmapsRef.current.get(v.datasetId) : undefined;
-            if (!og || !secBitmap) continue;
-            renderHeatmapAtBbox(ctx, secBitmap, og, worldGrid, t);
-          }
-        }
-      } else {
-        // Primary heatmap — Topaz-upscaled when available, otherwise raw bitmap.
-        const upscaled = upscaledBitmapRef.current;
-        if (upscaled) {
-          // Upscaled image covers the primary grid's bbox within world space.
-          const [px0, py0] = lonLatToCanvas(grid.minLon, grid.maxLat, worldGrid, t);
-          const [px1, py1] = lonLatToCanvas(grid.maxLon, grid.minLat, worldGrid, t);
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(upscaled, px0, py0, px1 - px0, py1 - py0);
-          ctx.imageSmoothingEnabled = true;
-        } else {
-          // Single-dataset fast path: renderHeatmap uses the legacy
-          // (offsetX/offsetY) coordinates which equal lonLatToCanvas on the
-          // primary grid.  For multi-dataset mode we position via bbox.
-          if (worldGridRef.current) {
-            renderHeatmapAtBbox(ctx, bitmap, grid, worldGrid, t);
-          } else {
-            renderHeatmap(ctx, bitmap, grid, t);
-          }
-        }
+          },
+          grid.datasetId,
+          { minLon: grid.minLon, maxLon: grid.maxLon, minLat: grid.minLat, maxLat: grid.maxLat },
+        );
       }
       ctx.globalAlpha = 1.0;
 
@@ -1770,6 +1873,98 @@ export const OverviewMap: React.FC = () => {
     if (!canvas) return;
 
     const handleMouseDown = (e: MouseEvent) => {
+      // Puzzle mode — intercept left-button for tile hit-test and drag setup.
+      if (puzzleModeRef.current && e.button === 0) {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        hasDraggedRef.current = true; // suppress trailing click
+        dirtyRef.current = true;
+
+        const t = transformRef.current;
+        if (!t || !overviewGrid) return;
+        const worldGrid = worldGridRef.current ?? overviewGrid;
+        const HANDLE_RADIUS = 10; // px hit area for rotation handle
+        const HANDLE_OFFSET = 16; // px above top-center of tile
+
+        // Check rotation handle for the currently selected tile first.
+        const selId = puzzleSelectedRef.current;
+        if (selId) {
+          const selV = visibleDatasetsRef.current.find((v) => v.datasetId === selId);
+          const selOg = selId === primaryDatasetIdRef.current ? overviewGrid : selV?.overviewGrid;
+          if (selOg) {
+            const [bx0, by0] = lonLatToCanvas(selOg.minLon, selOg.maxLat, worldGrid, t);
+            const [bx1, by1] = lonLatToCanvas(selOg.maxLon, selOg.minLat, worldGrid, t);
+            const tcx = (bx0 + bx1) / 2;
+            const tcy = (by0 + by1) / 2;
+            const pxform = puzzleTransformsRef.current.get(selId);
+            const ptx = pxform?.tx ?? 0;
+            const pty = pxform?.ty ?? 0;
+            const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
+            // Handle local position (before rotation): top-center of tile.
+            const hLocalDx = tcx - tcx; // = 0
+            const hLocalDy = (by0 - HANDLE_OFFSET) - tcy;
+            // Rotate into screen space then apply puzzle translation.
+            const hsx =
+              tcx + ptx +
+              hLocalDx * Math.cos(pAngleRad) - hLocalDy * Math.sin(pAngleRad);
+            const hsy =
+              tcy + pty +
+              hLocalDx * Math.sin(pAngleRad) + hLocalDy * Math.cos(pAngleRad);
+            if (Math.sqrt((mx - hsx) ** 2 + (my - hsy) ** 2) <= HANDLE_RADIUS) {
+              puzzleDragSubModeRef.current = "rotate";
+              puzzleDragStartRef.current = {
+                mx, my,
+                tx: ptx, ty: pty,
+                angleDeg: pxform?.angleDeg ?? 0,
+                cx: tcx + ptx, cy: tcy + pty,
+              };
+              return;
+            }
+          }
+        }
+
+        // Hit-test tiles newest-first (last drawn = topmost).
+        const visibleNow = visibleDatasetsRef.current;
+        const sorted = sortByRecency(visibleNow);
+        let hitId: string | null = null;
+        for (let i = sorted.length - 1; i >= 0; i--) {
+          const v = sorted[i];
+          if (!v) continue;
+          const og =
+            v.datasetId === primaryDatasetIdRef.current
+              ? overviewGrid
+              : v.overviewGrid;
+          if (!og) continue;
+          const [bx0, by0] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
+          const [bx1, by1] = lonLatToCanvas(og.maxLon, og.minLat, worldGrid, t);
+          const tcx = (bx0 + bx1) / 2;
+          const tcy = (by0 + by1) / 2;
+          const pxform = puzzleTransformsRef.current.get(v.datasetId);
+          const ptx = pxform?.tx ?? 0;
+          const pty = pxform?.ty ?? 0;
+          const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
+          // Inverse-rotate the pointer into the tile's local (unrotated) space.
+          const pdx = mx - (tcx + ptx);
+          const pdy = my - (tcy + pty);
+          const localX = tcx + pdx * Math.cos(-pAngleRad) - pdy * Math.sin(-pAngleRad);
+          const localY = tcy + pdx * Math.sin(-pAngleRad) + pdy * Math.cos(-pAngleRad);
+          if (localX >= bx0 && localX <= bx1 && localY >= by0 && localY <= by1) {
+            hitId = v.datasetId;
+            puzzleDragSubModeRef.current = "translate";
+            puzzleDragStartRef.current = {
+              mx, my,
+              tx: ptx, ty: pty,
+              angleDeg: pxform?.angleDeg ?? 0,
+              cx: tcx, cy: tcy,
+            };
+            break;
+          }
+        }
+        puzzleSelectedRef.current = hitId;
+        return;
+      }
+
       // Select-area / Download / Georef-pick tool: capture rectangle start in
       // canvas coords and suppress pan; left-button only.
       if ((selectModeRef.current || downloadModeRef.current || georefPickModeRef.current) && e.button === 0) {
@@ -1827,6 +2022,80 @@ export const OverviewMap: React.FC = () => {
         return;
       }
 
+      // Puzzle mode — handle active drags and cursor feedback.
+      if (puzzleModeRef.current) {
+        setTooltip((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+        const subMode = puzzleDragSubModeRef.current;
+        const selId = puzzleSelectedRef.current;
+
+        if (subMode === "translate" && selId) {
+          hasDraggedRef.current = true;
+          const start = puzzleDragStartRef.current;
+          const newTx = start.tx + (mx - start.mx);
+          const newTy = start.ty + (my - start.my);
+          setPuzzleTransforms((prev) => {
+            const next = new Map(prev);
+            const existing = prev.get(selId);
+            next.set(selId, { ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }), tx: newTx, ty: newTy });
+            return next;
+          });
+          canvas.style.cursor = "grabbing";
+          return;
+        }
+
+        if (subMode === "rotate" && selId) {
+          hasDraggedRef.current = true;
+          const start = puzzleDragStartRef.current;
+          // Angle from tile center to pointer — atan2(dx, -dy) gives north-up 0°.
+          const dx2 = mx - start.cx;
+          const dy2 = my - start.cy;
+          const angleDeg = Math.atan2(dx2, -dy2) * (180 / Math.PI);
+          setPuzzleTransforms((prev) => {
+            const next = new Map(prev);
+            const existing = prev.get(selId);
+            next.set(selId, { ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }), angleDeg });
+            return next;
+          });
+          canvas.style.cursor = "grabbing";
+          return;
+        }
+
+        // Not dragging — show hover cursor based on whether pointer is over a tile.
+        const t = transformRef.current;
+        if (t && overviewGrid) {
+          const worldGrid = worldGridRef.current ?? overviewGrid;
+          const visibleNow = visibleDatasetsRef.current;
+          let overTile = false;
+          for (const v of visibleNow) {
+            const og =
+              v.datasetId === primaryDatasetIdRef.current
+                ? overviewGrid
+                : v.overviewGrid;
+            if (!og) continue;
+            const [bx0, by0] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
+            const [bx1, by1] = lonLatToCanvas(og.maxLon, og.minLat, worldGrid, t);
+            const tcx = (bx0 + bx1) / 2;
+            const tcy = (by0 + by1) / 2;
+            const pxform = puzzleTransformsRef.current.get(v.datasetId);
+            const ptx = pxform?.tx ?? 0;
+            const pty = pxform?.ty ?? 0;
+            const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
+            const pdx = mx - (tcx + ptx);
+            const pdy = my - (tcy + pty);
+            const localX = tcx + pdx * Math.cos(-pAngleRad) - pdy * Math.sin(-pAngleRad);
+            const localY = tcy + pdx * Math.sin(-pAngleRad) + pdy * Math.cos(-pAngleRad);
+            if (localX >= bx0 && localX <= bx1 && localY >= by0 && localY <= by1) {
+              overTile = true;
+              break;
+            }
+          }
+          canvas.style.cursor = overTile ? "grab" : "crosshair";
+        } else {
+          canvas.style.cursor = "crosshair";
+        }
+        return;
+      }
+
       // Select-area / Download / Georef-pick tool: extend the drag rectangle, suppress tooltip/pan.
       if (selectModeRef.current || downloadModeRef.current || georefPickModeRef.current) {
         if (dragRectRef.current) {
@@ -1867,6 +2136,11 @@ export const OverviewMap: React.FC = () => {
     };
 
     const handleMouseUp = () => {
+      // End any active puzzle drag.
+      if (puzzleModeRef.current) {
+        puzzleDragSubModeRef.current = null;
+        return;
+      }
       // Commit the drawn rectangle as a bbox (if it has meaningful area).
       if ((selectModeRef.current || downloadModeRef.current || georefPickModeRef.current) && dragRectRef.current) {
         const r = dragRectRef.current;
@@ -1904,6 +2178,7 @@ export const OverviewMap: React.FC = () => {
 
     const handleMouseLeave = () => {
       isDraggingRef.current = false;
+      puzzleDragSubModeRef.current = null;
       mousePosRef.current = { x: -1, y: -1 };
       setTooltip((prev) => (prev.visible ? { ...prev, visible: false } : prev));
     };
@@ -1938,6 +2213,8 @@ export const OverviewMap: React.FC = () => {
     };
 
     const handleClick = (e: MouseEvent) => {
+      // Puzzle mode owns the canvas; suppress all click-through behaviors.
+      if (puzzleModeRef.current) return;
       // Select / Download tool owns the canvas; never drop-in or open EFH while active.
       if (selectModeRef.current || downloadModeRef.current) return;
       if (hasDraggedRef.current) return;
@@ -2863,6 +3140,70 @@ export const OverviewMap: React.FC = () => {
               ⊡ FIT
             </button>
           </ViewscreenTooltip>
+
+          {/* Puzzle mode — drag and rotate individual dataset tiles */}
+          <ViewscreenTooltip label="Puzzle mode: drag and rotate dataset tiles to align surveys" side="bottom">
+            <button
+              data-testid="overview-puzzle-toggle"
+              aria-pressed={puzzleMode}
+              onClick={() => {
+                const next = !puzzleMode;
+                setPuzzleMode(next);
+                // Deactivate other exclusive modes.
+                if (next) {
+                  setSelectMode(false);
+                  setDownloadMode(false);
+                  setWaypointMode(false);
+                  dragRectRef.current = null;
+                }
+                dirtyRef.current = true;
+              }}
+              style={{
+                background: puzzleMode ? "rgba(168,85,247,0.15)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${puzzleMode ? "rgba(168,85,247,0.65)" : "rgba(0,229,255,0.2)"}`,
+                borderRadius: 3,
+                color: puzzleMode ? "#c084fc" : "#94a3b8",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                padding: "2px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.1em",
+                lineHeight: "20px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ⧉ PUZZLE
+            </button>
+          </ViewscreenTooltip>
+
+          {/* Reset button — visible when any tile has been moved or rotated */}
+          {hasPuzzleTransforms && (
+            <ViewscreenTooltip label="Snap all tiles back to their original positions" side="bottom">
+              <button
+                data-testid="overview-puzzle-reset"
+                onClick={() => {
+                  setPuzzleTransforms(new Map());
+                  puzzleSelectedRef.current = null;
+                  dirtyRef.current = true;
+                }}
+                style={{
+                  background: "rgba(239,68,68,0.12)",
+                  border: "1px solid rgba(239,68,68,0.45)",
+                  borderRadius: 3,
+                  color: "#f87171",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                  padding: "2px 10px",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  lineHeight: "20px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ↺ RESET
+              </button>
+            </ViewscreenTooltip>
+          )}
 
 
           {/* Tools popover — collapses box-select and download into one button */}
