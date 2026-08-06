@@ -14,6 +14,7 @@ const FT_TO_M = 0.3048;
 // Boundaries outside range: 0 ft (0 m < 10 m), 600 ft (182.9 m > 160 m), 2000 ft
 const mockTerrain = {
   datasetId: "test-ds",
+  name: "Test Dataset",
   resolution: 4,
   width: 4,
   height: 4,
@@ -24,6 +25,8 @@ const mockTerrain = {
   maxLon: -119,
   minLat: 47,
   maxLat: 48,
+  centerLon: -119.5,
+  centerLat: 47.5,
   waterType: "saltwater" as const,
 };
 
