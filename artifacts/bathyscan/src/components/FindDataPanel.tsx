@@ -1590,6 +1590,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
 
             {/* Manual coordinate + radius search */}
             <details
+              open
               data-testid="coord-search-section"
               style={{
                 marginTop: 10,

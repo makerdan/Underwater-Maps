@@ -3321,7 +3321,7 @@ export const OverviewMap: React.FC = () => {
 
           {/* Tools popover — collapses box-select and download into one button */}
           <div ref={toolsWrapperRef} style={{ position: "relative" }}>
-            <ViewscreenTooltip label="Area tools: box-select or download" side="bottom">
+            <ViewscreenTooltip label="Area tools: box-select or export terrain" side="bottom">
               <button
                 data-testid="overview-tools-toggle"
                 aria-expanded={toolsPopoverOpen}
@@ -3351,7 +3351,7 @@ export const OverviewMap: React.FC = () => {
                   whiteSpace: "nowrap",
                 }}
               >
-                {selectMode ? "▭ SELECT" : downloadMode ? "↓ DOWNLOAD" : waypointMode ? "📍 WAYPOINTS" : "⚙ TOOLS"}
+                {selectMode ? "▭ SELECT" : downloadMode ? "↓ EXPORT" : waypointMode ? "📍 WAYPOINTS" : "⚙ TOOLS"}
               </button>
             </ViewscreenTooltip>
 
@@ -3452,7 +3452,7 @@ export const OverviewMap: React.FC = () => {
                   }}
                 >
                   <span style={{ width: 14, textAlign: "center", flexShrink: 0 }}>↓</span>
-                  <span style={{ flex: 1 }}>DOWNLOAD</span>
+                  <span style={{ flex: 1 }}>EXPORT TERRAIN</span>
                   {downloadMode && (
                     <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fbbf24", opacity: 0.85 }}>● ON</span>
                   )}
@@ -3493,34 +3493,6 @@ export const OverviewMap: React.FC = () => {
                   )}
                 </button>
 
-                {/* Coordinate search row — opens the Find Data panel's coordinate form */}
-                <button
-                  data-testid="overview-coord-search"
-                  role="menuitem"
-                  onClick={() => {
-                    setToolsPopoverOpen(false);
-                    useUiStore.getState().setFindDataPanelOpen(true);
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    width: "100%",
-                    padding: "7px 10px",
-                    background: "transparent",
-                    border: "none",
-                    borderTop: "1px solid rgba(0,229,255,0.07)",
-                    color: "#cbd5e1",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                    letterSpacing: "0.1em",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <span style={{ width: 14, textAlign: "center", flexShrink: 0 }}>⌖</span>
-                  <span style={{ flex: 1 }}>COORD SEARCH</span>
-                </button>
               </div>
           </div>
 
