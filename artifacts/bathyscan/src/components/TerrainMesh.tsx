@@ -261,7 +261,7 @@ export const TerrainMesh = React.forwardRef<THREE.Mesh, TerrainMeshProps>(
       // 50 ft band always appears at 50 ft, not stretched to grid-relative t=1
       // on a shallow lake). Fixed preset themes use the grid's own range.
       const domain = getColormapDepthDomain(effectiveColormapTheme, minDepth, maxDepth);
-      const toColor = getColormap(effectiveColormapTheme);
+      const toColor = getColormap(effectiveColormapTheme, domain);
       applyColormapToVertexColors(depths, domain.min, domain.max, colorAttr.array as Float32Array, toColor, nodataColorRgb);
       colorAttr.needsUpdate = true;
     }, [paletteShallow, paletteDeep, customStops, effectiveColormapTheme, grid, geometry, bandColors, bandBoundaries, blendBands, nodataColorRgb]);

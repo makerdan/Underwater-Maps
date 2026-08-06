@@ -103,6 +103,14 @@ function getValidatedBands(): { colors: string[]; boundariesFt: number[]; blend:
     colors = [...DEFAULT_BAND_COLORS];
     boundariesFt = [...DEFAULT_BAND_BOUNDARIES];
   }
+  // Reject boundaries that contain non-finite values or are not strictly
+  // monotone increasing — both corrupt the colormap lookup silently.
+  const hasNonFinite = boundariesFt.some((v) => !Number.isFinite(v));
+  const isMonotone = boundariesFt.every((v, i) => i === 0 || v > boundariesFt![i - 1]!);
+  if (hasNonFinite || !isMonotone) {
+    colors = [...DEFAULT_BAND_COLORS];
+    boundariesFt = [...DEFAULT_BAND_BOUNDARIES];
+  }
   const safeColors = colors.map((hex, i) =>
     typeof hex === "string" && OCEAN_HEX_RE.test(hex)
       ? hex

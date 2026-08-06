@@ -631,3 +631,76 @@ describe("getOceanStops respects live bandBoundaries from store", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: domain-mismatch when last boundary ≠ OCEAN_MAX_DEPTH_FT
+// ---------------------------------------------------------------------------
+// Without the range argument, boundaryPositions() normalises against the last
+// configured boundary in feet — not OCEAN_MAX_DEPTH_M.  When a user sets the
+// last boundary to anything other than 2000 ft the two t-scales diverge and
+// every vertex receives the wrong colour.  Passing `domain` fixes this.
+describe("getColormap('ocean', domain) — domain-mismatch regression", () => {
+  const FT_TO_M = 0.3048;
+  const OCEAN_MAX_DEPTH_M_TEST = 2000 * FT_TO_M; // ~609.6 m
+
+  const SHALLOW_COLOR = "#ff0000"; // band 0: 0–500 ft
+  const DEEP_COLOR = "#0000ff";    // band 1: 500–500 ft (last)
+
+  beforeEach(() => {
+    // Two-band palette: last boundary at 500 ft (NOT the default 2000 ft)
+    usePaletteStore.setState({
+      bandColors: [SHALLOW_COLOR, DEEP_COLOR],
+      bandBoundaries: [0, 500, 500], // [lo, mid, hi] — 500 ft boundary
+      blendBands: false, // discrete steps for clear assertion
+    });
+    // Fix the boundaries to [0, 500, 500] — a valid 2-band setup
+    // where the dividing boundary is at 500 ft
+    usePaletteStore.setState({
+      bandColors: [SHALLOW_COLOR, DEEP_COLOR],
+      bandBoundaries: [0, 500, 1000],
+      blendBands: false,
+    });
+  });
+
+  it("with domain: vertex at 150 ft maps to shallow color, vertex at 700 ft maps to deep color", () => {
+    const domain = { min: 0, max: OCEAN_MAX_DEPTH_M_TEST };
+    const fn = getColormap("ocean", domain);
+
+    // 150 ft is well inside band 0 (0–500 ft)
+    const t150ft = (150 * FT_TO_M) / OCEAN_MAX_DEPTH_M_TEST;
+    const shallow = fn(t150ft);
+    const expectedShallow = hexToRgb(SHALLOW_COLOR);
+    expect(shallow.r).toBeCloseTo(expectedShallow.r, 2);
+    expect(shallow.g).toBeCloseTo(expectedShallow.g, 2);
+    expect(shallow.b).toBeCloseTo(expectedShallow.b, 2);
+
+    // 700 ft is well inside band 1 (500–1000 ft)
+    const t700ft = (700 * FT_TO_M) / OCEAN_MAX_DEPTH_M_TEST;
+    const deep = fn(t700ft);
+    const expectedDeep = hexToRgb(DEEP_COLOR);
+    expect(deep.r).toBeCloseTo(expectedDeep.r, 2);
+    expect(deep.g).toBeCloseTo(expectedDeep.g, 2);
+    expect(deep.b).toBeCloseTo(expectedDeep.b, 2);
+  });
+
+  it("without domain (old broken path): 700 ft vertex receives wrong color when last boundary ≠ 2000 ft", () => {
+    // Without range, boundaryPositions normalises by the last boundary (1000 ft),
+    // so band 1 starts at t = 500/1000 = 0.5.
+    // But vertex t on the absolute 0–OCEAN_MAX_DEPTH_M scale is 700/2000 = 0.35,
+    // which falls BELOW 0.5 → incorrectly maps to the shallow color.
+    const fnNoRange = getColormap("ocean"); // no domain arg
+    const t700ft = (700 * FT_TO_M) / OCEAN_MAX_DEPTH_M_TEST;
+    const result = fnNoRange(t700ft);
+
+    // This should NOT equal the deep color (#0000ff) — proving the bug exists
+    // without the range argument.  The blue channel should be noticeably wrong.
+    const expectedDeep = hexToRgb(DEEP_COLOR);
+    // At t=0.35 without range, it maps into band 0 (0–0.5) → shallow color
+    const expectedShallow = hexToRgb(SHALLOW_COLOR);
+    // The result matches the shallow color (wrong band assignment confirms bug)
+    expect(result.r).toBeCloseTo(expectedShallow.r, 2);
+    expect(result.b).toBeCloseTo(expectedShallow.b, 2);
+    // And it does NOT match the deep color
+    expect(Math.abs(result.b - expectedDeep.b)).toBeGreaterThan(0.5);
+  });
+});

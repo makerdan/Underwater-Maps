@@ -291,6 +291,7 @@ function DepthBandEditor({
                   step={stepDisplay}
                   value={displayVal}
                   onChange={(e) => setBandBoundary(bIdx, displayToFt(Number(e.target.value)))}
+                  onPointerUp={() => { void flushServerSync(); }}
                   style={{ ...S.slider, width: "100%", minWidth: 60 }}
                   aria-label={`Band ${i} upper boundary depth`}
                 />
@@ -302,6 +303,8 @@ function DepthBandEditor({
                   step={stepDisplay}
                   value={displayVal}
                   onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) setBandBoundary(bIdx, displayToFt(v)); }}
+                  onBlur={() => { void flushServerSync(); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { void flushServerSync(); } }}
                   style={{ ...hexStyle, width: 58, textAlign: "right", color: changed ? "#00e5ff" : "#cbd5e1" }}
                   aria-label={`Band ${i} upper boundary value in ${inputUnit}`}
                 />
