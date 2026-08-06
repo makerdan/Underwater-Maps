@@ -460,6 +460,9 @@ export const OverviewMap: React.FC = () => {
   const puzzleModeRef = useRef(false);
   useEffect(() => { puzzleModeRef.current = puzzleMode; }, [puzzleMode]);
 
+  // Brief "saved" flash state — true for ~1500 ms after the user clicks SAVE.
+  const [puzzleSaved, setPuzzleSaved] = useState(false);
+
   // Per-dataset spatial offsets (canvas pixels). Persists for the lifetime of
   // the session — toggling puzzle mode OFF leaves tiles where they were placed.
   const [puzzleTransforms, setPuzzleTransforms] = useState<
@@ -1570,10 +1573,6 @@ export const OverviewMap: React.FC = () => {
         tileBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
         drawFn: () => void,
       ) => {
-        if (!puzzleModeRef.current) {
-          drawFn();
-          return;
-        }
         const [bx0, by0] = lonLatToCanvas(tileBbox.minLon, tileBbox.maxLat, worldGrid, t);
         const [bx1, by1] = lonLatToCanvas(tileBbox.maxLon, tileBbox.minLat, worldGrid, t);
         const tcx = (bx0 + bx1) / 2;
@@ -3513,12 +3512,14 @@ export const OverviewMap: React.FC = () => {
                   } catch {
                     // Ignore quota errors silently.
                   }
+                  setPuzzleSaved(true);
+                  setTimeout(() => setPuzzleSaved(false), 1500);
                 }}
                 style={{
-                  background: "rgba(20,184,166,0.12)",
-                  border: "1px solid rgba(20,184,166,0.50)",
+                  background: puzzleSaved ? "rgba(34,197,94,0.22)" : "rgba(20,184,166,0.12)",
+                  border: puzzleSaved ? "1px solid rgba(34,197,94,0.80)" : "1px solid rgba(20,184,166,0.50)",
                   borderRadius: 3,
-                  color: "#2dd4bf",
+                  color: puzzleSaved ? "#86efac" : "#2dd4bf",
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: "calc(12px * var(--bs-font-scale, 1))",
                   padding: "2px 8px",
@@ -3526,9 +3527,10 @@ export const OverviewMap: React.FC = () => {
                   letterSpacing: "0.1em",
                   lineHeight: "18px",
                   whiteSpace: "nowrap",
+                  transition: "background 0.15s, border-color 0.15s, color 0.15s",
                 }}
               >
-                ✦ SAVE
+                {puzzleSaved ? "✓ SAVED" : "✦ SAVE"}
               </button>
             </ViewscreenTooltip>
           )}
