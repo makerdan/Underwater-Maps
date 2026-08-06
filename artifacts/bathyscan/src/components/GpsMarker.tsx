@@ -10,7 +10,7 @@ import { Text, Billboard } from "@react-three/drei";
 import * as THREE from "three";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useAppState } from "@/lib/context";
-import { lonLatToWorldXZ, getTerrainSurfaceY } from "@/lib/terrain";
+import { lonLatToWorldXZ, getTerrainSurfaceY, getSeaSurfaceY, worldYToDepthFt } from "@/lib/terrain";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDepth } from "@/lib/units";
 
@@ -44,18 +44,21 @@ export const GpsMarker: React.FC = () => {
 
   const { x, z } = lonLatToWorldXZ(position.longitude, position.latitude, terrain);
   const bottomY = getTerrainSurfaceY(terrain, x, z);
-  const depthM = Math.abs(Math.round(bottomY * (terrain.maxDepth - terrain.minDepth) / 50));
+  const seaSurfaceY = getSeaSurfaceY(terrain);
+  const depthM = Math.round(worldYToDepthFt(bottomY, terrain));
+  const cylinderHeight = Math.max(0.001, seaSurfaceY - bottomY);
+  const cylinderCenterY = bottomY + cylinderHeight / 2;
 
   return (
     <group>
-      {/* Downward-pointing cone at surface */}
-      <mesh position={[x, 0.5, z]} rotation={[Math.PI, 0, 0]}>
+      {/* Downward-pointing cone at sea surface */}
+      <mesh position={[x, seaSurfaceY, z]} rotation={[Math.PI, 0, 0]}>
         <coneGeometry args={[0.3, 0.8, 8]} />
         <meshBasicMaterial color="#3b82f6" transparent opacity={0.85} />
       </mesh>
 
-      {/* Pulsing accuracy ring at y=0 */}
-      <mesh ref={ringRef} position={[x, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]}>
+      {/* Pulsing accuracy ring at sea surface */}
+      <mesh ref={ringRef} position={[x, seaSurfaceY + 0.02, z]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[0.6, 32]} />
         <meshBasicMaterial
           color="#3b82f6"
@@ -66,9 +69,9 @@ export const GpsMarker: React.FC = () => {
         />
       </mesh>
 
-      {/* Vertical line to seafloor */}
-      <mesh position={[x, bottomY / 2, z]}>
-        <cylinderGeometry args={[0.015, 0.015, Math.abs(bottomY), 6]} />
+      {/* Vertical line from seafloor to sea surface */}
+      <mesh position={[x, cylinderCenterY, z]}>
+        <cylinderGeometry args={[0.015, 0.015, cylinderHeight, 6]} />
         <meshBasicMaterial color="#3b82f6" transparent opacity={0.4} />
       </mesh>
 

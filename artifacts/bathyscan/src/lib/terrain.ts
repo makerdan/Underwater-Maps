@@ -462,6 +462,31 @@ export function normalizeLonDelta(dLon: number): number {
 }
 
 /**
+ * Convert a world-space Y value sampled from the terrain mesh into the
+ * corresponding display depth for the given grid.
+ *
+ * Unlike `worldYToMetres`, this function accepts negative *or* zero bottomY
+ * (the output of `getTerrainSurfaceY`) and correctly adds `terrain.minDepth`
+ * so the result is the absolute depth — not just the depth relative to the
+ * shallowest surveyed point.
+ *
+ * Formula:
+ *   t = |bottomY| / MAX_DEPTH_WORLD   (clamped to [0, 1])
+ *   depth = minDepth + t * (maxDepth − minDepth)
+ *
+ * Test cases that pin the formula:
+ *   bottomY= 0, minDepth=  0, maxDepth=100 → 0
+ *   bottomY=-50, minDepth=  0, maxDepth=100 → 100
+ *   bottomY= 0, minDepth= 50, maxDepth=150 → 50
+ *   bottomY=-50, minDepth= 50, maxDepth=150 → 150
+ */
+export function worldYToDepthFt(bottomY: number, terrain: TerrainData): number {
+  const depthRange = (terrain.maxDepth - terrain.minDepth) || 1;
+  const t = Math.max(0, Math.min(1, Math.abs(bottomY) / MAX_DEPTH_WORLD));
+  return terrain.minDepth + t * depthRange;
+}
+
+/**
  * Convert a world-space Y position (negative = deeper) to an estimated depth
  * in metres for the given grid.
  *

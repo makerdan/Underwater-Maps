@@ -111,7 +111,8 @@ export function useUndoableMarkerDelete() {
                 return;
               }
               // Other error — restore only this marker into the current cache
-              // so concurrent pending deletes are not accidentally reverted.
+              // so concurrent pending deletes are not accidentally reverted,
+              // and show a toast so the user knows the deletion failed.
               if (snapshotAtDelete !== undefined) {
                 const item = snapshotAtDelete.find((m) => m.id === marker.id);
                 if (item) {
@@ -124,6 +125,12 @@ export function useUndoableMarkerDelete() {
                   });
                 }
               }
+              toast({
+                title: "Could not delete marker",
+                description: "Please try again.",
+                variant: "destructive",
+                duration: 4000,
+              });
             },
           },
         );

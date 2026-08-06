@@ -339,12 +339,18 @@ export const MarkerForm: React.FC = () => {
           }
         },
         onError: (err) => {
-          // Queue to IndexedDB on any network-level failure
+          // Queue to IndexedDB on network-level failure; show a toast for all others.
           const isNetworkErr =
             err instanceof TypeError ||
             (err instanceof Error && /network|fetch|failed to fetch/i.test(err.message));
           if (isNetworkErr) {
             void queueOffline();
+          } else {
+            toast({
+              title: "Failed to save marker",
+              description: "Please try again.",
+              variant: "destructive",
+            });
           }
         },
       },

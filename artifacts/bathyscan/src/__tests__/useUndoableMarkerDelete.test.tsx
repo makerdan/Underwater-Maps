@@ -280,6 +280,41 @@ describe("useUndoableMarkerDelete", () => {
     expect(cacheGet().map((m) => m.id)).toEqual(["m1", "m2"]);
   });
 
+  it("shows a toast AND restores cache on a generic (non-404/409) DELETE error", () => {
+    const { result } = renderHook(() => useUndoableMarkerDelete());
+
+    act(() => {
+      result.current.requestDelete({ id: "m1", label: "Point A" }, "ds-1");
+    });
+
+    // The initial "Marker deleted" undo toast fires here — clear it so we can
+    // check only the error toast.
+    toastFn.mockClear();
+
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
+
+    const opts = deleteMutate.mock.calls[0]![1] as {
+      onError: (err: unknown) => void;
+    };
+
+    // A generic server error (not 404 or 409).
+    const genericError = new Error("Internal Server Error");
+    act(() => {
+      opts.onError(genericError);
+    });
+
+    // (a) Cache must be restored — marker re-appears.
+    expect(cacheGet().map((m) => m.id)).toEqual(["m1", "m2"]);
+
+    // (b) A toast must be shown to explain the failure.
+    expect(toastFn).toHaveBeenCalledOnce();
+    const toastArg = toastFn.mock.calls[0]![0] as { title?: string; variant?: string };
+    expect(toastArg.title).toMatch(/could not delete marker/i);
+    expect(toastArg.variant).toBe("destructive");
+  });
+
   it("ignores a second requestDelete for the same marker while in the undo window", () => {
     const { result } = renderHook(() => useUndoableMarkerDelete());
 
