@@ -667,6 +667,39 @@ export const OverviewMap: React.FC = () => {
     dirtyRef.current = true;
   }, [visibleDatasets]);
 
+  // Step-zoom handler — zooms in or out by the given factor, pivoting on the
+  // canvas centre, and animates via fitAnimRef (same tween mechanism as FIT).
+  const handleZoomStep = useCallback((factor: number) => {
+    const canvas = canvasRef.current;
+    const t = transformRef.current;
+    if (!canvas || !t || !overviewGrid) return;
+
+    const newScale = Math.max(0.5, Math.min(20, t.scale * factor));
+    const ratio = newScale / t.scale;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+
+    const targetTransform = clampTransform(
+      {
+        ...t,
+        scale: newScale,
+        offsetX: cx + (t.offsetX - cx) * ratio,
+        offsetY: cy + (t.offsetY - cy) * ratio,
+      },
+      worldGridRef.current ?? overviewGrid,
+      canvas.width,
+      canvas.height,
+    );
+
+    fitAnimRef.current = {
+      from: { ...t },
+      to: targetTransform,
+      startTime: performance.now(),
+      duration: 300,
+    };
+    dirtyRef.current = true;
+  }, [overviewGrid]);
+
   // Escape behavior (capture-phase so we win against the global App handler):
   //   1. Mid-drag (drawing a rectangle): cancel the in-progress drag only.
   //   2. Completed download box: clear it.
@@ -2761,6 +2794,92 @@ export const OverviewMap: React.FC = () => {
         </div>
       )}
 
+      {/* Zoom button strip — right edge, below compass, above legends */}
+      <div
+        style={{
+          position: "absolute",
+          right: 16,
+          top: 56,
+          zIndex: 41,
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          pointerEvents: "auto",
+        }}
+      >
+        <ViewscreenTooltip label="Zoom in" side="left">
+          <button
+            data-testid="overview-zoom-in"
+            onClick={() => handleZoomStep(1.35)}
+            style={{
+              width: 32,
+              height: 32,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(2,8,24,0.75)",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 3,
+              color: "#94a3b8",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "calc(18px * var(--bs-font-scale, 1))",
+              cursor: "pointer",
+              lineHeight: 1,
+            }}
+          >
+            +
+          </button>
+        </ViewscreenTooltip>
+        <ViewscreenTooltip label="Zoom out" side="left">
+          <button
+            data-testid="overview-zoom-out"
+            onClick={() => handleZoomStep(1 / 1.35)}
+            style={{
+              width: 32,
+              height: 32,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(2,8,24,0.75)",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 3,
+              color: "#94a3b8",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "calc(18px * var(--bs-font-scale, 1))",
+              cursor: "pointer",
+              lineHeight: 1,
+            }}
+          >
+            −
+          </button>
+        </ViewscreenTooltip>
+        <ViewscreenTooltip label="Fit all datasets in view" side="left">
+          <button
+            data-testid="overview-zoom-fit"
+            onClick={handleFitToData}
+            disabled={datasetsWithGrid.length === 0}
+            style={{
+              width: 32,
+              height: 32,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(2,8,24,0.75)",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 3,
+              color: datasetsWithGrid.length === 0 ? "#475569" : "#94a3b8",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
+              cursor: datasetsWithGrid.length === 0 ? "not-allowed" : "pointer",
+              lineHeight: 1,
+              opacity: datasetsWithGrid.length === 0 ? 0.45 : 1,
+            }}
+          >
+            ⊡
+          </button>
+        </ViewscreenTooltip>
+      </div>
+
       {/* Fixed compass rose — always North-up; pinned to top-right corner so it
           is visible on top of all overlays and clearly communicates orientation. */}
       <div
@@ -3217,10 +3336,11 @@ export const OverviewMap: React.FC = () => {
         <span
           style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "calc(15px * var(--bs-font-scale, 1))",
+            fontSize: "calc(13px * var(--bs-font-scale, 1))",
             letterSpacing: "0.25em",
             color: "#00e5ff",
             textShadow: "0 0 8px rgba(0,229,255,0.45)",
+            flexShrink: 0,
           }}
         >
           ▼ OVERVIEW MAP
@@ -3228,18 +3348,22 @@ export const OverviewMap: React.FC = () => {
         <span
           style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-            letterSpacing: "0.12em",
-            color: "#64748b",
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+            letterSpacing: "0.1em",
+            color: "#475569",
+            flexShrink: 1,
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+            textOverflow: "ellipsis",
           }}
         >
-          SCROLL TO ZOOM · DRAG TO PAN · CLICK TO DROP IN · [O] CLOSE
+          SCROLL TO ZOOM · DRAG TO PAN · CLICK TO DROP IN
         </span>
 
         {/* GPS controls */}
         <div style={{ display: "flex", gap: 6, alignItems: "center", pointerEvents: "auto" }}>
           {gpsError && (
-            <span style={{ color: "#ef4444", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", fontFamily: "'JetBrains Mono', monospace", maxWidth: 180 }}>
+            <span style={{ color: "#ef4444", fontSize: "calc(12px * var(--bs-font-scale, 1))", fontFamily: "'JetBrains Mono', monospace", maxWidth: 180 }}>
               ⚠ {gpsError}
             </span>
           )}
@@ -3269,11 +3393,11 @@ export const OverviewMap: React.FC = () => {
                   borderRadius: 3,
                   color: "#60a5fa",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
                   padding: "2px 8px",
                   cursor: "pointer",
                   letterSpacing: "0.1em",
-                  lineHeight: "20px",
+                  lineHeight: "18px",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -3296,11 +3420,11 @@ export const OverviewMap: React.FC = () => {
                 borderRadius: 3,
                 color: datasetsWithGrid.length === 0 ? "#475569" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                padding: "2px 10px",
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                padding: "2px 8px",
                 cursor: datasetsWithGrid.length === 0 ? "not-allowed" : "pointer",
                 letterSpacing: "0.1em",
-                lineHeight: "20px",
+                lineHeight: "18px",
                 whiteSpace: "nowrap",
                 opacity: datasetsWithGrid.length === 0 ? 0.45 : 1,
               }}
@@ -3332,11 +3456,11 @@ export const OverviewMap: React.FC = () => {
                 borderRadius: 3,
                 color: puzzleMode ? "#c084fc" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                padding: "2px 10px",
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                padding: "2px 8px",
                 cursor: "pointer",
                 letterSpacing: "0.1em",
-                lineHeight: "20px",
+                lineHeight: "18px",
                 whiteSpace: "nowrap",
               }}
             >
@@ -3361,11 +3485,11 @@ export const OverviewMap: React.FC = () => {
                   borderRadius: 3,
                   color: "#f87171",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                  padding: "2px 10px",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  padding: "2px 8px",
                   cursor: "pointer",
                   letterSpacing: "0.1em",
-                  lineHeight: "20px",
+                  lineHeight: "18px",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -3396,11 +3520,11 @@ export const OverviewMap: React.FC = () => {
                   borderRadius: 3,
                   color: "#2dd4bf",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                  padding: "2px 10px",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  padding: "2px 8px",
                   cursor: "pointer",
                   letterSpacing: "0.1em",
-                  lineHeight: "20px",
+                  lineHeight: "18px",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -3433,11 +3557,11 @@ export const OverviewMap: React.FC = () => {
                   borderRadius: 3,
                   color: (selectMode || downloadMode || waypointMode) ? "#00e5ff" : toolsPopoverOpen ? "#7dd3fc" : "#94a3b8",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                  padding: "2px 10px",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  padding: "2px 8px",
                   cursor: "pointer",
                   letterSpacing: "0.1em",
-                  lineHeight: "20px",
+                  lineHeight: "18px",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -3599,15 +3723,15 @@ export const OverviewMap: React.FC = () => {
                 borderRadius: 3,
                 color: showEfh ? "#4ade80" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                padding: "2px 10px",
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                padding: "2px 8px",
                 cursor: "pointer",
                 letterSpacing: "0.1em",
-                lineHeight: "20px",
+                lineHeight: "18px",
                 whiteSpace: "nowrap",
               }}
             >
-              🐟 Essential Fish Habitat
+              🐟 EFH
             </button>
             </ViewscreenTooltip>
           )}
@@ -3624,11 +3748,11 @@ export const OverviewMap: React.FC = () => {
                 borderRadius: 3,
                 color: showWaypointPanel ? "#c084fc" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                padding: "2px 10px",
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                padding: "2px 8px",
                 cursor: "pointer",
                 letterSpacing: "0.1em",
-                lineHeight: "20px",
+                lineHeight: "18px",
                 whiteSpace: "nowrap",
               }}
             >
@@ -3648,11 +3772,11 @@ export const OverviewMap: React.FC = () => {
                 borderRadius: 3,
                 color: showTrailList ? "#fb923c" : "#94a3b8",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                padding: "2px 10px",
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                padding: "2px 8px",
                 cursor: "pointer",
                 letterSpacing: "0.1em",
-                lineHeight: "20px",
+                lineHeight: "18px",
                 whiteSpace: "nowrap",
               }}
             >
@@ -3672,11 +3796,11 @@ export const OverviewMap: React.FC = () => {
               borderRadius: 3,
               color: gpsActive ? "#60a5fa" : "#94a3b8",
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-              padding: "2px 10px",
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              padding: "2px 8px",
               cursor: "pointer",
               letterSpacing: "0.1em",
-              lineHeight: "20px",
+              lineHeight: "18px",
               whiteSpace: "nowrap",
             }}
           >
@@ -3693,12 +3817,12 @@ export const OverviewMap: React.FC = () => {
               border: "1px solid rgba(0,229,255,0.2)",
               color: "#94a3b8",
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
-              padding: "1px 10px",
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              padding: "2px 8px",
               borderRadius: 3,
               cursor: "pointer",
               letterSpacing: "0.1em",
-              lineHeight: "20px",
+              lineHeight: "18px",
             }}
           >
             ✕ CLOSE
