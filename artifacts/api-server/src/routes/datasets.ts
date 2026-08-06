@@ -858,6 +858,18 @@ export function getUploadJobForTest(jobId: string): JobState | undefined {
   return uploadJobs.get(jobId);
 }
 
+// Test-only: inject a runParseWorker replacement so processUploadJob can be
+// exercised in unit tests without spawning a real worker thread.
+let _parseWorkerOverrideForTest: typeof runParseWorker | null = null;
+
+/**
+ * Test-only: replace the runParseWorker used by processUploadJob.
+ * Pass null to restore the real implementation.
+ */
+export function setParseWorkerOverrideForTest(fn: typeof runParseWorker | null): void {
+  _parseWorkerOverrideForTest = fn;
+}
+
 async function cleanupChunks(uploadId: string, totalChunks: number): Promise<void> {
   for (let i = 0; i < totalChunks; i++) {
     const p = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${i}`);
@@ -1186,7 +1198,7 @@ async function processUploadJob(
 
         // Grid the merged points in a worker thread — same pipeline as
         // single-file uploads, but with pre-parsed points supplied directly.
-        const { terrain, overview } = await runParseWorker({
+        const { terrain, overview } = await (_parseWorkerOverrideForTest ?? runParseWorker)({
           filePath: "",
           fileName,
           resolution,
@@ -1262,7 +1274,7 @@ async function processUploadJob(
     // Delegate parse + gridPoints to a dedicated worker thread.
     // The main event loop is completely free during this await — the worker
     // runs in its own OS thread and posts progress milestones back here.
-    const { terrain, overview } = await runParseWorker({
+    const { terrain, overview } = await (_parseWorkerOverrideForTest ?? runParseWorker)({
       filePath: processPath,
       fileName,
       resolution,
@@ -1322,6 +1334,23 @@ async function processUploadJob(
       .catch(() => undefined);
   }
   }); // end withChunkProcessSlot
+}
+
+/**
+ * Test-only: invoke processUploadJob directly so unit tests can assert on the
+ * resulting in-memory job record (status, error) without going through the
+ * HTTP finalize layer.
+ */
+export async function invokeProcessUploadJobForTest(
+  jobId: string,
+  uploadId: string,
+  totalChunks: number,
+  fileName: string,
+  resolution: number,
+  userId: string,
+  smoothing: boolean,
+): Promise<void> {
+  return processUploadJob(jobId, uploadId, totalChunks, fileName, resolution, userId, smoothing);
 }
 
 const DECOMPRESS_MAX_BYTES = 200 * 1024 * 1024;

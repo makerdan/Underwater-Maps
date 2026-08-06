@@ -11,8 +11,12 @@
  *   • Unit test for validateTerrainForDb helper (exercises the same guard used
  *     by job paths 1 & 2 which run inside the async processUploadJob worker)
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
+import * as nodeFs from "node:fs";
+import * as nodePath from "node:path";
+import * as nodeOs from "node:os";
+import { gzipSync } from "node:zlib";
 
 // ---------------------------------------------------------------------------
 // Mock @workspace/db — pull Zod / Drizzle schema objects from the schema
@@ -107,9 +111,48 @@ vi.mock("@clerk/shared/keys", () => ({
   publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
 }));
 
+// ---------------------------------------------------------------------------
+// Mocks for the processUploadJob code paths (BAG / tar-job tests below).
+// These don't affect the existing HTTP-handler tests because those paths never
+// call isGzipFile, isTarFile, extractTarFile, or routeTarEntries.
+// ---------------------------------------------------------------------------
+vi.mock("../../lib/tarDetect.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/tarDetect.js")>();
+  return {
+    ...actual,
+    isGzipFile: vi.fn().mockResolvedValue(false),
+    isTarFile: vi.fn().mockResolvedValue(false),
+    extractTarFile: vi.fn().mockResolvedValue([]),
+  };
+});
+
+vi.mock("../../lib/noaaTarRouter.js", () => ({
+  routeTarEntries: vi.fn().mockResolvedValue({
+    points: Array.from({ length: 10 }, (_, i) => ({
+      lon: -122 + i * 0.01,
+      lat: 37 + i * 0.01,
+      depth: 10 + i,
+    })),
+    substratePoints: [],
+    hyd93Features: [],
+    skipped: [],
+    smoothSheetRasterBuffer: null,
+    smoothSheetRasterFilename: null,
+    datasetName: "copernicus test dataset",
+    parseWarnings: [],
+  }),
+}));
+
 import app from "../../app.js";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
-import { validateTerrainForDb } from "../datasets.js";
+import {
+  validateTerrainForDb,
+  setUploadJobForTest,
+  getUploadJobForTest,
+  setParseWorkerOverrideForTest,
+  invokeProcessUploadJobForTest,
+} from "../datasets.js";
+import { isGzipFile, isTarFile } from "../../lib/tarDetect.js";
 
 const E2E_USER = "user_schema_mismatch_test";
 
@@ -308,5 +351,152 @@ describe("validateTerrainForDb helper", () => {
       dataSource: "ncei" as const,
     };
     expect(() => validateTerrainForDb(withOptional, "test")).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Shared helper: a terrain object that is missing all required bbox fields.
+// Using it as the runParseWorker override result causes validateTerrainForDb
+// to throw terrain_schema_mismatch, which the processUploadJob outer catch
+// must convert to job.status="error".
+// ---------------------------------------------------------------------------
+const BBOX_LESS_TERRAIN_FROM_WORKER = {
+  datasetId: "worker-grid-id",
+  name: "worker dataset",
+  waterType: "saltwater" as const,
+  resolution: 64,
+  width: 64,
+  height: 64,
+  depths: new Array(64 * 64).fill(5),
+  minDepth: 0,
+  maxDepth: 10,
+  // intentionally absent: minLon, maxLon, minLat, maxLat, centerLon, centerLat
+};
+
+// CHUNK_BASE_DIR mirrors the private constant in datasets.ts so tests can
+// create the chunk files that streamChunksToFile expects to find.
+const CHUNK_BASE_DIR = nodePath.join(nodeOs.tmpdir(), "bathyscan-chunks");
+
+// ---------------------------------------------------------------------------
+// Path 1 — processUploadJob BAG / chunk-job path
+// Single-file upload (.bag): not gzip, not tar → runParseWorker is called
+// directly with the assembled file path.
+// ---------------------------------------------------------------------------
+describe("processUploadJob BAG/chunk-job path — terrain schema mismatch", () => {
+  const UPLOAD_ID = "bag-schema-test-upload";
+  const JOB_ID = "bag-schema-test-job";
+  const USER_ID = "user_bag_schema_test";
+  const CHUNK_0 = nodePath.join(CHUNK_BASE_DIR, `${UPLOAD_ID}-chunk-0`);
+  const ASSEMBLED = nodePath.join(CHUNK_BASE_DIR, `${JOB_ID}-assembled`);
+
+  beforeEach(async () => {
+    __resetRateLimitMemory();
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+    // Ensure chunk directory exists and write a minimal (non-gzip) chunk file.
+    await nodeFs.promises.mkdir(CHUNK_BASE_DIR, { recursive: true });
+    await nodeFs.promises.writeFile(CHUNK_0, "fake bag chunk content");
+    // Seed the in-memory job as "queued" so processUploadJob finds it.
+    setUploadJobForTest(JOB_ID, { status: "queued", progress: 0, userId: USER_ID });
+    // isGzipFile=false → single-file path, no gzip decompression.
+    vi.mocked(isGzipFile).mockResolvedValue(false);
+    // Override runParseWorker to return a bbox-less object so validateTerrainForDb throws.
+    setParseWorkerOverrideForTest(() =>
+      Promise.resolve({
+        terrain: BBOX_LESS_TERRAIN_FROM_WORKER as never,
+        overview: BBOX_LESS_TERRAIN_FROM_WORKER as never,
+      }),
+    );
+  });
+
+  afterEach(async () => {
+    setParseWorkerOverrideForTest(null);
+    vi.mocked(isGzipFile).mockResolvedValue(false);
+    // Chunk file and assembled file are cleaned up by processUploadJob's finally
+    // block; these are no-op fallbacks for interrupted or partial runs.
+    await nodeFs.promises.unlink(CHUNK_0).catch(() => undefined);
+    await nodeFs.promises.unlink(ASSEMBLED).catch(() => undefined);
+  });
+
+  it("sets job.status='error' when runParseWorker returns a bbox-less object", async () => {
+    await invokeProcessUploadJobForTest(JOB_ID, UPLOAD_ID, 1, "survey.bag", 64, USER_ID, false);
+    const job = getUploadJobForTest(JOB_ID);
+    expect(job?.status).toBe("error");
+  });
+
+  it("records terrain_schema_mismatch in job.error for the BAG path", async () => {
+    await invokeProcessUploadJobForTest(JOB_ID, UPLOAD_ID, 1, "survey.bag", 64, USER_ID, false);
+    const job = getUploadJobForTest(JOB_ID);
+    expect(job?.error).toMatch(/terrain_schema_mismatch/);
+  });
+
+  it("does not set job.status='done' and leaves datasetId unset when terrain is malformed", async () => {
+    await invokeProcessUploadJobForTest(JOB_ID, UPLOAD_ID, 1, "survey.bag", 64, USER_ID, false);
+    const job = getUploadJobForTest(JOB_ID);
+    expect(job?.status).not.toBe("done");
+    expect(job?.datasetId).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Path 2 — processUploadJob tar-job path (Copernicus / NOAA archive)
+// File is a .tar.gz: gzip branch → decompress → tar branch → routeTarEntries
+// supplies prePoints → runParseWorker called with prePoints.
+// ---------------------------------------------------------------------------
+describe("processUploadJob tar-job path (Copernicus archive) — terrain schema mismatch", () => {
+  const UPLOAD_ID = "cop-schema-test-upload";
+  const JOB_ID = "cop-schema-test-job";
+  const USER_ID = "user_cop_schema_test";
+  const CHUNK_0 = nodePath.join(CHUNK_BASE_DIR, `${UPLOAD_ID}-chunk-0`);
+  const ASSEMBLED = nodePath.join(CHUNK_BASE_DIR, `${JOB_ID}-assembled`);
+  const DECOMPRESSED = nodePath.join(CHUNK_BASE_DIR, `${JOB_ID}-assembled-decompressed`);
+
+  beforeEach(async () => {
+    __resetRateLimitMemory();
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+    await nodeFs.promises.mkdir(CHUNK_BASE_DIR, { recursive: true });
+    // The chunk must be a valid gzip so streamGunzipToFile can decompress it.
+    // isTarFile is mocked to return true so we don't need a real tar archive.
+    await nodeFs.promises.writeFile(CHUNK_0, gzipSync(Buffer.from("fake tar content")));
+    setUploadJobForTest(JOB_ID, { status: "queued", progress: 0, userId: USER_ID });
+    // isGzipFile=true → gzip branch; isTarFile=true → tar sub-branch.
+    vi.mocked(isGzipFile).mockResolvedValue(true);
+    vi.mocked(isTarFile).mockResolvedValue(true);
+    // routeTarEntries is mocked at top-level to return 10 fake points so the
+    // "no parseable data" guard does not fire before runParseWorker is reached.
+    setParseWorkerOverrideForTest(() =>
+      Promise.resolve({
+        terrain: BBOX_LESS_TERRAIN_FROM_WORKER as never,
+        overview: BBOX_LESS_TERRAIN_FROM_WORKER as never,
+      }),
+    );
+  });
+
+  afterEach(async () => {
+    setParseWorkerOverrideForTest(null);
+    vi.mocked(isGzipFile).mockResolvedValue(false);
+    vi.mocked(isTarFile).mockResolvedValue(false);
+    // processUploadJob finally block handles cleanup; these are no-op fallbacks.
+    await nodeFs.promises.unlink(CHUNK_0).catch(() => undefined);
+    await nodeFs.promises.unlink(ASSEMBLED).catch(() => undefined);
+    await nodeFs.promises.unlink(DECOMPRESSED).catch(() => undefined);
+  });
+
+  it("sets job.status='error' when runParseWorker returns a bbox-less object", async () => {
+    await invokeProcessUploadJobForTest(JOB_ID, UPLOAD_ID, 1, "copernicus.tar.gz", 256, USER_ID, true);
+    const job = getUploadJobForTest(JOB_ID);
+    expect(job?.status).toBe("error");
+  });
+
+  it("records terrain_schema_mismatch in job.error for the tar-job path", async () => {
+    await invokeProcessUploadJobForTest(JOB_ID, UPLOAD_ID, 1, "copernicus.tar.gz", 256, USER_ID, true);
+    const job = getUploadJobForTest(JOB_ID);
+    expect(job?.error).toMatch(/terrain_schema_mismatch/);
+  });
+
+  it("does not set job.status='done' and leaves datasetId unset when terrain is malformed", async () => {
+    await invokeProcessUploadJobForTest(JOB_ID, UPLOAD_ID, 1, "copernicus.tar.gz", 256, USER_ID, true);
+    const job = getUploadJobForTest(JOB_ID);
+    expect(job?.status).not.toBe("done");
+    expect(job?.datasetId).toBeUndefined();
   });
 });
