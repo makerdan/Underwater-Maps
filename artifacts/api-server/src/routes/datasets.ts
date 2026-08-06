@@ -1569,13 +1569,27 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
       return;
     }
     const [ownRow] = await db
-      .select({ userId: customDatasetsTable.userId })
+      .select({ userId: customDatasetsTable.userId, terrainJson: customDatasetsTable.terrainJson })
       .from(customDatasetsTable)
       .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
     if (!ownRow) {
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
+    // Validate the stored terrain JSON against the schema before serving it so
+    // that a pre-validation DB row (or one written via a migration bypass) never
+    // silently passes corrupt data to the 3D renderer.
+    const stored = StoredTerrainJsonSchema.safeParse(ownRow.terrainJson);
+    if (!stored.success) {
+      const issues = stored.error.issues
+        .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
+        .join("; ");
+      logger.error({ id, issues }, "[datasets] GET terrain — stored terrain_schema_mismatch");
+      res.status(500).json({ error: "terrain_schema_mismatch", details: issues });
+      return;
+    }
+    res.json(GetDatasetsIdTerrainResponse.parse(stored.data));
+    return;
   }
 
   const rawRes = req.query["resolution"];
@@ -1623,13 +1637,27 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
       return;
     }
     const [ownRow] = await db
-      .select({ userId: customDatasetsTable.userId })
+      .select({ userId: customDatasetsTable.userId, overviewJson: customDatasetsTable.overviewJson })
       .from(customDatasetsTable)
       .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
     if (!ownRow) {
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
     }
+    // Validate the stored overview JSON against the schema before serving it so
+    // that a pre-validation DB row (or one written via a migration bypass) never
+    // silently passes corrupt data to the overview map renderer.
+    const stored = StoredTerrainJsonSchema.safeParse(ownRow.overviewJson);
+    if (!stored.success) {
+      const issues = stored.error.issues
+        .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
+        .join("; ");
+      logger.error({ id, issues }, "[datasets] GET overview — stored terrain_schema_mismatch");
+      res.status(500).json({ error: "terrain_schema_mismatch", details: issues });
+      return;
+    }
+    res.json(GetDatasetsIdOverviewResponse.parse(stored.data));
+    return;
   }
 
   const smoothing = await getSmoothingPreference(req);
