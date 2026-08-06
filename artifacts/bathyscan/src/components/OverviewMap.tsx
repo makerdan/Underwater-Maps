@@ -471,6 +471,22 @@ export const OverviewMap: React.FC = () => {
     dirtyRef.current = true;
   }, [puzzleTransforms]);
 
+  // Hydrate puzzle transforms from sessionStorage on mount so tile positions
+  // survive in-session navigation (page refresh resets them as intended).
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("bathyscan:puzzleTransforms");
+      if (raw) {
+        const entries = JSON.parse(raw) as Array<[string, { tx: number; ty: number; angleDeg: number }]>;
+        if (Array.isArray(entries) && entries.length > 0) {
+          setPuzzleTransforms(new Map(entries));
+        }
+      }
+    } catch {
+      // Silently ignore corrupt or missing data.
+    }
+  }, []);
+
   // Currently selected puzzle tile (datasetId) and drag sub-mode.
   const puzzleSelectedRef = useRef<string | null>(null);
   const puzzleDragSubModeRef = useRef<"translate" | "rotate" | null>(null);
@@ -1498,6 +1514,38 @@ export const OverviewMap: React.FC = () => {
         ctx.restore();
       };
 
+      // Helper: apply the same puzzle transform as drawPuzzleTile but without
+      // the selection affordances — used for overlay layers (contours, bands,
+      // borders) so they move in lockstep with their bitmap tile.  Outside
+      // puzzle mode this is a transparent pass-through.
+      const applyPuzzleTransform = (
+        tileDatasetId: string,
+        tileBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+        drawFn: () => void,
+      ) => {
+        if (!puzzleModeRef.current) {
+          drawFn();
+          return;
+        }
+        const [bx0, by0] = lonLatToCanvas(tileBbox.minLon, tileBbox.maxLat, worldGrid, t);
+        const [bx1, by1] = lonLatToCanvas(tileBbox.maxLon, tileBbox.minLat, worldGrid, t);
+        const tcx = (bx0 + bx1) / 2;
+        const tcy = (by0 + by1) / 2;
+        const pxform = puzzleTransformsRef.current.get(tileDatasetId);
+        const ptx = pxform?.tx ?? 0;
+        const pty = pxform?.ty ?? 0;
+        const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
+
+        ctx.save();
+        ctx.translate(tcx + ptx, tcy + pty);
+        ctx.rotate(pAngleRad);
+        ctx.translate(-tcx, -tcy);
+
+        drawFn();
+
+        ctx.restore();
+      };
+
       if (visibleNow.length > 1) {
         // Sort oldest-first so the newest survey data is always on top.
         const sorted = sortByRecency(visibleNow);
@@ -1566,11 +1614,19 @@ export const OverviewMap: React.FC = () => {
         for (const v of visibleNow) {
           const og = v.overviewGrid;
           if (og && isSyntheticGrid(og)) {
-            renderSyntheticHatch(ctx, og, worldGrid, t);
+            applyPuzzleTransform(
+              v.datasetId,
+              { minLon: og.minLon, maxLon: og.maxLon, minLat: og.minLat, maxLat: og.maxLat },
+              () => { renderSyntheticHatch(ctx, og, worldGrid, t); },
+            );
           }
         }
       } else if (isSyntheticGrid(grid)) {
-        renderSyntheticHatch(ctx, grid, worldGrid, t);
+        applyPuzzleTransform(
+          grid.datasetId,
+          { minLon: grid.minLon, maxLon: grid.maxLon, minLat: grid.minLat, maxLat: grid.maxLat },
+          () => { renderSyntheticHatch(ctx, grid, worldGrid, t); },
+        );
       }
 
       // Dataset boundary outlines — thin dashed borders drawn over the heatmap
@@ -1580,36 +1636,42 @@ export const OverviewMap: React.FC = () => {
           const og = v.overviewGrid;
           if (!og) continue;
           const isPrimDataset = v.datasetId === primIdNow;
-          ctx.save();
-          ctx.beginPath();
-          const corners: Array<[number, number]> = [
-            [og.minLon, og.minLat],
-            [og.maxLon, og.minLat],
-            [og.maxLon, og.maxLat],
-            [og.minLon, og.maxLat],
-          ];
-          corners.forEach(([lon, lat], i) => {
-            const [px, py] = lonLatToCanvas(lon, lat, worldGrid, t);
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          });
-          ctx.closePath();
-          ctx.lineWidth = isPrimDataset ? 1.5 : 1.5;
-          ctx.setLineDash([4, 3]);
-          ctx.strokeStyle = isPrimDataset
-            ? "rgba(255,255,255,0.35)"
-            : "rgba(0,229,255,0.55)";
-          ctx.stroke();
-          ctx.setLineDash([]);
-          // Tiny label at the NW corner so users can identify each patch.
-          const [lx, ly] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
-          ctx.fillStyle = isPrimDataset
-            ? "rgba(255,255,255,0.70)"
-            : "rgba(0,229,255,0.85)";
-          ctx.font = "10px monospace";
-          const patchLabel = datasetNameMapRef.current.get(og.datasetId) ?? og.datasetId;
-          ctx.fillText(`◎ ${patchLabel}`, lx + 4, ly + 12);
-          ctx.restore();
+          applyPuzzleTransform(
+            v.datasetId,
+            { minLon: og.minLon, maxLon: og.maxLon, minLat: og.minLat, maxLat: og.maxLat },
+            () => {
+              ctx.save();
+              ctx.beginPath();
+              const corners: Array<[number, number]> = [
+                [og.minLon, og.minLat],
+                [og.maxLon, og.minLat],
+                [og.maxLon, og.maxLat],
+                [og.minLon, og.maxLat],
+              ];
+              corners.forEach(([lon, lat], i) => {
+                const [px, py] = lonLatToCanvas(lon, lat, worldGrid, t);
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+              });
+              ctx.closePath();
+              ctx.lineWidth = isPrimDataset ? 1.5 : 1.5;
+              ctx.setLineDash([4, 3]);
+              ctx.strokeStyle = isPrimDataset
+                ? "rgba(255,255,255,0.35)"
+                : "rgba(0,229,255,0.55)";
+              ctx.stroke();
+              ctx.setLineDash([]);
+              // Tiny label at the NW corner so users can identify each patch.
+              const [lx, ly] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
+              ctx.fillStyle = isPrimDataset
+                ? "rgba(255,255,255,0.70)"
+                : "rgba(0,229,255,0.85)";
+              ctx.font = "10px monospace";
+              const patchLabel = datasetNameMapRef.current.get(og.datasetId) ?? og.datasetId;
+              ctx.fillText(`◎ ${patchLabel}`, lx + 4, ly + 12);
+              ctx.restore();
+            },
+          );
         }
       }
 
@@ -1622,13 +1684,19 @@ export const OverviewMap: React.FC = () => {
         for (const v of visibleNow) {
           const og = v.overviewGrid;
           if (!og) continue;
-          renderIntertidalBand(
-            ctx,
-            og,
-            worldGrid,
-            t,
-            intertidalMhwFtRef.current,
-            intertidalMhhwFtRef.current,
+          applyPuzzleTransform(
+            v.datasetId,
+            { minLon: og.minLon, maxLon: og.maxLon, minLat: og.minLat, maxLat: og.maxLat },
+            () => {
+              renderIntertidalBand(
+                ctx,
+                og,
+                worldGrid,
+                t,
+                intertidalMhwFtRef.current!,
+                intertidalMhhwFtRef.current,
+              );
+            },
           );
         }
       }
@@ -1644,7 +1712,11 @@ export const OverviewMap: React.FC = () => {
           if (!og) continue;
           const segs = nodataBoundarySegmentsRef.current.get(og.datasetId);
           if (segs && segs.length > 0) {
-            renderNodataBoundary(ctx, segs, og, t, worldGrid);
+            applyPuzzleTransform(
+              v.datasetId,
+              { minLon: og.minLon, maxLon: og.maxLon, minLat: og.minLat, maxLat: og.maxLat },
+              () => { renderNodataBoundary(ctx, segs, og, t, worldGrid); },
+            );
           }
         }
       }
@@ -1660,10 +1732,16 @@ export const OverviewMap: React.FC = () => {
           if (!og) continue;
           const segs = contourSegmentsRef.current.get(og.datasetId);
           if (segs && segs.length > 0) {
-            // renderContourLines uses og.width/height/minDepth/maxDepth for the
-            // dataset's own grid, but projects lon/lat coords onto the shared
-            // worldGrid canvas layout (same anchor used by renderHeatmapAtBbox).
-            renderContourLines(ctx, segs, og, t, units, activeTheme, worldGrid);
+            applyPuzzleTransform(
+              v.datasetId,
+              { minLon: og.minLon, maxLon: og.maxLon, minLat: og.minLat, maxLat: og.maxLat },
+              () => {
+                // renderContourLines uses og.width/height/minDepth/maxDepth for the
+                // dataset's own grid, but projects lon/lat coords onto the shared
+                // worldGrid canvas layout (same anchor used by renderHeatmapAtBbox).
+                renderContourLines(ctx, segs, og, t, units, activeTheme, worldGrid);
+              },
+            );
           }
         }
       }
@@ -3184,6 +3262,7 @@ export const OverviewMap: React.FC = () => {
                 onClick={() => {
                   setPuzzleTransforms(new Map());
                   puzzleSelectedRef.current = null;
+                  sessionStorage.removeItem("bathyscan:puzzleTransforms");
                   dirtyRef.current = true;
                 }}
                 style={{
@@ -3205,6 +3284,40 @@ export const OverviewMap: React.FC = () => {
             </ViewscreenTooltip>
           )}
 
+
+          {/* Save to Session button — visible when any tile has been moved or rotated */}
+          {hasPuzzleTransforms && (
+            <ViewscreenTooltip label="Save tile positions to session storage (survives navigation)" side="bottom">
+              <button
+                data-testid="overview-puzzle-save"
+                onClick={() => {
+                  try {
+                    sessionStorage.setItem(
+                      "bathyscan:puzzleTransforms",
+                      JSON.stringify([...puzzleTransforms.entries()]),
+                    );
+                  } catch {
+                    // Ignore quota errors silently.
+                  }
+                }}
+                style={{
+                  background: "rgba(20,184,166,0.12)",
+                  border: "1px solid rgba(20,184,166,0.50)",
+                  borderRadius: 3,
+                  color: "#2dd4bf",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                  padding: "2px 10px",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  lineHeight: "20px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ✦ SAVE
+              </button>
+            </ViewscreenTooltip>
+          )}
 
           {/* Tools popover — collapses box-select and download into one button */}
           <div ref={toolsWrapperRef} style={{ position: "relative" }}>
