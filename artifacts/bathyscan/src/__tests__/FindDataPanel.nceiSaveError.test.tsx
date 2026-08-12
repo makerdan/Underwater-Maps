@@ -1,20 +1,44 @@
 /**
- * Error-path tests for handleNceiSave in FindDataPanel.
+ * Error-path tests for handleNceiSave in FindDataPanel, plus terrain-gate
+ * regression tests for the NceiResultCard "Save to Library" button.
  *
  * Coverage:
  *   1. When POST /ncei/save throws, an error toast is shown with a clear
  *      user-facing message.
  *   2. The saving spinner is cleared after the error (button returns to
  *      "Save to Library" state).
+ *   3. The Save button is disabled when terrainStore.activeGrid is null.
+ *   4. The Save button is enabled when terrainStore.activeGrid is non-null.
  *
  * Guard:
  *   These behavioral tests serve as the regression guard for the catch block
  *   in handleNceiSave — if the block is removed the toast assertion fails.
+ *   The terrain-gate tests guard the saveBlockedReason wiring in NceiResultCard.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { FindDataPanel } from "@/components/FindDataPanel";
+
+// ---------------------------------------------------------------------------
+// Hoisted terrain state — mutable so individual tests can override it
+// ---------------------------------------------------------------------------
+type MockTerrainState = {
+  activeGrid: unknown;
+  visibleDatasets: unknown[];
+  selectedIds: string[];
+};
+
+const mockTerrainState = vi.hoisted((): MockTerrainState => ({
+  activeGrid: { datasetId: "test-grid", bbox: { minLon: -136, minLat: 56, maxLon: -135, maxLat: 57 } },
+  visibleDatasets: [],
+  selectedIds: [],
+}));
+
+vi.mock("@/lib/terrainStore", () => ({
+  useTerrainStore: (sel: (s: MockTerrainState) => unknown) =>
+    sel(mockTerrainState),
+}));
 
 // ---------------------------------------------------------------------------
 // Hoisted proxy factory
@@ -169,6 +193,11 @@ describe("FindDataPanel — handleNceiSave error path", () => {
     onClose.mockClear();
     nceiSaveMutateAsync.mockClear();
     toastSpy.mockClear();
+    // Restore a loaded terrain so error-path tests can actually click Save.
+    mockTerrainState.activeGrid = {
+      datasetId: "test-grid",
+      bbox: { minLon: -136, minLat: 56, maxLon: -135, maxLat: 57 },
+    } as unknown;
   });
 
   it("shows an error toast when the NCEI save mutation throws", async () => {
@@ -213,5 +242,64 @@ describe("FindDataPanel — handleNceiSave error path", () => {
       ).toBeInTheDocument(),
     );
     expect(screen.queryByText("Saving…")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Terrain gate tests
+// ---------------------------------------------------------------------------
+
+describe("FindDataPanel — NceiResultCard terrain gate", () => {
+  beforeEach(() => {
+    onClose.mockClear();
+    nceiSaveMutateAsync.mockClear();
+    toastSpy.mockClear();
+  });
+
+  it("disables Save to Library when no terrain is loaded (activeGrid is null)", async () => {
+    mockTerrainState.activeGrid = null;
+
+    renderPanel();
+    switchToNceiTab();
+
+    await waitFor(() =>
+      expect(screen.getByText("Sitka Sound Survey 2023")).toBeInTheDocument(),
+    );
+
+    const saveBtn = screen.getByRole("button", { name: /save to library/i });
+    expect(saveBtn).toBeDisabled();
+  });
+
+  it("does not call the save mutation when clicked while terrain gate is active", async () => {
+    mockTerrainState.activeGrid = null;
+
+    renderPanel();
+    switchToNceiTab();
+
+    await waitFor(() =>
+      expect(screen.getByText("Sitka Sound Survey 2023")).toBeInTheDocument(),
+    );
+
+    const saveBtn = screen.getByRole("button", { name: /save to library/i });
+    fireEvent.click(saveBtn);
+
+    expect(nceiSaveMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("enables Save to Library when a terrain is loaded (activeGrid is non-null)", async () => {
+    mockTerrainState.activeGrid = {
+      datasetId: "test-grid",
+      bbox: { minLon: -136, minLat: 56, maxLon: -135, maxLat: 57 },
+    } as unknown;
+
+    renderPanel();
+    switchToNceiTab();
+
+    await waitFor(() =>
+      expect(screen.getByText("Sitka Sound Survey 2023")).toBeInTheDocument(),
+    );
+
+    const saveBtn = screen.getByRole("button", { name: /save to library/i });
+    expect(saveBtn).not.toBeDisabled();
   });
 });

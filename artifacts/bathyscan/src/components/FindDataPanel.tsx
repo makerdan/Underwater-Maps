@@ -238,6 +238,12 @@ interface NceiResultCardProps {
   saving: boolean;
   saved: boolean;
   canSave: boolean;
+  /**
+   * When set, the Save button is disabled regardless of `canSave` and this
+   * message is shown as the tooltip reason. Used to block NCEI Portal saves
+   * when no terrain area is currently loaded in the viewer.
+   */
+  saveBlockedReason?: string;
 }
 
 const NceiResultCard: React.FC<NceiResultCardProps> = ({
@@ -246,6 +252,7 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
   saving,
   saved,
   canSave,
+  saveBlockedReason,
 }) => (
   <div style={CARD}>
     <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
@@ -352,19 +359,21 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
         label={
           !result.wcsAvailable
             ? "No NCEI WCS coverage for this dataset — cannot be materialized yet"
-            : !canSave
-              ? "Sign in to save datasets to your library"
-              : saved
-                ? "Already in your saved list"
-                : "Save to your library using the NCEI WCS mosaic"
+            : saveBlockedReason
+              ? saveBlockedReason
+              : !canSave
+                ? "Sign in to save datasets to your library"
+                : saved
+                  ? "Already in your saved list"
+                  : "Save to your library using the NCEI WCS mosaic"
         }
         side="top"
       >
         <button
           onClick={() =>
-            result.wcsAvailable && canSave && !saved && !saving && onSave(result)
+            result.wcsAvailable && !saveBlockedReason && canSave && !saved && !saving && onSave(result)
           }
-          disabled={!result.wcsAvailable || !canSave || saved || saving}
+          disabled={!result.wcsAvailable || !!saveBlockedReason || !canSave || saved || saving}
           style={{
             fontSize: "calc(12px * var(--bs-font-scale, 1))",
             padding: "3px 10px",
@@ -376,16 +385,16 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
             }`,
             borderRadius: 3,
             color:
-              !result.wcsAvailable || !canSave
+              !result.wcsAvailable || !!saveBlockedReason || !canSave
                 ? "#64748b"
                 : saved
                   ? "#4ade80"
                   : "#cbd5e1",
             cursor:
-              !result.wcsAvailable || !canSave || saved ? "default" : "pointer",
+              !result.wcsAvailable || !!saveBlockedReason || !canSave || saved ? "default" : "pointer",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            opacity: !result.wcsAvailable || !canSave ? 0.6 : 1,
+            opacity: !result.wcsAvailable || !!saveBlockedReason || !canSave ? 0.6 : 1,
           }}
         >
           {saving ? "Saving…" : saved ? "Saved ✓" : "Save to Library"}
@@ -1761,6 +1770,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 saving={nceiSavingIds.has(result.id)}
                 saved={savedCatalogIds.has(nceiPortalCatalogId(result.id))}
                 canSave={!!isSignedIn}
+                saveBlockedReason={
+                  !terrainActiveGrid
+                    ? "Load a terrain in this area first, then save to download it."
+                    : undefined
+                }
               />
             ))}
             {nceiAccumulated.length > 0 && nceiDataUpdatedAt > 0 && !isNceiSearching && (
