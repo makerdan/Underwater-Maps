@@ -677,7 +677,9 @@ describe("POST /api/poe/upscale", () => {
       .send({});
 
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: "missing_field" });
+    // validateBody() returns "invalid_request" for all Zod schema failures
+    // (including missing required fields) — matches the middleware contract.
+    expect(res.body).toMatchObject({ error: "invalid_request" });
     expect(fakeChatCreate).not.toHaveBeenCalled();
   });
 

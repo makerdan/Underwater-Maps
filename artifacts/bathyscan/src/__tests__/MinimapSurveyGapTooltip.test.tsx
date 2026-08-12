@@ -40,6 +40,14 @@ const makeApiClientMock = vi.hoisted(() => {
 
 vi.mock("@workspace/api-client-react", () => makeApiClientMock());
 
+vi.mock("@tanstack/react-query", () => ({
+  useQueries: () => [],
+  useQuery: () => ({ data: undefined, isLoading: false, isError: false }),
+  useQueryClient: () => ({ invalidateQueries: vi.fn(), setQueryData: vi.fn() }),
+  QueryClient: class { constructor() {} },
+  QueryClientProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 /** 3×3 terrain with one null cell at centre (index 4 = row 1, col 1). */
 const TERRAIN_WITH_NULL = {
   datasetId: "test-ds",

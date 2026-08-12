@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useReturnFocus } from "@/hooks/useReturnFocus";
 import {
   usePostUserDatasetsIdGeoref,
   getGetUserDatasetsQueryKey,
@@ -24,6 +25,7 @@ interface PendingPoint {
 }
 
 export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess }) => {
+  useReturnFocus();
   const qc = useQueryClient();
 
   const [imgSrc, setImgSrc] = useState<string | null>(null);

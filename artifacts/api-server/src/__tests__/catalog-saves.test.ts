@@ -282,11 +282,14 @@ describe("buildCatalogGrids", () => {
       .mockImplementation(async () => makeTiffResponse(tiff));
 
     try {
+      // Use a small bbox (area ≤ 10 deg²) so adaptiveNceiResolution returns
+      // terrainRes=256/overviewRes=64. The Alaska coverageBbox (40°×18°=720 deg²)
+      // would produce terrainRes=128 — this tests routing, not size-clamping.
       const entry = makeEntry({
         id: "ncei-bag-mosaic-alaska",
         name: "NCEI Multibeam Bag Mosaic — SE Alaska",
         sourceAgency: "NOAA/NCEI",
-        coverageBbox: { minLon: -170, minLat: 54, maxLon: -130, maxLat: 72 },
+        coverageBbox: { minLon: -133, minLat: 56, maxLon: -131, maxLat: 58 },
       });
 
       const result = await buildCatalogGrids(entry);

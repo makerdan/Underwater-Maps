@@ -35,6 +35,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetDatasetsMySaves: (opts?: unknown) => mockGetDatasetsMySavesImpl(opts),
   useGetMarkers: (params?: unknown, opts?: unknown) => mockGetMarkersImpl(params, opts),
   getGetMarkersQueryKey: (...a: unknown[]) => ["markers", ...a],
+  getGetDatasetsMySavesQueryKey: () => ["datasetsMySaves"],
   getGetTrollingPresetsQueryKey: () => ["trollingPresets"],
   MarkerInputType: { custom: "custom" },
 }));

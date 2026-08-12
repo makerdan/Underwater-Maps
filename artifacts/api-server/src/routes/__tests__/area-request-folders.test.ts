@@ -67,6 +67,8 @@ const H = vi.hoisted(() => {
     "folderId",
     "datasetId",
     "areaRequestId",
+    // Used in materializeSave's select({ requestBboxJson: ... }) projection
+    "requestBboxJson",
   ]);
   const customDatasetsTable = makeTable("datasets", [
     "id",

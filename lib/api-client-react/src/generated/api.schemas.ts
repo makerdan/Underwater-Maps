@@ -895,6 +895,11 @@ export interface UserSettings {
      */
   lampIntensity?: number;
   /**
+     * @minimum 1
+     * @maximum 6
+     */
+  maxActiveDatasets?: number;
+  /**
      * @minimum 0
      * @maximum 4
      */
@@ -4559,4 +4564,3 @@ export type GetTerrainBundlesPresetId202 = {
   status?: GetTerrainBundlesPresetId202Status;
   message?: string;
 };
-

@@ -228,7 +228,10 @@ function buildDefaultDb(): DbMockDb {
   const whereMock = vi.fn().mockResolvedValue([]);
   const fromMock = vi.fn().mockReturnValue({ where: whereMock });
 
-  const returningMock = vi.fn().mockResolvedValue([]);
+  // Return a minimal row so callers that destructure `const [saved] = await
+  // db.insert(...).values(...).returning(...)` get a non-undefined row and do
+  // not hit "Database insert returned no row" errors in test pipelines.
+  const returningMock = vi.fn().mockResolvedValue([{ id: "mock-inserted-id" }]);
   const onConflictDoUpdateMock = vi.fn().mockResolvedValue([]);
   const onConflictDoNothingMock = vi.fn().mockResolvedValue([]);
   const valuesMock = vi.fn().mockReturnValue({
@@ -289,5 +292,11 @@ export function createDbMock(options: DbMockOptions = {}) {
     poeUsageLogTable: poeUsageLogTableStub,
     rateLimitEventsTable: rateLimitEventsTableStub,
     uploadCalibrationTable: uploadCalibrationTableStub,
+    // Passthrough schema validator — always succeeds so test pipelines using
+    // FakeParseWorker (whose output omits many real schema fields) do not fail
+    // the validateTerrainForDb() guard inside processUploadJob.
+    StoredTerrainJsonSchema: {
+      safeParse: (v: unknown) => ({ success: true as const, data: v }),
+    },
   };
 }

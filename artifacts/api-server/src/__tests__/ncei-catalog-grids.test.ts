@@ -62,7 +62,8 @@ function makePortalEntry(
     dataType: "bathymetry",
     resolutionMMin: null,
     resolutionMMax: null,
-    coverageBbox: { minLon: -136, minLat: 54.5, maxLon: -130, maxLat: 60 },
+    // 3 × 3 = 9 deg² ≤ 10 so adaptiveNceiResolution returns terrainRes:256/overviewRes:64
+    coverageBbox: { minLon: -133, minLat: 56, maxLon: -130, maxLat: 59 },
     endpointUrl: null,
     accessNotes: null,
     description: null,

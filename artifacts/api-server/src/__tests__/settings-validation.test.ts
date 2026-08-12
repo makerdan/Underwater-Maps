@@ -408,3 +408,42 @@ describe("PUT /api/settings — freshwater band-limit guard", () => {
     expect(res.body.intertidalMhhwOverrideFt).toBe(2.5);
   });
 });
+
+// ─── maxActiveDatasets Zod validation ────────────────────────────────────────
+
+describe("PUT /api/settings — maxActiveDatasets Zod validation", () => {
+  it("accepts valid values within the allowed range [1, 6]", async () => {
+    for (const v of [1, 2, 3, 4, 5, 6]) {
+      const res = await request(app)
+        .put("/api/settings")
+        .set(AUTH)
+        .send({ maxActiveDatasets: v });
+      expect(res.status, `maxActiveDatasets=${v} should be accepted`).toBe(200);
+      expect(res.body.maxActiveDatasets).toBe(v);
+    }
+  });
+
+  it("rejects values below 1", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ maxActiveDatasets: 0 });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects values above 6", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ maxActiveDatasets: 7 });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects non-integer values", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ maxActiveDatasets: 2.5 });
+    expect(res.status).toBe(400);
+  });
+});

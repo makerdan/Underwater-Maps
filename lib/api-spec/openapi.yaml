@@ -5576,6 +5576,11 @@ components:
           minimum: 0
           maximum: 5
           default: 2
+        maxActiveDatasets:
+          type: integer
+          minimum: 1
+          maximum: 6
+          default: 3
         defaultSpeedTier:
           type: integer
           minimum: 0

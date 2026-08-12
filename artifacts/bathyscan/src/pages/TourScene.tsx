@@ -731,7 +731,7 @@ const TurboHudBadge: React.FC = () => {
         borderRadius: 4,
         padding: "2px 10px",
         fontFamily: "monospace",
-        fontSize: 13,
+        fontSize: "calc(13px * var(--bs-font-scale, 1))",
         fontWeight: 700,
         letterSpacing: "0.15em",
         color: "#ffd700",

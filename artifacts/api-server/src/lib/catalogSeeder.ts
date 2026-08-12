@@ -93,6 +93,10 @@ export const EXTRA_CATALOG_ENTRIES: CatalogSeedEntry[] = [
     resolutionMMin: 8,
     resolutionMMax: 90,
     coverageBbox: { minLon: -180, minLat: -90, maxLon: 180, maxLat: 90 },
+    // Thorne Bay / Clarence Strait — a survey-dense SE Alaska corridor with
+    // reliable community DEM data. Used as the materializer fallback when the
+    // user saves without an active terrain bbox (full global bbox is too large).
+    sampleBbox: { minLon: -132.5, minLat: 55.6, maxLon: -131.5, maxLat: 56.4 },
     endpointUrl: "https://gis.ngdc.noaa.gov/arcgis/services/DEM_mosaics/DEM_global_mosaic/ImageServer/WCSServer",
     accessNotes: "WCS endpoint serving NCEI's best-available DEM mosaic. Integrates community/tsunami DEMs for Juneau, Sitka, Ketchikan, Craig, Skagway, Wrangell, and Petersburg at 8–30 m where they exist.",
     description: "NCEI's integrated best-available DEM. In SE Alaska it blends multiple community DEMs (1/3 and 8/15 arc-second tsunami models) into a seamless 8–30 m bathy/topo grid, falling back to coarser regional grids elsewhere.",
@@ -1852,9 +1856,15 @@ export async function seedDatasetCatalog(opts: { force?: boolean } = {}): Promis
     // file flow to existing installs on the next boot. onConflictDoUpdate
     // refreshes all mutable fields from `excluded.*` while leaving
     // user-saved catalog rows (different id prefixes) untouched.
+    // Strip `sampleBbox` before the DB insert — it is runtime-only metadata
+    // (not a dataset_catalog column) used by buildCatalogGrids() to pick a
+    // small, survey-dense fallback bbox. getCatalogEntries() merges it back
+    // in after reading from the DB via applySampleBboxFromStatic().
+    const dbEntries = entries.map(({ sampleBbox: _sb, ...rest }) => rest);
+
     await db
       .insert(datasetCatalogTable)
-      .values(entries)
+      .values(dbEntries)
       .onConflictDoUpdate({
         target: datasetCatalogTable.id,
         set: {
@@ -1887,11 +1897,49 @@ export async function seedDatasetCatalog(opts: { force?: boolean } = {}): Promis
 
 let inMemoryCatalog: CatalogSeedEntry[] | null = null;
 
+/**
+ * Merge `sampleBbox` from a static reference list into DB-sourced rows.
+ *
+ * `sampleBbox` is not a `dataset_catalog` DB column (the schema has no such
+ * field), but `buildCatalogGrids()` needs it at materialisation time as a
+ * fallback: `requestBbox ?? entry.sampleBbox ?? entry.coverageBbox`. For
+ * entries whose `coverageBbox` spans thousands of square degrees (e.g.
+ * `ncei-bag-mosaic-alaska` covers 40°×18° of Alaska), the coverageBbox
+ * fallback always times out or returns a near-flat grid. The static list is
+ * the source of truth for `sampleBbox`; this helper merges it in so
+ * `getCatalogEntries()` callers see the field without a DB schema migration.
+ *
+ * Only entries whose id appears in `staticEntries` and whose static record
+ * carries a non-undefined `sampleBbox` are affected; all others pass through
+ * unchanged.
+ *
+ * Note: `ncei-portal-*` entries are intentionally absent from `staticEntries`
+ * and therefore receive no `sampleBbox` merge. Portal saves are created from
+ * real NCEI survey results whose `coverageBbox` is already bounded to the
+ * survey area (validated upstream by `computeWcsAvailable()`), so the
+ * coverageBbox fallback is safe there.
+ *
+ * Exported for unit-testing without a live database.
+ */
+export function applySampleBboxFromStatic(
+  rows: { id: string; [key: string]: unknown }[],
+  staticEntries: CatalogSeedEntry[],
+): CatalogSeedEntry[] {
+  const staticById = new Map(staticEntries.map((e) => [e.id, e]));
+  return rows.map((row): CatalogSeedEntry => {
+    const staticEntry = staticById.get(row.id);
+    if (staticEntry?.sampleBbox !== undefined) {
+      return { ...(row as unknown as CatalogSeedEntry), sampleBbox: staticEntry.sampleBbox };
+    }
+    return row as unknown as CatalogSeedEntry;
+  });
+}
+
 export async function getCatalogEntries(): Promise<CatalogSeedEntry[]> {
   if (inMemoryCatalog) return inMemoryCatalog;
   await seedDatasetCatalog();
   const rows = await db.select().from(datasetCatalogTable);
-  inMemoryCatalog = rows as unknown as CatalogSeedEntry[];
+  inMemoryCatalog = applySampleBboxFromStatic(rows, EXTRA_CATALOG_ENTRIES);
   return inMemoryCatalog;
 }
 

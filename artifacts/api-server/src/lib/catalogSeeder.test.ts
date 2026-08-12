@@ -12,8 +12,10 @@ import {
   buildPresetCatalogEntries,
   findDuplicateCatalogEntries,
   normalizedLakeIdBase,
+  applySampleBboxFromStatic,
 } from "./catalogSeeder.js";
 import type { CatalogSeedEntry } from "./catalogSeeder.js";
+import { nceiCoverageForEntry } from "../routes/catalog-saves.js";
 
 // Pull in a rich catalog that covers all test cases. We define entries
 // manually so these tests stay fast and don't need a live database.
@@ -780,5 +782,202 @@ describe("catalog entries reference no dead upstream hosts", () => {
       }
     }
     expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NCEI WCS entries must have a sampleBbox fallback
+//
+// Every static EXTRA_CATALOG_ENTRIES entry that nceiCoverageForEntry() routes
+// to the NCEI WCS materializer must carry a sampleBbox. The guard uses the
+// live runtime router directly — if a new NCEI WCS entry type is added and
+// nceiCoverageForEntry() is updated to handle it, this guard catches missing
+// sampleBboxes automatically without any predicate maintenance.
+//
+// Entries nceiCoverageForEntry() returns null for (ncei-crm-*, non-NCEI
+// sourceAgency, non-bathymetry dataType) are correctly excluded.
+//
+// ncei-portal-* entries are absent from EXTRA_CATALOG_ENTRIES (they are
+// created dynamically from real survey results via POST /ncei/save and live
+// only in the database), so no special exclusion is needed here.
+//
+// Runtime note: getCatalogEntries() calls applySampleBboxFromStatic() to
+// merge sampleBbox from this static list into DB rows (the DB schema has no
+// sample_bbox column). The tests below guard both the static source and the
+// merge helper.
+// ---------------------------------------------------------------------------
+
+describe("NCEI WCS entries — sampleBbox fallback guard", () => {
+  // Filter via the live runtime router so the guard automatically catches any
+  // new NCEI WCS entry type added to nceiCoverageForEntry() in the future.
+  const nceiWcsEntries = EXTRA_CATALOG_ENTRIES.filter((e) =>
+    nceiCoverageForEntry(e) !== null,
+  );
+
+  it("there is at least one static NCEI WCS materializer entry in the catalog (sentinel)", () => {
+    expect(nceiWcsEntries.length).toBeGreaterThan(0);
+  });
+
+  it("every static NCEI WCS materializer entry has a defined sampleBbox", () => {
+    const missing = nceiWcsEntries.filter((e) => e.sampleBbox === undefined);
+    expect(
+      missing.map((e) => e.id),
+      `NCEI WCS entries missing sampleBbox: ${missing.map((e) => e.id).join(", ")}`,
+    ).toHaveLength(0);
+  });
+
+  it("every static NCEI WCS materializer sampleBbox forms a non-zero area (minLon < maxLon and minLat < maxLat)", () => {
+    const offenders: string[] = [];
+    for (const entry of nceiWcsEntries) {
+      const s = entry.sampleBbox;
+      if (!s) continue; // caught by the previous test
+      if (s.minLon >= s.maxLon)
+        offenders.push(`${entry.id}: sampleBbox minLon (${s.minLon}) >= maxLon (${s.maxLon})`);
+      if (s.minLat >= s.maxLat)
+        offenders.push(`${entry.id}: sampleBbox minLat (${s.minLat}) >= maxLat (${s.maxLat})`);
+    }
+    expect(offenders, offenders.join("\n")).toHaveLength(0);
+  });
+
+  it("every static NCEI WCS materializer sampleBbox is strictly smaller in area than its coverageBbox", () => {
+    const offenders: string[] = [];
+    for (const entry of nceiWcsEntries) {
+      const s = entry.sampleBbox;
+      if (!s) continue; // caught by earlier test
+      const coverageArea =
+        (entry.coverageBbox.maxLon - entry.coverageBbox.minLon) *
+        (entry.coverageBbox.maxLat - entry.coverageBbox.minLat);
+      const sampleArea = (s.maxLon - s.minLon) * (s.maxLat - s.minLat);
+      if (sampleArea >= coverageArea) {
+        offenders.push(
+          `${entry.id}: sampleBbox area (${sampleArea.toFixed(4)}) >= coverageBbox area (${coverageArea.toFixed(4)})`,
+        );
+      }
+    }
+    expect(offenders, offenders.join("\n")).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applySampleBboxFromStatic — runtime merge helper unit tests
+//
+// getCatalogEntries() calls this helper to attach sampleBbox (absent from the
+// DB schema) to rows before returning them to callers. These tests exercise
+// the helper directly — no live database required.
+// ---------------------------------------------------------------------------
+
+describe("applySampleBboxFromStatic — runtime merge helper", () => {
+  const NCEI_BAG_SAMPLE: CatalogSeedEntry["sampleBbox"] = {
+    minLon: -132.5, minLat: 55.6, maxLon: -131.5, maxLat: 56.4,
+  };
+
+  /** Simulate a DB row: same fields as dataset_catalog, no sampleBbox. */
+  function makeDbRow(id: string): { id: string; [key: string]: unknown } {
+    return {
+      id,
+      name: `Test entry ${id}`,
+      sourceAgency: "NOAA/NCEI",
+      dataType: "bathymetry",
+      resolutionMMin: 1,
+      resolutionMMax: 50,
+      coverageBbox: { minLon: -170, minLat: 54, maxLon: -130, maxLat: 72 },
+      endpointUrl: null,
+      accessNotes: null,
+      description: null,
+      keywords: null,
+      lastUpdated: null,
+      waterType: "saltwater",
+      createdAt: new Date("2024-01-01"),
+      // sampleBbox intentionally absent — as it would be from the DB
+    };
+  }
+
+  const staticEntries: CatalogSeedEntry[] = [
+    {
+      id: "ncei-bag-mosaic-alaska",
+      name: "NCEI BAG Mosaic Alaska",
+      sourceAgency: "NOAA/NCEI",
+      dataType: "bathymetry",
+      resolutionMMin: 1,
+      resolutionMMax: 50,
+      coverageBbox: { minLon: -170, minLat: 54, maxLon: -130, maxLat: 72 },
+      sampleBbox: NCEI_BAG_SAMPLE,
+      endpointUrl: null,
+      accessNotes: null,
+      description: null,
+      keywords: null,
+      lastUpdated: null,
+      waterType: "saltwater",
+    },
+    {
+      id: "noaa-efh-alaska-pcod",
+      name: "EFH PCod (no sampleBbox in static)",
+      sourceAgency: "NOAA Fisheries",
+      dataType: "habitat",
+      resolutionMMin: null,
+      resolutionMMax: null,
+      coverageBbox: { minLon: -170, minLat: 47, maxLon: -130, maxLat: 72 },
+      endpointUrl: null,
+      accessNotes: null,
+      description: null,
+      keywords: null,
+      lastUpdated: null,
+      waterType: "saltwater",
+    },
+  ];
+
+  it("merges sampleBbox from static list into a matching DB row", () => {
+    const rows = [makeDbRow("ncei-bag-mosaic-alaska")];
+    const result = applySampleBboxFromStatic(rows, staticEntries);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.sampleBbox).toEqual(NCEI_BAG_SAMPLE);
+  });
+
+  it("does not add sampleBbox to a DB row whose static entry has none", () => {
+    const rows = [makeDbRow("noaa-efh-alaska-pcod")];
+    const result = applySampleBboxFromStatic(rows, staticEntries);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.sampleBbox).toBeUndefined();
+  });
+
+  it("does not add sampleBbox to a DB row with no matching static entry (ncei-portal-*)", () => {
+    const rows = [makeDbRow("ncei-portal-abc123")];
+    const result = applySampleBboxFromStatic(rows, staticEntries);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.sampleBbox).toBeUndefined();
+  });
+
+  it("handles a mixed batch of rows correctly", () => {
+    const rows = [
+      makeDbRow("ncei-bag-mosaic-alaska"),   // has static sampleBbox
+      makeDbRow("noaa-efh-alaska-pcod"),     // static entry exists, no sampleBbox
+      makeDbRow("ncei-portal-xyz"),          // no static entry at all
+    ];
+    const result = applySampleBboxFromStatic(rows, staticEntries);
+    expect(result).toHaveLength(3);
+    expect(result[0]!.sampleBbox).toEqual(NCEI_BAG_SAMPLE);
+    expect(result[1]!.sampleBbox).toBeUndefined();
+    expect(result[2]!.sampleBbox).toBeUndefined();
+  });
+
+  it("preserves all other DB row fields (does not strip existing data)", () => {
+    const row = makeDbRow("ncei-bag-mosaic-alaska");
+    const [merged] = applySampleBboxFromStatic([row], staticEntries);
+    expect(merged!.id).toBe("ncei-bag-mosaic-alaska");
+    expect(merged!.name).toBe("Test entry ncei-bag-mosaic-alaska");
+    expect(merged!.coverageBbox).toEqual(row.coverageBbox);
+  });
+
+  it("live EXTRA_CATALOG_ENTRIES: applySampleBboxFromStatic populates sampleBbox for ncei-bag-mosaic-alaska and ncei-dem-global-mosaic", () => {
+    // Use the real static catalog as the merge source.
+    const nceiIds = ["ncei-bag-mosaic-alaska", "ncei-dem-global-mosaic"];
+    const rows = nceiIds.map((id) => makeDbRow(id));
+    const result = applySampleBboxFromStatic(rows, EXTRA_CATALOG_ENTRIES);
+    for (const entry of result) {
+      expect(
+        entry.sampleBbox,
+        `${entry.id}: sampleBbox must be populated after applySampleBboxFromStatic`,
+      ).toBeDefined();
+    }
   });
 });

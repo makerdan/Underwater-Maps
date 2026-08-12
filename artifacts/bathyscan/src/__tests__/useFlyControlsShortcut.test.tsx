@@ -27,8 +27,12 @@ vi.mock("@react-three/fiber", () => ({
   useFrame: () => {},
 }));
 
+// Stable queryClient: returning a new object each render puts queryClient into
+// the event-listener useEffect's dep array and causes unnecessary listener
+// churn — cleanup removes the listener before the ref-sync effect fires.
+const stableQueryClient = vi.hoisted(() => ({ invalidateQueries: vi.fn(), setQueryData: vi.fn(), getQueryData: vi.fn(() => undefined) }));
 vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => stableQueryClient,
 }));
 
 const makeApiClientMock = vi.hoisted(() => {
@@ -153,9 +157,10 @@ describe("useFlyControls — keyboard shortcut", () => {
     useSettingsStore.getState().setKeyBinding("crosshairMenu", "KeyQ");
     const { unmount } = mountHook();
 
-    // Rebind to KeyT — the ref-sync useEffect should pick this up.
+    // Rebind to KeyH (a key with no default binding — avoids the early-return
+    // that fires for keys like "KeyT" which defaults to toggleTurbo).
     act(() => {
-      useSettingsStore.getState().setKeyBinding("crosshairMenu", "KeyT");
+      useSettingsStore.getState().setKeyBinding("crosshairMenu", "KeyH");
     });
 
     act(() => {
@@ -164,7 +169,7 @@ describe("useFlyControls — keyboard shortcut", () => {
     expect(openCrosshairContextMenuSpy).not.toHaveBeenCalled();
 
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyT" }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyH" }));
     });
     expect(openCrosshairContextMenuSpy).toHaveBeenCalledTimes(1);
     unmount();

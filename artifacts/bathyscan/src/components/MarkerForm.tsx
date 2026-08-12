@@ -10,6 +10,7 @@
  *   On submit, calls usePatchMarkersId and invalidates the markers query.
  */
 import React, { useState, useEffect, useRef } from "react";
+import { useReturnFocus } from "@/hooks/useReturnFocus";
 import { useQueryClient } from "@tanstack/react-query";
 import { set as idbSet } from "idb-keyval";
 import { useCameraStore } from "@/lib/cameraStore";
@@ -62,6 +63,7 @@ const PANEL: React.CSSProperties = {
 };
 
 export const MarkerForm: React.FC = () => {
+  useReturnFocus();
   const editMarker = useMarkerEditStore((s) => s.marker);
   const closeEdit = useMarkerEditStore((s) => s.close);
   const requestClose = useMarkerEditStore((s) => s.requestClose);

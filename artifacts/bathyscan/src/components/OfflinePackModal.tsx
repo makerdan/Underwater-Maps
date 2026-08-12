@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useState, useRef } from "react";
+import { useReturnFocus } from "@/hooks/useReturnFocus";
 import {
   saveOfflinePack,
   listOfflinePacks,
@@ -69,6 +70,7 @@ const STEP_LABELS: Record<PackProgress["step"], string> = {
 };
 
 export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
+  useReturnFocus();
   const [days, setDays] = useState(7);
   const [areaPhase, setAreaPhase] = useState<AreaPhase>("idle");
   const [areaProgress, setAreaProgress] = useState<PackProgress[]>([]);

@@ -88,6 +88,7 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   // ── Misc (settings-validation.test.ts) ───────────────────────────────────
   "smoothTerrainSpikes",
   "gpsRecordingInterval",
+  "maxActiveDatasets",
   "panelCollapse",
   "zoneOverlaySlots",
 
@@ -246,7 +247,7 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
 
 describe("PutSettingsBody field-coverage sentinel", () => {
   it("every PutSettingsBody field has a corresponding test entry in SETTINGS_TESTED_FIELDS", () => {
-    const schemaFields = Object.keys(PutSettingsBody.shape) as string[];
+    const schemaFields = new Set(Object.keys(PutSettingsBody.shape) as string[]);
     const untested = schemaFields.filter((f) => !SETTINGS_TESTED_FIELDS.has(f));
 
     expect(untested, [

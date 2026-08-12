@@ -15,6 +15,7 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useReturnFocus } from "@/hooks/useReturnFocus";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetDatasetsMySaves,
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export const ReassignMarkersDialog: React.FC<Props> = ({ onClose }) => {
+  useReturnFocus();
   const qc = useQueryClient();
   const { toast } = useToast();
   const patchMarkersId = usePatchMarkersId();
@@ -61,7 +63,7 @@ export const ReassignMarkersDialog: React.FC<Props> = ({ onClose }) => {
             maxLon: bbox.maxLon,
           }
         : undefined,
-    [bbox?.minLat, bbox?.minLon, bbox?.maxLat, bbox?.maxLon], // eslint-disable-line react-hooks/exhaustive-deps -- individual scalar fields used instead of the bbox object to avoid a fresh-reference on every render
+    [bbox?.minLat, bbox?.minLon, bbox?.maxLat, bbox?.maxLon], // eslint-disable-line react-hooks/exhaustive-deps -- individual bbox fields used to avoid re-creating params object when bbox reference changes but values are the same
   );
 
   const { data: unassignedMarkers, isLoading: markersLoading } = useGetMarkers(

@@ -254,7 +254,14 @@ router.get("/datasets/catalog/search", catalogReadRateLimit, asyncHandler(async 
   }
   const { q, dataType, waterType, minLon, minLat, maxLon, maxLat } = queryParsed.data;
 
-  const results = await searchCatalog({ q, dataType, waterType, minLon, minLat, maxLon, maxLat });
+  const results = await searchCatalog({
+    dataType,
+    waterType,
+    minLon: west,
+    minLat: south,
+    maxLon: east,
+    maxLat: north,
+  });
   res.json(
     validateResponse(
       GetDatasetsCatalogSearchResponse,
@@ -296,30 +303,22 @@ const MAX_BBOX_LAT_DEG = 170;
 
 router.post("/datasets/bbox-query", catalogReadRateLimit, validateBody(BboxQueryBody, "POST /api/datasets/bbox-query"), asyncHandler(async (req, res): Promise<void> => {
   const { dataType, waterType, north: rawNorth, south: rawSouth, east: rawEast, west: rawWest } = res.locals.parsedBody;
-  const north = Math.max(-90, Math.min(90, rawNorth));
-  const south = Math.max(-90, Math.min(90, rawSouth));
-  const east = normalizeLon(rawEast);
-  const west = normalizeLon(rawWest);
+  const north = Math.min(90, lat + latDelta);
+  const south = Math.max(-90, lat - latDelta);
+  const east = lon + lonDelta;
+  const west = lon - lonDelta;
 
-  if (north <= south) {
-    res.status(400).json({ error: "invalid_bbox", details: "north must be greater than south" });
-    return;
-  }
-  if (east <= west) {
+  if (!isFinite(lonDelta) || east - west > MAX_BBOX_LON_DEG) {
     res.status(400).json({
-      error: "invalid_bbox",
-      details: "east must be greater than west (antimeridian-crossing bboxes are not supported)",
+      error: "invalid_radius",
+      details: `radius spans more than ${MAX_BBOX_LON_DEG}° of longitude at this latitude — reduce the radius or move away from the pole`,
     });
     return;
   }
-  if (north - south < MIN_BBOX_DEG || east - west < MIN_BBOX_DEG) {
-    res.status(400).json({ error: "invalid_bbox", details: "bbox has zero or near-zero area" });
-    return;
-  }
-  if (east - west > MAX_BBOX_LON_DEG || north - south > MAX_BBOX_LAT_DEG) {
+  if (east > 180 || west < -180) {
     res.status(400).json({
       error: "invalid_bbox",
-      details: `bbox too large (max ${MAX_BBOX_LON_DEG}° lon × ${MAX_BBOX_LAT_DEG}° lat)`,
+      details: "search circle crosses the antimeridian (antimeridian-crossing queries are not supported)",
     });
     return;
   }
@@ -485,7 +484,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
 
   // Validate the catalog entry exists
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === catalogId);
+  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
   if (!entry) {
     res.status(404).json({ error: "not_found", details: `Catalog entry '${catalogId}' not found` });
     return;
@@ -1111,7 +1110,7 @@ function isGebcoBathymetryEntry(entry: CatalogSeedEntry): boolean {
  *                        Skagway / Wrangell-Petersburg), which the catalog
  *                        accesses via the DEM Global Mosaic WCS.
  */
-function nceiCoverageForEntry(
+export function nceiCoverageForEntry(
   entry: CatalogSeedEntry,
 ): "bagMosaic" | "demGlobalMosaic" | null {
   if (entry.dataType !== "bathymetry") return null;
@@ -1162,7 +1161,7 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, asyncHandler(async (req
   }
 
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === row.catalogId);
+  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
   if (!entry) {
     res.status(404).json({
       error: "not_found",
@@ -1180,8 +1179,8 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, asyncHandler(async (req
 
   const [updated] = await db
     .update(userCatalogSavesTable)
-    .set({ status: "processing", errorMessage: null, readyAt: null })
-    .where(eq(userCatalogSavesTable.id, saveId))
+    .set({ folderId })
+    .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
     .returning();
 
   if (!updated) {
@@ -1204,8 +1203,12 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
   const rows = await db
     .select()
     .from(userCatalogSavesTable)
-    .where(eq(userCatalogSavesTable.userId, userId))
-    .orderBy(desc(userCatalogSavesTable.requestedAt), asc(userCatalogSavesTable.id));
+    .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)));
+
+  if (!rows[0]) {
+    res.status(404).json({ error: "not_found", details: `Save record '${saveId}' not found` });
+    return;
+  }
 
   const entries = await getCatalogEntries();
   const entryMap = new Map(entries.map((e) => [e.id, e]));
@@ -1245,7 +1248,7 @@ router.get("/datasets/my-saves/:id/status", requireAuth, asyncHandler(async (req
   }
 
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === rows[0]!.catalogId) ?? null;
+  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
   res.json(validateResponse(GetDatasetsMySavesIdStatusResponse, formatSaveRow(rows[0], entry), "GET /api/datasets/my-saves/:id/status"));
 }));
 
@@ -1360,7 +1363,7 @@ router.patch("/datasets/my-saves/:id/rename", requireAuth, validateBody(RenameSa
 
   const [updated] = await db
     .update(userCatalogSavesTable)
-    .set({ displayLabel })
+    .set({ folderId })
     .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
     .returning();
 

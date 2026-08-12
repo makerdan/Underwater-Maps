@@ -203,7 +203,14 @@ type LandGrid = {
 
 let mockLandGrid: LandGrid | null = null;
 let mockTileUrl: string | null = null;
-let mockSatelliteImagery = false;
+
+// vi.hoisted() runs before any vi.mock() factory AND before top-level `let`
+// declarations are evaluated. uiStore.ts calls useSettingsStore.getState() at
+// module-init time (during import resolution) — that is earlier than the
+// top-level `let mockSatelliteImagery = false` assignment would run, so a
+// plain `let` variable is still in TDZ when the getter is first called. Using
+// vi.hoisted() ensures the state object exists in time.
+const mockSettingsState = vi.hoisted(() => ({ satelliteImagery: false as boolean }));
 
 vi.mock("@/lib/landTerrainStore", () => ({
   useLandTerrainStore: (sel: (s: { landGrid: LandGrid | null }) => unknown) =>
@@ -215,11 +222,18 @@ vi.mock("@/lib/satelliteTileStore", () => ({
     sel({ tileUrl: mockTileUrl }),
 }));
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (sel: (s: { satelliteImagery: boolean }) => unknown) =>
-    sel({ satelliteImagery: mockSatelliteImagery }),
-  DEFAULT_SETTINGS: {},
-}));
+vi.mock("@/lib/settingsStore", () => {
+  const store = Object.assign(
+    (sel: (s: { satelliteImagery: boolean }) => unknown) => sel(mockSettingsState),
+    {
+      getState: () => mockSettingsState,
+      setState: () => {},
+      subscribe: () => () => {},
+      persist: { hasHydrated: () => true, onFinishHydration: () => () => {} },
+    },
+  );
+  return { useSettingsStore: store, DEFAULT_SETTINGS: {} };
+});
 
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({ terrain: null }),
@@ -234,6 +248,10 @@ vi.mock("@/lib/terrain", () => ({
   INITIAL_CAMERA_POSITION: [0, 0, 0],
   getSeaSurfaceY: vi.fn(() => 0),
   buildWaterSurface: vi.fn(() => ({ visible: true, y: 0 })),
+  // NO_DATA_COLOR is used at module-init time by TerrainNodataBoundary.tsx
+  // (imported transitively from LandTerrainMesh). Omitting it triggers a
+  // vitest strict-mock proxy error before any test runs.
+  NO_DATA_COLOR: { r: 0.75, g: 0.75, b: 0.75 },
 }));
 
 // Remaining stores used by other TourScene parts (not LandTerrainMesh directly).
@@ -274,7 +292,7 @@ beforeEach(() => {
   mockTextureLoaderLoad = vi.fn();
   mockLandGrid = null;
   mockTileUrl = null;
-  mockSatelliteImagery = false;
+  mockSettingsState.satelliteImagery = false;
 });
 
 // ---------------------------------------------------------------------------
@@ -350,7 +368,7 @@ describe("LandTerrainMesh — Bug C: satellite texture disposed on unmount via r
   it("disposes a texture that loaded AFTER mount when the component unmounts", async () => {
     mockLandGrid = makeGrid(0);
     mockTileUrl = "blob:fake-tile-url";
-    mockSatelliteImagery = true;
+    mockSettingsState.satelliteImagery = true;
 
     const { unmount } = render(<LandTerrainMesh />);
 
@@ -382,7 +400,7 @@ describe("LandTerrainMesh — Bug D: satellite material disposed on unmount", ()
   it("disposes the satellite MeshStandardMaterial when unmounting with satellite imagery active", async () => {
     mockLandGrid = makeGrid(0);
     mockTileUrl = "blob:fake-tile-url";
-    mockSatelliteImagery = true;
+    mockSettingsState.satelliteImagery = true;
 
     const { unmount } = render(<LandTerrainMesh />);
 
@@ -414,7 +432,7 @@ describe("LandTerrainMesh — Bug D: satellite material disposed on unmount", ()
     // (no .map). The satellite-material unmount cleanup must not dispose it —
     // that is owned by prevProceduralMaterialRef (Bug B).
     mockLandGrid = makeGrid(0);
-    mockSatelliteImagery = false;
+    mockSettingsState.satelliteImagery = false;
 
     const { unmount } = render(<LandTerrainMesh />);
 

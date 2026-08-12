@@ -164,6 +164,8 @@ vi.mock("@/lib/uiStore", () => {
     georefPickMode: false,
     setGeorefPickMode: vi.fn(),
     setGeorefPickBbox: vi.fn(),
+    setZoneOverlayEnabled: vi.fn(),
+    setZonePaintMode: vi.fn(),
   };
   const useUiStore = Object.assign(
     (sel: (s: typeof mockState) => unknown) => sel(mockState),

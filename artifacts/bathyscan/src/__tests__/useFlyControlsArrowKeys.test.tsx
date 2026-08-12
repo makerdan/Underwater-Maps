@@ -253,10 +253,11 @@ describe("useFlyControls — arrow key preventDefault", () => {
     unmount();
   });
 
-  it("does NOT call preventDefault for unrelated keys (e.g. KeyT)", () => {
+  // KeyZ has no default binding (toggleTurbo=KeyT, crosshairMenu=KeyQ, etc.)
+  it("does NOT call preventDefault for unrelated keys (e.g. KeyZ)", () => {
     const { unmount } = mountHook();
 
-    const ev = new KeyboardEvent("keydown", { code: "KeyT", bubbles: true, cancelable: true });
+    const ev = new KeyboardEvent("keydown", { code: "KeyZ", bubbles: true, cancelable: true });
     const spy = vi.spyOn(ev, "preventDefault");
     act(() => {
       window.dispatchEvent(ev);

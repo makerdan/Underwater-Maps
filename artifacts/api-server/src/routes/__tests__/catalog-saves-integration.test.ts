@@ -73,6 +73,11 @@ const H = vi.hoisted(() => {
     "errorMessage",
     "folderId",
     "datasetId",
+    // Used in materializeSave's select({ requestBboxJson: ... }) projection
+    // and in the catalog-saves idempotency WHERE clause.
+    "requestBboxJson",
+    // Used in area-request grouping queries.
+    "areaRequestId",
   ]);
   const customDatasetsTable = makeTable("datasets", [
     "id",
@@ -396,6 +401,11 @@ const H = vi.hoisted(() => {
     resolutionMMin: 1,
     resolutionMMax: 50,
     coverageBbox: { minLon: -170, minLat: 54, maxLon: -130, maxLat: 72 },
+    // sampleBbox keeps the materialization area small (6 deg²; 1 < 6 ≤ 10 →
+    // adaptiveNceiResolution returns terrainRes 256) so the test mock grid
+    // produced by buildNceiTerrainForBbox has resolution 256.  Without it the
+    // large coverageBbox (720 deg²) would select terrainRes 128.
+    sampleBbox: { minLon: -135, minLat: 56, maxLon: -132, maxLat: 58 },
     endpointUrl: null,
     accessNotes: null,
     description: null,
@@ -452,6 +462,8 @@ vi.mock("drizzle-orm", () => ({
   lt: (col: unknown, val: unknown) => ({ kind: "lt", col, val }),
   desc: (col: unknown) => ({ kind: "desc", col }),
   asc: (col: unknown) => ({ kind: "asc", col }),
+  // isNull is used in catalog-saves.ts for filtering saves where requestBboxJson IS NULL
+  isNull: (col: unknown) => ({ kind: "isNull", col }),
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
     __sql: strings.join("?"),
     values,

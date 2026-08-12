@@ -224,11 +224,13 @@ describe("OverviewMap — camera heading drives SVG arrow rotation", () => {
     setupStores();
   });
 
+  // rot = cameraHeading directly (North=0°=up in SVG, arrow defined pointing up).
+  // See OverviewMap.tsx "Heading 0° = North = rotate(0)" comment.
   const HEADING_CASES = [
-    { heading: 0,   expectedRot: 180 },
+    { heading: 0,   expectedRot: 0 },
     { heading: 90,  expectedRot: 90 },
-    { heading: 180, expectedRot: 0 },
-    { heading: 270, expectedRot: -90 },
+    { heading: 180, expectedRot: 180 },
+    { heading: 270, expectedRot: 270 },
   ] as const;
 
   for (const { heading, expectedRot } of HEADING_CASES) {
@@ -276,9 +278,9 @@ describe("OverviewMap — camera heading drives SVG arrow rotation", () => {
       rotations.push(parseFloat(m[1]!));
     }
 
-    // rot = 180 - heading → each +90° heading step → -90° rotation step
+    // rot = heading → each +90° heading step → +90° rotation step
     for (let i = 1; i < rotations.length; i++) {
-      expect(rotations[i]! - rotations[i - 1]!).toBeCloseTo(-90, 5);
+      expect(rotations[i]! - rotations[i - 1]!).toBeCloseTo(90, 5);
     }
   });
 });

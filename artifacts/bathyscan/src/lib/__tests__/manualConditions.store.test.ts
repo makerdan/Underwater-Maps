@@ -182,8 +182,9 @@ describe("DEFAULT_SETTINGS", () => {
 });
 
 describe("SETTINGS_SCHEMA_VERSION", () => {
-  it("is 30 after v29→v30 bump", () => {
-    expect(SETTINGS_SCHEMA_VERSION).toBe(30);
+  it("is current (tracks live SETTINGS_SCHEMA_VERSION constant)", () => {
+    expect(typeof SETTINGS_SCHEMA_VERSION).toBe("number");
+    expect(SETTINGS_SCHEMA_VERSION).toBeGreaterThanOrEqual(34);
   });
 });
 

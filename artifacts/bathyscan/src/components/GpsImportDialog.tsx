@@ -62,6 +62,7 @@ import {
 } from "@/lib/markerConstants";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useToast } from "@/hooks/use-toast";
+import { useReturnFocus } from "@/hooks/useReturnFocus";
 
 const TROLLING_PRESET_WAYPOINTS_MAX = 50;
 const MARKER_LABEL_MAX = 200;
@@ -135,6 +136,7 @@ function clampNumber(n: number, lo: number, hi: number): number {
 }
 
 export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
+  useReturnFocus();
   const qc = useQueryClient();
   const { toast } = useToast();
   const postMarkers = usePostMarkers();

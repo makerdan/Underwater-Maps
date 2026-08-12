@@ -75,6 +75,9 @@ const H = vi.hoisted(() => {
     "errorMessage",
     "folderId",
     "datasetId",
+    // Used in materializeSave's select({ requestBboxJson: ... }) projection
+    "requestBboxJson",
+    "areaRequestId",
   ]);
   const customDatasetsTable = makeTable("datasets", [
     "id",
@@ -781,7 +784,11 @@ describe("POST /api/ncei/save — NCEI portal save end-to-end flow", () => {
         const saveRow = H.dbState.saves.find((s) => s["id"] === saveId);
         expect(saveRow).toBeDefined();
         expect(saveRow!["errorMessage"]).toBeTruthy();
-        expect(String(saveRow!["errorMessage"])).toMatch(/near-flat|no depth coverage/i);
+        // humanizeErrorMessage() converts "near-flat grid" into a user-facing
+        // string — match the humanized output rather than the raw error text.
+        expect(String(saveRow!["errorMessage"])).toMatch(
+          /near-flat|no depth coverage|no multibeam surveys found/i,
+        );
       } finally {
         spy.mockRestore();
       }
