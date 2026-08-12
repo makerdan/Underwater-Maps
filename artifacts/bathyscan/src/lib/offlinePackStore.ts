@@ -196,6 +196,15 @@ export async function saveOfflinePack(
   }
   if (weatherPack.station !== null || weatherPack.observation !== null) {
     onProgress({ step: "weather", label: "Weather snapshot saved", done: true });
+  } else {
+    // A 200 response with both fields null means no station is nearby or NOAA
+    // is temporarily unavailable.  Always emit a terminal done event so the
+    // progress row never stays frozen on "Fetching weather snapshot…".
+    onProgress({
+      step: "weather",
+      label: "Weather unavailable — no station nearby",
+      done: true,
+    });
   }
 
   // Step 4: save to IndexedDB

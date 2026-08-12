@@ -10,7 +10,7 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
-const { mockState, setSidebarModeSpy, isMobileRef, appStateRef, driftStateRef } = vi.hoisted(() => {
+const { mockState, setSidebarModeSpy, isMobileRef, appStateRef, driftStateRef, settingsStateRef } = vi.hoisted(() => {
   const setSidebarModeSpy = vi.fn();
   return {
     setSidebarModeSpy,
@@ -21,6 +21,7 @@ const { mockState, setSidebarModeSpy, isMobileRef, appStateRef, driftStateRef } 
     isMobileRef: { value: false },
     appStateRef: { tidalOverlay: false, realisticMode: false },
     driftStateRef: { driftPlannerActive: false },
+    settingsStateRef: { substrateColorMode: false, efhOverlayEnabled: false, intertidalHotspotsEnabled: false },
   };
 });
 
@@ -39,6 +40,13 @@ vi.mock("@/lib/driftStore", () => ({
   useDriftStore: Object.assign(
     (sel: (s: typeof driftStateRef) => unknown) => sel(driftStateRef),
     { getState: () => driftStateRef },
+  ),
+}));
+
+vi.mock("@/lib/settingsStore", () => ({
+  useSettingsStore: Object.assign(
+    (sel: (s: typeof settingsStateRef) => unknown) => sel(settingsStateRef),
+    { getState: () => settingsStateRef },
   ),
 }));
 
@@ -63,6 +71,9 @@ beforeEach(() => {
   appStateRef.tidalOverlay = false;
   appStateRef.realisticMode = false;
   driftStateRef.driftPlannerActive = false;
+  settingsStateRef.substrateColorMode = false;
+  settingsStateRef.efhOverlayEnabled = false;
+  settingsStateRef.intertidalHotspotsEnabled = false;
 });
 
 describe("SidebarModeTabs — desktop (text-only)", () => {
@@ -147,6 +158,30 @@ describe("SidebarModeTabs — feature-active indicator dots", () => {
     driftStateRef.driftPlannerActive = true;
     render(<SidebarModeTabs />);
     expect(screen.getByTestId("sidebar-mode-tab-plan-indicator")).toBeInTheDocument();
+  });
+
+  it("shows Analyze dot when substrateColorMode is on", () => {
+    settingsStateRef.substrateColorMode = true;
+    render(<SidebarModeTabs />);
+    expect(screen.getByTestId("sidebar-mode-tab-analyze-indicator")).toBeInTheDocument();
+    expect(screen.queryByTestId("sidebar-mode-tab-explore-indicator")).toBeNull();
+  });
+
+  it("shows Analyze dot when efhOverlayEnabled is on", () => {
+    settingsStateRef.efhOverlayEnabled = true;
+    render(<SidebarModeTabs />);
+    expect(screen.getByTestId("sidebar-mode-tab-analyze-indicator")).toBeInTheDocument();
+  });
+
+  it("shows Analyze dot when intertidalHotspotsEnabled is on", () => {
+    settingsStateRef.intertidalHotspotsEnabled = true;
+    render(<SidebarModeTabs />);
+    expect(screen.getByTestId("sidebar-mode-tab-analyze-indicator")).toBeInTheDocument();
+  });
+
+  it("shows no Analyze dot when all analyze features are off", () => {
+    render(<SidebarModeTabs />);
+    expect(screen.queryByTestId("sidebar-mode-tab-analyze-indicator")).toBeNull();
   });
 
   it("dots do not add visible text on mobile (icon-only) tabs", () => {

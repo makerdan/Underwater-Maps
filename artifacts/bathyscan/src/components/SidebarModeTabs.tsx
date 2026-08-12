@@ -14,6 +14,7 @@ import { useAppState } from "@/lib/context";
 import { useDriftStore } from "@/lib/driftStore";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { SidebarMode } from "@/lib/settingsStore";
+import { useSettingsStore } from "@/lib/settingsStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 interface ModeTab {
@@ -91,15 +92,20 @@ export const SidebarModeTabs: React.FC = () => {
   const isMobile = useIsMobile();
   const { tidalOverlay, realisticMode } = useAppState();
   const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+  const substrateColorMode = useSettingsStore((s) => s.substrateColorMode);
+  const efhOverlayEnabled = useSettingsStore((s) => s.efhOverlayEnabled);
+  const intertidalHotspotsEnabled = useSettingsStore((s) => s.intertidalHotspotsEnabled);
 
   // Per-tab "feature active" indicator dots: a tab shows a dot when a
   // feature homed under it is currently enabled, so relocated toggles
   // (Tidal 3D, Drive Boat, Drift) stay discoverable while the sidebar is
   // on another tab.
+  const analyzeActive = substrateColorMode || efhOverlayEnabled || intertidalHotspotsEnabled;
   const tabIndicator: Partial<Record<SidebarMode, boolean>> = {
     explore: tidalOverlay,
     live: realisticMode,
     plan: driftPlannerActive,
+    analyze: analyzeActive,
   };
 
   return (

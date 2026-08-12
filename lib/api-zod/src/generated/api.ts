@@ -1570,6 +1570,10 @@ export const getSettingsResponseShowWaterTempLayerDefault = false;
 export const getSettingsResponseSidebarModeDefault = `explore`;
 export const getSettingsResponseDatasetManualConditionsDefault = {  };
 export const getSettingsResponseManualConditionsActiveSourceDefault = {  };
+export const getSettingsResponseMaxActiveDatasetsDefault = 3;
+export const getSettingsResponseMaxActiveDatasetsMax = 6;
+
+
 
 export const GetSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(getSettingsResponseTextureQualityDefault),
@@ -1774,7 +1778,8 @@ export const GetSettingsResponse = zod.object({
 }).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
   "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(getSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.'),
   "datasetManualConditions": zod.record(zod.string(), zod.unknown()).default(getSettingsResponseDatasetManualConditionsDefault).describe('Per-dataset manual environmental conditions, keyed by dataset id.'),
-  "manualConditionsActiveSource": zod.record(zod.string(), zod.string()).default(getSettingsResponseManualConditionsActiveSourceDefault).describe('Per-dataset active conditions source (\'real\' or \'manual\'), keyed by dataset id.')
+  "manualConditionsActiveSource": zod.record(zod.string(), zod.string()).default(getSettingsResponseManualConditionsActiveSourceDefault).describe('Per-dataset active conditions source (\'real\' or \'manual\'), keyed by dataset id.'),
+  "maxActiveDatasets": zod.number().min(1).max(getSettingsResponseMaxActiveDatasetsMax).int().default(getSettingsResponseMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.')
 }).describe('Per-user application settings with sensible defaults')
 
 
@@ -2065,6 +2070,10 @@ export const putSettingsBodyShowWaterTempLayerDefault = false;
 export const putSettingsBodySidebarModeDefault = `explore`;
 export const putSettingsBodyDatasetManualConditionsDefault = {  };
 export const putSettingsBodyManualConditionsActiveSourceDefault = {  };
+export const putSettingsBodyMaxActiveDatasetsDefault = 3;
+export const putSettingsBodyMaxActiveDatasetsMax = 6;
+
+
 
 export const PutSettingsBody = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsBodyTextureQualityDefault),
@@ -2269,7 +2278,8 @@ export const PutSettingsBody = zod.object({
 }).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
   "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(putSettingsBodySidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.'),
   "datasetManualConditions": zod.record(zod.string(), zod.unknown()).default(putSettingsBodyDatasetManualConditionsDefault).describe('Per-dataset manual environmental conditions, keyed by dataset id.'),
-  "manualConditionsActiveSource": zod.record(zod.string(), zod.string()).default(putSettingsBodyManualConditionsActiveSourceDefault).describe('Per-dataset active conditions source (\'real\' or \'manual\'), keyed by dataset id.')
+  "manualConditionsActiveSource": zod.record(zod.string(), zod.string()).default(putSettingsBodyManualConditionsActiveSourceDefault).describe('Per-dataset active conditions source (\'real\' or \'manual\'), keyed by dataset id.'),
+  "maxActiveDatasets": zod.number().min(1).max(putSettingsBodyMaxActiveDatasetsMax).int().default(putSettingsBodyMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.')
 }).describe('Per-user application settings with sensible defaults')
 
 export const putSettingsResponseTextureQualityDefault = `high`;
@@ -2555,6 +2565,10 @@ export const putSettingsResponseShowWaterTempLayerDefault = false;
 export const putSettingsResponseSidebarModeDefault = `explore`;
 export const putSettingsResponseDatasetManualConditionsDefault = {  };
 export const putSettingsResponseManualConditionsActiveSourceDefault = {  };
+export const putSettingsResponseMaxActiveDatasetsDefault = 3;
+export const putSettingsResponseMaxActiveDatasetsMax = 6;
+
+
 
 export const PutSettingsResponse = zod.object({
   "textureQuality": zod.enum(['off', 'low', 'high']).default(putSettingsResponseTextureQualityDefault),
@@ -2759,7 +2773,8 @@ export const PutSettingsResponse = zod.object({
 }).nullish().describe('Last timeline range (start\/end ISO 8601 strings). Restored on next load. Null when no range has been set.'),
   "sidebarMode": zod.enum(['explore', 'plan', 'analyze', 'live']).default(putSettingsResponseSidebarModeDefault).describe('Which contextual mode the left sidebar shows. Persisted so the user\'s last mode survives page reloads.'),
   "datasetManualConditions": zod.record(zod.string(), zod.unknown()).default(putSettingsResponseDatasetManualConditionsDefault).describe('Per-dataset manual environmental conditions, keyed by dataset id.'),
-  "manualConditionsActiveSource": zod.record(zod.string(), zod.string()).default(putSettingsResponseManualConditionsActiveSourceDefault).describe('Per-dataset active conditions source (\'real\' or \'manual\'), keyed by dataset id.')
+  "manualConditionsActiveSource": zod.record(zod.string(), zod.string()).default(putSettingsResponseManualConditionsActiveSourceDefault).describe('Per-dataset active conditions source (\'real\' or \'manual\'), keyed by dataset id.'),
+  "maxActiveDatasets": zod.number().min(1).max(putSettingsResponseMaxActiveDatasetsMax).int().default(putSettingsResponseMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.')
 }).describe('Per-user application settings with sensible defaults')
 
 

@@ -238,6 +238,10 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   // settings-validation.test.ts.
   "intertidalMhwOverrideFt",
   "intertidalMhhwOverrideFt",
+
+  // ── performance cap (settings-validation.test.ts) ─────────────────────────
+  // Integer 1–6; controls how many datasets render simultaneously.
+  "maxActiveDatasets",
 ]);
 
 describe("PutSettingsBody field-coverage sentinel", () => {

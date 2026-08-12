@@ -477,6 +477,101 @@ describe("saveOfflinePack — weather fetch failure emits warning progress event
   });
 });
 
+// ── weather 200 with null station/observation ─────────────────────────────
+//
+// The API returns HTTP 200 with { station: null, observation: null } when no
+// nearby station is found or NOAA is temporarily unavailable.  saveOfflinePack
+// must always emit a terminal done:true weather event regardless of whether the
+// payload fields are populated — otherwise the progress row stays stuck at
+// "Fetching weather snapshot…" indefinitely.
+
+describe("saveOfflinePack — weather 200 with null station+observation emits terminal event", () => {
+  const origNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (origNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", origNavigatorDescriptor);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThis as any).navigator;
+    }
+  });
+
+  function stubSwAndFetchNullWeather() {
+    let capturedPort1: { onmessage: ((e: MessageEvent) => void) | null } | null = null;
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      capturedPort1 = { onmessage: null };
+      return { port1: capturedPort1, port2: {} };
+    });
+    vi.fn().mockImplementation(() => {
+      Promise.resolve().then(() => {
+        capturedPort1?.onmessage?.({ data: { ok: true } } as MessageEvent);
+      });
+    });
+    const postMessageSpy = vi.fn().mockImplementation(() => {
+      Promise.resolve().then(() => {
+        capturedPort1?.onmessage?.({ data: { ok: true } } as MessageEvent);
+      });
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: { postMessage: postMessageSpy } }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes("/tidal/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              station: "TEST",
+              heightPredictions: [],
+              currentPredictions: [],
+              tidalExpiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(),
+              generatedAt: new Date().toISOString(),
+            }),
+          });
+        }
+        // Weather endpoint returns 200 with null payload
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ station: null, observation: null, snapshotAt: new Date().toISOString() }),
+        });
+      }),
+    );
+  }
+
+  it("emits a terminal done:true weather event when the API returns 200 { station: null, observation: null }", async () => {
+    stubSwAndFetchNullWeather();
+    const events: PackProgress[] = [];
+    await saveOfflinePack({ id: "ds-weather-null", name: "No Station Dataset" }, 3, (p) =>
+      events.push(p),
+    );
+    const weatherDone = events.find((p) => p.step === "weather" && p.done);
+    expect(weatherDone).toBeDefined();
+    // The terminal label must signal unavailability, not a successful save.
+    expect(weatherDone?.label).toMatch(/unavailable/i);
+  });
+
+  it("does not leave the weather step in a non-terminal state when API returns null payload", async () => {
+    stubSwAndFetchNullWeather();
+    const events: PackProgress[] = [];
+    await saveOfflinePack({ id: "ds-weather-null2", name: "No Station Dataset 2" }, 3, (p) =>
+      events.push(p),
+    );
+    const weatherEvents = events.filter((p) => p.step === "weather");
+    // Every weather event must eventually reach done:true — none may be left open.
+    const lastWeatherEvent = weatherEvents.at(-1);
+    expect(lastWeatherEvent?.done).toBe(true);
+  });
+});
+
 // ── SW timeout without ack rejects ────────────────────────────────────────
 //
 // When the SW is registered but never responds on the MessageChannel port,

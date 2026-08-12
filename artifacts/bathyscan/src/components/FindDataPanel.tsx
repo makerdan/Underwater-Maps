@@ -259,12 +259,16 @@ const NceiResultCard: React.FC<NceiResultCardProps> = ({
       <span style={{ fontSize: "calc(21px * var(--bs-font-scale, 1))" }}>🌊</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
+          title={result.name ?? "Untitled"}
           style={{
             fontSize: "calc(15px * var(--bs-font-scale, 1))",
             fontWeight: 700,
             color: "#e2e8f0",
             marginBottom: 2,
             lineHeight: 1.3,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
           }}
         >
           {result.name ?? "Untitled"}
@@ -444,7 +448,10 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
         <span style={{ fontSize: "calc(21px * var(--bs-font-scale, 1))" }}>{isIntertidal ? "🏖️" : icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", fontWeight: 700, color: "#e2e8f0", marginBottom: 2, lineHeight: 1.3 }}>
+          <div
+            title={entry.name}
+            style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", fontWeight: 700, color: "#e2e8f0", marginBottom: 2, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          >
             {entry.name}
           </div>
           <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color, letterSpacing: "0.1em", textTransform: "uppercase" }}>

@@ -39,12 +39,17 @@ export function useWakeLock(active: boolean): void {
       try {
         const sentinel = await wakeLock.request("screen");
         if (cancelled) {
+          // intentional: wake-lock failures are non-fatal — release silently
           void sentinel.release().catch(() => {});
           return;
         }
         sentinelRef.current = sentinel;
       } catch {
-        // Silent degrade: unsupported, permission denied, or low battery.
+        // intentional: wake-lock failures are non-fatal (unsupported browser,
+        // permission denied, or low battery). The app continues working; the
+        // screen may dim as usual. Do NOT add logging here — it fires on every
+        // scrub tick in some browsers and would create a console-spam loop.
+        console.debug("[useWakeLock] acquire skipped:", "non-fatal");
       }
     };
 
@@ -62,6 +67,7 @@ export function useWakeLock(active: boolean): void {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       const sentinel = sentinelRef.current;
       sentinelRef.current = null;
+      // intentional: wake-lock failures are non-fatal — release errors are ignored
       if (sentinel) void sentinel.release().catch(() => {});
     };
   }, [active]);

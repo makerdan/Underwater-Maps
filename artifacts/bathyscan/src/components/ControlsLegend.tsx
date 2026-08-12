@@ -33,6 +33,10 @@ export const ControlsLegend: React.FC = () => {
     { key: "R-click", action: "Context menu (pin, measure, …)" },
     { key: "Esc", action: "Release mouse" },
     { key: "O", action: "Toggle overview map" },
+    { key: "H", action: "Toggle What's Here panel" },
+    { key: "M", action: "Cycle sidebar mode (Explore → Plan → Analyze → Live)" },
+    { key: "/", action: "Open AI query panel" },
+    { key: ",", action: "Open Settings" },
   ];
 
   return (

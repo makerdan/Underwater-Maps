@@ -350,3 +350,43 @@ describe("PUT /api/settings — showLandmass boolean field", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("PUT /api/settings — maxActiveDatasets integer range", () => {
+  function put(body: Record<string, unknown>) {
+    return request(app)
+      .put("/api/settings")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", "user-settings-maxactive")
+      .send(body);
+  }
+
+  it("accepts the default value of 3", async () => {
+    const res = await put({ maxActiveDatasets: 3 });
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts the minimum value of 1", async () => {
+    const res = await put({ maxActiveDatasets: 1 });
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts the maximum value of 6", async () => {
+    const res = await put({ maxActiveDatasets: 6 });
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a value below the minimum (0)", async () => {
+    const res = await put({ maxActiveDatasets: 0 });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a value above the maximum (7)", async () => {
+    const res = await put({ maxActiveDatasets: 7 });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a non-integer fractional value", async () => {
+    const res = await put({ maxActiveDatasets: 2.5 });
+    expect(res.status).toBe(400);
+  });
+});

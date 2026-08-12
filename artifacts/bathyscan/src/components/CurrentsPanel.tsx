@@ -173,12 +173,17 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
   // effectiveScrubDatetime in App.tsx → useTidalData); this sync keeps the
   // phase slider and particle animation consistent with that time.
   //
+  // Using the numeric timestamp (getTime()) as the dependency instead of the
+  // Date object reference prevents redundant settingsStore writes when a new
+  // Date instance is created on every render during timeline scrubbing while
+  // the underlying timestamp has not changed.
+  const timelineCurrentTimeMs = timelineCurrentTime?.getTime() ?? null;
   useEffect(() => {
-    if (!timelineVisible || currentsSource === "manual") return;
-    const phase = (timelineCurrentTime.getTime() % TIDE_CYCLE_MS) / TIDE_CYCLE_MS;
+    if (!timelineVisible || currentsSource === "manual" || timelineCurrentTimeMs === null) return;
+    const phase = (timelineCurrentTimeMs % TIDE_CYCLE_MS) / TIDE_CYCLE_MS;
     setCurrentsTidePhase(phase);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setCurrentsTidePhase is a Zustand setter (stable ref)
-  }, [timelineVisible, timelineCurrentTime, currentsSource]);
+  }, [timelineVisible, timelineCurrentTimeMs, currentsSource]);
 
   const wrapStyle: React.CSSProperties = embedded
     ? { width: "100%", minWidth: 0, color: "#e2e8f0", fontFamily: FONT, fontSize: "calc(16.5px * var(--bs-font-scale, 1))" }
@@ -332,7 +337,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
               <span>Tide phase synced to global timeline</span>
             </div>
             {(() => {
-              const tMs = timelineCurrentTime.getTime();
+              const tMs = timelineCurrentTime?.getTime() ?? Date.now();
               const nearestHourMs = Math.round(tMs / 3_600_000) * 3_600_000;
               const deltaMin = Math.round((tMs - nearestHourMs) / 60_000);
               const nearestHour = new Date(nearestHourMs);

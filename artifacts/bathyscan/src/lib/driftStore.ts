@@ -407,6 +407,10 @@ export const useDriftStore = create<DriftStore>((set, get) => ({
       lineLengthM: plan.lineLengthM,
       lineWeightG: plan.lineWeightG,
       driftWaypoints: plan.waypoints.slice(),
+      // Always clear stale start coordinates first so a plan with null start
+      // does not inherit coordinates left over from the previous session.
+      driftStartLat: null,
+      driftStartLon: null,
       ...(plan.startLat !== null && plan.startLon !== null
         ? { driftStartLat: plan.startLat, driftStartLon: plan.startLon }
         : {}),

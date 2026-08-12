@@ -36,4 +36,26 @@ describe("ControlsLegend", () => {
     fireEvent.click(btn);
     expect(screen.queryByText(/W A S D/)).not.toBeInTheDocument();
   });
+
+  it("lists H, M, /, and , shortcuts in the legend", () => {
+    renderWithProvider();
+    const btn = screen.getByRole("button", { name: /toggle controls help/i });
+    fireEvent.click(btn);
+
+    // H — What's Here panel
+    expect(screen.getByText("H")).toBeInTheDocument();
+    expect(screen.getByText(/What's Here panel/i)).toBeInTheDocument();
+
+    // M — cycle sidebar mode
+    expect(screen.getByText("M")).toBeInTheDocument();
+    expect(screen.getByText(/cycle sidebar mode/i)).toBeInTheDocument();
+
+    // / — AI query panel
+    expect(screen.getByText("/")).toBeInTheDocument();
+    expect(screen.getByText(/AI query panel/i)).toBeInTheDocument();
+
+    // , — Settings
+    expect(screen.getByText(",")).toBeInTheDocument();
+    expect(screen.getByText(/Open Settings/i)).toBeInTheDocument();
+  });
 });
