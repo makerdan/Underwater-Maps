@@ -210,3 +210,48 @@ describe("static NCEI catalog guard — coverageBbox validity and WCS intersecti
     ).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Save-gate prefix guard — every catalog entry that resolves to an NCEI WCS
+// fetch strategy must have an id starting with "ncei-".
+//
+// FindDataPanel.tsx gates the Save button behind a terrain requirement using:
+//   const isNceiWcsEntry = entry.id.startsWith("ncei-");
+//
+// If a new WCS entry is added with a different id prefix (e.g. "noaa-wcs-")
+// the gate silently passes and the user can save without terrain, producing a
+// zero-area survey download.  This test fails at test-fast time instead.
+// ---------------------------------------------------------------------------
+describe("save-gate prefix guard — ncei-wcs strategy entries must have ncei- id prefix", () => {
+  const allBathyEntries = [
+    ...EXTRA_CATALOG_ENTRIES.filter((e) => e.dataType === "bathymetry"),
+    ...buildPresetCatalogEntries(),
+  ];
+
+  const nceiWcsEntries = allBathyEntries.filter((e) => {
+    const strategy = deriveCatalogFetchStrategy(e);
+    return strategy?.kind === "ncei-wcs";
+  });
+
+  it("has at least one ncei-wcs strategy entry (sanity check)", () => {
+    expect(nceiWcsEntries.length).toBeGreaterThan(0);
+  });
+
+  it("every entry resolving to ncei-wcs strategy has an id starting with 'ncei-'", () => {
+    const mismatch = nceiWcsEntries
+      .filter((e) => !e.id.startsWith("ncei-"))
+      .map((e) => e.id);
+
+    expect(
+      mismatch,
+      [
+        "These catalog entries resolve to the ncei-wcs fetch strategy but their",
+        "ids do NOT start with 'ncei-'. FindDataPanel's terrain gate",
+        "(entry.id.startsWith('ncei-')) will silently skip them, allowing saves",
+        "without terrain. Either rename the ids to use the 'ncei-' prefix or",
+        "update the gate logic to cover the new prefix:",
+        mismatch.join(", "),
+      ].join(" "),
+    ).toEqual([]);
+  });
+});
