@@ -1,7 +1,27 @@
-import { defineConfig, InputTransformerFn } from "orval";
+// InputTransformerFn is used only as a TypeScript type annotation and is not
+// exported as a value from the local orval ESM build.  Mark it type-only so
+// jiti erases it at transform time instead of trying to import it at runtime.
+import type { InputTransformerFn } from "orval";
+import { defineConfig } from "orval";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const root = path.resolve(__dirname, "..", "..");
+// jiti v2 (used by orval 8.9.1) processes TypeScript config files as ESM
+// regardless of the package's "type" field.  __dirname is therefore not
+// guaranteed to be available; derive it from import.meta.url (which jiti
+// resolves to a string literal at transform time) as a safe cross-mode shim.
+function _getDir(): string {
+  try {
+    // CJS context: __dirname is injected directly.
+    // eslint-disable-next-line no-eval
+    return eval("__dirname") as string;
+  } catch {
+    return path.dirname(fileURLToPath(import.meta.url));
+  }
+}
+const _dir = _getDir();
+
+const root = path.resolve(_dir, "..", "..");
 const apiClientReactSrc = path.resolve(root, "lib", "api-client-react", "src");
 const apiZodSrc = path.resolve(root, "lib", "api-zod", "src");
 

@@ -895,6 +895,7 @@ export interface UserSettings {
      */
   lampIntensity?: number;
   /**
+     * Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.
      * @minimum 1
      * @maximum 6
      */
@@ -1297,12 +1298,6 @@ export interface UserSettings {
   datasetManualConditions?: UserSettingsDatasetManualConditions;
   /** Per-dataset active conditions source ('real' or 'manual'), keyed by dataset id. */
   manualConditionsActiveSource?: UserSettingsManualConditionsActiveSource;
-  /**
-     * Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.
-     * @minimum 1
-     * @maximum 6
-     */
-  maxActiveDatasets?: number;
 }
 
 export interface BucketObjectInfo {
@@ -4564,3 +4559,4 @@ export type GetTerrainBundlesPresetId202 = {
   status?: GetTerrainBundlesPresetId202Status;
   message?: string;
 };
+
