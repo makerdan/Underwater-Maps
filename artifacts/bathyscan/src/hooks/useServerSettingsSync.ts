@@ -31,6 +31,7 @@ import { usePaletteStore } from "@/lib/paletteStore";
 import { usePanelCollapseStore, type PanelId, DEFAULTS as PANEL_DEFAULTS } from "@/lib/panelCollapseStore";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useUiStore, CURRENT_DEPTH_LAYERS } from "@/lib/uiStore";
+import { useDriftStore } from "@/lib/driftStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 
 // ─── Singleton mount guard ────────────────────────────────────────────────────
@@ -381,6 +382,21 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     try {
       localStorage.removeItem("bathyscan:zoneOverlaySlots:saltwater");
       localStorage.removeItem("bathyscan:zoneOverlaySlots:freshwater");
+    } catch { /* ignore */ }
+
+    // Clear saved drift plans so the next user on this device starts fresh.
+    useDriftStore.setState({ savedDriftPlans: [], skippedPlanCount: 0 });
+    try { localStorage.removeItem("bathyscan:savedDriftPlans"); } catch { /* ignore */ }
+
+    // Clear GPS column-mapping fingerprints (bathyscan:colmap:*).
+    try {
+      const colmapPrefix = "bathyscan:colmap:";
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(colmapPrefix)) keysToRemove.push(key);
+      }
+      for (const key of keysToRemove) localStorage.removeItem(key);
     } catch { /* ignore */ }
   }, [isSignedIn, isLoaded]);
 
