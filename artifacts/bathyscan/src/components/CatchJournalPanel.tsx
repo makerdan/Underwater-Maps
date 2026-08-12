@@ -9,6 +9,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   useGetMarkersMarkerIdCatches,
   getGetMarkersMarkerIdCatchesQueryKey,
@@ -85,7 +86,7 @@ export const CatchSymbolPicker: React.FC<SymbolPickerProps> = ({ value, onPick }
       >
         {results.length === 0 && (
           <div style={{ color: "#94a3b8", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: 6 }}>
-            No symbols match “{query}”
+            No symbols match "{query}"
           </div>
         )}
         {CATCH_SYMBOL_CATEGORIES.map((cat) => {
@@ -460,12 +461,27 @@ export const CatchJournalPanel: React.FC = () => {
     setConfirmDeleteId(null);
   }, [markerId]);
 
-  if (!marker) return null;
+  // Scroll container ref — the outer panel div is the scroll element.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const entries = catches ?? [];
 
+  const virtualizer = useVirtualizer({
+    count: entries.length,
+    getScrollElement: () => panelRef.current,
+    estimateSize: () => 90,
+    overscan: 5,
+    measureElement:
+      typeof window !== "undefined" && navigator.userAgent.indexOf("Firefox") === -1
+        ? (element) => element.getBoundingClientRect().height
+        : undefined,
+  });
+
+  if (!marker) return null;
+
   return (
     <div
+      ref={panelRef}
       data-testid="catch-journal-panel"
       style={{
         position: "absolute",
@@ -544,111 +560,140 @@ export const CatchJournalPanel: React.FC = () => {
         </div>
       )}
 
-      {entries.map((entry) =>
-        editingId === entry.id ? (
-          <CatchEntryForm
-            key={entry.id}
-            initial={entry}
-            busy={patchMutation.isPending}
-            onSubmit={(data) => patchMutation.mutate({ id: entry.id, data })}
-            onCancel={() => setEditingId(null)}
-          />
-        ) : (
-          <div
-            key={entry.id}
-            data-testid={`catch-entry-${entry.id}`}
-            style={{
-              border: "1px solid rgba(0,229,255,0.15)",
-              borderRadius: 4,
-              padding: "8px 10px",
-              marginBottom: 8,
-              background: "rgba(0,229,255,0.02)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "calc(20px * var(--bs-font-scale, 1))" }}>
-                {entry.symbol}{" "}
-                <span style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
-                  {entry.symbolName}
-                </span>
-              </span>
-              <span style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b" }}>
-                {new Date(entry.createdAt).toLocaleDateString()}
-              </span>
-            </div>
-            {entry.notes && (
-              <div style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginTop: 4, whiteSpace: "pre-wrap" }}>
-                {entry.notes}
-              </div>
-            )}
-            {entry.photos.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-                {entry.photos.map((p) => (
-                  <img
-                    key={p}
-                    src={photoSrc(p)}
-                    alt="Catch photo"
-                    onClick={() => setLightbox(p)}
-                    style={{
-                      width: 52,
-                      height: 52,
-                      objectFit: "cover",
-                      borderRadius: 3,
-                      border: "1px solid rgba(0,229,255,0.2)",
-                      cursor: "zoom-in",
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-              <button
-                type="button"
-                data-testid={`catch-edit-${entry.id}`}
-                onClick={() => { setEditingId(entry.id); setAdding(false); }}
+      {/* Virtualized entries list */}
+      {entries.length > 0 && (
+        <div
+          data-testid="catch-entries-virtual-container"
+          style={{
+            height: virtualizer.getTotalSize(),
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const entry = entries[virtualItem.index];
+            if (!entry) return null;
+            return (
+              <div
+                key={virtualItem.key}
+                data-index={virtualItem.index}
+                data-testid={`catch-entry-row-${virtualItem.index}`}
+                ref={virtualizer.measureElement}
                 style={{
-                  background: "none",
-                  border: "none",
-                  color: "#22d3ee",
-                  cursor: "pointer",
-                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
-                  padding: 0,
-                  ...MONO,
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualItem.start}px)`,
+                  paddingBottom: 8,
+                  boxSizing: "border-box",
                 }}
               >
-                ✏️ Edit
-              </button>
-              {confirmDeleteId === entry.id ? (
-                <>
-                  <button
-                    type="button"
-                    data-testid={`catch-delete-confirm-${entry.id}`}
-                    onClick={() => deleteMutation.mutate({ id: entry.id })}
-                    style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: 0, ...MONO }}
+                {editingId === entry.id ? (
+                  <CatchEntryForm
+                    initial={entry}
+                    busy={patchMutation.isPending}
+                    onSubmit={(data) => patchMutation.mutate({ id: entry.id, data })}
+                    onCancel={() => setEditingId(null)}
+                  />
+                ) : (
+                  <div
+                    data-testid={`catch-entry-${entry.id}`}
+                    style={{
+                      border: "1px solid rgba(0,229,255,0.15)",
+                      borderRadius: 4,
+                      padding: "8px 10px",
+                      background: "rgba(0,229,255,0.02)",
+                    }}
                   >
-                    Confirm delete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDeleteId(null)}
-                    style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: 0, ...MONO }}
-                  >
-                    Keep
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  data-testid={`catch-delete-${entry.id}`}
-                  onClick={() => setConfirmDeleteId(entry.id)}
-                  style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: 0, ...MONO }}
-                >
-                  🗑️ Delete
-                </button>
-              )}
-            </div>
-          </div>
-        ),
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: "calc(20px * var(--bs-font-scale, 1))" }}>
+                        {entry.symbol}{" "}
+                        <span style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
+                          {entry.symbolName}
+                        </span>
+                      </span>
+                      <span style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b" }}>
+                        {new Date(entry.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {entry.notes && (
+                      <div style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#cbd5e1", marginTop: 4, whiteSpace: "pre-wrap" }}>
+                        {entry.notes}
+                      </div>
+                    )}
+                    {entry.photos.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                        {entry.photos.map((p) => (
+                          <img
+                            key={p}
+                            src={photoSrc(p)}
+                            alt="Catch photo"
+                            onClick={() => setLightbox(p)}
+                            style={{
+                              width: 52,
+                              height: 52,
+                              objectFit: "cover",
+                              borderRadius: 3,
+                              border: "1px solid rgba(0,229,255,0.2)",
+                              cursor: "zoom-in",
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                      <button
+                        type="button"
+                        data-testid={`catch-edit-${entry.id}`}
+                        onClick={() => { setEditingId(entry.id); setAdding(false); }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#22d3ee",
+                          cursor: "pointer",
+                          fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                          padding: 0,
+                          ...MONO,
+                        }}
+                      >
+                        ✏️ Edit
+                      </button>
+                      {confirmDeleteId === entry.id ? (
+                        <>
+                          <button
+                            type="button"
+                            data-testid={`catch-delete-confirm-${entry.id}`}
+                            onClick={() => deleteMutation.mutate({ id: entry.id })}
+                            style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: 0, ...MONO }}
+                          >
+                            Confirm delete
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: 0, ...MONO }}
+                          >
+                            Keep
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          data-testid={`catch-delete-${entry.id}`}
+                          onClick={() => setConfirmDeleteId(entry.id)}
+                          style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: 0, ...MONO }}
+                        >
+                          🗑️ Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* Lightbox */}
