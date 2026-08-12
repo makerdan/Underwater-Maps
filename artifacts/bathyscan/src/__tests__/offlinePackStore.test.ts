@@ -349,3 +349,225 @@ describe("saveOfflinePack — SW { ok: false } surface to caller", () => {
     expect(successTerrainEvent?.label).toBe("Terrain cached");
   });
 });
+
+// ── Weather-skip progress event ───────────────────────────────────────────
+//
+// When the weather fetch throws, saveOfflinePack() should emit a distinct
+// progress event so the UI can surface the omission instead of silently
+// succeeding.
+
+describe("saveOfflinePack — weather fetch failure emits warning progress event", () => {
+  const origNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (origNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", origNavigatorDescriptor);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThis as any).navigator;
+    }
+  });
+
+  it("emits step:'weather' with a warning label when the weather fetch rejects", async () => {
+    // Stub the SW to accept terrain caching immediately.
+    let capturedPort1: { onmessage: ((e: MessageEvent) => void) | null } | null = null;
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      capturedPort1 = { onmessage: null };
+      return { port1: capturedPort1, port2: {} };
+    });
+    const postMessageSpy = vi.fn().mockImplementation(() => {
+      Promise.resolve().then(() => {
+        capturedPort1?.onmessage?.({ data: { ok: true } } as MessageEvent);
+      });
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: { postMessage: postMessageSpy } }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    // Stub fetch: tide succeeds, weather rejects.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes("/tidal/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              station: "TEST",
+              heightPredictions: [],
+              currentPredictions: [],
+              tidalExpiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(),
+              generatedAt: new Date().toISOString(),
+            }),
+          });
+        }
+        // Weather endpoint rejects
+        return Promise.reject(new Error("Network error"));
+      }),
+    );
+
+    const events: PackProgress[] = [];
+    // The call should still resolve (weather is best-effort).
+    await saveOfflinePack({ id: "ds-weather-fail", name: "Weather Fail Dataset" }, 3, (p) =>
+      events.push(p),
+    );
+
+    const weatherWarning = events.find((p) => p.step === "weather" && p.done);
+    expect(weatherWarning).toBeDefined();
+    expect(weatherWarning?.label).toMatch(/unavailable/i);
+    // Must NOT carry an error field that would surface as a hard failure in the UI.
+    expect(weatherWarning?.error).toBeUndefined();
+  });
+
+  it("does not emit the normal 'Weather snapshot saved' event when fetch rejects", async () => {
+    let capturedPort1: { onmessage: ((e: MessageEvent) => void) | null } | null = null;
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      capturedPort1 = { onmessage: null };
+      return { port1: capturedPort1, port2: {} };
+    });
+    const postMessageSpy = vi.fn().mockImplementation(() => {
+      Promise.resolve().then(() => {
+        capturedPort1?.onmessage?.({ data: { ok: true } } as MessageEvent);
+      });
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: { postMessage: postMessageSpy } }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes("/tidal/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              station: "TEST",
+              heightPredictions: [],
+              currentPredictions: [],
+              tidalExpiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(),
+              generatedAt: new Date().toISOString(),
+            }),
+          });
+        }
+        return Promise.reject(new Error("Network error"));
+      }),
+    );
+
+    const events: PackProgress[] = [];
+    await saveOfflinePack({ id: "ds-weather-fail2", name: "Weather Fail Dataset 2" }, 3, (p) =>
+      events.push(p),
+    );
+
+    const successWeatherEvent = events.find(
+      (p) => p.step === "weather" && p.label === "Weather snapshot saved",
+    );
+    expect(successWeatherEvent).toBeUndefined();
+  });
+});
+
+// ── SW timeout without ack rejects ────────────────────────────────────────
+//
+// When the SW is registered but never responds on the MessageChannel port,
+// cacheTerrain() must reject (rather than resolve silently) after the timeout.
+// This ensures the pack creation flow surfaces a visible warning instead of
+// claiming success for terrain that was never cached.
+
+describe("saveOfflinePack — SW timeout without ack rejects", () => {
+  const origNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    if (origNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", origNavigatorDescriptor);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThis as any).navigator;
+    }
+  });
+
+  it("rejects and emits a terrain error event when the SW never acks the CACHE_PACK message", async () => {
+    vi.useFakeTimers();
+
+    // Stub MessageChannel: port1.onmessage will be captured but never called.
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      return { port1: { onmessage: null }, port2: {} };
+    });
+
+    // Stub postMessage to do nothing (no reply from the SW).
+    const postMessageSpy = vi.fn();
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: { postMessage: postMessageSpy } }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const events: PackProgress[] = [];
+    // Attach .catch() immediately so the rejection is never "unhandled" while
+    // fake timers advance past the 10-second SW ack timeout.
+    const promise = saveOfflinePack(
+      { id: "ds-sw-timeout", name: "SW Timeout Dataset" },
+      3,
+      (p) => events.push(p),
+    ).catch((e: unknown) => e);   // capture, not suppress — we inspect it below
+
+    // Advance past the 10-second SW timeout.
+    await vi.advanceTimersByTimeAsync(11000);
+
+    const result = await promise;
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toMatch(/timed out/i);
+
+    const terrainErrorEvent = events.find((p) => p.step === "terrain" && p.error !== undefined);
+    expect(terrainErrorEvent).toBeDefined();
+    expect(terrainErrorEvent?.error).toMatch(/timed out/i);
+  });
+
+  it("does not write a pack to IndexedDB when SW ack times out", async () => {
+    vi.useFakeTimers();
+
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      return { port1: { onmessage: null }, port2: {} };
+    });
+    const postMessageSpy = vi.fn();
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: { postMessage: postMessageSpy } }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    // Attach .catch() immediately so the rejection is never "unhandled" during
+    // fake-timer advancement.
+    const promise = saveOfflinePack(
+      { id: "ds-sw-timeout2", name: "SW Timeout Dataset 2" },
+      3,
+      () => { /* noop */ },
+    ).catch(() => { /* expected rejection */ });
+
+    await vi.advanceTimersByTimeAsync(11000);
+    await promise;
+
+    const packs = await listOfflinePacks();
+    expect(packs).toHaveLength(0);
+  });
+});

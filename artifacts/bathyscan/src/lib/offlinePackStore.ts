@@ -100,8 +100,17 @@ async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<vo
   const reg = await navigator.serviceWorker.ready;
   if (!reg.active) return;
   return new Promise<void>((resolve, reject) => {
+    // Track whether the SW sent a successful ack before the timeout fires.
+    // If the SW is absent (dev build, update race, browser restriction) the
+    // MessageChannel port will never receive a message.  Resolving silently in
+    // that case masks a real failure — the terrain is never cached and the pack
+    // will fail when the device goes offline.  Rejecting instead lets the
+    // caller surface a visible warning through onProgress.
+    let ackReceived = false;
+
     const channel = new MessageChannel();
     channel.port1.onmessage = (e: MessageEvent<{ ok: boolean; error?: string }>) => {
+      ackReceived = true;
       if (e.data.ok) resolve();
       else reject(new Error(e.data.error ?? "SW CACHE_PACK failed"));
     };
@@ -109,7 +118,11 @@ async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<vo
       { type: "CACHE_PACK", terrainUrl, overviewUrl },
       [channel.port2],
     );
-    setTimeout(() => resolve(), 10000);
+    setTimeout(() => {
+      if (!ackReceived) {
+        reject(new Error("SW CACHE_PACK timed out — terrain may not be cached for offline use"));
+      }
+    }, 10000);
   });
 }
 
@@ -171,10 +184,19 @@ export async function saveOfflinePack(
     if (!weatherRes.ok) throw new Error(`HTTP ${weatherRes.status}`);
     weatherPack = (await weatherRes.json()) as WeatherPack;
   } catch {
-    // Weather is best-effort — create a minimal pack if it fails
+    // Weather is best-effort — create a minimal pack if it fails, but tell
+    // the caller so the UI can surface the omission rather than showing a
+    // silent success followed by an empty weather panel when offline.
     weatherPack = { station: null, observation: null, snapshotAt: new Date().toISOString() };
+    onProgress({
+      step: "weather",
+      label: "Weather unavailable — pack saved without weather data",
+      done: true,
+    });
   }
-  onProgress({ step: "weather", label: "Weather snapshot saved", done: true });
+  if (weatherPack.station !== null || weatherPack.observation !== null) {
+    onProgress({ step: "weather", label: "Weather snapshot saved", done: true });
+  }
 
   // Step 4: save to IndexedDB
   onProgress({ step: "saving", label: "Writing to storage…", done: false });
