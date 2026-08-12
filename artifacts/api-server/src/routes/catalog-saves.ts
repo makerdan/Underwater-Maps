@@ -53,6 +53,7 @@ import {
   searchCatalog,
   type CatalogSeedEntry,
 } from "../lib/catalogSeeder.js";
+import { createRateLimit } from "../middlewares/rateLimit.js";
 import {
   AreaRequestContextSchema,
   applyAreaRequestGrouping,
@@ -77,6 +78,25 @@ import {
 } from "../lib/efhFetcher.js";
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// Per-IP rate limit for public catalog read endpoints (no auth required).
+// 60 requests/minute per IP — generous enough for legitimate browsing but
+// finite enough to deter unauthenticated enumeration scrapers.
+// Constants are exported so tests can build the correct bucket key without
+// duplicating magic numbers.
+// ---------------------------------------------------------------------------
+
+export const CATALOG_READ_ROUTE = "catalog-read";
+export const CATALOG_READ_WINDOW_MS = 60_000;
+export const CATALOG_READ_MAX = 60;
+
+const catalogReadRateLimit = createRateLimit({
+  route: CATALOG_READ_ROUTE,
+  windowMs: CATALOG_READ_WINDOW_MS,
+  max: CATALOG_READ_MAX,
+  mode: "ip",
+});
 
 // ---------------------------------------------------------------------------
 // Periodic sweeper: recover saves that are permanently stuck in "processing"
@@ -139,7 +159,7 @@ export async function recoverStuckSaves(): Promise<void> {
       );
     }
   } catch (err) {
-    logger.warn({ err }, `[catalog-saves] recoverStuckSaves failed: ${(err as Error).message}`);
+    logger.error({ err }, `[catalog-saves] recoverStuckSaves failed: ${(err as Error).message}`);
   }
 }
 
@@ -151,9 +171,13 @@ export async function recoverStuckSaves(): Promise<void> {
 export function startStuckSavesSweeper(
   intervalMs = 10 * 60 * 1000,
 ): ReturnType<typeof setInterval> {
-  void recoverStuckSaves();
+  void recoverStuckSaves().catch((err: unknown) => {
+    logger.error({ err }, "[catalog-saves] startStuckSavesSweeper: recoverStuckSaves failed");
+  });
   return setInterval(() => {
-    void recoverStuckSaves();
+    void recoverStuckSaves().catch((err: unknown) => {
+      logger.error({ err }, "[catalog-saves] startStuckSavesSweeper: recoverStuckSaves failed");
+    });
   }, intervalMs);
 }
 
@@ -200,7 +224,7 @@ function toCatalogResponse(entry: CatalogSeedEntry, createdAt?: string) {
 // GET /datasets/catalog
 // ---------------------------------------------------------------------------
 
-router.get("/datasets/catalog", asyncHandler(async (req, res): Promise<void> => {
+router.get("/datasets/catalog", catalogReadRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const rawDataType = req.query["dataType"] as string | undefined;
   const rawWaterType = req.query["waterType"] as string | undefined;
 
@@ -219,7 +243,7 @@ router.get("/datasets/catalog", asyncHandler(async (req, res): Promise<void> => 
 // GET /datasets/catalog/search
 // ---------------------------------------------------------------------------
 
-router.get("/datasets/catalog/search", asyncHandler(async (req, res): Promise<void> => {
+router.get("/datasets/catalog/search", catalogReadRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const queryParsed = CatalogSearchQuerySchema.safeParse(req.query);
   if (!queryParsed.success) {
     res.status(400).json({
@@ -270,7 +294,7 @@ const MIN_BBOX_DEG = 1e-4;
 const MAX_BBOX_LON_DEG = 180;
 const MAX_BBOX_LAT_DEG = 170;
 
-router.post("/datasets/bbox-query", validateBody(BboxQueryBody, "POST /api/datasets/bbox-query"), asyncHandler(async (req, res): Promise<void> => {
+router.post("/datasets/bbox-query", catalogReadRateLimit, validateBody(BboxQueryBody, "POST /api/datasets/bbox-query"), asyncHandler(async (req, res): Promise<void> => {
   const { dataType, waterType, north: rawNorth, south: rawSouth, east: rawEast, west: rawWest } = res.locals.parsedBody;
   const north = Math.max(-90, Math.min(90, rawNorth));
   const south = Math.max(-90, Math.min(90, rawSouth));

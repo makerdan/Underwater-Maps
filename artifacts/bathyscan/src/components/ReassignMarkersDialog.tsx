@@ -61,7 +61,7 @@ export const ReassignMarkersDialog: React.FC<Props> = ({ onClose }) => {
             maxLon: bbox.maxLon,
           }
         : undefined,
-    [bbox?.minLat, bbox?.minLon, bbox?.maxLat, bbox?.maxLon], // eslint-disable-line react-hooks/exhaustive-deps -- stable primitive fields; object identity changes on every render
+    [bbox?.minLat, bbox?.minLon, bbox?.maxLat, bbox?.maxLon], // eslint-disable-line react-hooks/exhaustive-deps -- individual scalar fields used instead of the bbox object to avoid a fresh-reference on every render
   );
 
   const { data: unassignedMarkers, isLoading: markersLoading } = useGetMarkers(
