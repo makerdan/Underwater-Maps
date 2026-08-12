@@ -1096,11 +1096,26 @@ function Main() {
         }
       }
       if (e.key === "Escape" && !e.repeat) {
-        setQueryOpen(false);
-        useHighlightStore.getState().clearHighlight();
-        const store = useUiStore.getState();
-        if (store.overviewOpen) store.setOverviewOpen(false);
-        if (store.whatsHereOpen) store.setWhatsHereOpen(false);
+        // Guard: don't close panels when the user is typing in an input,
+        // textarea, select, or contenteditable — Escape should dismiss the
+        // field/dropdown first, not blow away the whole panel.
+        const activeEl = document.activeElement as HTMLElement | null;
+        const activeTag = activeEl?.tagName ?? "";
+        if (
+          activeTag === "INPUT" ||
+          activeTag === "TEXTAREA" ||
+          activeTag === "SELECT" ||
+          activeEl?.isContentEditable
+        ) {
+          // Let the browser handle Escape for the focused element (clears
+          // input, closes a <select> popup, etc.) without closing panels.
+        } else {
+          setQueryOpen(false);
+          useHighlightStore.getState().clearHighlight();
+          const store = useUiStore.getState();
+          if (store.overviewOpen) store.setOverviewOpen(false);
+          if (store.whatsHereOpen) store.setWhatsHereOpen(false);
+        }
       }
       // M — cycle sidebar modes: Explore → Plan → Analyze → Live → Explore
       if (e.code === "KeyM" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {

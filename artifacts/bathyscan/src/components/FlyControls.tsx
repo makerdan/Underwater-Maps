@@ -36,6 +36,22 @@ export const FlyControls = () => {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // Guard: don't process any keyboard shortcuts when focus is inside an
+      // editable element (input, textarea, select, contenteditable). This
+      // prevents WASD / speed-change keys from firing while the user types in
+      // Settings sliders, GPS import fields, palette boxes, etc.
+      // Exception: pointer-locked state precludes any element having focus, so
+      // skip the guard when the canvas already has the pointer locked.
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeTag = activeEl?.tagName ?? "";
+      const isEditableFocused =
+        !isPointerLocked.current &&
+        (activeTag === "INPUT" ||
+          activeTag === "TEXTAREA" ||
+          activeTag === "SELECT" ||
+          activeEl?.isContentEditable === true);
+      if (isEditableFocused) return;
+
       keys.current[e.code] = true;
       const bindings = keyBindingsRef.current;
       if (e.code === getBoundKey(bindings, "speedUp") || e.code === "NumpadAdd") {
@@ -74,6 +90,13 @@ export const FlyControls = () => {
     };
 
     const onWheel = (e: WheelEvent) => {
+      // Guard: don't zoom the camera when the active element is an input,
+      // textarea, or select — e.g. scrolling inside a Settings range slider
+      // or a dropdown should not also move the camera.
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeTag = activeEl?.tagName ?? "";
+      if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT") return;
+
       if (e.shiftKey) {
         if (e.deltaY > 0) {
           setSpeedIndex(Math.min(FLY_SPEEDS_MPH.length - 1, speedIndexRef.current + 1));
