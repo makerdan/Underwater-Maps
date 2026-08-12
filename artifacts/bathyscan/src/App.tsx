@@ -19,6 +19,7 @@ import { AppProvider, useAppState } from "@/lib/context";
 import { registerTestBridge, registerTestCameraPosRef } from "@/lib/testHelpers";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { TourScene } from "@/pages/TourScene";
+import NotFound from "@/pages/not-found";
 import { Settings } from "@/pages/Settings";
 import { HUD } from "@/components/HUD";
 import { DepthScaleBar } from "@/components/DepthScaleBar";
@@ -2394,6 +2395,7 @@ function ClerkProviderWithRoutes() {
         <Route path="/settings" component={SettingsRoute} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
+        <Route component={NotFound} />
       </Switch>
     </ClerkProvider>
   );
