@@ -55,6 +55,7 @@ function sanitizeLegacyStoredJson(raw: unknown): Record<string, unknown> {
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
 import { logger } from "../lib/logger.js";
@@ -191,7 +192,7 @@ router.patch("/user/datasets/:id/rename", requireAuth, validateBody(PatchUserDat
 }));
 
 // ── POST /user/datasets/:id/duplicate ──────────────────────────────────────
-router.post("/user/datasets/:id/duplicate", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.post("/user/datasets/:id/duplicate", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
@@ -362,7 +363,7 @@ router.get("/user/datasets/:id/raster-image", requireAuth, asyncHandler(async (r
 // Accepts 2–4 control points mapping pixel coordinates to WGS84 lon/lat,
 // persists them, clears the pending raster blob (to save DB space), and
 // marks the dataset as no longer requiring georeferencing.
-router.post("/user/datasets/:id/georef", requireAuth, validateBody(GeorefBodySchema, "POST /api/user/datasets/:id/georef"), asyncHandler(async (req, res): Promise<void> => {
+router.post("/user/datasets/:id/georef", requireAuth, dataMutationRateLimit, validateBody(GeorefBodySchema, "POST /api/user/datasets/:id/georef"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 
@@ -431,7 +432,7 @@ router.get("/user/datasets/:id/hyd93-features", requireAuth, asyncHandler(async 
 }));
 
 // ── DELETE /user/datasets/:id ───────────────────────────────────────────────
-router.delete("/user/datasets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.delete("/user/datasets/:id", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
 

@@ -18,6 +18,7 @@ import { FederatedSearchQuerySchema } from "@workspace/api-zod";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { validateBody } from "../middlewares/validateBody.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { logger } from "../lib/logger.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { invalidateCatalogCache, type CatalogSeedEntry } from "../lib/catalogSeeder.js";
@@ -193,6 +194,7 @@ function sanitizeFederatedId(id: string): string {
 router.post(
   "/search/federated/save",
   requireAuth,
+  dataMutationRateLimit,
   validateBody(FederatedSaveBodySchema, "POST /api/search/federated/save"),
   asyncHandler(async (req, res): Promise<void> => {
     const userId = (req as AuthenticatedRequest).clerkUserId;

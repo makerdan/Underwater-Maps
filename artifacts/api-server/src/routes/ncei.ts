@@ -51,6 +51,7 @@ import { db, datasetCatalogTable, userCatalogSavesTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { invalidateCatalogCache, type CatalogSeedEntry } from "../lib/catalogSeeder.js";
 import { materializeSave, formatSaveRow } from "./catalog-saves.js";
 import {
@@ -637,7 +638,7 @@ function portalResultToCatalogEntry(result: NceiPortalResult): CatalogSeedEntry 
   };
 }
 
-router.post("/ncei/save", requireAuth, validateBody(NceiSaveBodySchema, "POST /api/ncei/save"), asyncHandler(async (req, res): Promise<void> => {
+router.post("/ncei/save", requireAuth, dataMutationRateLimit, validateBody(NceiSaveBodySchema, "POST /api/ncei/save"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   // Coerce optional Zod fields (undefined) → null to satisfy NceiPortalResult

@@ -33,6 +33,7 @@ import { getFetcher } from "../lib/fetchers/index.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateParams } from "../middlewares/validateBody.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { logger } from "../lib/logger.js";
 import type { BathyFetchBundle, Bbox, FetchStrategy } from "../lib/fetchers/types.js";
 
@@ -297,6 +298,7 @@ const PresetIdParamSchema = z.object({
 router.post(
   "/terrain/bundles",
   requireAuth,
+  dataMutationRateLimit,
   validateBody(PostBundleBodySchema, "POST /api/terrain/bundles"),
   asyncHandler(async (req, res) => {
     const { clerkUserId: userId } = req as AuthenticatedRequest;

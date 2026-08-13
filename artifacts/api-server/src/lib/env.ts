@@ -38,16 +38,16 @@ export function parsePositiveIntEnv(
   const max = opts.max ?? Number.MAX_SAFE_INTEGER;
   if (!/^\d+$/.test(raw.trim())) {
     logger.warn(
-      { name, value: raw },
-      `[env] ${name}='${raw}' is not a positive integer — falling back to ${fallback}`,
+      { name, valueLength: raw.length, valuePreview: raw.slice(0, 3) + "…" },
+      `[env] ${name} is not a positive integer (length ${raw.length}) — falling back to ${fallback}`,
     );
     return fallback;
   }
   const parsed = Number(raw.trim());
   if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
     logger.warn(
-      { name, value: raw, min, max },
-      `[env] ${name}='${raw}' is outside [${min}, ${max}] — falling back to ${fallback}`,
+      { name, valueLength: raw.length, min, max },
+      `[env] ${name} value is outside [${min}, ${max}] — falling back to ${fallback}`,
     );
     return fallback;
   }
@@ -151,14 +151,15 @@ export function validateStartupEnv(): EnvIssue[] {
   }
 
   for (const issue of issues) {
+    const safeMeta = { name: issue.name, valueLength: issue.value.length, valuePreview: issue.value.slice(0, 3) + "…" };
     if (issue.critical) {
       logger.error(
-        { name: issue.name, value: issue.value },
+        safeMeta,
         `[env] CRITICAL: ${issue.name} ${issue.problem}`,
       );
     } else {
       logger.warn(
-        { name: issue.name, value: issue.value },
+        safeMeta,
         `[env] ${issue.name} ${issue.problem}`,
       );
     }

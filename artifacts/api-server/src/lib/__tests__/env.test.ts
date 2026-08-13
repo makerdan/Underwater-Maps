@@ -19,6 +19,13 @@ vi.mock("../logger.js", () => ({
 
 import { parsePositiveIntEnv, validateStartupEnv } from "../env.js";
 
+// Helper: extract all plain objects passed as the first arg to mockWarn calls.
+function warnDataObjects(): Record<string, unknown>[] {
+  return (mockWarn as ReturnType<typeof vi.fn>).mock.calls.map(
+    (args: unknown[]) => args[0] as Record<string, unknown>,
+  );
+}
+
 beforeEach(() => {
   mockWarn.mockClear();
 });
@@ -57,6 +64,61 @@ describe("parsePositiveIntEnv", () => {
     vi.stubEnv("ENV_TEST_RANGE", "999");
     expect(parsePositiveIntEnv("ENV_TEST_RANGE", 42, { min: 1, max: 100 })).toBe(42);
     expect(mockWarn).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Log-safety: raw secret values must never appear in log objects ─────────────
+
+describe("parsePositiveIntEnv — log object must not contain raw value", () => {
+  it("warns without emitting a 'value' field containing the raw string", () => {
+    const secret = "sk_live_super_secret_token_12345";
+    vi.stubEnv("ENV_TEST_SECRET_SHAPE", secret);
+    parsePositiveIntEnv("ENV_TEST_SECRET_SHAPE", 42);
+
+    expect(mockWarn).toHaveBeenCalledTimes(1);
+    const dataObj = warnDataObjects()[0]!;
+    // Must not have a field whose value equals the raw secret string.
+    expect(Object.values(dataObj)).not.toContain(secret);
+    // Must not have a 'value' key at all (previously leaked raw).
+    expect(dataObj).not.toHaveProperty("value");
+    // Should have safe metadata instead.
+    expect(dataObj).toHaveProperty("name", "ENV_TEST_SECRET_SHAPE");
+    expect(dataObj).toHaveProperty("valueLength", secret.length);
+  });
+});
+
+describe("validateStartupEnv — log object must not contain raw value", () => {
+  it("warns without emitting a 'value' field containing the raw ADMIN_USER_IDS string", () => {
+    // A realistic secret-shaped value that fails admin-id validation.
+    const secretLike = "user ok space,user_good";
+    vi.stubEnv("ADMIN_USER_IDS", secretLike);
+    const issues = validateStartupEnv();
+
+    expect(issues.some((i) => i.name === "ADMIN_USER_IDS")).toBe(true);
+    expect(mockWarn).toHaveBeenCalled();
+
+    for (const dataObj of warnDataObjects()) {
+      // None of the logged data objects should carry the raw value string.
+      expect(Object.values(dataObj)).not.toContain(secretLike);
+      expect(dataObj).not.toHaveProperty("value");
+    }
+  });
+
+  it("logs safe metadata (name, valueLength, valuePreview) instead of the raw value", () => {
+    vi.stubEnv("ALLOWED_ORIGINS", "https://example.com/path/leak");
+    validateStartupEnv();
+
+    expect(mockWarn).toHaveBeenCalled();
+    const dataObj = warnDataObjects()[0]!;
+    expect(dataObj).toHaveProperty("name", "ALLOWED_ORIGINS");
+    expect(dataObj).toHaveProperty("valueLength");
+    expect(typeof dataObj["valueLength"]).toBe("number");
+    // valuePreview must be a short prefix — not the full raw string.
+    expect(dataObj).toHaveProperty("valuePreview");
+    expect(typeof dataObj["valuePreview"]).toBe("string");
+    const preview = dataObj["valuePreview"] as string;
+    expect(preview.length).toBeLessThanOrEqual(8); // "htt…" style
+    expect(preview).not.toBe("https://example.com/path/leak");
   });
 });
 
