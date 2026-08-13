@@ -462,6 +462,31 @@ export function normalizeLonDelta(dLon: number): number {
 }
 
 /**
+ * Compute the geographic longitude span (in degrees) for a bbox, correctly
+ * handling antimeridian-crossing bboxes (maxLon < minLon) and wide bboxes
+ * greater than 180°.
+ *
+ * Why not use `Math.abs(normalizeLonDelta(maxLon - minLon))`?
+ *   `normalizeLonDelta` folds any angle into [−180, +180]. A full-world bbox
+ *   (−180..180) yields maxLon − minLon = 360°, which normalizeLonDelta maps
+ *   to 0°, and any bbox wider than 180° is folded to its short complement.
+ *   This causes grossly wrong XZ coordinates for global/wide datasets.
+ *
+ * Correct formula:
+ *   • Normal (maxLon ≥ minLon):  maxLon − minLon          (direct span)
+ *   • Crossing (maxLon < minLon): maxLon + 360 − minLon   (short arc across ±180°)
+ *
+ * Examples:
+ *   lonSpan(-180, 180) → 360   (full globe — preserved, not folded to 0)
+ *   lonSpan(0, 200)    → 200   (wide non-crossing — preserved)
+ *   lonSpan(170, -170) →  20   (20° antimeridian-crossing arc)
+ *   lonSpan(-10, 0)    →  10   (normal US/Europe scale)
+ */
+export function lonSpan(minLon: number, maxLon: number): number {
+  return maxLon >= minLon ? maxLon - minLon : maxLon + 360 - minLon;
+}
+
+/**
  * Convert a world-space Y value sampled from the terrain mesh into the
  * corresponding display depth for the given grid.
  *
@@ -920,16 +945,66 @@ export function traceDepthContourSegment(
 }
 
 /**
+ * Compute the geographic center longitude of a bounding box in a
+ * dateline-aware way.
+ *
+ * For bboxes that do NOT cross the antimeridian (maxLon >= minLon) the
+ * arithmetic mean is correct.  For bboxes that DO cross (maxLon < minLon,
+ * e.g. minLon=170, maxLon=-170) the arithmetic mean produces 0° instead of
+ * the correct 180°/-180°.  The fix: add 360° to maxLon before averaging,
+ * then normalise the result back into [−180, 180].
+ *
+ * Test cases:
+ *   bboxCenterLon(170, -170) → 180  (antimeridian-crossing)
+ *   bboxCenterLon(-10, 10)   →   0  (normal)
+ *   bboxCenterLon(0, 90)     →  45  (normal)
+ *   bboxCenterLon(-180, 180) →   0  (full-globe)
+ */
+export function bboxCenterLon(minLon: number, maxLon: number): number {
+  if (maxLon >= minLon) {
+    // Normal case — no antimeridian crossing.
+    return (minLon + maxLon) / 2;
+  }
+  // Antimeridian-crossing: add 360° to maxLon so arithmetic is contiguous,
+  // then normalise the result back to [−180, 180].
+  return normalizeLonDelta((minLon + (maxLon + 360)) / 2);
+}
+/**
  * Convert geographic longitude/latitude to world-space XZ coordinates.
+ *
+ * Dateline-aware: correctly handles bboxes crossing the antimeridian (maxLon
+ * < minLon), full-world bboxes (−180..180), and wide non-crossing bboxes.
+ *
+ * Why lonSpan instead of raw maxLon − minLon?
+ *   For crossing bboxes (maxLon < minLon), the raw difference is negative.
+ *   lonSpan(minLon, maxLon) = maxLon + 360 − minLon gives the correct positive
+ *   arc. For full-world bboxes, direct span = 360° (not folded to 0° by
+ *   normalizeLonDelta which would cause divide-by-zero).
+ *
+ * Why branch the delta on crossing vs non-crossing?
+ *   For non-crossing bboxes, raw lon − minLon is always ≥ 0 for markers inside
+ *   the bbox. normalizeLonDelta would fold a 180° delta (full-world centre) to
+ *   −180°, placing it at the far west edge. Raw delta is correct here.
+ *   For crossing bboxes (maxLon < minLon), markers east of the antimeridian
+ *   (lon < minLon, e.g. lon=−170 when minLon=170) produce a raw delta of ~−340°.
+ *   normalizeLonDelta folds −340° → +20°, giving the correct positive offset.
+ *
+ * Examples for minLon=170, maxLon=−170 (20° crossing arc):
+ *   lon=170  → x=−50  (west edge)
+ *   lon=180  → x=  0  (centre)
+ *   lon=−170 → x=+50  (east edge)
  */
 export function lonLatToWorldXZ(
   lon: number,
   lat: number,
   grid: TerrainData,
 ): { x: number; z: number } {
-  const lonRange = grid.maxLon - grid.minLon || 1;
-  const latRange = grid.maxLat - grid.minLat || 1;
-  const x = ((lon - grid.minLon) / lonRange) * WORLD_SIZE - WORLD_SIZE / 2;
+  const lonRange = lonSpan(grid.minLon, grid.maxLon) || 1;
+  const latRange = (grid.maxLat - grid.minLat) || 1;
+  const lonDelta = grid.maxLon < grid.minLon
+    ? normalizeLonDelta(lon - grid.minLon)   // crossing: fold into [−180,+180]
+    : (lon - grid.minLon);                   // non-crossing: raw delta
+  const x = (lonDelta / lonRange) * WORLD_SIZE - WORLD_SIZE / 2;
   const z = ((lat - grid.minLat) / latRange) * WORLD_SIZE - WORLD_SIZE / 2;
   return { x, z };
 }

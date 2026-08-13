@@ -3,8 +3,11 @@
  * a MarkerSprite for each one inside the Three.js scene.
  *
  * Multi-primary: fans out useGetMarkers across all visible datasets (up to
- * VISIBLE_DATASETS_CAP = 4) and merges results. Each marker is placed in the
- * primary coordinate frame using its geographic lon/lat.
+ * VISIBLE_DATASETS_CAP = 4) and merges results. Each marker is placed in its
+ * own dataset's coordinate frame (not the primary's): MarkerSprite receives
+ * the activeGrid for the marker's datasetId so lonLatToWorldXZ uses the
+ * correct bbox. Markers whose dataset has no loaded grid are suppressed with
+ * a dev-mode console warning rather than placed using the wrong frame.
  *
  * When puzzle mode is active in the Overview Map, markers follow their
  * dataset tile — the puzzle transform is read from puzzleStore (written by
@@ -19,10 +22,11 @@ import {
   useGetCatches,
   getGetCatchesQueryKey,
 } from "@workspace/api-client-react";
-import type { Marker, CatchEntry } from "@workspace/api-client-react";
+import type { Marker, CatchEntry, TerrainData } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { MarkerSprite } from "./MarkerSprite";
+import { computeSecondaryMeshTransform } from "./NonPrimaryDatasetMeshes";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
 import { markerGroupRef } from "@/lib/markerGroupRef";
@@ -151,6 +155,20 @@ export function groupCatchSymbolsByMarker(entries: CatchEntry[]): Map<string, st
   return map;
 }
 
+/**
+ * Per-dataset info needed to render markers in the correct coordinate frame.
+ * For the primary dataset the transform is identity; for secondaries it is the
+ * same group transform applied by NonPrimaryDatasetMeshes so markers always
+ * sit exactly on top of their corresponding terrain tile.
+ */
+interface DatasetMarkerGroup {
+  grid: TerrainData;
+  /** Primary world-space translation [cx, cy, cz] for the group. Primary = [0,0,0]. */
+  position: [number, number, number];
+  /** Scale [xScale, yScale, zScale]. Primary = [1,1,1]. */
+  scale: [number, number, number];
+}
+
 export const MarkerLayer: React.FC = () => {
   const { terrain } = useAppState();
   const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
@@ -160,43 +178,46 @@ export const MarkerLayer: React.FC = () => {
   const setSubsampleState = useMarkerLayerStore((s) => s.setSubsampleState);
   const clear = useMarkerLayerStore((s) => s.clear);
 
-  // Puzzle store — read by MarkerLayer so each MarkerSprite can receive an
-  // adjusted lon/lat when its dataset tile has been moved in puzzle mode.
+  // Puzzle store — read so each MarkerSprite receives an adjusted lon/lat when
+  // its dataset tile has been moved in puzzle mode (task 3560).
   const puzzleMode = usePuzzleStore((s) => s.puzzleMode);
   const puzzleTransforms = usePuzzleStore((s) => s.puzzleTransforms);
   const overviewTransform = usePuzzleStore((s) => s.overviewTransform);
   const worldGrid = usePuzzleStore((s) => s.worldGrid);
 
-  const markers = useAllDatasetMarkers();
-  const catchSymbolsByMarker = useCatchSymbolsByMarker();
-
-  const visibleMarkers = (!terrain || !markers.length)
-    ? []
-    : markers.filter(
-        (m) => m.type === "depth_pole" || visibleMarkerTypes.includes(m.type as typeof visibleMarkerTypes[number]),
-      ).filter((m) => {
-        // Suppress markers whose geographic coordinates fall outside the primary
-        // terrain's bounding box. Without this guard lonLatToWorldXZ produces
-        // world X/Z values beyond ±50, and getTerrainSurfaceY extrapolates from
-        // the nearest edge cell rather than returning a meaningful depth — the
-        // marker would render at an arbitrary off-edge position.
-        const inBounds = isMarkerInBounds(m, terrain);
-        if (!inBounds && import.meta.env.DEV) {
-          console.warn(
-            `[MarkerLayer] marker ${m.id} suppressed: lon=${m.lon} lat=${m.lat} is outside terrain bbox ` +
-            `[${terrain.minLon},${terrain.maxLon}]×[${terrain.minLat},${terrain.maxLat}]`,
-          );
-        }
-        return inBounds;
-      });
-
-  // When the count of visible markers exceeds the user's cluster threshold,
-  // subsample uniformly so the scene stays readable.
-  let rendered = visibleMarkers;
-  if (clusterThreshold > 0 && visibleMarkers.length > clusterThreshold) {
-    const stride = Math.ceil(visibleMarkers.length / clusterThreshold);
-    rendered = visibleMarkers.filter((_, i) => i % stride === 0);
-  }
+  // Build a map from datasetId → { grid, position, scale } so each marker
+  // can be rendered inside the same group transform its TerrainMesh occupies.
+  //
+  // Why: lonLatToWorldXZ maps a marker's lon/lat to its dataset's OWN local
+  // world space ([-50,50]).  For secondary datasets that space is then
+  // translated and scaled by NonPrimaryDatasetMeshes to align with the primary.
+  // Wrapping secondary markers in an identical group transform means the same
+  // lonLatToWorldXZ result yields the correct PRIMARY world-space position
+  // without any additional math in MarkerSprite.
+  const datasetGroups = useMemo((): Map<string, DatasetMarkerGroup> => {
+    const map = new Map<string, DatasetMarkerGroup>();
+    if (!terrain) return map;
+    for (const v of visibleDatasets) {
+      if (!v.activeGrid) continue;
+      if (v.datasetId === terrain.datasetId) {
+        // Primary: identity transform — markers sit directly in primary world space.
+        map.set(v.datasetId, {
+          grid: v.activeGrid,
+          position: [0, 0, 0],
+          scale: [1, 1, 1],
+        });
+      } else {
+        // Secondary: use the same transform as the mesh so markers co-locate.
+        const { cx, cy, cz, xScale, yScale, zScale } = computeSecondaryMeshTransform(terrain, v.activeGrid);
+        map.set(v.datasetId, {
+          grid: v.activeGrid,
+          position: [cx, cy, cz],
+          scale: [xScale, yScale, zScale],
+        });
+      }
+    }
+    return map;
+  }, [terrain, visibleDatasets]);
 
   // Build a map from datasetId → overviewGrid for puzzle-transform lookups.
   // Only includes datasets that have an overviewGrid (bbox required for pivot).
@@ -209,6 +230,38 @@ export const MarkerLayer: React.FC = () => {
     }
     return m;
   }, [visibleDatasets]);
+
+  const markers = useAllDatasetMarkers();
+  const catchSymbolsByMarker = useCatchSymbolsByMarker();
+
+  const visibleMarkers = (!terrain || !markers.length)
+    ? []
+    : markers.filter(
+        (m) => m.type === "depth_pole" || visibleMarkerTypes.includes(m.type as typeof visibleMarkerTypes[number]),
+      ).filter((m) => {
+        // For the primary dataset: check bounds against primary terrain bbox.
+        // For secondary datasets: check bounds against their own grid bbox so
+        // they are not incorrectly suppressed for being outside the primary area.
+        const markerDatasetId = m.datasetId ?? "";
+        const dg = datasetGroups.get(markerDatasetId);
+        const refGrid = dg?.grid ?? terrain;
+        const inBounds = isMarkerInBounds(m, refGrid);
+        if (!inBounds && import.meta.env.DEV) {
+          console.warn(
+            `[MarkerLayer] marker ${m.id} suppressed: lon=${m.lon} lat=${m.lat} is outside dataset bbox ` +
+            `[${refGrid.minLon},${refGrid.maxLon}]×[${refGrid.minLat},${refGrid.maxLat}]`,
+          );
+        }
+        return inBounds;
+      });
+
+  // When the count of visible markers exceeds the user's cluster threshold,
+  // subsample uniformly so the scene stays readable.
+  let rendered = visibleMarkers;
+  if (clusterThreshold > 0 && visibleMarkers.length > clusterThreshold) {
+    const stride = Math.ceil(visibleMarkers.length / clusterThreshold);
+    rendered = visibleMarkers.filter((_, i) => i % stride === 0);
+  }
 
   // Pre-compute puzzle-adjusted positions for all rendered markers in a single
   // pass so each MarkerSprite receives a stable prop (no per-render recalc).
@@ -223,7 +276,6 @@ export const MarkerLayer: React.FC = () => {
     if (!refGrid) return result;
 
     for (const m of rendered) {
-      // Only markers with a known datasetId and an active puzzle transform get adjusted.
       if (!m.datasetId) continue;
       const xf = puzzleTransforms[m.datasetId];
       if (!xf) continue;
@@ -245,12 +297,6 @@ export const MarkerLayer: React.FC = () => {
       );
     }
     return result;
-  // `rendered` is intentionally included so the memo recomputes whenever
-  // marker identity or coordinates change (e.g. same-count server update).
-  // `rendered` identity changes on every React render when content is
-  // unchanged; the performance cost is acceptable because puzzle-adjusted
-  // coordinate math is cheap, and the 60 Hz overviewTransform write is the
-  // dominant recalculation driver (tracked in follow-up #3579).
   // eslint-disable-next-line react-hooks/exhaustive-deps -- visibleDatasets covers overviewGrid changes; rendered covers marker content
   }, [puzzleMode, puzzleTransforms, overviewTransform, worldGrid, overviewGridByDatasetId, rendered, visibleDatasets]);
 
@@ -269,18 +315,44 @@ export const MarkerLayer: React.FC = () => {
 
   if (!terrain || !markers.length) return null;
 
+  // Group rendered markers by datasetId so each dataset's markers share a
+  // single <group> with the correct position/scale transform.
+  const byDataset = new Map<string, Marker[]>();
+  for (const m of rendered) {
+    if (!m.datasetId || !datasetGroups.has(m.datasetId)) {
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[MarkerLayer] No loaded grid for marker ${m.id} (datasetId=${m.datasetId}); marker suppressed.`,
+        );
+      }
+      continue;
+    }
+    const key = m.datasetId;
+    const list = byDataset.get(key) ?? [];
+    list.push(m);
+    if (!byDataset.has(key)) byDataset.set(key, list);
+  }
+
   return (
     <group ref={(g) => { markerGroupRef.current = g; }}>
-      {rendered.map((m) => (
-        <MarkerSprite
-          key={m.id}
-          marker={m}
-          terrain={terrain}
-          showLabel={showMarkerLabels}
-          catchSymbols={catchSymbolsByMarker.get(m.id)}
-          effectiveLonLat={puzzleAdjustedPositions.get(m.id)}
-        />
-      ))}
+      {Array.from(byDataset.entries()).map(([datasetId, dsMarkers]) => {
+        const dg = datasetGroups.get(datasetId)!;
+        return (
+          <group key={datasetId} name={`marker-group-${datasetId}`} position={dg.position} scale={dg.scale}>
+            {dsMarkers.map((m) => (
+              <MarkerSprite
+                key={m.id}
+                marker={m}
+                terrain={dg.grid}
+                showLabel={showMarkerLabels}
+                catchSymbols={catchSymbolsByMarker.get(m.id)}
+                effectiveLonLat={puzzleAdjustedPositions.get(m.id)}
+              />
+            ))}
+          </group>
+        );
+      })}
     </group>
   );
 };

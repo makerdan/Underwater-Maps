@@ -243,6 +243,12 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   // ── performance cap (settings-validation.test.ts) ─────────────────────────
   // Integer 1–6; controls how many datasets render simultaneously.
   "maxActiveDatasets",
+
+  // ── puzzle mode (settings-schema-sync.test.ts) ────────────────────────────
+  // Named puzzle tile arrangements saved by the user. Schema/default parity
+  // is verified by settings-schema-sync.test.ts; behaviour covered in
+  // the puzzle-mode component tests.
+  "puzzleLayouts",
 ]);
 
 describe("PutSettingsBody field-coverage sentinel", () => {

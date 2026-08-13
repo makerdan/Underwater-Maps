@@ -35,6 +35,7 @@ vi.mock("@/components/LandmassMesh", () => ({
 
 import { NonPrimaryDatasetMeshes } from "@/components/NonPrimaryDatasetMeshes";
 import { useTerrainStore } from "@/lib/terrainStore";
+import { MAX_DEPTH_WORLD } from "@/lib/terrain";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -201,5 +202,60 @@ describe("NonPrimaryDatasetMeshes — primary-switch regression", () => {
     expect(groupsFor(container, "dataset-c").length).toBe(0);
     expect(groupsFor(container, "dataset-a").length).toBeGreaterThan(0);
     expect(groupsFor(container, "dataset-b").length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeSecondaryYAlignment — depth alignment policy tests
+// ---------------------------------------------------------------------------
+
+import { computeSecondaryYAlignment } from "@/components/NonPrimaryDatasetMeshes";
+
+describe("computeSecondaryYAlignment — depth alignment policy", () => {
+  it("returns naturalYScale < 1 and yScale = naturalYScale when secondary is shallower than primary", () => {
+    // Primary: 0–100 m, Secondary: 0–50 m → naturalYScale = 0.5
+    const { naturalYScale, yScale } = computeSecondaryYAlignment(50, 100, 0, 0);
+    expect(naturalYScale).toBeCloseTo(0.5, 5);
+    expect(yScale).toBeCloseTo(0.5, 5);
+  });
+
+  it("returns yScale = 1 (capped) when secondary is deeper than primary (naturalYScale > 1)", () => {
+    // Primary: 0–100 m, Secondary: 0–200 m → naturalYScale = 2 → capped to 1
+    const { naturalYScale, yScale } = computeSecondaryYAlignment(200, 100, 0, 0);
+    expect(naturalYScale).toBeCloseTo(2, 5);
+    expect(yScale).toBeCloseTo(1, 5);
+  });
+
+  it("returns yScale = 1 when secondary matches primary depth range exactly", () => {
+    const { naturalYScale, yScale } = computeSecondaryYAlignment(100, 100, 0, 0);
+    expect(naturalYScale).toBeCloseTo(1, 5);
+    expect(yScale).toBeCloseTo(1, 5);
+  });
+
+  it("cy is clamped to ≤ 0 (mesh does not float above the surface)", () => {
+    // Secondary shallower than primary → natural cy would be positive (above surface)
+    // Primary minDepth=0, Secondary minDepth=50 → natural cy < 0, actually let's think:
+    // naturalCy = (primaryMinDepth - secMinDepth) / primaryDepthRange * MAX
+    //           = (0 - 50) / 100 * 50 = -25  (mesh sits below surface — ok)
+    // When secMinDepth < primaryMinDepth the mesh floats above:
+    // naturalCy = (50 - 0) / 100 * 50 = 25  → clamped to 0
+    const { cy } = computeSecondaryYAlignment(50, 100, 50, 0);
+    expect(cy).toBeLessThanOrEqual(0);
+  });
+
+  it("cy is clamped so the secondary mesh bottom rests on the floor when deeper", () => {
+    // Very deep secondary: naturalYScale=2, yScale=1, extent=MAX_DEPTH_WORLD
+    // cyMin = MAX_DEPTH_WORLD - MAX_DEPTH_WORLD = 0; cy clamped to min(0, naturalCy)
+    const { cy, yScale } = computeSecondaryYAlignment(200, 100, 0, 0);
+    expect(yScale).toBeCloseTo(1, 5);
+    // cy must be within valid envelope [-MAX_DEPTH_WORLD, 0]
+    expect(cy).toBeGreaterThanOrEqual(-MAX_DEPTH_WORLD);
+    expect(cy).toBeLessThanOrEqual(0);
+  });
+
+  it("cy is 0 when both datasets share the same minDepth and naturalYScale ≤ 1", () => {
+    // Both start at the same depth → no vertical offset needed
+    const { cy } = computeSecondaryYAlignment(80, 100, 0, 0);
+    expect(cy).toBeCloseTo(0, 5);
   });
 });
