@@ -3270,6 +3270,8 @@ export type DeepHealthStatusSubsystemsPoe = {
   status?: DeepHealthStatusSubsystemsPoeStatus;
   latencyMs?: number;
   error?: string;
+  /** HTTP status code returned by the upstream probe (present when degraded due to a non-2xx response) */
+  statusCode?: number;
 };
 
 export type DeepHealthStatusSubsystemsAoosStatus = typeof DeepHealthStatusSubsystemsAoosStatus[keyof typeof DeepHealthStatusSubsystemsAoosStatus];
@@ -3284,6 +3286,8 @@ export type DeepHealthStatusSubsystemsAoos = {
   status?: DeepHealthStatusSubsystemsAoosStatus;
   latencyMs?: number;
   error?: string;
+  /** HTTP status code returned by the upstream probe (present when degraded due to a non-2xx response) */
+  statusCode?: number;
 };
 
 export type DeepHealthStatusSubsystems = {

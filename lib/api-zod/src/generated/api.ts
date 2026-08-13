@@ -4611,12 +4611,14 @@ export const GetDeepHealthzResponse = zod.object({
   "poe": zod.object({
   "status": zod.enum(['ok', 'degraded']).optional(),
   "latencyMs": zod.number().optional(),
-  "error": zod.string().optional()
+  "error": zod.string().optional(),
+  "statusCode": zod.number().optional().describe('HTTP status code returned by the upstream probe (present when degraded due to a non-2xx response)')
 }).optional(),
   "aoos": zod.object({
   "status": zod.enum(['ok', 'degraded']).optional(),
   "latencyMs": zod.number().optional(),
-  "error": zod.string().optional()
+  "error": zod.string().optional(),
+  "statusCode": zod.number().optional().describe('HTTP status code returned by the upstream probe (present when degraded due to a non-2xx response)')
 }).optional()
 })
 })

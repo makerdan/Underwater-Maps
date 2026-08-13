@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import type { PoolClient } from "pg";
 import { HealthCheckResponse, DeepHealthCheckResponse } from "@workspace/api-zod";
 import { pool } from "@workspace/db";
 import { logger } from "../lib/logger.js";
@@ -6,10 +7,10 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router: IRouter = Router();
 
-router.get("/healthz", (_req, res) => {
+router.get("/healthz", asyncHandler(async (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
   res.json(data);
-});
+}));
 
 const POE_PING_TIMEOUT_MS = 2_000;
 const DB_QUERY_TIMEOUT_MS = 2_000;
@@ -63,20 +64,42 @@ function getPoolStats(): PoolStats {
 
 async function checkDb(): Promise<{ status: "ok" | "degraded"; latencyMs?: number; error?: string; pool?: PoolStats }> {
   const start = Date.now();
+  let client: PoolClient | undefined;
+  // When ROLLBACK itself fails the session state is unknown; track the error
+  // so the client can be discarded (not returned to the pool) in the finally.
+  let clientMustBeDiscarded: Error | undefined;
   try {
-    await Promise.race([
-      pool.query("SELECT 1"),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("DB health check timed out")), DB_QUERY_TIMEOUT_MS),
-      ),
-    ]);
+    client = await pool.connect();
+    // Wrap in an explicit transaction so that `SET LOCAL` scopes the timeout
+    // to this transaction only.  When the transaction ends (COMMIT or ROLLBACK)
+    // the session reverts to its original statement_timeout, preventing the
+    // health probe from poisoning subsequent queries on the recycled connection.
+    await client.query("BEGIN");
+    try {
+      await client.query(`SET LOCAL statement_timeout = ${DB_QUERY_TIMEOUT_MS}`);
+      await client.query("SELECT 1");
+      await client.query("COMMIT");
+    } catch (innerErr) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rbErr) {
+        // ROLLBACK failed — session state is unknown; mark client for discard
+        // so the pool destroys it instead of handing it to the next borrower.
+        clientMustBeDiscarded = rbErr as Error;
+      }
+      throw innerErr;
+    }
     return { status: "ok", latencyMs: Date.now() - start, pool: getPoolStats() };
   } catch (err) {
     return { status: "degraded", latencyMs: Date.now() - start, error: (err as Error)?.message ?? "unknown", pool: getPoolStats() };
+  } finally {
+    // Pass the rollback error (if any) to release(); node-postgres interprets a
+    // truthy argument as "this client is broken — destroy it, don't reuse it".
+    client?.release(clientMustBeDiscarded);
   }
 }
 
-async function checkPoe(): Promise<{ status: "ok" | "degraded"; latencyMs?: number; error?: string }> {
+async function checkPoe(): Promise<{ status: "ok" | "degraded"; latencyMs?: number; error?: string; statusCode?: number }> {
   const start = Date.now();
   const apiKey = process.env["POE_API_KEY"];
   if (!apiKey) {
@@ -89,8 +112,8 @@ async function checkPoe(): Promise<{ status: "ok" | "degraded"; latencyMs?: numb
       signal: AbortSignal.timeout(POE_PING_TIMEOUT_MS),
     });
     const latencyMs = Date.now() - start;
-    if (response.status >= 500) {
-      return { status: "degraded", latencyMs, error: `HTTP ${response.status}` };
+    if (!response.ok) {
+      return { status: "degraded", latencyMs, error: `HTTP ${response.status}`, statusCode: response.status };
     }
     return { status: "ok", latencyMs };
   } catch (err) {
@@ -107,7 +130,7 @@ async function checkPoe(): Promise<{ status: "ok" | "degraded"; latencyMs?: numb
  * production, re-run `pnpm --filter @workspace/scripts run build-aoos-intertidal-pow`
  * to replace the ENC-fallback bundle with authoritative AOOS habitat polygons.
  */
-async function checkAoos(): Promise<{ status: "ok" | "degraded"; latencyMs?: number; error?: string }> {
+async function checkAoos(): Promise<{ status: "ok" | "degraded"; latencyMs?: number; error?: string; statusCode?: number }> {
   const start = Date.now();
   try {
     const response = await fetch(AOOS_PROBE_URL, {
@@ -115,8 +138,8 @@ async function checkAoos(): Promise<{ status: "ok" | "degraded"; latencyMs?: num
       signal: AbortSignal.timeout(AOOS_PING_TIMEOUT_MS),
     });
     const latencyMs = Date.now() - start;
-    if (response.status >= 500) {
-      return { status: "degraded", latencyMs, error: `HTTP ${response.status}` };
+    if (!response.ok) {
+      return { status: "degraded", latencyMs, error: `HTTP ${response.status}`, statusCode: response.status };
     }
     return { status: "ok", latencyMs };
   } catch (err) {

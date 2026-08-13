@@ -4,6 +4,7 @@ const SubsystemStatus = zod.object({
   status: zod.enum(["ok", "degraded"]),
   latencyMs: zod.number().optional(),
   error: zod.string().optional(),
+  statusCode: zod.number().int().optional(),
 });
 
 const DbPoolStats = zod.object({

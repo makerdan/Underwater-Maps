@@ -8528,6 +8528,9 @@ components:
                   type: integer
                 error:
                   type: string
+                statusCode:
+                  type: integer
+                  description: HTTP status code returned by the upstream probe (present when degraded due to a non-2xx response)
             aoos:
               type: object
               properties:
@@ -8538,6 +8541,9 @@ components:
                   type: integer
                 error:
                   type: string
+                statusCode:
+                  type: integer
+                  description: HTTP status code returned by the upstream probe (present when degraded due to a non-2xx response)
       required:
         - status
         - subsystems
