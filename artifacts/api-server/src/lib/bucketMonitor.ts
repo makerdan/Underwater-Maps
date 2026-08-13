@@ -129,31 +129,92 @@ export function getJobByObjectKey(objectKey: string): BucketJob | undefined {
 export const PROCESS_CONCURRENCY_CAP = 3;
 
 let activeProcessCount = 0;
+// Each entry is a resolve() that wakes the next waiter. The releasing path
+// hands off its slot directly (no decrement+re-check race).
 const processWaitQueue: Array<() => void> = [];
+// Monotonically increasing generation counter so __resetProcessConcurrencyForTests
+// can invalidate any outstanding waiters without corrupting new-generation state.
+let semaphoreGeneration = 0;
 
 /**
  * Reset concurrency state for tests only.
  * The api-server suite runs singleFork (all files in one process), so
  * activeProcessCount leaks between test files that call processObject.
  * Call this in beforeEach of any test that relies on the cap starting at 0.
+ *
+ * Bumping the generation causes any currently-awaiting withProcessSlot callers
+ * to self-cancel (they reject with a sentinel error) rather than silently
+ * corrupting the new-generation counter.
  */
 export function __resetProcessConcurrencyForTests(): void {
+  semaphoreGeneration++;
   activeProcessCount = 0;
-  processWaitQueue.length = 0;
+  // Wake all stale waiters so they can observe the generation change and exit.
+  const stale = processWaitQueue.splice(0);
+  for (const resolve of stale) resolve();
 }
 
+/**
+ * Correct semaphore implementation using a hand-off slot pattern:
+ * - If a slot is free, increment atomically (synchronously) before any await.
+ * - If at cap, enqueue and await. The releasing path hands the slot to the next
+ *   waiter directly (no decrement), so the waiter never has to re-check.
+ *
+ * This eliminates the TOCTOU race in the old while+await loop where a concurrent
+ * caller could swoop in and take a slot between the loop check and the increment.
+ *
+ * Generation isolation: each caller captures the current generation at entry.
+ * The finally block only modifies the shared counter/queue when the generation
+ * is still current — a reset that fires while a holder is in-flight already
+ * zeroed the counter, so the old holder's release must be a no-op to avoid
+ * pushing the new-generation count below zero or handing an orphaned slot to
+ * a new waiter.
+ */
 async function withProcessSlot<T>(fn: () => Promise<T>): Promise<T> {
-  while (activeProcessCount >= PROCESS_CONCURRENCY_CAP) {
+  const gen = semaphoreGeneration;
+
+  if (activeProcessCount < PROCESS_CONCURRENCY_CAP) {
+    // Slot is available — grab it synchronously before any await.
+    activeProcessCount++;
+  } else {
+    // No slot; wait for the releasing path to hand one off to us.
     await new Promise<void>((resolve) => processWaitQueue.push(resolve));
+    // If a test reset fired while we were waiting, bail out rather than run
+    // against torn-down state. The reset already zeroed activeProcessCount.
+    if (semaphoreGeneration !== gen) {
+      throw new Error("[bucket-monitor] semaphore reset during wait (test teardown)");
+    }
+    // The slot was handed off to us by the releasing path — no increment needed.
   }
-  activeProcessCount++;
+
   try {
     return await fn();
   } finally {
-    activeProcessCount--;
-    const next = processWaitQueue.shift();
-    if (next) next();
+    // Only release the slot if still in the same generation.  A reset that
+    // fired while we were in-flight already zeroed activeProcessCount; an
+    // unconditional decrement would corrupt the new-generation state (taking
+    // count negative) or an unconditional hand-off would give a new waiter a
+    // ghost slot that was never legitimately acquired.
+    if (semaphoreGeneration === gen) {
+      const next = processWaitQueue.shift();
+      if (next) {
+        // Hand the slot directly to the next waiter without decrementing.
+        // activeProcessCount stays the same; the waiter owns this slot now.
+        next();
+      } else {
+        activeProcessCount--;
+      }
+    }
   }
+}
+
+/**
+ * Expose the semaphore for unit tests so tests exercise the real implementation
+ * rather than a local reimplementation that would pass even if withProcessSlot
+ * were deleted.
+ */
+export async function __withProcessSlotForTests<T>(fn: () => Promise<T>): Promise<T> {
+  return withProcessSlot(fn);
 }
 
 const DECOMPRESS_MAX_BYTES = 200 * 1024 * 1024;
@@ -815,6 +876,17 @@ const SCAN_INTERVAL_MS = 30_000;
 let scanTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
+ * Test hook: replace the lifecycle-rules function called at monitor startup.
+ * Pass null to restore the default (applyBucketLifecycleRules).
+ * This lets unit tests inject a controllable promise so they can assert that
+ * stop() waits for it (or times out) without depending on real GCS methods.
+ */
+let _lifecycleFnOverride: (() => Promise<void>) | null = null;
+export function __setLifecycleFnForTests(fn: (() => Promise<void>) | null): void {
+  _lifecycleFnOverride = fn;
+}
+
+/**
  * Start the bucket monitor background job.
  *
  * Returns a stop function that clears the scan interval and waits for any
@@ -834,7 +906,10 @@ export function startBucketMonitor(): () => Promise<void> {
   logger.info({ bucket: bucketId, intervalMs: SCAN_INTERVAL_MS }, "[bucket-monitor] starting");
 
   // Apply lifecycle rules idempotently on every startup, then begin scanning.
-  applyBucketLifecycleRules().catch((err: unknown) => {
+  // Capture the promise so stop() can await it (bounded) before teardown.
+  // __setLifecycleFnForTests allows tests to inject a controllable promise.
+  const lifecycleFn = _lifecycleFnOverride ?? applyBucketLifecycleRules;
+  let lifecyclePromise: Promise<void> = lifecycleFn().catch((err: unknown) => {
     const msg = err instanceof Error ? err.message : String(err);
     lifecycleApplyStatus = { appliedAt: null, error: msg };
     logger.warn({ err }, "[bucket-monitor] failed to apply lifecycle rules (non-fatal)");
@@ -842,26 +917,34 @@ export function startBucketMonitor(): () => Promise<void> {
 
   // Track the current in-flight scan so stop() can await it.
   let currentScan: Promise<void> = Promise.resolve();
+  let stopped = false;
 
   function scheduledScan(): void {
+    // Guard against callbacks firing after stop() has been called (e.g. the
+    // startup timeout arriving in the 5-second window between start and stop).
+    if (stopped) return;
     currentScan = scan();
     void currentScan;
   }
 
-  // Initial scan shortly after startup, then every 30 s
-  setTimeout(() => scheduledScan(), 5_000);
+  // Initial scan shortly after startup, then every 30 s.
+  // Save the handle so stop() can cancel the startup delay.
+  const startupTimer = setTimeout(() => scheduledScan(), 5_000);
   scanTimer = setInterval(() => scheduledScan(), SCAN_INTERVAL_MS);
 
   const STOP_TIMEOUT_MS = 5_000;
 
   return async (): Promise<void> => {
+    stopped = true;
+    clearTimeout(startupTimer);
     if (scanTimer) {
       clearInterval(scanTimer);
       scanTimer = null;
     }
-    // Wait for any in-flight scan to finish, but don't block shutdown forever.
+    // Await both the in-flight scan and any in-flight lifecycle call, but
+    // don't block shutdown forever if either is stuck.
     await Promise.race([
-      currentScan,
+      Promise.all([currentScan, lifecyclePromise]),
       new Promise<void>((resolve) => setTimeout(resolve, STOP_TIMEOUT_MS).unref()),
     ]);
   };
