@@ -1213,7 +1213,14 @@ export const OverviewMap: React.FC = () => {
   const paletteCustomStops = usePaletteStore((s) => s.customStops);
   const paletteBandBoundaries = usePaletteStore((s) => s.bandBoundaries);
   useEffect(() => {
-    if (!overviewGrid) return;
+    if (!overviewGrid) {
+      // Clear the stale bitmap so a brief loading window after unload cannot
+      // show a ghost of the previous dataset behind the "LOADING…" indicator.
+      bitmapRef.current = null;
+      invalidateUpscaleRef.current();
+      dirtyRef.current = true;
+      return;
+    }
     bitmapRef.current = buildHeatmapBitmap(overviewGrid, colormapTheme, overviewGrid.topography);
     invalidateUpscaleRef.current();
     dirtyRef.current = true;

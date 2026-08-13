@@ -1200,6 +1200,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const activeOverviewWrittenRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeOverviewData || !terrain || activeOverviewWrittenRef.current === activeId) return;
+    // Guard against the stale-terrain / fresh-overview race: if dataset B's
+    // overview arrives from cache before B's terrain is committed (so `terrain`
+    // still belongs to the previously-loaded A), writing setGrids would
+    // re-insert A into visibleDatasets as a ghost.  Both grids must agree on
+    // the active dataset before we commit.
+    if (terrain.datasetId !== activeId || activeOverviewData.datasetId !== activeId) return;
     activeOverviewWrittenRef.current = activeId;
     useTerrainStore.getState().setGrids({ activeGrid: terrain, overviewGrid: activeOverviewData });
   }, [activeOverviewData, terrain, activeId]);
