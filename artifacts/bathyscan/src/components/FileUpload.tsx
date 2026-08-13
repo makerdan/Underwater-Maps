@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import type { FileRejection } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePostDatasetsUpload } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
@@ -20,6 +21,32 @@ import { Spinner } from "@/components/ui/spinner";
 
 export const SUPPORTED_EXTENSIONS =
   ".csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .gz, .pdf";
+
+/**
+ * MIME-type → extension map passed to react-dropzone.
+ *
+ * `.pdf` is included because the API server accepts vector and raster contour
+ * PDFs via the pdfContour / pdfContourRaster pipelines (see datasets.ts
+ * ACCEPTED_EXTENSIONS_SET). The `application/pdf` MIME type is required for
+ * the browser drop-zone to recognise PDF files; without it the drop-zone
+ * silently rejects them even though the server would accept them.
+ *
+ * Exported so the unit-test agreement check (F-008 regression guard) can
+ * compare this list against SUPPORTED_EXTENSIONS without re-parsing the JSX.
+ */
+export const ACCEPT_MAP: Record<string, string[]> = {
+  "text/csv": [".csv"],
+  "text/plain": [".xyz", ".txt", ".nmea"],
+  "application/gzip": [".gz"],
+  "application/x-gzip": [".gz"],
+  "image/tiff": [".tif", ".tiff"],
+  "application/octet-stream": [".bag", ".las", ".laz", ".nc", ".gz"],
+  "application/x-netcdf": [".nc"],
+  "application/gpx+xml": [".gpx"],
+  "text/xml": [".gpx"],
+  // PDF contour maps (vector or raster) — processed by pdfContour pipeline
+  "application/pdf": [".pdf"],
+};
 
 const GZ_WARNING_THRESHOLD_MB = 30;
 const UPLOAD_LIMIT_MB = 50;
@@ -97,19 +124,22 @@ export const FileUpload = () => {
     [isSignedIn, postDatasetsUpload, setTerrain, setDatasetId, setPendingExternalUserDatasetId],
   );
 
+  const onDropRejected = useCallback((rejections: FileRejection[]) => {
+    const code = rejections[0]?.errors[0]?.code;
+    if (code === "too-many-files") {
+      setError("Drop one file at a time");
+    } else if (code === "file-invalid-type") {
+      setError(`Unsupported file type — supported formats: ${SUPPORTED_EXTENSIONS}`);
+    } else {
+      setError("File rejected — check the file type and try again");
+    }
+  }, []);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      "text/csv": [".csv"],
-      "text/plain": [".xyz", ".txt", ".nmea"],
-      "application/gzip": [".gz"],
-      "application/x-gzip": [".gz"],
-      "image/tiff": [".tif", ".tiff"],
-      "application/octet-stream": [".bag", ".las", ".laz", ".nc", ".gz"],
-      "application/x-netcdf": [".nc"],
-      "application/gpx+xml": [".gpx"],
-      "text/xml": [".gpx"],
-    },
+    onDropRejected,
+    onDragEnter: () => setError(null),
+    accept: ACCEPT_MAP,
     maxFiles: 1,
     disabled: !isSignedIn || postDatasetsUpload.isPending,
   });
