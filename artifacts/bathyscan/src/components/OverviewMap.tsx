@@ -512,8 +512,8 @@ export const OverviewMap: React.FC = () => {
   const puzzleSelectedRef = useRef<string | null>(null);
   const [puzzleSelectedId, setPuzzleSelectedId] = useState<string | null>(null);
   const puzzleDragSubModeRef = useRef<"translate" | "rotate" | null>(null);
-  // Which edge handle was hit at mousedown (for click-nudge detection).
-  const puzzleHandleEdgeRef = useRef<"top" | "right" | "bottom" | "left" | null>(null);
+  // Which corner handle was hit at mousedown (for click-nudge detection).
+  const puzzleHandleEdgeRef = useRef<"topLeft" | "topRight" | "bottomRight" | "bottomLeft" | null>(null);
   // Whether the pointer actually moved during a rotate drag (distinguishes click from drag).
   const puzzleRotateActuallyDraggedRef = useRef(false);
   // Context captured at drag start for incremental delta computation.
@@ -1562,7 +1562,7 @@ export const OverviewMap: React.FC = () => {
 
         // Selection affordances — only visible in puzzle mode for the selected tile.
         if (puzzleModeRef.current && puzzleSelectedRef.current === tileDatasetId) {
-          const HANDLE_OFFSET = 16;
+          const CORNER_HANDLE_OFFSET = 8;
           // Dashed teal selection rectangle at the tile's canonical canvas bounds.
           ctx.save();
           ctx.strokeStyle = "rgba(0,229,255,0.92)";
@@ -1570,16 +1570,16 @@ export const OverviewMap: React.FC = () => {
           ctx.setLineDash([5, 3]);
           ctx.strokeRect(bx0, by0, bx1 - bx0, by1 - by0);
           ctx.setLineDash([]);
-          // Four rotation handles: one at each edge midpoint, offset outward 16 px.
+          // Four rotation handles: one at each corner, offset diagonally outward 8 px.
           // Coordinates are in the tile's local (rotated) canvas space, so drawing
           // at these points produces the correct rotated positions automatically.
-          const edgeHandles = [
-            { x: tcx,                  y: by0 - HANDLE_OFFSET }, // top
-            { x: bx1 + HANDLE_OFFSET,  y: tcy                 }, // right
-            { x: tcx,                  y: by1 + HANDLE_OFFSET }, // bottom
-            { x: bx0 - HANDLE_OFFSET,  y: tcy                 }, // left
+          const cornerHandles = [
+            { x: bx0 - CORNER_HANDLE_OFFSET, y: by0 - CORNER_HANDLE_OFFSET }, // topLeft
+            { x: bx1 + CORNER_HANDLE_OFFSET, y: by0 - CORNER_HANDLE_OFFSET }, // topRight
+            { x: bx1 + CORNER_HANDLE_OFFSET, y: by1 + CORNER_HANDLE_OFFSET }, // bottomRight
+            { x: bx0 - CORNER_HANDLE_OFFSET, y: by1 + CORNER_HANDLE_OFFSET }, // bottomLeft
           ];
-          for (const h of edgeHandles) {
+          for (const h of cornerHandles) {
             ctx.beginPath();
             ctx.arc(h.x, h.y, 7, 0, Math.PI * 2);
             ctx.fillStyle = "#00e5ff";
@@ -2039,10 +2039,10 @@ export const OverviewMap: React.FC = () => {
         if (!t || !overviewGrid) return;
         const worldGrid = worldGridRef.current ?? overviewGrid;
         const HANDLE_RADIUS = 10; // px hit area for rotation handle
-        const HANDLE_OFFSET = 16; // px above top-center of tile
+        const CORNER_HANDLE_OFFSET = 8; // px diagonal outward offset from each corner
 
         // Check rotation handles for the currently selected tile first.
-        // Each of the four edge-midpoint handles is tested in screen space.
+        // Each of the four corner handles is tested in screen space.
         const selId = puzzleSelectedRef.current;
         if (selId) {
           const selV = visibleDatasetsRef.current.find((v) => v.datasetId === selId);
@@ -2058,15 +2058,15 @@ export const OverviewMap: React.FC = () => {
             const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
 
             // Four handles: local offsets from tile center (in unrotated tile space).
-            const edgeLocalOffsets: Array<{ ldx: number; ldy: number; edge: "top" | "right" | "bottom" | "left" }> = [
-              { ldx: 0,                           ldy: (by0 - HANDLE_OFFSET) - tcy, edge: "top"    },
-              { ldx: (bx1 + HANDLE_OFFSET) - tcx, ldy: 0,                           edge: "right"  },
-              { ldx: 0,                           ldy: (by1 + HANDLE_OFFSET) - tcy, edge: "bottom" },
-              { ldx: (bx0 - HANDLE_OFFSET) - tcx, ldy: 0,                           edge: "left"   },
+            const cornerLocalOffsets: Array<{ ldx: number; ldy: number; edge: "topLeft" | "topRight" | "bottomRight" | "bottomLeft" }> = [
+              { ldx: (bx0 - CORNER_HANDLE_OFFSET) - tcx, ldy: (by0 - CORNER_HANDLE_OFFSET) - tcy, edge: "topLeft"     },
+              { ldx: (bx1 + CORNER_HANDLE_OFFSET) - tcx, ldy: (by0 - CORNER_HANDLE_OFFSET) - tcy, edge: "topRight"    },
+              { ldx: (bx1 + CORNER_HANDLE_OFFSET) - tcx, ldy: (by1 + CORNER_HANDLE_OFFSET) - tcy, edge: "bottomRight" },
+              { ldx: (bx0 - CORNER_HANDLE_OFFSET) - tcx, ldy: (by1 + CORNER_HANDLE_OFFSET) - tcy, edge: "bottomLeft"  },
             ];
 
-            let hitEdge: "top" | "right" | "bottom" | "left" | null = null;
-            for (const { ldx, ldy, edge } of edgeLocalOffsets) {
+            let hitEdge: "topLeft" | "topRight" | "bottomRight" | "bottomLeft" | null = null;
+            for (const { ldx, ldy, edge } of cornerLocalOffsets) {
               const hsx = tcx + ptx + ldx * Math.cos(pAngleRad) - ldy * Math.sin(pAngleRad);
               const hsy = tcy + pty + ldx * Math.sin(pAngleRad) + ldy * Math.cos(pAngleRad);
               if (Math.sqrt((mx - hsx) ** 2 + (my - hsy) ** 2) <= HANDLE_RADIUS) {
@@ -2235,11 +2235,11 @@ export const OverviewMap: React.FC = () => {
           const worldGrid = worldGridRef.current ?? overviewGrid;
           const visibleNow = visibleDatasetsRef.current;
           const HOVER_HANDLE_RADIUS = 10;
-          const HOVER_HANDLE_OFFSET = 16;
+          const HOVER_CORNER_HANDLE_OFFSET = 8;
           let overHandle = false;
           let overTile = false;
 
-          // Check selected tile's four edge handles first.
+          // Check selected tile's four corner handles first.
           const hovSelId = puzzleSelectedRef.current;
           if (hovSelId) {
             const hovSelV = visibleNow.find((v) => v.datasetId === hovSelId);
@@ -2254,10 +2254,10 @@ export const OverviewMap: React.FC = () => {
               const hpty = hpxform?.ty ?? 0;
               const hpAngleRad = ((hpxform?.angleDeg ?? 0) * Math.PI) / 180;
               const hovHandles = [
-                { ldx: 0,                                   ldy: (hby0 - HOVER_HANDLE_OFFSET) - htcy },
-                { ldx: (hbx1 + HOVER_HANDLE_OFFSET) - htcx, ldy: 0                                   },
-                { ldx: 0,                                   ldy: (hby1 + HOVER_HANDLE_OFFSET) - htcy },
-                { ldx: (hbx0 - HOVER_HANDLE_OFFSET) - htcx, ldy: 0                                   },
+                { ldx: (hbx0 - HOVER_CORNER_HANDLE_OFFSET) - htcx, ldy: (hby0 - HOVER_CORNER_HANDLE_OFFSET) - htcy },
+                { ldx: (hbx1 + HOVER_CORNER_HANDLE_OFFSET) - htcx, ldy: (hby0 - HOVER_CORNER_HANDLE_OFFSET) - htcy },
+                { ldx: (hbx1 + HOVER_CORNER_HANDLE_OFFSET) - htcx, ldy: (hby1 + HOVER_CORNER_HANDLE_OFFSET) - htcy },
+                { ldx: (hbx0 - HOVER_CORNER_HANDLE_OFFSET) - htcx, ldy: (hby1 + HOVER_CORNER_HANDLE_OFFSET) - htcy },
               ];
               for (const { ldx, ldy } of hovHandles) {
                 const hsx = htcx + hptx + ldx * Math.cos(hpAngleRad) - ldy * Math.sin(hpAngleRad);
@@ -2354,7 +2354,7 @@ export const OverviewMap: React.FC = () => {
           const nudgeEdge = puzzleHandleEdgeRef.current;
           const nudgeId = puzzleSelectedRef.current;
           if (nudgeId) {
-            const delta = nudgeEdge === "top" || nudgeEdge === "right" ? 1 : -1;
+            const delta = nudgeEdge === "topRight" || nudgeEdge === "bottomLeft" ? 1 : -1;
             setPuzzleTransforms((prev) => {
               const next = new Map(prev);
               const existing = prev.get(nudgeId);
