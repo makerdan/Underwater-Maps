@@ -856,6 +856,28 @@ describe("NCEI WCS entries — sampleBbox fallback guard", () => {
     }
     expect(offenders, offenders.join("\n")).toHaveLength(0);
   });
+
+  it("every static NCEI WCS materializer sampleBbox is geographically contained within its coverageBbox", () => {
+    // Ensures a developer cannot accidentally specify a sampleBbox whose
+    // coordinates fall outside the entry's coverage region. Such a bbox would
+    // pass the area-size check above but cause the materializer to silently
+    // request tiles from an empty area with no real data.
+    const offenders: string[] = [];
+    for (const entry of nceiWcsEntries) {
+      const s = entry.sampleBbox;
+      if (!s) continue; // caught by earlier test
+      const c = entry.coverageBbox;
+      if (s.minLon < c.minLon)
+        offenders.push(`${entry.id}: sampleBbox.minLon (${s.minLon}) < coverageBbox.minLon (${c.minLon})`);
+      if (s.maxLon > c.maxLon)
+        offenders.push(`${entry.id}: sampleBbox.maxLon (${s.maxLon}) > coverageBbox.maxLon (${c.maxLon})`);
+      if (s.minLat < c.minLat)
+        offenders.push(`${entry.id}: sampleBbox.minLat (${s.minLat}) < coverageBbox.minLat (${c.minLat})`);
+      if (s.maxLat > c.maxLat)
+        offenders.push(`${entry.id}: sampleBbox.maxLat (${s.maxLat}) > coverageBbox.maxLat (${c.maxLat})`);
+    }
+    expect(offenders, offenders.join("\n")).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
