@@ -139,6 +139,27 @@ export function registerRawsCanvasPositionGetter(
   _rawsCanvasPositionGetter = getter;
 }
 
+// Puzzle mode state handlers registered by OverviewMap so e2e tests can
+// enter puzzle mode and select a tile without canvas hit-testing.
+let _puzzleSetMode: ((on: boolean) => void) | null = null;
+let _puzzleSetSelectedId: ((id: string | null) => void) | null = null;
+let _puzzleGetSelectedId: (() => string | null) | null = null;
+let _puzzleGetTransform:
+  | ((id: string) => { tx: number; ty: number; angleDeg: number } | null)
+  | null = null;
+
+export function registerPuzzleTestHandlers(
+  setMode: (on: boolean) => void,
+  setSelectedId: (id: string | null) => void,
+  getSelectedId: () => string | null,
+  getTransform: (id: string) => { tx: number; ty: number; angleDeg: number } | null,
+): void {
+  _puzzleSetMode = setMode;
+  _puzzleSetSelectedId = setSelectedId;
+  _puzzleGetSelectedId = getSelectedId;
+  _puzzleGetTransform = getTransform;
+}
+
 // AppContext-backed setter wired up by the in-tree <TestBridge/> component
 // mounted inside <AppProvider/>. Without this, helpers have no way to reach
 // React context state from a plain window-side call.
@@ -788,6 +809,35 @@ export interface BathyTestApi {
     nullCells: number;
     /** true iff every null-depth cell has its geometry Y-position at 0 (±0.001). */
     allNullAtZero: boolean;
+  } | null;
+
+  // ── Puzzle mode helpers ──────────────────────────────────────────────────
+  /**
+   * Enter or exit puzzle mode directly. Has no effect when OverviewMap is
+   * not mounted (returns false in that case, true on success).
+   */
+  setPuzzleMode: (on: boolean) => boolean;
+  /**
+   * Select a specific tile by datasetId (or deselect with null) as if the
+   * user had clicked on it in puzzle mode. The rotation panel appears only
+   * when a tile is selected, so tests call this after `setPuzzleMode(true)`
+   * to avoid canvas hit-testing.
+   */
+  setPuzzleSelectedId: (id: string | null) => boolean;
+  /**
+   * Returns the currently selected puzzle tile's datasetId, or null when
+   * nothing is selected (or OverviewMap is not mounted).
+   */
+  getPuzzleSelectedId: () => string | null;
+  /**
+   * Returns the current puzzle transform for a tile (translate offsets +
+   * angle in degrees), or null when no transform exists for that id or
+   * OverviewMap is not mounted.
+   */
+  getPuzzleTransform: (id: string) => {
+    tx: number;
+    ty: number;
+    angleDeg: number;
   } | null;
 }
 
@@ -1634,5 +1684,19 @@ export function installTestHelpers(): void {
       geometry.dispose();
       return { totalCells, nullCells, allNullAtZero };
     },
+
+    // ── Puzzle mode helpers ──────────────────────────────────────────────
+    setPuzzleMode: (on) => {
+      if (!_puzzleSetMode) return false;
+      _puzzleSetMode(on);
+      return true;
+    },
+    setPuzzleSelectedId: (id) => {
+      if (!_puzzleSetSelectedId) return false;
+      _puzzleSetSelectedId(id);
+      return true;
+    },
+    getPuzzleSelectedId: () => _puzzleGetSelectedId?.() ?? null,
+    getPuzzleTransform: (id) => _puzzleGetTransform?.(id) ?? null,
   };
 }

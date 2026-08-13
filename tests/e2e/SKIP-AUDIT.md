@@ -1,6 +1,9 @@
 # E2E conditional-skip audit
 
 Last audited: 2026-07-21 (Task: skipped-test cleanup and skip-count guard).
+Baseline updated 2026-08-13 to 207: `overview-puzzle-rotation.spec.ts`
+added 9 environment-gated skips (auth-bypass / canvas gate + test-bridge /
+terrain gate), matching categories 1 and 2 below.
 Baseline updated 2026-07-21 to 199: `manual-conditions-chip-mobile.spec.ts`
 added one test-bridge/auth-bypass gate ("Test bridge not ready — app not
 signed in"), matching the existing auth-bypass category below.

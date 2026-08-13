@@ -109,6 +109,7 @@ import {
   registerRawsPopupHandlers,
   registerRawsCanvasPositionGetter,
   registerSubstrateFeatureGetter,
+  registerPuzzleTestHandlers,
 } from "@/lib/testHelpers";
 import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
 import { approxBboxForRadius } from "@/lib/coordinateParser";
@@ -949,6 +950,17 @@ export const OverviewMap: React.FC = () => {
     registerRawsPopupHandlers(setSelectedRawsDatasetId, () => {});
     registerRawsCanvasPositionGetter(() => rawsCanvasPositionsRef.current);
     registerSubstrateFeatureGetter(() => substrateFeaturesRef.current.length);
+    registerPuzzleTestHandlers(
+      (on) => {
+        setPuzzleMode(on);
+      },
+      (id) => {
+        puzzleSelectedRef.current = id;
+        setPuzzleSelectedId(id);
+      },
+      () => puzzleSelectedRef.current,
+      (id) => puzzleTransformsRef.current.get(id) ?? null,
+    );
   }, []);
   useEffect(() => {
     rawsActiveRef.current = rawsOverlayActive;
@@ -3579,7 +3591,9 @@ export const OverviewMap: React.FC = () => {
               whiteSpace: "nowrap",
             };
             return (
-              <div style={{
+              <div
+                data-testid="overview-puzzle-rotation-panel"
+                style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 3,
@@ -3589,11 +3603,12 @@ export const OverviewMap: React.FC = () => {
                 padding: "2px 6px",
               }}>
                 <span style={{ color: "rgba(192,132,252,0.7)", fontFamily: "'JetBrains Mono', monospace", fontSize: "calc(10px * var(--bs-font-scale,1))", letterSpacing: "0.05em", marginRight: 2 }}>↻</span>
-                <button style={btnStyle} title="Rotate −90°" onClick={() => applyDelta(-90)}>−90°</button>
-                <button style={btnStyle} title="Rotate −45°" onClick={() => applyDelta(-45)}>−45°</button>
-                <button style={btnStyle} title="Rotate −5°"  onClick={() => applyDelta(-5)}>−5°</button>
-                <button style={btnStyle} title="Rotate −1°"  onClick={() => applyDelta(-1)}>−1°</button>
+                <button data-testid="overview-puzzle-rotate-minus90" style={btnStyle} title="Rotate −90°" onClick={() => applyDelta(-90)}>−90°</button>
+                <button data-testid="overview-puzzle-rotate-minus45" style={btnStyle} title="Rotate −45°" onClick={() => applyDelta(-45)}>−45°</button>
+                <button data-testid="overview-puzzle-rotate-minus5"  style={btnStyle} title="Rotate −5°"  onClick={() => applyDelta(-5)}>−5°</button>
+                <button data-testid="overview-puzzle-rotate-minus1"  style={btnStyle} title="Rotate −1°"  onClick={() => applyDelta(-1)}>−1°</button>
                 <input
+                  data-testid="overview-puzzle-angle-input"
                   type="number"
                   value={selAngle}
                   onChange={(e) => {
@@ -3615,12 +3630,13 @@ export const OverviewMap: React.FC = () => {
                   }}
                 />
                 <span style={{ color: "rgba(192,132,252,0.55)", fontFamily: "'JetBrains Mono', monospace", fontSize: "calc(10px * var(--bs-font-scale,1))" }}>°</span>
-                <button style={btnStyle} title="Rotate +1°"  onClick={() => applyDelta(1)}>+1°</button>
-                <button style={btnStyle} title="Rotate +5°"  onClick={() => applyDelta(5)}>+5°</button>
-                <button style={btnStyle} title="Rotate +45°" onClick={() => applyDelta(45)}>+45°</button>
-                <button style={btnStyle} title="Rotate +90°" onClick={() => applyDelta(90)}>+90°</button>
+                <button data-testid="overview-puzzle-rotate-plus1"  style={btnStyle} title="Rotate +1°"  onClick={() => applyDelta(1)}>+1°</button>
+                <button data-testid="overview-puzzle-rotate-plus5"  style={btnStyle} title="Rotate +5°"  onClick={() => applyDelta(5)}>+5°</button>
+                <button data-testid="overview-puzzle-rotate-plus45" style={btnStyle} title="Rotate +45°" onClick={() => applyDelta(45)}>+45°</button>
+                <button data-testid="overview-puzzle-rotate-plus90" style={btnStyle} title="Rotate +90°" onClick={() => applyDelta(90)}>+90°</button>
                 {selAngle !== 0 && (
                   <button
+                    data-testid="overview-puzzle-rotation-reset"
                     style={{ ...btnStyle, color: "#f87171", border: "1px solid rgba(239,68,68,0.4)" }}
                     title="Reset rotation to 0°"
                     onClick={() => setAngle(0)}
