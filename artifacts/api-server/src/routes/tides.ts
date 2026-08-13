@@ -97,6 +97,14 @@ const predictionsCache = new Map<string, { result: TidePredictionsResult; ts: nu
 export const TIDES_PREDICTIONS_TTL_MS = 24 * 60 * 60 * 1000;
 registerCache(() => predictionsCache.clear());
 
+/**
+ * In-flight coalescing map for predictions. Concurrent cache-miss requests
+ * for the same key share a single NOAA fetch promise; only one HTTP request
+ * is dispatched regardless of how many callers arrive simultaneously.
+ */
+const predictionsInFlight = new Map<string, Promise<TidePredictionsResult | null>>();
+registerCache(() => predictionsInFlight.clear());
+
 /** Test-only: clear the predictions cache. */
 export function __clearTidesPredictionsCacheForTests(): void {
   predictionsCache.clear();
@@ -136,39 +144,51 @@ export async function getTidePredictions(
     return cached.result;
   }
 
-  try {
-    const url =
-      `${NOAA_BASE}/api/prod/datagetter?station=${stationId}&product=predictions` +
-      `&datum=MLLW&time_zone=GMT&units=english&format=json&interval=6` +
-      `&begin_date=${toNoaaDateStr(start)}&end_date=${toNoaaDateStr(end)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status} from NOAA datagetter`);
-    const json = (await res.json()) as {
-      predictions?: Array<{ t: string; v: string }>;
-      error?: { message?: string };
-    };
-    if (json.error) throw new Error(json.error.message ?? "NOAA error response");
-    const predictions: TidePredictionSample[] = (json.predictions ?? [])
-      .map((p) => ({
-        t: new Date(p.t.replace(" ", "T") + "Z").toISOString(),
-        v: parseFloat(p.v),
-      }))
-      .filter((p) => Number.isFinite(p.v));
-    if (predictions.length === 0) return null;
-    const result: TidePredictionsResult = {
-      stationId,
-      windowStart: start.toISOString(),
-      windowEnd: end.toISOString(),
-      datum: "MLLW",
-      units: "feet",
-      predictions,
-    };
-    predictionsCache.set(cacheKey, { result, ts: nowMs });
-    return result;
-  } catch (err) {
-    logger.warn({ err, stationId }, "Failed to fetch NOAA tide predictions window");
-    return null;
-  }
+  // Coalesce concurrent cache-miss requests: reuse any in-flight promise for
+  // this key so only one NOAA HTTP request is dispatched at a time.
+  const existing = predictionsInFlight.get(cacheKey);
+  if (existing) return existing;
+
+  const fetchPromise = (async (): Promise<TidePredictionsResult | null> => {
+    try {
+      const url =
+        `${NOAA_BASE}/api/prod/datagetter?station=${stationId}&product=predictions` +
+        `&datum=MLLW&time_zone=GMT&units=english&format=json&interval=6` +
+        `&begin_date=${toNoaaDateStr(start)}&end_date=${toNoaaDateStr(end)}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status} from NOAA datagetter`);
+      const json = (await res.json()) as {
+        predictions?: Array<{ t: string; v: string }>;
+        error?: { message?: string };
+      };
+      if (json.error) throw new Error(json.error.message ?? "NOAA error response");
+      const predictions: TidePredictionSample[] = (json.predictions ?? [])
+        .map((p) => ({
+          t: new Date(p.t.replace(" ", "T") + "Z").toISOString(),
+          v: parseFloat(p.v),
+        }))
+        .filter((p) => Number.isFinite(p.v));
+      if (predictions.length === 0) return null;
+      const result: TidePredictionsResult = {
+        stationId,
+        windowStart: start.toISOString(),
+        windowEnd: end.toISOString(),
+        datum: "MLLW",
+        units: "feet",
+        predictions,
+      };
+      predictionsCache.set(cacheKey, { result, ts: nowMs });
+      return result;
+    } catch (err) {
+      logger.warn({ err, stationId }, "Failed to fetch NOAA tide predictions window");
+      return null;
+    } finally {
+      predictionsInFlight.delete(cacheKey);
+    }
+  })();
+
+  predictionsInFlight.set(cacheKey, fetchPromise);
+  return fetchPromise;
 }
 
 // ── Station datums (MHW / MHHW) ─────────────────────────────────────────────
@@ -191,6 +211,13 @@ const datumsCache = new Map<string, { result: TideStationDatums; ts: number }>()
 export const TIDES_DATUMS_TTL_MS = 24 * 60 * 60 * 1000;
 registerCache(() => datumsCache.clear());
 
+/**
+ * In-flight coalescing map for datums. Concurrent cache-miss requests for the
+ * same station share a single NOAA fetch promise.
+ */
+const datumsInFlight = new Map<string, Promise<TideStationDatums | null>>();
+registerCache(() => datumsInFlight.clear());
+
 /** Test-only: clear the datums cache. */
 export function __clearTidesDatumsCacheForTests(): void {
   datumsCache.clear();
@@ -209,37 +236,50 @@ export async function getStationDatums(
   if (cached && nowMs - cached.ts < TIDES_DATUMS_TTL_MS) {
     return cached.result;
   }
-  try {
-    const url =
-      `${NOAA_BASE}/mdapi/prod/webapi/stations/${stationId}/datums.json?units=english`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status} from NOAA datums API`);
-    const json = (await res.json()) as {
-      datums?: Array<{ name?: string; value?: number }>;
-    };
-    const datums = json.datums ?? [];
-    const find = (name: string): number | null => {
-      const d = datums.find((x) => x.name === name);
-      return d && typeof d.value === "number" && Number.isFinite(d.value)
-        ? d.value
-        : null;
-    };
-    const mhwFt = find("MHW");
-    const mhhwFt = find("MHHW");
-    if (mhwFt === null && mhhwFt === null) return null;
-    const result: TideStationDatums = {
-      stationId,
-      mhwFt,
-      mhhwFt,
-      datum: "MLLW",
-      units: "feet",
-    };
-    datumsCache.set(stationId, { result, ts: nowMs });
-    return result;
-  } catch (err) {
-    logger.warn({ err, stationId }, "Failed to fetch NOAA station datums");
-    return null;
-  }
+
+  // Coalesce concurrent cache-miss requests: reuse any in-flight promise for
+  // this station so only one NOAA HTTP request is dispatched at a time.
+  const existing = datumsInFlight.get(stationId);
+  if (existing) return existing;
+
+  const fetchPromise = (async (): Promise<TideStationDatums | null> => {
+    try {
+      const url =
+        `${NOAA_BASE}/mdapi/prod/webapi/stations/${stationId}/datums.json?units=english`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status} from NOAA datums API`);
+      const json = (await res.json()) as {
+        datums?: Array<{ name?: string; value?: number }>;
+      };
+      const datums = json.datums ?? [];
+      const find = (name: string): number | null => {
+        const d = datums.find((x) => x.name === name);
+        return d && typeof d.value === "number" && Number.isFinite(d.value)
+          ? d.value
+          : null;
+      };
+      const mhwFt = find("MHW");
+      const mhhwFt = find("MHHW");
+      if (mhwFt === null && mhhwFt === null) return null;
+      const result: TideStationDatums = {
+        stationId,
+        mhwFt,
+        mhhwFt,
+        datum: "MLLW",
+        units: "feet",
+      };
+      datumsCache.set(stationId, { result, ts: nowMs });
+      return result;
+    } catch (err) {
+      logger.warn({ err, stationId }, "Failed to fetch NOAA station datums");
+      return null;
+    } finally {
+      datumsInFlight.delete(stationId);
+    }
+  })();
+
+  datumsInFlight.set(stationId, fetchPromise);
+  return fetchPromise;
 }
 
 // ── GET /tides/station ──────────────────────────────────────────────────────
