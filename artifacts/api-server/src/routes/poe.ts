@@ -676,7 +676,11 @@ export async function evictStaleCacheEntries(jsonFiles: string[]): Promise<Set<s
       jsonFiles.map(async (f): Promise<FileEntry | null> => {
         try {
           const raw = await fsPromises.readFile(path.join(ZONE_CACHE_DIR, f), "utf8");
-          const parsed = JSON.parse(raw) as { classifiedAt?: unknown };
+          const value = JSON.parse(raw);
+          if (typeof value !== "object" || value === null) {
+            return null; // JSON primitive — treat as evictable/miss
+          }
+          const parsed = value as { classifiedAt?: unknown };
           const classifiedAt =
             typeof parsed.classifiedAt === "number" ? parsed.classifiedAt : 0;
           return { name: f, classifiedAt };
@@ -1327,10 +1331,17 @@ async function runTiledClassify(opts: {
       const hit = globalPoeCache.get(tileCacheKey);
       if (hit) {
         try {
-          const parsed = JSON.parse(hit) as string[];
-          if (Array.isArray(parsed) && parsed.length === TILE_SIZE * TILE_SIZE) {
+          const parsed = JSON.parse(hit);
+          const validation = z.array(z.string()).safeParse(parsed);
+          if (validation.success && validation.data.length === TILE_SIZE * TILE_SIZE) {
             tilesAi++;
-            return parsed;
+            return validation.data;
+          }
+          if (!validation.success) {
+            logger.warn(
+              { tileCacheKey },
+              "[poe/classify] tile cache hit contained non-string-array; treating as miss",
+            );
           }
         } catch {
           // fall through to live call
@@ -1444,22 +1455,35 @@ router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classif
   const cacheKey = hashCacheKey(`${datasetId ?? "unknown"}|sub:${substrateFp}`, waterType, gridBase64);
   const cached = globalPoeCache.get(cacheKey);
   if (cached) {
-    const zones = JSON.parse(cached) as string[];
-    const secondary = gridHash
-      ? datasetZonesCache.get(zoneCacheKey(userId, gridHash, waterType, substrateFp))
-      : null;
-    const coarseWidth = secondary?.coarseWidth ?? TILE_SIZE;
-    const coarseHeight = secondary?.coarseHeight ?? TILE_SIZE;
-    res.json(validateResponse(PoeClassifyResponse, {
-      zones,
-      fromCache: true,
-      source: secondary?.source ?? "ai",
-      substrateFp,
-      coarseWidth,
-      coarseHeight,
-      tilesTotal: (coarseWidth / TILE_SIZE) * (coarseHeight / TILE_SIZE),
-    }, "POST /api/poe/classify"));
-    return;
+    try {
+      const parsedZones = JSON.parse(cached);
+      const zonesValidation = z.array(z.string()).safeParse(parsedZones);
+      if (!zonesValidation.success) {
+        logger.warn(
+          { cacheKey },
+          "[poe/classify] in-memory cache hit contained non-string-array; treating as miss",
+        );
+      } else {
+        const zones = zonesValidation.data;
+        const secondary = gridHash
+          ? datasetZonesCache.get(zoneCacheKey(userId, gridHash, waterType, substrateFp))
+          : null;
+        const coarseWidth = secondary?.coarseWidth ?? TILE_SIZE;
+        const coarseHeight = secondary?.coarseHeight ?? TILE_SIZE;
+        res.json(validateResponse(PoeClassifyResponse, {
+          zones,
+          fromCache: true,
+          source: secondary?.source ?? "ai",
+          substrateFp,
+          coarseWidth,
+          coarseHeight,
+          tilesTotal: (coarseWidth / TILE_SIZE) * (coarseHeight / TILE_SIZE),
+        }, "POST /api/poe/classify"));
+        return;
+      }
+    } catch {
+      // fall through to live call
+    }
   }
 
   // Strong content fingerprint of the actual depth payload — used to detect
@@ -2094,7 +2118,16 @@ router.post("/query", validateBody(PoeQueryBodySchema, "POST /api/poe/query"), a
         name: item.name ?? "",
         args: (() => {
           try {
-            return JSON.parse(item.arguments ?? "{}");
+            const parsed = JSON.parse(item.arguments ?? "{}");
+            const validation = z.record(z.unknown()).safeParse(parsed);
+            if (!validation.success) {
+              logger.warn(
+                { toolName: item.name, arguments: item.arguments },
+                "[poe/query] tool-call arguments had unexpected shape; using empty args",
+              );
+              return {};
+            }
+            return validation.data;
           } catch {
             return {};
           }
