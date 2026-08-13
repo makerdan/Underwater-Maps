@@ -207,6 +207,12 @@ export const DEFAULT_SETTINGS = {
   timelineRange: null as { start: string; end: string } | null,
   sidebarMode: "explore" as "explore" | "plan" | "analyze" | "live",
   maxActiveDatasets: 3,
+  puzzleLayouts: [] as Array<{
+    id: string;
+    name: string;
+    tiles: Array<{ datasetId: string; tx: number; ty: number; angleDeg: number }>;
+    groups: string[][];
+  }>,
 };
 
 /**

@@ -66,7 +66,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 34;
+export const SETTINGS_SCHEMA_VERSION = 35;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -225,6 +225,22 @@ export type SettingsSection =
   | "currents"
   | "shortcuts"
   | "onboarding";
+
+/** A single saved puzzle tile arrangement (named preset). */
+export interface PuzzleLayout {
+  /** Unique identifier for this saved layout (nanoid / uuid). */
+  id: string;
+  /** User-provided display name, 1–80 chars. */
+  name: string;
+  /** Per-dataset tile transforms captured at save time. */
+  tiles: Array<{ datasetId: string; tx: number; ty: number; angleDeg: number }>;
+  /**
+   * Saved group memberships. Each inner array is a set of datasetIds that
+   * move together as a unit. Entries with fewer than 2 members are ignored
+   * on restore (a single tile has no meaningful grouping).
+   */
+  groups: string[][];
+}
 
 export interface SettingsState {
   schemaVersion: number;
@@ -617,6 +633,15 @@ export interface SettingsState {
    * context; users on low-end devices can lower it to reduce GPU load.
    */
   maxActiveDatasets: number;
+
+  // ── Puzzle tile layout presets ────────────────────────────────────────
+  /**
+   * User-saved named puzzle tile arrangements. Each entry stores per-tile
+   * transforms and group memberships so users can instantly restore a
+   * frequently used dataset comparison without repositioning tiles manually.
+   * Max 50 layouts. Synced cross-device for signed-in users.
+   */
+  puzzleLayouts: PuzzleLayout[];
 }
 
 interface SettingsActions {
@@ -815,6 +840,9 @@ interface SettingsActions {
 
   /** Set the max active datasets cap (1–6). Auto-evicts excess if lowered. */
   setMaxActiveDatasets: (v: number) => void;
+
+  /** Overwrite the entire puzzleLayouts list (used for add/remove/rename). */
+  setPuzzleLayouts: (v: PuzzleLayout[]) => void;
 
   /** Hydrate the entire settings state from the server response. */
   hydrateFromServer: (partial: Partial<SettingsState>) => void;
@@ -1106,6 +1134,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   sidebarMode: 'explore',
 
   maxActiveDatasets: 3,
+  puzzleLayouts: [],
 };
 
 export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
@@ -1132,7 +1161,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   overview: [
     "overviewDefaultZoom", "overviewShowGrid", "overviewShowMarkers", "overviewOpenOnLoad",
-    "overviewHillshading",
+    "overviewHillshading", "puzzleLayouts",
   ],
   markers: [
     "defaultMarkerType", "defaultDepthPoleColor", "showMarkerLabels",
@@ -1477,6 +1506,8 @@ export const useSettingsStore = create<SettingsStore>()(
         setShowNodataBoundary: setter("showNodataBoundary"),
 
         setSidebarMode: setter("sidebarMode"),
+
+        setPuzzleLayouts: setter("puzzleLayouts"),
 
         setMaxActiveDatasets: (v) => {
           const cap = Math.max(1, Math.min(6, Math.round(v)));
@@ -1891,6 +1922,11 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).maxActiveDatasets === undefined) {
             migratedMaxActiveDatasets.maxActiveDatasets = DEFAULT_SETTINGS.maxActiveDatasets;
           }
+          // v34 → v35: inject puzzleLayouts default ([]) for existing users.
+          const migratedPuzzleLayouts: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).puzzleLayouts === undefined) {
+            migratedPuzzleLayouts.puzzleLayouts = DEFAULT_SETTINGS.puzzleLayouts;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1914,6 +1950,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedHillshading,
             ...migratedLastSession,
             ...migratedMaxActiveDatasets,
+            ...migratedPuzzleLayouts,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

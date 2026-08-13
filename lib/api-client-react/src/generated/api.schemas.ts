@@ -226,6 +226,32 @@ export type UserSettingsSavedDepthThemesItem = {
   blendBands: boolean;
 };
 
+export type UserSettingsPuzzleLayoutsItemTilesItem = {
+  /** @maxLength 128 */
+  datasetId: string;
+  tx: number;
+  ty: number;
+  angleDeg: number;
+};
+
+export type UserSettingsPuzzleLayoutsItem = {
+  /**
+     * Unique identifier for this saved layout.
+     * @maxLength 64
+     */
+  id: string;
+  /**
+     * User-provided display name for this layout.
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  /** @maxItems 20 */
+  tiles: UserSettingsPuzzleLayoutsItemTilesItem[];
+  /** @maxItems 20 */
+  groups: string[][];
+};
+
 export type UserSettingsCameraSpawnBehaviour = typeof UserSettingsCameraSpawnBehaviour[keyof typeof UserSettingsCameraSpawnBehaviour];
 
 
@@ -889,6 +915,11 @@ export interface UserSettings {
      * @maxItems 20
      */
   savedDepthThemes?: UserSettingsSavedDepthThemesItem[];
+  /**
+     * User-saved named puzzle tile arrangements. Each entry stores per-tile transforms and groupings under a user-provided name, enabling quick restoration of frequently used dataset comparisons.
+     * @maxItems 50
+     */
+  puzzleLayouts?: UserSettingsPuzzleLayoutsItem[];
   /**
      * @minimum 0
      * @maximum 5

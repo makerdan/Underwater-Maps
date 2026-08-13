@@ -5571,6 +5571,50 @@ components:
                   maximum: 36000
               blendBands:
                 type: boolean
+        puzzleLayouts:
+          type: array
+          maxItems: 50
+          default: []
+          description: User-saved named puzzle tile arrangements. Each entry stores per-tile transforms and groupings under a user-provided name, enabling quick restoration of frequently used dataset comparisons.
+          items:
+            type: object
+            required: [id, name, tiles, groups]
+            properties:
+              id:
+                type: string
+                maxLength: 64
+                description: Unique identifier for this saved layout.
+              name:
+                type: string
+                minLength: 1
+                maxLength: 80
+                description: User-provided display name for this layout.
+              tiles:
+                type: array
+                maxItems: 20
+                items:
+                  type: object
+                  required: [datasetId, tx, ty, angleDeg]
+                  properties:
+                    datasetId:
+                      type: string
+                      maxLength: 128
+                    tx:
+                      type: number
+                    ty:
+                      type: number
+                    angleDeg:
+                      type: number
+              groups:
+                type: array
+                maxItems: 20
+                items:
+                  type: array
+                  minItems: 2
+                  maxItems: 20
+                  items:
+                    type: string
+                    maxLength: 128
         lampIntensity:
           type: number
           minimum: 0

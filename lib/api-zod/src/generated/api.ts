@@ -1336,6 +1336,24 @@ export const getSettingsResponseSavedDepthThemesItemBandBoundariesMax = 17;
 export const getSettingsResponseSavedDepthThemesDefault = [];
 export const getSettingsResponseSavedDepthThemesMax = 20;
 
+export const getSettingsResponsePuzzleLayoutsItemIdMax = 64;
+
+export const getSettingsResponsePuzzleLayoutsItemNameMax = 80;
+
+export const getSettingsResponsePuzzleLayoutsItemTilesItemDatasetIdMax = 128;
+
+export const getSettingsResponsePuzzleLayoutsItemTilesMax = 20;
+
+export const getSettingsResponsePuzzleLayoutsItemGroupsItemItemMax = 128;
+
+export const getSettingsResponsePuzzleLayoutsItemGroupsItemMin = 2;
+export const getSettingsResponsePuzzleLayoutsItemGroupsItemMax = 20;
+
+export const getSettingsResponsePuzzleLayoutsItemGroupsMax = 20;
+
+export const getSettingsResponsePuzzleLayoutsDefault = [];
+export const getSettingsResponsePuzzleLayoutsMax = 50;
+
 export const getSettingsResponseLampIntensityDefault = 2;
 export const getSettingsResponseLampIntensityMin = 0;
 export const getSettingsResponseLampIntensityMax = 5;
@@ -1605,6 +1623,17 @@ export const GetSettingsResponse = zod.object({
   "bandBoundaries": zod.array(zod.number().min(getSettingsResponseSavedDepthThemesItemBandBoundariesItemMin).max(getSettingsResponseSavedDepthThemesItemBandBoundariesItemMax)).min(getSettingsResponseSavedDepthThemesItemBandBoundariesMin).max(getSettingsResponseSavedDepthThemesItemBandBoundariesMax),
   "blendBands": zod.boolean()
 })).max(getSettingsResponseSavedDepthThemesMax).default(getSettingsResponseSavedDepthThemesDefault).describe('User-saved named depth colour themes. Each entry stores a full palette snapshot (band colours, boundaries, blend setting) under a user-provided name, enabling quick switching between configurations across devices.'),
+  "puzzleLayouts": zod.array(zod.object({
+  "id": zod.string().max(getSettingsResponsePuzzleLayoutsItemIdMax).describe('Unique identifier for this saved layout.'),
+  "name": zod.string().min(1).max(getSettingsResponsePuzzleLayoutsItemNameMax).describe('User-provided display name for this layout.'),
+  "tiles": zod.array(zod.object({
+  "datasetId": zod.string().max(getSettingsResponsePuzzleLayoutsItemTilesItemDatasetIdMax),
+  "tx": zod.number(),
+  "ty": zod.number(),
+  "angleDeg": zod.number()
+})).max(getSettingsResponsePuzzleLayoutsItemTilesMax),
+  "groups": zod.array(zod.array(zod.string().max(getSettingsResponsePuzzleLayoutsItemGroupsItemItemMax)).min(getSettingsResponsePuzzleLayoutsItemGroupsItemMin).max(getSettingsResponsePuzzleLayoutsItemGroupsItemMax)).max(getSettingsResponsePuzzleLayoutsItemGroupsMax)
+})).max(getSettingsResponsePuzzleLayoutsMax).default(getSettingsResponsePuzzleLayoutsDefault).describe('User-saved named puzzle tile arrangements. Each entry stores per-tile transforms and groupings under a user-provided name, enabling quick restoration of frequently used dataset comparisons.'),
   "lampIntensity": zod.number().min(getSettingsResponseLampIntensityMin).max(getSettingsResponseLampIntensityMax).default(getSettingsResponseLampIntensityDefault),
   "maxActiveDatasets": zod.number().min(1).max(getSettingsResponseMaxActiveDatasetsMax).int().default(getSettingsResponseMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.'),
   "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).int().default(getSettingsResponseDefaultSpeedTierDefault),
@@ -1834,6 +1863,24 @@ export const putSettingsBodySavedDepthThemesItemBandBoundariesMax = 17;
 
 export const putSettingsBodySavedDepthThemesDefault = [];
 export const putSettingsBodySavedDepthThemesMax = 20;
+
+export const putSettingsBodyPuzzleLayoutsItemIdMax = 64;
+
+export const putSettingsBodyPuzzleLayoutsItemNameMax = 80;
+
+export const putSettingsBodyPuzzleLayoutsItemTilesItemDatasetIdMax = 128;
+
+export const putSettingsBodyPuzzleLayoutsItemTilesMax = 20;
+
+export const putSettingsBodyPuzzleLayoutsItemGroupsItemItemMax = 128;
+
+export const putSettingsBodyPuzzleLayoutsItemGroupsItemMin = 2;
+export const putSettingsBodyPuzzleLayoutsItemGroupsItemMax = 20;
+
+export const putSettingsBodyPuzzleLayoutsItemGroupsMax = 20;
+
+export const putSettingsBodyPuzzleLayoutsDefault = [];
+export const putSettingsBodyPuzzleLayoutsMax = 50;
 
 export const putSettingsBodyLampIntensityDefault = 2;
 export const putSettingsBodyLampIntensityMin = 0;
@@ -2104,6 +2151,17 @@ export const PutSettingsBody = zod.object({
   "bandBoundaries": zod.array(zod.number().min(putSettingsBodySavedDepthThemesItemBandBoundariesItemMin).max(putSettingsBodySavedDepthThemesItemBandBoundariesItemMax)).min(putSettingsBodySavedDepthThemesItemBandBoundariesMin).max(putSettingsBodySavedDepthThemesItemBandBoundariesMax),
   "blendBands": zod.boolean()
 })).max(putSettingsBodySavedDepthThemesMax).default(putSettingsBodySavedDepthThemesDefault).describe('User-saved named depth colour themes. Each entry stores a full palette snapshot (band colours, boundaries, blend setting) under a user-provided name, enabling quick switching between configurations across devices.'),
+  "puzzleLayouts": zod.array(zod.object({
+  "id": zod.string().max(putSettingsBodyPuzzleLayoutsItemIdMax).describe('Unique identifier for this saved layout.'),
+  "name": zod.string().min(1).max(putSettingsBodyPuzzleLayoutsItemNameMax).describe('User-provided display name for this layout.'),
+  "tiles": zod.array(zod.object({
+  "datasetId": zod.string().max(putSettingsBodyPuzzleLayoutsItemTilesItemDatasetIdMax),
+  "tx": zod.number(),
+  "ty": zod.number(),
+  "angleDeg": zod.number()
+})).max(putSettingsBodyPuzzleLayoutsItemTilesMax),
+  "groups": zod.array(zod.array(zod.string().max(putSettingsBodyPuzzleLayoutsItemGroupsItemItemMax)).min(putSettingsBodyPuzzleLayoutsItemGroupsItemMin).max(putSettingsBodyPuzzleLayoutsItemGroupsItemMax)).max(putSettingsBodyPuzzleLayoutsItemGroupsMax)
+})).max(putSettingsBodyPuzzleLayoutsMax).default(putSettingsBodyPuzzleLayoutsDefault).describe('User-saved named puzzle tile arrangements. Each entry stores per-tile transforms and groupings under a user-provided name, enabling quick restoration of frequently used dataset comparisons.'),
   "lampIntensity": zod.number().min(putSettingsBodyLampIntensityMin).max(putSettingsBodyLampIntensityMax).default(putSettingsBodyLampIntensityDefault),
   "maxActiveDatasets": zod.number().min(1).max(putSettingsBodyMaxActiveDatasetsMax).int().default(putSettingsBodyMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.'),
   "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).int().default(putSettingsBodyDefaultSpeedTierDefault),
@@ -2328,6 +2386,24 @@ export const putSettingsResponseSavedDepthThemesItemBandBoundariesMax = 17;
 
 export const putSettingsResponseSavedDepthThemesDefault = [];
 export const putSettingsResponseSavedDepthThemesMax = 20;
+
+export const putSettingsResponsePuzzleLayoutsItemIdMax = 64;
+
+export const putSettingsResponsePuzzleLayoutsItemNameMax = 80;
+
+export const putSettingsResponsePuzzleLayoutsItemTilesItemDatasetIdMax = 128;
+
+export const putSettingsResponsePuzzleLayoutsItemTilesMax = 20;
+
+export const putSettingsResponsePuzzleLayoutsItemGroupsItemItemMax = 128;
+
+export const putSettingsResponsePuzzleLayoutsItemGroupsItemMin = 2;
+export const putSettingsResponsePuzzleLayoutsItemGroupsItemMax = 20;
+
+export const putSettingsResponsePuzzleLayoutsItemGroupsMax = 20;
+
+export const putSettingsResponsePuzzleLayoutsDefault = [];
+export const putSettingsResponsePuzzleLayoutsMax = 50;
 
 export const putSettingsResponseLampIntensityDefault = 2;
 export const putSettingsResponseLampIntensityMin = 0;
@@ -2598,6 +2674,17 @@ export const PutSettingsResponse = zod.object({
   "bandBoundaries": zod.array(zod.number().min(putSettingsResponseSavedDepthThemesItemBandBoundariesItemMin).max(putSettingsResponseSavedDepthThemesItemBandBoundariesItemMax)).min(putSettingsResponseSavedDepthThemesItemBandBoundariesMin).max(putSettingsResponseSavedDepthThemesItemBandBoundariesMax),
   "blendBands": zod.boolean()
 })).max(putSettingsResponseSavedDepthThemesMax).default(putSettingsResponseSavedDepthThemesDefault).describe('User-saved named depth colour themes. Each entry stores a full palette snapshot (band colours, boundaries, blend setting) under a user-provided name, enabling quick switching between configurations across devices.'),
+  "puzzleLayouts": zod.array(zod.object({
+  "id": zod.string().max(putSettingsResponsePuzzleLayoutsItemIdMax).describe('Unique identifier for this saved layout.'),
+  "name": zod.string().min(1).max(putSettingsResponsePuzzleLayoutsItemNameMax).describe('User-provided display name for this layout.'),
+  "tiles": zod.array(zod.object({
+  "datasetId": zod.string().max(putSettingsResponsePuzzleLayoutsItemTilesItemDatasetIdMax),
+  "tx": zod.number(),
+  "ty": zod.number(),
+  "angleDeg": zod.number()
+})).max(putSettingsResponsePuzzleLayoutsItemTilesMax),
+  "groups": zod.array(zod.array(zod.string().max(putSettingsResponsePuzzleLayoutsItemGroupsItemItemMax)).min(putSettingsResponsePuzzleLayoutsItemGroupsItemMin).max(putSettingsResponsePuzzleLayoutsItemGroupsItemMax)).max(putSettingsResponsePuzzleLayoutsItemGroupsMax)
+})).max(putSettingsResponsePuzzleLayoutsMax).default(putSettingsResponsePuzzleLayoutsDefault).describe('User-saved named puzzle tile arrangements. Each entry stores per-tile transforms and groupings under a user-provided name, enabling quick restoration of frequently used dataset comparisons.'),
   "lampIntensity": zod.number().min(putSettingsResponseLampIntensityMin).max(putSettingsResponseLampIntensityMax).default(putSettingsResponseLampIntensityDefault),
   "maxActiveDatasets": zod.number().min(1).max(putSettingsResponseMaxActiveDatasetsMax).int().default(putSettingsResponseMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.'),
   "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).int().default(putSettingsResponseDefaultSpeedTierDefault),

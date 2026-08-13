@@ -99,6 +99,7 @@ import { HabitatLegend } from "@/components/HabitatLegend";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import type { PuzzleLayout } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth, formatDistance } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -174,6 +175,8 @@ export const OverviewMap: React.FC = () => {
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
   const contoursEnabled = useSettingsStore((s) => s.contoursEnabled);
   const contourInterval = useSettingsStore((s) => s.contourInterval);
+  const puzzleLayouts = useSettingsStore((s) => s.puzzleLayouts);
+  const setPuzzleLayouts = useSettingsStore((s) => s.setPuzzleLayouts);
   const datasetId = overviewGrid?.datasetId ?? appTerrain?.datasetId ?? "";
   const { data: markerData } = useGetMarkers(
     { datasetId },
@@ -485,6 +488,13 @@ export const OverviewMap: React.FC = () => {
   // Brief "saved" flash state — true for ~1500 ms after the user clicks SAVE.
   const [puzzleSaved, setPuzzleSaved] = useState(false);
 
+  // Layout preset save form — inline text input that appears below the toolbar.
+  const [puzzleLayoutFormOpen, setPuzzleLayoutFormOpen] = useState(false);
+  const [puzzleLayoutNameInput, setPuzzleLayoutNameInput] = useState("");
+  // Layouts dropdown — lists saved presets for restore/delete.
+  const [layoutsDropdownOpen, setLayoutsDropdownOpen] = useState(false);
+  const layoutsDropdownRef = useRef<HTMLDivElement>(null);
+
   // Per-dataset spatial offsets (canvas pixels). Persists for the lifetime of
   // the session — toggling puzzle mode OFF leaves tiles where they were placed.
   const [puzzleTransforms, setPuzzleTransforms] = useState<
@@ -618,6 +628,68 @@ export const OverviewMap: React.FC = () => {
       return changed ? next : prev;
     });
   }, [visibleDatasets]);
+
+  // Close layouts dropdown when user clicks outside it.
+  useEffect(() => {
+    if (!layoutsDropdownOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (layoutsDropdownRef.current && !layoutsDropdownRef.current.contains(e.target as Node)) {
+        setLayoutsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [layoutsDropdownOpen]);
+
+  /** Restore a saved layout: apply tile transforms and groups, silently skipping missing dataset IDs. */
+  const restorePuzzleLayout = useCallback((layout: PuzzleLayout) => {
+    const aliveIds = new Set(visibleDatasets.map((v) => v.datasetId));
+    // Restore transforms only for datasets still visible.
+    const nextTransforms = new Map<string, { tx: number; ty: number; angleDeg: number }>();
+    for (const tile of layout.tiles) {
+      if (aliveIds.has(tile.datasetId)) {
+        nextTransforms.set(tile.datasetId, { tx: tile.tx, ty: tile.ty, angleDeg: tile.angleDeg });
+      }
+    }
+    setPuzzleTransforms(nextTransforms);
+    // Restore groups — keep only groups whose members are ≥ 2 alive datasets.
+    const nextGroups = new Map<string, Set<string>>();
+    let maxCounter = puzzleGroupCounterRef.current;
+    for (let i = 0; i < layout.groups.length; i++) {
+      const members = layout.groups[i]!.filter((id) => aliveIds.has(id));
+      if (members.length >= 2) {
+        const gid = `group-${++maxCounter}`;
+        nextGroups.set(gid, new Set(members));
+      }
+    }
+    puzzleGroupCounterRef.current = maxCounter;
+    setPuzzleGroups(nextGroups);
+    // Deselect tiles so the restored layout is shown cleanly.
+    setPuzzleSelectedIds(new Set(), null);
+    dirtyRef.current = true;
+    setLayoutsDropdownOpen(false);
+  }, [visibleDatasets, setPuzzleTransforms, setPuzzleGroups, setPuzzleSelectedIds]);
+
+  /** Save current transforms+groups as a named layout preset. */
+  const saveCurrentPuzzleLayout = useCallback((name: string) => {
+    const trimmed = name.trim().slice(0, 80);
+    if (!trimmed) return;
+    const tiles: PuzzleLayout["tiles"] = [];
+    for (const [datasetId, xf] of puzzleTransformsRef.current) {
+      tiles.push({ datasetId, tx: xf.tx, ty: xf.ty, angleDeg: xf.angleDeg });
+    }
+    const groups: string[][] = [];
+    for (const members of puzzleGroupsRef.current.values()) {
+      groups.push([...members]);
+    }
+    const id = `pl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const next = [...puzzleLayouts, { id, name: trimmed, tiles, groups }].slice(-50);
+    setPuzzleLayouts(next);
+    setPuzzleLayoutFormOpen(false);
+    setPuzzleLayoutNameInput("");
+    setPuzzleSaved(true);
+    setTimeout(() => setPuzzleSaved(false), 1500);
+  }, [puzzleLayouts, setPuzzleLayouts]);
 
   const puzzleDragSubModeRef = useRef<"translate" | "rotate" | null>(null);
   // Which corner handle was hit at mousedown (for click-nudge detection).
@@ -3860,6 +3932,217 @@ export const OverviewMap: React.FC = () => {
                 {puzzleSaved ? "✓ SAVED" : "✦ SAVE"}
               </button>
             </ViewscreenTooltip>
+          )}
+
+          {/* Save named layout preset — visible when puzzle has any transforms */}
+          {hasPuzzleTransforms && (
+            <ViewscreenTooltip label="Pin this arrangement as a named layout preset (synced to your account)" side="bottom">
+              <button
+                data-testid="overview-puzzle-save-layout"
+                onClick={() => {
+                  setPuzzleLayoutFormOpen((v) => !v);
+                  setLayoutsDropdownOpen(false);
+                }}
+                style={{
+                  background: puzzleLayoutFormOpen ? "rgba(168,85,247,0.18)" : "rgba(99,102,241,0.12)",
+                  border: `1px solid ${puzzleLayoutFormOpen ? "rgba(168,85,247,0.65)" : "rgba(99,102,241,0.5)"}`,
+                  borderRadius: 3,
+                  color: puzzleLayoutFormOpen ? "#c084fc" : "#a5b4fc",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  padding: "2px 8px",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  lineHeight: "18px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                📌 SAVE LAYOUT
+              </button>
+            </ViewscreenTooltip>
+          )}
+
+          {/* Restore / delete named layout presets — visible when puzzle mode is on and layouts exist */}
+          {puzzleMode && puzzleLayouts.length > 0 && (
+            <div ref={layoutsDropdownRef} style={{ position: "relative" }}>
+              <ViewscreenTooltip label="Restore a previously saved puzzle layout" side="bottom">
+                <button
+                  data-testid="overview-puzzle-layouts-btn"
+                  onClick={() => {
+                    setLayoutsDropdownOpen((v) => !v);
+                    setPuzzleLayoutFormOpen(false);
+                  }}
+                  style={{
+                    background: layoutsDropdownOpen ? "rgba(99,102,241,0.18)" : "rgba(99,102,241,0.10)",
+                    border: `1px solid ${layoutsDropdownOpen ? "rgba(99,102,241,0.65)" : "rgba(99,102,241,0.4)"}`,
+                    borderRadius: 3,
+                    color: "#a5b4fc",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                    padding: "2px 8px",
+                    cursor: "pointer",
+                    letterSpacing: "0.1em",
+                    lineHeight: "18px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  LAYOUTS {layoutsDropdownOpen ? "▴" : "▾"}
+                </button>
+              </ViewscreenTooltip>
+              {layoutsDropdownOpen && (
+                <div
+                  data-testid="overview-puzzle-layouts-dropdown"
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    right: 0,
+                    background: "rgba(8,16,32,0.97)",
+                    border: "1px solid rgba(99,102,241,0.45)",
+                    borderRadius: 4,
+                    minWidth: 200,
+                    maxWidth: 320,
+                    zIndex: 100,
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
+                    overflow: "hidden",
+                  }}
+                >
+                  {puzzleLayouts.map((layout) => (
+                    <div
+                      key={layout.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 8px",
+                        borderBottom: "1px solid rgba(99,102,241,0.15)",
+                      }}
+                    >
+                      <button
+                        data-testid={`overview-puzzle-layout-restore-${layout.id}`}
+                        onClick={() => restorePuzzleLayout(layout)}
+                        title={`Restore "${layout.name}"`}
+                        style={{
+                          flex: 1,
+                          background: "transparent",
+                          border: "none",
+                          color: "#e2e8f0",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          padding: "2px 4px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        ↩ {layout.name}
+                      </button>
+                      <button
+                        data-testid={`overview-puzzle-layout-delete-${layout.id}`}
+                        onClick={() => {
+                          setPuzzleLayouts(puzzleLayouts.filter((l) => l.id !== layout.id));
+                        }}
+                        title="Delete this layout"
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "#f87171",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                          cursor: "pointer",
+                          padding: "2px 4px",
+                          flexShrink: 0,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Inline "save layout" name input form */}
+          {puzzleLayoutFormOpen && (
+            <div
+              data-testid="overview-puzzle-layout-form"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                background: "rgba(8,16,32,0.95)",
+                border: "1px solid rgba(168,85,247,0.45)",
+                borderRadius: 4,
+                padding: "2px 6px",
+              }}
+            >
+              <input
+                data-testid="overview-puzzle-layout-name-input"
+                autoFocus
+                type="text"
+                value={puzzleLayoutNameInput}
+                onChange={(e) => setPuzzleLayoutNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && puzzleLayoutNameInput.trim()) {
+                    saveCurrentPuzzleLayout(puzzleLayoutNameInput);
+                  } else if (e.key === "Escape") {
+                    setPuzzleLayoutFormOpen(false);
+                    setPuzzleLayoutNameInput("");
+                  }
+                }}
+                placeholder="Layout name…"
+                maxLength={80}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "#e2e8f0",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                  width: 140,
+                  minWidth: 80,
+                }}
+              />
+              <button
+                data-testid="overview-puzzle-layout-confirm"
+                disabled={!puzzleLayoutNameInput.trim()}
+                onClick={() => saveCurrentPuzzleLayout(puzzleLayoutNameInput)}
+                style={{
+                  background: puzzleLayoutNameInput.trim() ? "rgba(168,85,247,0.25)" : "transparent",
+                  border: "1px solid rgba(168,85,247,0.4)",
+                  borderRadius: 3,
+                  color: puzzleLayoutNameInput.trim() ? "#c084fc" : "#64748b",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(10px * var(--bs-font-scale, 1))",
+                  padding: "1px 6px",
+                  cursor: puzzleLayoutNameInput.trim() ? "pointer" : "default",
+                  letterSpacing: "0.08em",
+                  lineHeight: "18px",
+                }}
+              >
+                PIN
+              </button>
+              <button
+                data-testid="overview-puzzle-layout-cancel"
+                onClick={() => {
+                  setPuzzleLayoutFormOpen(false);
+                  setPuzzleLayoutNameInput("");
+                }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#64748b",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                  cursor: "pointer",
+                  padding: "1px 4px",
+                }}
+              >
+                ✕
+              </button>
+            </div>
           )}
 
           {/* GROUP / UNGROUP toolbar buttons */}
