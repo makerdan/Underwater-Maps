@@ -152,6 +152,14 @@ router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(
     return;
   }
 
+  // Semantic depth validation — must be finite and non-negative.
+  if (updateData.depth !== undefined) {
+    if (!Number.isFinite(updateData.depth) || updateData.depth < 0) {
+      res.status(422).json({ error: "validation_error", field: "depth", message: "depth must be a finite number ≥ 0" });
+      return;
+    }
+  }
+
   const [updated] = await db
     .update(markersTable)
     .set(updateData)

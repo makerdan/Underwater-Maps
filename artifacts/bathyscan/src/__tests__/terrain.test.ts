@@ -900,6 +900,125 @@ describe("absolute-feet depth mapping — ocean/custom vertex colouring", () => 
 // normalizeLonDelta — antimeridian longitude-difference normalization
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// getTerrainSurfaceY — out-of-bounds clamping + NaN guard
+// (Task #3549: Bug 3 & Bug 4 fixes)
+// ---------------------------------------------------------------------------
+
+describe("getTerrainSurfaceY — out-of-bounds worldX/Z clamping (no extrapolation)", () => {
+  // 2×2 grid: corners [0, 100, 100, 200] → bilinear centre = 100, t=0.5 → Y=-25
+  // Edge cells hold constant depths so the edge value is unambiguous.
+  const gridUniform = makeDepthGrid(new Array(16).fill(75), 4, 0, 100);
+
+  it("worldX far beyond +WORLD_SIZE/2 returns the same Y as the clamped edge", () => {
+    const yEdge = getTerrainSurfaceY(gridUniform, WORLD_SIZE / 2, 0);
+    const yFar  = getTerrainSurfaceY(gridUniform, WORLD_SIZE * 10, 0);
+    expect(yFar).toBeCloseTo(yEdge, 5);
+  });
+
+  it("worldX far below -WORLD_SIZE/2 returns the same Y as the clamped edge", () => {
+    const yEdge = getTerrainSurfaceY(gridUniform, -WORLD_SIZE / 2, 0);
+    const yFar  = getTerrainSurfaceY(gridUniform, -WORLD_SIZE * 10, 0);
+    expect(yFar).toBeCloseTo(yEdge, 5);
+  });
+
+  it("worldZ far beyond +WORLD_SIZE/2 returns the same Y as the clamped edge", () => {
+    const yEdge = getTerrainSurfaceY(gridUniform, 0, WORLD_SIZE / 2);
+    const yFar  = getTerrainSurfaceY(gridUniform, 0, WORLD_SIZE * 10);
+    expect(yFar).toBeCloseTo(yEdge, 5);
+  });
+
+  it("out-of-bounds result is NOT an extrapolated value (equals clamped, not beyond it)", () => {
+    // Gradient grid: depths increase linearly with column.
+    // If tx were unclamped, querying far outside would extrapolate to a depth
+    // beyond [minDepth, maxDepth], producing |Y| > MAX_DEPTH_WORLD.
+    // With the fix, result must stay within [-MAX_DEPTH_WORLD, 0].
+    const N = 4;
+    const depths = Array.from({ length: N * N }, (_, i) => (i % N) * 100) as number[];
+    const grid = makeDepthGrid(depths, N, 0, 300);
+    const yFar = getTerrainSurfaceY(grid, WORLD_SIZE * 5, 0);
+    expect(yFar).toBeGreaterThanOrEqual(-MAX_DEPTH_WORLD);
+    expect(yFar).toBeLessThanOrEqual(0);
+  });
+});
+
+describe("getTerrainSurfaceY — NaN / non-finite worldX/Z guard", () => {
+  const grid = makeDepthGrid(new Array(16).fill(50), 4, 0, 100);
+
+  it("NaN worldX → returns 0 (not NaN)", () => {
+    expect(getTerrainSurfaceY(grid, NaN, 0)).toBe(0);
+  });
+
+  it("NaN worldZ → returns 0 (not NaN)", () => {
+    expect(getTerrainSurfaceY(grid, 0, NaN)).toBe(0);
+  });
+
+  it("+Infinity worldX → returns 0 (not NaN or extrapolated)", () => {
+    expect(getTerrainSurfaceY(grid, Infinity, 0)).toBe(0);
+  });
+
+  it("-Infinity worldZ → returns 0 (not NaN or extrapolated)", () => {
+    expect(getTerrainSurfaceY(grid, 0, -Infinity)).toBe(0);
+  });
+
+  it("result for NaN input is exactly 0 (not −0)", () => {
+    expect(Object.is(getTerrainSurfaceY(grid, NaN, NaN), -0)).toBe(false);
+    expect(getTerrainSurfaceY(grid, NaN, NaN)).toBe(0);
+  });
+});
+
+describe("worldXZToLonLat — zero lonRange / latRange guard", () => {
+  it("does not return NaN when lonRange = 0 (minLon === maxLon)", () => {
+    const grid = makeGrid(2, { minLon: 90, maxLon: 90, minLat: 0, maxLat: 10 });
+    const result = worldXZToLonLat(0, 0, grid);
+    expect(Number.isFinite(result.lon)).toBe(true);
+    expect(Number.isFinite(result.lat)).toBe(true);
+  });
+
+  it("does not return NaN when latRange = 0 (minLat === maxLat)", () => {
+    const grid = makeGrid(2, { minLon: 0, maxLon: 10, minLat: 45, maxLat: 45 });
+    const result = worldXZToLonLat(0, 0, grid);
+    expect(Number.isFinite(result.lon)).toBe(true);
+    expect(Number.isFinite(result.lat)).toBe(true);
+  });
+
+  it("does not throw when both ranges are 0", () => {
+    const grid = makeGrid(2, { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 });
+    expect(() => worldXZToLonLat(25, 25, grid)).not.toThrow();
+  });
+});
+
+describe("marker-Y convention: snap-to-terrain (getTerrainSurfaceY drives position, not stored depth)", () => {
+  // This test locks in the intentional design: MarkerSprite uses getTerrainSurfaceY
+  // to place the pillar bottom, not the marker's stored .depth value. The terrain
+  // mesh is the authoritative source of the vertical position.
+  //
+  // To verify: for a given (lon, lat), getTerrainSurfaceY returns a finite Y
+  // that is independent of whatever depth value is stored on the marker object.
+  it("getTerrainSurfaceY is independent of any stored marker.depth value", () => {
+    const grid = makeDepthGrid(new Array(16).fill(50), 4, 0, 100);
+    const worldX = 10;
+    const worldZ = -15;
+
+    const yFromTerrain = getTerrainSurfaceY(grid, worldX, worldZ);
+    expect(Number.isFinite(yFromTerrain)).toBe(true);
+    expect(yFromTerrain).toBeLessThanOrEqual(0);
+
+    // Changing the hypothetical stored depth (e.g. 0, 500, 9999) does not
+    // affect yFromTerrain — the function signature doesn't even accept depth.
+    // Any code that passed marker.depth to getTerrainSurfaceY would cause a
+    // TypeScript compilation error, making this an intentional API boundary.
+    expect(yFromTerrain).toBeCloseTo(-MAX_DEPTH_WORLD / 2, 3);
+  });
+
+  it("getTerrainSurfaceY signature has no depth parameter (snap-to-terrain contract)", () => {
+    // The function must accept (grid, worldX, worldZ) only — no depth arg.
+    // This compile-time guarantee is also checked by TypeScript, but we pin
+    // the expected argument count here so a signature change is caught at test time.
+    expect(getTerrainSurfaceY.length).toBe(3);
+  });
+});
+
 describe("normalizeLonDelta", () => {
   it("short difference well inside [−180, +180] is unchanged", () => {
     // Same hemisphere: +5° east of primary

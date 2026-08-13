@@ -8409,6 +8409,10 @@ components:
           type: string
           maxLength: 2000
           nullable: true
+        depth:
+          type: number
+          minimum: 0
+          description: Depth in metres (positive = below surface). Must be finite and ≥ 0.
 
     MarkerInput:
       type: object

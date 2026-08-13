@@ -504,14 +504,17 @@ export function worldYToMetres(worldY: number, grid: TerrainData): number | null
  * Convert world-space XZ coordinates to geographic longitude/latitude.
  * X ∈ [−WORLD_SIZE/2, WORLD_SIZE/2] → [minLon, maxLon]
  * Z ∈ [−WORLD_SIZE/2, WORLD_SIZE/2] → [minLat, maxLat]
+ *
+ * Guards zero lonRange/latRange (degenerate terrain) with `|| 1` fallback,
+ * matching the same pattern used in lonLatToWorldXZ.
  */
 export function worldXZToLonLat(
   worldX: number,
   worldZ: number,
   grid: TerrainData,
 ): { lon: number; lat: number } {
-  const lonRange = grid.maxLon - grid.minLon;
-  const latRange = grid.maxLat - grid.minLat;
+  const lonRange = grid.maxLon - grid.minLon || 1;
+  const latRange = grid.maxLat - grid.minLat || 1;
   const lon = grid.minLon + ((worldX + WORLD_SIZE / 2) / WORLD_SIZE) * lonRange;
   const lat = grid.minLat + ((worldZ + WORLD_SIZE / 2) / WORLD_SIZE) * latRange;
   return { lon, lat };
@@ -647,6 +650,11 @@ export function computeStatistic(
  *
  * Uses bilinear interpolation across the four nearest grid cells.
  * Returns a negative value (deeper = more negative).
+ *
+ * Guards:
+ * - Non-finite worldX/worldZ (NaN, ±Infinity) → returns 0 (water surface).
+ * - worldX/worldZ outside the terrain footprint → clamped to the nearest
+ *   edge cell; tx/tz are clamped to [0, 1] so interpolation never extrapolates.
  */
 export function getTerrainSurfaceY(
   grid: TerrainData,
@@ -656,6 +664,9 @@ export function getTerrainSurfaceY(
   const { resolution: N, depths, minDepth, maxDepth } = grid;
   const depthRange = (maxDepth - minDepth) || 1;
 
+  // Non-finite inputs (NaN / ±Infinity) cannot be mapped to a grid position.
+  if (!Number.isFinite(worldX) || !Number.isFinite(worldZ)) return 0;
+
   // Convert world XZ → fractional grid column/row
   const fracCol = ((worldX + WORLD_SIZE / 2) / WORLD_SIZE) * (N - 1);
   const fracRow = ((worldZ + WORLD_SIZE / 2) / WORLD_SIZE) * (N - 1);
@@ -664,8 +675,10 @@ export function getTerrainSurfaceY(
   const row0 = Math.max(0, Math.min(N - 2, Math.floor(fracRow)));
   const col1 = col0 + 1;
   const row1 = row0 + 1;
-  const tx = fracCol - col0;
-  const tz = fracRow - row0;
+  // Clamp to [0, 1] so bilinear interpolation never extrapolates beyond the
+  // boundary cells when worldX/worldZ falls outside the terrain footprint.
+  const tx = Math.max(0, Math.min(1, fracCol - col0));
+  const tz = Math.max(0, Math.min(1, fracRow - row0));
 
   const d00 = depths[row0 * N + col0] ?? minDepth;
   const d10 = depths[row0 * N + col1] ?? minDepth;

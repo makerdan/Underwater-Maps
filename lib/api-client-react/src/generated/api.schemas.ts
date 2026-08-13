@@ -3073,6 +3073,11 @@ export interface MarkerPatch {
   type?: MarkerPatchType;
   /** @maxLength 2000 */
   notes?: string | null;
+  /**
+     * Depth in metres (positive = below surface). Must be finite and ≥ 0.
+     * @minimum 0
+     */
+  depth?: number;
 }
 
 export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];
@@ -4590,4 +4595,3 @@ export type GetTerrainBundlesPresetId202 = {
   status?: GetTerrainBundlesPresetId202Status;
   message?: string;
 };
-

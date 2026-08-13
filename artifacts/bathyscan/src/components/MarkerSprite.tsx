@@ -4,6 +4,19 @@
  *
  * Uses the same getTerrainSurfaceY helper as DepthPole for consistent
  * coordinate lookup. Depth poles are excluded (rendered by DepthPoleLayer).
+ *
+ * MARKER-Y CONVENTION (snap-to-terrain, intentional):
+ *   Saved markers always snap their pillar bottom to the terrain surface
+ *   sampled from the current grid via getTerrainSurfaceY(). The stored
+ *   marker.depth value (recorded at creation time) is NOT used to set the
+ *   world Y position. This is a deliberate design choice: the 3D terrain
+ *   mesh is the authoritative source of the vertical position so that
+ *   re-gridded or updated terrain keeps all markers visually consistent
+ *   without requiring a depth correction on each marker. The pillar always
+ *   spans from the terrain surface up to Y=0 (the waterline), giving a
+ *   clear visual indicator regardless of the absolute depth stored.
+ *   Out-of-bounds markers (lat/lon outside the terrain bbox) are suppressed
+ *   before this component is ever rendered — see MarkerLayer.
  */
 import React from "react";
 import { Billboard, Text } from "@react-three/drei";

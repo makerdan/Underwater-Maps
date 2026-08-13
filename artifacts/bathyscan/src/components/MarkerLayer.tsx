@@ -114,6 +114,23 @@ export function useCatchSymbolsByMarker(): Map<string, string[]> {
 }
 
 /**
+ * Returns true when a marker's geographic coordinates fall within the primary
+ * terrain's bounding box. Markers outside the bbox produce world XZ values
+ * beyond ±50 and getTerrainSurfaceY would extrapolate rather than clamp —
+ * suppressing them here is safer than rendering at an arbitrary off-edge position.
+ * Exported for unit tests.
+ */
+export function isMarkerInBounds(
+  marker: Pick<import("@workspace/api-client-react").Marker, "lon" | "lat">,
+  terrain: Pick<import("@workspace/api-client-react").TerrainData, "minLon" | "maxLon" | "minLat" | "maxLat">,
+): boolean {
+  return (
+    marker.lon >= terrain.minLon && marker.lon <= terrain.maxLon &&
+    marker.lat >= terrain.minLat && marker.lat <= terrain.maxLat
+  );
+}
+
+/**
  * Group catch symbols by markerId, one symbol per entry (duplicates kept —
  * two salmon entries render two salmon symbols), insertion order preserved.
  * Exported for unit tests.
@@ -143,7 +160,21 @@ export const MarkerLayer: React.FC = () => {
     ? []
     : markers.filter(
         (m) => m.type === "depth_pole" || visibleMarkerTypes.includes(m.type as typeof visibleMarkerTypes[number]),
-      );
+      ).filter((m) => {
+        // Suppress markers whose geographic coordinates fall outside the primary
+        // terrain's bounding box. Without this guard lonLatToWorldXZ produces
+        // world X/Z values beyond ±50, and getTerrainSurfaceY extrapolates from
+        // the nearest edge cell rather than returning a meaningful depth — the
+        // marker would render at an arbitrary off-edge position.
+        const inBounds = isMarkerInBounds(m, terrain);
+        if (!inBounds && import.meta.env.DEV) {
+          console.warn(
+            `[MarkerLayer] marker ${m.id} suppressed: lon=${m.lon} lat=${m.lat} is outside terrain bbox ` +
+            `[${terrain.minLon},${terrain.maxLon}]×[${terrain.minLat},${terrain.maxLat}]`,
+          );
+        }
+        return inBounds;
+      });
 
   // When the count of visible markers exceeds the user's cluster threshold,
   // subsample uniformly so the scene stays readable.

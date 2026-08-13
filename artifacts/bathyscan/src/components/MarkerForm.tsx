@@ -87,6 +87,8 @@ export const MarkerForm: React.FC = () => {
   const [labelError, setLabelError] = useState("");
   const [notesError, setNotesError] = useState("");
   const [poleColour, setPoleColour] = useState(DEPTH_POLE_DEFAULT_COLOUR);
+  // Edit mode: optional corrected depth (metres). Undefined means "don't patch depth".
+  const [editDepth, setEditDepth] = useState<string>("");
 
   // In edit mode: populate from the stored marker.
   // In create mode: reset when GPS changes, honouring one-shot prefill.
@@ -100,6 +102,8 @@ export const MarkerForm: React.FC = () => {
       setNotes(existingNotes);
       setLabelError("");
       setNotesError("");
+      // Pre-populate depth in edit mode so the user sees the current value.
+      setEditDepth(editMarker.depth !== undefined && editMarker.depth !== null ? String(editMarker.depth) : "");
       // Legacy types stay valid on existing markers: accept any known type
       // from the full library, not just the ones in the current picker.
       const candidateType = editMarker.type as MarkerTypeValue | undefined;
@@ -171,6 +175,10 @@ export const MarkerForm: React.FC = () => {
       } else {
         dirty = notes !== (editMarker.notes ?? "");
       }
+    }
+    if (!dirty) {
+      const savedDepth = editMarker.depth !== undefined && editMarker.depth !== null ? String(editMarker.depth) : "";
+      dirty = editDepth !== savedDepth;
     }
     isDirtyRef.current = dirty;
   });
@@ -244,6 +252,14 @@ export const MarkerForm: React.FC = () => {
 
     // ── Edit mode ────────────────────────────────────────────────────────────
     if (isEditMode && editMarker) {
+      // Only include depth in the PATCH body when the user has changed it and
+      // it parses as a valid finite non-negative number.
+      const savedDepthStr = editMarker.depth !== undefined && editMarker.depth !== null ? String(editMarker.depth) : "";
+      let patchDepth: number | undefined;
+      if (editDepth !== savedDepthStr && editDepth.trim() !== "") {
+        const parsed = parseFloat(editDepth);
+        if (Number.isFinite(parsed) && parsed >= 0) patchDepth = parsed;
+      }
       patchMarker.mutate(
         {
           id: editMarker.id,
@@ -251,6 +267,7 @@ export const MarkerForm: React.FC = () => {
             label: labelResult.data,
             type: markerType as MarkerInputType,
             notes: notesForBody,
+            ...(patchDepth !== undefined ? { depth: patchDepth } : {}),
           },
         },
         {
@@ -633,6 +650,38 @@ export const MarkerForm: React.FC = () => {
               />
               <span style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#cbd5e1", fontFamily: "monospace" }}>{poleColour}</span>
             </div>
+          </div>
+        )}
+
+        {/* Depth correction (edit mode only, hidden for depth_pole) */}
+        {isEditMode && markerType !== "depth_pole" && (
+          <div style={{ padding: "4px 14px 8px" }}>
+            <label
+              style={{ display: "block", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", color: "#64748b", marginBottom: 4 }}
+            >
+              DEPTH (m) — optional correction
+            </label>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="any"
+              value={editDepth}
+              onChange={(e) => setEditDepth(e.target.value)}
+              placeholder={editMarker ? String(editMarker.depth) : ""}
+              style={{
+                width: "100%",
+                background: "rgba(0,229,255,0.04)",
+                border: "1px solid rgba(0,229,255,0.15)",
+                borderRadius: 3,
+                color: "#e2e8f0",
+                fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
+                padding: "5px 8px",
+                fontFamily: "inherit",
+                boxSizing: "border-box",
+                outline: "none",
+              }}
+            />
           </div>
         )}
 
