@@ -473,6 +473,21 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => {
     puzzleTransformsRef.current = puzzleTransforms;
     dirtyRef.current = true;
+    // Auto-persist to sessionStorage so positions survive navigation / component
+    // unmount without requiring an explicit ✦ SAVE click. The ↺ RESET button
+    // still calls sessionStorage.removeItem() directly when it wipes all
+    // transforms, so there is no conflict — this branch simply skips writing
+    // when the map is empty (size === 0 after a reset).
+    if (puzzleTransforms.size > 0) {
+      try {
+        sessionStorage.setItem(
+          "bathyscan:puzzleTransforms",
+          JSON.stringify([...puzzleTransforms.entries()]),
+        );
+      } catch {
+        // Ignore quota / security errors silently.
+      }
+    }
   }, [puzzleTransforms]);
 
   // Hydrate puzzle transforms from sessionStorage on mount so tile positions
