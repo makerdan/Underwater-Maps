@@ -117,18 +117,24 @@ vi.mock("@/lib/context", () => ({
   useAppState: () => ({ terrain: mockTerrain }),
 }));
 
-vi.mock("@/lib/settingsStore", () => ({
-  useSettingsStore: (sel: (s: {
-    visibleMarkerTypes: string[];
-    showMarkerLabels: boolean;
-    markerClusterThreshold: number;
-  }) => unknown) =>
-    sel({
-      visibleMarkerTypes: mockVisibleMarkerTypes,
-      showMarkerLabels: false,
-      markerClusterThreshold: mockClusterThreshold,
-    }),
-}));
+vi.mock("@/lib/settingsStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
+  const storeState = () => ({
+    visibleMarkerTypes: mockVisibleMarkerTypes,
+    showMarkerLabels: false,
+    markerClusterThreshold: mockClusterThreshold,
+  });
+  const useSettingsStore = Object.assign(
+    (sel: (s: ReturnType<typeof storeState>) => unknown) => sel(storeState()),
+    {
+      getState: () => storeState(),
+      setState: vi.fn(),
+      persist: { hasHydrated: () => false, onFinishHydration: () => () => {} },
+      subscribe: () => () => {},
+    },
+  );
+  return { ...actual, useSettingsStore };
+});
 
 vi.mock("@/components/MarkerSprite", () => ({
   MarkerSprite: () => null,
