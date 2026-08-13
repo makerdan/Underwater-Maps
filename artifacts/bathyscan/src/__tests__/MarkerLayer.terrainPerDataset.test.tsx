@@ -272,58 +272,42 @@ describe("lonSpan — bbox longitude span", () => {
 // ---------------------------------------------------------------------------
 
 describe("lonLatToWorldXZ — dateline-crossing bboxes", () => {
-  it("maps the west edge of an antimeridian-crossing bbox to x=-WORLD_SIZE/2", () => {
+  // Normal (non-crossing) bbox 0..200 — lonSpan = 200, preserved as-is.
+  it("maps the west edge (minLon) of a wide non-crossing bbox (0..200) to x=-WORLD_SIZE/2", () => {
     const grid = makeGrid("wide", 0, 200);
-    const { x } = lonLatToWorldXZ(100, 45, grid); // 100 is the centre of 0..200
+    const { x } = lonLatToWorldXZ(0, 45, grid); // 0 is the west edge (minLon)
     expect(x).toBeCloseTo(-WORLD_SIZE / 2, 2);
   });
 
-  // Regression: wide non-crossing bboxes > 180° must not be folded to their
-  // short complement. lonSpan(0, 200) = 200, not 160.
-  it("maps the centre of a wide non-crossing bbox (0..200) to x=0", () => {
-    const grid = makeGrid("wide", 0, 200);
-    const { x } = lonLatToWorldXZ(100, 45, grid); // 100 is the centre of 0..200
-    expect(x).toBeCloseTo(-WORLD_SIZE / 2, 2);
-  });
-
-  // Regression: wide non-crossing bboxes > 180° must not be folded to their
-  // short complement. lonSpan(0, 200) = 200, not 160.
-  it("maps the centre of a wide non-crossing bbox (0..200) to x=0", () => {
-    const grid = makeGrid("wide", 0, 200);
-    const { x } = lonLatToWorldXZ(100, 45, grid); // 100 is the centre of 0..200
-    expect(x).toBeCloseTo(-WORLD_SIZE / 2, 2);
-  });
-
-  // Regression: wide non-crossing bboxes > 180° must not be folded to their
-  // short complement. lonSpan(0, 200) = 200, not 160.
-  it("maps the centre of a wide non-crossing bbox (0..200) to x=0", () => {
-    const grid = makeGrid("wide", 0, 200);
-    const { x } = lonLatToWorldXZ(100, 45, grid); // 100 is the centre of 0..200
-    expect(x).toBeCloseTo(-WORLD_SIZE / 2, 2);
-  });
-
-  // Regression: wide non-crossing bboxes > 180° must not be folded to their
-  // short complement. lonSpan(0, 200) = 200, not 160.
-  it("maps the centre of a wide non-crossing bbox (0..200) to x=0", () => {
-    const grid = makeGrid("wide", 0, 200);
-    const { x } = lonLatToWorldXZ(100, 45, grid); // 100 is the centre of 0..200
-    expect(x).toBeCloseTo(-WORLD_SIZE / 2, 2);
-  });
-
-  // Regression: wide non-crossing bboxes > 180° must not be folded to their
-  // short complement. lonSpan(0, 200) = 200, not 160.
-  it("maps the centre of a wide non-crossing bbox (0..200) to x=0", () => {
-    const grid = makeGrid("wide", 0, 200);
-    const { x } = lonLatToWorldXZ(100, 45, grid); // 100 is the centre of 0..200
-    expect(x).toBeCloseTo(-WORLD_SIZE / 2, 2);
-  });
-
-  // Regression: wide non-crossing bboxes > 180° must not be folded to their
-  // short complement. lonSpan(0, 200) = 200, not 160.
   it("maps the centre of a wide non-crossing bbox (0..200) to x=0", () => {
     const grid = makeGrid("wide", 0, 200);
     const { x } = lonLatToWorldXZ(100, 45, grid); // 100 is the centre of 0..200
     expect(x).toBeCloseTo(0, 2);
+  });
+
+  it("maps the east edge (maxLon) of a wide non-crossing bbox (0..200) to x=+WORLD_SIZE/2", () => {
+    const grid = makeGrid("wide", 0, 200);
+    const { x } = lonLatToWorldXZ(200, 45, grid); // 200 is the east edge (maxLon)
+    expect(x).toBeCloseTo(WORLD_SIZE / 2, 2);
+  });
+
+  // Antimeridian-crossing bbox 170..-170 — lonSpan = 20°, centre at lon=180.
+  it("maps the west edge of an antimeridian-crossing bbox (170..-170) to x=-WORLD_SIZE/2", () => {
+    const grid = makeGrid("cross", 170, -170);
+    const { x } = lonLatToWorldXZ(170, 45, grid); // west edge = minLon
+    expect(x).toBeCloseTo(-WORLD_SIZE / 2, 2);
+  });
+
+  it("maps the centre of an antimeridian-crossing bbox (170..-170) to x=0", () => {
+    const grid = makeGrid("cross", 170, -170);
+    const { x } = lonLatToWorldXZ(180, 45, grid); // centre = 180° (the antimeridian)
+    expect(x).toBeCloseTo(0, 2);
+  });
+
+  it("maps the east edge of an antimeridian-crossing bbox (170..-170) to x=+WORLD_SIZE/2", () => {
+    const grid = makeGrid("cross", 170, -170);
+    const { x } = lonLatToWorldXZ(-170, 45, grid); // east edge = maxLon
+    expect(x).toBeCloseTo(WORLD_SIZE / 2, 2);
   });
 });
 
