@@ -755,7 +755,7 @@ export function DepthColorsCard() {
               <SavedThemeChip
                 key={theme.id}
                 theme={theme}
-                onApply={() => { applyTheme(theme.id); void flushServerSync(); }}
+                onApply={() => { applyTheme(theme.id); if (!isBandTheme) setColormapThemeByUser("ocean"); void flushServerSync(); }}
                 onRename={(name) => { renameTheme(theme.id, name); void flushServerSync(); }}
                 onDelete={() => { deleteTheme(theme.id); void flushServerSync(); }}
                 labelStyle={labelStyle}
