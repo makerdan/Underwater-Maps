@@ -46,6 +46,7 @@ export default defineConfig({
       "src/routes/__tests__/settings-validation.test.ts",
       "src/routes/__tests__/me-validation.test.ts",
       "src/routes/__tests__/datasets-response-parse.test.ts",
+      "src/routes/__tests__/my-saves-routes.test.ts",
     ],
   },
 });
