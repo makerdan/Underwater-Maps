@@ -22,8 +22,13 @@ import { parseUploadedFile } from "./uploadParsers.js";
 import { isTarFile, extractTarFile, isGzipFile } from "./tarDetect.js";
 import { routeTarEntries } from "./noaaTarRouter.js";
 import { registerCache } from "./cacheRegistry.js";
+import { z } from "zod";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+
+const SignedUrlResponseSchema = z.object({
+  signed_url: z.string().url(),
+});
 
 export const gcsClient = new Storage({
   credentials: {
@@ -80,8 +85,8 @@ export async function signDatasetUploadUrl(
     );
   }
 
-  const { signed_url: uploadUrl } = (await resp.json()) as { signed_url: string };
-  return { uploadUrl, objectKey };
+  const body = SignedUrlResponseSchema.parse(await resp.json());
+  return { uploadUrl: body.signed_url, objectKey };
 }
 
 // ─── Job state ────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { Storage, File } from "@google-cloud/storage";
 import { Readable } from "stream";
 import { randomUUID } from "crypto";
 import path from "path";
+import { z } from "zod";
 import {
   ObjectAclPolicy,
   ObjectPermission,
@@ -11,6 +12,10 @@ import {
 } from "./objectAcl";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+
+const SignedUrlResponseSchema = z.object({
+  signed_url: z.string().url(),
+});
 
 export const objectStorageClient = new Storage({
   credentials: {
@@ -314,7 +319,10 @@ function parseObjectPath(path: string): {
     throw new Error("Invalid path: must contain at least a bucket name");
   }
 
-  const bucketName = pathParts[1] as string;
+  const bucketName = pathParts[1];
+  if (!bucketName) {
+    throw new Error("Invalid path: bucket name segment is missing");
+  }
   const objectName = pathParts.slice(2).join("/");
 
   return {
@@ -358,6 +366,6 @@ async function signObjectURL({
     );
   }
 
-  const { signed_url: signedURL } = (await response.json()) as { signed_url: string };
-  return signedURL;
+  const body = SignedUrlResponseSchema.parse(await response.json());
+  return body.signed_url;
 }

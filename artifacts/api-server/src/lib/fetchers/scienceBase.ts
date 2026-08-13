@@ -6,6 +6,7 @@
  * fetch()  — downloads the GeoTIFF, reprojects to WGS84, returns depth grid.
  */
 
+import { z } from "zod";
 import type {
   BathymetryFetcher,
   BathyFetchBundle,
@@ -208,18 +209,22 @@ function bilinearSample(data: Float32Array, width: number, height: number, col: 
 // ScienceBase catalog helpers
 // ---------------------------------------------------------------------------
 
-interface SbFile {
-  name: string;
-  downloadUri: string;
-  size?: number;
-}
+const SbFileSchema = z.object({
+  name: z.string(),
+  downloadUri: z.string(),
+  size: z.number().optional(),
+});
 
-interface SbItem {
-  title?: string;
-  files?: SbFile[];
-  dates?: { dateString?: string; label?: string }[];
-  errors?: { message: string };
-}
+const SbItemSchema = z.object({
+  title: z.string().optional(),
+  files: z.array(SbFileSchema).optional(),
+  dates: z
+    .array(z.object({ dateString: z.string().optional(), label: z.string().optional() }))
+    .optional(),
+  errors: z.object({ message: z.string() }).optional(),
+});
+
+type SbItem = z.infer<typeof SbItemSchema>;
 
 async function fetchSbItem(itemId: string): Promise<SbItem | null> {
   const url = `https://www.sciencebase.gov/catalog/item/${itemId}?format=json`;
@@ -228,9 +233,36 @@ async function fetchSbItem(itemId: string): Promise<SbItem | null> {
       signal: AbortSignal.timeout(30_000),
       headers: { Accept: "application/json" },
     });
-    if (!r.ok) return null;
-    return (await r.json()) as SbItem;
-  } catch {
+    if (!r.ok) {
+      console.error(
+        `[ScienceBase] fetchSbItem: non-OK HTTP status ${r.status} for item ${itemId}`,
+      );
+      return null;
+    }
+    let json: unknown;
+    try {
+      json = await r.json();
+    } catch (jsonErr) {
+      console.error(
+        `[ScienceBase] fetchSbItem: invalid JSON for item ${itemId}`,
+        jsonErr,
+      );
+      return null;
+    }
+    const parsed = SbItemSchema.safeParse(json);
+    if (!parsed.success) {
+      console.error(
+        `[ScienceBase] fetchSbItem: response shape mismatch for item ${itemId}`,
+        parsed.error.flatten(),
+      );
+      return null;
+    }
+    return parsed.data;
+  } catch (err) {
+    console.error(
+      `[ScienceBase] fetchSbItem: transport failure for item ${itemId}`,
+      err,
+    );
     return null;
   }
 }
