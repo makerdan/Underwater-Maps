@@ -236,3 +236,47 @@ describe("GET /api/datasets/:id/overview — valid stored overviewJson", () => {
     expect(Array.isArray(res.body.depths)).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// GET /api/datasets/:id/preview — corrupt stored row (line 1745 guard)
+// ---------------------------------------------------------------------------
+describe("GET /api/datasets/:id/preview — terrain schema mismatch on corrupt DB row", () => {
+  it("returns 500 terrain_schema_mismatch when the stored terrainJson is missing required bbox fields", async () => {
+    _mockDbRows = [{ userId: "test-owner", name: "Corrupt Lake", terrainJson: CORRUPT_TERRAIN_JSON }];
+
+    const res = await request(app).get(`/api/datasets/${TEST_UUID}/preview`);
+
+    expect(res.status).toBe(500);
+    expect(res.body).toMatchObject({ error: "terrain_schema_mismatch" });
+    expect(typeof res.body.details).toBe("string");
+    expect(res.body.details).toMatch(/minLon|maxLon|minLat|maxLat|centerLon|centerLat/);
+  });
+
+  it("does not return 200 when the stored terrainJson is malformed", async () => {
+    _mockDbRows = [{ userId: "test-owner", name: "Corrupt Lake", terrainJson: CORRUPT_TERRAIN_JSON }];
+
+    const res = await request(app).get(`/api/datasets/${TEST_UUID}/preview`);
+
+    expect(res.status).not.toBe(200);
+    expect(res.body.error).toBe("terrain_schema_mismatch");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/datasets/:id/preview — valid stored row
+// ---------------------------------------------------------------------------
+describe("GET /api/datasets/:id/preview — valid stored terrainJson", () => {
+  it("returns 200 with datasetId and bbox when the stored terrainJson is well-formed", async () => {
+    _mockDbRows = [{ userId: "test-owner", name: "Test Lake", terrainJson: VALID_TERRAIN_JSON }];
+
+    const res = await request(app).get(`/api/datasets/${TEST_UUID}/preview`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      datasetId: TEST_UUID,
+      name: "Test Lake",
+      bbox: { minLon: -93.5, maxLon: -93.0, minLat: 44.5, maxLat: 45.0 },
+      dataSource: "ncei",
+    });
+  });
+});

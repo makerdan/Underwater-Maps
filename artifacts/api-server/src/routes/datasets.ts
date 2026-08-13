@@ -1211,8 +1211,8 @@ async function processUploadJob(
 
         // Validate worker output before writing to DB — prevents silent corrupt
         // rows if the parse worker's output shape ever drifts from StoredTerrainJson.
-        validateTerrainForDb(terrain, "[tar-job]:terrain");
-        validateTerrainForDb(overview, "[tar-job]:overview");
+        const validTarTerrain = validateTerrainForDb(terrain, "[tar-job]:terrain");
+        const validTarOverview = validateTerrainForDb(overview, "[tar-job]:overview");
 
         // Encode the ungeoreferenced smooth-sheet raster for DB storage (if present).
         const pendingRasterGzBase64 = smoothSheetRasterBuffer
@@ -1226,10 +1226,10 @@ async function processUploadJob(
             id: gridId,
             userId,
             name: tarDatasetName,
-            minDepth: terrain.minDepth,
-            maxDepth: terrain.maxDepth,
-            terrainJson: terrain as StoredTerrainJson,
-            overviewJson: overview as StoredTerrainJson,
+            minDepth: validTarTerrain.minDepth,
+            maxDepth: validTarTerrain.maxDepth,
+            terrainJson: validTarTerrain,
+            overviewJson: validTarOverview,
             noaaSubstrateSamplesJson: tarSubstratePoints.length > 0 ? tarSubstratePoints : null,
             hyd93FeaturesJson: tarHyd93Features.length > 0 ? tarHyd93Features : null,
             needsGeoreferencing: needsGeoreferencing ?? null,
@@ -1286,8 +1286,8 @@ async function processUploadJob(
 
     // Validate worker output before writing to DB — prevents silent corrupt
     // rows if the parse worker's output shape ever drifts from StoredTerrainJson.
-    validateTerrainForDb(terrain, "[chunk-job]:terrain");
-    validateTerrainForDb(overview, "[chunk-job]:overview");
+    const validChunkTerrain = validateTerrainForDb(terrain, "[chunk-job]:terrain");
+    const validChunkOverview = validateTerrainForDb(overview, "[chunk-job]:overview");
 
     const [saved] = await db
       .insert(customDatasetsTable)
@@ -1295,11 +1295,11 @@ async function processUploadJob(
         id: gridId,
         userId,
         name: datasetName,
-        minDepth: terrain.minDepth,
-        maxDepth: terrain.maxDepth,
-        terrainJson: terrain as StoredTerrainJson,
-        overviewJson: overview as StoredTerrainJson,
-        tideStationJson: await resolveTideStationForTerrain(terrain),
+        minDepth: validChunkTerrain.minDepth,
+        maxDepth: validChunkTerrain.maxDepth,
+        terrainJson: validChunkTerrain,
+        overviewJson: validChunkOverview,
+        tideStationJson: await resolveTideStationForTerrain(validChunkTerrain),
       })
       .returning({ id: customDatasetsTable.id });
 
@@ -1742,7 +1742,16 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
           res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
           return;
         }
-        const tj = row.terrainJson as StoredTerrainJson;
+        const tjParsed = StoredTerrainJsonSchema.safeParse(row.terrainJson);
+        if (!tjParsed.success) {
+          const issues = tjParsed.error.issues
+            .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
+            .join("; ");
+          logger.error({ id, issues }, "[datasets] GET preview — stored terrain_schema_mismatch");
+          res.status(500).json({ error: "terrain_schema_mismatch", details: issues });
+          return;
+        }
+        const tj = tjParsed.data;
         // StoredTerrainJson.dataSource may include source labels not present in
         // the DatasetPreview enum (twdb, usace, usgs-3dep). User-uploaded sonar
         // is always real measured data, so map anything unrecognised to "ncei".

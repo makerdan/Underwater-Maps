@@ -15,6 +15,7 @@
  */
 
 import MiniSearch from "minisearch";
+import { z } from "zod";
 import { db, datasetCatalogTable, disabledPresetsTable } from "@workspace/db";
 import { inArray, notInArray, sql } from "drizzle-orm";
 import type { CatalogSearchQuery } from "../routes/schemas.js";
@@ -1921,18 +1922,52 @@ let inMemoryCatalog: CatalogSeedEntry[] | null = null;
  *
  * Exported for unit-testing without a live database.
  */
+/**
+ * Minimum Zod schema for rows coming out of `dataset_catalog`. Only validates
+ * the fields consumed by downstream strategy and search code; extra columns
+ * returned by Drizzle are allowed via `.passthrough()`.
+ */
+const CatalogDbRowSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  sourceAgency: z.string(),
+  dataType: z.enum(["bathymetry", "substrate", "habitat", "lidar", "chart"]),
+  coverageBbox: z.object({
+    minLon: z.number(),
+    minLat: z.number(),
+    maxLon: z.number(),
+    maxLat: z.number(),
+  }),
+  waterType: z.enum(["saltwater", "freshwater"]),
+}).passthrough();
+
 export function applySampleBboxFromStatic(
   rows: { id: string; [key: string]: unknown }[],
   staticEntries: CatalogSeedEntry[],
 ): CatalogSeedEntry[] {
   const staticById = new Map(staticEntries.map((e) => [e.id, e]));
-  return rows.map((row): CatalogSeedEntry => {
+  const valid: CatalogSeedEntry[] = [];
+  for (const row of rows) {
+    const parsed = CatalogDbRowSchema.safeParse(row);
+    if (!parsed.success) {
+      const issues = parsed.error.issues
+        .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
+        .join("; ");
+      logger.warn(
+        { id: row.id, issues },
+        "[catalogSeeder] applySampleBboxFromStatic — skipping invalid DB row",
+      );
+      continue;
+    }
+    const entry = parsed.data as unknown as CatalogSeedEntry;
     const staticEntry = staticById.get(row.id);
     if (staticEntry?.sampleBbox !== undefined) {
-      return { ...(row as unknown as CatalogSeedEntry), sampleBbox: staticEntry.sampleBbox };
+      valid.push({ ...entry, sampleBbox: staticEntry.sampleBbox });
+    } else {
+      valid.push(entry);
     }
-    return row as unknown as CatalogSeedEntry;
-  });
+  }
+  return valid;
 }
 
 export async function getCatalogEntries(): Promise<CatalogSeedEntry[]> {
