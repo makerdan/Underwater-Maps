@@ -223,6 +223,9 @@ export const OverviewMap: React.FC = () => {
   const rightClickedMarkerTypeRef = useRef<string | null>(null);
   const savedTrailsRef = useRef<CanvasSavedTrail[]>([]);
   const rafRef = useRef<number>(0);
+  /** Tracks the view key (scale+offset) at the last geo-transform publish so
+   *  the rAF loop can re-publish when zoom or pan changes the pixel→geo ratio. */
+  const lastGeoPublishKeyRef = useRef<string>("");
   const efhFeaturesRef = useRef<EfhFeature[]>([]);
   /** Pre-built contour segments keyed by datasetId, rebuilt when any dataset's grid or interval changes. */
   const contourSegmentsRef = useRef<Map<string, ContourSegment[]>>(new Map());
@@ -522,7 +525,49 @@ export const OverviewMap: React.FC = () => {
         // Ignore quota / security errors silently.
       }
     }
-  }, [puzzleTransforms]);
+
+    // Convert pixel-space puzzle transforms to geographic offsets so the
+    // Minimap can draw tiles at the correct shifted positions.
+    // worldGridRef is null in single-dataset mode; fall back to overviewGrid
+    // (the same pattern used throughout OverviewMap for single-dataset rendering).
+    const worldGrid = worldGridRef.current ?? overviewGrid;
+    // transformRef may not be populated yet during sessionStorage hydration
+    // (before the first rAF); compute a fresh initial transform as a fallback.
+    const canvas = canvasRef.current;
+    const transform =
+      transformRef.current ??
+      (worldGrid && canvas && canvas.width > 0
+        ? computeInitialTransform(worldGrid, canvas.width, canvas.height)
+        : null);
+
+    if (puzzleTransforms.size === 0) {
+      // User hit Reset (or map was initialised with no saved transforms) → clear.
+      useUiStore.getState().clearPuzzleGeoTransforms();
+    } else if (worldGrid && transform) {
+      // Refs are ready — compute geographic deltas and publish to uiStore.
+      const geoMap = new Map<string, { dLon: number; dLat: number; angleDeg: number }>();
+      for (const [datasetId, { tx, ty, angleDeg }] of puzzleTransforms.entries()) {
+        // Find this dataset's bbox to compute the canonical tile center in canvas space.
+        const entry = visibleDatasetsRef.current.find((v) => v.datasetId === datasetId);
+        const bbox = entry?.overviewGrid ?? overviewGrid;
+        if (!bbox) continue;
+        const centerLon = (bbox.minLon + bbox.maxLon) / 2;
+        const centerLat = (bbox.minLat + bbox.maxLat) / 2;
+        const [tcx, tcy] = lonLatToCanvas(centerLon, centerLat, worldGrid, transform);
+        // Canonical center and puzzle-offset center, both converted to lon/lat.
+        const canonPt = canvasToLonLat(tcx, tcy, worldGrid, transform);
+        const offsetPt = canvasToLonLat(tcx + tx, tcy + ty, worldGrid, transform);
+        geoMap.set(datasetId, {
+          dLon: offsetPt.lon - canonPt.lon,
+          dLat: offsetPt.lat - canonPt.lat,
+          angleDeg,
+        });
+      }
+      useUiStore.getState().setPuzzleGeoTransforms(geoMap);
+    }
+    // If worldGrid or transform are still null, skip publishing —
+    // the Minimap keeps the last known state until refs are populated.
+  }, [puzzleTransforms, overviewGrid]);
 
   // Hydrate puzzle transforms on mount. Prefer sessionStorage (more recent
   // within the same tab session) and fall back to localStorage so arrangements
@@ -1731,6 +1776,33 @@ export const OverviewMap: React.FC = () => {
           invalidateUpscaleRef.current();
         }
         lastViewKey = viewKey;
+      }
+
+      // Re-publish puzzle geo transforms whenever the view key (scale/offset)
+      // changes while puzzle tiles are positioned.  Wheel zoom and fit-animation
+      // update transformRef.current directly without touching [puzzleTransforms],
+      // so the [puzzleTransforms] effect alone is insufficient — we recompute
+      // here instead using the same `t` and `worldGrid` that the rAF draw uses
+      // to ensure pixel→geo mapping is always consistent with what is rendered.
+      if (puzzleTransformsRef.current.size > 0 && viewKey !== lastGeoPublishKeyRef.current) {
+        lastGeoPublishKeyRef.current = viewKey;
+        const geoMapRaf = new Map<string, { dLon: number; dLat: number; angleDeg: number }>();
+        for (const [dsId, { tx, ty, angleDeg }] of puzzleTransformsRef.current.entries()) {
+          const dsEntry = visibleDatasetsRef.current.find((v) => v.datasetId === dsId);
+          const dsBbox = dsEntry?.overviewGrid ?? grid;
+          if (!dsBbox) continue;
+          const cLon = (dsBbox.minLon + dsBbox.maxLon) / 2;
+          const cLat = (dsBbox.minLat + dsBbox.maxLat) / 2;
+          const [tcx, tcy] = lonLatToCanvas(cLon, cLat, worldGrid, t);
+          const canonPt = canvasToLonLat(tcx, tcy, worldGrid, t);
+          const offsetPt = canvasToLonLat(tcx + tx, tcy + ty, worldGrid, t);
+          geoMapRaf.set(dsId, {
+            dLon: offsetPt.lon - canonPt.lon,
+            dLat: offsetPt.lat - canonPt.lat,
+            angleDeg,
+          });
+        }
+        useUiStore.getState().setPuzzleGeoTransforms(geoMapRaf);
       }
 
       // Multi-dataset heatmap rendering — sorted by survey recency so the

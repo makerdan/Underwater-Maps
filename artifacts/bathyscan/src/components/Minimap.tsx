@@ -411,6 +411,7 @@ export const Minimap: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
   const showNodataBoundary = useUiStore((s) => s.showNodataBoundary);
   const setShowNodataBoundary = useUiStore((s) => s.setShowNodataBoundary);
+  const puzzleGeoTransforms = useUiStore((s) => s.puzzleGeoTransforms);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
   const overviewHillshading = useSettingsStore((s) => s.overviewHillshading);
   const units = useSettingsStore((s) => s.units);
@@ -586,10 +587,43 @@ export const Minimap: React.FC = () => {
     const alpha = satelliteImgRef.current ? 0.65 : 1.0;
     sCtx.globalAlpha = alpha;
 
+    // Helper: draw a heatmap bitmap applying a puzzle geo transform when present.
+    // Offsets the bbox by (dLon, dLat) and wraps drawImage with a rotation
+    // transform centred on the shifted tile rect, mirroring OverviewMap's
+    // drawPuzzleTile pattern.
+    const drawTileWithGeoTransform = (
+      bitmap: HTMLCanvasElement,
+      dataBbox: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+      datasetId: string,
+    ) => {
+      const pGeo = puzzleGeoTransforms.get(datasetId);
+      const effectiveBbox = pGeo
+        ? {
+            minLon: dataBbox.minLon + pGeo.dLon,
+            maxLon: dataBbox.maxLon + pGeo.dLon,
+            minLat: dataBbox.minLat + pGeo.dLat,
+            maxLat: dataBbox.maxLat + pGeo.dLat,
+          }
+        : dataBbox;
+      const rect = datasetCanvasRect(effectiveBbox, unionBbox);
+      if (pGeo) {
+        const tileCx = rect.x + rect.w / 2;
+        const tileCy = rect.y + rect.h / 2;
+        const angleRad = (pGeo.angleDeg * Math.PI) / 180;
+        sCtx.save();
+        sCtx.translate(tileCx, tileCy);
+        sCtx.rotate(angleRad);
+        sCtx.translate(-tileCx, -tileCy);
+        sCtx.drawImage(bitmap, rect.x, rect.y, rect.w, rect.h);
+        sCtx.restore();
+      } else {
+        sCtx.drawImage(bitmap, rect.x, rect.y, rect.w, rect.h);
+      }
+    };
+
     // 3a. Primary heatmap (always uses currentTerrain's bbox as its data bbox)
     if (heatmapCanvasRef.current) {
-      const rect = datasetCanvasRect(currentTerrain, unionBbox);
-      sCtx.drawImage(heatmapCanvasRef.current, rect.x, rect.y, rect.w, rect.h);
+      drawTileWithGeoTransform(heatmapCanvasRef.current, currentTerrain, currentTerrain.datasetId);
     }
 
     // 3b. Secondary dataset bitmaps
@@ -598,8 +632,7 @@ export const Minimap: React.FC = () => {
       const entry = visibleDatasets.find((v) => v.datasetId === datasetId);
       const grid = entry?.overviewGrid;
       if (!grid) continue;
-      const rect = datasetCanvasRect(grid, unionBbox);
-      sCtx.drawImage(bitmap, rect.x, rect.y, rect.w, rect.h);
+      drawTileWithGeoTransform(bitmap, grid, datasetId);
     }
 
     sCtx.globalAlpha = 1.0;
@@ -747,6 +780,22 @@ export const Minimap: React.FC = () => {
     compositeFrame(ctx, cp1.known ? cp1.lon : null, cp1.known ? cp1.lat : null, camState.heading, terrain);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers; terrain is captured from outer scope (current at call time)
   }, [tileUrl]);
+
+  // Re-composite when puzzle geo transforms change (tile positions/rotations
+  // were updated by OverviewMap's puzzle mode). The rebuildStaticLayer call
+  // captures puzzleGeoTransforms from the render-scope closure so this effect
+  // is always working with the latest transform map.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !terrain || !heatmapCanvasRef.current) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    rebuildStaticLayer(terrain);
+    const camState = useCameraStore.getState();
+    const cpPuzzle = camState.cameraPosition;
+    compositeFrame(ctx, cpPuzzle.known ? cpPuzzle.lon : null, cpPuzzle.known ? cpPuzzle.lat : null, camState.heading, terrain);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuildStaticLayer and compositeFrame are render-scope helpers; triggered whenever puzzle geo transforms change
+  }, [puzzleGeoTransforms]);
 
   // Subscribe to cameraStore and update arrow only — static layer is pre-built.
   useEffect(() => {

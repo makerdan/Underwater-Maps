@@ -715,6 +715,164 @@ describe("Minimap — rebuildStaticLayer draws one bitmap per loaded dataset", (
 });
 
 // ---------------------------------------------------------------------------
+// Minimap — puzzle geo transforms shift heatmap tile drawImage position
+// ---------------------------------------------------------------------------
+
+describe("Minimap — puzzle geo transforms shift heatmap drawImage position", () => {
+  type Ctx2D = CanvasRenderingContext2D;
+
+  // drawImage spy args: [image, x, y, w, h]
+  const drawImageCalls: Array<[unknown, number, number, number, number]> = [];
+  // translate spy args (used to verify rotation wrapping)
+  const translateCalls: Array<[number, number]> = [];
+  const rotateCalls: number[] = [];
+
+  let origGetContext: typeof HTMLCanvasElement.prototype.getContext;
+
+  beforeAll(() => {
+    origGetContext = HTMLCanvasElement.prototype.getContext;
+    // @ts-expect-error -- override prototype for jsdom canvas tests
+    HTMLCanvasElement.prototype.getContext = function (_type: string) {
+      return {
+        fillStyle: "",
+        strokeStyle: "",
+        lineWidth: 1,
+        shadowColor: "",
+        shadowBlur: 0,
+        globalAlpha: 1,
+        imageSmoothingEnabled: false,
+        fillRect: vi.fn() as Ctx2D["fillRect"],
+        drawImage: vi.fn((...args: unknown[]) => {
+          drawImageCalls.push(args as [unknown, number, number, number, number]);
+        }) as unknown as Ctx2D["drawImage"],
+        putImageData: vi.fn() as Ctx2D["putImageData"],
+        createImageData: vi.fn((_w: number, _h: number) => ({
+          data: new Uint8ClampedArray(_w * _h * 4),
+          width: _w,
+          height: _h,
+        })) as unknown as Ctx2D["createImageData"],
+        save: vi.fn() as Ctx2D["save"],
+        restore: vi.fn() as Ctx2D["restore"],
+        translate: vi.fn((x: number, y: number) => { translateCalls.push([x, y]); }) as unknown as Ctx2D["translate"],
+        rotate: vi.fn((r: number) => { rotateCalls.push(r); }) as unknown as Ctx2D["rotate"],
+        beginPath: vi.fn() as Ctx2D["beginPath"],
+        moveTo: vi.fn() as Ctx2D["moveTo"],
+        lineTo: vi.fn() as Ctx2D["lineTo"],
+        closePath: vi.fn() as Ctx2D["closePath"],
+        arc: vi.fn() as Ctx2D["arc"],
+        fill: vi.fn() as Ctx2D["fill"],
+        stroke: vi.fn() as Ctx2D["stroke"],
+        strokeRect: vi.fn() as Ctx2D["strokeRect"],
+      } as unknown as Ctx2D;
+    };
+  });
+
+  afterAll(() => {
+    HTMLCanvasElement.prototype.getContext = origGetContext;
+    useUiStore.getState().clearPuzzleGeoTransforms();
+  });
+
+  beforeEach(() => {
+    terrain = mockTerrain;
+    drawImageCalls.length = 0;
+    translateCalls.length = 0;
+    rotateCalls.length = 0;
+    useUiStore.setState({ pendingDropIn: null, overviewOpen: false });
+    useUiStore.getState().clearPuzzleGeoTransforms();
+    useTerrainStore.setState({
+      visibleDatasets: [],
+      primaryDatasetIds: [],
+      primaryDatasetId: null,
+      activeGrid: null,
+      overviewGrid: null,
+    });
+  });
+
+  afterEach(() => {
+    useUiStore.getState().clearPuzzleGeoTransforms();
+    useTerrainStore.setState({
+      visibleDatasets: [],
+      primaryDatasetIds: [],
+      primaryDatasetId: null,
+      activeGrid: null,
+      overviewGrid: null,
+    });
+  });
+
+  it("no puzzle transform: primary heatmap drawImage x ≈ 0 (unshifted)", () => {
+    // Single dataset — union bbox = mockTerrain bbox; rect = full 180×180 canvas.
+    render(<Minimap />);
+
+    const canvasDraws = drawImageCalls.filter((a) => a[0] instanceof HTMLCanvasElement);
+    // At least one drawImage for the primary heatmap canvas exists.
+    expect(canvasDraws.length).toBeGreaterThan(0);
+
+    // Without any puzzle transform the rect.x must be 0 (left edge of canvas).
+    const primaryDraw = canvasDraws.find(([, x]) => Math.abs(x) < 1);
+    expect(primaryDraw).toBeDefined();
+  });
+
+  it("dLon offset: primary heatmap drawImage x shifts right when dLon > 0", () => {
+    // mockTerrain bbox: lon [-120, -119], lat [47, 48].
+    // Seed a +0.5° lon offset for the primary dataset.
+    // Effective bbox: [-119.5, -118.5, 47, 48].
+    // Union bbox (single dataset → seeded from currentTerrain): [-120, -119, 47, 48].
+    // rect.x = ((-119.5 - (-120)) / 1) * 180 = 90.
+    useUiStore.getState().setPuzzleGeoTransforms(
+      new Map([[mockTerrain.datasetId, { dLon: 0.5, dLat: 0, angleDeg: 0 }]]),
+    );
+
+    render(<Minimap />);
+
+    const canvasDraws = drawImageCalls.filter((a) => a[0] instanceof HTMLCanvasElement);
+    expect(canvasDraws.length).toBeGreaterThan(0);
+
+    // The primary heatmap drawImage should have x ≈ 90 (shifted +0.5° = 50% of 180px).
+    const shiftedDraw = canvasDraws.find(([, x]) => Math.abs(x - 90) < 2);
+    expect(shiftedDraw).toBeDefined();
+  });
+
+  it("non-zero angleDeg: rotate() is called during the drawImage of a puzzle-transformed tile", () => {
+    // With a non-zero rotation, the canvas save/translate/rotate/translate/drawImage/restore
+    // sequence must fire. Verify rotate() is called with the correct radian value.
+    const angleDeg = 30;
+    const expectedRad = (angleDeg * Math.PI) / 180;
+
+    useUiStore.getState().setPuzzleGeoTransforms(
+      new Map([[mockTerrain.datasetId, { dLon: 0, dLat: 0, angleDeg }]]),
+    );
+
+    render(<Minimap />);
+
+    // rotate() must have been called with the expected angle.
+    const matchingRotate = rotateCalls.find((r) => Math.abs(r - expectedRad) < 0.001);
+    expect(matchingRotate).toBeDefined();
+  });
+
+  it("clearPuzzleGeoTransforms: after clearing, tile draws at unshifted position", () => {
+    // First render with an offset.
+    useUiStore.getState().setPuzzleGeoTransforms(
+      new Map([[mockTerrain.datasetId, { dLon: 0.5, dLat: 0, angleDeg: 0 }]]),
+    );
+    const { unmount } = render(<Minimap />);
+    unmount();
+
+    // Reset
+    drawImageCalls.length = 0;
+    useUiStore.getState().clearPuzzleGeoTransforms();
+
+    render(<Minimap />);
+
+    const canvasDraws = drawImageCalls.filter((a) => a[0] instanceof HTMLCanvasElement);
+    expect(canvasDraws.length).toBeGreaterThan(0);
+
+    // After clearing, x should be back near 0.
+    const unshiftedDraw = canvasDraws.find(([, x]) => Math.abs(x) < 1);
+    expect(unshiftedDraw).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Minimap — marker dots use union bbox for secondary-dataset markers
 // ---------------------------------------------------------------------------
 

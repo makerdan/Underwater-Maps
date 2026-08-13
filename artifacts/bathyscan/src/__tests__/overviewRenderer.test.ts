@@ -1854,3 +1854,80 @@ describe("renderNodataBoundary — worldGrid canvas projection in multi-dataset 
     expect(hasWorldPoint).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Puzzle pixel→geo offset conversion math
+// ---------------------------------------------------------------------------
+// This tests the same computation that OverviewMap's [puzzleTransforms] effect
+// performs: given a tile's canonical center and a pixel-space offset (tx, ty),
+// convert both to lon/lat and subtract to obtain the geographic delta.
+// Since the math uses lonLatToCanvas + canvasToLonLat (already tested above),
+// this suite validates the derived formula with concrete known inputs.
+
+describe("Puzzle pixel→geo offset conversion — known-input round-trip", () => {
+  const grid = makeGrid({ minLon: -120, maxLon: -119, minLat: 47, maxLat: 48 });
+  // pxPerDeg=100 → terrainW = 100 px, terrainH = 100 px at scale=1
+  const t = makeTransform({ pxPerDeg: 100, offsetX: 0, offsetY: 0 });
+
+  /**
+   * Replicate the OverviewMap pixel→geo conversion so the test documents the
+   * formula clearly and is self-contained.
+   */
+  function pixelToGeoOffset(
+    centerLon: number,
+    centerLat: number,
+    tx: number,
+    ty: number,
+  ) {
+    const [tcx, tcy] = lonLatToCanvas(centerLon, centerLat, grid, t);
+    const canon = canvasToLonLat(tcx, tcy, grid, t);
+    const offset = canvasToLonLat(tcx + tx, tcy + ty, grid, t);
+    return { dLon: offset.lon - canon.lon, dLat: offset.lat - canon.lat };
+  }
+
+  it("zero pixel offset produces zero geographic offset", () => {
+    const { dLon, dLat } = pixelToGeoOffset(-119.5, 47.5, 0, 0);
+    expect(dLon).toBeCloseTo(0, 8);
+    expect(dLat).toBeCloseTo(0, 8);
+  });
+
+  it("positive tx (east shift in pixels) produces positive dLon", () => {
+    const { dLon, dLat } = pixelToGeoOffset(-119.5, 47.5, 10, 0);
+    // 10 px east in a 100px-wide terrain that spans 1° lon → dLon = 0.1°
+    expect(dLon).toBeCloseTo(0.1, 5);
+    expect(dLat).toBeCloseTo(0, 5);
+  });
+
+  it("negative ty (north shift in pixels, North-up means smaller y = more north) produces positive dLat", () => {
+    const { dLon, dLat } = pixelToGeoOffset(-119.5, 47.5, 0, -10);
+    // North-up: decreasing y → increasing lat. 10 px in 100px terrain = 0.1° lat.
+    expect(dLon).toBeCloseTo(0, 5);
+    expect(dLat).toBeCloseTo(0.1, 5);
+  });
+
+  it("positive ty (south shift) produces negative dLat", () => {
+    const { dLon, dLat } = pixelToGeoOffset(-119.5, 47.5, 0, 10);
+    expect(dLon).toBeCloseTo(0, 5);
+    expect(dLat).toBeCloseTo(-0.1, 5);
+  });
+
+  it("diagonal shift of (+10px, -10px) produces expected (+0.1°, +0.1°) offset", () => {
+    const { dLon, dLat } = pixelToGeoOffset(-119.5, 47.5, 10, -10);
+    expect(dLon).toBeCloseTo(0.1, 5);
+    expect(dLat).toBeCloseTo(0.1, 5);
+  });
+
+  it("applying dLon/dLat to the canonical bbox center recovers the offset canvas position", () => {
+    const tx = 15;
+    const ty = -5;
+    const centerLon = -119.5;
+    const centerLat = 47.5;
+    const { dLon, dLat } = pixelToGeoOffset(centerLon, centerLat, tx, ty);
+
+    // Re-encode the shifted lon/lat back to canvas pixels — must match (tcx+tx, tcy+ty).
+    const [tcx, tcy] = lonLatToCanvas(centerLon, centerLat, grid, t);
+    const [shiftedCx, shiftedCy] = lonLatToCanvas(centerLon + dLon, centerLat + dLat, grid, t);
+    expect(shiftedCx).toBeCloseTo(tcx + tx, 5);
+    expect(shiftedCy).toBeCloseTo(tcy + ty, 5);
+  });
+});

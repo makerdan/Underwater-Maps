@@ -363,6 +363,17 @@ interface UiStore {
    * settingsStore are intentionally untouched.
    */
   pruneSessionManualConditions: (activeDatasetId: string) => void;
+  /**
+   * Geographic-space puzzle transforms derived from OverviewMap's pixel-space
+   * transforms. Keyed by datasetId. Each entry holds the longitude/latitude
+   * offset (in degrees) and the rotation angle so the Minimap can reposition
+   * and rotate heatmap tiles to match OverviewMap's puzzle layout.
+   *
+   * Session-only — cleared when the OverviewMap puzzle is reset.
+   */
+  puzzleGeoTransforms: Map<string, { dLon: number; dLat: number; angleDeg: number }>;
+  setPuzzleGeoTransforms: (transforms: Map<string, { dLon: number; dLat: number; angleDeg: number }>) => void;
+  clearPuzzleGeoTransforms: () => void;
 }
 
 // ── Device-local helpers (hasSeenOrbitTouchHint only) ────────────────────────
@@ -807,6 +818,14 @@ export const useUiStore = create<UiStore>((set, get) => {
     // ── Survey-gap overlay visibility (persisted via settingsStore) ─────────
     showNodataBoundary: s.showNodataBoundary,
     setShowNodataBoundary: (show) => set({ showNodataBoundary: show }),
+
+    // ── Puzzle geo-space transforms (session-only, derived from OverviewMap) ─
+    // OverviewMap converts its pixel-space puzzle transforms into geographic
+    // offsets (dLon, dLat, angleDeg) and publishes them here so the Minimap
+    // can draw tiles at the correct shifted geographic positions.
+    puzzleGeoTransforms: new Map(),
+    setPuzzleGeoTransforms: (transforms) => set({ puzzleGeoTransforms: transforms }),
+    clearPuzzleGeoTransforms: () => set({ puzzleGeoTransforms: new Map() }),
   };
 });
 

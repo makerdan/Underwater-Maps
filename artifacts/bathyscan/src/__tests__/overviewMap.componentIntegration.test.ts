@@ -1747,3 +1747,133 @@ describe("OverviewMap — contour segments rebuilt for all datasets when contour
     ).toContain(gridSecondary.datasetId);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Puzzle geo-transform publication — single-grid mode
+//
+// Verifies that when OverviewMap mounts with a single overview grid (the common
+// case where worldGridRef is null) and sessionStorage has a saved puzzle
+// transform, the component correctly publishes geographic offsets to uiStore
+// rather than silently clearing them.
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — puzzle geo-transform publication with a single grid", () => {
+  const PUZZLE_DS_ID = "test-ds";
+
+  beforeEach(() => {
+    setupStores();
+    useUiStore.getState().clearPuzzleGeoTransforms();
+    sessionStorage.removeItem("bathyscan:puzzleTransforms");
+  });
+
+  afterEach(() => {
+    useUiStore.getState().clearPuzzleGeoTransforms();
+    sessionStorage.removeItem("bathyscan:puzzleTransforms");
+  });
+
+  it("publishes non-zero dLon/dLat to uiStore when a positive tx pixel offset is set via sessionStorage hydration", async () => {
+    // Seed sessionStorage with a 20px east, 10px north puzzle offset.
+    // After OverviewMap hydrates, the [puzzleTransforms] effect must convert
+    // these to geographic offsets and store them in uiStore.puzzleGeoTransforms.
+    const TX = 20;
+    const TY = -10;
+    sessionStorage.setItem(
+      "bathyscan:puzzleTransforms",
+      JSON.stringify([[PUZZLE_DS_ID, { tx: TX, ty: TY, angleDeg: 0 }]]),
+    );
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    // Wait for rAF / first draw (camera arrow is the signal).
+    await waitForCameraArrow();
+
+    // Allow useEffect microtasks to settle.
+    await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+
+    const geo = useUiStore.getState().puzzleGeoTransforms;
+    expect(geo.size).toBeGreaterThan(0);
+
+    const entry = geo.get(PUZZLE_DS_ID);
+    expect(entry).toBeDefined();
+    // Positive tx (east shift) must produce positive dLon.
+    expect(entry!.dLon).toBeGreaterThan(0);
+    // Negative ty (north shift, North-up canvas) must produce positive dLat.
+    expect(entry!.dLat).toBeGreaterThan(0);
+  });
+
+  it("publishes angleDeg unchanged from the pixel-space transform", async () => {
+    const ANGLE = 45;
+    sessionStorage.setItem(
+      "bathyscan:puzzleTransforms",
+      JSON.stringify([[PUZZLE_DS_ID, { tx: 0, ty: 0, angleDeg: ANGLE }]]),
+    );
+
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    await waitForCameraArrow();
+    await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+
+    const entry = useUiStore.getState().puzzleGeoTransforms.get(PUZZLE_DS_ID);
+    expect(entry).toBeDefined();
+    expect(entry!.angleDeg).toBe(ANGLE);
+  });
+
+  it("clears puzzleGeoTransforms when sessionStorage has no saved transforms (normal mode)", async () => {
+    // Pre-populate geo transforms so we can verify they get cleared.
+    useUiStore.getState().setPuzzleGeoTransforms(
+      new Map([[PUZZLE_DS_ID, { dLon: 1, dLat: 1, angleDeg: 0 }]]),
+    );
+
+    // No sessionStorage entry — hydration finds nothing, puzzleTransforms stays empty.
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    await waitForCameraArrow();
+    await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+
+    // The [puzzleTransforms] effect fires with size === 0 → clearPuzzleGeoTransforms.
+    expect(useUiStore.getState().puzzleGeoTransforms.size).toBe(0);
+  });
+
+  it("re-publishes smaller dLon after zooming in — rAF loop stays consistent with canvas transform", async () => {
+    // Regression: puzzle geo offsets must track the current canvas transform scale,
+    // not just the transform at hydration time.  When the user zooms in (scale
+    // increases), each pixel covers fewer degrees, so the same px offset should
+    // produce a strictly smaller |dLon|.
+    const TX = 50; // 50 px east offset
+    sessionStorage.setItem(
+      "bathyscan:puzzleTransforms",
+      JSON.stringify([[PUZZLE_DS_ID, { tx: TX, ty: 0, angleDeg: 0 }]]),
+    );
+
+    const { container } = await act(async () =>
+      renderWithProviders(withQuery(React.createElement(OverviewMap))),
+    );
+
+    await waitForCameraArrow();
+    // Let the initial rAF frame settle and publish geo transforms.
+    await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+
+    const dLonBefore = useUiStore.getState().puzzleGeoTransforms.get(PUZZLE_DS_ID)?.dLon;
+    expect(dLonBefore).toBeDefined();
+    expect(dLonBefore!).toBeGreaterThan(0);
+
+    // Fire a zoom-in wheel event on the canvas (deltaY < 0 → scale * 1.15).
+    const canvas = container.querySelector("canvas");
+    expect(canvas).not.toBeNull();
+    fireEvent.wheel(canvas!, { deltaY: -120, clientX: 512, clientY: 384, deltaMode: 0 });
+
+    // Allow the dirty rAF loop to process the new transform and republish.
+    await act(async () => { await new Promise((r) => setTimeout(r, 120)); });
+
+    const dLonAfter = useUiStore.getState().puzzleGeoTransforms.get(PUZZLE_DS_ID)?.dLon;
+    expect(dLonAfter).toBeDefined();
+    // After zooming in, each pixel spans fewer degrees → dLon must decrease.
+    expect(dLonAfter!).toBeLessThan(dLonBefore!);
+  });
+});
