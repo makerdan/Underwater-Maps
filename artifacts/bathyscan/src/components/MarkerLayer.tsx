@@ -6,6 +6,10 @@
  * VISIBLE_DATASETS_CAP = 4) and merges results. Each marker is placed in the
  * primary coordinate frame using its geographic lon/lat.
  *
+ * When puzzle mode is active in the Overview Map, markers follow their
+ * dataset tile — the puzzle transform is read from puzzleStore (written by
+ * OverviewMap) and applied via applyPuzzleTransformToLonLat.
+ *
  * Must be rendered inside the R3F Canvas (inside SceneContents in TourScene).
  */
 import React, { useEffect, useMemo } from "react";
@@ -22,6 +26,8 @@ import { MarkerSprite } from "./MarkerSprite";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
 import { markerGroupRef } from "@/lib/markerGroupRef";
+import { usePuzzleStore } from "@/lib/puzzleStore";
+import { applyPuzzleTransformToLonLat, tileCenterLonLat } from "@/lib/puzzleTransform";
 
 // ---------------------------------------------------------------------------
 // Fixed-slot hooks (hooks cannot be called in loops in React).
@@ -147,11 +153,19 @@ export function groupCatchSymbolsByMarker(entries: CatchEntry[]): Map<string, st
 
 export const MarkerLayer: React.FC = () => {
   const { terrain } = useAppState();
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const visibleMarkerTypes = useSettingsStore((s) => s.visibleMarkerTypes);
   const showMarkerLabels = useSettingsStore((s) => s.showMarkerLabels);
   const clusterThreshold = useSettingsStore((s) => s.markerClusterThreshold);
   const setSubsampleState = useMarkerLayerStore((s) => s.setSubsampleState);
   const clear = useMarkerLayerStore((s) => s.clear);
+
+  // Puzzle store — read by MarkerLayer so each MarkerSprite can receive an
+  // adjusted lon/lat when its dataset tile has been moved in puzzle mode.
+  const puzzleMode = usePuzzleStore((s) => s.puzzleMode);
+  const puzzleTransforms = usePuzzleStore((s) => s.puzzleTransforms);
+  const overviewTransform = usePuzzleStore((s) => s.overviewTransform);
+  const worldGrid = usePuzzleStore((s) => s.worldGrid);
 
   const markers = useAllDatasetMarkers();
   const catchSymbolsByMarker = useCatchSymbolsByMarker();
@@ -184,6 +198,62 @@ export const MarkerLayer: React.FC = () => {
     rendered = visibleMarkers.filter((_, i) => i % stride === 0);
   }
 
+  // Build a map from datasetId → overviewGrid for puzzle-transform lookups.
+  // Only includes datasets that have an overviewGrid (bbox required for pivot).
+  const overviewGridByDatasetId = useMemo(() => {
+    const m = new Map<string, { minLon: number; maxLon: number; minLat: number; maxLat: number }>();
+    for (const v of visibleDatasets) {
+      if (v.overviewGrid) {
+        m.set(v.datasetId, v.overviewGrid);
+      }
+    }
+    return m;
+  }, [visibleDatasets]);
+
+  // Pre-compute puzzle-adjusted positions for all rendered markers in a single
+  // pass so each MarkerSprite receives a stable prop (no per-render recalc).
+  // Only runs when puzzle mode is active AND the store has all required data.
+  const puzzleAdjustedPositions = useMemo<Map<string, { lon: number; lat: number }>>(() => {
+    const result = new Map<string, { lon: number; lat: number }>();
+    if (!puzzleMode || !overviewTransform) return result;
+
+    // Use the worldGrid (union bbox) when available; fall back to the primary
+    // dataset's overviewGrid as the projection reference.
+    const refGrid = worldGrid ?? (visibleDatasets[0]?.overviewGrid ?? null);
+    if (!refGrid) return result;
+
+    for (const m of rendered) {
+      // Only markers with a known datasetId and an active puzzle transform get adjusted.
+      if (!m.datasetId) continue;
+      const xf = puzzleTransforms[m.datasetId];
+      if (!xf) continue;
+      const og = overviewGridByDatasetId.get(m.datasetId);
+      if (!og) continue;
+
+      const { centerLon, centerLat } = tileCenterLonLat(og);
+      result.set(
+        m.id,
+        applyPuzzleTransformToLonLat(
+          m.lon,
+          m.lat,
+          centerLon,
+          centerLat,
+          xf,
+          refGrid as import("@workspace/api-client-react").TerrainData,
+          overviewTransform,
+        ),
+      );
+    }
+    return result;
+  // `rendered` is intentionally included so the memo recomputes whenever
+  // marker identity or coordinates change (e.g. same-count server update).
+  // `rendered` identity changes on every React render when content is
+  // unchanged; the performance cost is acceptable because puzzle-adjusted
+  // coordinate math is cheap, and the 60 Hz overviewTransform write is the
+  // dominant recalculation driver (tracked in follow-up #3579).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- visibleDatasets covers overviewGrid changes; rendered covers marker content
+  }, [puzzleMode, puzzleTransforms, overviewTransform, worldGrid, overviewGridByDatasetId, rendered, visibleDatasets]);
+
   // Publish subsampling state to the DOM-level HUD badge (outside R3F canvas).
   useEffect(() => {
     if (visibleMarkers.length === 0) {
@@ -208,6 +278,7 @@ export const MarkerLayer: React.FC = () => {
           terrain={terrain}
           showLabel={showMarkerLabels}
           catchSymbols={catchSymbolsByMarker.get(m.id)}
+          effectiveLonLat={puzzleAdjustedPositions.get(m.id)}
         />
       ))}
     </group>

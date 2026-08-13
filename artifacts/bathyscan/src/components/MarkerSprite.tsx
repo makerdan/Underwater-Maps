@@ -32,6 +32,13 @@ interface Props {
   showLabel?: boolean;
   /** Distinct catch-journal symbols logged at this spot (rendered in a spaced row above the pillar). */
   catchSymbols?: string[];
+  /**
+   * Puzzle-adjusted geographic position. When puzzle mode is active and the
+   * marker's dataset has a spatial transform, this overrides marker.lon/lat
+   * for the 3D world-space placement so the marker follows its tile.
+   * Undefined when no puzzle transform applies (use marker.lon/lat directly).
+   */
+  effectiveLonLat?: { lon: number; lat: number };
 }
 
 /** Max symbols per row before wrapping to a second row. */
@@ -59,13 +66,17 @@ export function layoutCatchSymbols(count: number): Array<[number, number]> {
   return out;
 }
 
-export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = true, catchSymbols }) => {
+export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = true, catchSymbols, effectiveLonLat }) => {
   // Hooks must run unconditionally; the depth_pole early-return happens below.
   const iconTexture = useMarkerIconTexture(marker.type, "#02101c");
 
   if (marker.type === "depth_pole") return null;
 
-  const { x, z } = lonLatToWorldXZ(marker.lon, marker.lat, terrain);
+  // Use the puzzle-adjusted position when provided, otherwise fall back to the
+  // marker's stored geographic coordinates.
+  const displayLon = effectiveLonLat?.lon ?? marker.lon;
+  const displayLat = effectiveLonLat?.lat ?? marker.lat;
+  const { x, z } = lonLatToWorldXZ(displayLon, displayLat, terrain);
   const bottomY = getTerrainSurfaceY(terrain, x, z);
   const poleHeight = Math.abs(bottomY);
 

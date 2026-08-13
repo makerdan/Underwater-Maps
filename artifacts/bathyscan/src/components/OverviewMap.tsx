@@ -117,6 +117,7 @@ import { approxBboxForRadius } from "@/lib/coordinateParser";
 import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
 import { useIntertidal } from "@/lib/useIntertidal";
 import { IntertidalBandLegend } from "@/components/IntertidalBandLegend";
+import { usePuzzleStore } from "@/lib/puzzleStore";
 
 interface TooltipState {
   visible: boolean;
@@ -488,6 +489,10 @@ export const OverviewMap: React.FC = () => {
   const puzzleModeRef = useRef(false);
   useEffect(() => { puzzleModeRef.current = puzzleMode; }, [puzzleMode]);
 
+  // Sync puzzle mode into puzzleStore so MarkerLayer can follow without prop drilling.
+  const setPuzzleStoreMode = usePuzzleStore((s) => s.setPuzzleMode);
+  useEffect(() => { setPuzzleStoreMode(puzzleMode); }, [puzzleMode, setPuzzleStoreMode]);
+
   // Brief "saved" flash state — true for ~1500 ms after the user clicks SAVE.
   const [puzzleSaved, setPuzzleSaved] = useState(false);
 
@@ -568,6 +573,16 @@ export const OverviewMap: React.FC = () => {
     // If worldGrid or transform are still null, skip publishing —
     // the Minimap keeps the last known state until refs are populated.
   }, [puzzleTransforms, overviewGrid]);
+
+  // Sync puzzle transforms into puzzleStore so MarkerLayer can apply them to
+  // 3D marker positions without prop drilling through the R3F canvas hierarchy.
+  const setPuzzleStoreTransforms = usePuzzleStore((s) => s.setPuzzleTransforms);
+  useEffect(() => {
+    // Convert Map → plain object for the store.
+    const record: Record<string, { tx: number; ty: number; angleDeg: number }> = {};
+    for (const [id, xf] of puzzleTransforms) record[id] = xf;
+    setPuzzleStoreTransforms(record);
+  }, [puzzleTransforms, setPuzzleStoreTransforms]);
 
   // Hydrate puzzle transforms on mount. Prefer sessionStorage (more recent
   // within the same tab session) and fall back to localStorage so arrangements
@@ -1514,6 +1529,9 @@ export const OverviewMap: React.FC = () => {
     } else {
       worldGridRef.current = null;
     }
+    // Sync reference grid into puzzleStore so MarkerLayer can apply puzzle
+    // transforms without being co-located with the OverviewMap canvas.
+    usePuzzleStore.getState().setWorldGrid(worldGridRef.current);
 
     // Re-initialize the canvas transform whenever the visible set changes so
     // all loaded datasets fit in view at once.  Uses the combined world-space
@@ -2289,6 +2307,9 @@ export const OverviewMap: React.FC = () => {
       // Push current transform to the SVG overlay state so React re-renders
       // SVG elements (markers, camera arrow, GPS dot, pins) in the correct position.
       setSvgTransform({ ...t });
+      // Also mirror into puzzleStore so MarkerLayer can convert puzzle canvas-pixel
+      // offsets to geographic coordinates using the same pan/zoom state.
+      usePuzzleStore.getState().setOverviewTransform({ ...t });
 
       // "Enhancing…" indicator — shown while a Topaz upscale request is in
       // flight. Drawn last so it sits on top of all other layers.
@@ -2322,8 +2343,19 @@ export const OverviewMap: React.FC = () => {
       unsubCamera();
       unsubGps();
       unsubTrail();
+      // Note: do NOT clear puzzleStore here. This cleanup fires whenever
+      // overviewGrid changes (not only on unmount), so clearing would wipe
+      // puzzle state mid-session — e.g. when a secondary dataset loads or the
+      // primary changes — while puzzleMode/transforms sync effects do not
+      // re-run because their own deps did not change. The unmount cleanup
+      // below is the sole place that clears the store.
     };
   }, [overviewGrid]);
+
+  // Clear puzzleStore only on component unmount so 3D markers revert to their
+  // original positions when the panel is closed, but NOT on intermediate
+  // overviewGrid changes that restart the rAF loop mid-session.
+  useEffect(() => () => { usePuzzleStore.getState().clear(); }, []);
 
   // ---------------------------------------------------------------------------
   // Mouse / wheel events
