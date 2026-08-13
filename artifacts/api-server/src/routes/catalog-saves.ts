@@ -368,7 +368,7 @@ const KM_PER_NMI = 1.852;
 const MIN_RADIUS_KM = (MIN_BBOX_DEG / 2) * KM_PER_DEG_LAT;   // ≈ 0.0055 km (~5.5 m)
 const MAX_RADIUS_KM = (MAX_BBOX_LAT_DEG / 2) * KM_PER_DEG_LAT; // ≈ 9399 km
 
-router.post("/datasets/point-radius-query", validateBody(PointRadiusQueryBody, "POST /api/datasets/point-radius-query"), asyncHandler(async (req, res): Promise<void> => {
+router.post("/datasets/point-radius-query", catalogReadRateLimit, validateBody(PointRadiusQueryBody, "POST /api/datasets/point-radius-query"), asyncHandler(async (req, res): Promise<void> => {
   const { dataType, waterType, unit, lat, lon: rawLon, radius: rawRadius } = res.locals.parsedBody;
   const lon = normalizeLon(rawLon);
   const radiusKm = unit === "nmi" ? rawRadius * KM_PER_NMI : rawRadius;

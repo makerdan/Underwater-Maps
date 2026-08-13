@@ -219,3 +219,40 @@ describe("catalog read rate limit — shared bucket across endpoints", () => {
     expect(searchRes.status).toBe(429);
   });
 });
+
+describe("POST /api/datasets/point-radius-query — rate limit", () => {
+  const VALID_POINT_RADIUS = { lat: 47.5, lon: -122.3, radius: 50, unit: "km" };
+
+  it("returns 200 when the bucket is not exhausted", async () => {
+    const res = await request(app)
+      .post("/api/datasets/point-radius-query")
+      .send(VALID_POINT_RADIUS);
+    expect(res.status).toBe(200);
+  });
+
+  it("returns 429 when the per-IP bucket is exhausted", async () => {
+    __prefillRateLimitMemory(catalogReadKey(), CATALOG_READ_MAX, CATALOG_READ_WINDOW_MS);
+
+    const res = await request(app)
+      .post("/api/datasets/point-radius-query")
+      .send(VALID_POINT_RADIUS);
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBe("rate_limit");
+    expect(res.headers["retry-after"]).toBeDefined();
+  });
+
+  it("filling the catalog-read bucket also blocks point-radius-query (shared bucket key)", async () => {
+    // Exhaust the bucket via the /catalog endpoint.
+    __prefillRateLimitMemory(catalogReadKey(), CATALOG_READ_MAX, CATALOG_READ_WINDOW_MS);
+    const catalogRes = await request(app).get("/api/datasets/catalog");
+    expect(catalogRes.status).toBe(429);
+
+    // The same bucket key must block point-radius-query from the same IP.
+    __prefillRateLimitMemory(catalogReadKey(), CATALOG_READ_MAX, CATALOG_READ_WINDOW_MS);
+    const pointRes = await request(app)
+      .post("/api/datasets/point-radius-query")
+      .send(VALID_POINT_RADIUS);
+    expect(pointRes.status).toBe(429);
+    expect(pointRes.body.error).toBe("rate_limit");
+  });
+});
