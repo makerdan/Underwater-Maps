@@ -500,22 +500,28 @@ export const OverviewMap: React.FC = () => {
     // transforms, so there is no conflict — this branch simply skips writing
     // when the map is empty (size === 0 after a reset).
     if (puzzleTransforms.size > 0) {
+      const serialised = JSON.stringify([...puzzleTransforms.entries()]);
       try {
-        sessionStorage.setItem(
-          "bathyscan:puzzleTransforms",
-          JSON.stringify([...puzzleTransforms.entries()]),
-        );
+        sessionStorage.setItem("bathyscan:puzzleTransforms", serialised);
+      } catch {
+        // Ignore quota / security errors silently.
+      }
+      try {
+        localStorage.setItem("bathyscan:puzzleTransforms", serialised);
       } catch {
         // Ignore quota / security errors silently.
       }
     }
   }, [puzzleTransforms]);
 
-  // Hydrate puzzle transforms from sessionStorage on mount so tile positions
-  // survive in-session navigation (page refresh resets them as intended).
+  // Hydrate puzzle transforms on mount. Prefer sessionStorage (more recent
+  // within the same tab session) and fall back to localStorage so arrangements
+  // survive a full browser restart / tab close.
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem("bathyscan:puzzleTransforms");
+      const raw =
+        sessionStorage.getItem("bathyscan:puzzleTransforms") ??
+        localStorage.getItem("bathyscan:puzzleTransforms");
       if (raw) {
         const entries = JSON.parse(raw) as Array<[string, { tx: number; ty: number; angleDeg: number }]>;
         if (Array.isArray(entries) && entries.length > 0) {
@@ -547,26 +553,33 @@ export const OverviewMap: React.FC = () => {
   // Keep puzzleGroupsRef in sync with state.
   useEffect(() => { puzzleGroupsRef.current = puzzleGroups; }, [puzzleGroups]);
 
-  // Persist puzzle groups to sessionStorage whenever they change.
+  // Persist puzzle groups to sessionStorage and localStorage whenever they change.
   useEffect(() => {
     if (puzzleGroups.size > 0) {
+      const serialised = JSON.stringify(
+        [...puzzleGroups.entries()].map(([gid, members]) => [gid, [...members]]),
+      );
       try {
-        sessionStorage.setItem(
-          "bathyscan:puzzleGroups",
-          JSON.stringify(
-            [...puzzleGroups.entries()].map(([gid, members]) => [gid, [...members]]),
-          ),
-        );
+        sessionStorage.setItem("bathyscan:puzzleGroups", serialised);
+      } catch {
+        // Ignore quota / security errors silently.
+      }
+      try {
+        localStorage.setItem("bathyscan:puzzleGroups", serialised);
       } catch {
         // Ignore quota / security errors silently.
       }
     }
   }, [puzzleGroups]);
 
-  // Hydrate puzzle groups from sessionStorage on mount.
+  // Hydrate puzzle groups on mount. Prefer sessionStorage (more recent within
+  // the same tab session) and fall back to localStorage so groups survive a
+  // full browser restart / tab close.
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem("bathyscan:puzzleGroups");
+      const raw =
+        sessionStorage.getItem("bathyscan:puzzleGroups") ??
+        localStorage.getItem("bathyscan:puzzleGroups");
       if (raw) {
         const entries = JSON.parse(raw) as Array<[string, string[]]>;
         if (Array.isArray(entries) && entries.length > 0) {
@@ -583,7 +596,7 @@ export const OverviewMap: React.FC = () => {
         }
       }
     } catch {
-      // Silently ignore corrupt or missing sessionStorage data.
+      // Silently ignore corrupt or missing storage data.
     }
   }, []);
 
@@ -3788,6 +3801,8 @@ export const OverviewMap: React.FC = () => {
                   puzzleGroupCounterRef.current = 0;
                   sessionStorage.removeItem("bathyscan:puzzleTransforms");
                   sessionStorage.removeItem("bathyscan:puzzleGroups");
+                  localStorage.removeItem("bathyscan:puzzleTransforms");
+                  localStorage.removeItem("bathyscan:puzzleGroups");
                   dirtyRef.current = true;
                 }}
                 style={{

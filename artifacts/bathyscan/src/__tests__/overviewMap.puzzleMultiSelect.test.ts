@@ -286,9 +286,11 @@ function topRightHandle(grid: TerrainData, worldGrid: TerrainData): { x: number;
 
 describe("OverviewMap — puzzle multi-select", () => {
   beforeEach(() => {
-    // Clear sessionStorage so accumulated puzzle transforms/groups from prior
-    // tests do not interfere with the fresh tile positions each test expects.
+    // Clear both storage layers so accumulated puzzle transforms/groups from
+    // prior tests do not interfere with the fresh tile positions each test
+    // expects.
     sessionStorage.clear();
+    localStorage.clear();
     setupStores();
   });
 
@@ -506,6 +508,10 @@ describe("OverviewMap — puzzle multi-select", () => {
     expect(getTransform(DATASET_A)?.tx ?? 0).not.toBe(0);
     expect(Object.keys(getGroups()).length).toBeGreaterThan(0);
 
+    // Both storage layers should have been written through before reset.
+    expect(localStorage.getItem("bathyscan:puzzleTransforms")).not.toBeNull();
+    expect(localStorage.getItem("bathyscan:puzzleGroups")).not.toBeNull();
+
     // Click the Reset button.
     const resetBtn = document.querySelector<HTMLButtonElement>(
       '[data-testid="overview-puzzle-reset"]',
@@ -518,5 +524,11 @@ describe("OverviewMap — puzzle multi-select", () => {
     expect(getTransform(DATASET_A)).toBeNull();
     expect(getTransform(DATASET_B)).toBeNull();
     expect(Object.keys(getGroups()).length).toBe(0);
+
+    // Reset must also remove from both storage layers.
+    expect(sessionStorage.getItem("bathyscan:puzzleTransforms")).toBeNull();
+    expect(sessionStorage.getItem("bathyscan:puzzleGroups")).toBeNull();
+    expect(localStorage.getItem("bathyscan:puzzleTransforms")).toBeNull();
+    expect(localStorage.getItem("bathyscan:puzzleGroups")).toBeNull();
   });
 });
