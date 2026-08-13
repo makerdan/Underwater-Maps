@@ -491,7 +491,10 @@ export const OverviewMap: React.FC = () => {
   }, []);
 
   // Currently selected puzzle tile (datasetId) and drag sub-mode.
+  // puzzleSelectedRef is updated synchronously in event handlers for hit-testing;
+  // puzzleSelectedId is a React state mirror so the toolbar can re-render.
   const puzzleSelectedRef = useRef<string | null>(null);
+  const [puzzleSelectedId, setPuzzleSelectedId] = useState<string | null>(null);
   const puzzleDragSubModeRef = useRef<"translate" | "rotate" | null>(null);
   // Which edge handle was hit at mousedown (for click-nudge detection).
   const puzzleHandleEdgeRef = useRef<"top" | "right" | "bottom" | "left" | null>(null);
@@ -2098,6 +2101,7 @@ export const OverviewMap: React.FC = () => {
           }
         }
         puzzleSelectedRef.current = hitId;
+        setPuzzleSelectedId(hitId);
         return;
       }
 
@@ -3534,6 +3538,99 @@ export const OverviewMap: React.FC = () => {
               </button>
             </ViewscreenTooltip>
           )}
+
+          {/* Rotation controls — visible in puzzle mode when a tile is selected */}
+          {puzzleMode && puzzleSelectedId !== null && (() => {
+            const selAngle = puzzleTransforms.get(puzzleSelectedId)?.angleDeg ?? 0;
+            const applyDelta = (delta: number) => {
+              setPuzzleTransforms((prev) => {
+                const next = new Map(prev);
+                const existing = prev.get(puzzleSelectedId);
+                next.set(puzzleSelectedId, {
+                  ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }),
+                  angleDeg: (existing?.angleDeg ?? 0) + delta,
+                });
+                return next;
+              });
+              dirtyRef.current = true;
+            };
+            const setAngle = (deg: number) => {
+              setPuzzleTransforms((prev) => {
+                const next = new Map(prev);
+                const existing = prev.get(puzzleSelectedId);
+                next.set(puzzleSelectedId, {
+                  ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }),
+                  angleDeg: deg,
+                });
+                return next;
+              });
+              dirtyRef.current = true;
+            };
+            const btnStyle: React.CSSProperties = {
+              background: "rgba(0,10,20,0.75)",
+              border: "1px solid rgba(168,85,247,0.45)",
+              borderRadius: 3,
+              color: "#c084fc",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+              padding: "2px 6px",
+              cursor: "pointer",
+              lineHeight: "18px",
+              whiteSpace: "nowrap",
+            };
+            return (
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 3,
+                background: "rgba(168,85,247,0.08)",
+                border: "1px solid rgba(168,85,247,0.35)",
+                borderRadius: 4,
+                padding: "2px 6px",
+              }}>
+                <span style={{ color: "rgba(192,132,252,0.7)", fontFamily: "'JetBrains Mono', monospace", fontSize: "calc(10px * var(--bs-font-scale,1))", letterSpacing: "0.05em", marginRight: 2 }}>↻</span>
+                <button style={btnStyle} title="Rotate −90°" onClick={() => applyDelta(-90)}>−90°</button>
+                <button style={btnStyle} title="Rotate −45°" onClick={() => applyDelta(-45)}>−45°</button>
+                <button style={btnStyle} title="Rotate −5°"  onClick={() => applyDelta(-5)}>−5°</button>
+                <button style={btnStyle} title="Rotate −1°"  onClick={() => applyDelta(-1)}>−1°</button>
+                <input
+                  type="number"
+                  value={selAngle}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v)) setAngle(v);
+                  }}
+                  title="Current rotation angle in degrees — edit to set exactly"
+                  style={{
+                    width: 52,
+                    background: "rgba(0,0,0,0.55)",
+                    border: "1px solid rgba(168,85,247,0.55)",
+                    borderRadius: 3,
+                    color: "#e9d5ff",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: "calc(12px * var(--bs-font-scale,1))",
+                    textAlign: "center",
+                    padding: "1px 2px",
+                    lineHeight: "18px",
+                  }}
+                />
+                <span style={{ color: "rgba(192,132,252,0.55)", fontFamily: "'JetBrains Mono', monospace", fontSize: "calc(10px * var(--bs-font-scale,1))" }}>°</span>
+                <button style={btnStyle} title="Rotate +1°"  onClick={() => applyDelta(1)}>+1°</button>
+                <button style={btnStyle} title="Rotate +5°"  onClick={() => applyDelta(5)}>+5°</button>
+                <button style={btnStyle} title="Rotate +45°" onClick={() => applyDelta(45)}>+45°</button>
+                <button style={btnStyle} title="Rotate +90°" onClick={() => applyDelta(90)}>+90°</button>
+                {selAngle !== 0 && (
+                  <button
+                    style={{ ...btnStyle, color: "#f87171", border: "1px solid rgba(239,68,68,0.4)" }}
+                    title="Reset rotation to 0°"
+                    onClick={() => setAngle(0)}
+                  >
+                    ↺
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Tools popover — collapses box-select and download into one button */}
           <div ref={toolsWrapperRef} style={{ position: "relative" }}>

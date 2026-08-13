@@ -26,7 +26,7 @@
  */
 
 import { Router } from "express";
-import { eq, and, lt, desc, asc, isNull } from "drizzle-orm";
+import { eq, and, lt, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { CatalogSearchQuerySchema, CatalogIdParamSchema, SaveIdParamSchema } from "./schemas.js";
@@ -252,15 +252,15 @@ router.get("/datasets/catalog/search", catalogReadRateLimit, asyncHandler(async 
     });
     return;
   }
-  const { q, dataType, waterType, minLon, minLat, maxLon, maxLat } = queryParsed.data;
+  const { dataType, waterType, minLon, minLat, maxLon, maxLat } = queryParsed.data;
 
   const results = await searchCatalog({
     dataType,
     waterType,
-    minLon: west,
-    minLat: south,
-    maxLon: east,
-    maxLat: north,
+    minLon,
+    minLat,
+    maxLon,
+    maxLat,
   });
   res.json(
     validateResponse(
@@ -302,13 +302,9 @@ const MAX_BBOX_LON_DEG = 180;
 const MAX_BBOX_LAT_DEG = 170;
 
 router.post("/datasets/bbox-query", catalogReadRateLimit, validateBody(BboxQueryBody, "POST /api/datasets/bbox-query"), asyncHandler(async (req, res): Promise<void> => {
-  const { dataType, waterType, north: rawNorth, south: rawSouth, east: rawEast, west: rawWest } = res.locals.parsedBody;
-  const north = Math.min(90, lat + latDelta);
-  const south = Math.max(-90, lat - latDelta);
-  const east = lon + lonDelta;
-  const west = lon - lonDelta;
+  const { dataType, waterType, north, south, east, west } = res.locals.parsedBody;
 
-  if (!isFinite(lonDelta) || east - west > MAX_BBOX_LON_DEG) {
+  if (east - west > MAX_BBOX_LON_DEG) {
     res.status(400).json({
       error: "invalid_radius",
       details: `radius spans more than ${MAX_BBOX_LON_DEG}° of longitude at this latitude — reduce the radius or move away from the pole`,
@@ -484,7 +480,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
 
   // Validate the catalog entry exists
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
+  const entry = entries.find((e) => e.id === catalogId) ?? null;
   if (!entry) {
     res.status(404).json({ error: "not_found", details: `Catalog entry '${catalogId}' not found` });
     return;
@@ -1161,7 +1157,7 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, asyncHandler(async (req
   }
 
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
+  const entry = entries.find((e) => e.id === row.catalogId) ?? null;
   if (!entry) {
     res.status(404).json({
       error: "not_found",
@@ -1179,7 +1175,7 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, asyncHandler(async (req
 
   const [updated] = await db
     .update(userCatalogSavesTable)
-    .set({ folderId })
+    .set({ status: "processing", errorMessage: null })
     .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
     .returning();
 
@@ -1203,12 +1199,7 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
   const rows = await db
     .select()
     .from(userCatalogSavesTable)
-    .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)));
-
-  if (!rows[0]) {
-    res.status(404).json({ error: "not_found", details: `Save record '${saveId}' not found` });
-    return;
-  }
+    .where(eq(userCatalogSavesTable.userId, userId));
 
   const entries = await getCatalogEntries();
   const entryMap = new Map(entries.map((e) => [e.id, e]));
@@ -1242,14 +1233,15 @@ router.get("/datasets/my-saves/:id/status", requireAuth, asyncHandler(async (req
     .from(userCatalogSavesTable)
     .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)));
 
-  if (!rows[0]) {
+  const statusRow = rows[0];
+  if (!statusRow) {
     res.status(404).json({ error: "not_found", details: `Save record '${saveId}' not found` });
     return;
   }
 
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
-  res.json(validateResponse(GetDatasetsMySavesIdStatusResponse, formatSaveRow(rows[0], entry), "GET /api/datasets/my-saves/:id/status"));
+  const entry = entries.find((e) => e.id === statusRow.catalogId) ?? null;
+  res.json(validateResponse(GetDatasetsMySavesIdStatusResponse, formatSaveRow(statusRow, entry), "GET /api/datasets/my-saves/:id/status"));
 }));
 
 // ---------------------------------------------------------------------------
@@ -1363,7 +1355,7 @@ router.patch("/datasets/my-saves/:id/rename", requireAuth, validateBody(RenameSa
 
   const [updated] = await db
     .update(userCatalogSavesTable)
-    .set({ folderId })
+    .set({ displayLabel })
     .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
     .returning();
 

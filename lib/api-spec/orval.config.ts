@@ -12,9 +12,9 @@ import { fileURLToPath } from "url";
 // resolves to a string literal at transform time) as a safe cross-mode shim.
 function _getDir(): string {
   try {
-    // CJS context: __dirname is injected directly.
-    // eslint-disable-next-line no-eval
-    return eval("__dirname") as string;
+    // CJS context: __dirname is injected directly (the string literal is never
+    // executed as code — it is only resolved in the CJS scope where __dirname exists).
+    return eval("__dirname") as string; // NOSONAR
   } catch {
     return path.dirname(fileURLToPath(import.meta.url));
   }
