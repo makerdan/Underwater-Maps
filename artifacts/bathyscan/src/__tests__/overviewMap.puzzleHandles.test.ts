@@ -222,6 +222,7 @@ async function renderAndCapturePuzzleHandlers() {
 
   expect(capturedHandlers, "registerPuzzleTestHandlers was not called by OverviewMap").not.toBeNull();
 
+  // Index 0=setMode, 1=setSelection(ids[]), 2=getSelection, 3=getTransform, 4=createGroup, 5=getGroups
   const [setPuzzleMode, setSelectedId, , getTransform] = capturedHandlers!;
 
   const canvas = document.querySelector<HTMLCanvasElement>(
@@ -269,6 +270,10 @@ async function clickAt(
 
 describe("OverviewMap — puzzle corner rotation handles", () => {
   beforeEach(() => {
+    // Clear sessionStorage so accumulated puzzle transforms from prior tests do
+    // not rotate the handles away from the unrotated positions that
+    // computeCornerHandles() (which assumes angleDeg=0) expects.
+    sessionStorage.clear();
     setupStores();
   });
 
@@ -285,7 +290,7 @@ describe("OverviewMap — puzzle corner rotation handles", () => {
 
         // Enter puzzle mode and select the tile via the test bridge.
         await act(async () => { setPuzzleMode(true); });
-        await act(async () => { setSelectedId(DATASET_ID); });
+        await act(async () => { setSelectedId([DATASET_ID]); });
 
         // Wait for state to propagate through the useEffect → ref.
         await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
@@ -316,7 +321,7 @@ describe("OverviewMap — puzzle corner rotation handles", () => {
           await renderAndCapturePuzzleHandlers();
 
         await act(async () => { setPuzzleMode(true); });
-        await act(async () => { setSelectedId(DATASET_ID); });
+        await act(async () => { setSelectedId([DATASET_ID]); });
         await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
 
         const handles = computeCornerHandles(makeOverviewGrid());
@@ -348,7 +353,7 @@ describe("OverviewMap — puzzle corner rotation handles", () => {
           await renderAndCapturePuzzleHandlers();
 
         await act(async () => { setPuzzleMode(true); });
-        await act(async () => { setSelectedId(DATASET_ID); });
+        await act(async () => { setSelectedId([DATASET_ID]); });
         await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
 
         const handles = computeCornerHandles(makeOverviewGrid());

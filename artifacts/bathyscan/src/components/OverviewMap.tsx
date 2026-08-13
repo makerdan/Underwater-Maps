@@ -126,7 +126,28 @@ interface TooltipState {
   depth: number;
 }
 
-
+/**
+ * Expand a selection set to include all group co-members of any newly-added tile.
+ * Only tiles that weren't in `oldIds` trigger group expansion, so removing a
+ * tile via shift-click does not re-pull in its group mates.
+ */
+function expandWithGroupMembers(
+  newIds: Set<string>,
+  oldIds: Set<string>,
+  groups: Map<string, Set<string>>,
+): Set<string> {
+  const result = new Set(newIds);
+  for (const id of newIds) {
+    if (oldIds.has(id)) continue; // not newly added — skip expansion
+    for (const [, members] of groups) {
+      if (members.has(id)) {
+        for (const m of members) result.add(m);
+        break; // each tile is in at most one group (no nested groups)
+      }
+    }
+  }
+  return result;
+}
 export const OverviewMap: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
   const setPendingDropIn = useUiStore((s) => s.setPendingDropIn);
@@ -506,11 +527,85 @@ export const OverviewMap: React.FC = () => {
     }
   }, []);
 
-  // Currently selected puzzle tile (datasetId) and drag sub-mode.
-  // puzzleSelectedRef is updated synchronously in event handlers for hit-testing;
-  // puzzleSelectedId is a React state mirror so the toolbar can re-render.
-  const puzzleSelectedRef = useRef<string | null>(null);
-  const [puzzleSelectedId, setPuzzleSelectedId] = useState<string | null>(null);
+  // Currently selected puzzle tiles (set of datasetIds) and the primary tile.
+  // puzzleSelectedIdsRef is updated synchronously in event handlers for hit-testing;
+  // puzzleSelectedIds is a React state mirror so the toolbar can re-render.
+  const puzzleSelectedIdsRef = useRef<Set<string>>(new Set());
+  const [puzzleSelectedIds, setPuzzleSelectedIds_internal] = useState<Set<string>>(new Set());
+  /** The most-recently-clicked tile — drives angle-input display and corner-handle placement. */
+  const puzzlePrimaryIdRef = useRef<string | null>(null);
+  // Helper: set both ref and state for selection (always creates a new Set to trigger re-render).
+  const setPuzzleSelectedIds = useCallback((ids: Set<string>, primaryId?: string | null) => {
+    puzzleSelectedIdsRef.current = ids;
+    setPuzzleSelectedIds_internal(new Set(ids));
+    if (primaryId !== undefined) puzzlePrimaryIdRef.current = primaryId;
+  }, []);
+  // Groups: maps groupId ("group-N") → set of member datasetIds.
+  const puzzleGroupsRef = useRef<Map<string, Set<string>>>(new Map());
+  const [puzzleGroups, setPuzzleGroups] = useState<Map<string, Set<string>>>(new Map());
+  const puzzleGroupCounterRef = useRef(0);
+  // Keep puzzleGroupsRef in sync with state.
+  useEffect(() => { puzzleGroupsRef.current = puzzleGroups; }, [puzzleGroups]);
+
+  // Persist puzzle groups to sessionStorage whenever they change.
+  useEffect(() => {
+    if (puzzleGroups.size > 0) {
+      try {
+        sessionStorage.setItem(
+          "bathyscan:puzzleGroups",
+          JSON.stringify(
+            [...puzzleGroups.entries()].map(([gid, members]) => [gid, [...members]]),
+          ),
+        );
+      } catch {
+        // Ignore quota / security errors silently.
+      }
+    }
+  }, [puzzleGroups]);
+
+  // Hydrate puzzle groups from sessionStorage on mount.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("bathyscan:puzzleGroups");
+      if (raw) {
+        const entries = JSON.parse(raw) as Array<[string, string[]]>;
+        if (Array.isArray(entries) && entries.length > 0) {
+          const restored = new Map<string, Set<string>>(
+            entries.map(([gid, members]) => [gid, new Set(members)]),
+          );
+          setPuzzleGroups(restored);
+          // Restore counter so new groups don't collide with restored IDs.
+          const maxN = entries.reduce((m, [gid]) => {
+            const n = parseInt(gid.replace("group-", ""), 10);
+            return isNaN(n) ? m : Math.max(m, n);
+          }, 0);
+          puzzleGroupCounterRef.current = maxN;
+        }
+      }
+    } catch {
+      // Silently ignore corrupt or missing sessionStorage data.
+    }
+  }, []);
+
+  // Prune group memberships when datasets are unloaded from the viewer.
+  useEffect(() => {
+    const aliveIds = new Set(visibleDatasets.map((v) => v.datasetId));
+    setPuzzleGroups((prev) => {
+      const next = new Map<string, Set<string>>();
+      let changed = false;
+      for (const [gid, members] of prev) {
+        const pruned = new Set([...members].filter((id) => aliveIds.has(id)));
+        if (pruned.size >= 2) {
+          next.set(gid, pruned);
+          if (pruned.size !== members.size) changed = true;
+        } else {
+          changed = true; // group dissolved or shrank to single member
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [visibleDatasets]);
+
   const puzzleDragSubModeRef = useRef<"translate" | "rotate" | null>(null);
   // Which corner handle was hit at mousedown (for click-nudge detection).
   const puzzleHandleEdgeRef = useRef<"topLeft" | "topRight" | "bottomRight" | "bottomLeft" | null>(null);
@@ -521,7 +616,11 @@ export const OverviewMap: React.FC = () => {
     mx: number; my: number;
     tx: number; ty: number; angleDeg: number;
     cx: number; cy: number;
-  }>({ mx: 0, my: 0, tx: 0, ty: 0, angleDeg: 0, cx: 0, cy: 0 });
+    startTransforms: Map<string, { tx: number; ty: number; angleDeg: number }>;
+    collectiveCx: number; collectiveCy: number;
+    startAngleDeg: number;
+  }>({ mx: 0, my: 0, tx: 0, ty: 0, angleDeg: 0, cx: 0, cy: 0,
+       startTransforms: new Map(), collectiveCx: 0, collectiveCy: 0, startAngleDeg: 0 });
 
   // Hit rect for the "Find Data" link rendered in the empty-state canvas.
   // Updated each rAF frame when no datasets are selected; used by handleClick
@@ -966,17 +1065,34 @@ export const OverviewMap: React.FC = () => {
     registerRawsCanvasPositionGetter(() => rawsCanvasPositionsRef.current);
     registerSubstrateFeatureGetter(() => substrateFeaturesRef.current.length);
     registerPuzzleTestHandlers(
-      (on) => {
-        setPuzzleMode(on);
+      (on) => { setPuzzleMode(on); },
+      (ids) => {
+        const filtered = ids.filter(Boolean) as string[];
+        const newSet = new Set(filtered);
+        const primary = filtered[0] ?? null;
+        setPuzzleSelectedIds(newSet, primary);
       },
-      (id) => {
-        puzzleSelectedRef.current = id;
-        setPuzzleSelectedId(id);
-      },
-      () => puzzleSelectedRef.current,
+      () => puzzlePrimaryIdRef.current,
       (id) => puzzleTransformsRef.current.get(id) ?? null,
+      (ids) => {
+        const gid = `group-${++puzzleGroupCounterRef.current}`;
+        const members = new Set(ids);
+        setPuzzleGroups((prev) => {
+          const next = new Map(prev);
+          next.set(gid, members);
+          return next;
+        });
+        return gid;
+      },
+      () => {
+        const out: Record<string, string[]> = {};
+        for (const [gid, members] of puzzleGroupsRef.current) {
+          out[gid] = [...members];
+        }
+        return out;
+      },
     );
-  }, []);
+  }, [setPuzzleSelectedIds]);
   useEffect(() => {
     rawsActiveRef.current = rawsOverlayActive;
     if (!rawsOverlayActive) {
@@ -1567,35 +1683,61 @@ export const OverviewMap: React.FC = () => {
 
         drawFn();
 
-        // Selection affordances — only visible in puzzle mode for the selected tile.
-        if (puzzleModeRef.current && puzzleSelectedRef.current === tileDatasetId) {
+        // Selection affordances — bright-purple outline for all selected tiles;
+        // corner handles are drawn only on the primary tile.
+        if (puzzleModeRef.current && puzzleSelectedIdsRef.current.has(tileDatasetId)) {
           const CORNER_HANDLE_OFFSET = 8;
-          // Dashed teal selection rectangle at the tile's canonical canvas bounds.
+          const isPrimary = puzzlePrimaryIdRef.current === tileDatasetId;
           ctx.save();
-          ctx.strokeStyle = "rgba(0,229,255,0.92)";
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = "rgba(168,85,247,0.92)";
+          ctx.lineWidth = 2;
           ctx.setLineDash([5, 3]);
           ctx.strokeRect(bx0, by0, bx1 - bx0, by1 - by0);
           ctx.setLineDash([]);
-          // Four rotation handles: one at each corner, offset diagonally outward 8 px.
-          // Coordinates are in the tile's local (rotated) canvas space, so drawing
-          // at these points produces the correct rotated positions automatically.
-          const cornerHandles = [
-            { x: bx0 - CORNER_HANDLE_OFFSET, y: by0 - CORNER_HANDLE_OFFSET }, // topLeft
-            { x: bx1 + CORNER_HANDLE_OFFSET, y: by0 - CORNER_HANDLE_OFFSET }, // topRight
-            { x: bx1 + CORNER_HANDLE_OFFSET, y: by1 + CORNER_HANDLE_OFFSET }, // bottomRight
-            { x: bx0 - CORNER_HANDLE_OFFSET, y: by1 + CORNER_HANDLE_OFFSET }, // bottomLeft
-          ];
-          for (const h of cornerHandles) {
-            ctx.beginPath();
-            ctx.arc(h.x, h.y, 7, 0, Math.PI * 2);
-            ctx.fillStyle = "#00e5ff";
-            ctx.fill();
-            ctx.strokeStyle = "rgba(255,255,255,0.85)";
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
+          // Corner handles — only on the primary tile so there's one set of controls.
+          if (isPrimary) {
+            const cornerHandles = [
+              { x: bx0 - CORNER_HANDLE_OFFSET, y: by0 - CORNER_HANDLE_OFFSET }, // topLeft
+              { x: bx1 + CORNER_HANDLE_OFFSET, y: by0 - CORNER_HANDLE_OFFSET }, // topRight
+              { x: bx1 + CORNER_HANDLE_OFFSET, y: by1 + CORNER_HANDLE_OFFSET }, // bottomRight
+              { x: bx0 - CORNER_HANDLE_OFFSET, y: by1 + CORNER_HANDLE_OFFSET }, // bottomLeft
+            ];
+            for (const h of cornerHandles) {
+              ctx.beginPath();
+              ctx.arc(h.x, h.y, 7, 0, Math.PI * 2);
+              ctx.fillStyle = "#c084fc";
+              ctx.fill();
+              ctx.strokeStyle = "rgba(255,255,255,0.85)";
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+            }
           }
           ctx.restore();
+        }
+        // Group-membership label: small colored pill near the tile's top-left corner.
+        if (puzzleModeRef.current) {
+          const GROUP_LABEL_COLORS = ["#f97316", "#a855f7", "#22d3ee", "#84cc16", "#f43f5e"];
+          for (const [gid, members] of puzzleGroupsRef.current) {
+            if (members.has(tileDatasetId)) {
+              const gNum = parseInt(gid.replace("group-", ""), 10);
+              const color = GROUP_LABEL_COLORS[(gNum - 1) % GROUP_LABEL_COLORS.length] ?? "#f97316";
+              const label = `G${gNum}`;
+              ctx.save();
+              ctx.font = "bold 9px monospace";
+              const tw = ctx.measureText(label).width;
+              const px = bx0 + 4;
+              const py = by0 + 4;
+              ctx.fillStyle = color;
+              ctx.globalAlpha = 0.85;
+              ctx.fillRect(px - 2, py - 1, tw + 5, 12);
+              ctx.globalAlpha = 1;
+              ctx.fillStyle = "#ffffff";
+              ctx.textBaseline = "top";
+              ctx.fillText(label, px, py);
+              ctx.restore();
+              break; // show first group membership only
+            }
+          }
         }
 
         ctx.restore();
@@ -2048,23 +2190,21 @@ export const OverviewMap: React.FC = () => {
         const HANDLE_RADIUS = 10; // px hit area for rotation handle
         const CORNER_HANDLE_OFFSET = 8; // px diagonal outward offset from each corner
 
-        // Check rotation handles for the currently selected tile first.
-        // Each of the four corner handles is tested in screen space.
-        const selId = puzzleSelectedRef.current;
-        if (selId) {
-          const selV = visibleDatasetsRef.current.find((v) => v.datasetId === selId);
-          const selOg = selId === primaryDatasetIdRef.current ? overviewGrid : selV?.overviewGrid;
+        // Check rotation handles for the primary tile first.
+        const primaryId = puzzlePrimaryIdRef.current;
+        if (primaryId && puzzleSelectedIdsRef.current.has(primaryId)) {
+          const selV = visibleDatasetsRef.current.find((v) => v.datasetId === primaryId);
+          const selOg = primaryId === primaryDatasetIdRef.current ? overviewGrid : selV?.overviewGrid;
           if (selOg) {
             const [bx0, by0] = lonLatToCanvas(selOg.minLon, selOg.maxLat, worldGrid, t);
             const [bx1, by1] = lonLatToCanvas(selOg.maxLon, selOg.minLat, worldGrid, t);
             const tcx = (bx0 + bx1) / 2;
             const tcy = (by0 + by1) / 2;
-            const pxform = puzzleTransformsRef.current.get(selId);
+            const pxform = puzzleTransformsRef.current.get(primaryId);
             const ptx = pxform?.tx ?? 0;
             const pty = pxform?.ty ?? 0;
             const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
 
-            // Four handles: local offsets from tile center (in unrotated tile space).
             const cornerLocalOffsets: Array<{ ldx: number; ldy: number; edge: "topLeft" | "topRight" | "bottomRight" | "bottomLeft" }> = [
               { ldx: (bx0 - CORNER_HANDLE_OFFSET) - tcx, ldy: (by0 - CORNER_HANDLE_OFFSET) - tcy, edge: "topLeft"     },
               { ldx: (bx1 + CORNER_HANDLE_OFFSET) - tcx, ldy: (by0 - CORNER_HANDLE_OFFSET) - tcy, edge: "topRight"    },
@@ -2083,6 +2223,32 @@ export const OverviewMap: React.FC = () => {
             }
 
             if (hitEdge !== null) {
+              // Compute collective bounding-box center of all selected tiles.
+              const selectedIds = puzzleSelectedIdsRef.current;
+              let sumCx = 0;
+              let sumCy = 0;
+              let count = 0;
+              for (const id of selectedIds) {
+                const vv = visibleDatasetsRef.current.find((v) => v.datasetId === id);
+                const og = id === primaryDatasetIdRef.current ? overviewGrid : vv?.overviewGrid;
+                if (!og) continue;
+                const [rx0, ry0] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
+                const [rx1, ry1] = lonLatToCanvas(og.maxLon, og.minLat, worldGrid, t);
+                const xf = puzzleTransformsRef.current.get(id);
+                sumCx += (rx0 + rx1) / 2 + (xf?.tx ?? 0);
+                sumCy += (ry0 + ry1) / 2 + (xf?.ty ?? 0);
+                count++;
+              }
+              const ccx = count > 0 ? sumCx / count : mx;
+              const ccy = count > 0 ? sumCy / count : my;
+
+              // Snapshot all selected transforms for multi-tile rotate.
+              const startTransforms = new Map<string, { tx: number; ty: number; angleDeg: number }>();
+              for (const id of selectedIds) {
+                const xf = puzzleTransformsRef.current.get(id) ?? { tx: 0, ty: 0, angleDeg: 0 };
+                startTransforms.set(id, { ...xf });
+              }
+
               puzzleHandleEdgeRef.current = hitEdge;
               puzzleRotateActuallyDraggedRef.current = false;
               puzzleDragSubModeRef.current = "rotate";
@@ -2091,6 +2257,9 @@ export const OverviewMap: React.FC = () => {
                 tx: ptx, ty: pty,
                 angleDeg: pxform?.angleDeg ?? 0,
                 cx: tcx + ptx, cy: tcy + pty,
+                startTransforms,
+                collectiveCx: ccx, collectiveCy: ccy,
+                startAngleDeg: Math.atan2(mx - ccx, -(my - ccy)) * (180 / Math.PI),
               };
               return;
             }
@@ -2124,18 +2293,79 @@ export const OverviewMap: React.FC = () => {
           const localY = tcy + pdx * Math.sin(-pAngleRad) + pdy * Math.cos(-pAngleRad);
           if (localX >= bx0 && localX <= bx1 && localY >= by0 && localY <= by1) {
             hitId = v.datasetId;
-            puzzleDragSubModeRef.current = "translate";
-            puzzleDragStartRef.current = {
-              mx, my,
-              tx: ptx, ty: pty,
-              angleDeg: pxform?.angleDeg ?? 0,
-              cx: tcx, cy: tcy,
-            };
             break;
           }
         }
-        puzzleSelectedRef.current = hitId;
-        setPuzzleSelectedId(hitId);
+
+        // Determine new selection based on Shift key and hit result.
+        const oldSelection = puzzleSelectedIdsRef.current;
+        let newSelection: Set<string>;
+
+        if (e.shiftKey) {
+          if (hitId === null) {
+            // Shift+click on empty area: no change.
+            newSelection = new Set(oldSelection);
+          } else if (oldSelection.has(hitId)) {
+            // Shift+click on already-selected tile: remove it.
+            newSelection = new Set(oldSelection);
+            newSelection.delete(hitId);
+          } else {
+            // Shift+click on unselected tile: add it.
+            newSelection = new Set(oldSelection);
+            newSelection.add(hitId);
+          }
+        } else {
+          if (hitId === null) {
+            // Plain click on empty area: clear selection.
+            newSelection = new Set();
+          } else if (oldSelection.has(hitId)) {
+            // Plain click on already-selected tile: keep selection (enables drag).
+            newSelection = new Set(oldSelection);
+          } else {
+            // Plain click on new tile: replace selection.
+            newSelection = new Set([hitId]);
+          }
+        }
+
+        // Expand newly-added tiles to include their group co-members.
+        newSelection = expandWithGroupMembers(newSelection, oldSelection, puzzleGroupsRef.current);
+
+        // Primary tile: the tile that was just clicked (or first in set).
+        const newPrimaryId = hitId ?? (newSelection.size > 0 ? ([...newSelection][0] ?? null) : null);
+        setPuzzleSelectedIds(newSelection, newPrimaryId);
+
+        // Set translate drag submode if a tile was hit and is in the final selection.
+        if (hitId !== null && newSelection.has(hitId)) {
+          // Snapshot all selected transforms for multi-tile drag.
+          const startTransforms = new Map<string, { tx: number; ty: number; angleDeg: number }>();
+          for (const id of newSelection) {
+            const xf = puzzleTransformsRef.current.get(id) ?? { tx: 0, ty: 0, angleDeg: 0 };
+            startTransforms.set(id, { ...xf });
+          }
+          const hitV = visibleNow.find((vv) => vv.datasetId === hitId);
+          const hitOg = hitId === primaryDatasetIdRef.current ? overviewGrid : hitV?.overviewGrid;
+          if (hitOg) {
+            const [hbx0, hby0] = lonLatToCanvas(hitOg.minLon, hitOg.maxLat, worldGrid, t);
+            const [hbx1, hby1] = lonLatToCanvas(hitOg.maxLon, hitOg.minLat, worldGrid, t);
+            const htcx = (hbx0 + hbx1) / 2;
+            const htcy = (hby0 + hby1) / 2;
+            const hpxform = puzzleTransformsRef.current.get(hitId);
+            const hptx = hpxform?.tx ?? 0;
+            const hpty = hpxform?.ty ?? 0;
+            puzzleDragSubModeRef.current = "translate";
+            puzzleDragStartRef.current = {
+              mx, my,
+              tx: hptx, ty: hpty,
+              angleDeg: hpxform?.angleDeg ?? 0,
+              cx: htcx, cy: htcy,
+              startTransforms,
+              collectiveCx: htcx + hptx, collectiveCy: htcy + hpty,
+              startAngleDeg: 0,
+            };
+          }
+        } else {
+          puzzleDragSubModeRef.current = null;
+        }
         return;
       }
 
@@ -2200,36 +2430,75 @@ export const OverviewMap: React.FC = () => {
       if (puzzleModeRef.current) {
         setTooltip((prev) => (prev.visible ? { ...prev, visible: false } : prev));
         const subMode = puzzleDragSubModeRef.current;
-        const selId = puzzleSelectedRef.current;
 
-        if (subMode === "translate" && selId) {
+        if (subMode === "translate" && puzzleSelectedIdsRef.current.size > 0) {
           hasDraggedRef.current = true;
           const start = puzzleDragStartRef.current;
-          const newTx = start.tx + (mx - start.mx);
-          const newTy = start.ty + (my - start.my);
+          const dx = mx - start.mx;
+          const dy = my - start.my;
           setPuzzleTransforms((prev) => {
             const next = new Map(prev);
-            const existing = prev.get(selId);
-            next.set(selId, { ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }), tx: newTx, ty: newTy });
+            for (const [id, startXf] of start.startTransforms) {
+              const existing = prev.get(id);
+              next.set(id, {
+                ...(existing ?? { tx: 0, ty: 0, angleDeg: startXf.angleDeg }),
+                tx: startXf.tx + dx,
+                ty: startXf.ty + dy,
+              });
+            }
             return next;
           });
           canvas.style.cursor = "grabbing";
           return;
         }
 
-        if (subMode === "rotate" && selId) {
+        if (subMode === "rotate" && puzzleSelectedIdsRef.current.size > 0) {
           hasDraggedRef.current = true;
           puzzleRotateActuallyDraggedRef.current = true;
           const start = puzzleDragStartRef.current;
-          // Angle from tile center to pointer — atan2(dx, -dy) gives north-up 0°.
-          const dx2 = mx - start.cx;
-          const dy2 = my - start.cy;
-          // Snap to nearest integer degree for precise alignment.
-          const angleDeg = Math.round(Math.atan2(dx2, -dy2) * (180 / Math.PI));
+          const ccx = start.collectiveCx;
+          const ccy = start.collectiveCy;
+          // Delta angle from the drag-start pointer direction around collective center.
+          const currentAngleDeg = Math.atan2(mx - ccx, -(my - ccy)) * (180 / Math.PI);
+          const deltaDeg = Math.round(currentAngleDeg - start.startAngleDeg);
+          const deltaRad = (deltaDeg * Math.PI) / 180;
+          const tNow = transformRef.current;
+          const wgNow = worldGridRef.current ?? overviewGrid;
           setPuzzleTransforms((prev) => {
             const next = new Map(prev);
-            const existing = prev.get(selId);
-            next.set(selId, { ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }), angleDeg });
+            for (const [id, startXf] of start.startTransforms) {
+              const newAngle = startXf.angleDeg + deltaDeg;
+              let orbitTx = startXf.tx;
+              let orbitTy = startXf.ty;
+              // Orbit tile center around collective center by deltaDeg.
+              if (tNow && wgNow) {
+                const vv = visibleDatasetsRef.current.find((v) => v.datasetId === id);
+                const tileOg = id === primaryDatasetIdRef.current ? overviewGrid : vv?.overviewGrid;
+                if (tileOg) {
+                  const [tbx0, tby0] = lonLatToCanvas(tileOg.minLon, tileOg.maxLat, wgNow, tNow);
+                  const [tbx1, tby1] = lonLatToCanvas(tileOg.maxLon, tileOg.minLat, wgNow, tNow);
+                  const baseCx = (tbx0 + tbx1) / 2;
+                  const baseCy = (tby0 + tby1) / 2;
+                  const tileCx = baseCx + startXf.tx;
+                  const tileCy = baseCy + startXf.ty;
+                  const relX = tileCx - ccx;
+                  const relY = tileCy - ccy;
+                  const cos = Math.cos(deltaRad);
+                  const sin = Math.sin(deltaRad);
+                  const newTileCx = ccx + relX * cos - relY * sin;
+                  const newTileCy = ccy + relX * sin + relY * cos;
+                  orbitTx = newTileCx - baseCx;
+                  orbitTy = newTileCy - baseCy;
+                }
+              }
+              const existing = prev.get(id);
+              next.set(id, {
+                ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }),
+                angleDeg: newAngle,
+                tx: orbitTx,
+                ty: orbitTy,
+              });
+            }
             return next;
           });
           canvas.style.cursor = "grabbing";
@@ -2246,8 +2515,8 @@ export const OverviewMap: React.FC = () => {
           let overHandle = false;
           let overTile = false;
 
-          // Check selected tile's four corner handles first.
-          const hovSelId = puzzleSelectedRef.current;
+          // Check primary tile's four corner handles first.
+          const hovSelId = puzzlePrimaryIdRef.current;
           if (hovSelId) {
             const hovSelV = visibleNow.find((v) => v.datasetId === hovSelId);
             const hovSelOg = hovSelId === primaryDatasetIdRef.current ? overviewGrid : hovSelV?.overviewGrid;
@@ -2359,14 +2628,16 @@ export const OverviewMap: React.FC = () => {
           puzzleHandleEdgeRef.current !== null
         ) {
           const nudgeEdge = puzzleHandleEdgeRef.current;
-          const nudgeId = puzzleSelectedRef.current;
-          if (nudgeId) {
+          const nudgeIds = [...puzzleSelectedIdsRef.current];
+          if (nudgeIds.length > 0) {
             const delta = nudgeEdge === "topRight" || nudgeEdge === "bottomLeft" ? 1 : -1;
             setPuzzleTransforms((prev) => {
               const next = new Map(prev);
-              const existing = prev.get(nudgeId);
-              const current = existing?.angleDeg ?? 0;
-              next.set(nudgeId, { ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }), angleDeg: current + delta });
+              for (const nudgeId of nudgeIds) {
+                const existing = prev.get(nudgeId);
+                const current = existing?.angleDeg ?? 0;
+                next.set(nudgeId, { ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }), angleDeg: current + delta });
+              }
               return next;
             });
             dirtyRef.current = true;
@@ -2739,7 +3010,7 @@ export const OverviewMap: React.FC = () => {
       canvas.removeEventListener("click", handleClick);
       canvas.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [overviewGrid, substrateCreditUrl, substrateSourceName, substrateFetchedAt, setDatasetId, setTerrain]);
+  }, [overviewGrid, substrateCreditUrl, substrateSourceName, substrateFetchedAt, setDatasetId, setTerrain, setPuzzleSelectedIds]);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -3512,8 +3783,11 @@ export const OverviewMap: React.FC = () => {
                 data-testid="overview-puzzle-reset"
                 onClick={() => {
                   setPuzzleTransforms(new Map());
-                  puzzleSelectedRef.current = null;
+                  setPuzzleSelectedIds(new Set(), null);
+                  setPuzzleGroups(new Map());
+                  puzzleGroupCounterRef.current = 0;
                   sessionStorage.removeItem("bathyscan:puzzleTransforms");
+                  sessionStorage.removeItem("bathyscan:puzzleGroups");
                   dirtyRef.current = true;
                 }}
                 style={{
@@ -3573,32 +3847,109 @@ export const OverviewMap: React.FC = () => {
             </ViewscreenTooltip>
           )}
 
-          {/* Rotation controls — visible in puzzle mode when a tile is selected */}
-          {puzzleMode && puzzleSelectedId !== null && (() => {
-            const selAngle = puzzleTransforms.get(puzzleSelectedId)?.angleDeg ?? 0;
+          {/* GROUP / UNGROUP toolbar buttons */}
+          {puzzleMode && (() => {
+            const selectedArr = [...puzzleSelectedIds];
+            const allInOneGroup =
+              selectedArr.length >= 2 &&
+              [...puzzleGroups.values()].some((members) =>
+                selectedArr.every((id) => members.has(id)),
+              );
+            const hasGroupedTile = selectedArr.some((id) =>
+              [...puzzleGroups.values()].some((members) => members.has(id)),
+            );
+            return (
+              <>
+                {selectedArr.length >= 2 && !allInOneGroup && (
+                  <ViewscreenTooltip label="Group selected tiles so they move as one unit" side="bottom">
+                    <button
+                      data-testid="overview-puzzle-group"
+                      onClick={() => {
+                        const gid = `group-${++puzzleGroupCounterRef.current}`;
+                        const members = new Set(selectedArr);
+                        setPuzzleGroups((prev) => {
+                          const next = new Map(prev);
+                          next.set(gid, members);
+                          return next;
+                        });
+                      }}
+                      style={{
+                        background: "rgba(34,211,238,0.12)",
+                        border: "1px solid rgba(34,211,238,0.5)",
+                        borderRadius: 3,
+                        color: "#22d3ee",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                        padding: "2px 8px",
+                        cursor: "pointer",
+                        letterSpacing: "0.1em",
+                        lineHeight: "18px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ⛓ GROUP
+                    </button>
+                  </ViewscreenTooltip>
+                )}
+                {hasGroupedTile && (
+                  <ViewscreenTooltip label="Dissolve group(s) overlapping the current selection" side="bottom">
+                    <button
+                      data-testid="overview-puzzle-ungroup"
+                      onClick={() => {
+                        setPuzzleGroups((prev) => {
+                          const next = new Map(prev);
+                          for (const [gid, members] of prev) {
+                            if (selectedArr.some((id) => members.has(id))) {
+                              next.delete(gid);
+                            }
+                          }
+                          return next;
+                        });
+                      }}
+                      style={{
+                        background: "rgba(251,146,60,0.12)",
+                        border: "1px solid rgba(251,146,60,0.5)",
+                        borderRadius: 3,
+                        color: "#fb923c",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                        padding: "2px 8px",
+                        cursor: "pointer",
+                        letterSpacing: "0.1em",
+                        lineHeight: "18px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ✂ UNGROUP
+                    </button>
+                  </ViewscreenTooltip>
+                )}
+              </>
+            );
+          })()}
+
+          {/* Rotation controls — visible in puzzle mode when any tile is selected */}
+          {puzzleMode && puzzleSelectedIds.size > 0 && (() => {
+            const primaryIdForPanel = puzzlePrimaryIdRef.current ?? ([...puzzleSelectedIds][0] ?? null);
+            const selAngle = primaryIdForPanel != null ? (puzzleTransforms.get(primaryIdForPanel)?.angleDeg ?? 0) : 0;
             const applyDelta = (delta: number) => {
               setPuzzleTransforms((prev) => {
                 const next = new Map(prev);
-                const existing = prev.get(puzzleSelectedId);
-                next.set(puzzleSelectedId, {
-                  ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }),
-                  angleDeg: (existing?.angleDeg ?? 0) + delta,
-                });
+                for (const id of puzzleSelectedIds) {
+                  const existing = prev.get(id);
+                  next.set(id, {
+                    ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }),
+                    angleDeg: (existing?.angleDeg ?? 0) + delta,
+                  });
+                }
                 return next;
               });
               dirtyRef.current = true;
             };
             const setAngle = (deg: number) => {
-              setPuzzleTransforms((prev) => {
-                const next = new Map(prev);
-                const existing = prev.get(puzzleSelectedId);
-                next.set(puzzleSelectedId, {
-                  ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }),
-                  angleDeg: deg,
-                });
-                return next;
-              });
-              dirtyRef.current = true;
+              // Apply delta vs primary tile angle so all tiles shift by the same amount.
+              const primaryAngle = primaryIdForPanel != null ? (puzzleTransforms.get(primaryIdForPanel)?.angleDeg ?? 0) : 0;
+              applyDelta(deg - primaryAngle);
             };
             const btnStyle: React.CSSProperties = {
               background: "rgba(0,10,20,0.75)",

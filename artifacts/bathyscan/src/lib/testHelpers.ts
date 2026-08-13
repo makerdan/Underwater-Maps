@@ -140,24 +140,30 @@ export function registerRawsCanvasPositionGetter(
 }
 
 // Puzzle mode state handlers registered by OverviewMap so e2e tests can
-// enter puzzle mode and select a tile without canvas hit-testing.
+// enter puzzle mode and manipulate selections / groups without canvas hit-testing.
 let _puzzleSetMode: ((on: boolean) => void) | null = null;
-let _puzzleSetSelectedId: ((id: string | null) => void) | null = null;
-let _puzzleGetSelectedId: (() => string | null) | null = null;
+let _puzzleSetSelection: ((ids: string[]) => void) | null = null;
+let _puzzleGetSelection: (() => string | null) | null = null;
 let _puzzleGetTransform:
   | ((id: string) => { tx: number; ty: number; angleDeg: number } | null)
   | null = null;
+let _puzzleCreateGroup: ((ids: string[]) => string) | null = null;
+let _puzzleGetGroups: (() => Record<string, string[]>) | null = null;
 
 export function registerPuzzleTestHandlers(
   setMode: (on: boolean) => void,
-  setSelectedId: (id: string | null) => void,
-  getSelectedId: () => string | null,
+  setSelection: (ids: string[]) => void,
+  getSelection: () => string | null,
   getTransform: (id: string) => { tx: number; ty: number; angleDeg: number } | null,
+  createGroup: (ids: string[]) => string,
+  getGroups: () => Record<string, string[]>,
 ): void {
   _puzzleSetMode = setMode;
-  _puzzleSetSelectedId = setSelectedId;
-  _puzzleGetSelectedId = getSelectedId;
+  _puzzleSetSelection = setSelection;
+  _puzzleGetSelection = getSelection;
   _puzzleGetTransform = getTransform;
+  _puzzleCreateGroup = createGroup;
+  _puzzleGetGroups = getGroups;
 }
 
 // AppContext-backed setter wired up by the in-tree <TestBridge/> component
@@ -818,14 +824,18 @@ export interface BathyTestApi {
    */
   setPuzzleMode: (on: boolean) => boolean;
   /**
-   * Select a specific tile by datasetId (or deselect with null) as if the
-   * user had clicked on it in puzzle mode. The rotation panel appears only
-   * when a tile is selected, so tests call this after `setPuzzleMode(true)`
-   * to avoid canvas hit-testing.
+   * Set the puzzle selection to the given array of datasetIds. The first
+   * element becomes the primary tile (drives angle display and corner handles).
+   * Call after `setPuzzleMode(true)` to avoid canvas hit-testing.
+   */
+  setPuzzleSelection: (ids: string[]) => boolean;
+  /**
+   * Backward-compat alias for `setPuzzleSelection([id])` / `setPuzzleSelection([])`.
+   * E2E specs that already use this do not need to be updated.
    */
   setPuzzleSelectedId: (id: string | null) => boolean;
   /**
-   * Returns the currently selected puzzle tile's datasetId, or null when
+   * Returns the primary selected puzzle tile's datasetId, or null when
    * nothing is selected (or OverviewMap is not mounted).
    */
   getPuzzleSelectedId: () => string | null;
@@ -839,6 +849,17 @@ export interface BathyTestApi {
     ty: number;
     angleDeg: number;
   } | null;
+  /**
+   * Create a persistent group from the given tile datasetIds. Returns the
+   * new groupId (e.g. "group-1"). Returns empty string when OverviewMap is
+   * not mounted.
+   */
+  createPuzzleGroup: (ids: string[]) => string;
+  /**
+   * Returns a snapshot of all current groups as `{ groupId: [memberIds] }`.
+   * Returns an empty object when OverviewMap is not mounted.
+   */
+  getPuzzleGroups: () => Record<string, string[]>;
 }
 
 declare global {
@@ -1691,12 +1712,19 @@ export function installTestHelpers(): void {
       _puzzleSetMode(on);
       return true;
     },
-    setPuzzleSelectedId: (id) => {
-      if (!_puzzleSetSelectedId) return false;
-      _puzzleSetSelectedId(id);
+    setPuzzleSelection: (ids) => {
+      if (!_puzzleSetSelection) return false;
+      _puzzleSetSelection(ids);
       return true;
     },
-    getPuzzleSelectedId: () => _puzzleGetSelectedId?.() ?? null,
+    setPuzzleSelectedId: (id) => {
+      if (!_puzzleSetSelection) return false;
+      _puzzleSetSelection(id != null ? [id] : []);
+      return true;
+    },
+    getPuzzleSelectedId: () => _puzzleGetSelection?.() ?? null,
     getPuzzleTransform: (id) => _puzzleGetTransform?.(id) ?? null,
+    createPuzzleGroup: (ids) => _puzzleCreateGroup?.(ids) ?? "",
+    getPuzzleGroups: () => _puzzleGetGroups?.() ?? {},
   };
 }
