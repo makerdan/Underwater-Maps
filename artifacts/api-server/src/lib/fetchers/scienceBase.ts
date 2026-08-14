@@ -350,12 +350,19 @@ export const scienceBaseFetcher: BathymetryFetcher = {
     if (!tiffFile) throw new Error(`ScienceBase item ${s.itemId}: no GeoTIFF attached`);
 
     const res = await fetch(tiffFile.downloadUri, { signal: AbortSignal.timeout(300_000) });
-    if (!res.ok) throw new Error(`ScienceBase download HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`ScienceBase item ${s.itemId}: download HTTP ${res.status}`);
     const buf = await res.arrayBuffer();
 
-    const geo = readTiffWithGeo(buf);
+    let geo: TiffGeo;
+    try {
+      geo = readTiffWithGeo(buf);
+    } catch (err) {
+      throw new Error(
+        `ScienceBase item ${s.itemId}: failed to parse GeoTIFF — ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     const rawDepths = extractDepthGrid(geo, bbox, N, s.poolElevationM, s.maxDepthM);
-    if (!rawDepths) throw new Error("ScienceBase GeoTIFF does not cover the requested bbox");
+    if (!rawDepths) throw new Error(`ScienceBase item ${s.itemId}: GeoTIFF does not cover the requested bbox`);
 
     const depths: number[] = new Array(N * N).fill(0);
     const topography: number[] = new Array(N * N).fill(0);
