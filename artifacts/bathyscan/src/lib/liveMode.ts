@@ -28,12 +28,30 @@
  * transition, and applySettingsToUiStore calls it on hydration so a persisted
  * 'live' mode resumes GPS + follow after a page reload.
  */
+import { create } from "zustand";
 import { useGpsStore } from "./gpsStore";
 import { useTrailStore } from "./trailStore";
 import { useCameraStore } from "./cameraStore";
 import { useSettingsStore } from "./settingsStore";
 import { toast } from "@/hooks/use-toast";
 import type { SidebarMode } from "./settingsStore";
+
+/**
+ * Observable store for Live-mode retry state.
+ * React components subscribe to this so they can show a "Reconnecting…"
+ * indicator without polling module-level variables.
+ */
+interface LiveModeState {
+  /** Number of GPS reconnect attempts made since the last successful fix or Live entry (0 = no pending retry). */
+  gpsRetryAttempt: number;
+  /** Maximum number of attempts; matches MAX_GPS_RETRIES so the UI can show "attempt X of N". */
+  gpsMaxRetries: number;
+}
+
+export const useLiveModeStore = create<LiveModeState>(() => ({
+  gpsRetryAttempt: 0,
+  gpsMaxRetries: 3, // kept in sync with MAX_GPS_RETRIES below
+}));
 
 /** Unsubscribe handle for the GPS-store subscription active while in Live mode. */
 let unsubGps: (() => void) | null = null;
@@ -71,6 +89,7 @@ export function __resetLiveModeForTests(): void {
     gpsRetryTimer = null;
   }
   gpsRetryCount = 0;
+  useLiveModeStore.setState({ gpsRetryAttempt: 0 });
 }
 
 export function isLiveModeActive(): boolean {
@@ -130,6 +149,7 @@ export function enterLiveMode(): void {
       // Successful fix — reset the retry counter so the cap starts fresh
       // the next time an error occurs.
       gpsRetryCount = 0;
+      useLiveModeStore.setState({ gpsRetryAttempt: 0 });
       if (gpsRetryTimer !== null) {
         clearTimeout(gpsRetryTimer);
         gpsRetryTimer = null;
@@ -143,6 +163,7 @@ export function enterLiveMode(): void {
       // Live mode off and on after a transient GPS failure.
       if (gpsRetryCount < MAX_GPS_RETRIES) {
         gpsRetryCount++;
+        useLiveModeStore.setState({ gpsRetryAttempt: gpsRetryCount });
         if (gpsRetryTimer !== null) clearTimeout(gpsRetryTimer);
         gpsRetryTimer = setTimeout(() => {
           gpsRetryTimer = null;
@@ -169,6 +190,7 @@ export function exitLiveMode(): void {
     gpsRetryTimer = null;
   }
   gpsRetryCount = 0;
+  useLiveModeStore.setState({ gpsRetryAttempt: 0 });
 
   unsubGps?.();
   unsubGps = null;

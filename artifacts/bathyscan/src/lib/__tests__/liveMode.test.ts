@@ -27,6 +27,7 @@ import {
   onSidebarModeChange,
   isLiveModeActive,
   __resetLiveModeForTests,
+  useLiveModeStore,
 } from "../liveMode";
 import { useGpsStore } from "../gpsStore";
 import { useTrailStore } from "../trailStore";
@@ -398,6 +399,71 @@ describe("liveMode — autoStartTrailRecording=true", () => {
     expect(useTrailStore.getState().recording).toBe(true);
     exitLiveMode();
     expect(useTrailStore.getState().recording).toBe(false);
+  });
+});
+
+describe("liveMode — GPS retry HUD store", () => {
+  it("gpsRetryAttempt is 0 before any error", () => {
+    enterLiveMode();
+    expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(0);
+  });
+
+  it("increments gpsRetryAttempt to 1 after the first GPS error", () => {
+    enterLiveMode();
+    useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", watchId: null, position: null });
+    expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(1);
+  });
+
+  it("increments gpsRetryAttempt on each successive error up to the cap", () => {
+    vi.useFakeTimers();
+    try {
+      enterLiveMode();
+
+      for (let i = 1; i <= 3; i++) {
+        useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", watchId: null, position: null });
+        expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(i);
+        vi.advanceTimersByTime(5_000);
+      }
+
+      // A 4th error is beyond the cap — attempt count must stay at 3.
+      useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", watchId: null, position: null });
+      expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears gpsRetryAttempt to 0 after a successful GPS fix", () => {
+    enterLiveMode();
+    useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", watchId: null, position: null });
+    expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(1);
+
+    // After the error the old watchId is cleared, so fireFix() (which calls the
+    // original watchPosition success callback) hits the stale-watchId guard and
+    // is a no-op. Simulate a successful reconnect by writing GPS state directly —
+    // the liveMode subscription observes the active: false → true transition and
+    // must clear the retry counter.
+    useGpsStore.setState({
+      active: true,
+      error: null,
+      watchId: 42,
+      position: { longitude: 142.1951, latitude: 11.3733, accuracy: 8, timestamp: 0, speed: null, heading: null },
+    });
+    expect(useGpsStore.getState().active).toBe(true);
+    expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(0);
+  });
+
+  it("clears gpsRetryAttempt to 0 when Live mode is exited", () => {
+    enterLiveMode();
+    useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", watchId: null, position: null });
+    expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(1);
+
+    exitLiveMode();
+    expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(0);
+  });
+
+  it("gpsMaxRetries matches MAX_GPS_RETRIES (3)", () => {
+    expect(useLiveModeStore.getState().gpsMaxRetries).toBe(3);
   });
 });
 

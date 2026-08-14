@@ -24,6 +24,7 @@ import { useCameraStore } from "@/lib/cameraStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
+import { useLiveModeStore } from "@/lib/liveMode";
 import {
   lonLatToWorldXZ,
   getTerrainSurfaceY,
@@ -74,6 +75,9 @@ export const LivePanel: React.FC = () => {
   const pointCount = useTrailStore((s) => s.currentPoints.length);
   const startRecording = useTrailStore((s) => s.startRecording);
   const stopRecording = useTrailStore((s) => s.stopRecording);
+
+  const gpsRetryAttempt = useLiveModeStore((s) => s.gpsRetryAttempt);
+  const gpsMaxRetries = useLiveModeStore((s) => s.gpsMaxRetries);
 
   const gpsFollowState = useCameraStore((s) => s.gpsFollowState);
   const gpsFollowMode = gpsFollowState !== "off";
@@ -228,6 +232,33 @@ export const LivePanel: React.FC = () => {
             style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#f87171", lineHeight: 1.5, letterSpacing: "0.06em" }}
           >
             {gpsError}
+          </div>
+        )}
+        {gpsRetryAttempt > 0 && (
+          <div
+            data-testid="live-gps-retry-indicator"
+            style={{
+              fontSize: "calc(12.5px * var(--bs-font-scale, 1))",
+              color: "#fbbf24",
+              letterSpacing: "0.08em",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: "inline-block",
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "#fbbf24",
+                boxShadow: "0 0 5px rgba(251,191,36,0.7)",
+                animation: "pulse 1.2s ease-in-out infinite",
+              }}
+            />
+            Reconnecting… (attempt {gpsRetryAttempt} of {gpsMaxRetries})
           </div>
         )}
       </div>
