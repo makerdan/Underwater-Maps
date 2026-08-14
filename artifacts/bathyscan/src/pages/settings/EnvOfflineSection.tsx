@@ -170,14 +170,22 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
         {/* Download error */}
         {downloadError && (
           <div
-            data-testid="env-pack-error"
+            data-testid={
+              downloadError.startsWith("No data available")
+                ? "env-pack-no-data"
+                : "env-pack-error"
+            }
             style={{
               fontSize: "calc(9px * var(--bs-font-scale, 1))",
-              color: "#f87171",
+              color: downloadError.startsWith("No data available")
+                ? "#94a3b8"
+                : "#f87171",
               marginBottom: 8,
             }}
           >
-            ✗ {downloadError}
+            {downloadError.startsWith("No data available")
+              ? `ℹ ${downloadError}`
+              : `✗ ${downloadError}`}
           </div>
         )}
 

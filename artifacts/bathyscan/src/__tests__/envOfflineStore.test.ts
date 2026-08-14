@@ -218,6 +218,80 @@ describe("envOfflineStore", () => {
       expect(useEnvOfflineStore.getState().downloadError).toBe("Network failure");
     });
 
+    it("partial success — tides only — saves the pack without error", async () => {
+      const pack = makePack({ weatherStations: null });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => pack,
+      } as Response);
+
+      await expect(
+        useEnvOfflineStore.getState().downloadEnvPack(57.05, -135.33, 15, 14),
+      ).resolves.toBeUndefined();
+
+      expect(useEnvOfflineStore.getState().envPack).toEqual(pack);
+      expect(useEnvOfflineStore.getState().downloadError).toBeNull();
+    });
+
+    it("partial success — weather only — saves the pack without error", async () => {
+      const pack = makePack({ tideStations: null });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => pack,
+      } as Response);
+
+      await expect(
+        useEnvOfflineStore.getState().downloadEnvPack(57.05, -135.33, 15, 14),
+      ).resolves.toBeUndefined();
+
+      expect(useEnvOfflineStore.getState().envPack).toEqual(pack);
+      expect(useEnvOfflineStore.getState().downloadError).toBeNull();
+    });
+
+    it("total failure — no tide or weather stations — throws and sets downloadError", async () => {
+      const pack = makePack({
+        tideStations: null,
+        weatherStations: null,
+        warnings: ["No tide stations found", "No weather stations found"],
+      });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => pack,
+      } as Response);
+
+      await expect(
+        useEnvOfflineStore.getState().downloadEnvPack(57.05, -135.33, 15, 14),
+      ).rejects.toThrow("No data available for this location");
+
+      const state = useEnvOfflineStore.getState();
+      expect(state.downloadError).toMatch(/No data available for this location/);
+      expect(state.isDownloading).toBe(false);
+      // Pack must NOT be saved to memory or IDB
+      expect(state.envPack).toBeNull();
+      expect(idbStore.has(ENV_PACK_IDB_KEY)).toBe(false);
+    });
+
+    it("warning-only case — empty arrays instead of null — also treated as total failure", async () => {
+      const pack = makePack({
+        tideStations: [],
+        weatherStations: [],
+        warnings: ["No stations nearby"],
+      });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => pack,
+      } as Response);
+
+      await expect(
+        useEnvOfflineStore.getState().downloadEnvPack(57.05, -135.33, 15, 14),
+      ).rejects.toThrow("No data available for this location");
+
+      expect(useEnvOfflineStore.getState().downloadError).toMatch(
+        /No data available for this location/,
+      );
+      expect(useEnvOfflineStore.getState().envPack).toBeNull();
+    });
+
     it("builds the correct URL", async () => {
       const pack = makePack();
       let capturedUrl = "";

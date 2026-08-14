@@ -73,6 +73,19 @@ export const useEnvOfflineStore = create<EnvOfflineState>((set, get) => ({
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const pack = (await res.json()) as EnvPack;
+
+      // Fail loudly if both tide and weather sources returned nothing —
+      // silently saving an empty pack would leave users offline with no data.
+      const hasTides =
+        pack.tideStations !== null && pack.tideStations.length > 0;
+      const hasWeather =
+        pack.weatherStations !== null && pack.weatherStations.length > 0;
+      if (!hasTides && !hasWeather) {
+        throw new Error(
+          "No data available for this location — try a different area",
+        );
+      }
+
       await idbSet(ENV_PACK_IDB_KEY, pack);
       set({ envPack: pack, isDownloading: false, downloadError: null });
     } catch (err) {
