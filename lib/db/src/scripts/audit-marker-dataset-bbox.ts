@@ -25,6 +25,7 @@
 
 import { isNotNull, inArray } from "drizzle-orm";
 import { db, pool, markersTable, datasetCatalogTable, customDatasetsTable } from "../index.js";
+import { isInBbox, classifyMarkers, ciExitCode, type Bbox } from "./audit-marker-dataset-bbox-helpers.js";
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -33,16 +34,6 @@ const args = process.argv.slice(2);
 const FIX_MODE = args.includes("--fix");
 const DRY_RUN = args.includes("--dry-run");
 const CI_MODE = args.includes("--ci");
-
-// ---------------------------------------------------------------------------
-// Bbox type
-// ---------------------------------------------------------------------------
-interface Bbox {
-  minLon: number;
-  minLat: number;
-  maxLon: number;
-  maxLat: number;
-}
 
 // ---------------------------------------------------------------------------
 // Bbox resolver — batched by unique dataset ID
@@ -119,13 +110,6 @@ async function resolveBboxes(datasetIds: string[]): Promise<Map<string, Bbox | n
 }
 
 // ---------------------------------------------------------------------------
-// Point-in-bbox check (inclusive boundaries)
-// ---------------------------------------------------------------------------
-function isInBbox(lon: number, lat: number, bbox: Bbox): boolean {
-  return lon >= bbox.minLon && lon <= bbox.maxLon && lat >= bbox.minLat && lat <= bbox.maxLat;
-}
-
-// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
@@ -158,19 +142,8 @@ async function main() {
   const unresolvableCount = uniqueDatasetIds.length - resolvedCount;
   console.log(`[audit] Resolved: ${resolvedCount}  Unresolvable (dataset deleted): ${unresolvableCount}`);
 
-  // 3. Classify markers
-  const outOfBounds: typeof markers = [];
-  const unknownDataset: typeof markers = [];
-
-  for (const marker of markers) {
-    const bbox = bboxMap.get(marker.datasetId as string);
-    if (bbox === null) {
-      unknownDataset.push(marker);
-    } else if (!isInBbox(marker.lon, marker.lat, bbox!)) {
-      outOfBounds.push(marker);
-    }
-    // in-bounds: no action needed
-  }
+  // 3. Classify markers (pure helper — no DB)
+  const { outOfBounds, unknownDataset } = classifyMarkers(markers, bboxMap);
 
   // 4. Print table of out-of-bounds + unknown markers
   const problematic = [...outOfBounds, ...unknownDataset];
@@ -210,11 +183,12 @@ async function main() {
   );
 
   // 5. CI mode — non-zero exit when any findings exist
-  if (CI_MODE && problematic.length > 0) {
+  const exitCode = ciExitCode(problematic.length, CI_MODE);
+  if (exitCode !== 0) {
     console.error(
       `\n[audit] --ci: ${problematic.length} problem(s) found. Exiting with code 1.`,
     );
-    process.exitCode = 1;
+    process.exitCode = exitCode;
   }
 
   // 6. Fix mode
