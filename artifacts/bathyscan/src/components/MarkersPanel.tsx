@@ -8,7 +8,8 @@
  *
  * Allows importing GPS files via GpsImportDialog in dataset-free mode.
  */
-import React, { useState } from "react";
+import React, { useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
@@ -16,6 +17,10 @@ import { GpsImportDialog } from "@/components/GpsImportDialog";
 import { ReassignMarkersDialog } from "@/components/ReassignMarkersDialog";
 
 const PANEL_WIDTH = 300;
+
+// MarkerRow measured height: 8px top + 8px bottom padding, ~19px label line,
+// 2px gap, ~17px sublabel line = ~54px. Use 56 as estimateSize.
+const MARKER_ROW_HEIGHT = 56;
 
 interface MarkerRowProps {
   id: string;
@@ -28,6 +33,7 @@ interface MarkerRowProps {
 
 const MarkerRow: React.FC<MarkerRowProps> = ({ label, lat, lon, depth, type }) => (
   <div
+    data-testid={`marker-row-item`}
     style={{
       padding: "8px 10px",
       borderBottom: "1px solid rgba(148,163,184,0.08)",
@@ -45,11 +51,79 @@ const MarkerRow: React.FC<MarkerRowProps> = ({ label, lat, lon, depth, type }) =
   </div>
 );
 
+/** Inner component that holds the virtualizer — extracted so that the ref is
+ *  always bound to the scroll element before the virtualizer is created. */
+interface MarkerListProps {
+  markers: MarkerRowProps[];
+}
+
+const MarkerList: React.FC<MarkerListProps> = ({ markers }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: markers.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => MARKER_ROW_HEIGHT,
+    overscan: 5,
+    measureElement:
+      typeof window !== "undefined" && navigator.userAgent.indexOf("Firefox") === -1
+        ? (element) => element.getBoundingClientRect().height
+        : undefined,
+  });
+
+  return (
+    <div
+      ref={scrollRef}
+      data-testid="markers-panel-list"
+      style={{ flex: 1, overflowY: "auto" }}
+    >
+      <div
+        data-testid="markers-virtual-container"
+        style={{
+          height: virtualizer.getTotalSize(),
+          width: "100%",
+          position: "relative",
+        }}
+      >
+        {virtualizer.getVirtualItems().map((virtualItem) => {
+          const m = markers[virtualItem.index];
+          if (!m) return null;
+          return (
+            <div
+              key={virtualItem.key}
+              data-index={virtualItem.index}
+              data-testid={`marker-row-${virtualItem.index}`}
+              ref={virtualizer.measureElement}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualItem.start}px)`,
+                boxSizing: "border-box",
+              }}
+            >
+              <MarkerRow
+                id={m.id}
+                label={m.label}
+                lat={m.lat}
+                lon={m.lon}
+                depth={m.depth}
+                type={m.type}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const MarkersPanel: React.FC = () => {
   const { terrain } = useAppState();
   const setMarkersPanelOpen = useUiStore((s) => s.setMarkersPanelOpen);
-  const [gpsImportOpen, setGpsImportOpen] = useState(false);
-  const [reassignOpen, setReassignOpen] = useState(false);
+  const [gpsImportOpen, setGpsImportOpen] = React.useState(false);
+  const [reassignOpen, setReassignOpen] = React.useState(false);
 
   const hasDataset = !!terrain?.datasetId;
 
@@ -140,84 +214,71 @@ export const MarkersPanel: React.FC = () => {
           {hasDataset ? `Dataset: ${terrain!.datasetId}` : "Unassigned markers (no active dataset)"}
         </div>
 
-        {/* Marker list */}
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          {isLoading && (
-            <div
-              data-testid="markers-panel-loading"
-              style={{ padding: "20px 12px", color: "#64748b", textAlign: "center", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}
-            >
-              Loading markers…
-            </div>
-          )}
+        {/* Marker list area */}
+        {isLoading && (
+          <div
+            data-testid="markers-panel-loading"
+            style={{ padding: "20px 12px", color: "#64748b", textAlign: "center", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", flex: 1 }}
+          >
+            Loading markers…
+          </div>
+        )}
 
-          {isError && (
-            <div style={{ padding: "16px 12px" }}>
-              <div
-                style={{
-                  color: "#f87171",
-                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                  marginBottom: 10,
-                  padding: "8px 10px",
-                  background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.25)",
-                  borderRadius: 4,
-                }}
-              >
-                Failed to load markers.
-              </div>
-              <button
-                onClick={() => void refetch()}
-                data-testid="markers-panel-retry"
-                style={{
-                  padding: "5px 12px",
-                  background: "transparent",
-                  border: "1px solid rgba(148,163,184,0.3)",
-                  borderRadius: 3,
-                  color: "#e2e8f0",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                }}
-              >
-                Retry
-              </button>
-            </div>
-          )}
-
-          {!isLoading && !isError && markers !== undefined && markers.length === 0 && (
+        {isError && (
+          <div style={{ padding: "16px 12px", flex: 1 }}>
             <div
-              data-testid="markers-panel-empty"
               style={{
-                padding: "20px 12px",
-                color: "#64748b",
-                textAlign: "center",
+                color: "#f87171",
                 fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                lineHeight: 1.6,
+                marginBottom: 10,
+                padding: "8px 10px",
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.25)",
+                borderRadius: 4,
               }}
             >
-              No markers yet.
-              <br />
-              Import a GPS file below.
+              Failed to load markers.
             </div>
-          )}
+            <button
+              onClick={() => void refetch()}
+              data-testid="markers-panel-retry"
+              style={{
+                padding: "5px 12px",
+                background: "transparent",
+                border: "1px solid rgba(148,163,184,0.3)",
+                borderRadius: 3,
+                color: "#e2e8f0",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
-          {!isLoading && !isError && markers && markers.length > 0 && (
-            <div data-testid="markers-panel-list">
-              {markers.map((m) => (
-                <MarkerRow
-                  key={m.id}
-                  id={m.id}
-                  label={m.label}
-                  lat={m.lat}
-                  lon={m.lon}
-                  depth={m.depth}
-                  type={m.type}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        {!isLoading && !isError && markers !== undefined && markers.length === 0 && (
+          <div
+            data-testid="markers-panel-empty"
+            style={{
+              padding: "20px 12px",
+              color: "#64748b",
+              textAlign: "center",
+              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+              lineHeight: 1.6,
+              flex: 1,
+            }}
+          >
+            No markers yet.
+            <br />
+            Import a GPS file below.
+          </div>
+        )}
+
+        {!isLoading && !isError && markers && markers.length > 0 && (
+          <MarkerList markers={markers} />
+        )}
 
         {/* Footer: Import GPS + Reassign */}
         <div
