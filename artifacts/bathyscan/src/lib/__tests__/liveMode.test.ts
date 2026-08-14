@@ -164,6 +164,99 @@ describe("liveMode — GPS errors", () => {
   });
 });
 
+describe("liveMode — GPS auto-retry on error", () => {
+  it("schedules a GPS restart 5 s after an error fires in Live mode", () => {
+    vi.useFakeTimers();
+    try {
+      enterLiveMode();
+      // watchPosition has been called once to start the watch.
+      expect(watchPosition).toHaveBeenCalledTimes(1);
+
+      // Simulate the GPS error: gpsStore clears watchId and sets error.
+      useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", watchId: null, position: null });
+
+      // Before the delay elapses, no retry yet.
+      vi.advanceTimersByTime(4_999);
+      expect(watchPosition).toHaveBeenCalledTimes(1);
+
+      // After 5 s the retry fires and starts a new watch.
+      vi.advanceTimersByTime(1);
+      expect(watchPosition).toHaveBeenCalledTimes(2);
+      expect(useGpsStore.getState().watchId).toBe(42);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not retry when Live mode was exited before the delay elapses", () => {
+    vi.useFakeTimers();
+    try {
+      enterLiveMode();
+      useGpsStore.setState({ active: false, error: "GPS position unavailable. Check that location services are enabled.", watchId: null, position: null });
+
+      // Exit Live mode — retry timer must be cancelled.
+      exitLiveMode();
+
+      vi.advanceTimersByTime(10_000);
+      // Only the initial watchPosition call; no retry.
+      expect(watchPosition).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("caps retries at 3 and stops scheduling after the limit", () => {
+    vi.useFakeTimers();
+    try {
+      enterLiveMode();
+      expect(watchPosition).toHaveBeenCalledTimes(1);
+
+      // Fire 4 consecutive errors and advance the timer after each.
+      for (let i = 0; i < 4; i++) {
+        // Each retry starts a new watch — the error handler fires again.
+        useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", watchId: null, position: null });
+        vi.advanceTimersByTime(5_000);
+      }
+
+      // Only 3 retries on top of the initial call = 4 total watchPosition calls.
+      expect(watchPosition).toHaveBeenCalledTimes(4);
+
+      // A 5th error should not schedule another retry.
+      useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", watchId: null, position: null });
+      vi.advanceTimersByTime(5_000);
+      expect(watchPosition).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resets the retry counter after a successful GPS fix", () => {
+    vi.useFakeTimers();
+    try {
+      enterLiveMode();
+
+      // Use up 3 retries.
+      for (let i = 0; i < 3; i++) {
+        useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", watchId: null, position: null });
+        vi.advanceTimersByTime(5_000);
+      }
+      // 3 retries on top of initial = 4 total.
+      expect(watchPosition).toHaveBeenCalledTimes(4);
+
+      // Now a successful fix arrives.
+      fireFix();
+      expect(useGpsStore.getState().active).toBe(true);
+
+      // Another error fires — the counter was reset, so a new retry is allowed.
+      useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", watchId: null, position: null });
+      vi.advanceTimersByTime(5_000);
+      expect(watchPosition).toHaveBeenCalledTimes(5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("liveMode — exiting", () => {
   it("disables follow mode", () => {
     enterLiveMode();

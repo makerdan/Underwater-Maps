@@ -48,12 +48,29 @@ let liveActive = false;
  */
 let trailStartedByLive = false;
 
+/** Maximum number of automatic GPS restart attempts after an error in Live mode. */
+const MAX_GPS_RETRIES = 3;
+
+/** Delay between GPS restart attempts when in Live mode (milliseconds). */
+const GPS_RETRY_DELAY_MS = 5_000;
+
+/** Number of GPS restart attempts made since the last successful fix or Live entry. */
+let gpsRetryCount = 0;
+
+/** Pending retry timer handle (null when no retry is scheduled). */
+let gpsRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
 /** Exported for tests — reset module-level state between test cases. */
 export function __resetLiveModeForTests(): void {
   unsubGps?.();
   unsubGps = null;
   liveActive = false;
   trailStartedByLive = false;
+  if (gpsRetryTimer !== null) {
+    clearTimeout(gpsRetryTimer);
+    gpsRetryTimer = null;
+  }
+  gpsRetryCount = 0;
 }
 
 export function isLiveModeActive(): boolean {
@@ -110,10 +127,33 @@ export function enterLiveMode(): void {
   unsubGps = useGpsStore.subscribe((state, prev) => {
     if (!liveActive) return;
     if (state.active && !prev.active) {
+      // Successful fix — reset the retry counter so the cap starts fresh
+      // the next time an error occurs.
+      gpsRetryCount = 0;
+      if (gpsRetryTimer !== null) {
+        clearTimeout(gpsRetryTimer);
+        gpsRetryTimer = null;
+      }
       useCameraStore.getState().setGpsFollowMode(true);
     }
     if (state.error && state.error !== prev.error) {
       notifyGpsError(state.error);
+      // Attempt to restart the GPS watch after a short delay, up to
+      // MAX_GPS_RETRIES times, so the user does not have to manually toggle
+      // Live mode off and on after a transient GPS failure.
+      if (gpsRetryCount < MAX_GPS_RETRIES) {
+        gpsRetryCount++;
+        if (gpsRetryTimer !== null) clearTimeout(gpsRetryTimer);
+        gpsRetryTimer = setTimeout(() => {
+          gpsRetryTimer = null;
+          if (!liveActive) return;
+          // Only call startWatching when the watch was cleared by the error
+          // handler — a concurrent fix may have already reinstated it.
+          if (useGpsStore.getState().watchId === null) {
+            useGpsStore.getState().startWatching();
+          }
+        }, GPS_RETRY_DELAY_MS);
+      }
     }
   });
 }
@@ -121,6 +161,14 @@ export function enterLiveMode(): void {
 export function exitLiveMode(): void {
   if (!liveActive) return;
   liveActive = false;
+
+  // Cancel any pending GPS-retry timer so it does not fire after the user
+  // has intentionally left Live mode.
+  if (gpsRetryTimer !== null) {
+    clearTimeout(gpsRetryTimer);
+    gpsRetryTimer = null;
+  }
+  gpsRetryCount = 0;
 
   unsubGps?.();
   unsubGps = null;
