@@ -2038,12 +2038,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
         if (!resp.ok) {
           consecutiveFailures++;
-          // Three consecutive non-OK responses indicate the server has lost
-          // track of this job (e.g. restarted mid-upload and wiped in-memory
-          // state). Stop polling and surface a retryable error so the user
-          // does not wait 10 minutes for the overall timeout to fire.
-          // Follow-up work: persist job state to an upload_jobs DB table so
-          // a restarted server can resume from a durable record instead.
+          // Three consecutive non-OK responses indicate a transient or
+          // persistent server problem. In most cases job state is recovered
+          // automatically: the server persists each job to the upload_jobs
+          // DB table on finalize, updates it as processing progresses, and
+          // re-queues stale rows on restart — so a single restart should not
+          // produce a 404. This threshold remains as a final safety net for
+          // unrecoverable scenarios (e.g. DB unavailable during restart).
           if (consecutiveFailures >= POLL_INTERRUPT_THRESHOLD) {
             stopped = true;
             clearUploadSession();
