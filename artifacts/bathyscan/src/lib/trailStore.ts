@@ -95,9 +95,11 @@ function beginRecording(get: Get, set: Set, intervalMs: number, preservePoints: 
   });
 
   // Sample immediately, then on every interval tick.
+  // Skip recording when GPS is not active (signal lost / error) so stale
+  // last-known coordinates are never appended as if they were a live fix.
   const sample = () => {
-    const pos = useGpsStore.getState().position;
-    if (pos) get().addPoint(pos);
+    const gps = useGpsStore.getState();
+    if (gps.active && gps.position) get().addPoint(gps.position);
   };
 
   sample();
@@ -144,8 +146,8 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
     }
 
     const sample = () => {
-      const pos = useGpsStore.getState().position;
-      if (pos) get().addPoint(pos);
+      const gps = useGpsStore.getState();
+      if (gps.active && gps.position) get().addPoint(gps.position);
     };
     const id = setInterval(sample, intervalMs);
     const cleanup = () => {

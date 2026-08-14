@@ -41,17 +41,45 @@ export const useGpsStore = create<GpsStore>((set, get) => ({
     const existing = get().watchId;
     if (existing !== null) navigator.geolocation.clearWatch(existing);
 
-    const id = navigator.geolocation.watchPosition(
+    // ownId is set synchronously after watchPosition returns and is captured
+    // by the callbacks via closure. Because both callbacks fire asynchronously
+    // (after this function returns), ownId is always initialised before they run.
+    // This identity guard prevents a delayed error callback from a superseded
+    // watch from tearing down a newer, valid watch.
+    let ownId: number;
+
+    ownId = navigator.geolocation.watchPosition(
       (pos) => {
+        // Ignore callbacks from superseded watches.
+        if (get().watchId !== ownId) return;
+
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const acc = pos.coords.accuracy;
+        const ts = pos.timestamp;
+
+        // Reject fixes with out-of-range or non-finite values to guard against
+        // browser quirks, native wrapper edge cases, or mock data pushing NaN /
+        // Infinity / impossible coordinates into state. Rejection is silent —
+        // no location-derived values are logged.
+        if (
+          !isFinite(lat) || lat < -90 || lat > 90 ||
+          !isFinite(lon) || lon < -180 || lon > 180 ||
+          !isFinite(acc) || acc < 0 ||
+          !isFinite(ts)
+        ) {
+          return;
+        }
+
         set({
           active: true,
           error: null,
           position: {
-            longitude: pos.coords.longitude,
-            latitude: pos.coords.latitude,
-            accuracy: pos.coords.accuracy,
-            timestamp: pos.timestamp,
-            speed: pos.coords.speed ?? null,
+            longitude: lon,
+            latitude: lat,
+            accuracy: acc,
+            timestamp: ts,
+            speed: pos.coords.speed != null && isFinite(pos.coords.speed) ? pos.coords.speed : null,
             heading:
               pos.coords.heading != null && isFinite(pos.coords.heading)
                 ? ((pos.coords.heading % 360) + 360) % 360
@@ -60,16 +88,28 @@ export const useGpsStore = create<GpsStore>((set, get) => ({
         });
       },
       (err) => {
+        // Ignore stale callbacks from superseded watches — they must not clear
+        // the watchId of a newer, valid watch.
+        if (get().watchId !== ownId) return;
+
         const msg =
           err.code === 1
             ? "GPS permission denied. Please enable location access in your browser settings."
             : err.code === 2
               ? "GPS position unavailable. Check that location services are enabled."
               : "GPS timed out. Move to an area with better signal.";
-        set({ active: false, error: msg });
+        // Clear the stale watch and null out watchId so startWatching() can
+        // create a fresh watch the next time the user retries (e.g. toggling
+        // Live mode off and on). Also null out position so downstream
+        // consumers cannot read a stale last-known coordinate as if it were
+        // a live fix.
+        navigator.geolocation.clearWatch(ownId);
+        set({ active: false, error: msg, watchId: null, position: null });
       },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
     );
+
+    const id = ownId;
 
     set({ watchId: id, active: false, error: null });
   },
