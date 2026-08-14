@@ -70,6 +70,15 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
     };
   }, [dataset.id]);
 
+  // Escape key closes the modal — same pattern as DatasetPanel's RemoveDatasetConfirmDialog.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const handleImageClick = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
     if (!imgRef.current || points.length >= MAX_POINTS) return;
     const rect = imgRef.current.getBoundingClientRect();

@@ -224,6 +224,20 @@ export const MarkerForm: React.FC = () => {
     }
   };
 
+  // Ref so the Escape-key effect always calls the latest handleClose without
+  // re-registering the listener on every render.
+  const handleCloseRef = useRef(handleClose);
+  handleCloseRef.current = handleClose;
+
+  // Escape key fires handleClose — the dirty-edit AlertDialog guard runs inside it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleCloseRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 

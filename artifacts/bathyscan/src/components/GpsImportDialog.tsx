@@ -209,10 +209,23 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   useEffect(() => {
     setReassignExisting(true);
   }, [matchedSave]);
+
   const [headingDeg, setHeadingDeg] = useState<number>(DEFAULT_HEADING_DEG);
   const [speedKnots, setSpeedKnots] = useState<number>(DEFAULT_SPEED_KNOTS);
   const [isImporting, setIsImporting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+
+  // Escape key closes the dialog — mirrors the backdrop-click guard so the
+  // handler is suppressed while an import is in-flight.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (isImporting && !isCancelling) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, isImporting, isCancelling]);
   const [importProgress, setImportProgress] = useState<{
     markersDone: number;
     markersTotal: number;

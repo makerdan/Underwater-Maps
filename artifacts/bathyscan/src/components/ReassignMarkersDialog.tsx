@@ -12,7 +12,7 @@
  *   5. On completion it invalidates the target dataset's markers query key
  *      and the unassigned-markers queries, then fires a toast.
  */
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useReturnFocus } from "@/hooks/useReturnFocus";
@@ -44,6 +44,18 @@ export const ReassignMarkersDialog: React.FC<Props> = ({ onClose }) => {
   const [selectedSave, setSelectedSave] = useState<UserCatalogSave | null>(null);
   const [isReassigning, setIsReassigning] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  // Escape key closes the dialog — suppressed while reassignment is in-flight,
+  // mirroring the close-button and backdrop guards.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (isReassigning) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, isReassigning]);
 
   // Fetch user's saved catalog datasets.
   const { data: mySavesData, isLoading: savesLoading } = useGetDatasetsMySaves({
