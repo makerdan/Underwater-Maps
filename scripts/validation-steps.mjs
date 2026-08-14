@@ -118,6 +118,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:audit", resource: null, cmd: "pnpm run check:audit", tiers: FULL },
     // no resource: pure grep scan, sub-second
     { name: "check:bare-pino-http-mock", resource: null, cmd: "pnpm run check:bare-pino-http-mock", tiers: FULL },
+    // no resource: static scan of TripWindowPanel.tsx for raw-unit literals / direct .toFixed() regressions, sub-second
+    { name: "check:trip-window-raw-units", resource: null, cmd: "pnpm run check:trip-window-raw-units", tiers: FULL },
     // DB-backed audit step — skipped unless AUDIT_MARKER_BBOX_ENABLED=1 is set in the environment.
     // Opt in by exporting AUDIT_MARKER_BBOX_ENABLED=1 before running the full tier, or by setting
     // it in your CI environment where a real DATABASE_URL is available.
