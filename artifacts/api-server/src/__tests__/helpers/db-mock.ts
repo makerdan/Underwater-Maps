@@ -137,6 +137,17 @@ const gpsTrailsTableStub = {
   colour: "colour",
   startedAt: "startedAt",
   endedAt: "endedAt",
+  pointCount: "pointCount",
+};
+
+const gpsTrailPointsTableStub = {
+  id: "id",
+  trailId: "trailId",
+  seq: "seq",
+  lon: "lon",
+  lat: "lat",
+  accuracy: "accuracy",
+  recordedAt: "recordedAt",
 };
 
 const datasetCatalogTableStub = {
@@ -283,6 +294,7 @@ export function createDbMock(options: DbMockOptions = {}) {
     catchEntriesTable: catchEntriesTableStub,
     datasetFoldersTable: datasetFoldersTableStub,
     gpsTrailsTable: gpsTrailsTableStub,
+    gpsTrailPointsTable: gpsTrailPointsTableStub,
     datasetCatalogTable: datasetCatalogTableStub,
     trollingPresetsTable: trollingPresetsTableStub,
     trollingPresetFoldersTable: trollingPresetFoldersTableStub,
