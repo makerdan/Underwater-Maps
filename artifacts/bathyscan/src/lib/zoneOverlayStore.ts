@@ -148,6 +148,13 @@ interface ZoneOverlayStore {
   resetToDefaults: () => void;
   /** Hydrate from server-persisted data (accepts new or legacy format). */
   hydrateFromServer: (data: unknown) => void;
+  /**
+   * Re-read both saltwater and freshwater slot arrays from localStorage and
+   * update in-memory state. Called by the cross-tab storage sync hook when
+   * another tab writes either zone-overlay key so the receiving tab stays in
+   * sync without a page reload.
+   */
+  reloadFromStorage: () => void;
 }
 
 export const useZoneOverlayStore = create<ZoneOverlayStore>((set, get) => {
@@ -191,6 +198,13 @@ export const useZoneOverlayStore = create<ZoneOverlayStore>((set, get) => {
       const next = buildDefaultSlots();
       saveSlots(next, wt);
       set({ [wt]: next, slots: next });
+    },
+
+    reloadFromStorage: () => {
+      const sw = loadSlots(LS_KEY_SALTWATER);
+      const fw = loadSlots(LS_KEY_FRESHWATER);
+      const wt = get().activeWaterType;
+      set({ saltwater: sw, freshwater: fw, slots: wt === "freshwater" ? fw : sw });
     },
 
     hydrateFromServer: (raw: unknown) => {

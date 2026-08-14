@@ -86,6 +86,7 @@ import { useActiveDatasetSync } from "@/lib/useActiveDatasetSync";
 import { VisibleDatasetsLoader } from "@/lib/VisibleDatasetsLoader";
 import { waterLabels } from "@/lib/waterLabels";
 import { useServerSettingsSync, requestSettingsSync } from "@/hooks/useServerSettingsSync";
+import { useCrossTabSync } from "@/hooks/useCrossTabSync";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useDriftStore } from "@/lib/driftStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
@@ -321,6 +322,9 @@ function Main() {
   // Always-mounted sync: debounce-flush lastSession to server when signed in,
   // independent of whether the Settings page is currently open.
   useLastSessionServerSync();
+  // Passive cross-tab storage sync: re-hydrate stores when another tab writes
+  // to the same localStorage keys so all open tabs stay in sync.
+  useCrossTabSync();
   // Fetch user datasets so we can verify a stored upload default still exists.
   const { data: userDatasets } = useGetUserDatasets({
     query: {

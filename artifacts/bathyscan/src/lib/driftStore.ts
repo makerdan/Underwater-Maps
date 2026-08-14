@@ -236,6 +236,12 @@ interface DriftStore {
   /** Number of corrupt/stale plans dropped at startup (cleared once acknowledged). */
   skippedPlanCount: number;
   clearSkippedPlanCount: () => void;
+  /**
+   * Re-read savedDriftPlans from localStorage and update in-memory state.
+   * Called by the cross-tab storage sync hook when another tab writes the
+   * SAVED_PLANS_KEY, so the receiving tab stays in sync without a page reload.
+   */
+  reloadSavedPlans: () => void;
 
   // ── Reverse drift ───────────────────────────────────────────────────────
   /** Backwards-computed path from a catch location. */
@@ -372,6 +378,11 @@ export const useDriftStore = create<DriftStore>((set, get) => ({
   })(),
 
   clearSkippedPlanCount: () => set({ skippedPlanCount: 0 }),
+
+  reloadSavedPlans: () => {
+    const { plans, skipped } = readSavedPlans();
+    set({ savedDriftPlans: plans, skippedPlanCount: skipped });
+  },
 
   saveDriftPlan: (name) => {
     const s = get();
