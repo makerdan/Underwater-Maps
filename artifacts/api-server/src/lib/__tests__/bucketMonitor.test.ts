@@ -55,6 +55,7 @@ import {
   PROCESS_CONCURRENCY_CAP,
   __resetProcessConcurrencyForTests,
   __withProcessSlotForTests,
+  __getActiveProcessCountForTests,
   __setLifecycleFnForTests,
   startBucketMonitor,
 } from "../bucketMonitor.js";
@@ -243,6 +244,56 @@ describe("withProcessSlot — generation isolation after reset", () => {
 
     // Clean up holders.
     for (const d of holderDeferreds) d.resolve();
+  });
+
+  it("reset mid-wait: waiter rejects with sentinel and activeProcessCount returns to 0", async () => {
+    const CAP = PROCESS_CONCURRENCY_CAP;
+
+    // Fill all CAP slots with long-running holders.
+    const holderDeferreds = Array.from({ length: CAP }, () => deferred<void>());
+    const holderTasks = holderDeferreds.map((d) =>
+      __withProcessSlotForTests(() => d.promise).catch(() => {}),
+    );
+    await flushMicrotasks();
+
+    // Confirm all slots are taken.
+    expect(__getActiveProcessCountForTests()).toBe(CAP);
+
+    // Start one additional waiter — it must queue because there are no free slots.
+    let waiterRan = false;
+    const waiterPromise = __withProcessSlotForTests(async () => {
+      waiterRan = true;
+      return "should not run";
+    });
+    await flushMicrotasks();
+
+    // The waiter is blocked; the slot-holder count should still be CAP.
+    expect(__getActiveProcessCountForTests()).toBe(CAP);
+    expect(waiterRan).toBe(false);
+
+    // Reset while the waiter is blocked — this bumps the generation and wakes
+    // the waiter (and all holders) via the stale-resolve path.
+    __resetProcessConcurrencyForTests();
+    await flushMicrotasks();
+
+    // The reset zeroes activeProcessCount immediately.
+    expect(__getActiveProcessCountForTests()).toBe(0);
+
+    // The waiter must reject with the sentinel message, not hang or silently succeed.
+    await expect(waiterPromise).rejects.toThrow(
+      "[bucket-monitor] semaphore reset during wait (test teardown)",
+    );
+
+    // The waiter's fn must never have run.
+    expect(waiterRan).toBe(false);
+
+    // After all holders settle their (now stale) promises, the count stays 0
+    // because old-generation finally blocks are no-ops.
+    for (const d of holderDeferreds) d.resolve();
+    await Promise.allSettled(holderTasks);
+    await flushMicrotasks();
+
+    expect(__getActiveProcessCountForTests()).toBe(0);
   });
 });
 

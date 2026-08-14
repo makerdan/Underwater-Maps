@@ -222,6 +222,14 @@ export async function __withProcessSlotForTests<T>(fn: () => Promise<T>): Promis
   return withProcessSlot(fn);
 }
 
+/**
+ * Expose the live activeProcessCount for unit tests that need to assert the
+ * counter is back to 0 after a reset (or at a specific value mid-test).
+ */
+export function __getActiveProcessCountForTests(): number {
+  return activeProcessCount;
+}
+
 const DECOMPRESS_MAX_BYTES = 200 * 1024 * 1024;
 const TEMP_DIR = path.join(os.tmpdir(), "bathyscan-gcs");
 const TEXT_EXTENSIONS = new Set(["csv", "xyz", "txt"]);
