@@ -3,6 +3,7 @@ import { useTerrainStore } from "@/lib/terrainStore";
 import type { DatasetSource } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useProximityStreamingStore } from "@/lib/proximityStreamingStore";
 
 /** Bounding box in geographic coordinates. */
 export interface DatasetBbox {
@@ -163,6 +164,17 @@ export function useDatasetProximityStreaming({
           isSelected,
           source,
         });
+      }
+
+      // ── Publish distance table to HUD store ──────────────────────────────
+      // Write the per-dataset distances computed this tick so ProximityHudChip
+      // can display them in the popover without polling or prop-drilling.
+      {
+        const table: Record<string, number> = {};
+        for (const e of withBbox) {
+          table[e.id] = e.distM;
+        }
+        useProximityStreamingStore.getState().updateDistanceTable(table);
       }
 
       // ── Step 1: Evict active datasets that are too far away ───────────────

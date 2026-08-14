@@ -64,6 +64,7 @@ import { GpsExportDialog } from "@/components/GpsExportDialog";
 import { ReassignMarkersDialog } from "@/components/ReassignMarkersDialog";
 import { SUPPORTED_EXTENSIONS } from "@/components/FileUpload";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
+import { useProximityStreamingStore } from "@/lib/proximityStreamingStore";
 import { fetchJsonWithProgress, NoDataAvailableError } from "@/lib/fetchWithProgress";
 import { checkDatasetIdMatch } from "@/lib/datasetResponseValidation";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
@@ -971,6 +972,23 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     return out;
   }, [datasets, userDatasets]);
 
+  // ─── Proximity HUD: sync name map to store ────────────────────────────────
+  // Keep the name map in proximityStreamingStore current whenever the catalog
+  // or user-dataset list resolves, so the ProximityHudChip popover can show
+  // survey names (not raw IDs) without being mounted inside DatasetPanel.
+  useEffect(() => {
+    const names: Record<string, string> = {};
+    for (const d of datasets ?? []) {
+      names[d.id] = d.name;
+    }
+    for (const d of userDatasets ?? []) {
+      names[d.id] = d.name;
+    }
+    if (Object.keys(names).length > 0) {
+      useProximityStreamingStore.getState().updateNameMap(names);
+    }
+  }, [datasets, userDatasets]);
+
   // ─── Proximity auto-registration effect ──────────────────────────────────
   // When proximityMode is ON, datasets are enrolled in the proximity pool via
   // addSelectedToPool — which adds to selectedIds WITHOUT immediate activation.
@@ -1032,6 +1050,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const handleProximityActivate = useCallback(
     async (datasetId: string, source: DatasetSource) => {
       useTerrainStore.getState().autoActivate(datasetId);
+      useProximityStreamingStore.getState().setLoadingDatasetId(datasetId);
       try {
         if (source === "preset") {
           const [terrainData, overviewData] = await Promise.all([
@@ -1088,6 +1107,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       } catch {
         // Load failed — remove from selected pool so it doesn't spin forever.
         useTerrainStore.getState().removeSelected(datasetId);
+      } finally {
+        // Clear the loading indicator regardless of success or failure.
+        const store = useProximityStreamingStore.getState();
+        if (store.loadingDatasetId === datasetId) {
+          store.setLoadingDatasetId(null);
+        }
       }
     },
     [],

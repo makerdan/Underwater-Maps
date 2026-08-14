@@ -23,6 +23,7 @@ import { TemperatureProfileChart } from "@/components/TemperatureProfileChart";
 import { openCrosshairContextMenu } from "@/lib/terrainContextMenu";
 import { toast } from "@/hooks/use-toast";
 import { useIsNarrow } from "@/hooks/use-mobile";
+import { ProximityHudChip } from "@/components/ProximityHudChip";
 
 const IS_TOUCH_DEVICE =
   typeof window !== "undefined" &&
@@ -774,12 +775,14 @@ export const HUD: React.FC<HUDProps> = ({ panelRightEdge = 0 }) => {
       {!showCrosshairGps &&
         renderWhatsHereButton({ bottom: "calc(50% - 108px)" })}
 
-      {/* ── Bottom-left: pin readout only ──
+      {/* ── Bottom-left: proximity streaming status chip + pin readout ──
+          ProximityHudChip is hidden when proximityMode is off (renders null).
           The "CAMERA POSITION" LON/LAT panel was renamed to
           "YOUR CURRENT COORDINATES" and moved into the left side pane
           (rendered via <CameraCoordsReadout /> in App.tsx). The SPD
           readout was removed entirely. */}
       <div className="absolute bottom-3 left-3 space-y-1">
+        <ProximityHudChip />
         {lastClickedGps && (
           <div style={{ ...PANEL, fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>
             <span style={{ color: "#94a3b8" }}>PIN </span>
