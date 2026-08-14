@@ -158,6 +158,9 @@ const CHUNKED_THRESHOLD = 10 * 1024 * 1024; // files above 10 MB use chunked pat
 const CHUNK_SIZE = 5 * 1024 * 1024;          // 5 MB per chunk
 const GCS_THRESHOLD = 50 * 1024 * 1024;      // files above 50 MB go straight to GCS
 
+/** Maximum time to wait for a chunked-upload job to complete before giving up. */
+export const MAX_UPLOAD_POLL_DURATION_MS = 5 * 60 * 1_000; // 5 minutes
+
 const UPLOAD_SESSION_KEY = "bathyscan_upload_session";
 interface SavedUploadSession {
   uploadId: string;
@@ -2024,7 +2027,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
     // After this many consecutive non-OK poll responses the poll loop stops
     // and surfaces a clear, retryable error message instead of spinning for
-    // the full 10-minute timeout.
+    // the full 5-minute timeout.
     const POLL_INTERRUPT_THRESHOLD = 3;
 
     const poll = async () => {
@@ -2151,7 +2154,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       void poll();
     });
 
-    // Stop polling after 10 minutes and show a timeout message.
+    // Stop polling after 5 minutes and show a timeout message.
     const timeoutId = setTimeout(() => {
       if (stopped) return;
       stopped = true;
@@ -2163,7 +2166,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         }
         return prev;
       });
-    }, 10 * 60 * 1_000);
+    }, MAX_UPLOAD_POLL_DURATION_MS);
 
     return () => {
       stopped = true;

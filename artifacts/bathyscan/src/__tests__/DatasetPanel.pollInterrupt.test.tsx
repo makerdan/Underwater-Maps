@@ -27,7 +27,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
 import { render, screen, act, waitFor } from "@testing-library/react";
-import { DatasetPanel } from "@/components/DatasetPanel";
+import { DatasetPanel, MAX_UPLOAD_POLL_DURATION_MS } from "@/components/DatasetPanel";
 
 // ── Hoisted state ──────────────────────────────────────────────────────────────
 
@@ -558,6 +558,17 @@ describe("DatasetPanel — poll interruption error (SEED F-008)", () => {
       screen.queryByTestId("btn-retry-chunked-upload"),
     ).not.toBeInTheDocument();
   }, 15_000);
+
+  /**
+   * (d) The exported MAX_UPLOAD_POLL_DURATION_MS constant equals 5 minutes
+   * (300 000 ms).  This constant is passed directly to the setTimeout that
+   * caps the poll loop, so asserting its value is equivalent to asserting the
+   * timeout fires at the right time — without any rendering or timer overhead.
+   */
+  it("(d) MAX_UPLOAD_POLL_DURATION_MS is 5 minutes (300 000 ms), not 10 minutes", () => {
+    expect(MAX_UPLOAD_POLL_DURATION_MS).toBe(300_000);
+    expect(MAX_UPLOAD_POLL_DURATION_MS).not.toBe(600_000);
+  });
 
   /**
    * (c) A job status:"error" response → existing job-error path fires,
