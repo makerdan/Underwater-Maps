@@ -36,7 +36,7 @@ interface TrailStore {
    */
   beforeUnloadCleanup: (() => void) | null;
   isOverflowing: boolean;
-  startRecording: (intervalMs?: number) => void;
+  startRecording: (intervalMs?: number, color?: string) => void;
   /**
    * Resume recording without clearing previously recorded points — used by
    * Live mode so switching tabs pauses (rather than resets) the trail.
@@ -69,7 +69,7 @@ type Set = (partial: Partial<TrailStore>) => void;
  * When `preservePoints` is true, previously recorded points (and startedAt /
  * isOverflowing state) are kept so the session continues where it left off.
  */
-function beginRecording(get: Get, set: Set, intervalMs: number, preservePoints: boolean): void {
+function beginRecording(get: Get, set: Set, intervalMs: number, preservePoints: boolean, color?: string): void {
   const { recording, intervalId, beforeUnloadCleanup: prevCleanup, startedAt } = get();
   if (recording) return;
 
@@ -78,11 +78,12 @@ function beginRecording(get: Get, set: Set, intervalMs: number, preservePoints: 
   if (prevCleanup) window.removeEventListener("beforeunload", prevCleanup);
 
   const now = Date.now();
-  // On a fresh recording, pick up the user's current defaultTrailColor so
+  // On a fresh recording, use the explicitly passed color (e.g. from the swatch
+  // picker) if provided; otherwise fall back to the user's stored default so
   // TrailLayer and the save payload both reflect their preference.
   const colorPatch = preservePoints
     ? {}
-    : { color: useSettingsStore.getState().defaultTrailColor ?? DEFAULT_TRAIL_COLOR };
+    : { color: color ?? useSettingsStore.getState().defaultTrailColor ?? DEFAULT_TRAIL_COLOR };
 
   set({
     recording: true,
@@ -126,8 +127,8 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
   beforeUnloadCleanup: null,
   isOverflowing: false,
 
-  startRecording: (intervalMs = DEFAULT_INTERVAL_MS) => {
-    beginRecording(get, set, intervalMs, /* preservePoints */ false);
+  startRecording: (intervalMs = DEFAULT_INTERVAL_MS, color?) => {
+    beginRecording(get, set, intervalMs, /* preservePoints */ false, color);
   },
 
   resumeRecording: (intervalMs = DEFAULT_INTERVAL_MS) => {

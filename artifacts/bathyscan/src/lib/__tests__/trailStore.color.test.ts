@@ -51,6 +51,13 @@ describe("trailStore — color field", () => {
     useTrailStore.getState().stopRecording();
   });
 
+  it("uses an explicitly passed color instead of defaultTrailColor on startRecording", () => {
+    useSettingsStore.setState({ defaultTrailColor: "#aabbcc" });
+    useTrailStore.getState().startRecording(1000, "#11ff22");
+    expect(useTrailStore.getState().color).toBe("#11ff22");
+    useTrailStore.getState().stopRecording();
+  });
+
   it("preserves the color from the paused session on resumeRecording", () => {
     useSettingsStore.setState({ defaultTrailColor: "#aabbcc" });
     useTrailStore.getState().startRecording(1000);

@@ -327,7 +327,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
           ) : (
             <ViewscreenTooltip label="Begin recording your GPS trail" side="top">
             <button
-              onClick={() => startRecording(gpsRecordingInterval)}
+              onClick={() => startRecording(gpsRecordingInterval, trailColour)}
               data-testid="trail-start-btn"
               style={{
                 background: "rgba(239,68,68,0.15)",
