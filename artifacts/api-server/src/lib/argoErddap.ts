@@ -17,6 +17,7 @@
  * resolve to `null` so the route falls through to the next provider.
  */
 
+import { z } from "zod";
 import type { TemperatureProfilePayload } from "../routes/temperature-profile";
 import { registerCache } from "./cacheRegistry.js";
 
@@ -55,12 +56,20 @@ export function __clearArgoCache(): void {
   profileCache.clear();
 }
 
-interface ErddapResponse {
-  table?: {
-    columnNames?: string[];
-    rows?: unknown[][];
-  };
-}
+// ---------------------------------------------------------------------------
+// Zod schema for ERDDAP tabledap JSON response
+// ---------------------------------------------------------------------------
+
+const ErddapResponseSchema = z.object({
+  table: z
+    .object({
+      columnNames: z.array(z.string()).optional(),
+      rows: z.array(z.array(z.unknown())).optional(),
+    })
+    .optional(),
+});
+
+type ErddapResponse = z.infer<typeof ErddapResponseSchema>;
 
 interface ArgoRow {
   platform: string;
@@ -255,7 +264,22 @@ async function fetchArgoProfileUncached(
     const url = buildArgoQueryUrl(lat, lon);
     const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
     if (!res.ok) return null;
-    const json = (await res.json()) as ErddapResponse;
+    let rawJson: unknown;
+    try {
+      rawJson = await res.json();
+    } catch {
+      console.error(`[argoErddap] fetchArgoProfile: invalid JSON from ${ERDDAP_BASE}`);
+      return null;
+    }
+    const parsed = ErddapResponseSchema.safeParse(rawJson);
+    if (!parsed.success) {
+      console.error(
+        `[argoErddap] fetchArgoProfile: response shape mismatch from ${ERDDAP_BASE}`,
+        parsed.error.flatten(),
+      );
+      return null;
+    }
+    const json: ErddapResponse = parsed.data;
     const rows = parseArgoRows(json);
     const cast = pickClosestArgoCast(rows, lat, lon);
     if (!cast) return null;

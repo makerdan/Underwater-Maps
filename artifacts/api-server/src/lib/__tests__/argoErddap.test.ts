@@ -297,3 +297,73 @@ describe("fetchArgoProfile caching", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("fetchArgoProfile — malformed upstream JSON", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    __clearArgoCache();
+    fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
+    consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    consoleSpy.mockRestore();
+    __clearArgoCache();
+  });
+
+  function ok(body: unknown): Response {
+    return { ok: true, status: 200, json: async () => body } as unknown as Response;
+  }
+
+  function badJson(): Response {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError("Unexpected token < in JSON");
+      },
+    } as unknown as Response;
+  }
+
+  it("returns null and logs shape mismatch when 'table' is not an object", async () => {
+    // table should be an object but upstream returns a string
+    fetchSpy.mockResolvedValueOnce(ok({ table: "not-an-object" }));
+
+    const result = await fetchArgoProfile(55.7, -132.6);
+
+    expect(result).toBeNull();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("shape mismatch"),
+      expect.anything(),
+    );
+    expect(consoleSpy.mock.calls[0]![0]).toContain("erddap.ifremer.fr");
+  });
+
+  it("returns null and logs shape mismatch when 'rows' is not an array of arrays", async () => {
+    // rows should be unknown[][] but upstream sends flat strings
+    fetchSpy.mockResolvedValueOnce(ok({ table: { columnNames: ["pres"], rows: ["row1", "row2"] } }));
+
+    const result = await fetchArgoProfile(55.7, -132.6);
+
+    expect(result).toBeNull();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("shape mismatch"),
+      expect.anything(),
+    );
+  });
+
+  it("returns null and logs when upstream sends invalid JSON bytes", async () => {
+    fetchSpy.mockResolvedValueOnce(badJson());
+
+    const result = await fetchArgoProfile(55.7, -132.6);
+
+    expect(result).toBeNull();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("invalid JSON"),
+    );
+    expect(consoleSpy.mock.calls[0]![0]).toContain("erddap.ifremer.fr");
+  });
+});

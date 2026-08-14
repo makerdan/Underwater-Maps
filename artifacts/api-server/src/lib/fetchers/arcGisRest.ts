@@ -7,6 +7,7 @@
  * fetch()  — delegates to the BATHYMETRY_SOURCES ArcGIS source `.fetch()`.
  */
 
+import { z } from "zod";
 import type {
   ArcGisRestFetchStrategy,
   BathymetryFetcher,
@@ -16,6 +17,17 @@ import type {
   ProbeResult,
 } from "./types.js";
 import { BATHYMETRY_SOURCES } from "../terrain.js";
+
+// ---------------------------------------------------------------------------
+// Zod schema for the ArcGIS REST feature query JSON response
+// ---------------------------------------------------------------------------
+
+const ArcGisQueryResponseSchema = z.object({
+  error: z
+    .object({ message: z.string().optional(), code: z.number().optional() })
+    .optional(),
+  features: z.array(z.unknown()).optional(),
+});
 
 export const arcGisRestFetcher: BathymetryFetcher = {
   async probe(strategy: FetchStrategy, bbox: Bbox): Promise<ProbeResult> {
@@ -44,7 +56,24 @@ export const arcGisRestFetcher: BathymetryFetcher = {
       if (!r.ok) {
         return { available: false, title: s.sourceLabel, error: `HTTP ${r.status}` };
       }
-      const body = (await r.json()) as { error?: { message?: string }; features?: unknown[] };
+      let rawJson: unknown;
+      try {
+        rawJson = await r.json();
+      } catch {
+        console.error(
+          `[arcGisRest] probe: invalid JSON from ${s.serviceUrl}/query`,
+        );
+        return { available: false, title: s.sourceLabel, error: "Invalid JSON from ArcGIS endpoint" };
+      }
+      const bodyParsed = ArcGisQueryResponseSchema.safeParse(rawJson);
+      if (!bodyParsed.success) {
+        console.error(
+          `[arcGisRest] probe: response shape mismatch for ${s.serviceUrl}/query`,
+          bodyParsed.error.flatten(),
+        );
+        return { available: false, title: s.sourceLabel, error: "Unexpected ArcGIS response shape" };
+      }
+      const body = bodyParsed.data;
       if (body.error) {
         return { available: false, title: s.sourceLabel, error: body.error.message ?? "ArcGIS error" };
       }
