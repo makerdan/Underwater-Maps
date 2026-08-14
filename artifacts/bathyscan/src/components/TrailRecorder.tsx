@@ -5,6 +5,9 @@
  * Sampling interval is read from settingsStore.gpsRecordingInterval.
  * Trail colour is user-selectable from a fixed palette.
  * On stop: saves trail to server (or buffers to localStorage if offline).
+ *
+ * Draft recovery: if a previous session was interrupted (page close/reload
+ * during active recording), a banner offers to resume or discard it.
  */
 import React, { useEffect, useRef, useState } from "react";
 import { useGpsStore } from "@/lib/gpsStore";
@@ -95,21 +98,24 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
   const currentPoints = useTrailStore((s) => s.currentPoints);
   const startedAt = useTrailStore((s) => s.startedAt);
   const isOverflowing = useTrailStore((s) => s.isOverflowing);
+  const draftTrail = useTrailStore((s) => s.draftTrail);
   const startRecording = useTrailStore((s) => s.startRecording);
   const resumeRecording = useTrailStore((s) => s.resumeRecording);
   const stopRecording = useTrailStore((s) => s.stopRecording);
   const clearPoints = useTrailStore((s) => s.clearPoints);
   const setStoreColor = useTrailStore((s) => s.setColor);
-  const { terrain } = useAppState();
-
-  const gpsRecordingInterval = useSettingsStore((s) => s.gpsRecordingInterval);
-  const setGpsRecordingInterval = useSettingsStore((s) => s.setGpsRecordingInterval);
-  const defaultTrailColor = useSettingsStore((s) => s.defaultTrailColor);
+  const resumeDraft = useTrailStore((s) => s.resumeDraft);
+  const discardDraft = useTrailStore((s) => s.discardDraft);
   // When a recording is already in progress at mount time (e.g. started by
   // liveMode before this component rendered), seed the UI colour from the
   // session's stored color rather than the live settings value, so the swatch
   // reflects what was captured when the session began.
   const sessionColor = useTrailStore((s) => s.color);
+  const { terrain } = useAppState();
+
+  const gpsRecordingInterval = useSettingsStore((s) => s.gpsRecordingInterval);
+  const setGpsRecordingInterval = useSettingsStore((s) => s.setGpsRecordingInterval);
+  const defaultTrailColor = useSettingsStore((s) => s.defaultTrailColor);
 
   const [elapsed, setElapsed] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -152,7 +158,16 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
   const handleStop = async () => {
     const points = stopRecording();
-    if (!points.length || !terrain || !startedAt) return;
+
+    if (!points.length) {
+      toast({
+        title: "No trail points recorded",
+        description: "Nothing to save — start recording and move around to collect GPS points.",
+      });
+      return;
+    }
+
+    if (!terrain || !startedAt) return;
 
     const endedAt = Date.now();
     const name = trailName.trim() || `Trail ${new Date().toLocaleDateString()}`;
@@ -188,6 +203,11 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
     }
   };
 
+  const handleResumeDraft = () => {
+    resumeDraft();
+    resumeRecording(gpsRecordingInterval);
+  };
+
   const PANEL: React.CSSProperties = {
     background: "rgba(2,8,24,0.92)",
     border: "1px solid rgba(0,229,255,0.25)",
@@ -199,11 +219,71 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
 
   const selectedInterval = INTERVALS.find((iv) => iv.ms === gpsRecordingInterval) ?? INTERVALS[1]!;
 
+  // Draft recovery banner — shown when not actively recording and a draft
+  // from an interrupted session was found on page load.
+  const draftBanner = !recording && draftTrail ? (
+    <div
+      data-testid="trail-draft-banner"
+      style={{
+        background: "rgba(245,158,11,0.1)",
+        border: "1px solid rgba(245,158,11,0.4)",
+        borderRadius: 3,
+        padding: "6px 8px",
+        marginBottom: 8,
+        color: "#f59e0b",
+        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+      }}
+    >
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠ Interrupted trail found</div>
+      <div style={{ color: "#e2e8f0", marginBottom: 6 }}>
+        {draftTrail.points.length} pts recorded before the page closed.
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <button
+          onClick={handleResumeDraft}
+          data-testid="trail-draft-resume-btn"
+          style={{
+            flex: 1,
+            background: "rgba(245,158,11,0.15)",
+            border: "1px solid rgba(245,158,11,0.5)",
+            borderRadius: 3,
+            color: "#f59e0b",
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+            padding: "3px 6px",
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          Resume
+        </button>
+        <button
+          onClick={discardDraft}
+          data-testid="trail-draft-discard-btn"
+          style={{
+            flex: 1,
+            background: "none",
+            border: "1px solid rgba(148,163,184,0.3)",
+            borderRadius: 3,
+            color: "#94a3b8",
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+            padding: "3px 6px",
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          Discard
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div data-testid="trail-recorder" style={{ ...FONT, ...PANEL }}>
       <div style={{ color: "#00e5ff", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.2em", marginBottom: 6, fontWeight: 700 }}>
         ⏺ GPS TRAIL
       </div>
+
+      {draftBanner}
 
       {!recording ? (
         <>
