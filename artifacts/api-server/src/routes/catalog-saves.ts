@@ -465,10 +465,10 @@ router.post("/datasets/point-radius-query", catalogReadRateLimit, validateBody(P
 // materializer fetches a small, survey-covered tile instead of the 40° × 18°
 // coverage bbox (which always times out or returns a near-flat grid).
 const RequestBboxSchema = z.object({
-  minLon: z.number().finite(),
-  minLat: z.number().finite(),
-  maxLon: z.number().finite(),
-  maxLat: z.number().finite(),
+  minLon: z.number().finite().min(-180).max(180),
+  minLat: z.number().finite().min(-90).max(90),
+  maxLon: z.number().finite().min(-180).max(180),
+  maxLat: z.number().finite().min(-90).max(90),
 });
 
 // Optional body: carries the originating area-request context so the server

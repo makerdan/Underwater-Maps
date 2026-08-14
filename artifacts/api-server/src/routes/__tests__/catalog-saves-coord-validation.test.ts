@@ -119,7 +119,8 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: () => (_req: unknown, _res: unknown, next: () => void) => next(),
-  getAuth: () => ({ userId: null }),
+  // Return a non-null userId so requireAuth (used by the save route) passes.
+  getAuth: () => ({ userId: "test-user" }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -252,5 +253,104 @@ describe("POST /datasets/bbox-query — valid coordinates pass through", () => {
         maxLon: VALID_BBOX.east,
       }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /datasets/catalog/:id/save — requestBbox coordinate range guards
+//
+// RequestBboxSchema enforces lat ∈ [-90, 90] and lon ∈ [-180, 180].
+// The validateBody middleware fires before the route handler so invalid
+// coordinates return 400 ("invalid_request") without touching the DB.
+// ---------------------------------------------------------------------------
+describe("POST /datasets/catalog/:id/save — requestBbox lat/lon range", () => {
+  const VALID_REQUEST_BBOX = { minLat: 50, maxLat: 60, minLon: -140, maxLon: -130 };
+  const SAVE_URL = "/datasets/catalog/test-id/save";
+
+  // --- minLat ---
+  it("returns 400 when requestBbox.minLat < -90", async () => {
+    const res = await request(makeApp())
+      .post(SAVE_URL)
+      .send({ requestBbox: { ...VALID_REQUEST_BBOX, minLat: -91 } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("returns 400 when requestBbox.minLat > 90", async () => {
+    const res = await request(makeApp())
+      .post(SAVE_URL)
+      .send({ requestBbox: { ...VALID_REQUEST_BBOX, minLat: 91 } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  // --- maxLat ---
+  it("returns 400 when requestBbox.maxLat < -90", async () => {
+    const res = await request(makeApp())
+      .post(SAVE_URL)
+      .send({ requestBbox: { ...VALID_REQUEST_BBOX, maxLat: -91 } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("returns 400 when requestBbox.maxLat > 90", async () => {
+    const res = await request(makeApp())
+      .post(SAVE_URL)
+      .send({ requestBbox: { ...VALID_REQUEST_BBOX, maxLat: 91 } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  // --- minLon ---
+  it("returns 400 when requestBbox.minLon < -180", async () => {
+    const res = await request(makeApp())
+      .post(SAVE_URL)
+      .send({ requestBbox: { ...VALID_REQUEST_BBOX, minLon: -181 } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("returns 400 when requestBbox.minLon > 180", async () => {
+    const res = await request(makeApp())
+      .post(SAVE_URL)
+      .send({ requestBbox: { ...VALID_REQUEST_BBOX, minLon: 181 } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  // --- maxLon ---
+  it("returns 400 when requestBbox.maxLon < -180", async () => {
+    const res = await request(makeApp())
+      .post(SAVE_URL)
+      .send({ requestBbox: { ...VALID_REQUEST_BBOX, maxLon: -181 } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("returns 400 when requestBbox.maxLon > 180", async () => {
+    const res = await request(makeApp())
+      .post(SAVE_URL)
+      .send({ requestBbox: { ...VALID_REQUEST_BBOX, maxLon: 181 } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  // --- boundary values pass schema validation ---
+  it("accepts requestBbox at lat/lon boundaries (-90/-180/90/180)", async () => {
+    const res = await request(makeApp())
+      .post(SAVE_URL)
+      .send({ requestBbox: { minLat: -90, maxLat: 90, minLon: -180, maxLon: 180 } });
+
+    // validateBody passes; downstream handler returns 404 (catalog id not
+    // found in the seeded mock) — not a 400 from coord-range validation.
+    expect(res.status).not.toBe(400);
   });
 });
