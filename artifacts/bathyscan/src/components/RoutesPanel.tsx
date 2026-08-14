@@ -193,8 +193,8 @@ export const RoutesPanel: React.FC = () => {
         return;
       }
       toast({
-        title: "Rename failed",
-        description: err instanceof Error ? err.message : "Could not rename route.",
+        title: "Couldn't rename",
+        description: "Please try again.",
         variant: "destructive",
       });
     },
