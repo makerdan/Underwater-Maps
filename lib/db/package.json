@@ -13,6 +13,7 @@
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
     "backfill:upload-dataset-ids": "tsx ./src/scripts/backfill-upload-dataset-ids.ts",
     "purge:null-userid-markers": "tsx ./src/scripts/purge-null-userid-markers.ts",
+    "audit:marker-bbox": "tsx src/scripts/audit-marker-dataset-bbox.ts",
     "test:unit": "node ../../scripts/run-with-timeout.mjs libDbUnit --label \"lib-db test:unit\" -- vitest run"
   },
   "dependencies": {
