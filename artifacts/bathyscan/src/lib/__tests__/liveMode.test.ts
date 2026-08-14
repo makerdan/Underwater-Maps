@@ -64,7 +64,7 @@ beforeEach(() => {
   if (trail.recording) trail.stopRecording();
   useTrailStore.getState().clearPoints();
   useCameraStore.setState({ gpsFollowState: "off" });
-  useSettingsStore.setState({ gpsRecordingInterval: 1000 });
+  useSettingsStore.setState({ gpsRecordingInterval: 1000, autoStartTrailRecording: true });
 });
 
 afterEach(() => {
@@ -249,6 +249,62 @@ describe("trailStore — setSamplingInterval", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("liveMode — autoStartTrailRecording=false", () => {
+  it("does NOT start trail recording when auto-start is disabled", () => {
+    useSettingsStore.setState({ autoStartTrailRecording: false });
+    enterLiveMode();
+    expect(useTrailStore.getState().recording).toBe(false);
+  });
+
+  it("still starts the GPS watch even when auto-start is disabled", () => {
+    useSettingsStore.setState({ autoStartTrailRecording: false });
+    enterLiveMode();
+    expect(watchPosition).toHaveBeenCalledTimes(1);
+    expect(useGpsStore.getState().watchId).toBe(42);
+  });
+
+  it("still enables Follow Me when GPS arrives and auto-start is disabled", () => {
+    useSettingsStore.setState({ autoStartTrailRecording: false });
+    enterLiveMode();
+    fireFix();
+    expect(useCameraStore.getState().gpsFollowState).not.toBe("off");
+  });
+
+  it("exiting Live does not pause a non-existent Live-started recording", () => {
+    useSettingsStore.setState({ autoStartTrailRecording: false });
+    enterLiveMode();
+    expect(useTrailStore.getState().recording).toBe(false);
+    exitLiveMode();
+    expect(useTrailStore.getState().recording).toBe(false);
+  });
+
+  it("a recording the user starts manually in Live mode survives Live exit when auto-start is off", () => {
+    useSettingsStore.setState({ autoStartTrailRecording: false });
+    enterLiveMode();
+    useTrailStore.getState().startRecording(1000);
+    expect(useTrailStore.getState().recording).toBe(true);
+    exitLiveMode();
+    // Live did not start the recording, so it must not stop it
+    expect(useTrailStore.getState().recording).toBe(true);
+  });
+});
+
+describe("liveMode — autoStartTrailRecording=true", () => {
+  it("starts trail recording when auto-start is enabled", () => {
+    useSettingsStore.setState({ autoStartTrailRecording: true });
+    enterLiveMode();
+    expect(useTrailStore.getState().recording).toBe(true);
+  });
+
+  it("pauses a Live-started recording on exit when auto-start is enabled", () => {
+    useSettingsStore.setState({ autoStartTrailRecording: true });
+    enterLiveMode();
+    expect(useTrailStore.getState().recording).toBe(true);
+    exitLiveMode();
+    expect(useTrailStore.getState().recording).toBe(false);
   });
 });
 

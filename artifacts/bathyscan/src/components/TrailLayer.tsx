@@ -21,12 +21,11 @@ import { decimateTrailPoints, MAX_RENDERED_TRAIL_POINTS } from "@/lib/trailDecim
 /** World units above the terrain surface the trail floats. */
 const TRAIL_Y_OFFSET = 0.35;
 
-const TRAIL_COLOR = "#fb923c";
-
 const noopRaycast = () => null;
 
 export const TrailLayer: React.FC = () => {
   const currentPoints = useTrailStore((s) => s.currentPoints);
+  const trailColor = useTrailStore((s) => s.color);
   const { terrain } = useAppState();
 
   const worldPoints = useMemo(() => {
@@ -55,7 +54,7 @@ export const TrailLayer: React.FC = () => {
     <group name="trail-layer">
       <Line
         points={worldPoints}
-        color={TRAIL_COLOR}
+        color={trailColor}
         lineWidth={2.5}
         transparent
         opacity={0.85}
@@ -64,7 +63,7 @@ export const TrailLayer: React.FC = () => {
       {/* Head dot — the boat's most recent sampled position. */}
       <mesh position={head} raycast={noopRaycast}>
         <sphereGeometry args={[0.5, 12, 12]} />
-        <meshBasicMaterial color={TRAIL_COLOR} transparent opacity={0.9} />
+        <meshBasicMaterial color={trailColor} transparent opacity={0.9} />
       </mesh>
     </group>
   );

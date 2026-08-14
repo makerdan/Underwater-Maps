@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
-import { db, gpsTrailsTable, gpsTrailPointsTable } from "@workspace/db";
+import { eq, and, gte } from "drizzle-orm";
+import { db, gpsTrailsTable, gpsTrailPointsTable, userSettingsTable } from "@workspace/db";
 import { GetTrailsResponse, GetTrailsResponseItem } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { createRateLimit } from "../middlewares/rateLimit.js";
@@ -59,6 +59,14 @@ const GetPointsQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(1000).default(200),
 });
 
+/** Days for each retention enum value (undefined = keep all). */
+const RETENTION_DAYS: Record<string, number | undefined> = {
+  "7": 7,
+  "30": 30,
+  "90": 90,
+  "all": undefined,
+};
+
 // ---------------------------------------------------------------------------
 // GET /trails?datasetId=
 // ---------------------------------------------------------------------------
@@ -72,15 +80,38 @@ router.get("/trails", requireAuth, asyncHandler(async (req, res): Promise<void> 
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const { datasetId } = parsed.data;
 
+  // Determine the trail retention cutoff from the user's settings row.
+  const [settingsRow] = await db
+    .select({ settings: userSettingsTable.settings })
+    .from(userSettingsTable)
+    .where(eq(userSettingsTable.userId, userId))
+    .limit(1);
+
+  const storedSettings = (settingsRow?.settings ?? {}) as Record<string, unknown>;
+  const retentionKey = typeof storedSettings["trailRetention"] === "string"
+    ? storedSettings["trailRetention"]
+    : "30"; // default matches DEFAULT_SETTINGS
+
+  const retentionDays = RETENTION_DAYS[retentionKey];
+  const cutoffDate = typeof retentionDays === "number"
+    ? new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000)
+    : null;
+
+  const whereClause = cutoffDate
+    ? and(
+        eq(gpsTrailsTable.userId, userId),
+        eq(gpsTrailsTable.datasetId, datasetId),
+        gte(gpsTrailsTable.startedAt, cutoffDate),
+      )
+    : and(
+        eq(gpsTrailsTable.userId, userId),
+        eq(gpsTrailsTable.datasetId, datasetId),
+      );
+
   const rows = await db
     .select()
     .from(gpsTrailsTable)
-    .where(
-      and(
-        eq(gpsTrailsTable.userId, userId),
-        eq(gpsTrailsTable.datasetId, datasetId),
-      ),
-    )
+    .where(whereClause)
     .orderBy(gpsTrailsTable.startedAt);
 
   res.json(validateResponse(GetTrailsResponse, rows, "GET /api/trails"));

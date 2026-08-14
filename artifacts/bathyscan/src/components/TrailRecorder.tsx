@@ -96,20 +96,29 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
   const startedAt = useTrailStore((s) => s.startedAt);
   const isOverflowing = useTrailStore((s) => s.isOverflowing);
   const startRecording = useTrailStore((s) => s.startRecording);
+  const resumeRecording = useTrailStore((s) => s.resumeRecording);
   const stopRecording = useTrailStore((s) => s.stopRecording);
+  const clearPoints = useTrailStore((s) => s.clearPoints);
+  const setStoreColor = useTrailStore((s) => s.setColor);
   const { terrain } = useAppState();
 
   const gpsRecordingInterval = useSettingsStore((s) => s.gpsRecordingInterval);
   const setGpsRecordingInterval = useSettingsStore((s) => s.setGpsRecordingInterval);
   const defaultTrailColor = useSettingsStore((s) => s.defaultTrailColor);
+  // When a recording is already in progress at mount time (e.g. started by
+  // liveMode before this component rendered), seed the UI colour from the
+  // session's stored color rather than the live settings value, so the swatch
+  // reflects what was captured when the session began.
+  const sessionColor = useTrailStore((s) => s.color);
 
   const [elapsed, setElapsed] = useState(0);
   const [saving, setSaving] = useState(false);
   const [trailName, setTrailName] = useState("");
-  // Seed from the user's persisted default; fall back to the first palette
-  // colour so the swatch row still shows a selected dot.
+  // Seed from the session's stored color when already recording; otherwise
+  // from the user's persisted default. Falls back to the first palette entry
+  // so the swatch row always shows a selected dot.
   const [trailColour, setTrailColour] = useState(
-    defaultTrailColor || TRAIL_COLOURS[0]!,
+    (recording ? sessionColor : defaultTrailColor) || TRAIL_COLOURS[0]!,
   );
 
   // Track mount state so async save callbacks never write to state after unmount.
@@ -226,7 +235,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
               {TRAIL_COLOURS.map((col) => (
                 <ViewscreenTooltip key={col} label={`Use ${col} for this trail`} side="top">
                   <button
-                    onClick={() => setTrailColour(col)}
+                    onClick={() => { setTrailColour(col); setStoreColor(col); }}
                     data-testid={`trail-colour-${col.replace("#", "")}`}
                     style={{
                       width: 14,
@@ -271,26 +280,72 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
             </div>
           </div>
 
-          <ViewscreenTooltip label="Begin recording your GPS trail" side="top">
-          <button
-            onClick={() => startRecording(gpsRecordingInterval)}
-            data-testid="trail-start-btn"
-            style={{
-              background: "rgba(239,68,68,0.15)",
-              border: "1px solid rgba(239,68,68,0.5)",
-              borderRadius: 3,
-              color: "#ef4444",
-              fontSize: "calc(15px * var(--bs-font-scale, 1))",
-              padding: "5px 10px",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              letterSpacing: "0.1em",
-              width: "100%",
-            }}
-          >
-            ⏺ START RECORDING
-          </button>
-          </ViewscreenTooltip>
+          {currentPoints.length > 0 ? (
+            /* Paused session (e.g. auto-started by Live mode then exited) —
+               offer Resume or Discard so the user never loses points silently. */
+            <div style={{ display: "flex", gap: 6 }}>
+              <ViewscreenTooltip label="Continue recording from where you left off" side="top">
+              <button
+                onClick={() => resumeRecording(gpsRecordingInterval)}
+                data-testid="trail-resume-btn"
+                style={{
+                  flex: 1,
+                  background: "rgba(52,211,153,0.13)",
+                  border: "1px solid rgba(52,211,153,0.45)",
+                  borderRadius: 3,
+                  color: "#34d399",
+                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                  padding: "5px 10px",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                ▶ RESUME
+              </button>
+              </ViewscreenTooltip>
+              <ViewscreenTooltip label="Discard the paused trail and start fresh" side="top">
+              <button
+                onClick={() => { clearPoints(); setTrailColour(defaultTrailColor || TRAIL_COLOURS[0]!); setStoreColor(defaultTrailColor || TRAIL_COLOURS[0]!); }}
+                data-testid="trail-discard-btn"
+                style={{
+                  background: "rgba(239,68,68,0.10)",
+                  border: "1px solid rgba(239,68,68,0.35)",
+                  borderRadius: 3,
+                  color: "#f87171",
+                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                  padding: "5px 10px",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                ✕
+              </button>
+              </ViewscreenTooltip>
+            </div>
+          ) : (
+            <ViewscreenTooltip label="Begin recording your GPS trail" side="top">
+            <button
+              onClick={() => startRecording(gpsRecordingInterval)}
+              data-testid="trail-start-btn"
+              style={{
+                background: "rgba(239,68,68,0.15)",
+                border: "1px solid rgba(239,68,68,0.5)",
+                borderRadius: 3,
+                color: "#ef4444",
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                padding: "5px 10px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                letterSpacing: "0.1em",
+                width: "100%",
+              }}
+            >
+              ⏺ START RECORDING
+            </button>
+            </ViewscreenTooltip>
+          )}
         </>
       ) : (
         <>

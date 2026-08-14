@@ -81,15 +81,21 @@ export function enterLiveMode(): void {
   const immediateError = useGpsStore.getState().error;
   if (immediateError) notifyGpsError(immediateError);
 
-  // Start trail recording unless a session is already running. If points
-  // from a previous (paused) session exist, resume that session rather than
-  // starting fresh — leaving Live pauses the trail, it never resets it.
+  // Start trail recording only when the user has auto-start enabled AND no
+  // session is already running. If points from a previous (paused) session
+  // exist, resume that session rather than starting fresh — leaving Live
+  // pauses the trail, it never resets it.
   const trail = useTrailStore.getState();
+  const autoStart = useSettingsStore.getState().autoStartTrailRecording;
   if (!trail.recording) {
-    const interval = useSettingsStore.getState().gpsRecordingInterval;
-    if (trail.currentPoints.length > 0) trail.resumeRecording(interval);
-    else trail.startRecording(interval);
-    trailStartedByLive = true;
+    if (autoStart) {
+      const interval = useSettingsStore.getState().gpsRecordingInterval;
+      if (trail.currentPoints.length > 0) trail.resumeRecording(interval);
+      else trail.startRecording(interval);
+      trailStartedByLive = true;
+    } else {
+      trailStartedByLive = false;
+    }
   } else {
     trailStartedByLive = false;
   }

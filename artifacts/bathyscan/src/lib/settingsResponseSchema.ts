@@ -173,7 +173,7 @@ export const settingsFieldSchemas = {
   // GPS / Trail
   autoStartTrailRecording: bool,
   defaultTrailColor: str,
-  gpsRecordingInterval: num,
+  gpsRecordingInterval: z.number().min(1000).optional().catch(undefined),
   trailRetention: z.enum(["7", "30", "90", "all"]).optional().catch(undefined),
   followResumeDelaySec: num,
 

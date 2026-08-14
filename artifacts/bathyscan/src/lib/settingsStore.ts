@@ -1389,7 +1389,8 @@ export const useSettingsStore = create<SettingsStore>()(
         // GPS / Trail
         setAutoStartTrailRecording: setter("autoStartTrailRecording"),
         setDefaultTrailColor: setter("defaultTrailColor"),
-        setGpsRecordingInterval: setter("gpsRecordingInterval"),
+        setGpsRecordingInterval: (ms: number) =>
+          set({ gpsRecordingInterval: Math.max(1000, ms) }),
         setTrailRetention: setter("trailRetention"),
         setFollowResumeDelaySec: setter("followResumeDelaySec"),
 

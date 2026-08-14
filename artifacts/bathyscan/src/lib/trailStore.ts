@@ -10,6 +10,7 @@
  */
 import { create } from "zustand";
 import { useGpsStore, type GpsPosition } from "./gpsStore";
+import { useSettingsStore } from "./settingsStore";
 
 export const MAX_TRAIL_POINTS = 10_000;
 
@@ -23,6 +24,8 @@ export interface TrailGpsPoint {
 
 interface TrailStore {
   recording: boolean;
+  /** Colour applied to this recording session — set from defaultTrailColor at startRecording time. */
+  color: string;
   currentPoints: TrailGpsPoint[];
   startedAt: number | null;
   intervalId: ReturnType<typeof setInterval> | null;
@@ -44,12 +47,19 @@ interface TrailStore {
    * No-op when not recording.
    */
   setSamplingInterval: (intervalMs: number) => void;
+  /**
+   * Update the session color while recording — call when the user picks a
+   * different colour in the TrailRecorder swatch so TrailLayer reflects the
+   * choice immediately without waiting for a new session.
+   */
+  setColor: (color: string) => void;
   addPoint: (pos: GpsPosition) => void;
   stopRecording: () => TrailGpsPoint[];
   clearPoints: () => void;
 }
 
 const DEFAULT_INTERVAL_MS = 10_000;
+const DEFAULT_TRAIL_COLOR = "#ff6600";
 
 type Get = () => TrailStore;
 type Set = (partial: Partial<TrailStore>) => void;
@@ -68,10 +78,17 @@ function beginRecording(get: Get, set: Set, intervalMs: number, preservePoints: 
   if (prevCleanup) window.removeEventListener("beforeunload", prevCleanup);
 
   const now = Date.now();
+  // On a fresh recording, pick up the user's current defaultTrailColor so
+  // TrailLayer and the save payload both reflect their preference.
+  const colorPatch = preservePoints
+    ? {}
+    : { color: useSettingsStore.getState().defaultTrailColor ?? DEFAULT_TRAIL_COLOR };
+
   set({
     recording: true,
     intervalId: null,
     beforeUnloadCleanup: null,
+    ...colorPatch,
     ...(preservePoints
       ? { startedAt: startedAt ?? now }
       : { currentPoints: [], startedAt: now, isOverflowing: false }),
@@ -100,6 +117,7 @@ function beginRecording(get: Get, set: Set, intervalMs: number, preservePoints: 
 
 export const useTrailStore = create<TrailStore>((set, get) => ({
   recording: false,
+  color: DEFAULT_TRAIL_COLOR,
   currentPoints: [],
   startedAt: null,
   intervalId: null,
@@ -113,6 +131,8 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
   resumeRecording: (intervalMs = DEFAULT_INTERVAL_MS) => {
     beginRecording(get, set, intervalMs, /* preservePoints */ true);
   },
+
+  setColor: (color) => set({ color }),
 
   setSamplingInterval: (intervalMs) => {
     const { recording, intervalId, beforeUnloadCleanup } = get();
