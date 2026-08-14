@@ -319,6 +319,25 @@ router.post("/datasets/bbox-query", catalogReadRateLimit, validateBody(BboxQuery
     return;
   }
 
+  // Semantic lat range validation — north/south are latitude values and must
+  // stay within the geographic bounds of the WGS84 ellipsoid.
+  if (north > 90 || north < -90) {
+    res.status(422).json({
+      error: "validation_error",
+      field: "north",
+      message: "north must be a finite latitude between -90 and 90",
+    });
+    return;
+  }
+  if (south < -90 || south > 90) {
+    res.status(422).json({
+      error: "validation_error",
+      field: "south",
+      message: "south must be a finite latitude between -90 and 90",
+    });
+    return;
+  }
+
   const results = await searchCatalog({
     dataType,
     waterType,
