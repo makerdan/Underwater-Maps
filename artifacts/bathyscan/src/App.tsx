@@ -118,6 +118,7 @@ import { useTimelineStore } from "@/lib/timelineStore";
 import { TimelineScrubBar } from "@/components/TimelineScrubBar";
 import { WhatsHereCard } from "@/components/WhatsHereCard";
 import { useWhatsHere } from "@/hooks/useWhatsHere";
+import { OfflineReadOnlyBanner, persistOfflineIdentity } from "@/components/OfflineReadOnlyBanner";
 
 
 function TestBridge(): null {
@@ -2316,9 +2317,12 @@ export async function getTokenWithRetry(
   const retried = await getToken();
   if (retried !== null) return retried;
   // If the device is offline, a null token is expected — the Clerk SDK cannot
-  // refresh without network access. Do not signal session expiry in this case;
-  // the auth-offline task will show the appropriate read-only banner instead.
-  if (!useOfflineStore.getState().isOnline) return null;
+  // refresh without network access. Enter offline read-only mode instead of
+  // showing the session-expired banner (reloading while offline does nothing).
+  if (!useOfflineStore.getState().isOnline) {
+    useOfflineStore.getState().setOfflineReadOnly(true);
+    return null;
+  }
   onExpired();
   return null;
 }
@@ -2339,6 +2343,21 @@ export async function getTokenWithRetry(
  */
 export function ClerkAuthTokenWirer() {
   const { session } = useClerk();
+  const { user } = useUser();
+
+  // Persist display name to localStorage on each successful sign-in so the
+  // OfflineReadOnlyBanner can show it while the device is offline.
+  useEffect(() => {
+    if (!user) return;
+    const firstName = user.firstName ?? "";
+    const lastInitial = user.lastName ? ` ${user.lastName[0]}.` : "";
+    const emailPrefix =
+      user.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "";
+    const displayName = firstName ? `${firstName}${lastInitial}` : emailPrefix;
+    persistOfflineIdentity({ displayName, userId: user.id });
+  }, [user]);
+
+  // Wire token getter into the API client.
   useEffect(() => {
     if (session) {
       setClerkLoaded(true);
@@ -2360,6 +2379,25 @@ export function ClerkAuthTokenWirer() {
       setAuthTokenGetter(null);
     };
   }, [session]);
+
+  // When connectivity is restored while in offline read-only mode, clear the
+  // banner and re-attempt the token.  If the token is still null (genuine
+  // expiry), the normal session-expired path fires.  If it succeeds, the app
+  // resumes silently without a page reload.
+  useEffect(() => {
+    if (!session) return;
+    const onExpired = DEV_AUTH_BYPASS ? () => {} : signalSessionExpired;
+    const unsubscribe = useOfflineStore.subscribe((state, prevState) => {
+      if (state.isOnline && !prevState.isOnline) {
+        useOfflineStore.getState().setOfflineReadOnly(false);
+        // Re-attempt immediately — network is back; 0 delay still does one
+        // retry internally before calling onExpired.
+        void getTokenWithRetry(() => session.getToken(), onExpired, 0);
+      }
+    });
+    return unsubscribe;
+  }, [session]);
+
   return null;
 }
 
@@ -2393,8 +2431,14 @@ function ClerkProviderWithRoutes() {
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
       {/* Session-expired banner — fixed overlay, non-dismissable. Fires when
-          persistent post-load 401s or getToken() null retries exhaust. */}
+          persistent post-load 401s or getToken() null retries exhaust.
+          Mutually exclusive with OfflineReadOnlyBanner: isOfflineReadOnly and
+          isSessionExpired should never both be true simultaneously. */}
       <SessionExpiredBanner />
+      {/* Offline read-only banner — shown instead of SessionExpiredBanner when
+          the token returns null because the device is offline rather than
+          because the session genuinely expired. Clears on reconnect. */}
+      <OfflineReadOnlyBanner />
       {/* Dev-only "API server down" warning banner. Mounted at the router
           root (not inside Main) so it is visible on every screen. The
           import.meta.env.DEV gate is statically false in production builds,
