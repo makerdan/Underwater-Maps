@@ -70,6 +70,7 @@ export const LivePanel: React.FC = () => {
   const gpsPosition = useGpsStore((s) => s.position);
   const gpsError = useGpsStore((s) => s.error);
   const gpsWatchId = useGpsStore((s) => s.watchId);
+  const startWatching = useGpsStore((s) => s.startWatching);
 
   const recording = useTrailStore((s) => s.recording);
   const pointCount = useTrailStore((s) => s.currentPoints.length);
@@ -116,6 +117,7 @@ export const LivePanel: React.FC = () => {
         ? "ACQUIRING…"
         : "OFF";
   const statusColor = gpsError ? "#f87171" : gpsActive ? "#34d399" : "#fbbf24";
+  const showRetryButton = (statusText === "ERROR" || statusText === "OFF") && gpsRetryAttempt === 0;
 
   const setGpsRecordingInterval = useSettingsStore((s) => s.setGpsRecordingInterval);
 
@@ -260,6 +262,30 @@ export const LivePanel: React.FC = () => {
             />
             Reconnecting… (attempt {gpsRetryAttempt} of {gpsMaxRetries})
           </div>
+        )}
+        {showRetryButton && (
+          <button
+            data-testid="live-gps-retry-btn"
+            aria-label="Retry GPS acquisition"
+            onClick={startWatching}
+            style={{
+              alignSelf: "flex-start",
+              marginTop: 4,
+              padding: "4px 10px",
+              borderRadius: 4,
+              border: "1px solid rgba(0,229,255,0.35)",
+              background: "rgba(0,229,255,0.07)",
+              color: "#00e5ff",
+              fontFamily: MONO,
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              fontWeight: 600,
+              letterSpacing: "0.1em",
+              cursor: "pointer",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+          >
+            ↺ Retry GPS
+          </button>
         )}
       </div>
 
