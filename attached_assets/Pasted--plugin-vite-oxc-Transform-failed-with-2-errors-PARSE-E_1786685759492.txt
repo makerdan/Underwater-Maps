@@ -1,0 +1,31 @@
+[plugin:vite:oxc] Transform failed with 2 errors:
+
+[PARSE_ERROR] Identifier `useOfflineStore` has already been declared
+    ╭─[ src/components/FindDataPanel.tsx:21:10 ]
+    │
+ 21 │ import { useOfflineStore } from "@/lib/offlineStore";
+    │          ───────┬───────  
+    │                 ╰───────── `useOfflineStore` has already been declared here
+    │ 
+ 55 │ import { useOfflineStore } from "@/lib/offlineStore";
+    │          ───────┬───────  
+    │                 ╰───────── It can not be redeclared here
+────╯
+
+[PARSE_ERROR] Identifier `isOnline` has already been declared
+      ╭─[ src/components/FindDataPanel.tsx:1038:9 ]
+      │
+ 1038 │   const isOnline = useOfflineStore((s) => s.isOnline);
+      │         ────┬───  
+      │             ╰───── `isOnline` has already been declared here
+      │ 
+ 1041 │   const isOnline = useOfflineStore((s) => s.isOnline);
+      │         ────┬───  
+      │             ╰───── It can not be redeclared here
+──────╯
+/home/runner/workspace/artifacts/bathyscan/src/components/FindDataPanel.tsx
+    at transformWithOxc (file:///home/runner/workspace/node_modules/.pnpm/vite@8.1.5_@types+node@25.6.2_esbuild@0.28.1_jiti@2.7.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/node.js:4033:19)
+    at TransformPluginContext.transform (file:///home/runner/workspace/node_modules/.pnpm/vite@8.1.5_@types+node@25.6.2_esbuild@0.28.1_jiti@2.7.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/node.js:4104:26)
+    at EnvironmentPluginContainer.transform (file:///home/runner/workspace/node_modules/.pnpm/vite@8.1.5_@types+node@25.6.2_esbuild@0.28.1_jiti@2.7.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/node.js:30201:51)
+    at async loadAndTransform (file:///home/runner/workspace/node_modules/.pnpm/vite@8.1.5_@types+node@25.6.2_esbuild@0.28.1_jiti@2.7.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/node.js:20124:26)
+    at async viteTransformMiddleware (file:///home/runner/workspace/node_modules/.pnpm/vite@8.1.5_@types+node@25.6.2_esbuild@0.28.1_jiti@2.7.0_terser@5.48.0_tsx@4.21.0_yaml@2.8.4/node_modules/vite/dist/node/chunks/node.js:24604:20)
