@@ -374,6 +374,7 @@ Authentication is handled by **Clerk** across all surfaces:
 | GET | `/raws-weather` | Fetch latest observation for a single AOOS RAWS station |
 | GET | `/water-temperature` | Fetch current sea-surface temperature for a lat/lon point |
 | GET | `/temperature-profile` | Fetch a depth-resolved temperature profile for a lat/lon point |
+| GET | `/env-pack` | Fetch a 14-day environmental data pack for an area |
 | GET | `/tidal` | Current tide height, current speed/direction, and next high/low event |
 | GET | `/tides/station` | Nearest NOAA tide station to a point |
 | GET | `/tides/:stationId` | 31-day window of 6-minute tide predictions for a station |
