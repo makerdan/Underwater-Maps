@@ -22,6 +22,13 @@ const router = Router();
 // ---------------------------------------------------------------------------
 // Shared zod schemas
 // ---------------------------------------------------------------------------
+
+// Min/max years accepted for GPS timestamps (server-side range guard).
+// Timestamps outside [2000, 2100] are almost certainly programmer errors,
+// clock corruption, or deliberate injection — not real recorded positions.
+const GPS_TIMESTAMP_MIN_YEAR = 2000;
+const GPS_TIMESTAMP_MAX_YEAR = 2100;
+
 const GpsPointSchema = z.object({
   lon: z.number(),
   lat: z.number(),
@@ -86,6 +93,49 @@ router.post("/trails", trailUploadRateLimit, requireAuth, dataMutationRateLimit,
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const { datasetId, name, colour, startedAt, endedAt, points } = res.locals.parsedBody;
 
+  // -------------------------------------------------------------------------
+  // Semantic validation — check each GPS point for geographic range and a
+  // reasonable timestamp.  Zod rejects wrong types (400); we return 422 for
+  // valid-typed but out-of-range values so the client can identify the bad
+  // point.  Checking here (post-parse) lets us give a precise field/value
+  // message rather than a generic schema error.
+  // -------------------------------------------------------------------------
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i] as { lon: number; lat: number; accuracy?: number; timestamp: number; seq?: number };
+
+    if (!Number.isFinite(p.lat) || p.lat < -90 || p.lat > 90) {
+      res.status(422).json({
+        error: "validation_error",
+        field: "lat",
+        index: i,
+        message: `points[${i}].lat must be a finite number between -90 and 90`,
+      });
+      return;
+    }
+
+    if (!Number.isFinite(p.lon) || p.lon < -180 || p.lon > 180) {
+      res.status(422).json({
+        error: "validation_error",
+        field: "lon",
+        index: i,
+        message: `points[${i}].lon must be a finite number between -180 and 180`,
+      });
+      return;
+    }
+
+    const d = new Date(p.timestamp);
+    const year = d.getUTCFullYear();
+    if (isNaN(d.getTime()) || year < GPS_TIMESTAMP_MIN_YEAR || year > GPS_TIMESTAMP_MAX_YEAR) {
+      res.status(422).json({
+        error: "validation_error",
+        field: "timestamp",
+        index: i,
+        message: `points[${i}].timestamp must be a valid date between ${GPS_TIMESTAMP_MIN_YEAR} and ${GPS_TIMESTAMP_MAX_YEAR}`,
+      });
+      return;
+    }
+  }
+
   const trail = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(gpsTrailsTable)
@@ -101,6 +151,8 @@ router.post("/trails", trailUploadRateLimit, requireAuth, dataMutationRateLimit,
       .returning();
 
     if (!created) throw new Error("Failed to create trail");
+
+    let actualCount = 0;
 
     if (points.length > 0) {
       const pointRows = points.map((p: { lon: number; lat: number; accuracy?: number; timestamp: number; seq?: number }, i: number) => ({
@@ -118,16 +170,34 @@ router.post("/trails", trailUploadRateLimit, requireAuth, dataMutationRateLimit,
       // onConflictDoNothing guards against retry-induced phantom points:
       // if the client retries a failed upload the (trail_id, seq) unique
       // index would otherwise produce a duplicate-key error.
+      //
+      // We use returning() to count only rows that were actually inserted —
+      // onConflictDoNothing silently skips duplicates, so points.length may
+      // overcount. pointCount must reflect actual stored rows so paginated
+      // retrieval returns the right total.
       const CHUNK = 500;
       for (let i = 0; i < pointRows.length; i += CHUNK) {
-        await tx
+        const inserted = await tx
           .insert(gpsTrailPointsTable)
           .values(pointRows.slice(i, i + CHUNK))
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          .returning({ id: gpsTrailPointsTable.id });
+        actualCount += inserted.length;
         if (i + CHUNK < pointRows.length) {
           await new Promise<void>((resolve) => setImmediate(resolve));
         }
       }
+    }
+
+    // Update pointCount to the number of rows actually written.  This differs
+    // from points.length only when the client submitted duplicate seq values
+    // (e.g. a retried upload that already partially landed).
+    if (actualCount !== points.length) {
+      await tx
+        .update(gpsTrailsTable)
+        .set({ pointCount: actualCount })
+        .where(eq(gpsTrailsTable.id, created.id));
+      return { ...created, pointCount: actualCount };
     }
 
     return created;

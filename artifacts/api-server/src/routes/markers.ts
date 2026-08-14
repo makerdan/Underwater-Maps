@@ -181,10 +181,15 @@ router.delete("/markers/:id", requireAuth, dataMutationRateLimit, validateParams
   // Collect all photo object paths from catch entries before the cascade delete
   // removes them. This lets us fire best-effort GCS cleanup immediately rather
   // than waiting up to 24 h for the orphaned-photos sweep.
+  //
+  // IMPORTANT: the WHERE clause must include userId so that an attacker who
+  // guesses or brute-forces another user's marker UUID cannot cause this
+  // handler to expose (prefetch) that user's photo storage paths — even though
+  // the subsequent marker delete is already owner-scoped and returns 404.
   const entries = await db
     .select({ photos: catchEntriesTable.photos })
     .from(catchEntriesTable)
-    .where(eq(catchEntriesTable.markerId, id));
+    .where(and(eq(catchEntriesTable.markerId, id), eq(catchEntriesTable.userId, userId)));
 
   const photoPaths = entries.flatMap((e) => e.photos ?? []);
 

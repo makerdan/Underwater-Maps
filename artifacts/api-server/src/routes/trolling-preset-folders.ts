@@ -17,6 +17,25 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when `err` is a PostgreSQL unique-constraint violation
+ * (SQLSTATE 23505). Used to translate DB-level duplicate-name errors into 409
+ * so concurrent requests that both pass the in-process fast-path check get a
+ * consistent response code.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "23505"
+  );
+}
+
 const router = Router();
 
 function folderToJson(row: typeof trollingPresetFoldersTable.$inferSelect) {
@@ -54,26 +73,42 @@ router.post("/trolling-preset-folders", requireAuth, dataMutationRateLimit, vali
   }
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
+  // Fast-path duplicate check — catches single-request duplicates cheaply.
+  // This is a read-then-write and is NOT race-safe for concurrent requests;
+  // the DB unique index on (userId, lower(name)) is the authoritative guard.
   const existing = await db
     .select()
     .from(trollingPresetFoldersTable)
     .where(eq(trollingPresetFoldersTable.userId, userId));
   if (existing.some((r) => r.name.toLowerCase() === name.toLowerCase())) {
     res
-      .status(400)
+      .status(409)
       .json({ error: "duplicate_name", details: "A folder with that name already exists" });
     return;
   }
 
-  const [created] = await db
-    .insert(trollingPresetFoldersTable)
-    .values({ userId, name })
-    .returning();
-  if (!created) {
-    res.status(500).json({ error: "db_error", details: "Could not create folder" });
-    return;
+  // The DB unique index on (userId, lower(name)) is the final arbiter for
+  // concurrent requests that both pass the fast-path check above.  Catch the
+  // unique violation and translate it to 409 so the client gets a consistent
+  // error code regardless of whether the duplicate was detected in-process or
+  // at the DB level.
+  try {
+    const [created] = await db
+      .insert(trollingPresetFoldersTable)
+      .values({ userId, name })
+      .returning();
+    if (!created) {
+      res.status(500).json({ error: "db_error", details: "Could not create folder" });
+      return;
+    }
+    res.status(201).json(folderToJson(created));
+  } catch (err: unknown) {
+    if (isUniqueViolation(err)) {
+      res.status(409).json({ error: "duplicate_name", details: "A folder with that name already exists" });
+      return;
+    }
+    throw err;
   }
-  res.status(201).json(folderToJson(created));
 }));
 
 router.patch("/trolling-preset-folders/:id", requireAuth, dataMutationRateLimit, validateBody(PatchTrollingPresetFoldersIdBody, "PATCH /api/trolling-preset-folders/:id"), asyncHandler(async (req, res) => {
