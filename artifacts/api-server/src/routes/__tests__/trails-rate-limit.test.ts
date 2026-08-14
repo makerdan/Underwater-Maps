@@ -17,21 +17,43 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
+// Full trail row returned by the tx.insert(gpsTrailsTable).returning() call.
+// All fields required by GetTrailsResponseItem must be present so that
+// validateResponse() in POST /api/trails succeeds and the handler returns 201.
+const MOCK_TRAIL_ROW = {
+  id: "trail-1",
+  userId: "user_trails_rate_limit_test",
+  datasetId: "glba_main",
+  name: "Test Trail",
+  colour: "#ff6600",
+  startedAt: new Date("2026-01-01T00:00:00.000Z"),
+  endedAt: new Date("2026-01-01T01:00:00.000Z"),
+  pointCount: 1,
+  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+};
+
 vi.mock("@workspace/db", () => ({
   db: {
     select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
     insert: () => ({
       values: () => ({
-        returning: () => Promise.resolve([{ id: "trail-1", pointCount: 1 }]),
+        returning: () => Promise.resolve([MOCK_TRAIL_ROW]),
       }),
     }),
     transaction: async <T>(cb: (tx: unknown) => Promise<T>) =>
       cb({
         insert: () => ({
           values: () => ({
-            returning: () =>
-              Promise.resolve([{ id: "trail-1", pointCount: 1 }]),
+            // Called by tx.insert(gpsTrailsTable).returning() (trail row)
+            returning: () => Promise.resolve([MOCK_TRAIL_ROW]),
+            // Called by tx.insert(gpsTrailPointsTable).onConflictDoNothing().returning()
+            onConflictDoNothing: () => ({
+              returning: () => Promise.resolve([{ id: "point-1" }]),
+            }),
           }),
+        }),
+        update: () => ({
+          set: () => ({ where: () => Promise.resolve([]) }),
         }),
       }),
     delete: () => ({ where: () => Promise.resolve([]) }),
@@ -112,7 +134,7 @@ describe("POST /api/trails — IP rate limit (10 req / min)", () => {
       .set("x-forwarded-for", ip)
       .send(VALID_TRAIL_BODY);
 
-    expect(allowed.status, "10th request should not be rate-limited").not.toBe(429);
+    expect(allowed.status, "10th request should succeed with 201").toBe(201);
 
     const blocked = await request(app)
       .post("/api/trails")
