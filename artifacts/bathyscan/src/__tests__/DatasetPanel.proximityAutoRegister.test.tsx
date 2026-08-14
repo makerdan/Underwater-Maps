@@ -13,6 +13,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import React from "react";
 import { render, act } from "@testing-library/react";
 import { DatasetPanel } from "@/components/DatasetPanel";
+import { useSettingsStore } from "@/lib/settingsStore";
 
 // ── Hoisted state ──────────────────────────────────────────────────────────────
 
@@ -333,5 +334,88 @@ describe("DatasetPanel — proximity auto-registration: preset catalog entries",
     });
 
     expect(terrainStoreMock.addSelectedToPool).toHaveBeenCalledWith("preset-ocean", "preset");
+  });
+});
+
+describe("DatasetPanel — proximity auto-registration: 10 user datasets with bbox", () => {
+  it("enrolls all 10 user datasets with bbox in the proximity pool on mount", async () => {
+    apiState.userDatasets = Array.from({ length: 10 }, (_, i) => ({
+      id: `user-ds-${i}`,
+      name: `Survey ${i}`,
+      minDepth: 0,
+      maxDepth: 100,
+      createdAt: "2024-01-01T00:00:00Z",
+      bbox: BBOX,
+    }));
+
+    await act(async () => {
+      render(React.createElement(DatasetPanel, {}));
+    });
+
+    const enrolledIds = terrainStoreMock.addSelectedToPool.mock.calls.map((c) => c[0] as string);
+    for (let i = 0; i < 10; i++) {
+      expect(enrolledIds).toContain(`user-ds-${i}`);
+    }
+    expect(enrolledIds).toHaveLength(10);
+    // Must use pool enrollment (no immediate activation), not addSelected.
+    expect(terrainStoreMock.addSelected).not.toHaveBeenCalled();
+  });
+
+  it("enrolls all 10 datasets with source='user'", async () => {
+    apiState.userDatasets = Array.from({ length: 10 }, (_, i) => ({
+      id: `user-ds-${i}`,
+      name: `Survey ${i}`,
+      minDepth: 0,
+      maxDepth: 100,
+      createdAt: "2024-01-01T00:00:00Z",
+      bbox: BBOX,
+    }));
+
+    await act(async () => {
+      render(React.createElement(DatasetPanel, {}));
+    });
+
+    for (const call of terrainStoreMock.addSelectedToPool.mock.calls) {
+      expect(call[1]).toBe("user");
+    }
+  });
+});
+
+describe("DatasetPanel — proximity auto-registration: proximityMode disabled", () => {
+  beforeEach(() => {
+    // Temporarily disable proximity mode via the mocked settings store.
+    (useSettingsStore.getState() as Record<string, unknown>)["proximityMode"] = false;
+  });
+
+  afterEach(() => {
+    // Restore to default (true) for subsequent tests.
+    (useSettingsStore.getState() as Record<string, unknown>)["proximityMode"] = true;
+  });
+
+  it("does not auto-enroll any user dataset when proximityMode is false", async () => {
+    apiState.userDatasets = [
+      { id: "user-ds-a", name: "Survey A", minDepth: 0, maxDepth: 100, createdAt: "2024-01-01T00:00:00Z", bbox: BBOX },
+      { id: "user-ds-b", name: "Survey B", minDepth: 0, maxDepth: 50, createdAt: "2024-01-01T00:00:00Z", bbox: BBOX },
+    ];
+
+    await act(async () => {
+      render(React.createElement(DatasetPanel, {}));
+    });
+
+    // No auto-registration when proximity mode is off.
+    expect(terrainStoreMock.addSelectedToPool).not.toHaveBeenCalled();
+    expect(terrainStoreMock.selectedIds).toHaveLength(0);
+  });
+
+  it("does not auto-enroll preset datasets when proximityMode is false", async () => {
+    apiState.presets = [
+      { id: "preset-bay", name: "Bay Survey", minDepth: 0, maxDepth: 200, bbox: BBOX },
+    ];
+
+    await act(async () => {
+      render(React.createElement(DatasetPanel, {}));
+    });
+
+    expect(terrainStoreMock.addSelectedToPool).not.toHaveBeenCalled();
   });
 });

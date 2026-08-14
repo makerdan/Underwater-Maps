@@ -439,6 +439,193 @@ describe("useDatasetProximityStreaming — evict-then-re-activate cycle", () => 
 });
 
 // ---------------------------------------------------------------------------
+// Tests — pool-cap stress: 20 datasets, MAX_ACTIVE_DATASETS cap
+// ---------------------------------------------------------------------------
+
+describe("useDatasetProximityStreaming — pool-cap stress: 20 datasets", () => {
+  it("never holds more than MAX_ACTIVE_DATASETS active at any sample tick across 5 ticks", () => {
+    setCameraAt(CAM_INSIDE_ORIGIN.lon, CAM_INSIDE_ORIGIN.lat);
+
+    const bboxMap: Record<string, DatasetBbox> = {};
+    for (let i = 0; i < 20; i++) {
+      const id = `ds-stress-${i}`;
+      addSelectedOnly(id);
+      bboxMap[id] = BBOX_ORIGIN; // all within LOAD_THRESHOLD_M
+    }
+
+    // Realistic onActivate: drives autoActivate so the store updates between loop iterations.
+    const onActivate = vi.fn((id: string) => {
+      useTerrainStore.getState().autoActivate(id);
+    });
+
+    renderStreamingHook(bboxMap, onActivate);
+
+    for (let tick = 0; tick < 5; tick++) {
+      act(() => { vi.advanceTimersByTime(TICK_MS); });
+      const active = useTerrainStore.getState().visibleDatasets;
+      expect(
+        active.length,
+        `Tick ${tick + 1}: expected ≤ ${MAX_ACTIVE_DATASETS} active, got ${active.length}`,
+      ).toBeLessThanOrEqual(MAX_ACTIVE_DATASETS);
+    }
+  });
+
+  it("does not double-activate any single dataset within one tick", () => {
+    setCameraAt(CAM_INSIDE_ORIGIN.lon, CAM_INSIDE_ORIGIN.lat);
+
+    const bboxMap: Record<string, DatasetBbox> = {};
+    for (let i = 0; i < 20; i++) {
+      const id = `ds-stress-${i}`;
+      addSelectedOnly(id);
+      bboxMap[id] = BBOX_ORIGIN;
+    }
+
+    const activatedIds: string[] = [];
+    const onActivate = vi.fn((id: string) => {
+      activatedIds.push(id);
+      useTerrainStore.getState().autoActivate(id);
+    });
+
+    renderStreamingHook(bboxMap, onActivate);
+    act(() => { vi.advanceTimersByTime(TICK_MS); }); // one tick only
+
+    const counts = new Map<string, number>();
+    for (const id of activatedIds) {
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    for (const [id, count] of counts.entries()) {
+      expect(count, `Dataset ${id} was activated ${count} times in one tick`).toBe(1);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — hysteresis: inside vs outside UNLOAD_THRESHOLD_M
+//
+// BBOX_ORIGIN has maxLat = 0.01°.  Camera at (0, lat) with lat > 0.01:
+//   dist ≈ (lat − 0.01) × 111 195 m/°
+//   lat = 0.036 → dist ≈ 2 891 m  (inside UNLOAD_THRESHOLD_M = 3 000 m)
+//   lat = 0.038 → dist ≈ 3 113 m  (outside UNLOAD_THRESHOLD_M)
+// ---------------------------------------------------------------------------
+
+describe("useDatasetProximityStreaming — hysteresis boundary", () => {
+  const CAM_NEAR_UNLOAD = { lon: 0, lat: 0.036 }; // ~2891 m from BBOX_ORIGIN — within threshold
+  const CAM_FAR_UNLOAD  = { lon: 0, lat: 0.038 }; // ~3113 m from BBOX_ORIGIN — beyond threshold
+
+  it("retains an active dataset when camera is ~2891 m from its bbox (inside UNLOAD_THRESHOLD_M)", () => {
+    addVisible("ds-a");
+    setCameraAt(CAM_NEAR_UNLOAD.lon, CAM_NEAR_UNLOAD.lat);
+
+    const autoEvictSpy = vi.spyOn(useTerrainStore.getState(), "autoEvict");
+    const onActivate = vi.fn();
+    renderStreamingHook({ "ds-a": BBOX_ORIGIN }, onActivate);
+
+    act(() => { vi.advanceTimersByTime(TICK_MS); });
+
+    // ~2891 m < UNLOAD_THRESHOLD_M (3000 m) — must NOT be evicted.
+    expect(autoEvictSpy).not.toHaveBeenCalledWith("ds-a");
+    expect(
+      useTerrainStore.getState().visibleDatasets.map((v) => v.datasetId),
+    ).toContain("ds-a");
+  });
+
+  it("evicts an active dataset when camera retreats to ~3113 m from its bbox (beyond UNLOAD_THRESHOLD_M)", () => {
+    addVisible("ds-a");
+    setCameraAt(CAM_FAR_UNLOAD.lon, CAM_FAR_UNLOAD.lat);
+
+    const autoEvictSpy = vi.spyOn(useTerrainStore.getState(), "autoEvict");
+    const onActivate = vi.fn();
+    renderStreamingHook({ "ds-a": BBOX_ORIGIN }, onActivate);
+
+    act(() => { vi.advanceTimersByTime(TICK_MS); });
+
+    // ~3113 m > UNLOAD_THRESHOLD_M (3000 m) — must be evicted.
+    expect(autoEvictSpy).toHaveBeenCalledWith("ds-a");
+  });
+
+  it("dataset remains in selectedIds after hysteresis eviction so it can re-activate on approach", () => {
+    addVisible("ds-a");
+    setCameraAt(CAM_FAR_UNLOAD.lon, CAM_FAR_UNLOAD.lat);
+
+    renderStreamingHook({ "ds-a": BBOX_ORIGIN }, vi.fn());
+    act(() => { vi.advanceTimersByTime(TICK_MS); });
+
+    // autoEvict removes from visibleDatasets but keeps in selectedIds.
+    expect(useTerrainStore.getState().selectedIds).toContain("ds-a");
+    expect(
+      useTerrainStore.getState().visibleDatasets.map((v) => v.datasetId),
+    ).not.toContain("ds-a");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — no-bbox slot fairness
+// ---------------------------------------------------------------------------
+
+describe("useDatasetProximityStreaming — no-bbox slot fairness", () => {
+  it("fills an open slot with a no-bbox dataset while far bbox-valid ones stay inactive", () => {
+    // Camera at origin.  FAR_AWAY bbox is ~555 km away — well beyond LOAD_THRESHOLD_M.
+    const BBOX_FAR_AWAY: DatasetBbox = { minLon: 5.0, maxLon: 5.1, minLat: 5.0, maxLat: 5.1 };
+    setCameraAt(CAM_INSIDE_ORIGIN.lon, CAM_INSIDE_ORIGIN.lat);
+
+    addSelectedOnly("ds-far-1");
+    addSelectedOnly("ds-far-2");
+    addSelectedOnly("ds-no-bbox", "user"); // no bbox entry → always-nearby fallback
+
+    const activatedIds: string[] = [];
+    const onActivate = vi.fn((id: string) => {
+      activatedIds.push(id);
+      useTerrainStore.getState().autoActivate(id);
+    });
+
+    renderStreamingHook(
+      {
+        "ds-far-1": BBOX_FAR_AWAY,
+        "ds-far-2": BBOX_FAR_AWAY,
+        // ds-no-bbox intentionally absent from bboxMap → no-bbox path
+      },
+      onActivate,
+    );
+
+    act(() => { vi.advanceTimersByTime(TICK_MS); });
+
+    // No-bbox dataset must fill a slot (always-nearby slot fill, Step 3 of hook).
+    expect(activatedIds).toContain("ds-no-bbox");
+    // Far bbox-valid datasets must NOT be activated (beyond LOAD_THRESHOLD_M).
+    expect(activatedIds).not.toContain("ds-far-1");
+    expect(activatedIds).not.toContain("ds-far-2");
+  });
+
+  it("does not evict a bbox-valid active dataset to admit a no-bbox queued one when no eviction candidate exists", () => {
+    // All active slots occupied by bbox-valid nearby datasets.
+    // A no-bbox queued dataset arrives — hook must NOT evict to make room for it
+    // (the evict-farthest path covers bbox candidates only; no-bbox activation goes
+    // through Step 3 which only fires when slots are free).
+    setCameraAt(CAM_INSIDE_ORIGIN.lon, CAM_INSIDE_ORIGIN.lat);
+
+    for (let i = 0; i < MAX_ACTIVE_DATASETS; i++) {
+      addVisible(`ds-fill-${i}`); // fills all active slots
+    }
+    addSelectedOnly("ds-no-bbox-queued", "user");
+
+    const onActivate = vi.fn();
+    renderStreamingHook(
+      // All active fill datasets have BBOX_ORIGIN bbox (inside UNLOAD_THRESHOLD — not evicted).
+      Object.fromEntries(
+        Array.from({ length: MAX_ACTIVE_DATASETS }, (_, i) => [`ds-fill-${i}`, BBOX_ORIGIN]),
+      ),
+      onActivate,
+    );
+
+    act(() => { vi.advanceTimersByTime(TICK_MS); });
+
+    // Slots full, no eviction candidate via bbox distance — no-bbox dataset stays queued.
+    expect(onActivate).not.toHaveBeenCalled();
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(MAX_ACTIVE_DATASETS);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests — multiple ticks
 // ---------------------------------------------------------------------------
 
