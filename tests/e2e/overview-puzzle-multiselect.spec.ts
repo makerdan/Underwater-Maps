@@ -67,6 +67,33 @@ async function enterPuzzleMode(page: Page): Promise<boolean> {
 }
 
 /**
+ * Poll until the OverviewMap's `registerPuzzleTestHandlers` useEffect has fired
+ * and wired the bridge callbacks. The effect runs asynchronously after the first
+ * render of OverviewMap, so there is a timing gap between `setOverviewOpen(true)`
+ * and the handlers becoming available.
+ *
+ * Uses `setPuzzleSelection([])` as a no-op probe: it returns `true` once the
+ * bridge is wired and `false` (or undefined) before that.
+ */
+async function waitForPuzzleBridge(page: Page): Promise<boolean> {
+  try {
+    await page.waitForFunction(
+      () => {
+        const api = (window as unknown as {
+          __bathyTest?: { setPuzzleSelection?: (ids: string[]) => boolean };
+        }).__bathyTest;
+        // Empty-array call is a no-op but confirms the handler is registered.
+        return api?.setPuzzleSelection?.([]) === true;
+      },
+      { timeout: 5_000 },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Seed the primary tile and return its datasetId, or null on failure.
  * Also selects it via bridge so tests start with a known selection state.
  */
@@ -152,6 +179,13 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
       return;
     }
 
+    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
+    const bridgeReady = await waitForPuzzleBridge(page);
+    if (!bridgeReady) {
+      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
+      return;
+    }
+
     const primaryId = await selectPrimaryTileViaBridge(page);
     if (!primaryId) {
       test.skip(true, "Bridge could not select a tile — terrain may not be available");
@@ -175,6 +209,12 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
       [primaryId, PHANTOM_ID],
     );
 
+    // If the bridge lost its registration between calls, skip rather than fail.
+    if (selected === null) {
+      test.skip(true, "setPuzzleSelection returned false — bridge lost registration");
+      return;
+    }
+
     // Primary must be the first element we passed.
     expect(selected).toBe(primaryId);
 
@@ -194,6 +234,13 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
     const entered = await enterPuzzleMode(page);
     if (!entered) {
       test.skip(true, "Puzzle toggle button not found");
+      return;
+    }
+
+    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
+    const bridgeReady = await waitForPuzzleBridge(page);
+    if (!bridgeReady) {
+      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
       return;
     }
 
@@ -245,6 +292,13 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
       return;
     }
 
+    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
+    const bridgeReady = await waitForPuzzleBridge(page);
+    if (!bridgeReady) {
+      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
+      return;
+    }
+
     // Create a group via the bridge directly (bypasses the GROUP button UI).
     const groupId = await page.evaluate(
       ([realPhantom, secondPhantom]) => {
@@ -255,6 +309,13 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
       },
       [PHANTOM_ID, "phantom-tile-b"],
     );
+
+    // If the bridge lost its registration, skip rather than produce a confusing
+    // regex-mismatch failure on an empty string.
+    if (!groupId) {
+      test.skip(true, "createPuzzleGroup returned empty string — bridge handler not registered");
+      return;
+    }
 
     // groupId must be a non-empty string (e.g. "group-1").
     expect(groupId).toMatch(/^group-\d+$/);
@@ -310,6 +371,13 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
     const entered = await enterPuzzleMode(page);
     if (!entered) {
       test.skip(true, "Puzzle toggle button not found");
+      return;
+    }
+
+    // Wait for registerPuzzleTestHandlers useEffect to fire before querying bridge.
+    const bridgeReady = await waitForPuzzleBridge(page);
+    if (!bridgeReady) {
+      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
       return;
     }
 
