@@ -1370,7 +1370,7 @@ function Main() {
                   onClick={() => setSidebarMode('plan')}
                   style={{
                     width: "100%",
-                    minWidth: 460,
+                    minWidth: "min(460px, 100vw - 32px)",
                     maxWidth: 520,
                     padding: "7px 12px",
                     background: "rgb(2,8,18)",
@@ -1441,7 +1441,7 @@ function Main() {
                 <div
                   data-testid="plan-timeline-hint"
                   style={{
-                    minWidth: 460,
+                    minWidth: "min(460px, 100vw - 32px)",
                     maxWidth: 520,
                     padding: "7px 10px",
                     background: "rgba(0,229,255,0.04)",
@@ -1612,7 +1612,7 @@ function Main() {
                     onClick={() => setQueryOpen(true)}
                     style={{
                       width: "100%",
-                      minWidth: 460,
+                      minWidth: "min(460px, 100vw - 32px)",
                       maxWidth: 520,
                       padding: "9px 14px",
                       background: "rgb(2,8,18)",

@@ -186,9 +186,10 @@ const PANEL: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   color: "#e2e8f0",
   fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
-  minWidth: 536,
+  minWidth: "min(536px, 100vw - 32px)",
   maxWidth: 616,
   backdropFilter: "blur(6px)",
+  overflowX: "auto",
 };
 
 const CYAN: React.CSSProperties = {

@@ -27,7 +27,7 @@ const PANEL: React.CSSProperties = {
   letterSpacing: "0.07em",
   userSelect: "none",
   pointerEvents: "auto",
-  minWidth: 460,
+  minWidth: "min(460px, 100vw - 32px)",
   maxWidth: 520,
 };
 
