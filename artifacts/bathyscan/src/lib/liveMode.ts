@@ -47,11 +47,18 @@ interface LiveModeState {
   gpsRetryAttempt: number;
   /** Maximum number of attempts; matches MAX_GPS_RETRIES so the UI can show "attempt X of N". */
   gpsMaxRetries: number;
+  /**
+   * True when all MAX_GPS_RETRIES attempts have been exhausted without a
+   * successful fix. Cleared on Live-mode exit (and re-entry) so the counter
+   * starts fresh when the user toggles Live mode off and on again.
+   */
+  gpsRecoveryFailed: boolean;
 }
 
 export const useLiveModeStore = create<LiveModeState>(() => ({
   gpsRetryAttempt: 0,
   gpsMaxRetries: 3, // kept in sync with MAX_GPS_RETRIES below
+  gpsRecoveryFailed: false,
 }));
 
 /** Unsubscribe handle for the GPS-store subscription active while in Live mode. */
@@ -90,7 +97,7 @@ export function __resetLiveModeForTests(): void {
     gpsRetryTimer = null;
   }
   gpsRetryCount = 0;
-  useLiveModeStore.setState({ gpsRetryAttempt: 0 });
+  useLiveModeStore.setState({ gpsRetryAttempt: 0, gpsRecoveryFailed: false });
 }
 
 export function isLiveModeActive(): boolean {
@@ -188,10 +195,10 @@ export function enterLiveMode(): void {
   unsubGps = useGpsStore.subscribe((state, prev) => {
     if (!liveActive) return;
     if (state.active && !prev.active) {
-      // Successful fix — reset the retry counter so the cap starts fresh
-      // the next time an error occurs.
+      // Successful fix — reset all retry state so the cap starts fresh and
+      // any failure banner is dismissed.
       gpsRetryCount = 0;
-      useLiveModeStore.setState({ gpsRetryAttempt: 0 });
+      useLiveModeStore.setState({ gpsRetryAttempt: 0, gpsRecoveryFailed: false });
       if (gpsRetryTimer !== null) {
         clearTimeout(gpsRetryTimer);
         gpsRetryTimer = null;
@@ -223,6 +230,10 @@ export function enterLiveMode(): void {
             useGpsStore.getState().startWatching();
           }
         }, GPS_RETRY_DELAY_MS);
+      } else if (!isPermissionDenied && gpsRetryCount >= MAX_GPS_RETRIES) {
+        // All automatic retry attempts have been exhausted. Surface a
+        // persistent failure state so the user knows they must act.
+        useLiveModeStore.setState({ gpsRecoveryFailed: true });
       }
     }
   });
@@ -239,7 +250,7 @@ export function exitLiveMode(): void {
     gpsRetryTimer = null;
   }
   gpsRetryCount = 0;
-  useLiveModeStore.setState({ gpsRetryAttempt: 0 });
+  useLiveModeStore.setState({ gpsRetryAttempt: 0, gpsRecoveryFailed: false });
 
   unsubGps?.();
   unsubGps = null;

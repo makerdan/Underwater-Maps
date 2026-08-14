@@ -358,6 +358,112 @@ describe("liveMode — GPS auto-retry on error", () => {
   });
 });
 
+describe("liveMode — gpsRecoveryFailed", () => {
+  it("is false while retries are still in progress", () => {
+    vi.useFakeTimers();
+    try {
+      enterLiveMode();
+      // Fire the first error — retry 1 of 3 is now scheduled.
+      useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", errorCode: 3, watchId: null, position: null });
+      expect(useLiveModeStore.getState().gpsRecoveryFailed).toBe(false);
+
+      // Advance and fire a second error — retry 2 of 3.
+      vi.advanceTimersByTime(5_000);
+      useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", errorCode: 3, watchId: null, position: null });
+      expect(useLiveModeStore.getState().gpsRecoveryFailed).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("becomes true after the 3rd failed attempt (all retries exhausted)", () => {
+    vi.useFakeTimers();
+    try {
+      enterLiveMode();
+
+      // Exhaust all 3 retries.
+      for (let i = 0; i < 3; i++) {
+        useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", errorCode: 3, watchId: null, position: null });
+        vi.advanceTimersByTime(5_000);
+      }
+      // All retries used — one more error tips us into the failed state.
+      useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", errorCode: 3, watchId: null, position: null });
+
+      expect(useLiveModeStore.getState().gpsRecoveryFailed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is cleared when the user exits Live mode", () => {
+    vi.useFakeTimers();
+    try {
+      enterLiveMode();
+
+      // Exhaust retries and trigger the failed state.
+      for (let i = 0; i < 3; i++) {
+        useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", errorCode: 3, watchId: null, position: null });
+        vi.advanceTimersByTime(5_000);
+      }
+      useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", errorCode: 3, watchId: null, position: null });
+      expect(useLiveModeStore.getState().gpsRecoveryFailed).toBe(true);
+
+      // Exiting (toggling Live mode off) must clear the flag.
+      exitLiveMode();
+      expect(useLiveModeStore.getState().gpsRecoveryFailed).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is cleared when a successful GPS fix arrives after exhaustion (banner dismisses without toggle)", () => {
+    vi.useFakeTimers();
+    try {
+      enterLiveMode();
+
+      // Exhaust all retries to trigger the failed state.
+      for (let i = 0; i < 3; i++) {
+        useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", errorCode: 3, watchId: null, position: null });
+        vi.advanceTimersByTime(5_000);
+      }
+      useGpsStore.setState({ active: false, error: "GPS timed out. Move to an area with better signal.", errorCode: 3, watchId: null, position: null });
+      expect(useLiveModeStore.getState().gpsRecoveryFailed).toBe(true);
+
+      // A successful fix (e.g. external GPS restores signal) must clear the banner.
+      // fireFix() would be dropped by the watchId guard (watchId is null after
+      // the last error), so simulate the fix by driving the store directly.
+      useGpsStore.setState({
+        active: true,
+        error: null,
+        errorCode: null,
+        watchId: 99,
+        position: { longitude: 142.1951, latitude: 11.3733, accuracy: 8, timestamp: 0 },
+      });
+      expect(useLiveModeStore.getState().gpsRecoveryFailed).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is not set for PERMISSION_DENIED errors (they have their own permanent message)", () => {
+    vi.useFakeTimers();
+    try {
+      enterLiveMode();
+      useGpsStore.setState({
+        active: false,
+        error: "GPS permission denied. Please enable location access in your browser settings.",
+        errorCode: 1,
+        watchId: null,
+        position: null,
+      });
+      vi.advanceTimersByTime(15_000);
+      expect(useLiveModeStore.getState().gpsRecoveryFailed).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("liveMode — exiting", () => {
   it("disables follow mode", () => {
     enterLiveMode();

@@ -79,6 +79,7 @@ export const LivePanel: React.FC = () => {
 
   const gpsRetryAttempt = useLiveModeStore((s) => s.gpsRetryAttempt);
   const gpsMaxRetries = useLiveModeStore((s) => s.gpsMaxRetries);
+  const gpsRecoveryFailed = useLiveModeStore((s) => s.gpsRecoveryFailed);
 
   const gpsFollowState = useCameraStore((s) => s.gpsFollowState);
   const gpsFollowMode = gpsFollowState !== "off";
@@ -117,7 +118,14 @@ export const LivePanel: React.FC = () => {
         ? "ACQUIRING…"
         : "OFF";
   const statusColor = gpsError ? "#f87171" : gpsActive ? "#34d399" : "#fbbf24";
-  const showRetryButton = (statusText === "ERROR" || statusText === "OFF") && gpsRetryAttempt === 0;
+
+  // Show the manual Retry GPS button only when idle/errored, not currently
+  // auto-retrying, and recovery has not fully failed (the failure banner
+  // already guides users to toggle Live mode instead).
+  const showRetryButton =
+    (statusText === "ERROR" || statusText === "OFF") &&
+    gpsRetryAttempt === 0 &&
+    !gpsRecoveryFailed;
 
   const setGpsRecordingInterval = useSettingsStore((s) => s.setGpsRecordingInterval);
 
@@ -236,7 +244,7 @@ export const LivePanel: React.FC = () => {
             {gpsError}
           </div>
         )}
-        {gpsRetryAttempt > 0 && (
+        {gpsRetryAttempt > 0 && !gpsRecoveryFailed && (
           <div
             data-testid="live-gps-retry-indicator"
             style={{
@@ -261,6 +269,26 @@ export const LivePanel: React.FC = () => {
               }}
             />
             Reconnecting… (attempt {gpsRetryAttempt} of {gpsMaxRetries})
+          </div>
+        )}
+        {gpsRecoveryFailed && (
+          <div
+            data-testid="live-gps-recovery-failed"
+            style={{
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              color: "#fca5a5",
+              letterSpacing: "0.06em",
+              lineHeight: 1.5,
+              padding: "6px 8px",
+              borderRadius: 4,
+              border: "1px solid rgba(239,68,68,0.45)",
+              background: "rgba(239,68,68,0.10)",
+            }}
+          >
+            <strong style={{ display: "block", marginBottom: 2, color: "#f87171", letterSpacing: "0.1em", textTransform: "uppercase", fontSize: "calc(11px * var(--bs-font-scale, 1))" }}>
+              Recovery failed
+            </strong>
+            Toggle Live mode off and on to retry GPS.
           </div>
         )}
         {showRetryButton && (
