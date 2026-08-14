@@ -22,8 +22,7 @@ import {
   type TerrainData,
 } from "@workspace/api-client-react";
 import {
-  serializeGpx,
-  serializeKml,
+  serializeAsync,
   buildExportFilename,
   downloadTextFile,
   mimeForFormat,
@@ -39,6 +38,7 @@ interface Props {
 export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const { toast } = useToast();
   const [format, setFormat] = useState<ExportFormat>("gpx");
+  const [isSerializing, setIsSerializing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef);
 
@@ -125,28 +125,32 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   );
 
   const handleDownload = () => {
-    if (nothingToExport || !isSuccess) return;
-    try {
-      const filename = buildExportFilename(exportData.datasetName, format);
-      const content =
-        format === "gpx" ? serializeGpx(exportData) : serializeKml(exportData);
-      downloadTextFile(content, filename, mimeForFormat(format));
-      toast({
-        title: "GPS export ready",
-        description: `Downloaded ${filename} (${markerCount} marker${
-          markerCount === 1 ? "" : "s"
-        }, ${exportData.routes.length} route${
-          exportData.routes.length === 1 ? "" : "s"
-        }).`,
+    if (nothingToExport || !isSuccess || isSerializing) return;
+    const filename = buildExportFilename(exportData.datasetName, format);
+    setIsSerializing(true);
+    serializeAsync(exportData, format)
+      .then((content) => {
+        downloadTextFile(content, filename, mimeForFormat(format));
+        toast({
+          title: "GPS export ready",
+          description: `Downloaded ${filename} (${markerCount} marker${
+            markerCount === 1 ? "" : "s"
+          }, ${exportData.routes.length} route${
+            exportData.routes.length === 1 ? "" : "s"
+          }).`,
+        });
+        onClose();
+      })
+      .catch((err: unknown) => {
+        toast({
+          title: "Export failed",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      })
+      .finally(() => {
+        setIsSerializing(false);
       });
-      onClose();
-    } catch (err) {
-      toast({
-        title: "Export failed",
-        description: err instanceof Error ? err.message : String(err),
-        variant: "destructive",
-      });
-    }
   };
 
   const body = (
@@ -380,14 +384,15 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             <button
               onClick={handleDownload}
               data-testid="gps-export-confirm"
-              disabled={!isSuccess || nothingToExport}
+              disabled={!isSuccess || nothingToExport || isSerializing}
+              aria-busy={isSerializing}
               style={{
                 ...btnStyle("primary"),
-                opacity: (!isSuccess || nothingToExport) ? 0.5 : 1,
-                cursor: (!isSuccess || nothingToExport) ? "not-allowed" : "pointer",
+                opacity: (!isSuccess || nothingToExport || isSerializing) ? 0.5 : 1,
+                cursor: (!isSuccess || nothingToExport || isSerializing) ? "not-allowed" : "pointer",
               }}
             >
-              Download
+              {isSerializing ? "Downloading…" : "Download"}
             </button>
           </div>
         </div>

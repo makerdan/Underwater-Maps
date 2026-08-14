@@ -77,6 +77,7 @@ vi.mock("@/lib/gpsExport", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/gpsExport")>();
   return {
     ...original,
+    serializeAsync: vi.fn().mockResolvedValue("<gpx/>"),
     downloadTextFile: vi.fn(),
     triggerBlobDownload: vi.fn(),
   };

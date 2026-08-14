@@ -245,6 +245,57 @@ export function mimeForFormat(format: ExportFormat): string {
     : "application/vnd.google-earth.kml+xml";
 }
 
+/**
+ * Serialize GPS data off the main thread using a Web Worker.
+ *
+ * Spawns a short-lived worker, posts the export data, and resolves with the
+ * serialized string. The worker is terminated after the first response.
+ * Falls back to synchronous serialization when `Worker` is not available
+ * (e.g. test environments that don't polyfill it).
+ *
+ * @throws if serialization fails inside the worker.
+ */
+export function serializeAsync(
+  data: ExportData,
+  format: ExportFormat,
+): Promise<string> {
+  // Synchronous fallback for environments without Worker (e.g. jsdom in tests).
+  if (typeof Worker === "undefined") {
+    try {
+      return Promise.resolve(
+        format === "gpx" ? serializeGpx(data) : serializeKml(data),
+      );
+    } catch (err) {
+      return Promise.reject(err instanceof Error ? err : new Error(String(err)));
+    }
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const worker = new Worker(
+      new URL("./gpsExport.worker.ts", import.meta.url),
+      { type: "module" },
+    );
+
+    worker.onmessage = (
+      e: MessageEvent<{ ok: boolean; content?: string; error?: string }>,
+    ) => {
+      worker.terminate();
+      if (e.data.ok) {
+        resolve(e.data.content ?? "");
+      } else {
+        reject(new Error(e.data.error ?? "Serialization failed"));
+      }
+    };
+
+    worker.onerror = (err) => {
+      worker.terminate();
+      reject(new Error(err.message ?? "Worker error"));
+    };
+
+    worker.postMessage({ data, format });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
