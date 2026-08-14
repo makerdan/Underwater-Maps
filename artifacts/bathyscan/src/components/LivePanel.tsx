@@ -285,6 +285,24 @@ export const LivePanel: React.FC = () => {
           >
             {recording ? "RECORDING" : "STOPPED"}
           </span>
+          {recording && !gpsActive && (
+            <span
+              data-testid="live-trail-gps-lost"
+              style={{
+                fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                color: "#fbbf24",
+                background: "rgba(251,191,36,0.12)",
+                border: "1px solid rgba(251,191,36,0.35)",
+                borderRadius: 3,
+                padding: "1px 5px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ⚠ NO GPS
+            </span>
+          )}
           <span
             data-testid="live-trail-point-count"
             style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", letterSpacing: "0.1em" }}

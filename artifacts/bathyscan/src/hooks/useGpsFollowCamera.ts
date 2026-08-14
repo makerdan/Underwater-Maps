@@ -40,11 +40,23 @@ export function useGpsFollowCamera(): void {
   const checkState = useRef({ toastFired: false });
 
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
+  const gpsActive = useGpsStore((s) => s.active);
 
   useEffect(() => {
     useCameraStore.getState().setGpsFollowMode(false);
     checkState.current.toastFired = false;
   }, [primaryDatasetId]);
+
+  // Auto-resume follow when GPS signal recovers from a signal-loss pause.
+  // Only fires for signal-loss pauses — user-interaction pauses (where the
+  // user manually panned the camera) are intentional and not auto-resumed here.
+  useEffect(() => {
+    if (!gpsActive) return;
+    const cam = useCameraStore.getState();
+    if (cam.gpsFollowState === "paused" && cam.pauseReason === "signal-loss") {
+      cam.resumeFollow();
+    }
+  }, [gpsActive]);
 
   useFrame(() => {
     // GPS-loss / out-of-bounds checks (shared with the dev stub watcher);

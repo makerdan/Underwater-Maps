@@ -168,7 +168,7 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
     unmount();
   });
 
-  it("disables follow mode when GPS becomes inactive mid-follow (no handoff)", () => {
+  it("signal-loss pauses (not disables) follow when GPS becomes inactive mid-follow (no handoff)", () => {
     const { unmount } = mountHook();
 
     act(() => {
@@ -179,7 +179,10 @@ describe("useGpsFollowCamera — bounds-exit behaviour", () => {
 
     runFrame();
 
-    expect(useCameraStore.getState().gpsFollowState).toBe("off");
+    // GPS inactive → signal-loss pause so auto-resume can re-engage on recovery.
+    // It must NOT be 'off' — that would prevent the follow camera recovering.
+    expect(useCameraStore.getState().gpsFollowState).toBe("paused");
+    expect(useCameraStore.getState().pauseReason).toBe("signal-loss");
     expect(handoffSpy).not.toHaveBeenCalled();
     unmount();
   });

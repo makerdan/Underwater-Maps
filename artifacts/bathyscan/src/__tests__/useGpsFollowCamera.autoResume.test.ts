@@ -112,6 +112,7 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
 
     useCameraStore.setState({
       gpsFollowState: "off",
+      pauseReason: null,
       followLastInteractionAt: 0,
     });
     useGpsStore.setState({ active: false, position: null, error: null, watchId: null });
@@ -235,7 +236,7 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
     unmount();
   });
 
-  it("GPS loss while paused fully disables follow mode (no auto-resume)", () => {
+  it("GPS loss while interaction-paused stays paused (interaction reason preserved — no auto-resume on recovery)", () => {
     const { unmount } = mountHook();
     startFollowing();
 
@@ -245,7 +246,13 @@ describe("useGpsFollowCamera — interaction pause / auto-resume", () => {
     });
 
     runFrame();
-    expect(useCameraStore.getState().gpsFollowState).toBe("off");
+    // GPS loss while interaction-paused is a no-op on the pause reason:
+    // pauseFollowForSignalLoss only transitions from 'following', not 'paused'.
+    // State stays 'paused' with reason 'interaction' — auto-resume on GPS
+    // recovery will NOT fire because the recovery effect only fires for
+    // pauseReason === 'signal-loss'.
+    expect(useCameraStore.getState().gpsFollowState).toBe("paused");
+    expect(useCameraStore.getState().pauseReason).toBe("interaction");
     unmount();
   });
 

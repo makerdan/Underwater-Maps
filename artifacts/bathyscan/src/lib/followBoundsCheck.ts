@@ -35,7 +35,16 @@ export function runFollowBoundsCheck(state: FollowCheckState): boolean {
   const position = useGpsStore.getState().position;
   const activeGrid = useTerrainStore.getState().activeGrid;
 
-  if (!gpsActive || !position || !activeGrid) {
+  // GPS signal lost (transient) — pause with signal-loss reason so the
+  // follow camera can auto-resume once the signal returns. Only transitions
+  // 'following' → 'paused'; a pre-existing signal-loss pause is left alone.
+  if (!gpsActive) {
+    useCameraStore.getState().pauseFollowForSignalLoss();
+    return false;
+  }
+
+  // Missing position or grid — structural issue, fully disable follow.
+  if (!position || !activeGrid) {
     useCameraStore.getState().setGpsFollowMode(false);
     return false;
   }

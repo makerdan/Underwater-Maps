@@ -53,14 +53,29 @@ describe("runFollowBoundsCheck", () => {
     expect(handleFollowOutOfBounds).not.toHaveBeenCalled();
   });
 
-  it("disables follow when GPS is not active", () => {
+  it("signal-loss pause (not full disable) when GPS is not active", () => {
     useGpsStore.setState({ active: false });
     expect(runFollowBoundsCheck(freshState())).toBe(false);
-    expect(useCameraStore.getState().gpsFollowState).toBe("off");
+    // GPS signal loss → paused with reason 'signal-loss', NOT 'off',
+    // so auto-resume can re-engage follow once the signal returns.
+    expect(useCameraStore.getState().gpsFollowState).toBe("paused");
+    expect(useCameraStore.getState().pauseReason).toBe("signal-loss");
     expect(handleFollowOutOfBounds).not.toHaveBeenCalled();
   });
 
-  it("disables follow when no terrain grid is loaded", () => {
+  it("signal-loss pause is idempotent — repeated calls while GPS lost stay paused", () => {
+    useGpsStore.setState({ active: false });
+    runFollowBoundsCheck(freshState());
+    expect(useCameraStore.getState().gpsFollowState).toBe("paused");
+
+    // Call again (next frame) — still paused, not toggled to off
+    const state = freshState();
+    expect(runFollowBoundsCheck(state)).toBe(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe("paused");
+    expect(useCameraStore.getState().pauseReason).toBe("signal-loss");
+  });
+
+  it("fully disables follow when no terrain grid is loaded (structural issue)", () => {
     useTerrainStore.setState({ activeGrid: null } as never);
     expect(runFollowBoundsCheck(freshState())).toBe(false);
     expect(useCameraStore.getState().gpsFollowState).toBe("off");

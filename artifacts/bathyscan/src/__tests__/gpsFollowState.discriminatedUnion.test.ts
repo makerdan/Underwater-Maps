@@ -21,7 +21,11 @@ import { useCameraStore } from "@/lib/cameraStore";
 import type { GpsFollowState } from "@/lib/cameraStore";
 
 beforeEach(() => {
-  useCameraStore.setState({ gpsFollowState: "off", followLastInteractionAt: 0 });
+  useCameraStore.setState({
+    gpsFollowState: "off",
+    pauseReason: null,
+    followLastInteractionAt: 0,
+  });
 });
 
 describe("GpsFollowState discriminated union", () => {
@@ -81,5 +85,55 @@ describe("GpsFollowState discriminated union", () => {
     const s2 = useCameraStore.getState().gpsFollowState;
     expect(s2).not.toBe("paused");
     expect(s2).not.toBe("following");
+  });
+
+  it("pauseFollowForInteraction sets pauseReason to 'interaction'", () => {
+    useCameraStore.setState({ gpsFollowState: "following" });
+    useCameraStore.getState().pauseFollowForInteraction();
+    expect(useCameraStore.getState().gpsFollowState).toBe<GpsFollowState>("paused");
+    expect(useCameraStore.getState().pauseReason).toBe("interaction");
+  });
+
+  it("pauseFollowForSignalLoss while 'following' → paused with reason 'signal-loss'", () => {
+    useCameraStore.setState({ gpsFollowState: "following" });
+    useCameraStore.getState().pauseFollowForSignalLoss();
+    expect(useCameraStore.getState().gpsFollowState).toBe<GpsFollowState>("paused");
+    expect(useCameraStore.getState().pauseReason).toBe("signal-loss");
+  });
+
+  it("pauseFollowForSignalLoss while 'off' → no-op", () => {
+    useCameraStore.getState().pauseFollowForSignalLoss();
+    expect(useCameraStore.getState().gpsFollowState).toBe<GpsFollowState>("off");
+    expect(useCameraStore.getState().pauseReason).toBeNull();
+  });
+
+  it("pauseFollowForSignalLoss while already signal-loss paused → no-op (idempotent)", () => {
+    useCameraStore.setState({ gpsFollowState: "paused", pauseReason: "signal-loss" });
+    useCameraStore.getState().pauseFollowForSignalLoss();
+    expect(useCameraStore.getState().gpsFollowState).toBe<GpsFollowState>("paused");
+    expect(useCameraStore.getState().pauseReason).toBe("signal-loss");
+  });
+
+  it("resumeFollow clears pauseReason", () => {
+    useCameraStore.setState({ gpsFollowState: "paused", pauseReason: "signal-loss" });
+    useCameraStore.getState().resumeFollow();
+    expect(useCameraStore.getState().gpsFollowState).toBe<GpsFollowState>("following");
+    expect(useCameraStore.getState().pauseReason).toBeNull();
+  });
+
+  it("setGpsFollowMode(false) while paused clears pauseReason", () => {
+    useCameraStore.setState({ gpsFollowState: "paused", pauseReason: "interaction" });
+    useCameraStore.getState().setGpsFollowMode(false);
+    expect(useCameraStore.getState().gpsFollowState).toBe<GpsFollowState>("off");
+    expect(useCameraStore.getState().pauseReason).toBeNull();
+  });
+
+  it("pauseReason is null when state is 'off'", () => {
+    expect(useCameraStore.getState().pauseReason).toBeNull();
+  });
+
+  it("pauseReason is null when state is 'following'", () => {
+    useCameraStore.setState({ gpsFollowState: "following" });
+    expect(useCameraStore.getState().pauseReason).toBeNull();
   });
 });
