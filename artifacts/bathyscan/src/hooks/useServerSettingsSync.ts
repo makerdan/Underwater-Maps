@@ -27,6 +27,7 @@ import {
   getGetSettingsQueryKey,
 } from "@workspace/api-client-react";
 import { useSettingsStore, getDataSnapshot } from "@/lib/settingsStore";
+import { parseSettingsResponse } from "@/lib/settingsResponseSchema";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { usePanelCollapseStore, type PanelId, DEFAULTS as PANEL_DEFAULTS } from "@/lib/panelCollapseStore";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
@@ -458,7 +459,21 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       // Skip flag or a slider nudge made before the first GET settled).
       const settingsClean = _settingsEditRev === _ackedSettingsRev;
       if (settingsClean) {
-        hydrateFromServer(serverSettings as Parameters<typeof hydrateFromServer>[0]);
+        const parsed = parseSettingsResponse(serverSettings);
+        if (!parsed.ok) {
+          console.warn(
+            "[useServerSettingsSync] Settings response has an unexpected shape — hydration skipped.",
+            parsed.reason,
+          );
+        } else {
+          if (parsed.skippedKeys.length > 0) {
+            console.warn(
+              "[useServerSettingsSync] The following settings fields were skipped due to type mismatches:",
+              parsed.skippedKeys,
+            );
+          }
+          hydrateFromServer(parsed.value as Parameters<typeof hydrateFromServer>[0]);
+        }
       } else if (
         isFirstHydration &&
         !_onboardingLocallyEdited &&
