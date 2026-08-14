@@ -16,7 +16,10 @@ export { isProduction } from "./production.js";
 
 export interface EnvIssue {
   name: string;
-  value: string;
+  /** Length of the original raw value — safe to log/persist. */
+  valueLength: number;
+  /** Short prefix of the raw value (at most 3 chars + "…") — safe to log/persist. */
+  valuePreview: string;
   problem: string;
   /** When true the caller must abort startup — the configuration is unsafe for production. */
   critical?: boolean;
@@ -69,51 +72,56 @@ const ORIGIN_RE = /^https?:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?$/;
 export function validateStartupEnv(): EnvIssue[] {
   const issues: EnvIssue[] = [];
 
+  /** Build a safe-field object for a raw value without retaining the raw string. */
+  function safeFields(raw: string): { valueLength: number; valuePreview: string } {
+    return { valueLength: raw.length, valuePreview: raw.slice(0, 3) + "…" };
+  }
+
   const adminIdsRaw = process.env["ADMIN_USER_IDS"];
   if (adminIdsRaw !== undefined && adminIdsRaw !== "") {
-    for (const token of adminIdsRaw.split(",")) {
+    adminIdsRaw.split(",").forEach((token, idx) => {
       const trimmed = token.trim();
       if (trimmed === "") {
         issues.push({
           name: "ADMIN_USER_IDS",
-          value: adminIdsRaw,
-          problem: "contains an empty entry (double comma or trailing comma)",
+          ...safeFields(adminIdsRaw),
+          problem: `entry at position ${idx + 1} is empty (double comma or trailing comma)`,
         });
       } else if (!ADMIN_ID_RE.test(trimmed)) {
         issues.push({
           name: "ADMIN_USER_IDS",
-          value: adminIdsRaw,
-          problem: `entry '${trimmed}' is not a valid user id token`,
+          ...safeFields(adminIdsRaw),
+          problem: `entry at position ${idx + 1} is not a valid user id token`,
         });
       }
-    }
+    });
   }
 
   const originsRaw = process.env["ALLOWED_ORIGINS"];
   if (originsRaw !== undefined && originsRaw !== "") {
-    for (const token of originsRaw.split(",")) {
+    originsRaw.split(",").forEach((token, idx) => {
       const trimmed = token.trim();
       if (trimmed === "") {
         issues.push({
           name: "ALLOWED_ORIGINS",
-          value: originsRaw,
-          problem: "contains an empty entry (double comma or trailing comma)",
+          ...safeFields(originsRaw),
+          problem: `entry at position ${idx + 1} is empty (double comma or trailing comma)`,
         });
       } else if (!ORIGIN_RE.test(trimmed)) {
         issues.push({
           name: "ALLOWED_ORIGINS",
-          value: originsRaw,
-          problem: `entry '${trimmed}' is not a valid http(s) origin (no path or trailing slash allowed)`,
+          ...safeFields(originsRaw),
+          problem: `entry at position ${idx + 1} is not a valid http(s) origin (no path or trailing slash allowed)`,
         });
       }
-    }
+    });
   }
 
   // OpenAI model name overrides: must be non-empty strings when set.
   for (const name of ["OPENAI_CLASSIFY_MODEL", "OPENAI_HELP_MODEL", "OPENAI_QUERY_MODEL"]) {
     const raw = process.env[name];
     if (raw !== undefined && raw.trim() === "") {
-      issues.push({ name, value: raw, problem: "must be a non-empty model name string" });
+      issues.push({ name, ...safeFields(raw), problem: "must be a non-empty model name string" });
     }
   }
 
@@ -128,7 +136,7 @@ export function validateStartupEnv(): EnvIssue[] {
   ]) {
     const raw = process.env[name];
     if (raw !== undefined && raw !== "" && !/^\d+$/.test(raw.trim())) {
-      issues.push({ name, value: raw, problem: "is not a positive integer" });
+      issues.push({ name, ...safeFields(raw), problem: "is not a positive integer" });
     }
   }
 
@@ -143,7 +151,7 @@ export function validateStartupEnv(): EnvIssue[] {
   if ((bucketAdminFlag === "1" || bucketAdminFlag === "true") && isProduction) {
     issues.push({
       name: "BUCKET_MONITOR_ADMIN",
-      value: bucketAdminFlag,
+      ...safeFields(bucketAdminFlag),
       problem:
         "must not be set in production — it grants every authenticated user full admin access. Remove it or restrict access via ADMIN_USER_IDS instead.",
       critical: true,
@@ -151,7 +159,7 @@ export function validateStartupEnv(): EnvIssue[] {
   }
 
   for (const issue of issues) {
-    const safeMeta = { name: issue.name, valueLength: issue.value.length, valuePreview: issue.value.slice(0, 3) + "…" };
+    const safeMeta = { name: issue.name, valueLength: issue.valueLength, valuePreview: issue.valuePreview };
     if (issue.critical) {
       logger.error(
         safeMeta,

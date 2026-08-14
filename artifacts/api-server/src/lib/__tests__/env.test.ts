@@ -120,6 +120,41 @@ describe("validateStartupEnv — log object must not contain raw value", () => {
     expect(preview.length).toBeLessThanOrEqual(8); // "htt…" style
     expect(preview).not.toBe("https://example.com/path/leak");
   });
+
+  it("does not embed the invalid token in the problem string or logger message for ADMIN_USER_IDS", () => {
+    // Use a unique sentinel so we can search for it across all fields and messages.
+    const secret = "sk_live_SECRET_TOKEN_xyz987";
+    vi.stubEnv("ADMIN_USER_IDS", secret);
+    const issues = validateStartupEnv();
+
+    // The returned issue must not contain the raw value anywhere.
+    for (const issue of issues) {
+      for (const v of Object.values(issue)) {
+        expect(String(v)).not.toContain(secret);
+      }
+    }
+
+    // The logger message string (second argument to mockWarn) must also be clean.
+    for (const call of (mockWarn as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(String(call[1])).not.toContain(secret);
+    }
+  });
+
+  it("does not embed the invalid origin in the problem string or logger message for ALLOWED_ORIGINS", () => {
+    const secret = "https://sk_live_SECRET_ORIGIN_abc123.example.com/leak";
+    vi.stubEnv("ALLOWED_ORIGINS", secret);
+    const issues = validateStartupEnv();
+
+    for (const issue of issues) {
+      for (const v of Object.values(issue)) {
+        expect(String(v)).not.toContain(secret);
+      }
+    }
+
+    for (const call of (mockWarn as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(String(call[1])).not.toContain(secret);
+    }
+  });
 });
 
 describe("validateStartupEnv", () => {
