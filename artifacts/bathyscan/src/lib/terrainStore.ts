@@ -183,6 +183,15 @@ interface TerrainStore {
   addSelected: (datasetId: string, source: DatasetSource, dataUpdatedAt?: string | null) => void;
 
   /**
+   * Add a dataset to the selected pool WITHOUT activating it.
+   * Used by the proximity-mode auto-registration effect so that all datasets
+   * are enrolled in the proximity pool but none are activated immediately —
+   * the proximity hook activates based on camera distance only.
+   * Safe to call for datasets already in the pool (becomes a source update).
+   */
+  addSelectedToPool: (datasetId: string, source: DatasetSource) => void;
+
+  /**
    * Remove a dataset from the selected pool AND from active visibleDatasets.
    * Called when the user explicitly deselects / removes a dataset.
    */
@@ -512,6 +521,21 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         selectedIds: nextSelectedIds,
         selectedSources: nextSelectedSources,
         multiDatasetMode: true,
+      };
+    }),
+
+  addSelectedToPool: (datasetId, source) =>
+    set((prev) => {
+      // Already in pool — update source but do not activate.
+      const alreadySelected = prev.selectedIds.includes(datasetId);
+      return {
+        ...prev,
+        selectedIds: alreadySelected
+          ? prev.selectedIds
+          : [...prev.selectedIds, datasetId],
+        selectedSources: { ...prev.selectedSources, [datasetId]: source },
+        // Intentionally does NOT add to visibleDatasets or set multiDatasetMode.
+        // Activation is deferred entirely to the proximity streaming hook.
       };
     }),
 

@@ -447,3 +447,33 @@ describe("PUT /api/settings — maxActiveDatasets Zod validation", () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ─── proximityMode Zod validation ─────────────────────────────────────────────
+
+describe("PUT /api/settings — proximityMode Zod validation", () => {
+  it("accepts true", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ proximityMode: true });
+    expect(res.status).toBe(200);
+    expect(res.body.proximityMode).toBe(true);
+  });
+
+  it("accepts false", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ proximityMode: false });
+    expect(res.status).toBe(200);
+    expect(res.body.proximityMode).toBe(false);
+  });
+
+  it("rejects non-boolean values", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ proximityMode: "yes" });
+    expect(res.status).toBe(400);
+  });
+});

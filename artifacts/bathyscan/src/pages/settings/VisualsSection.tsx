@@ -202,6 +202,12 @@ export function VisualsSection() {
             { value: "6", label: "6" },
           ]}
         />
+        <ToggleRow
+          label="Proximity Mode"
+          sublabel="Automatically add all your datasets to the proximity pool on startup. The nearest 1–3 load automatically as you move between surveys; far-away surveys stay evicted."
+          value={s.proximityMode ?? true}
+          onChange={s.setProximityMode}
+        />
       </div>
 
       {/* Effects */}

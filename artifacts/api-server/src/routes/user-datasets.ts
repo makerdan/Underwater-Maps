@@ -76,6 +76,26 @@ const terrainFetchUserRateLimit = createRateLimit({
   mode: "user",
 });
 
+function extractBbox(
+  terrainJson: StoredTerrainJson | null | undefined,
+  overviewJson: StoredTerrainJson | null | undefined,
+): { minLon: number; maxLon: number; minLat: number; maxLat: number } | null {
+  // Prefer terrainJson (higher-res grid); fall back to overviewJson.
+  for (const json of [terrainJson, overviewJson]) {
+    if (!json) continue;
+    const { minLon, maxLon, minLat, maxLat } = json;
+    if (
+      typeof minLon === "number" && isFinite(minLon) &&
+      typeof maxLon === "number" && isFinite(maxLon) &&
+      typeof minLat === "number" && isFinite(minLat) &&
+      typeof maxLat === "number" && isFinite(maxLat)
+    ) {
+      return { minLon, maxLon, minLat, maxLat };
+    }
+  }
+  return null;
+}
+
 function metaJson(row: {
   id: string;
   name: string;
@@ -86,7 +106,10 @@ function metaJson(row: {
   needsGeoreferencing?: boolean | null;
   pendingRasterGzBase64?: string | null;
   tideStationJson?: StoredTideStation | null;
+  terrainJson?: StoredTerrainJson | null;
+  overviewJson?: StoredTerrainJson | null;
 }) {
+  const bbox = extractBbox(row.terrainJson, row.overviewJson);
   return {
     id: row.id,
     name: row.name,
@@ -99,6 +122,7 @@ function metaJson(row: {
       ? { hasRasterImage: true as const }
       : {}),
     ...(row.tideStationJson ? { tideStation: row.tideStationJson } : {}),
+    ...(bbox !== null ? { bbox } : {}),
   };
 }
 
@@ -130,6 +154,8 @@ router.get("/user/datasets", requireAuth, asyncHandler(async (req, res): Promise
       needsGeoreferencing: customDatasetsTable.needsGeoreferencing,
       pendingRasterGzBase64: customDatasetsTable.pendingRasterGzBase64,
       tideStationJson: customDatasetsTable.tideStationJson,
+      terrainJson: customDatasetsTable.terrainJson,
+      overviewJson: customDatasetsTable.overviewJson,
     })
     .from(customDatasetsTable)
     .where(eq(customDatasetsTable.userId, userId))

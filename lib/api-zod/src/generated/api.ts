@@ -324,7 +324,13 @@ export const PostDatasetsUploadResponse = zod.object({
   "lat": zod.number(),
   "lon": zod.number(),
   "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
-}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.'),
+  "bbox": zod.object({
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number()
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
 }).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch')
 }).describe('Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller\'s dataset library; `savedDatasetId` carries the new row\'s UUID.')
 
@@ -498,7 +504,13 @@ export const PostDatasetsRasterCommitResponse = zod.object({
   "lat": zod.number(),
   "lon": zod.number(),
   "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
-}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.'),
+  "bbox": zod.object({
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number()
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
 }).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch')
 }).describe('Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller\'s dataset library; `savedDatasetId` carries the new row\'s UUID.')
 
@@ -522,7 +534,13 @@ export const GetUserDatasetsResponseItem = zod.object({
   "lat": zod.number(),
   "lon": zod.number(),
   "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
-}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.'),
+  "bbox": zod.object({
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number()
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
 }).describe('Metadata for a user-saved custom terrain dataset')
 export const GetUserDatasetsResponse = zod.array(GetUserDatasetsResponseItem)
 
@@ -725,7 +743,13 @@ export const PostUserDatasetsIdGeorefResponse = zod.object({
   "lat": zod.number(),
   "lon": zod.number(),
   "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
-}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.'),
+  "bbox": zod.object({
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number()
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 
@@ -763,7 +787,13 @@ export const PatchUserDatasetsIdMoveResponse = zod.object({
   "lat": zod.number(),
   "lon": zod.number(),
   "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
-}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.'),
+  "bbox": zod.object({
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number()
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 
@@ -801,7 +831,13 @@ export const PatchUserDatasetsIdRenameResponse = zod.object({
   "lat": zod.number(),
   "lon": zod.number(),
   "distanceMiles": zod.number().describe('Great-circle distance from the dataset bbox centroid, statute miles')
-}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.')
+}).optional().describe('Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.'),
+  "bbox": zod.object({
+  "minLon": zod.number(),
+  "maxLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLat": zod.number()
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 
@@ -1364,6 +1400,7 @@ export const getSettingsResponseLampIntensityMax = 5;
 export const getSettingsResponseMaxActiveDatasetsDefault = 3;
 export const getSettingsResponseMaxActiveDatasetsMax = 6;
 
+export const getSettingsResponseProximityModeDefault = true;
 export const getSettingsResponseDefaultSpeedTierDefault = 2;
 export const getSettingsResponseDefaultSpeedTierMin = 0;
 export const getSettingsResponseDefaultSpeedTierMax = 4;
@@ -1639,6 +1676,7 @@ export const GetSettingsResponse = zod.object({
 })).max(getSettingsResponsePuzzleLayoutsMax).default(getSettingsResponsePuzzleLayoutsDefault).describe('User-saved named puzzle tile arrangements. Each entry stores per-tile transforms and groupings under a user-provided name, enabling quick restoration of frequently used dataset comparisons.'),
   "lampIntensity": zod.number().min(getSettingsResponseLampIntensityMin).max(getSettingsResponseLampIntensityMax).default(getSettingsResponseLampIntensityDefault),
   "maxActiveDatasets": zod.number().min(1).max(getSettingsResponseMaxActiveDatasetsMax).int().default(getSettingsResponseMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.'),
+  "proximityMode": zod.boolean().default(getSettingsResponseProximityModeDefault).describe('When true, all user-uploaded datasets and preset catalog entries are automatically added to the proximity streaming pool on startup. When false, only manually selected datasets are streamed.'),
   "defaultSpeedTier": zod.number().min(getSettingsResponseDefaultSpeedTierMin).max(getSettingsResponseDefaultSpeedTierMax).int().default(getSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(getSettingsResponseInvertMouseYDefault),
   "mouseSensitivity": zod.number().min(getSettingsResponseMouseSensitivityMin).max(getSettingsResponseMouseSensitivityMax).default(getSettingsResponseMouseSensitivityDefault),
@@ -1892,6 +1930,7 @@ export const putSettingsBodyLampIntensityMax = 5;
 export const putSettingsBodyMaxActiveDatasetsDefault = 3;
 export const putSettingsBodyMaxActiveDatasetsMax = 6;
 
+export const putSettingsBodyProximityModeDefault = true;
 export const putSettingsBodyDefaultSpeedTierDefault = 2;
 export const putSettingsBodyDefaultSpeedTierMin = 0;
 export const putSettingsBodyDefaultSpeedTierMax = 4;
@@ -2167,6 +2206,7 @@ export const PutSettingsBody = zod.object({
 })).max(putSettingsBodyPuzzleLayoutsMax).default(putSettingsBodyPuzzleLayoutsDefault).describe('User-saved named puzzle tile arrangements. Each entry stores per-tile transforms and groupings under a user-provided name, enabling quick restoration of frequently used dataset comparisons.'),
   "lampIntensity": zod.number().min(putSettingsBodyLampIntensityMin).max(putSettingsBodyLampIntensityMax).default(putSettingsBodyLampIntensityDefault),
   "maxActiveDatasets": zod.number().min(1).max(putSettingsBodyMaxActiveDatasetsMax).int().default(putSettingsBodyMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.'),
+  "proximityMode": zod.boolean().default(putSettingsBodyProximityModeDefault).describe('When true, all user-uploaded datasets and preset catalog entries are automatically added to the proximity streaming pool on startup. When false, only manually selected datasets are streamed.'),
   "defaultSpeedTier": zod.number().min(putSettingsBodyDefaultSpeedTierMin).max(putSettingsBodyDefaultSpeedTierMax).int().default(putSettingsBodyDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsBodyInvertMouseYDefault),
   "mouseSensitivity": zod.number().min(putSettingsBodyMouseSensitivityMin).max(putSettingsBodyMouseSensitivityMax).default(putSettingsBodyMouseSensitivityDefault),
@@ -2415,6 +2455,7 @@ export const putSettingsResponseLampIntensityMax = 5;
 export const putSettingsResponseMaxActiveDatasetsDefault = 3;
 export const putSettingsResponseMaxActiveDatasetsMax = 6;
 
+export const putSettingsResponseProximityModeDefault = true;
 export const putSettingsResponseDefaultSpeedTierDefault = 2;
 export const putSettingsResponseDefaultSpeedTierMin = 0;
 export const putSettingsResponseDefaultSpeedTierMax = 4;
@@ -2690,6 +2731,7 @@ export const PutSettingsResponse = zod.object({
 })).max(putSettingsResponsePuzzleLayoutsMax).default(putSettingsResponsePuzzleLayoutsDefault).describe('User-saved named puzzle tile arrangements. Each entry stores per-tile transforms and groupings under a user-provided name, enabling quick restoration of frequently used dataset comparisons.'),
   "lampIntensity": zod.number().min(putSettingsResponseLampIntensityMin).max(putSettingsResponseLampIntensityMax).default(putSettingsResponseLampIntensityDefault),
   "maxActiveDatasets": zod.number().min(1).max(putSettingsResponseMaxActiveDatasetsMax).int().default(putSettingsResponseMaxActiveDatasetsDefault).describe('Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.'),
+  "proximityMode": zod.boolean().default(putSettingsResponseProximityModeDefault).describe('When true, all user-uploaded datasets and preset catalog entries are automatically added to the proximity streaming pool on startup. When false, only manually selected datasets are streamed.'),
   "defaultSpeedTier": zod.number().min(putSettingsResponseDefaultSpeedTierMin).max(putSettingsResponseDefaultSpeedTierMax).int().default(putSettingsResponseDefaultSpeedTierDefault),
   "invertMouseY": zod.boolean().default(putSettingsResponseInvertMouseYDefault),
   "mouseSensitivity": zod.number().min(putSettingsResponseMouseSensitivityMin).max(putSettingsResponseMouseSensitivityMax).default(putSettingsResponseMouseSensitivityDefault),

@@ -5689,6 +5689,10 @@ components:
           maximum: 6
           default: 3
           description: Maximum number of datasets rendered simultaneously in the 3D scene. Lower values reduce GPU load on slower devices.
+        proximityMode:
+          type: boolean
+          default: true
+          description: When true, all user-uploaded datasets and preset catalog entries are automatically added to the proximity streaming pool on startup. When false, only manually selected datasets are streamed.
         defaultSpeedTier:
           type: integer
           minimum: 0
@@ -6791,6 +6795,19 @@ components:
         tideStation:
           $ref: "#/components/schemas/StoredTideStation"
           description: Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature.
+        bbox:
+          type: object
+          description: "Geographic bounding box derived from the dataset's stored terrain or overview grid. Present when the grid carries valid minLon/maxLon/minLat/maxLat fields; absent when georeferencing data is missing."
+          properties:
+            minLon:
+              type: number
+            maxLon:
+              type: number
+            minLat:
+              type: number
+            maxLat:
+              type: number
+          required: [minLon, maxLon, minLat, maxLat]
       required:
         - id
         - name

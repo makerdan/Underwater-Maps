@@ -257,6 +257,9 @@ export const settingsFieldSchemas = {
   // Performance
   maxActiveDatasets: num,
 
+  // Proximity streaming
+  proximityMode: z.boolean().optional().catch(undefined),
+
   // Puzzle layouts
   puzzleLayouts: unknownArr,
 

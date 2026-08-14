@@ -249,6 +249,11 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   // is verified by settings-schema-sync.test.ts; behaviour covered in
   // the puzzle-mode component tests.
   "puzzleLayouts",
+
+  // ── proximity streaming mode (settings-validation.test.ts) ───────────────
+  // Boolean; controls whether all datasets are auto-registered in the
+  // proximity pool on startup. Validation tested in settings-validation.test.ts.
+  "proximityMode",
 ]);
 
 describe("PutSettingsBody field-coverage sentinel", () => {

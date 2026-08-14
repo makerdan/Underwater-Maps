@@ -66,7 +66,7 @@ import {
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
 
-export const SETTINGS_SCHEMA_VERSION = 35;
+export const SETTINGS_SCHEMA_VERSION = 36;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -634,6 +634,18 @@ export interface SettingsState {
    */
   maxActiveDatasets: number;
 
+  /**
+   * When true (default), all user-uploaded datasets and preset catalog
+   * entries are automatically added to the proximity streaming pool when
+   * the app starts — no manual "Select" click required. The proximity
+   * engine still applies distance gating and the active-cap so only the
+   * nearest 1–3 surveys are ever loaded at once.
+   *
+   * When false, only datasets the user explicitly selects are streamed,
+   * restoring the original manual-control behaviour.
+   */
+  proximityMode: boolean;
+
   // ── Puzzle tile layout presets ────────────────────────────────────────
   /**
    * User-saved named puzzle tile arrangements. Each entry stores per-tile
@@ -840,6 +852,9 @@ interface SettingsActions {
 
   /** Set the max active datasets cap (1–6). Auto-evicts excess if lowered. */
   setMaxActiveDatasets: (v: number) => void;
+
+  /** Enable or disable automatic proximity-pool registration for all datasets. */
+  setProximityMode: (v: boolean) => void;
 
   /** Overwrite the entire puzzleLayouts list (used for add/remove/rename). */
   setPuzzleLayouts: (v: PuzzleLayout[]) => void;
@@ -1134,6 +1149,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   sidebarMode: 'explore',
 
   maxActiveDatasets: 3,
+  proximityMode: true,
   puzzleLayouts: [],
 };
 
@@ -1193,7 +1209,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "autoStartTrailRecording", "defaultTrailColor", "gpsRecordingInterval", "trailRetention",
     "followResumeDelaySec",
   ],
-  data: ["defaultRegion", "autoLoadLastDataset", "defaultMapLoad", "coordSearchRadius", "coordSearchRadiusUnit"],
+  data: ["defaultRegion", "autoLoadLastDataset", "defaultMapLoad", "coordSearchRadius", "coordSearchRadiusUnit", "proximityMode"],
   accessibility: [
     "reducedMotion", "colorBlindSafePalette", "largeHudText", "highContrastHud", "brightDaylight",
     "colormapUserSet", "globalFontSize",
@@ -1523,6 +1539,8 @@ export const useSettingsStore = create<SettingsStore>()(
             }
           }
         },
+
+        setProximityMode: setter("proximityMode"),
 
         // Manual conditions
         setDatasetManualConditions: (datasetId, conditions) => {
@@ -1928,6 +1946,11 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).puzzleLayouts === undefined) {
             migratedPuzzleLayouts.puzzleLayouts = DEFAULT_SETTINGS.puzzleLayouts;
           }
+          // v35 → v36: inject proximityMode default (true) for existing users.
+          const migratedProximityMode: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).proximityMode === undefined) {
+            migratedProximityMode.proximityMode = DEFAULT_SETTINGS.proximityMode;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1952,6 +1975,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedLastSession,
             ...migratedMaxActiveDatasets,
             ...migratedPuzzleLayouts,
+            ...migratedProximityMode,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

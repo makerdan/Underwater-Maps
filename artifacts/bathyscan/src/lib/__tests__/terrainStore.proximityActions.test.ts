@@ -425,3 +425,70 @@ describe("terrainStore — cap-change eviction via setMaxActiveDatasets", () => 
     expect(useTerrainStore.getState().visibleDatasets).toHaveLength(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// addSelectedToPool — pool-only enrollment, never activates immediately
+// ---------------------------------------------------------------------------
+
+describe("terrainStore — addSelectedToPool", () => {
+  it("adds the dataset to selectedIds without adding it to visibleDatasets", () => {
+    useTerrainStore.getState().addSelectedToPool("ds-pool", "preset");
+    const { selectedIds, visibleDatasets } = useTerrainStore.getState();
+    expect(selectedIds).toContain("ds-pool");
+    expect(visibleDatasets.some((v) => v.datasetId === "ds-pool")).toBe(false);
+  });
+
+  it("records the correct source in selectedSources", () => {
+    useTerrainStore.getState().addSelectedToPool("ds-user", "user");
+    expect(useTerrainStore.getState().selectedSources["ds-user"]).toBe("user");
+  });
+
+  it("does NOT activate even when active slots are available", () => {
+    // With default cap (3) and zero active datasets, addSelectedToPool must
+    // still NOT activate — unlike addSelected which would activate immediately.
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(0);
+    useTerrainStore.getState().addSelectedToPool("ds-no-activate", "preset");
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(0);
+  });
+
+  it("is idempotent: calling twice for the same ID updates source but does not duplicate selectedIds", () => {
+    useTerrainStore.getState().addSelectedToPool("ds-dup", "preset");
+    useTerrainStore.getState().addSelectedToPool("ds-dup", "user");
+    const { selectedIds, selectedSources } = useTerrainStore.getState();
+    expect(selectedIds.filter((id) => id === "ds-dup")).toHaveLength(1);
+    expect(selectedSources["ds-dup"]).toBe("user");
+  });
+
+  it("can enrol many datasets at once without activating any", () => {
+    for (let i = 0; i < 10; i++) {
+      useTerrainStore.getState().addSelectedToPool(`ds-bulk-${i}`, "preset");
+    }
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(0);
+    expect(useTerrainStore.getState().selectedIds).toHaveLength(10);
+  });
+
+  it("dataset enrolled via addSelectedToPool can later be activated via autoActivate", () => {
+    useTerrainStore.getState().addSelectedToPool("ds-delayed", "preset");
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(0);
+
+    // Proximity hook calls autoActivate when camera enters bbox.
+    useTerrainStore.getState().autoActivate("ds-delayed");
+    expect(
+      useTerrainStore.getState().visibleDatasets.some((v) => v.datasetId === "ds-delayed"),
+    ).toBe(true);
+  });
+
+  it("removeSelected removes a pool-enrolled dataset from both selectedIds and visibleDatasets", () => {
+    useTerrainStore.getState().addSelectedToPool("ds-remove", "preset");
+    // Activate it manually so we can test eviction too.
+    useTerrainStore.getState().autoActivate("ds-remove");
+    expect(
+      useTerrainStore.getState().visibleDatasets.some((v) => v.datasetId === "ds-remove"),
+    ).toBe(true);
+
+    useTerrainStore.getState().removeSelected("ds-remove");
+    const { selectedIds, visibleDatasets } = useTerrainStore.getState();
+    expect(selectedIds).not.toContain("ds-remove");
+    expect(visibleDatasets.some((v) => v.datasetId === "ds-remove")).toBe(false);
+  });
+});

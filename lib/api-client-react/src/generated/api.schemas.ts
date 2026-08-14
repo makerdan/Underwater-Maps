@@ -931,6 +931,8 @@ export interface UserSettings {
      * @maximum 6
      */
   maxActiveDatasets?: number;
+  /** When true, all user-uploaded datasets and preset catalog entries are automatically added to the proximity streaming pool on startup. When false, only manually selected datasets are streamed. */
+  proximityMode?: boolean;
   /**
      * @minimum 0
      * @maximum 4
@@ -1685,6 +1687,16 @@ export interface StoredTideStation {
 }
 
 /**
+ * Geographic bounding box derived from the dataset's stored terrain or overview grid. Present when the grid carries valid minLon/maxLon/minLat/maxLat fields; absent when georeferencing data is missing.
+ */
+export type UserDatasetMetaBbox = {
+  minLon: number;
+  maxLon: number;
+  minLat: number;
+  maxLat: number;
+};
+
+/**
  * Metadata for a user-saved custom terrain dataset
  */
 export interface UserDatasetMeta {
@@ -1710,6 +1722,8 @@ export interface UserDatasetMeta {
   hasRasterImage?: boolean;
   /** Nearest NOAA tide station resolved from the dataset bbox centroid at upload time. Absent when resolution failed or the dataset predates the tides feature. */
   tideStation?: StoredTideStation;
+  /** Geographic bounding box derived from the dataset's stored terrain or overview grid. Present when the grid carries valid minLon/maxLon/minLat/maxLat fields; absent when georeferencing data is missing. */
+  bbox?: UserDatasetMetaBbox;
 }
 
 /**

@@ -730,6 +730,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const clearEviction = useTerrainStore((s) => s.clearEviction);
   const visibleDatasetsForToast = useTerrainStore((s) => s.visibleDatasets);
   const maxActiveDatasets = useSettingsStore((s) => s.maxActiveDatasets ?? 3);
+  const proximityMode = useSettingsStore((s) => s.proximityMode ?? true);
 
   const storeCollapsed = usePanelCollapseStore((s) => s.collapsed.datasets);
   const collapsed = embedded ? false : storeCollapsed;
@@ -939,13 +940,25 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const atViewCap = visibleDatasetsForToast.length >= maxActiveDatasets;
 
   // ─── Proximity streaming ──────────────────────────────────────────────────
-  // Build a map from datasetId → bbox for preset catalog datasets that have a
-  // geographic bounding box. User datasets do not have a bbox so they activate
-  // immediately when added to the selected pool (handled in addSelected).
+  // Build a map from datasetId → bbox for ALL datasets that have geographic
+  // bounding box data — both preset catalog entries and user-uploaded datasets.
+  // User datasets now carry a computed bbox from the API when their terrainJson
+  // or overviewJson contains valid geo bounds.
   const bboxMap = React.useMemo<Record<string, DatasetBbox>>(() => {
-    if (!datasets) return {};
     const out: Record<string, DatasetBbox> = {};
-    for (const d of datasets) {
+    for (const d of datasets ?? []) {
+      if (d.bbox) {
+        out[d.id] = {
+          minLon: d.bbox.minLon,
+          maxLon: d.bbox.maxLon,
+          minLat: d.bbox.minLat,
+          maxLat: d.bbox.maxLat,
+        };
+      }
+    }
+    // Include user datasets with a known bbox so proximity distance checks are
+    // real Haversine calculations rather than the "always nearby" fallback.
+    for (const d of userDatasets ?? []) {
       if (d.bbox) {
         out[d.id] = {
           minLon: d.bbox.minLon,
@@ -956,7 +969,62 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       }
     }
     return out;
-  }, [datasets]);
+  }, [datasets, userDatasets]);
+
+  // ─── Proximity auto-registration effect ──────────────────────────────────
+  // When proximityMode is ON, datasets are enrolled in the proximity pool via
+  // addSelectedToPool — which adds to selectedIds WITHOUT immediate activation.
+  // The proximity hook activates only when the camera enters the dataset's bbox.
+  //
+  // IMPORTANT: Only datasets with a known bbox are auto-enrolled.
+  // User datasets without bbox are treated as "always nearby" by the proximity
+  // hook (it activates them on first available slot), so auto-enrolling them
+  // would cause unintended immediate loads regardless of camera position.
+  // Those datasets remain manual-select only.
+  //
+  // Preset catalog entries always have bbox from the catalog; all are enrolled.
+  //
+  // autoRegisteredRef tracks ONLY IDs we actually registered, so toggle-off
+  // cannot evict datasets the user manually selected before enabling the mode.
+  const autoRegisteredRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const { addSelectedToPool, removeSelected, selectedIds } = useTerrainStore.getState();
+
+    if (!proximityMode) {
+      // Remove every auto-registered ID from the pool (and evict if active).
+      // removeSelected handles both selectedIds and visibleDatasets atomically.
+      for (const id of autoRegisteredRef.current) {
+        removeSelected(id);
+      }
+      autoRegisteredRef.current.clear();
+      return;
+    }
+
+    const alreadySelected = new Set(selectedIds);
+
+    // Register preset catalog entries (all carry bbox from catalog metadata).
+    for (const d of datasets ?? []) {
+      if (!autoRegisteredRef.current.has(d.id) && !alreadySelected.has(d.id)) {
+        addSelectedToPool(d.id, "preset");
+        autoRegisteredRef.current.add(d.id);
+      }
+    }
+
+    // Register user-uploaded datasets ONLY when they have a valid bbox.
+    // Without bbox, the proximity hook activates on any open slot (always-nearby
+    // fallback), which would cause immediate unintended loads.
+    for (const d of userDatasets ?? []) {
+      if (
+        d.bbox &&
+        !autoRegisteredRef.current.has(d.id) &&
+        !alreadySelected.has(d.id)
+      ) {
+        addSelectedToPool(d.id, "user");
+        autoRegisteredRef.current.add(d.id);
+      }
+    }
+  }, [proximityMode, datasets, userDatasets]);
 
   // Called by the proximity hook when a selected-but-not-active dataset should
   // be loaded into the scene. Adds it to visibleDatasets (with null grids) and
