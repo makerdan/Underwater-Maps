@@ -404,6 +404,21 @@ export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
     bulk.phase === "cancelled" ||
     bulk.phase === "preflight-error";
 
+  // ── beforeunload guard while batch is running ─────────────────────────────
+
+  useEffect(() => {
+    if (!isRunning) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // returnValue is required for legacy browser support.
+      e.returnValue =
+        "A save is in progress — leaving will not cancel saved packs but the batch will stop.";
+      return e.returnValue;
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isRunning]);
+
   // ── Escape + focus ────────────────────────────────────────────────────────
 
   useEffect(() => {
