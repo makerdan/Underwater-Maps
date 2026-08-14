@@ -12,11 +12,15 @@ import {
   getGetWaterTemperatureQueryKey,
 } from "@workspace/api-client-react";
 import type { SurfaceAnchor } from "@/lib/waterTemp";
+import { useOfflineStore } from "@/lib/offlineStore";
+import { useEnvOfflineStore } from "@/lib/envOfflineStore";
 
 export interface SurfaceTemperatureResult {
   anchor: SurfaceAnchor | null;
   loading: boolean;
   error: boolean;
+  /** True when data is served from the cached env pack (device is offline). */
+  isCachedPack?: boolean;
 }
 
 /**
@@ -33,12 +37,17 @@ export function useSurfaceTemperature(
   lon: number | null,
   enabled = true,
 ): SurfaceTemperatureResult {
+  const isOnline = useOfflineStore((s) => s.isOnline);
+  const envPack = useEnvOfflineStore((s) => s.envPack);
+  const isExpired = useEnvOfflineStore((s) => s.isExpired);
+
   const params = { lat: lat ?? 0, lon: lon ?? 0 };
 
   const { data, isLoading, isError } = useGetWaterTemperature(params, {
     query: {
       queryKey: getGetWaterTemperatureQueryKey(params),
-      enabled: enabled && lat !== null && lon !== null,
+      // Disable network fetch when offline — serve from pack instead.
+      enabled: enabled && lat !== null && lon !== null && isOnline,
       // SST evolves very slowly; once per session is plenty.
       staleTime: 60 * 60 * 1000,
       retry: 1,
@@ -46,6 +55,26 @@ export function useSurfaceTemperature(
   });
 
   return useMemo<SurfaceTemperatureResult>(() => {
+    // Offline: serve SST from the cached env pack when available and not expired.
+    if (!isOnline && envPack && !isExpired()) {
+      const mc = envPack.marineConditions;
+      const sst = mc?.seaSurfaceTemperatureC?.[0] ?? null;
+      if (typeof sst === "number") {
+        return {
+          anchor: {
+            sstCelsius: sst,
+            source: "Cached env pack",
+            sourceUrl: null,
+            timestamp: envPack.generatedAt,
+          },
+          loading: false,
+          error: false,
+          isCachedPack: true,
+        };
+      }
+      return { anchor: null, loading: false, error: false, isCachedPack: true };
+    }
+
     if (!data || !data.available || typeof data.sstCelsius !== "number") {
       return { anchor: null, loading: isLoading, error: isError };
     }
@@ -59,5 +88,5 @@ export function useSurfaceTemperature(
       loading: isLoading,
       error: isError,
     };
-  }, [data, isLoading, isError]);
+  }, [data, isLoading, isError, isOnline, envPack, isExpired]);
 }

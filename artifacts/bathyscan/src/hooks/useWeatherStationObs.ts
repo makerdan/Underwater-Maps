@@ -8,6 +8,11 @@
  * "stationId|hour" so the popover doesn't re-fetch on every scrubber tick.
  */
 import { useState, useEffect, useRef } from "react";
+import { useOfflineStore } from "@/lib/offlineStore";
+import {
+  useEnvOfflineStore,
+  getEnvPackWeatherStationById,
+} from "@/lib/envOfflineStore";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const CACHE_TTL_MS = 10 * 60_000;
@@ -60,10 +65,13 @@ export function useWeatherStationObs(
   stationId: string | null,
   targetTime: Date | null,
   enabled: boolean,
-): WeatherStationObsResult {
+): WeatherStationObsResult & { isCachedPack?: boolean } {
   const [observation, setObservation] = useState<WeatherStationObs | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [isCachedPack, setIsCachedPack] = useState(false);
+  const isOnline = useOfflineStore((s) => s.isOnline);
+  const envPack = useEnvOfflineStore((s) => s.envPack);
 
   // 15-minute bucket: effect fires only when the scrubber crosses a
   // quarter-hour boundary, avoiding a fetch on every single tick while still
@@ -86,8 +94,43 @@ export function useWeatherStationObs(
       setObservation(null);
       setIsLoading(false);
       setIsError(false);
+      setIsCachedPack(false);
       return;
     }
+
+    // When offline, serve from the cached env pack when available,
+    // not expired, and the requested station ID is in the pack.
+    if (!isOnline) {
+      const isExpired = envPack
+        ? new Date(envPack.expiresAt).getTime() < Date.now()
+        : true;
+      const station =
+        envPack && !isExpired
+          ? getEnvPackWeatherStationById(envPack, stationId)
+          : null;
+      if (station) {
+        const obs: WeatherStationObs = {
+          windSpeedKnots: station.windSpeedKnots,
+          windDirDeg: station.windDirDeg,
+          visibilityMiles: station.visibilityMiles,
+          ceilingFt: station.ceilingFt,
+          tempC: station.tempC,
+          observedAt: station.observedAt,
+        };
+        setObservation(obs);
+        setIsCachedPack(true);
+        setIsLoading(false);
+        setIsError(false);
+      } else {
+        setObservation(null);
+        setIsCachedPack(false);
+        setIsLoading(false);
+        setIsError(false);
+      }
+      return;
+    }
+
+    setIsCachedPack(false);
 
     const cacheKey = `${stationId}|${targetTime15MinKey}`;
     const now = Date.now();
@@ -160,7 +203,7 @@ export function useWeatherStationObs(
         pendingCache.delete(cacheKey);
       }
     };
-  }, [stationId, targetTime15MinKey, enabled]);
+  }, [stationId, targetTime15MinKey, enabled, isOnline, envPack]);
 
-  return { observation, isLoading, isError };
+  return { observation, isLoading, isError, isCachedPack };
 }

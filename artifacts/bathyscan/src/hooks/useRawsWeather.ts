@@ -10,6 +10,7 @@
  */
 import { useState, useEffect, useRef } from "react";
 import type { RawsObservation } from "@workspace/api-client-react";
+import { useOfflineStore } from "@/lib/offlineStore";
 
 export type { RawsObservation };
 
@@ -43,10 +44,12 @@ export function useRawsWeather(
   datasetId: string | null,
   enabled: boolean,
   targetTime?: Date | null,
-): RawsWeatherResult {
+): RawsWeatherResult & { isCachedPack?: boolean } {
   const [observation, setObservation] = useState<RawsObservation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [isCachedPack, setIsCachedPack] = useState(false);
+  const isOnline = useOfflineStore((s) => s.isOnline);
   const controllerRef = useRef<AbortController | null>(null);
 
   // 15-minute-bucketed key — controls WHEN the effect re-fires so nearest-obs
@@ -70,9 +73,21 @@ export function useRawsWeather(
       setObservation(null);
       setIsLoading(false);
       setIsError(false);
+      setIsCachedPack(false);
       return;
     }
 
+    // RAWS are forest weather stations; no env-pack equivalent — surface
+    // "unavailable" gracefully rather than an error when offline.
+    if (!isOnline) {
+      setObservation(null);
+      setIsCachedPack(false);
+      setIsLoading(false);
+      setIsError(false);
+      return;
+    }
+
+    setIsCachedPack(false);
     const cacheKey = targetTimeQuarterKey ? `${datasetId}|${targetTimeQuarterKey}` : datasetId;
     const now = Date.now();
     const cached = localCache.get(cacheKey);
@@ -119,7 +134,7 @@ export function useRawsWeather(
       cancelled = true;
       controller.abort();
     };
-  }, [datasetId, enabled, targetTimeQuarterKey]);
+  }, [datasetId, enabled, targetTimeQuarterKey, isOnline]);
 
-  return { observation, isLoading, isError };
+  return { observation, isLoading, isError, isCachedPack };
 }

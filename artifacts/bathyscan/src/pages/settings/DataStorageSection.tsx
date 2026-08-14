@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { clear as idbClear } from "idb-keyval";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useCameraStore } from "@/lib/cameraStore";
 import { clearUpscaleCache, getUpscaleCacheInfo } from "@/hooks/useUpscaledHeatmap";
 import {
   listOfflinePacks,
@@ -25,9 +26,11 @@ import {
   formatCacheSize,
   type CachedDataset,
 } from "./constants";
+import { EnvOfflineSection } from "./EnvOfflineSection";
 
 export function DataStorageSection() {
   const s = useSettingsStore(useShallow((s) => s));
+  const cameraPosition = useCameraStore((s) => s.cameraPosition);
   const [cached, setCached] = useState<CachedDataset[]>([]);
   const [pending, setPending] = useState({ markers: 0, trails: 0 });
   const [loading, setLoading] = useState(true);
@@ -312,6 +315,12 @@ export function DataStorageSection() {
           )}
         </div>
       </div>
+      {/* Weather & ocean data (env pack) — pass current map centre so
+          the download covers the user's actual location */}
+      <EnvOfflineSection
+        centerLat={cameraPosition.known ? cameraPosition.lat : undefined}
+        centerLon={cameraPosition.known ? cameraPosition.lon : undefined}
+      />
       {/* Help content pack */}
       <div style={S.card}>
         <div style={S.cardHeader}>HELP CONTENT</div>

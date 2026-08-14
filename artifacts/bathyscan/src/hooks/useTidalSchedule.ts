@@ -1,4 +1,11 @@
 import { useEffect, useState } from "react";
+import { useOfflineStore } from "@/lib/offlineStore";
+import {
+  useEnvOfflineStore,
+  getEnvPackTideStation,
+  isEnvPackInRange,
+  deriveScheduleEvents,
+} from "@/lib/envOfflineStore";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -25,15 +32,56 @@ export function useTidalSchedule(
   lat: number | null,
   lon: number | null,
   days = 7,
-): { schedule: TidalSchedule | null; loading: boolean; isError: boolean } {
+): { schedule: TidalSchedule | null; loading: boolean; isError: boolean; isCachedPack?: boolean } {
   const [schedule, setSchedule] = useState<TidalSchedule | null>(null);
   const [loading, setLoading] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [isCachedPack, setIsCachedPack] = useState(false);
+  const isOnline = useOfflineStore((s) => s.isOnline);
+  const envPack = useEnvOfflineStore((s) => s.envPack);
 
   useEffect(() => {
     if (lat === null || lon === null) return;
+
+    // When offline, serve from the cached env pack when available,
+    // not expired, and covering the requested location.
+    if (!isOnline) {
+      const isExpired = envPack
+        ? new Date(envPack.expiresAt).getTime() < Date.now()
+        : true;
+      const inRange = envPack && !isExpired ? isEnvPackInRange(envPack, lat, lon) : false;
+      const station = inRange && envPack ? getEnvPackTideStation(envPack) : null;
+      if (station && station.predictions.length > 0) {
+        const events = deriveScheduleEvents(
+          station.predictions,
+          station.windowStart,
+          station.windowEnd,
+        );
+        const synth: TidalSchedule = {
+          available: true,
+          source: "noaa",
+          stationId: station.stationId,
+          stationName: station.name,
+          rangeStart: station.windowStart,
+          rangeEnd: station.windowEnd,
+          events,
+        };
+        setSchedule(synth);
+        setIsCachedPack(true);
+        setIsError(false);
+        setLoading(false);
+      } else {
+        setSchedule(null);
+        setIsCachedPack(false);
+        setIsError(false);
+        setLoading(false);
+      }
+      return;
+    }
+
     let cancelled = false;
     const controller = new AbortController();
+    setIsCachedPack(false);
 
     async function run() {
       if (lat === null || lon === null) return;
@@ -67,7 +115,7 @@ export function useTidalSchedule(
       cancelled = true;
       controller.abort();
     };
-  }, [lat, lon, days]);
+  }, [lat, lon, days, isOnline, envPack]);
 
-  return { schedule, loading, isError };
+  return { schedule, loading, isError, isCachedPack };
 }

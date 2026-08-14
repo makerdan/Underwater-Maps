@@ -4,6 +4,11 @@ import {
   getPackForLocation,
   getOfflineTideValue,
 } from "@/lib/offlinePackStore";
+import {
+  useEnvOfflineStore,
+  getEnvPackTideStation,
+  getEnvPackTideHeight,
+} from "@/lib/envOfflineStore";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
@@ -175,7 +180,27 @@ export function useTidalData(
               packSnapshotAt: pack.savedAt,
             });
           } else {
-            setData({ available: false });
+            // Secondary fallback: env pack (broader coverage, no currents data)
+            const envPack = useEnvOfflineStore.getState().envPack;
+            const isExpired = useEnvOfflineStore.getState().isExpired();
+            const station = envPack && !isExpired ? getEnvPackTideStation(envPack) : null;
+            if (station) {
+              const dt = scrubDatetime ?? new Date();
+              const height = getEnvPackTideHeight(envPack!, dt);
+              setData({
+                available: true,
+                tideHeight: height,
+                currentDirection: 0,
+                currentSpeed: 0,
+                stationName: station.name,
+                isPredicted: true,
+                source: "noaa",
+                isOfflinePack: true,
+                packSnapshotAt: envPack!.generatedAt,
+              });
+            } else {
+              setData({ available: false });
+            }
           }
           setLoading(false);
         }

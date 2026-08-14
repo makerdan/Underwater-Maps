@@ -4,6 +4,12 @@ import { getSelectableMarkerTypes } from "@/lib/markerConstants";
 
 export const UNDO_DELETE_WINDOW_MS = 5000;
 
+/**
+ * IndexedDB key used by envOfflineStore to persist the global env pack.
+ * Listed here so the storage-usage summary can account for it.
+ */
+export const ENV_PACK_IDB_KEY = "env-pack-v1";
+
 export const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export const FIXED_SHORTCUTS: { keys: string; desc: string }[] = [
