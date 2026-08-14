@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { QueryClient, QueryCache, MutationCache } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { useOfflineStore } from "@/lib/offlineStore";
 
 function is401(error: unknown): boolean {
   return (
@@ -60,11 +61,38 @@ function setIsConnecting(value: boolean): void {
   notifyConnecting();
 
   if (value) {
-    startHealthPoll();
+    // Only start the health poll when the device has internet access.
+    // If isOnline is false the server is unreachable by definition — the poll
+    // would just fail immediately.  When the device comes back online the
+    // offlineStore subscription below will trigger a probe automatically.
+    // Guard: test mocks may not implement .getState; default to true so the
+    // poll still starts in those environments (existing test behaviour).
+    const isOnline =
+      typeof useOfflineStore.getState === "function"
+        ? useOfflineStore.getState().isOnline
+        : true;
+    if (isOnline) {
+      startHealthPoll();
+    }
   } else if (wasConnecting) {
     // Transition: connecting → connected — notify any upload resumption hooks.
     _reconnectListeners.forEach((fn) => fn());
   }
+}
+
+// When the device comes back online while _isConnecting is true, trigger one
+// health probe immediately (the poll was suppressed while offline).
+// Guard: test mocks of useOfflineStore may not implement .subscribe — skip
+// safely so the module loads without throwing in those environments.
+if (typeof useOfflineStore.subscribe === "function") {
+  useOfflineStore.subscribe((state, prev) => {
+    if (!prev.isOnline && state.isOnline && _isConnecting) {
+      _healthPollAttempt = 0;
+      if (_healthPollTimer === null) {
+        scheduleHealthPoll();
+      }
+    }
+  });
 }
 
 /**

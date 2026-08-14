@@ -293,6 +293,7 @@ function Main() {
   // banner stays visible even after TanStack Query exhausts its retry budget.
   const serverWarmingUp = useIsConnecting();
   const healthResponseMs = useHealthResponseTime();
+  const isOnline = useOfflineStore((s) => s.isOnline);
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
   const { data: datasets } = useGetDatasets(
     { waterType: waterTypeForDatasets },
@@ -919,18 +920,8 @@ function Main() {
     }
   }, [terrain]);
 
-  // Sync online/offline state into offlineStore
-  useEffect(() => {
-    const setOnline = useOfflineStore.getState().setOnline;
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  // online/offline listeners are registered once at module-load time in
+  // offlineStore.ts — no duplicate useEffect needed here.
 
   // iOS Safari "Add to Home Screen" hint (once per session)
   useEffect(() => {
@@ -1153,10 +1144,25 @@ function Main() {
     <div className="relative w-screen h-screen overflow-hidden bg-[#040810] flex flex-col">
       <VisibleDatasetsLoader />
 
+      {/* Offline banner — device has no internet connection. Clears automatically
+          when navigator comes back online. No spinner (no point retrying). */}
+      {!isOnline && (
+        <div
+          data-testid="offline-banner"
+          role="status"
+          aria-live="polite"
+          aria-label="You are offline"
+          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-red-950/90 backdrop-blur-sm border-b border-red-800/40 text-red-400 text-[16.5px] font-mono tracking-wide select-none pointer-events-none"
+        >
+          ● You're offline
+        </div>
+      )}
+
       {/* Connecting banner — shown from the first 502 / network error until
-          the health poll confirms the server is back. Stays visible even after
-          TanStack Query exhausts its retry budget. Non-alarming: no red. */}
-      {serverWarmingUp && (
+          the health poll confirms the server is back. Only shown when the
+          device has internet (isOnline) — if the device is fully offline the
+          "offline" banner above already covers the user. Non-alarming: no red. */}
+      {serverWarmingUp && isOnline && (
         <div
           role="status"
           aria-live="polite"
@@ -1176,7 +1182,7 @@ function Main() {
           >
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
           </svg>
-          Reconnecting…
+          Reconnecting to server…
         </div>
       )}
 
@@ -2309,6 +2315,10 @@ export async function getTokenWithRetry(
   await new Promise<void>((resolve) => setTimeout(resolve, retryDelay));
   const retried = await getToken();
   if (retried !== null) return retried;
+  // If the device is offline, a null token is expected — the Clerk SDK cannot
+  // refresh without network access. Do not signal session expiry in this case;
+  // the auth-offline task will show the appropriate read-only banner instead.
+  if (!useOfflineStore.getState().isOnline) return null;
   onExpired();
   return null;
 }

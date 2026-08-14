@@ -50,6 +50,7 @@ import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useToast } from "@/hooks/use-toast";
+import { useOfflineStore } from "@/lib/offlineStore";
 
 
 // ---------------------------------------------------------------------------
@@ -975,6 +976,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const isOnline = useOfflineStore((s) => s.isOnline);
 
   // Terrain store — used to derive "Add to View" state for catalog cards and
   // to gate NCEI WCS saves (which require an active terrain area bbox).
@@ -1546,7 +1548,12 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 </ViewscreenTooltip>
               ))}
             </div>
-            {isSearching && (
+            {!isOnline && (
+              <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 4 }}>
+                Offline — results unavailable
+              </div>
+            )}
+            {isOnline && isSearching && (
               <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 4 }}>Searching…</div>
             )}
 
