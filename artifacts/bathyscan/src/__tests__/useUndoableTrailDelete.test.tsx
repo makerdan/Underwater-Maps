@@ -252,6 +252,93 @@ describe("useUndoableTrailDelete", () => {
     expect(deleteTrailMutate.mock.calls[0]![0]).toEqual({ id: "t1" });
   });
 
+  // ── New regression tests for the three undo-delete bugs ─────────────────
+
+  it("commit is one-shot — double commit does not fire DELETE twice", () => {
+    // Regression: if the timer fires and the unmount flush also calls
+    // entry.commit(), mutation.mutate must only be called once.
+    const { result, unmount } = renderHook(() =>
+      useUndoableTrailDelete(DATASET_ID, refetchTrails),
+    );
+
+    act(() => {
+      result.current("t1", "North Pass");
+    });
+
+    // Advance the timer so the natural timeout commit fires first.
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
+
+    expect(deleteTrailMutate).toHaveBeenCalledOnce();
+
+    // Unmounting now should NOT fire a second mutate call.
+    act(() => {
+      unmount();
+    });
+
+    expect(deleteTrailMutate).toHaveBeenCalledOnce();
+  });
+
+  it("same-ID requestDelete cancels the prior timer before replacing the entry", () => {
+    // Regression: a second requestDelete for the same trail ID must cancel
+    // the first timer so the first commit never fires while the second toast
+    // is visible.
+    const { result } = renderHook(() =>
+      useUndoableTrailDelete(DATASET_ID, refetchTrails),
+    );
+
+    // First delete request.
+    act(() => {
+      result.current("t1", "North Pass");
+    });
+
+    expect(deleteTrailMutate).not.toHaveBeenCalled();
+
+    // Second delete request for the same ID before the first timer fires.
+    act(() => {
+      result.current("t1", "North Pass again");
+    });
+
+    // Advance past the first window — the first timer must have been cancelled.
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
+
+    // Only one commit should have fired (from the second timer).
+    expect(deleteTrailMutate).toHaveBeenCalledOnce();
+    expect(deleteTrailMutate.mock.calls[0]![0]).toEqual({ id: "t1" });
+  });
+
+  it("unmount flush fires DELETE exactly once — timer does not double-fire afterward", () => {
+    // Regression: the unmount cleanup must cancel the pending timer before
+    // calling commit so that when fake timers later flush any remaining
+    // callbacks, no second DELETE is issued.
+    const { result, unmount } = renderHook(() =>
+      useUndoableTrailDelete(DATASET_ID, refetchTrails),
+    );
+
+    act(() => {
+      result.current("t1", "North Pass");
+    });
+
+    expect(deleteTrailMutate).not.toHaveBeenCalled();
+
+    // Unmount mid-window — should fire commit immediately.
+    act(() => {
+      unmount();
+    });
+
+    expect(deleteTrailMutate).toHaveBeenCalledOnce();
+
+    // Drain any remaining timers — the cancelled timer must not re-fire.
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    expect(deleteTrailMutate).toHaveBeenCalledOnce();
+  });
+
   it("restores the cache on DELETE server error", () => {
     const { result } = renderHook(() =>
       useUndoableTrailDelete(DATASET_ID, refetchTrails),

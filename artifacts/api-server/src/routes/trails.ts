@@ -163,6 +163,38 @@ router.delete("/trails/:id", requireAuth, dataMutationRateLimit, asyncHandler(as
 }));
 
 // ---------------------------------------------------------------------------
+// POST /trails/:id/soft-delete  (beacon fallback for beforeunload)
+// ---------------------------------------------------------------------------
+// Called by navigator.sendBeacon on page unload so pending deletes survive
+// tab-close without needing an async auth-token lookup.  Authentication relies
+// on the session cookie that the browser includes automatically with the beacon.
+// This route is intentionally identical in effect to DELETE /trails/:id.
+router.post("/trails/:id/soft-delete", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
+  const parsed = TrailIdParamSchema.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_request", details: "Invalid trail id" });
+    return;
+  }
+
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const { id } = parsed.data;
+
+  const deleted = await db
+    .delete(gpsTrailsTable)
+    .where(and(eq(gpsTrailsTable.id, id), eq(gpsTrailsTable.userId, userId)))
+    .returning({ id: gpsTrailsTable.id });
+
+  if (!deleted.length) {
+    // Return 204 rather than 404 — a beacon fired on unload may arrive after a
+    // normal DELETE has already committed, so "already gone" is not an error.
+    res.status(204).send();
+    return;
+  }
+
+  res.status(204).send();
+}));
+
+// ---------------------------------------------------------------------------
 // GET /trails/:id/points?page=1&pageSize=200
 // ---------------------------------------------------------------------------
 router.get("/trails/:id/points", requireAuth, asyncHandler(async (req, res): Promise<void> => {

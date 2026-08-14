@@ -13,9 +13,19 @@
  *      current cache — not the full snapshot — so concurrent pending deletes
  *      are not accidentally reverted.
  *
- * Pending deletes are flushed on unmount AND on page unload (via
- * beforeunload + fetch keepalive) so the server is never left with
- * dangling rows even when the user closes the tab during the undo window.
+ * Pending deletes are flushed on unmount (timer cancelled, commit called once)
+ * AND on page unload via navigator.sendBeacon to a POST soft-delete endpoint,
+ * so the server is never left with dangling rows even when the user closes the
+ * tab during the 5-second undo window.
+ *
+ * Bug fixes over the original implementation:
+ *  1. commit() is one-shot — a `committed` guard prevents duplicate DELETEs
+ *     if the timer fires and then the unmount flush also calls commit().
+ *  2. Same-ID replace cancels the prior timer before overwriting the entry
+ *     so the first timer can't fire while the second toast is active.
+ *  3. beforeunload uses navigator.sendBeacon (POST to /soft-delete) with a
+ *     synchronous-XHR fallback instead of an unawaited authorizedFetch; this
+ *     survives tab-close without needing an async token lookup.
  */
 import React, { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,7 +36,6 @@ import {
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { authorizedFetch } from "@/lib/authorizedFetch";
 
 const UNDO_TRAIL_DELETE_MS = 5000;
 
@@ -34,6 +43,7 @@ type PendingEntry = {
   trailId: string;
   datasetId: string;
   timer: ReturnType<typeof setTimeout>;
+  /** Cancels the pending timer and runs commit exactly once. */
   commit: () => void;
 };
 
@@ -50,6 +60,17 @@ export function useUndoableTrailDelete(
 
   const requestDelete = useCallback(
     (id: string, name: string) => {
+      // ── Cancel any prior pending delete for the same ID ──────────────────
+      // If a second requestDelete arrives for an ID that is already pending,
+      // the original timer must be cancelled before we overwrite the entry.
+      // Without this, the first timer fires while the second toast is active,
+      // deleting the trail while the user still has an "Undo" option showing.
+      const existing = pendingRef.current.get(id);
+      if (existing) {
+        clearTimeout(existing.timer);
+        pendingRef.current.delete(id);
+      }
+
       // Snapshot used ONLY for undo-rollback of this specific trail.
       const snapshotAtDelete = qc.getQueryData<GpsTrail[]>(trailsQueryKey);
 
@@ -57,12 +78,18 @@ export function useUndoableTrailDelete(
         prev ? prev.filter((t) => t.id !== id) : prev,
       );
 
-      // Closure flag — set by undo() to prevent the mutation from firing even
-      // if the timer callback was already queued when the user clicked "Undo".
+      // Closure flags:
+      //  aborted   — set by undo() to prevent mutation even if the timer
+      //              callback was already queued when the user clicked "Undo".
+      //  committed — one-shot guard so commit() is idempotent; prevents a
+      //              double DELETE when the timer fires and the unmount flush
+      //              also tries to call commit().
       let aborted = false;
+      let committed = false;
 
       const commit = () => {
-        if (aborted) return;
+        if (aborted || committed) return;
+        committed = true;
         pendingRef.current.delete(id);
         mutation.mutate(
           { id },
@@ -140,6 +167,8 @@ export function useUndoableTrailDelete(
         datasetId,
         timer,
         commit: () => {
+          // Cancel the pending timer before calling the inner commit so the
+          // unmount flush doesn't leave a live timer that fires afterward.
           clearTimeout(timer);
           commit();
         },
@@ -170,31 +199,50 @@ export function useUndoableTrailDelete(
   );
 
   // Flush pending deletes on unmount (e.g. map closes mid-undo-window).
+  // Cancel each timer first so the one-shot `commit` is the only caller.
   useEffect(() => {
     const map = pendingRef.current;
     return () => {
       const entries = Array.from(map.values());
       map.clear();
-      for (const entry of entries) entry.commit();
+      for (const entry of entries) {
+        // entry.commit() calls clearTimeout internally, then runs the
+        // one-shot inner commit. No duplicate DELETE can occur even if the
+        // timer already fired, because the `committed` flag guards it.
+        entry.commit();
+      }
     };
   }, []);
 
-  // Flush pending deletes on page unload using fetch keepalive so the
-  // server receives the DELETE even if the browser tab is closed during
-  // the 5-second undo window.
+  // Flush pending deletes on page unload using navigator.sendBeacon so the
+  // server receives the delete intent even when the tab closes before an
+  // async token lookup can complete.
+  //
+  // sendBeacon sends a POST to /api/trails/:id/soft-delete which the server
+  // handles identically to DELETE /api/trails/:id.  Cookies are included
+  // automatically by the browser so authentication works without a token.
+  //
+  // Falls back to a synchronous XHR if sendBeacon is unavailable (rare).
   useEffect(() => {
     const handleBeforeUnload = () => {
       const map = pendingRef.current;
       if (map.size === 0) return;
       const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
       for (const entry of map.values()) {
-        // Best-effort: the token lookup is async, so during unload the
-        // request may go out cookie-only — the Authorization header is
-        // attached whenever the token resolves in time.
-        void authorizedFetch(`${apiBase}/api/trails/${encodeURIComponent(entry.trailId)}`, {
-          method: "DELETE",
-          keepalive: true,
-        }).catch(() => undefined);
+        const url = `${apiBase}/api/trails/${encodeURIComponent(entry.trailId)}/soft-delete`;
+        if (typeof navigator.sendBeacon === "function") {
+          // sendBeacon is non-blocking and survives tab close.
+          navigator.sendBeacon(url);
+        } else {
+          // Synchronous XHR fallback — blocks unload long enough to dispatch.
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", url, false /* synchronous */);
+            xhr.send();
+          } catch {
+            // Nothing we can do during unload; swallow silently.
+          }
+        }
       }
       map.clear();
     };
