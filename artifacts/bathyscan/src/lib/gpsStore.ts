@@ -21,6 +21,12 @@ interface GpsStore {
   active: boolean;
   position: GpsPosition | null;
   error: string | null;
+  /**
+   * The raw GeolocationPositionError.code from the most recent error, or null
+   * when there is no active error. Codes: 1 = PERMISSION_DENIED, 2 =
+   * POSITION_UNAVAILABLE, 3 = TIMEOUT.
+   */
+  errorCode: number | null;
   watchId: number | null;
   startWatching: () => void;
   stopWatching: () => void;
@@ -30,6 +36,7 @@ export const useGpsStore = create<GpsStore>((set, get) => ({
   active: false,
   position: null,
   error: null,
+  errorCode: null,
   watchId: null,
 
   startWatching: () => {
@@ -74,6 +81,7 @@ export const useGpsStore = create<GpsStore>((set, get) => ({
         set({
           active: true,
           error: null,
+          errorCode: null,
           position: {
             longitude: lon,
             latitude: lat,
@@ -104,14 +112,14 @@ export const useGpsStore = create<GpsStore>((set, get) => ({
         // consumers cannot read a stale last-known coordinate as if it were
         // a live fix.
         navigator.geolocation.clearWatch(ownId);
-        set({ active: false, error: msg, watchId: null, position: null });
+        set({ active: false, error: msg, errorCode: err.code, watchId: null, position: null });
       },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
     );
 
     const id = ownId;
 
-    set({ watchId: id, active: false, error: null });
+    set({ watchId: id, active: false, error: null, errorCode: null });
   },
 
   stopWatching: () => {
@@ -119,6 +127,6 @@ export const useGpsStore = create<GpsStore>((set, get) => ({
     if (watchId !== null) {
       navigator.geolocation.clearWatch(watchId);
     }
-    set({ active: false, position: null, error: null, watchId: null });
+    set({ active: false, position: null, error: null, errorCode: null, watchId: null });
   },
 }));

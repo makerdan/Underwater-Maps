@@ -158,10 +158,13 @@ export function enterLiveMode(): void {
     }
     if (state.error && state.error !== prev.error) {
       notifyGpsError(state.error);
-      // Attempt to restart the GPS watch after a short delay, up to
-      // MAX_GPS_RETRIES times, so the user does not have to manually toggle
-      // Live mode off and on after a transient GPS failure.
-      if (gpsRetryCount < MAX_GPS_RETRIES) {
+      // PERMISSION_DENIED (code 1) is a permanent failure until the user
+      // changes browser settings — retrying cannot self-heal it, and doing so
+      // wastes the cap and may confuse the user with repeated error toasts.
+      // Only schedule a retry for transient errors (code 2 = unavailable,
+      // code 3 = timeout, null = unknown origin).
+      const isPermissionDenied = state.errorCode === 1;
+      if (!isPermissionDenied && gpsRetryCount < MAX_GPS_RETRIES) {
         gpsRetryCount++;
         useLiveModeStore.setState({ gpsRetryAttempt: gpsRetryCount });
         if (gpsRetryTimer !== null) clearTimeout(gpsRetryTimer);
