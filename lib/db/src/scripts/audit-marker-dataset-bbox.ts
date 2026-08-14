@@ -1,20 +1,26 @@
 /**
  * audit-marker-dataset-bbox.ts
  *
- * One-off audit: checks every marker whose `dataset_id IS NOT NULL` against
+ * Audit: checks every marker whose `dataset_id IS NOT NULL` against
  * the coverage bbox of its referenced dataset (catalog or user-dataset).
  *
- * Default mode — read-only, prints a report to stdout.
+ * Default mode — read-only, prints a report to stdout, exits 0.
  *
  * Options:
+ *   --ci            Exit with code 1 when any out-of-bounds or unknown-dataset
+ *                   markers are found. Use this flag in CI / scheduled jobs so
+ *                   the run fails when drift is detected.
  *   --fix           UPDATE out-of-bounds and unknown-dataset markers to
  *                   set dataset_id = NULL (they become unassigned).
  *   --fix --dry-run Print what would be updated without writing to the DB.
  *
- * Run with:
- *   pnpm --filter @workspace/db tsx src/scripts/audit-marker-dataset-bbox.ts
- *   pnpm --filter @workspace/db tsx src/scripts/audit-marker-dataset-bbox.ts --fix
- *   pnpm --filter @workspace/db tsx src/scripts/audit-marker-dataset-bbox.ts --fix --dry-run
+ * Run manually:
+ *   pnpm --filter @workspace/db audit:marker-bbox
+ *   pnpm --filter @workspace/db audit:marker-bbox -- --fix
+ *   pnpm --filter @workspace/db audit:marker-bbox -- --fix --dry-run
+ *
+ * Run in CI (fails when problems are found):
+ *   pnpm --filter @workspace/db audit:marker-bbox -- --ci
  */
 
 import { isNotNull, inArray } from "drizzle-orm";
@@ -26,6 +32,7 @@ import { db, pool, markersTable, datasetCatalogTable, customDatasetsTable } from
 const args = process.argv.slice(2);
 const FIX_MODE = args.includes("--fix");
 const DRY_RUN = args.includes("--dry-run");
+const CI_MODE = args.includes("--ci");
 
 // ---------------------------------------------------------------------------
 // Bbox type
@@ -202,7 +209,15 @@ async function main() {
     ` (${problematic.length} total problems out of ${markers.length} checked)`,
   );
 
-  // 5. Fix mode
+  // 5. CI mode — non-zero exit when any findings exist
+  if (CI_MODE && problematic.length > 0) {
+    console.error(
+      `\n[audit] --ci: ${problematic.length} problem(s) found. Exiting with code 1.`,
+    );
+    process.exitCode = 1;
+  }
+
+  // 6. Fix mode
   if (FIX_MODE && problematic.length > 0) {
     if (DRY_RUN) {
       console.log(
