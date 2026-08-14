@@ -67,6 +67,7 @@ import { useActiveLoadStore } from "@/lib/activeLoadStore";
 import { fetchJsonWithProgress, NoDataAvailableError } from "@/lib/fetchWithProgress";
 import { checkDatasetIdMatch } from "@/lib/datasetResponseValidation";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
+import { BulkOfflinePanel } from "@/components/BulkOfflinePanel";
 import { GeoreferenceModal } from "@/components/GeoreferenceModal";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -2803,6 +2804,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
   } | null>(null);
 
+  // ─── Bulk Offline Panel ───────────────────────────────────────────────────
+  const [bulkOfflineOpen, setBulkOfflineOpen] = useState(false);
+
   // ─── Georeferencing wizard modal ──────────────────────────────────────────
   const [georefDataset, setGeorefDataset] = useState<UserDatasetMeta | null>(null);
 
@@ -2855,26 +2859,48 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           </div>
           {/* ── MY LIBRARY section (preset datasets + user library) ── */}
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
-            <button
-              type="button"
-              onClick={() => togglePanel("myLibrary")}
-              aria-expanded={!myLibraryCollapsed}
-              className="px-3 py-1 flex items-center gap-2 w-full hover:bg-white/5 transition-colors"
-              style={{
-                fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                letterSpacing: "0.12em",
-                color: "#cbd5e1",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
-              <span>{myLibraryCollapsed ? "▾ MY LIBRARY" : "▲ MY LIBRARY"}</span>
-              {anyLoading && (
-                <span className="animate-spin" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1" }}>◌</span>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={() => togglePanel("myLibrary")}
+                aria-expanded={!myLibraryCollapsed}
+                className="px-3 py-1 flex items-center gap-2 flex-1 hover:bg-white/5 transition-colors"
+                style={{
+                  fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                  letterSpacing: "0.12em",
+                  color: "#cbd5e1",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <span>{myLibraryCollapsed ? "▾ MY LIBRARY" : "▲ MY LIBRARY"}</span>
+                {anyLoading && (
+                  <span className="animate-spin" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1" }}>◌</span>
+                )}
+              </button>
+              {isSignedIn && (userDatasets?.length ?? 0) > 0 && (
+                <button
+                  type="button"
+                  title="Save all uploaded datasets for offline use"
+                  onClick={() => setBulkOfflineOpen(true)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#00e5ff",
+                    fontSize: "calc(13px * var(--bs-font-scale, 1))",
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    flexShrink: 0,
+                    opacity: 0.8,
+                  }}
+                  aria-label="Save all offline"
+                >
+                  ⬇ All
+                </button>
               )}
-            </button>
+            </div>
 
             <div style={{ display: myLibraryCollapsed ? 'none' : 'block' }}>
                 {presetLoadError && (
@@ -4250,6 +4276,16 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         <OfflinePackModal
           dataset={offlinePackDataset}
           onClose={() => setOfflinePackDataset(null)}
+        />
+      )}
+
+      {bulkOfflineOpen && (
+        <BulkOfflinePanel
+          datasets={(userDatasets ?? []).map((d) => ({
+            id: d.id,
+            name: d.name,
+          }))}
+          onClose={() => setBulkOfflineOpen(false)}
         />
       )}
 
