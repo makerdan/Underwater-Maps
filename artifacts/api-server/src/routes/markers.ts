@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, eq, sql, isNull, gte, lte } from "drizzle-orm";
-import { db, markersTable, catchCountersTable, catchEntriesTable } from "@workspace/db";
+import { db, markersTable, catchCountersTable, catchEntriesTable, datasetCatalogTable, customDatasetsTable } from "@workspace/db";
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody, GetMarkersResponse, GetMarkersResponseItem, PatchMarkersIdResponse, DeleteMarkersMineResponse } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -12,6 +12,52 @@ import { dataMutationRateLimit, bulkDeleteMarkersRateLimit } from "../middleware
 
 const LABEL_MAX = 200;
 const NOTES_MAX = 2000;
+
+interface NormalisedBbox {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+}
+
+/**
+ * Resolves the coverage bbox for a given datasetId by checking the catalog
+ * table first, then the user-uploaded custom datasets table. Returns a
+ * normalised bbox or null when the dataset is not found in either table.
+ */
+async function resolveDatasetBbox(datasetId: string): Promise<NormalisedBbox | null> {
+  // 1. Check catalog datasets (coverageBbox is a JSONB blob).
+  const catalogRows = await db
+    .select({ coverageBbox: datasetCatalogTable.coverageBbox })
+    .from(datasetCatalogTable)
+    .where(eq(datasetCatalogTable.id, datasetId));
+
+  if (catalogRows.length > 0) {
+    const bbox = catalogRows[0]!.coverageBbox as NormalisedBbox | null | undefined;
+    if (bbox && typeof bbox.minLon === "number") {
+      return bbox;
+    }
+  }
+
+  // 2. Check user-uploaded datasets (bbox fields live inside terrainJson).
+  const userRows = await db
+    .select({ terrainJson: customDatasetsTable.terrainJson })
+    .from(customDatasetsTable)
+    .where(eq(customDatasetsTable.id, datasetId));
+
+  if (userRows.length > 0) {
+    const tj = userRows[0]!.terrainJson;
+    if (tj && typeof tj.minLon === "number") {
+      return { minLon: tj.minLon, minLat: tj.minLat, maxLon: tj.maxLon, maxLat: tj.maxLat };
+    }
+  }
+
+  return null;
+}
+
+function isInsideBbox(lon: number, lat: number, bbox: NormalisedBbox): boolean {
+  return lon >= bbox.minLon && lon <= bbox.maxLon && lat >= bbox.minLat && lat <= bbox.maxLat;
+}
 
 const router = Router();
 
@@ -88,6 +134,19 @@ router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMar
     return;
   }
 
+  // Dataset bbox guard — only when a datasetId is provided.
+  if (datasetId != null) {
+    const bbox = await resolveDatasetBbox(datasetId);
+    if (bbox === null) {
+      res.status(404).json({ error: "not_found", message: "Dataset not found" });
+      return;
+    }
+    if (!isInsideBbox(lon, lat, bbox)) {
+      res.status(422).json({ error: "validation_error", message: "Marker coordinates are outside the dataset's coverage area" });
+      return;
+    }
+  }
+
   let finalLabel = trimmedLabel;
   let catchSeq: number | null = null;
 
@@ -156,6 +215,34 @@ router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(
   if (updateData.depth !== undefined) {
     if (!Number.isFinite(updateData.depth) || updateData.depth < 0) {
       res.status(422).json({ error: "validation_error", field: "depth", message: "depth must be a finite number ≥ 0" });
+      return;
+    }
+  }
+
+  // Dataset bbox guard — only when the request body explicitly supplies a
+  // datasetId (non-null). Patching only label/notes/depth leaves this field
+  // absent entirely, so the check is skipped. Passing datasetId: null is
+  // valid (un-assignment) and also skips the check.
+  if ("datasetId" in updateData && updateData.datasetId != null) {
+    const bbox = await resolveDatasetBbox(updateData.datasetId);
+    if (bbox === null) {
+      res.status(404).json({ error: "not_found", message: "Dataset not found" });
+      return;
+    }
+    // We need the marker's current lon/lat to check against the new dataset's bbox.
+    // Fetch the marker first (ownership-scoped) so we always check the real coords.
+    const [existing] = await db
+      .select({ lon: markersTable.lon, lat: markersTable.lat })
+      .from(markersTable)
+      .where(and(eq(markersTable.id, id), eq(markersTable.userId, userId)));
+    if (!existing) {
+      res.status(404).json({ error: "not_found", details: `Marker '${id}' not found` });
+      return;
+    }
+    const lon = (updateData as { lon?: number }).lon ?? existing.lon;
+    const lat = (updateData as { lat?: number }).lat ?? existing.lat;
+    if (!isInsideBbox(lon, lat, bbox)) {
+      res.status(422).json({ error: "validation_error", message: "Marker coordinates are outside the dataset's coverage area" });
       return;
     }
   }
