@@ -18,6 +18,8 @@ import { formatFreshness } from "@/lib/freshnessUtils";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
 import { useQueryClient, useQueries } from "@tanstack/react-query";
+import { useOfflineStore } from "@/lib/offlineStore";
+import { listOfflinePacks, type OfflinePack } from "@/lib/offlinePackStore";
 import {
   useGetDatasetsCatalogSearch,
   useGetDatasetsMySaves,
@@ -657,6 +659,63 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
 };
 
 // ---------------------------------------------------------------------------
+// OfflinePackCard — lightweight card for a saved offline pack shown when offline
+// ---------------------------------------------------------------------------
+
+interface OfflinePackCardProps {
+  pack: OfflinePack;
+  onView: (pack: OfflinePack) => void;
+}
+
+const OfflinePackCard: React.FC<OfflinePackCardProps> = ({ pack, onView }) => (
+  <div style={CARD} data-testid={`offline-pack-card-${pack.datasetId}`}>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+      <span style={{ fontSize: "calc(21px * var(--bs-font-scale, 1))" }}>📦</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          title={pack.datasetName}
+          style={{
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
+            fontWeight: 700,
+            color: "#e2e8f0",
+            marginBottom: 2,
+            lineHeight: 1.3,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {pack.datasetName}
+        </div>
+        <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", letterSpacing: "0.06em" }}>
+          {pack.centerLat.toFixed(4)}°, {pack.centerLon.toFixed(4)}°
+        </div>
+      </div>
+    </div>
+    <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 8 }}>
+      Saved {formatFreshness(pack.savedAt)}
+    </div>
+    <button
+      data-testid={`offline-pack-view-${pack.datasetId}`}
+      onClick={() => onView(pack)}
+      style={{
+        fontSize: "calc(12px * var(--bs-font-scale, 1))",
+        padding: "3px 10px",
+        background: "rgba(0,229,255,0.1)",
+        border: "1px solid rgba(0,229,255,0.3)",
+        borderRadius: 3,
+        color: "#00e5ff",
+        cursor: "pointer",
+        letterSpacing: "0.1em",
+        textTransform: "uppercase",
+      }}
+    >
+      View
+    </button>
+  </div>
+);
+
+// ---------------------------------------------------------------------------
 // (My Saves components moved to MySavesSection.tsx)
 // ---------------------------------------------------------------------------
 
@@ -978,6 +1037,19 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const { toast } = useToast();
   const isOnline = useOfflineStore((s) => s.isOnline);
 
+  // Offline state — drives the "Saved Offline Packs" branch in the Search tab.
+  const isOnline = useOfflineStore((s) => s.isOnline);
+  const [savedPacks, setSavedPacks] = useState<OfflinePack[]>([]);
+
+  // Load saved packs on mount and whenever the device goes offline so the list
+  // is ready the moment the offline branch becomes visible. We skip loading while
+  // online to avoid IndexedDB overhead on the hot path.
+  useEffect(() => {
+    if (!isOnline) {
+      void listOfflinePacks().then(setSavedPacks);
+    }
+  }, [isOnline]);
+
   // Terrain store — used to derive "Add to View" state for catalog cards and
   // to gate NCEI WCS saves (which require an active terrain area bbox).
   const terrainVisibleDatasets = useTerrainStore((s) => s.visibleDatasets);
@@ -1033,6 +1105,30 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     nceiDebounceRef.current = setTimeout(() => setDebouncedNceiQuery(val), 400);
   }, []);
 
+  // Offline packs — filter by debouncedQuery when we are offline.
+  const filteredPacks = useMemo(() => {
+    if (isOnline) return [];
+    const q = debouncedQuery.trim().toLowerCase();
+    if (!q) return savedPacks;
+    return savedPacks.filter((p) =>
+      p.datasetName.toLowerCase().includes(q),
+    );
+  }, [isOnline, savedPacks, debouncedQuery]);
+
+  // Handler for the "View" button on an offline pack card.
+  const handleOfflinePackView = useCallback(
+    (pack: OfflinePack) => {
+      void requestDatasetSwitch({
+        datasetId: pack.datasetId,
+        onConfirm: () => {
+          setDatasetId(pack.datasetId);
+          onClose();
+        },
+      });
+    },
+    [setDatasetId, onClose],
+  );
+
   // Catalog search
   // "intertidal" is a client-side-only filter (not a real dataType on the API),
   // so we don't forward it to the server — we filter results locally instead.
@@ -1045,7 +1141,8 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     {
       query: {
         queryKey: getGetDatasetsCatalogSearchQueryKey(searchParams),
-        enabled: tab === "search" && debouncedQuery.trim().length > 0,
+        // Skip catalog search entirely when offline — the server is unreachable.
+        enabled: tab === "search" && debouncedQuery.trim().length > 0 && isOnline,
         staleTime: 30_000,
       },
     },
@@ -1593,61 +1690,112 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
             style={{ flex: 1, overflowY: "auto", padding: "0 14px 14px" }}
             data-testid="find-data-results"
           >
-            {searchResults.length === 0 && !isSearching && (
-              <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
-                {debouncedQuery
-                  ? "No results found — try different keywords"
-                  : "Type a query to discover datasets"}
-              </div>
-            )}
-            {!isSignedIn && (
-              <div
-                style={{
-                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-                  color: "#f59e0b",
-                  textAlign: "center",
-                  padding: "8px 0 12px",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                Sign in to save catalog datasets to your account.
-              </div>
-            )}
-            {searchResults.map((entry) => {
-              const presetId = entry.id.startsWith("preset-") ? entry.id.replace("preset-", "") : null;
-              // NCEI WCS catalog entries require an active terrain bbox to materialise
-              // a meaningful survey corridor.  Disable Save when no terrain is loaded.
-              const isNceiWcsEntry = entry.id.startsWith("ncei-");
-              const saveBlockedReason =
-                isNceiWcsEntry && !terrainActiveGrid
-                  ? "Load a terrain in this area first, then save to download it."
-                  : undefined;
-              return (
-                <CatalogCard
-                  key={entry.id}
-                  entry={entry}
-                  onSave={handleSave}
-                  saving={savingIds.has(entry.id)}
-                  saved={savedIds.has(entry.id) || savedCatalogIds.has(entry.id)}
-                  canSave={!!isSignedIn}
-                  presetId={presetId}
-                  onLoad={handleLoad}
-                  hasPrimary={hasCatalogPrimary}
-                  inView={presetId !== null && catalogSelectedIdSet.has(presetId)}
-                  atCap={atCatalogCap}
-                  onAddToView={handleCatalogAddToView}
-                  saveBlockedReason={saveBlockedReason}
-                />
-              );
-            })}
-            {searchResults.length > 0 && catalogDataUpdatedAt > 0 && !isSearching && (
-              <div style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#475569", letterSpacing: "0.06em", textAlign: "right", paddingTop: 6, paddingBottom: 2 }}>
-                Results as of {formatFreshness(catalogDataUpdatedAt)}
-              </div>
+            {!isOnline ? (
+              /* ── Offline branch — show saved packs instead of catalog ─────── */
+              <>
+                <div
+                  data-testid="offline-packs-heading"
+                  style={{
+                    fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                    color: "#fbbf24",
+                    paddingTop: 10,
+                    paddingBottom: 6,
+                  }}
+                >
+                  📴 Saved Offline Packs
+                </div>
+                {filteredPacks.length === 0 ? (
+                  <div
+                    data-testid="offline-packs-empty"
+                    style={{
+                      fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                      color: "#94a3b8",
+                      textAlign: "center",
+                      paddingTop: 16,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    <div style={{ fontSize: "calc(28px * var(--bs-font-scale, 1))", marginBottom: 8 }}>⛅</div>
+                    <div style={{ fontWeight: 600, marginBottom: 6, color: "#e2e8f0" }}>
+                      No offline packs saved yet.
+                    </div>
+                    <div>
+                      Save a dataset while online using the{" "}
+                      <span style={{ color: "#fbbf24" }}>⬇ Offline</span> button on any result card.
+                    </div>
+                  </div>
+                ) : (
+                  filteredPacks.map((pack) => (
+                    <OfflinePackCard
+                      key={pack.id}
+                      pack={pack}
+                      onView={handleOfflinePackView}
+                    />
+                  ))
+                )}
+              </>
+            ) : (
+              /* ── Online branch — catalog search results (unchanged) ─────── */
+              <>
+                {searchResults.length === 0 && !isSearching && (
+                  <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
+                    {debouncedQuery
+                      ? "No results found — try different keywords"
+                      : "Type a query to discover datasets"}
+                  </div>
+                )}
+                {!isSignedIn && (
+                  <div
+                    style={{
+                      fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                      color: "#f59e0b",
+                      textAlign: "center",
+                      padding: "8px 0 12px",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    Sign in to save catalog datasets to your account.
+                  </div>
+                )}
+                {searchResults.map((entry) => {
+                  const presetId = entry.id.startsWith("preset-") ? entry.id.replace("preset-", "") : null;
+                  // NCEI WCS catalog entries require an active terrain bbox to materialise
+                  // a meaningful survey corridor.  Disable Save when no terrain is loaded.
+                  const isNceiWcsEntry = entry.id.startsWith("ncei-");
+                  const saveBlockedReason =
+                    isNceiWcsEntry && !terrainActiveGrid
+                      ? "Load a terrain in this area first, then save to download it."
+                      : undefined;
+                  return (
+                    <CatalogCard
+                      key={entry.id}
+                      entry={entry}
+                      onSave={handleSave}
+                      saving={savingIds.has(entry.id)}
+                      saved={savedIds.has(entry.id) || savedCatalogIds.has(entry.id)}
+                      canSave={!!isSignedIn}
+                      presetId={presetId}
+                      onLoad={handleLoad}
+                      hasPrimary={hasCatalogPrimary}
+                      inView={presetId !== null && catalogSelectedIdSet.has(presetId)}
+                      atCap={atCatalogCap}
+                      onAddToView={handleCatalogAddToView}
+                      saveBlockedReason={saveBlockedReason}
+                    />
+                  );
+                })}
+                {searchResults.length > 0 && catalogDataUpdatedAt > 0 && !isSearching && (
+                  <div style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#475569", letterSpacing: "0.06em", textAlign: "right", paddingTop: 6, paddingBottom: 2 }}>
+                    Results as of {formatFreshness(catalogDataUpdatedAt)}
+                  </div>
+                )}
+              </>
             )}
 
-            {/* External sources — federated multi-source search */}
-            {debouncedQuery.trim().length > 0 && (
+            {/* External sources — federated multi-source search (online only) */}
+            {isOnline && debouncedQuery.trim().length > 0 && (
               <div data-testid="federated-section" style={{ marginTop: 14 }}>
                 <div
                   style={{
