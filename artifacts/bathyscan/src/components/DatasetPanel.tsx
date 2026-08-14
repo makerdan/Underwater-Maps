@@ -2014,6 +2014,19 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     let backoffMs = 1_500;
     let timerId: ReturnType<typeof setTimeout> | null = null;
 
+    // Tracks how many consecutive non-OK poll responses have been received.
+    // A single transient failure (e.g. a brief network blip) resets to 0 on
+    // the next successful response, so it does not trigger the error path.
+    // Three in a row strongly indicates the server lost track of the job —
+    // the most common cause is a server restart wiping in-memory job state.
+    // TODO: eliminate this heuristic once job state is persisted to the DB.
+    let consecutiveFailures = 0;
+
+    // After this many consecutive non-OK poll responses the poll loop stops
+    // and surfaces a clear, retryable error message instead of spinning for
+    // the full 10-minute timeout.
+    const POLL_INTERRUPT_THRESHOLD = 3;
+
     const poll = async () => {
       if (stopped) return;
 
@@ -2024,9 +2037,29 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         backoffMs = 1_500; // reset back-off on any successful network response
 
         if (!resp.ok) {
+          consecutiveFailures++;
+          // Three consecutive non-OK responses indicate the server has lost
+          // track of this job (e.g. restarted mid-upload and wiped in-memory
+          // state). Stop polling and surface a retryable error so the user
+          // does not wait 10 minutes for the overall timeout to fire.
+          // Follow-up work: persist job state to an upload_jobs DB table so
+          // a restarted server can resume from a durable record instead.
+          if (consecutiveFailures >= POLL_INTERRUPT_THRESHOLD) {
+            stopped = true;
+            clearUploadSession();
+            setChunkedPhase("error");
+            setChunkedError(
+              "Upload processing was interrupted (the server may have restarted). " +
+              "Your file was received — please try uploading again.",
+            );
+            return;
+          }
           scheduleNext();
           return;
         }
+
+        // Successful response — reset the consecutive-failure counter.
+        consecutiveFailures = 0;
 
         const job = await resp.json() as {
           status: string; progress: number; error?: string; datasetId?: string;
