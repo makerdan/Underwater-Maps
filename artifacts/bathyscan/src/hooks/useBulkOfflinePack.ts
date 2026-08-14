@@ -51,6 +51,7 @@ export interface BulkRow {
 
 export type BatchPhase =
   | "idle"
+  | "preflighting"
   | "preflight-error"
   | "running"
   | "paused"
@@ -313,7 +314,9 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
 
   const start = useCallback(async () => {
     cancelRef.current = false;
-    setPhase("running");
+    // Enter "preflighting" so controls are hidden while checks run, but without
+    // committing to "running" before we know preflight succeeded.
+    setPhase("preflighting");
     setPreflightError(null);
 
     const ok = await runPreflight();
@@ -323,12 +326,20 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
     }
 
     // Load existing packs so we can determine which rows to skip.
+    // Propagate failures as a preflight error — silently converting to [] would
+    // mean all packs are re-downloaded even when valid ones already exist.
     let existingPacks: OfflinePack[] = [];
     try {
       existingPacks = await listOfflinePacks();
-    } catch {
-      existingPacks = [];
+    } catch (e) {
+      setPreflightError(
+        `Cannot check existing packs — ${e instanceof Error ? e.message : "storage unavailable"}. Try closing and reopening the panel.`,
+      );
+      setPhase("preflight-error");
+      return;
     }
+
+    setPhase("running");
 
     const initialRows: BulkRow[] = datasets.map((ds) => {
       const existing = existingPacks.find((p) => p.datasetId === ds.id) ?? null;

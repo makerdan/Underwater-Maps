@@ -147,7 +147,8 @@ router.get(
     logger.info({ lat, lon, radiusMiles, days }, "[env-pack] Building environmental data pack");
 
     const generatedAt = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString();
+    // expiresAt respects the requested `days` window — not a hardcoded 14-day value.
+    const expiresAt = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
     const warnings: string[] = [];
 
     // Run all four data fetches concurrently; tolerate individual failures.

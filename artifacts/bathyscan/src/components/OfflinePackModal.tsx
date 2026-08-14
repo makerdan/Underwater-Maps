@@ -138,6 +138,9 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
     setAreaPhase("downloading");
     setAreaProgress([]);
     setAreaError(null);
+    // Capture the current existing pack before clearing it so we can restore
+    // it if the update fails — the user's old pack may still be valid.
+    const prevExistingPack = isUpdate ? existingPack : null;
     if (isUpdate) setExistingPack(null);
     try {
       const pack = await saveOfflinePack(dataset, days, (p) => {
@@ -156,6 +159,11 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
     } catch (err) {
       setAreaError(err instanceof Error ? err.message : "Download failed");
       setAreaPhase("error");
+      // Restore the previously valid pack so the user knows their old pack is
+      // still usable and can choose to retry or close.
+      if (isUpdate && prevExistingPack) {
+        setExistingPack(prevExistingPack);
+      }
     }
   };
 
@@ -396,7 +404,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   {/* Storage estimate */}
                   {storageQuota && (
                     <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 8 }}>
-                      ~2–5 MB per pack · {formatBytes(storageQuota.used)} used of {formatBytes(storageQuota.total)} available
+                      ~2–5 MB per pack · {formatBytes(storageQuota.used)} used of {formatBytes(storageQuota.total - storageQuota.used)} available
                     </div>
                   )}
 
@@ -411,6 +419,12 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       marginBottom: 8,
                     }}>
                       {areaError}
+                      {/* Show existing pack info when an update failed */}
+                      {existingPack && (
+                        <div style={{ marginTop: 4, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>
+                          Your previous pack (saved {formatDate(existingPack.savedAt)}) is still available.
+                        </div>
+                      )}
                     </div>
                   )}
 

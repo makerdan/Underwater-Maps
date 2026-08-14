@@ -27,6 +27,12 @@ export interface EnvOfflineState {
   isDownloading: boolean;
   /** Non-null when the last download attempt failed. */
   downloadError: string | null;
+  /**
+   * True when IDB hydration failed on startup (e.g. private-browsing quota
+   * exceeded or storage corrupted).  EnvOfflineSection shows a degraded-state
+   * warning when this is set so the user knows cached data may be unavailable.
+   */
+  idbHydrationError: boolean;
 
   // ── Selectors ──────────────────────────────────────────────────────────────
   /** True when a pack is cached and its expiresAt has passed. */
@@ -57,6 +63,7 @@ export const useEnvOfflineStore = create<EnvOfflineState>((set, get) => ({
   envPack: null,
   isDownloading: false,
   downloadError: null,
+  idbHydrationError: false,
 
   isExpired: () => {
     const pack = get().envPack;
@@ -108,7 +115,11 @@ export const useEnvOfflineStore = create<EnvOfflineState>((set, get) => ({
         set({ envPack: pack });
       }
     } catch {
-      // IDB unavailable (e.g. private-browsing in some browsers) — ignore.
+      // IDB unavailable (e.g. private-browsing in some browsers, storage
+      // quota exceeded, or corrupted store).  Surface as a degraded-state
+      // flag so EnvOfflineSection can show a visible warning instead of
+      // silently acting as if no pack exists.
+      set({ idbHydrationError: true });
     }
   },
 }));

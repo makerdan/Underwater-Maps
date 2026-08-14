@@ -343,6 +343,7 @@ function SavedPackRow({
 
 function QuotaBar({ used, total }: { used: number; total: number }) {
   const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0;
+  const available = total > used ? total - used : 0;
   return (
     <div style={{ marginBottom: 10 }}>
       <div
@@ -355,7 +356,7 @@ function QuotaBar({ used, total }: { used: number; total: number }) {
         }}
       >
         <span>{formatBytes(used)} used</span>
-        <span>{formatBytes(total)} available</span>
+        <span>{formatBytes(available)} available</span>
       </div>
       <div
         style={{
@@ -393,11 +394,13 @@ export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
   const [savedPacks, setSavedPacks] = useState<OfflinePack[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [packsError, setPacksError] = useState<string | null>(null);
+  const [showPauseCloseConfirm, setShowPauseCloseConfirm] = useState(false);
 
   const bulk = useBulkOfflinePack(datasets);
 
   const isRunning = bulk.phase === "running";
   const isPaused = bulk.phase === "paused";
+  const isPreflighting = bulk.phase === "preflighting";
   const isIdle =
     bulk.phase === "idle" ||
     bulk.phase === "done" ||
@@ -423,12 +426,18 @@ export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isRunning) onClose();
+      if (e.key !== "Escape") return;
+      if (isRunning) return;
+      if (isPaused) {
+        setShowPauseCloseConfirm(true);
+        return;
+      }
+      onClose();
     };
     document.addEventListener("keydown", handleKey);
     overlayRef.current?.focus();
     return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose, isRunning]);
+  }, [onClose, isRunning, isPaused]);
 
   // ── Load quota on mount ───────────────────────────────────────────────────
 
@@ -551,7 +560,11 @@ export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (isRunning) return;
+              if (isPaused) { setShowPauseCloseConfirm(true); return; }
+              onClose();
+            }}
             disabled={isRunning}
             aria-label="Close"
             style={{
@@ -570,6 +583,83 @@ export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
         </div>
 
         <div style={{ padding: "12px 16px" }}>
+          {/* ── Close-while-paused confirmation ── */}
+          {showPauseCloseConfirm && (
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-label="Confirm close"
+              data-testid="pause-close-confirm"
+              style={{
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.4)",
+                borderRadius: 5,
+                padding: "12px 14px",
+                marginBottom: 10,
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                color: "#fca5a5",
+              }}
+            >
+              <div style={{ marginBottom: 8 }}>
+                ⚠ The batch is paused. Closing now will discard the paused session — rows that
+                have not been saved yet will need to be re-started from scratch.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  data-testid="pause-close-confirm-yes"
+                  onClick={onClose}
+                  style={{
+                    padding: "4px 14px",
+                    background: "rgba(239,68,68,0.12)",
+                    border: "1px solid rgba(239,68,68,0.4)",
+                    borderRadius: 3,
+                    color: "#f87171",
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                    cursor: "pointer",
+                    fontFamily: FONT,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Close anyway
+                </button>
+                <button
+                  data-testid="pause-close-confirm-cancel"
+                  onClick={() => setShowPauseCloseConfirm(false)}
+                  style={{
+                    padding: "4px 14px",
+                    background: "none",
+                    border: "1px solid rgba(100,116,139,0.4)",
+                    borderRadius: 3,
+                    color: "#94a3b8",
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                    cursor: "pointer",
+                    fontFamily: FONT,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Keep open
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Preflighting indicator ── */}
+          {isPreflighting && (
+            <div
+              role="status"
+              style={{
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                color: "#94a3b8",
+                padding: "8px 0",
+                marginBottom: 10,
+              }}
+            >
+              ◌ Checking storage…
+            </div>
+          )}
+
           {/* ── Pre-flight error banner ── */}
           {bulk.preflightError && (
             <div

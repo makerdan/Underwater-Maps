@@ -5,7 +5,7 @@
  * Use" button that calls /api/env-pack for the user's current map centre
  * (default: SE Alaska) with radiusMiles=15 and days=14.
  */
-import React from "react";
+import React, { useState } from "react";
 import { useEnvOfflineStore, ENV_PACK_IDB_KEY } from "@/lib/envOfflineStore";
 import { useToast } from "@/hooks/use-toast";
 import { S } from "./styles";
@@ -50,7 +50,10 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
   const isExpired = useEnvOfflineStore((s) => s.isExpired);
   const downloadEnvPack = useEnvOfflineStore((s) => s.downloadEnvPack);
   const clearEnvPack = useEnvOfflineStore((s) => s.clearEnvPack);
+  const idbHydrationError = useEnvOfflineStore((s) => s.idbHydrationError);
   const { toast } = useToast();
+
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const lat = centerLat ?? DEFAULT_LAT;
   const lon = centerLon ?? DEFAULT_LON;
@@ -67,8 +70,13 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
   };
 
   const handleDelete = async () => {
-    await clearEnvPack();
-    toast({ title: "Cached weather data deleted", duration: 3000 });
+    setDeleteError(null);
+    try {
+      await clearEnvPack();
+      toast({ title: "Cached weather data deleted", duration: 3000 });
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Delete failed — please try again");
+    }
   };
 
   // Format helpers
@@ -93,6 +101,25 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
           Tides, weather, sea-surface temperature, and temperature profiles
           saved for offline use. Coverage radius: 15 mi · 14-day tide window.
         </div>
+
+        {/* IDB hydration error — shown when offline pack data could not be loaded */}
+        {idbHydrationError && (
+          <div
+            role="alert"
+            data-testid="env-idb-hydration-error"
+            style={{
+              background: "rgba(251,191,36,0.08)",
+              border: "1px solid rgba(251,191,36,0.3)",
+              borderRadius: 4,
+              padding: "6px 10px",
+              marginBottom: 8,
+              fontSize: "calc(9px * var(--bs-font-scale, 1))",
+              color: "#fbbf24",
+            }}
+          >
+            ⚠ Offline data could not be loaded from storage — your previously saved pack may be unavailable. Try refreshing the page.
+          </div>
+        )}
 
         {envPack === null ? (
           <div
@@ -186,6 +213,21 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
             {downloadError.startsWith("No data available")
               ? `ℹ ${downloadError}`
               : `✗ ${downloadError}`}
+          </div>
+        )}
+
+        {/* Delete error */}
+        {deleteError && (
+          <div
+            data-testid="env-pack-delete-error"
+            role="alert"
+            style={{
+              fontSize: "calc(9px * var(--bs-font-scale, 1))",
+              color: "#f87171",
+              marginBottom: 8,
+            }}
+          >
+            ✗ {deleteError}
           </div>
         )}
 

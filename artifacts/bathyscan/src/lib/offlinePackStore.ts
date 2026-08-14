@@ -126,6 +126,25 @@ async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<vo
   });
 }
 
+// ─── Tell the SW to remove cached terrain entries (rollback on pack failure) ──
+
+async function deletePackCache(terrainUrl: string, overviewUrl: string): Promise<void> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  const reg = await navigator.serviceWorker.ready.catch(() => null);
+  if (!reg?.active) return;
+  return new Promise<void>((resolve) => {
+    const channel = new MessageChannel();
+    // Resolve regardless of outcome — this is best-effort cleanup.
+    channel.port1.onmessage = () => resolve();
+    reg.active!.postMessage(
+      { type: "DELETE_PACK_CACHE", terrainUrl, overviewUrl },
+      [channel.port2],
+    );
+    // If the SW never responds (e.g. outdated SW without the handler), don't block.
+    setTimeout(resolve, 5000);
+  });
+}
+
 // ─── saveOfflinePack ──────────────────────────────────────────────────────────
 
 export async function saveOfflinePack(
@@ -158,75 +177,99 @@ export async function saveOfflinePack(
   }
   onProgress({ step: "terrain", label: "Terrain cached", done: true });
 
-  // Step 2: fetch tide pack
-  onProgress({ step: "tide", label: "Fetching tide predictions…", done: false });
-  let tidePack: TidePack;
+  // Steps 2–4: wrapped in a try/catch so any failure after terrain is cached
+  // triggers best-effort cleanup of the orphaned Cache Storage entries.
   try {
-    const tideRes = await fetch(
-      `${API_BASE}/api/tidal/pack?lat=${centerLat}&lon=${centerLon}&days=${days}`,
-    );
-    if (!tideRes.ok) throw new Error(`HTTP ${tideRes.status}`);
-    tidePack = (await tideRes.json()) as TidePack;
+    // Step 2: fetch tide pack
+    onProgress({ step: "tide", label: "Fetching tide predictions…", done: false });
+    let tidePack: TidePack;
+    try {
+      const tideRes = await fetch(
+        `${API_BASE}/api/tidal/pack?lat=${centerLat}&lon=${centerLon}&days=${days}`,
+      );
+      if (!tideRes.ok) throw new Error(`HTTP ${tideRes.status}`);
+      tidePack = (await tideRes.json()) as TidePack;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to fetch tide predictions";
+      onProgress({ step: "tide", label: msg, done: true, error: msg });
+      throw err;
+    }
+    onProgress({ step: "tide", label: "Tide predictions saved", done: true });
+
+    // Step 3: fetch weather pack (best-effort — does not throw)
+    onProgress({ step: "weather", label: "Fetching weather snapshot…", done: false });
+    let weatherPack: WeatherPack;
+    let weatherDone = false;
+    try {
+      const weatherRes = await fetch(
+        `${API_BASE}/api/weather/pack?lat=${centerLat}&lon=${centerLon}`,
+      );
+      if (!weatherRes.ok) throw new Error(`HTTP ${weatherRes.status}`);
+      weatherPack = (await weatherRes.json()) as WeatherPack;
+    } catch {
+      // Weather is best-effort — create a minimal pack if it fails, but tell
+      // the caller so the UI can surface the omission rather than showing a
+      // silent success followed by an empty weather panel when offline.
+      weatherPack = { station: null, observation: null, snapshotAt: new Date().toISOString() };
+      onProgress({
+        step: "weather",
+        label: "Weather unavailable — pack saved without weather data",
+        done: true,
+      });
+      weatherDone = true;
+    }
+    if (!weatherDone) {
+      if (weatherPack.station !== null || weatherPack.observation !== null) {
+        onProgress({ step: "weather", label: "Weather snapshot saved", done: true });
+      } else {
+        // A 200 response with both fields null means no station is nearby or NOAA
+        // is temporarily unavailable.  Always emit a terminal done event so the
+        // progress row never stays frozen on "Fetching weather snapshot…".
+        onProgress({
+          step: "weather",
+          label: "Weather unavailable — no station nearby",
+          done: true,
+        });
+      }
+    }
+
+    // Step 4: save to IndexedDB
+    onProgress({ step: "saving", label: "Writing to storage…", done: false });
+    const id = newId();
+    const pack: OfflinePack = {
+      id,
+      datasetId: dataset.id,
+      datasetName: dataset.name,
+      bbox: dataset.bbox ?? { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 },
+      centerLat,
+      centerLon,
+      savedAt: new Date().toISOString(),
+      terrainUrl,
+      overviewUrl,
+      tidePack,
+      weatherPack,
+      storageBytesEstimate: estimateFromPredictions(tidePack),
+    };
+
+    try {
+      await set(`${PACK_KEY_PREFIX}${id}`, pack);
+    } catch (idbErr) {
+      const raw = idbErr instanceof Error ? idbErr.message : "Storage write failed";
+      const userMsg = `Could not save to device storage: ${raw}`;
+      onProgress({ step: "saving", label: userMsg, done: true, error: userMsg });
+      throw new Error(userMsg);
+    }
+
+    onProgress({ step: "saving", label: "Saved to device", done: true });
+    return pack;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Failed to fetch tide predictions";
-    onProgress({ step: "tide", label: msg, done: true, error: msg });
+    // Any failure after terrain was successfully cached — remove the orphaned
+    // Cache Storage entries so re-saving always starts clean.
+    await deletePackCache(terrainUrl, overviewUrl).catch(() => {
+      // Best-effort; never mask the original error.
+    });
     throw err;
   }
-  onProgress({ step: "tide", label: "Tide predictions saved", done: true });
-
-  // Step 3: fetch weather pack
-  onProgress({ step: "weather", label: "Fetching weather snapshot…", done: false });
-  let weatherPack: WeatherPack;
-  try {
-    const weatherRes = await fetch(
-      `${API_BASE}/api/weather/pack?lat=${centerLat}&lon=${centerLon}`,
-    );
-    if (!weatherRes.ok) throw new Error(`HTTP ${weatherRes.status}`);
-    weatherPack = (await weatherRes.json()) as WeatherPack;
-  } catch {
-    // Weather is best-effort — create a minimal pack if it fails, but tell
-    // the caller so the UI can surface the omission rather than showing a
-    // silent success followed by an empty weather panel when offline.
-    weatherPack = { station: null, observation: null, snapshotAt: new Date().toISOString() };
-    onProgress({
-      step: "weather",
-      label: "Weather unavailable — pack saved without weather data",
-      done: true,
-    });
-  }
-  if (weatherPack.station !== null || weatherPack.observation !== null) {
-    onProgress({ step: "weather", label: "Weather snapshot saved", done: true });
-  } else {
-    // A 200 response with both fields null means no station is nearby or NOAA
-    // is temporarily unavailable.  Always emit a terminal done event so the
-    // progress row never stays frozen on "Fetching weather snapshot…".
-    onProgress({
-      step: "weather",
-      label: "Weather unavailable — no station nearby",
-      done: true,
-    });
-  }
-
-  // Step 4: save to IndexedDB
-  onProgress({ step: "saving", label: "Writing to storage…", done: false });
-  const id = newId();
-  const pack: OfflinePack = {
-    id,
-    datasetId: dataset.id,
-    datasetName: dataset.name,
-    bbox: dataset.bbox ?? { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 },
-    centerLat,
-    centerLon,
-    savedAt: new Date().toISOString(),
-    terrainUrl,
-    overviewUrl,
-    tidePack,
-    weatherPack,
-    storageBytesEstimate: estimateFromPredictions(tidePack),
-  };
-  await set(`${PACK_KEY_PREFIX}${id}`, pack);
-  onProgress({ step: "saving", label: "Saved to device", done: true });
-  return pack;
 }
 
 function estimateFromPredictions(tidePack: TidePack): number {
@@ -257,9 +300,12 @@ export async function getPackForLocation(
   lon: number,
 ): Promise<OfflinePack | null> {
   const packs = await listOfflinePacks();
+  // Exclude expired packs — an expired pack at 50 km must not win over a fresh
+  // pack at 150 km because the expired pack's tide data is stale.
+  const freshPacks = packs.filter((p) => !isPackExpired(p));
   let nearest: OfflinePack | null = null;
   let nearestDist = 200; // km threshold
-  for (const p of packs) {
+  for (const p of freshPacks) {
     const dist = haversineKm(lat, lon, p.centerLat, p.centerLon);
     if (dist < nearestDist) {
       nearestDist = dist;
@@ -339,9 +385,12 @@ function interpolateCurrentPredictions(
   const span = nextT - prevT;
   if (span <= 0) return { speed: prev.speed, dir: prev.dir };
   const t = (refMs - prevT) / span;
+  // Use shortest-arc interpolation for direction so that e.g. 359° → 1° wraps
+  // through 0° (north, Δ=2°) rather than through 180° (south, Δ=358°).
+  const dirDiff = ((((next.dir - prev.dir) % 360) + 540) % 360) - 180;
   return {
     speed: prev.speed + (next.speed - prev.speed) * t,
-    dir: prev.dir + (next.dir - prev.dir) * t,
+    dir: (prev.dir + dirDiff * t + 360) % 360,
   };
 }
 
@@ -363,9 +412,30 @@ export function getOfflineWeatherValue(pack: OfflinePack): OfflineWeatherValue |
 
 // ─── Storage estimate ─────────────────────────────────────────────────────────
 
+/**
+ * Estimate the storage size of an offline pack for `datasetId`.
+ *
+ * Attempts a HEAD request on the terrain endpoint and reads Content-Length.
+ * Falls back to 2.5 MiB when the server does not expose the header or the
+ * request fails (e.g. offline, CORS restriction).
+ */
 export async function estimatePackStorageBytes(
-  _datasetId: string,
+  datasetId: string,
 ): Promise<number> {
+  const terrainUrl = `${API_BASE}/api/datasets/${datasetId}/terrain`;
+  try {
+    const res = await fetch(terrainUrl, { method: "HEAD" });
+    const contentLength = res.headers.get("content-length");
+    if (contentLength) {
+      const bytes = parseInt(contentLength, 10);
+      if (!isNaN(bytes) && bytes > 0) {
+        // Add ~200 KB overhead for tide + weather JSON pack data.
+        return bytes + 200 * 1024;
+      }
+    }
+  } catch {
+    // Network unavailable or endpoint doesn't support HEAD — fall back.
+  }
   return 2.5 * 1024 * 1024;
 }
 

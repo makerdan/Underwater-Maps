@@ -3,7 +3,7 @@ import { precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
 import { StaleWhileRevalidate, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
-import { handleCachePackMessage, PACK_TERRAIN_CACHE_NAME } from "./lib/swMessageHandler";
+import { handleSwMessage, PACK_TERRAIN_CACHE_NAME } from "./lib/swMessageHandler";
 
 declare const self: ServiceWorkerGlobalScope;
 declare const __BUILD_HASH__: string;
@@ -111,7 +111,7 @@ registerRoute(
 
 // ── CACHE_PACK message handler ────────────────────────────────────────────────
 
-self.addEventListener("message", handleCachePackMessage as EventListener);
+self.addEventListener("message", handleSwMessage as EventListener);
 
 // ── Background Sync (markers) — intentionally not implemented in the SW ──────
 //

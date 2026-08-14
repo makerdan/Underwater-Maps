@@ -26,3 +26,23 @@ export function isCachePackMessage(data: unknown): data is CachePackMessage {
     (data as Record<string, unknown>)["type"] === "CACHE_PACK"
   );
 }
+
+export interface DeletePackCacheMessage {
+  type: "DELETE_PACK_CACHE";
+  terrainUrl: string;
+  overviewUrl: string;
+}
+
+/**
+ * Runtime type guard for DELETE_PACK_CACHE postMessage payloads.
+ *
+ * Used by the SW message handler to route cleanup requests sent when a
+ * saveOfflinePack call fails after terrain was already cached.
+ */
+export function isDeletePackCacheMessage(data: unknown): data is DeletePackCacheMessage {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    (data as Record<string, unknown>)["type"] === "DELETE_PACK_CACHE"
+  );
+}

@@ -1,13 +1,13 @@
 /**
- * Service-worker CACHE_PACK message handler — extracted for unit-testability.
+ * Service-worker message handlers — extracted for unit-testability.
  *
- * Exporting the handler as a plain function lets tests call it directly with
- * a mock event object (and a mocked global `caches`) without having to import
+ * Exporting the handlers as plain functions lets tests call them directly with
+ * mock event objects (and a mocked global `caches`) without having to import
  * the full sw.ts entry-point, which depends on Workbox and service-worker
  * globals that are unavailable in the jsdom test environment.
  */
 
-import { isCachePackMessage } from "./swHelpers";
+import { isCachePackMessage, isDeletePackCacheMessage } from "./swHelpers";
 
 /** The cache name used for persisting offline pack terrain/overview tiles. */
 export const PACK_TERRAIN_CACHE_NAME = "bathyscan-pack-terrain";
@@ -25,8 +25,8 @@ export interface MessageEventLike {
 /**
  * CACHE_PACK message handler.
  *
- * Called from `self.addEventListener("message", handleCachePackMessage)` in
- * sw.ts.  Returns immediately (no-op) for any message that does not pass the
+ * Called from `self.addEventListener("message", ...)` in sw.ts.
+ * Returns immediately (no-op) for any message that does not pass the
  * `isCachePackMessage` runtime guard.
  */
 export function handleCachePackMessage(event: MessageEventLike): void {
@@ -54,4 +54,41 @@ export function handleCachePackMessage(event: MessageEventLike): void {
       }
     })(),
   );
+}
+
+/**
+ * DELETE_PACK_CACHE message handler.
+ *
+ * Removes terrain and overview entries from the persistent pack cache.
+ * Called by the page when a saveOfflinePack call fails after terrain was
+ * already cached, preventing orphaned Cache Storage entries.
+ */
+export function handleDeletePackCacheMessage(event: MessageEventLike): void {
+  const raw: unknown = event.data;
+  if (!isDeletePackCacheMessage(raw)) return;
+
+  event.waitUntil(
+    (async () => {
+      const port = event.ports[0];
+      try {
+        const cache = await caches.open(PACK_TERRAIN_CACHE_NAME);
+        await Promise.all([
+          cache.delete(raw.terrainUrl),
+          cache.delete(raw.overviewUrl),
+        ]);
+        port?.postMessage({ ok: true });
+      } catch (err) {
+        port?.postMessage({ ok: false, error: String(err) });
+      }
+    })(),
+  );
+}
+
+/**
+ * Combined message handler — routes to the appropriate handler based on
+ * message type. Use this as the single `message` event listener in sw.ts.
+ */
+export function handleSwMessage(event: MessageEventLike): void {
+  handleCachePackMessage(event);
+  handleDeletePackCacheMessage(event);
 }
