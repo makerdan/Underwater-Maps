@@ -243,6 +243,15 @@ export const MarkerLayer: React.FC = () => {
         // For secondary datasets: check bounds against their own grid bbox so
         // they are not incorrectly suppressed for being outside the primary area.
         const markerDatasetId = m.datasetId ?? "";
+        if (!markerDatasetId && import.meta.env.DEV) {
+          // A missing datasetId is always a data-quality bug upstream: without
+          // it we cannot look up the correct dataset bbox and must fall back to
+          // the primary terrain's bbox, which may incorrectly keep or drop the
+          // marker. Surface this explicitly so it is easy to diagnose.
+          console.warn(
+            `[MarkerLayer] marker ${m.id} has no datasetId; falling back to primary terrain bbox for bounds check. This is a data-quality issue upstream.`,
+          );
+        }
         const dg = datasetGroups.get(markerDatasetId);
         const refGrid = dg?.grid ?? terrain;
         const inBounds = isMarkerInBounds(m, refGrid);

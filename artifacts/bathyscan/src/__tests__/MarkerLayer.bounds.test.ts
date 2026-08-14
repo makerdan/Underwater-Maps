@@ -181,6 +181,100 @@ describe("secondary-dataset marker bounds — Task #3566 regression guard", () =
   });
 });
 
+/**
+ * Simulates the MarkerLayer filtering logic for markers that have a null or
+ * empty datasetId — the case added by the task-3699 fix.
+ *
+ * When `datasetId` is null/empty the component falls back to the primary
+ * terrain bbox (same as the unknown-dataset case).  MarkerLayer also emits a
+ * console.warn in DEV mode for these markers; this helper mirrors the
+ * filtering side of that behaviour so it can be asserted as a pure function.
+ */
+function filterMarkersWithNullableDatasetId(
+  markers: Array<{ id: string; datasetId: string | null | undefined; lon: number; lat: number }>,
+  primaryTerrain: { minLon: number; maxLon: number; minLat: number; maxLat: number },
+  datasetGrids: Map<string, { minLon: number; maxLon: number; minLat: number; maxLat: number }>,
+): Array<{ id: string; datasetId: string | null | undefined; lon: number; lat: number }> {
+  return markers.filter((m) => {
+    const markerDatasetId = m.datasetId ?? "";
+    const ownGrid = datasetGrids.get(markerDatasetId);
+    // No datasetId → falls back to primary (same path as MarkerLayer component).
+    const refGrid = ownGrid ?? primaryTerrain;
+    return isMarkerInBounds(m, refGrid);
+  });
+}
+
+describe("null/empty datasetId fallback — Task #3699 regression guard", () => {
+  const PRIMARY_TERRAIN = {
+    minLon: -136,
+    maxLon: -130,
+    minLat: 56,
+    maxLat: 60,
+  };
+  const SECONDARY_TERRAIN = {
+    minLon: -125,
+    maxLon: -120,
+    minLat: 46,
+    maxLat: 50,
+  };
+  const datasetGrids = new Map([
+    ["ds-primary", PRIMARY_TERRAIN],
+    ["ds-secondary", SECONDARY_TERRAIN],
+  ]);
+
+  it("keeps a marker with null datasetId that is inside the primary bbox", () => {
+    const markers = [{ id: "m-null-in", datasetId: null, lon: -133, lat: 58 }];
+    const result = filterMarkersWithNullableDatasetId(markers, PRIMARY_TERRAIN, datasetGrids);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe("m-null-in");
+  });
+
+  it("drops a marker with null datasetId that is outside the primary bbox", () => {
+    // lon=-122, lat=48 is inside the secondary bbox but NOT the primary.
+    // Without a datasetId we cannot look up the correct bbox so the primary is used.
+    const markers = [{ id: "m-null-out", datasetId: null, lon: -122, lat: 48 }];
+    const result = filterMarkersWithNullableDatasetId(markers, PRIMARY_TERRAIN, datasetGrids);
+    expect(result).toHaveLength(0);
+  });
+
+  it("keeps a marker with empty-string datasetId that is inside the primary bbox", () => {
+    const markers = [{ id: "m-empty-in", datasetId: "", lon: -133, lat: 58 }];
+    const result = filterMarkersWithNullableDatasetId(markers, PRIMARY_TERRAIN, datasetGrids);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe("m-empty-in");
+  });
+
+  it("drops a marker with empty-string datasetId that is outside the primary bbox", () => {
+    const markers = [{ id: "m-empty-out", datasetId: "", lon: -110, lat: 35 }];
+    const result = filterMarkersWithNullableDatasetId(markers, PRIMARY_TERRAIN, datasetGrids);
+    expect(result).toHaveLength(0);
+  });
+
+  it("does not confuse an empty datasetId with a real dataset key of empty string", () => {
+    // Even if someone accidentally registered "" as a key in datasetGrids,
+    // a null datasetId resolves to "" and would pick it up. Validate the
+    // lookup falls back correctly when no "" entry exists (the common case).
+    const gridsWithoutEmptyKey = new Map([["ds-primary", PRIMARY_TERRAIN]]);
+    const markers = [{ id: "m-null-fallback", datasetId: null, lon: -133, lat: 58 }];
+    const result = filterMarkersWithNullableDatasetId(markers, PRIMARY_TERRAIN, gridsWithoutEmptyKey);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe("m-null-fallback");
+  });
+
+  it("mixed batch: null, empty, and valid datasetId markers filtered correctly", () => {
+    const markers = [
+      { id: "m1", datasetId: "ds-primary",   lon: -133, lat: 58 },  // valid, in primary → keep
+      { id: "m2", datasetId: null,            lon: -133, lat: 58 },  // null, in primary → keep (fallback)
+      { id: "m3", datasetId: "",              lon: -133, lat: 58 },  // empty, in primary → keep (fallback)
+      { id: "m4", datasetId: null,            lon: -122, lat: 48 },  // null, outside primary → drop
+      { id: "m5", datasetId: "",              lon: -110, lat: 35 },  // empty, outside primary → drop
+      { id: "m6", datasetId: "ds-secondary", lon: -122, lat: 48 },  // valid secondary, in own bbox → keep
+    ];
+    const result = filterMarkersWithNullableDatasetId(markers, PRIMARY_TERRAIN, datasetGrids);
+    expect(result.map((m) => m.id)).toEqual(["m1", "m2", "m3", "m6"]);
+  });
+});
+
 describe("groupCatchSymbolsByMarker (regression guard)", () => {
   it("returns an empty map for empty input", () => {
     const result = groupCatchSymbolsByMarker([]);
