@@ -249,7 +249,12 @@ export function mimeForFormat(format: ExportFormat): string {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function escXml(s: string): string {
+/**
+ * Escape XML special characters. Accepts null/undefined and returns "" for
+ * those so serializers never throw on missing API values.
+ */
+function escXml(s: string | null | undefined): string {
+  if (s == null) return "";
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -258,13 +263,17 @@ function escXml(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function fmtCoord(n: number): string {
+function fmtCoord(n: number | null | undefined): string {
   // 7 decimals ≈ 11 mm precision — well beyond any GPS source.
-  return Number.isFinite(n) ? n.toFixed(7) : "0";
+  if (n == null || !Number.isFinite(n)) {
+    console.warn("[gpsExport] fmtCoord: non-finite coordinate", n, "— using 0");
+    return "0";
+  }
+  return n.toFixed(7);
 }
 
-function fmtNum(n: number): string {
-  if (!Number.isFinite(n)) return "0";
+function fmtNum(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "0";
   // Drop trailing zeros from a fixed-precision representation.
   return parseFloat(n.toFixed(3)).toString();
 }

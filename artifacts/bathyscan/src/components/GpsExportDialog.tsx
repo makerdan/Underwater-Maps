@@ -42,7 +42,12 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef);
 
-  const { data: markers } = useGetMarkers(
+  const {
+    data: markers,
+    isLoading: markersLoading,
+    isError: markersError,
+    refetch: markersRefetch,
+  } = useGetMarkers(
     { datasetId: terrain.datasetId },
     {
       query: {
@@ -51,10 +56,20 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       },
     },
   );
-  const { data: presets } = useGetTrollingPresets({
+  const {
+    data: presets,
+    isLoading: presetsLoading,
+    isError: presetsError,
+    refetch: presetsRefetch,
+  } = useGetTrollingPresets({
     query: { queryKey: getGetTrollingPresetsQueryKey() },
   });
-  const { data: catches } = useGetCatches(
+  const {
+    data: catches,
+    isLoading: catchesLoading,
+    isError: catchesError,
+    refetch: catchesRefetch,
+  } = useGetCatches(
     { datasetId: terrain.datasetId },
     {
       query: {
@@ -64,9 +79,19 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     },
   );
 
+  const isLoading = markersLoading || presetsLoading || catchesLoading;
+  const isError = !isLoading && (markersError || presetsError || catchesError);
+  const isSuccess = !isLoading && !isError;
+
+  const handleRetry = () => {
+    void markersRefetch();
+    void presetsRefetch();
+    void catchesRefetch();
+  };
+
   const markerCount = markers?.length ?? 0;
   const presetCount = presets?.length ?? 0;
-  const nothingToExport = markerCount === 0 && presetCount === 0;
+  const nothingToExport = isSuccess && markerCount === 0 && presetCount === 0;
 
   const exportData = useMemo(
     () => {
@@ -100,11 +125,11 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   );
 
   const handleDownload = () => {
-    if (nothingToExport) return;
-    const filename = buildExportFilename(exportData.datasetName, format);
-    const content =
-      format === "gpx" ? serializeGpx(exportData) : serializeKml(exportData);
+    if (nothingToExport || !isSuccess) return;
     try {
+      const filename = buildExportFilename(exportData.datasetName, format);
+      const content =
+        format === "gpx" ? serializeGpx(exportData) : serializeKml(exportData);
       downloadTextFile(content, filename, mimeForFormat(format));
       toast({
         title: "GPS export ready",
@@ -202,6 +227,63 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             into your chartplotter, Garmin, or Navionics tools.
           </p>
 
+          {isLoading && (
+            <div
+              data-testid="gps-export-loading"
+              style={{
+                padding: "10px 12px",
+                background: "rgba(0,229,255,0.04)",
+                border: "1px solid rgba(0,229,255,0.15)",
+                borderRadius: 4,
+                marginBottom: 12,
+                color: "#94a3b8",
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span aria-hidden="true" style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</span>
+              Loading…
+            </div>
+          )}
+          {isError && (
+            <div
+              data-testid="gps-export-error"
+              style={{
+                padding: "10px 12px",
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                borderRadius: 4,
+                marginBottom: 12,
+                color: "#f87171",
+                fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
+              <span>Failed to load — </span>
+              <button
+                onClick={handleRetry}
+                data-testid="gps-export-retry"
+                style={{
+                  background: "none",
+                  border: "1px solid rgba(239,68,68,0.4)",
+                  borderRadius: 3,
+                  color: "#f87171",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontSize: "calc(14px * var(--bs-font-scale, 1))",
+                  padding: "2px 8px",
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {isSuccess && (
           <div
             data-testid="gps-export-summary"
             style={{
@@ -235,6 +317,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               </div>
             </div>
           </div>
+          )}
 
           <div style={{ marginBottom: 12 }}>
             <div
@@ -297,11 +380,11 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             <button
               onClick={handleDownload}
               data-testid="gps-export-confirm"
-              disabled={nothingToExport}
+              disabled={!isSuccess || nothingToExport}
               style={{
                 ...btnStyle("primary"),
-                opacity: nothingToExport ? 0.5 : 1,
-                cursor: nothingToExport ? "not-allowed" : "pointer",
+                opacity: (!isSuccess || nothingToExport) ? 0.5 : 1,
+                cursor: (!isSuccess || nothingToExport) ? "not-allowed" : "pointer",
               }}
             >
               Download

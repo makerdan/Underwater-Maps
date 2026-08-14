@@ -585,6 +585,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     }
 
     // Reassign existing unassigned markers in the matched save's coverage area.
+    let reassignFails = 0;
     if (
       !cancelRequestedRef.current &&
       matchedSave?.datasetId &&
@@ -600,7 +601,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             data: { datasetId: matchedSave.datasetId },
           });
         } catch {
-          // best-effort: continue on individual failures
+          // best-effort: continue on individual failures, but track them
+          reassignFails++;
         }
       }
       // Invalidate the bbox query that fed the count so it re-fetches.
@@ -669,6 +671,11 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     }
     if (failTotal - tooShortRoutes > 0) {
       desc.push(`${failTotal - tooShortRoutes} item(s) failed.`);
+    }
+    if (reassignFails > 0) {
+      desc.push(
+        `· ${reassignFails} reassignment${reassignFails === 1 ? "" : "s"} failed — some existing markers may remain unlinked.`,
+      );
     }
 
     toast({

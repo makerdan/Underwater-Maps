@@ -72,6 +72,119 @@ describe("serializeKml", () => {
   });
 });
 
+describe("serializeGpx — null/undefined input guards", () => {
+  it("does not throw when a marker has null label and null notes", () => {
+    const data: ExportData = {
+      datasetName: "Test",
+      markers: [
+        {
+          lon: 10,
+          lat: 20,
+          depth: 5,
+          label: null as unknown as string,
+          type: null as unknown as string,
+          notes: null,
+        },
+      ],
+      routes: [],
+    };
+    expect(() => serializeGpx(data)).not.toThrow();
+    const xml = serializeGpx(data);
+    expect(xml).toContain("<wpt ");
+  });
+
+  it("does not throw when a marker has undefined label", () => {
+    const data: ExportData = {
+      datasetName: "Test",
+      markers: [
+        {
+          lon: 10,
+          lat: 20,
+          depth: 5,
+          label: undefined as unknown as string,
+          type: "custom",
+        },
+      ],
+      routes: [],
+    };
+    expect(() => serializeGpx(data)).not.toThrow();
+  });
+
+  it("does not throw when a route has null name", () => {
+    const data: ExportData = {
+      datasetName: "Test",
+      markers: [],
+      routes: [
+        {
+          name: null as unknown as string,
+          points: [
+            { lon: 1, lat: 2 },
+            { lon: 3, lat: 4 },
+          ],
+        },
+      ],
+    };
+    expect(() => serializeGpx(data)).not.toThrow();
+  });
+
+  it("outputs '0' (not NaN) for non-finite coordinates and does not throw", () => {
+    const data: ExportData = {
+      datasetName: "Test",
+      markers: [
+        {
+          lon: NaN,
+          lat: Infinity,
+          depth: NaN,
+          label: "Bad coords",
+          type: "custom",
+        },
+      ],
+      routes: [],
+    };
+    expect(() => serializeGpx(data)).not.toThrow();
+    const xml = serializeGpx(data);
+    // NaN/Infinity coordinates fall back to "0"
+    expect(xml).toContain('lat="0"');
+    expect(xml).toContain('lon="0"');
+  });
+});
+
+describe("serializeKml — null/undefined input guards", () => {
+  it("does not throw when a marker has null label", () => {
+    const data: ExportData = {
+      datasetName: "Test",
+      markers: [
+        {
+          lon: 10,
+          lat: 20,
+          depth: 5,
+          label: null as unknown as string,
+          type: "custom",
+        },
+      ],
+      routes: [],
+    };
+    expect(() => serializeKml(data)).not.toThrow();
+  });
+
+  it("does not throw when a route name is null", () => {
+    const data: ExportData = {
+      datasetName: "Test",
+      markers: [],
+      routes: [
+        {
+          name: null as unknown as string,
+          points: [
+            { lon: 1, lat: 2 },
+            { lon: 3, lat: 4 },
+          ],
+        },
+      ],
+    };
+    expect(() => serializeKml(data)).not.toThrow();
+  });
+});
+
 describe("buildExportFilename", () => {
   it("uses dataset slug + ISO date + extension", () => {
     const fn = buildExportFilename(
