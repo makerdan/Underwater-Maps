@@ -846,6 +846,26 @@ useUiStore.subscribe((state, prevState) => {
   );
   if (!changed) return;
   useSettingsStore.setState(computeSettingsPatch(state));
+
+  if (process.env.NODE_ENV === "development") {
+    const settingsSnap = useSettingsStore.getState() as unknown as Record<string, unknown>;
+    const uiSnap = state as unknown as Record<string, unknown>;
+    for (const key of MIRRORED_UI_KEYS) {
+      const uiVal = uiSnap[key];
+      const settVal = settingsSnap[key];
+      // Some mirrored fields are Set<T> in uiStore but serialized as T[] in
+      // settingsStore (via computeSettingsPatch spread). Stringify both sides
+      // so the assertion does not false-fire on Set vs Array comparisons.
+      const normalize = (v: unknown): unknown =>
+        v instanceof Set ? JSON.stringify([...v]) :
+        Array.isArray(v) ? JSON.stringify(v) : v;
+      console.assert(
+        normalize(settVal) === normalize(uiVal),
+        "uiStore/settingsStore desync on key:",
+        key,
+      );
+    }
+  }
 });
 
 /**
