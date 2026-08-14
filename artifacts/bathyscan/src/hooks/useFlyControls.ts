@@ -273,14 +273,15 @@ export function useFlyControls({ terrainMeshRef, lightRef }: FlyControlsOptions)
       const bindings = keyBindingsRef.current;
 
       // Suppress all single-key action shortcuts when focus is inside a text
-      // input, textarea, or contenteditable element — unless the pointer is
-      // already locked (pointer lock precludes focus in any input anyway).
+      // input, textarea, select, or contenteditable element — unless the
+      // pointer is already locked (pointer lock precludes focus in any input).
       const activeEl = document.activeElement as HTMLElement | null;
       const activeTag = activeEl?.tagName ?? "";
       const isEditableFocused =
         !isLocked.current &&
         (activeTag === "INPUT" ||
           activeTag === "TEXTAREA" ||
+          activeTag === "SELECT" ||
           activeEl?.isContentEditable === true);
 
       if (isEditableFocused) return;
