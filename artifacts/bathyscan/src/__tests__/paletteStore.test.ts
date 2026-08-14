@@ -690,6 +690,78 @@ describe("paletteStore.setBandBoundary", () => {
   });
 });
 
+describe("paletteStore.saveCurrentTheme / applyTheme", () => {
+  beforeEach(() => { usePaletteStore.getState().reset(); });
+  afterEach(() => { usePaletteStore.getState().reset(); });
+
+  it("saveCurrentTheme captures current bandColors, bandBoundaries, and blendBands", () => {
+    const store = usePaletteStore.getState();
+    store.setBandColors(["#ff0000", "#00ff00", "#0000ff"]);
+    store.setBandBoundaries([0, 100, 500, 2000]);
+    store.setBlendBands(false);
+    store.saveCurrentTheme("My Theme");
+    const { savedDepthThemes } = usePaletteStore.getState();
+    expect(savedDepthThemes).toHaveLength(1);
+    const saved = savedDepthThemes[0]!;
+    expect(saved.name).toBe("My Theme");
+    expect(saved.bandColors).toEqual(["#ff0000", "#00ff00", "#0000ff"]);
+    expect(saved.bandBoundaries).toEqual([0, 100, 500, 2000]);
+    expect(saved.blendBands).toBe(false);
+  });
+
+  it("applyTheme restores bandColors, bandBoundaries, blendBands, shallow, and deep", () => {
+    const store = usePaletteStore.getState();
+    store.setBandColors(["#aaaaaa", "#bbbbbb", "#cccccc"]);
+    store.setBandBoundaries([0, 200, 800, 2000]);
+    store.setBlendBands(true);
+    store.saveCurrentTheme("Saved A");
+    const savedId = usePaletteStore.getState().savedDepthThemes.find((t) => t.name === "Saved A")!.id;
+
+    // Mutate state so we can confirm applyTheme restores it
+    store.setBandColors(["#111111", "#222222", "#333333"]);
+
+    store.applyTheme(savedId);
+    const s = usePaletteStore.getState();
+    expect(s.bandColors).toEqual(["#aaaaaa", "#bbbbbb", "#cccccc"]);
+    expect(s.bandBoundaries).toEqual([0, 200, 800, 2000]);
+    expect(s.blendBands).toBe(true);
+    expect(s.shallow).toBe("#aaaaaa");
+    expect(s.deep).toBe("#cccccc");
+  });
+
+  it("applyTheme is a no-op for an unknown id", () => {
+    const store = usePaletteStore.getState();
+    store.setBandColors(["#ff0000", "#0000ff"]);
+    const before = usePaletteStore.getState().bandColors.slice();
+    store.applyTheme("nonexistent-id");
+    expect(usePaletteStore.getState().bandColors).toEqual(before);
+  });
+
+  it("applying one theme then saving a second does not corrupt the first", () => {
+    const store = usePaletteStore.getState();
+    // Save theme A
+    store.setBandColors(["#aaa111", "#bbb222"]);
+    store.setBandBoundaries([0, 500, 2000]);
+    store.setBlendBands(false);
+    store.saveCurrentTheme("Theme A2");
+    const idA = usePaletteStore.getState().savedDepthThemes.find((t) => t.name === "Theme A2")!.id;
+
+    // Change state and save theme B
+    store.setBandColors(["#ccc333", "#ddd444"]);
+    store.setBandBoundaries([0, 300, 2000]);
+    store.setBlendBands(true);
+    store.saveCurrentTheme("Theme B2");
+
+    // Apply A and verify B is still intact
+    store.applyTheme(idA);
+    const s = usePaletteStore.getState();
+    expect(s.bandColors).toEqual(["#aaa111", "#bbb222"]);
+    const themeB = s.savedDepthThemes.find((t) => t.name === "Theme B2");
+    expect(themeB).toBeDefined();
+    expect(themeB!.bandColors).toEqual(["#ccc333", "#ddd444"]);
+  });
+});
+
 describe("paletteStore.setBandBoundaries / resetBandBoundaries", () => {
   beforeEach(() => { usePaletteStore.getState().reset(); });
   afterEach(() => { usePaletteStore.getState().reset(); });

@@ -430,6 +430,7 @@ function SavedThemeChip({
 }) {
   const [editing, setEditing] = React.useState(false);
   const [editName, setEditName] = React.useState(theme.name);
+  const [applyPressed, setApplyPressed] = React.useState(false);
 
   React.useEffect(() => { setEditName(theme.name); }, [theme.name]);
 
@@ -517,6 +518,9 @@ function SavedThemeChip({
         data-testid={`apply-theme-${theme.id}`}
         title="Apply this theme"
         onClick={onApply}
+        onMouseDown={() => setApplyPressed(true)}
+        onMouseUp={() => setApplyPressed(false)}
+        onMouseLeave={() => setApplyPressed(false)}
         style={{
           ...iconBtn(),
           background: "rgba(0,229,255,0.08)",
@@ -524,6 +528,8 @@ function SavedThemeChip({
           borderRadius: 3,
           color: "#67e8f9",
           padding: "2px 7px",
+          transform: applyPressed ? "scale(0.94)" : "scale(1)",
+          transition: "transform 0.08s",
         }}
       >
         APPLY
@@ -755,7 +761,7 @@ export function DepthColorsCard() {
               <SavedThemeChip
                 key={theme.id}
                 theme={theme}
-                onApply={() => { applyTheme(theme.id); if (!isBandTheme) setColormapThemeByUser("ocean"); void flushServerSync(); }}
+                onApply={() => { applyTheme(theme.id); setColormapThemeByUser("ocean"); void flushServerSync(); }}
                 onRename={(name) => { renameTheme(theme.id, name); void flushServerSync(); }}
                 onDelete={() => { deleteTheme(theme.id); void flushServerSync(); }}
                 labelStyle={labelStyle}

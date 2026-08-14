@@ -174,20 +174,20 @@ describe("DepthColorsCard — Apply saved theme", () => {
     expect(h.setColormapThemeByUser).toHaveBeenCalledWith("ocean");
   });
 
-  it("does NOT call setColormapThemeByUser when the active colormap is already 'ocean'", () => {
-    // Default mock state has colormapTheme: "ocean"
+  it("calls setColormapThemeByUser('ocean') even when the active colormap is already 'ocean'", () => {
+    // Default mock state has colormapTheme: "ocean" — must still call to promote colormapUserSet:true
     render(<DepthColorsCard />);
     fireEvent.click(screen.getByTestId("apply-theme-theme-1"));
     expect(h.applyTheme).toHaveBeenCalledWith("theme-1");
-    expect(h.setColormapThemeByUser).not.toHaveBeenCalled();
+    expect(h.setColormapThemeByUser).toHaveBeenCalledWith("ocean");
   });
 
-  it("does NOT call setColormapThemeByUser when the active colormap is 'custom'", () => {
+  it("calls setColormapThemeByUser('ocean') even when the active colormap is 'custom'", () => {
     h.stateOverrides.colormapTheme = "custom";
     render(<DepthColorsCard />);
     fireEvent.click(screen.getByTestId("apply-theme-theme-1"));
     expect(h.applyTheme).toHaveBeenCalledWith("theme-1");
-    expect(h.setColormapThemeByUser).not.toHaveBeenCalled();
+    expect(h.setColormapThemeByUser).toHaveBeenCalledWith("ocean");
   });
 
   it("calls setColormapThemeByUser('ocean') when the active colormap is 'grayscale'", () => {
