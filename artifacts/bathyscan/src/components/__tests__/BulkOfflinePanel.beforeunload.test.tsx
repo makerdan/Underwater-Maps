@@ -59,6 +59,11 @@ function renderPanel() {
   return { ...utils, onClose };
 }
 
+// NOTE: countBeforeUnloadListeners was a helper intended to count active
+// beforeunload registrations via addCalls/removeCalls.  Left as dead code
+// during initial authoring; removed to satisfy noUnusedLocals.
+// If needed in future tests, restore: () => addCalls - removeCalls.
+
 let addCalls = 0;
 let removeCalls = 0;
 let origAdd: typeof window.addEventListener;
@@ -93,17 +98,26 @@ afterEach(() => {
 describe("BulkOfflinePanel — beforeunload guard", () => {
   it("registers the handler when phase is 'running'", () => {
     mockPhase.value = "running";
-    const { unmount } = renderPanel();
+      const { unmount } = renderPanel();
 
     expect(addCalls).toBe(1);
-    expect(removeCalls).toBe(0);
 
-    unmount();
+    act(() => { unmount(); });
+
+    expect(removeCalls).toBe(1);
   });
 
-  it("removes the handler on unmount when phase was 'running'", () => {
-    mockPhase.value = "running";
-    const { unmount } = renderPanel();
+  it.each([
+    "idle",
+    "paused",
+    "done",
+    "cancelled",
+    "preflight-error",
+  ] as UseBulkOfflinePackResult["phase"][])(
+    "does NOT register the handler when phase is '%s'",
+    (phase) => {
+      mockPhase.value = phase;
+      const { unmount } = renderPanel();
 
     expect(addCalls).toBe(1);
 

@@ -1035,7 +1035,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const qc = useQueryClient();
   const { toast } = useToast();
   // Offline state — drives the "Saved Offline Packs" branch in the Search tab.
-  const isOnline = useOfflineStore((s) => s.isOnline);
   const [savedPacks, setSavedPacks] = useState<OfflinePack[]>([]);
 
   // Load saved packs on mount and whenever the device goes offline so the list
