@@ -20,12 +20,15 @@
 import { z } from "zod";
 import type { TemperatureProfilePayload } from "../routes/temperature-profile";
 import { registerCache } from "./cacheRegistry.js";
+import { logger } from "./logger.js";
 
 const ERDDAP_BASE = "https://erddap.ifremer.fr/erddap/tabledap/ArgoFloats.json";
 const SEARCH_RADIUS_DEG = 2.0;
 const SEARCH_WINDOW_DAYS = 60;
 const FETCH_TIMEOUT_MS = 6000;
-const MAX_ROWS = 2000;
+// Prior MAX_ROWS = 2000 cap was for orderByLimit("time/1day,N").
+// orderByMax("time") selects one row per (platform,cycle,pres) triple and
+// does not require an explicit row cap — ERDDAP naturally limits depth levels.
 
 // In-process cache: coarse lat/lon bucket → recent ERDDAP result. The bucket
 // is large enough that nearby requests share an entry but small enough that a
@@ -134,7 +137,14 @@ export function buildArgoQueryUrl(lat: number, lon: number, now: Date = new Date
     "temp!=NaN",
     "pres!=NaN",
   ].join("&");
-  return `${ERDDAP_BASE}?${cols}&${constraints}&orderByLimit("time/1day,${MAX_ROWS}")`;
+  // orderByMax("time") returns, for each unique combination of the other
+  // requested columns (platform, cycle, lat, lon, pres), the row with the
+  // largest `time` value — i.e. the most-recent measurement per depth level.
+  // This is better than orderByLimit("time/1day,N") which distributes rows
+  // across 1-day time bins and can surface floats from 60 days ago when many
+  // older casts fill the row budget before more-recent ones are reached.
+  // pickClosestArgoCast then selects the geographically nearest cast.
+  return `${ERDDAP_BASE}?${cols}&${constraints}&orderByMax("time")`;
 }
 
 /**
@@ -267,15 +277,15 @@ async function fetchArgoProfileUncached(
     let rawJson: unknown;
     try {
       rawJson = await res.json();
-    } catch {
-      console.error(`[argoErddap] fetchArgoProfile: invalid JSON from ${ERDDAP_BASE}`);
+    } catch (err) {
+      logger.warn({ err }, `[argoErddap] fetchArgoProfile: invalid JSON from ${ERDDAP_BASE}`);
       return null;
     }
     const parsed = ErddapResponseSchema.safeParse(rawJson);
     if (!parsed.success) {
-      console.error(
+      logger.warn(
+        { err: parsed.error.flatten() },
         `[argoErddap] fetchArgoProfile: response shape mismatch from ${ERDDAP_BASE}`,
-        parsed.error.flatten(),
       );
       return null;
     }

@@ -170,7 +170,10 @@ export async function getNearestUsgsStation(
   const bBox = `${lon - margin},${lat - margin},${lon + margin},${lat + margin}`;
   const url = `${USGS_IV_BASE}?format=json&parameterCd=00065&siteType=LK,ST&bBox=${bBox}&period=PT1H`;
   try {
-    const res = await fetch(url);
+    // 8 s — consistent with the ERDDAP timeout policy in rawsErddap.ts.
+    // Without a timeout this call could block indefinitely during USGS NWIS
+    // outages, stalling the freshwater API path for every concurrent request.
+    const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
     if (!res.ok) return null;
     const json = (await res.json()) as UsgsIvResponse;
     const series = json.value?.timeSeries ?? [];
@@ -209,7 +212,12 @@ function bearingDeg(fromLat: number, fromLon: number, toLat: number, toLon: numb
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+  // 12 s — NOAA CO-OPS regularly takes 5–15 s under peak load; the old 3 s
+  // timeout caused genuine NOAA responses to be aborted and treated as
+  // failures, degrading the tidal panel to synthetic estimates even when NOAA
+  // is healthy.  tides.ts uses 15 s for its 6-minute prediction window; 12 s
+  // is a balanced default for station-list and hi/lo prediction calls.
+  const res = await fetch(url, { signal: AbortSignal.timeout(12_000) });
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
   return res.json() as Promise<T>;
 }
@@ -379,11 +387,16 @@ export async function getHighLowEvents(
     const resp = await fetchJson<{
       predictions?: Array<{ t: string; v: string; type: "H" | "L" }>;
     }>(url);
-    const events: TideEvent[] = (resp.predictions ?? []).map((p) => ({
-      type: p.type === "H" ? "high" : "low",
-      time: new Date(p.t.replace(" ", "T") + "Z").getTime(),
-      height: parseFloat(p.v),
-    }));
+    const events: TideEvent[] = (resp.predictions ?? [])
+      .map((p) => ({
+        type: (p.type === "H" ? "high" : "low") as "high" | "low",
+        time: new Date(p.t.replace(" ", "T") + "Z").getTime(),
+        height: parseFloat(p.v),
+      }))
+      // Drop NaN heights (NOAA sends "" or "9999" for missing data) and the
+      // NOAA sentinel value 9999 used to signal no-data. Real ocean tides
+      // never exceed ~20 m so ±100 is a safe upper bound.
+      .filter((e) => Number.isFinite(e.height) && Math.abs(e.height) < 100);
     events.sort((a, b) => a.time - b.time);
     const result = events.length > 0 ? events : null;
     highLowEventsCache.set(cacheKey, { result, ts: now });
@@ -659,7 +672,9 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
     }
     const fwEvents = buildSyntheticEvents(refMs, lon);
     const fwPeakSpeedKnots = 0.5;
-    const fwFloodBearing = ((lat + lon) * 73.1 + 360) % 360;
+    // True modulo — JS % returns negative values when the left operand is
+    // negative (e.g. Gulf of Mexico: (25−100)*73.1+360 = −5122.5; −5122.5%360 = −82.5°).
+    const fwFloodBearing = (((lat + lon) * 73.1) % 360 + 360) % 360;
     const fwSample = computeSlackSample({
       events: fwEvents,
       refTime: refMs,
@@ -793,7 +808,9 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
     // USGS station found — synthesise a schedule labelled as "usgs".
     const fwEvents = buildSyntheticEvents(refMs, lon);
     const fwPeakSpeedKnots = 0.3;
-    const fwFloodBearing = ((lat + lon) * 73.1 + 360) % 360;
+    // True modulo — JS % returns negative values when the left operand is
+    // negative (e.g. Gulf of Mexico: (25−100)*73.1+360 = −5122.5; −5122.5%360 = −82.5°).
+    const fwFloodBearing = (((lat + lon) * 73.1) % 360 + 360) % 360;
     const fwSample = computeSlackSample({
       events: fwEvents,
       refTime: refMs,
@@ -802,6 +819,12 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
       slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
     });
     const distanceKm = haversineKm(lat, lon, usgsStation.lat, usgsStation.lng);
+    // Source labels are "estimated" not "usgs": the USGS station lookup only
+    // confirms that a gage exists nearby; the heights and schedule come from
+    // buildSyntheticEvents (a sinusoidal model), NOT from actual USGS gage
+    // readings.  Mislabelling these as "usgs" implies the heights are measured
+    // data, which is incorrect.  A proper USGS gage-height fetch is a future
+    // improvement (see task backlog).
     const usgsBody: TidalResponse = {
       available: true,
       tideHeight: interpolateHeight(fwEvents, refMs),
@@ -811,9 +834,9 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
       stationName: usgsStation.name,
       stationId: usgsStation.id,
       isPredicted: true,
-      source: "usgs",
-      heightsSource: "usgs",
-      currentsSource: "usgs",
+      source: "estimated",
+      heightsSource: "estimated",
+      currentsSource: "estimated",
       distanceKm,
       isModeled: true,
       slack: fwSample.slack,
@@ -885,7 +908,9 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
     }
     floodBearing = bearingDeg(station.lat, station.lng, lat, lon);
   } else {
-    floodBearing = ((lat + lon) * 73.1 + 360) % 360;
+    // True modulo — JS % returns negative values when the left operand is
+    // negative (e.g. Gulf of Mexico: (25−100)*73.1+360 = −5122.5; −5122.5%360 = −82.5°).
+    floodBearing = (((lat + lon) * 73.1) % 360 + 360) % 360;
   }
 
   if (!events) {
@@ -1038,17 +1063,24 @@ router.get("/tidal/pack", asyncHandler(async (req, res): Promise<void> => {
         `${NOAA_BASE}/api/prod/datagetter?station=${currentsStation.id}&product=currents_predictions` +
         `&time_zone=GMT&units=metric&format=json&interval=MAX_SLACK` +
         `&begin_date=${begin}&end_date=${end}`;
+      // The real NOAA shape wraps the array in a { cp: [...] } envelope —
+      // matching getCurrentsPeak's type (line 434). Typing it as a direct
+      // array causes `resp.current_predictions` to be the truthy object
+      // {cp:[…]}, so ?? [] never fires, and `for (const cp of entries)` throws
+      // "entries is not iterable", silently leaving currentPredictions = [].
       const resp = await fetchJson<{
-        current_predictions?: Array<{
-          Time: string;
-          Velocity_Major?: string | number;
-          Speed?: string | number;
-          Direction?: string | number;
-          meanFloodDir?: string | number;
-          Type?: string;
-        }>;
+        current_predictions?: {
+          cp?: Array<{
+            Time: string;
+            Velocity_Major?: string | number;
+            Speed?: string | number;
+            Direction?: string | number;
+            meanFloodDir?: string | number;
+            Type?: string;
+          }>;
+        };
       }>(url);
-      const entries = resp.current_predictions ?? [];
+      const entries = resp.current_predictions?.cp ?? [];
       for (const cp of entries) {
         const rawSpeed =
           cp.Speed != null ? cp.Speed : cp.Velocity_Major != null ? cp.Velocity_Major : null;

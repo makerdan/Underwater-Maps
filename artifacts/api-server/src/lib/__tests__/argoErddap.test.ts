@@ -300,17 +300,21 @@ describe("fetchArgoProfile caching", () => {
 
 describe("fetchArgoProfile — malformed upstream JSON", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  // L-1 fix: argoErddap now emits via logger.warn (structured pino logger)
+  // instead of console.error so errors appear in structured log aggregation.
+  // Tests spy on logger.warn to confirm the messages are still emitted.
+  let loggerWarnSpy: ReturnType<typeof vi.spyOn>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     __clearArgoCache();
     fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
-    consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const loggerModule = await import("../logger.js");
+    loggerWarnSpy = vi.spyOn(loggerModule.logger, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    consoleSpy.mockRestore();
+    loggerWarnSpy.mockRestore();
     __clearArgoCache();
   });
 
@@ -335,11 +339,11 @@ describe("fetchArgoProfile — malformed upstream JSON", () => {
     const result = await fetchArgoProfile(55.7, -132.6);
 
     expect(result).toBeNull();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("shape mismatch"),
-      expect.anything(),
-    );
-    expect(consoleSpy.mock.calls[0]![0]).toContain("erddap.ifremer.fr");
+    // logger.warn is called with (context, message) — check the message arg
+    expect(loggerWarnSpy).toHaveBeenCalled();
+    const messageArg = loggerWarnSpy.mock.calls[0]?.[1] as string;
+    expect(messageArg).toContain("shape mismatch");
+    expect(messageArg).toContain("erddap.ifremer.fr");
   });
 
   it("returns null and logs shape mismatch when 'rows' is not an array of arrays", async () => {
@@ -349,10 +353,9 @@ describe("fetchArgoProfile — malformed upstream JSON", () => {
     const result = await fetchArgoProfile(55.7, -132.6);
 
     expect(result).toBeNull();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("shape mismatch"),
-      expect.anything(),
-    );
+    expect(loggerWarnSpy).toHaveBeenCalled();
+    const messageArg = loggerWarnSpy.mock.calls[0]?.[1] as string;
+    expect(messageArg).toContain("shape mismatch");
   });
 
   it("returns null and logs when upstream sends invalid JSON bytes", async () => {
@@ -361,9 +364,9 @@ describe("fetchArgoProfile — malformed upstream JSON", () => {
     const result = await fetchArgoProfile(55.7, -132.6);
 
     expect(result).toBeNull();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("invalid JSON"),
-    );
-    expect(consoleSpy.mock.calls[0]![0]).toContain("erddap.ifremer.fr");
+    expect(loggerWarnSpy).toHaveBeenCalled();
+    const messageArg = loggerWarnSpy.mock.calls[0]?.[1] as string;
+    expect(messageArg).toContain("invalid JSON");
+    expect(messageArg).toContain("erddap.ifremer.fr");
   });
 });

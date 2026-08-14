@@ -456,9 +456,11 @@ describe("GET /tidal?waterType=freshwater", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.available).toBe(true);
-    expect(res.body.source).toBe("usgs");
-    expect(res.body.heightsSource).toBe("usgs");
-    expect(res.body.currentsSource).toBe("usgs");
+    // M-2 fix: USGS path serves synthetic heights, not real gage data —
+    // source must be "estimated" to avoid implying the heights are measured.
+    expect(res.body.source).toBe("estimated");
+    expect(res.body.heightsSource).toBe("estimated");
+    expect(res.body.currentsSource).toBe("estimated");
     expect(res.body.stationId).toBe("05407000");
     expect(res.body.stationName).toBe("Wisconsin River at Portage, WI");
     expect(res.body.isPredicted).toBe(true);
