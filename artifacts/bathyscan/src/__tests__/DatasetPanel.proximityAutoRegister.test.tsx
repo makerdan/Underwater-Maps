@@ -9,7 +9,7 @@
  *   - Preset catalog entries are always auto-enrolled regardless of bbox.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
 import { render, act } from "@testing-library/react";
 import { DatasetPanel } from "@/components/DatasetPanel";
@@ -384,12 +384,12 @@ describe("DatasetPanel — proximity auto-registration: 10 user datasets with bb
 describe("DatasetPanel — proximity auto-registration: proximityMode disabled", () => {
   beforeEach(() => {
     // Temporarily disable proximity mode via the mocked settings store.
-    (useSettingsStore.getState() as Record<string, unknown>)["proximityMode"] = false;
+    (useSettingsStore.getState() as unknown as Record<string, unknown>)["proximityMode"] = false;
   });
 
   afterEach(() => {
     // Restore to default (true) for subsequent tests.
-    (useSettingsStore.getState() as Record<string, unknown>)["proximityMode"] = true;
+    (useSettingsStore.getState() as unknown as Record<string, unknown>)["proximityMode"] = true;
   });
 
   it("does not auto-enroll any user dataset when proximityMode is false", async () => {

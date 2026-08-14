@@ -52,7 +52,6 @@ import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useToast } from "@/hooks/use-toast";
-import { useOfflineStore } from "@/lib/offlineStore";
 
 
 // ---------------------------------------------------------------------------
@@ -1035,8 +1034,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const isOnline = useOfflineStore((s) => s.isOnline);
-
   // Offline state — drives the "Saved Offline Packs" branch in the Search tab.
   const isOnline = useOfflineStore((s) => s.isOnline);
   const [savedPacks, setSavedPacks] = useState<OfflinePack[]>([]);
@@ -1147,6 +1144,23 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       },
     },
   );
+
+  // Cancel any in-flight catalog search the instant the device goes offline so
+  // the panel shows the offline placeholder immediately instead of hanging for
+  // up to 30 s waiting for a fetch that can never complete.
+  //
+  // Strategy: keep a ref to the current query key so the effect closure always
+  // sees the key that was active when the drop occurred, even after re-renders.
+  const catalogQueryKeyRef = useRef(getGetDatasetsCatalogSearchQueryKey(searchParams));
+  catalogQueryKeyRef.current = getGetDatasetsCatalogSearchQueryKey(searchParams);
+  const prevIsOnlineRef = useRef(isOnline);
+  useEffect(() => {
+    const wasOnline = prevIsOnlineRef.current;
+    prevIsOnlineRef.current = isOnline;
+    if (wasOnline && !isOnline) {
+      void qc.cancelQueries({ queryKey: catalogQueryKeyRef.current });
+    }
+  }, [isOnline, qc]);
 
   // Client-side intertidal filter — the API doesn't know about this category,
   // so we narrow down the raw results ourselves when that chip is active.
@@ -1330,10 +1344,24 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   } = useGetNceiSearch(nceiSearchParams, {
     query: {
       queryKey: getGetNceiSearchQueryKey(nceiSearchParams),
-      enabled: tab === "ncei",
+      // Skip NCEI search entirely when offline — the server is unreachable.
+      enabled: tab === "ncei" && isOnline,
       staleTime: 10 * 60 * 1000,
     },
   });
+
+  // Cancel any in-flight NCEI search immediately when the device goes offline,
+  // mirroring the catalog-search cancel pattern above.
+  const nceiQueryKeyRef = useRef(getGetNceiSearchQueryKey(nceiSearchParams));
+  nceiQueryKeyRef.current = getGetNceiSearchQueryKey(nceiSearchParams);
+  const prevIsOnlineForNceiRef = useRef(isOnline);
+  useEffect(() => {
+    const wasOnline = prevIsOnlineForNceiRef.current;
+    prevIsOnlineForNceiRef.current = isOnline;
+    if (wasOnline && !isOnline) {
+      void qc.cancelQueries({ queryKey: nceiQueryKeyRef.current });
+    }
+  }, [isOnline, qc]);
 
   // Accumulate pages as they arrive. When nceiFrom is 1 we replace;
   // on subsequent pages we append. Early-return when data is undefined
@@ -1887,7 +1915,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               </a>
               . Datasets with WCS coverage can be saved to your library.
             </div>
-            {isNceiSearching && (
+            {isOnline && isNceiSearching && (
               <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 4 }}>Searching…</div>
             )}
             {nceiError && (

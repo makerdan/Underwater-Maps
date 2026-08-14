@@ -28,12 +28,6 @@ function setOnlineState(isOnline: boolean) {
   });
 }
 
-function setOfflineReadOnlyState(v: boolean) {
-  act(() => {
-    useOfflineStore.getState().setOfflineReadOnly(v);
-  });
-}
-
 // ─── getTokenWithRetry — offline intercept ────────────────────────────────────
 
 describe("getTokenWithRetry — offline intercept", () => {

@@ -59,12 +59,6 @@ function renderPanel() {
   return { ...utils, onClose };
 }
 
-function countBeforeUnloadListeners(): number {
-  // Spy on addEventListener/removeEventListener to count active registrations.
-  // We track this via the spy captured in beforeEach.
-  return addCalls - removeCalls;
-}
-
 let addCalls = 0;
 let removeCalls = 0;
 let origAdd: typeof window.addEventListener;
