@@ -11,6 +11,7 @@ import { useReturnFocus } from "@/hooks/useReturnFocus";
 import {
   saveOfflinePack,
   listOfflinePacks,
+  estimatePackStorageBytes,
   type OfflinePack,
   type PackProgress,
 } from "@/lib/offlinePackStore";
@@ -84,6 +85,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   const [helpError, setHelpError] = useState<string | null>(null);
 
   const [storageQuota, setStorageQuota] = useState<{ used: number; total: number } | null>(null);
+  const [estimatedBytes, setEstimatedBytes] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [idbError, setIdbError] = useState(false);
 
@@ -121,6 +123,14 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
           // Not supported
         }
       }
+
+      // Estimate pack size using bbox area when available; this is more
+      // accurate than the HEAD Content-Length fallback for streaming responses.
+      const estBytes = await estimatePackStorageBytes(
+        dataset.id,
+        dataset.bbox ? { bbox: dataset.bbox } : undefined,
+      );
+      setEstimatedBytes(estBytes);
     })();
   }, [dataset.id]);
 
@@ -402,9 +412,14 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   </div>
 
                   {/* Storage estimate */}
-                  {storageQuota && (
+                  {(estimatedBytes != null || storageQuota) && (
                     <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 8 }}>
-                      ~2–5 MB per pack · {formatBytes(storageQuota.used)} used of {formatBytes(storageQuota.total - storageQuota.used)} available
+                      {estimatedBytes != null
+                        ? `~${formatBytes(estimatedBytes)} estimated`
+                        : "~2–5 MB per pack"}
+                      {storageQuota && (
+                        <> · {formatBytes(storageQuota.used)} used of {formatBytes(storageQuota.total - storageQuota.used)} available</>
+                      )}
                     </div>
                   )}
 

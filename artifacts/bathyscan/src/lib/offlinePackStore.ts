@@ -412,16 +412,70 @@ export function getOfflineWeatherValue(pack: OfflinePack): OfflineWeatherValue |
 
 // ─── Storage estimate ─────────────────────────────────────────────────────────
 
+/** Optional hints for a dataset-aware size estimate. */
+export interface BboxEstimateHints {
+  /** Bounding box of the dataset in WGS-84 degrees. */
+  bbox: { minLon: number; maxLon: number; minLat: number; maxLat: number };
+  /**
+   * Horizontal grid resolution in metres.
+   * Used to select the compressed-bytes-per-sample factor.
+   * Defaults to 10 m when omitted.
+   */
+  resolutionM?: number;
+}
+
+/**
+ * Compute a terrain-size estimate from bbox area and resolution.
+ *
+ * Formula:
+ *   sample_count ≈ bbox_area_m² / resolutionM²
+ *   bytes ≈ sample_count × avg_bytes_per_sample + 200 KB overhead
+ *
+ * avg_bytes_per_sample accounts for float32 elevation values and typical
+ * compression ratios:
+ *   ≤ 2 m resolution → 4 bytes/sample (high variance, poor compression)
+ *   > 2 m resolution → 1 byte/sample  (smoother terrain, better compression)
+ *
+ * Exported for direct unit testing.
+ */
+export function estimatePackStorageBytesFromBbox(hints: BboxEstimateHints): number {
+  const { bbox, resolutionM = 10 } = hints;
+  const dLon = Math.abs(bbox.maxLon - bbox.minLon);
+  const dLat = Math.abs(bbox.maxLat - bbox.minLat);
+  // Convert degrees to metres (approx 111 000 m/degree).
+  const widthM = dLon * 111_000;
+  const heightM = dLat * 111_000;
+  const areaM2 = widthM * heightM;
+  const resM = Math.max(1, resolutionM);
+  const sampleCount = areaM2 / (resM * resM);
+  // Compressed bytes per elevation sample, tuned to typical terrain payloads.
+  const avgBytesPerSample = resM <= 2 ? 4 : 1;
+  const terrainBytes = sampleCount * avgBytesPerSample;
+  return Math.round(terrainBytes + 200 * 1024);
+}
+
 /**
  * Estimate the storage size of an offline pack for `datasetId`.
  *
- * Attempts a HEAD request on the terrain endpoint and reads Content-Length.
- * Falls back to 2.5 MiB when the server does not expose the header or the
- * request fails (e.g. offline, CORS restriction).
+ * When `hints` are provided (bbox + optional resolution) the estimate is
+ * computed from the dataset's area using `estimatePackStorageBytesFromBbox`.
+ * This is the preferred path — servers rarely expose Content-Length on
+ * streaming terrain responses.
+ *
+ * Falls back (in order) to:
+ *   1. A HEAD request on the terrain endpoint reading Content-Length.
+ *   2. A fixed 2.5 MiB stub when the header is absent or the request fails.
  */
 export async function estimatePackStorageBytes(
   datasetId: string,
+  hints?: BboxEstimateHints,
 ): Promise<number> {
+  // Prefer bbox-area formula — avoids a network round-trip and is more
+  // accurate than Content-Length (which is absent on chunked responses).
+  if (hints?.bbox) {
+    return estimatePackStorageBytesFromBbox(hints);
+  }
+
   const terrainUrl = `${API_BASE}/api/datasets/${datasetId}/terrain`;
   try {
     const res = await fetch(terrainUrl, { method: "HEAD" });

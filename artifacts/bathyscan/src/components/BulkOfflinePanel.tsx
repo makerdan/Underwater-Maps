@@ -19,6 +19,7 @@ import {
   listOfflinePacks,
   deleteOfflinePack,
   isPackExpired,
+  estimatePackStorageBytesFromBbox,
   type OfflinePack,
 } from "@/lib/offlinePackStore";
 import {
@@ -721,6 +722,31 @@ export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
               total={bulk.storageQuota.total}
             />
           )}
+
+          {/* ── Estimated download size for this batch ── */}
+          {(() => {
+            const datasetsWithBbox = datasets.filter((ds) => ds.bbox);
+            if (datasetsWithBbox.length === 0) return null;
+            const totalEstBytes = datasetsWithBbox.reduce(
+              (sum, ds) =>
+                sum + estimatePackStorageBytesFromBbox({ bbox: ds.bbox! }),
+              0,
+            );
+            return (
+              <div
+                style={{
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  color: "#64748b",
+                  marginBottom: 8,
+                }}
+              >
+                ~{formatBytes(totalEstBytes)} estimated for{" "}
+                {datasetsWithBbox.length === datasets.length
+                  ? "all datasets"
+                  : `${datasetsWithBbox.length} of ${datasets.length} datasets`}
+              </div>
+            );
+          })()}
 
           {/* ── Tide window ── */}
           {isIdle && datasets.length > 0 && (
