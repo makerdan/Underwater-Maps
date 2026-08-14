@@ -28,6 +28,7 @@ import {
   isLiveModeActive,
   __resetLiveModeForTests,
   useLiveModeStore,
+  getLocationHelpUrl,
 } from "../liveMode";
 import { useGpsStore } from "../gpsStore";
 import { useTrailStore } from "../trailStore";
@@ -162,6 +163,82 @@ describe("liveMode — GPS errors", () => {
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "GPS unavailable" }),
     );
+  });
+
+  it("permission-denied toast includes a 'How to enable' action element", () => {
+    enterLiveMode();
+    errorCb?.({ code: 1 });
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "GPS unavailable",
+        action: expect.objectContaining({ type: expect.anything() }),
+      }),
+    );
+  });
+
+  it("permission-denied toast description tells the user to enable location in browser settings", () => {
+    enterLiveMode();
+    errorCb?.({ code: 1 });
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining("browser settings"),
+      }),
+    );
+  });
+
+  it("non-permission-denied errors (code 2) do NOT include an action element", () => {
+    enterLiveMode();
+    errorCb?.({ code: 2 });
+    expect(toast).toHaveBeenCalledWith(
+      expect.not.objectContaining({ action: expect.anything() }),
+    );
+  });
+});
+
+describe("getLocationHelpUrl — browser detection", () => {
+  function withUserAgent(ua: string, fn: () => void) {
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, "userAgent");
+    Object.defineProperty(navigator, "userAgent", { value: ua, configurable: true });
+    try {
+      fn();
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(navigator, "userAgent", descriptor);
+      }
+    }
+  }
+
+  it("returns Firefox help URL when user agent contains 'Firefox/'", () => {
+    withUserAgent(
+      "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
+      () => {
+        expect(getLocationHelpUrl()).toContain("mozilla.org");
+      },
+    );
+  });
+
+  it("returns Safari help URL when user agent contains 'Safari/' but not 'Chrome/'", () => {
+    withUserAgent(
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+      () => {
+        expect(getLocationHelpUrl()).toContain("apple.com");
+      },
+    );
+  });
+
+  it("returns Chrome help URL for Chrome user agents", () => {
+    withUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      () => {
+        expect(getLocationHelpUrl()).toContain("google.com");
+      },
+    );
+  });
+
+  it("returns Chrome help URL as fallback for unrecognised browsers", () => {
+    withUserAgent("SomeFutureBot/1.0", () => {
+      expect(getLocationHelpUrl()).toContain("google.com");
+    });
   });
 });
 

@@ -28,12 +28,14 @@
  * transition, and applySettingsToUiStore calls it on hydration so a persisted
  * 'live' mode resumes GPS + follow after a page reload.
  */
+import React from "react";
 import { create } from "zustand";
 import { useGpsStore } from "./gpsStore";
 import { useTrailStore } from "./trailStore";
 import { useCameraStore } from "./cameraStore";
 import { useSettingsStore, type SidebarMode } from "./settingsStore";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 
 /**
  * Observable store for Live-mode retry state.
@@ -103,6 +105,47 @@ function notifyGpsError(message: string): void {
   });
 }
 
+/**
+ * Return a browser-specific URL for "how to re-enable location access".
+ * Detects Chrome/Edge, Firefox, and Safari; falls back to the Chrome guide
+ * for all other Chromium-based browsers.
+ */
+export function getLocationHelpUrl(): string {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  if (/Firefox\//i.test(ua)) {
+    return "https://support.mozilla.org/en-US/kb/permissions-manager-give-ability-store-passwords-set-cookies-and-more";
+  }
+  if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) {
+    return "https://support.apple.com/guide/safari/websites-ibrwe2159f50/mac";
+  }
+  // Chrome, Edge, and other Chromium-based browsers.
+  return "https://support.google.com/chrome/answer/142065";
+}
+
+/**
+ * Show a toast for PERMISSION_DENIED (GPS error code 1) that includes a
+ * "How to enable" action button linking to browser-specific location-settings
+ * help. Unlike transient errors, permission-denied cannot self-heal with a
+ * retry, so the toast gives users a direct path to fix it themselves.
+ */
+function notifyPermissionDeniedError(): void {
+  toast({
+    title: "GPS unavailable",
+    description:
+      "Location access is blocked. Enable it in your browser settings to use Live mode.",
+    variant: "destructive",
+    action: React.createElement(
+      ToastAction,
+      {
+        altText: "How to enable location access",
+        onClick: () =>
+          window.open(getLocationHelpUrl(), "_blank", "noopener,noreferrer"),
+      },
+      "How to enable",
+    ) as unknown as ToastActionElement,
+  });
+}
+
 export function enterLiveMode(): void {
   if (liveActive) return;
   liveActive = true;
@@ -156,13 +199,17 @@ export function enterLiveMode(): void {
       useCameraStore.getState().setGpsFollowMode(true);
     }
     if (state.error && state.error !== prev.error) {
-      notifyGpsError(state.error);
       // PERMISSION_DENIED (code 1) is a permanent failure until the user
       // changes browser settings — retrying cannot self-heal it, and doing so
       // wastes the cap and may confuse the user with repeated error toasts.
       // Only schedule a retry for transient errors (code 2 = unavailable,
       // code 3 = timeout, null = unknown origin).
       const isPermissionDenied = state.errorCode === 1;
+      if (isPermissionDenied) {
+        notifyPermissionDeniedError();
+      } else {
+        notifyGpsError(state.error);
+      }
       if (!isPermissionDenied && gpsRetryCount < MAX_GPS_RETRIES) {
         gpsRetryCount++;
         useLiveModeStore.setState({ gpsRetryAttempt: gpsRetryCount });
