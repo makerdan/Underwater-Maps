@@ -118,6 +118,29 @@ export function getValidationSteps(logPrefix) {
     { name: "check:audit", resource: null, cmd: "pnpm run check:audit", tiers: FULL },
     // no resource: pure grep scan, sub-second
     { name: "check:bare-pino-http-mock", resource: null, cmd: "pnpm run check:bare-pino-http-mock", tiers: FULL },
+    // DB-backed audit step — skipped unless AUDIT_MARKER_BBOX_ENABLED=1 is set in the environment.
+    // Opt in by exporting AUDIT_MARKER_BBOX_ENABLED=1 before running the full tier, or by setting
+    // it in your CI environment where a real DATABASE_URL is available.
+    // When enabled, exits non-zero if any marker references a dataset whose bbox it falls outside
+    // of, or references a dataset_id that no longer exists — surfaces drift before it piles up.
+    {
+      name: "audit:marker-bbox",
+      resource: null,
+      cmd: () => {
+        if (!process.env.AUDIT_MARKER_BBOX_ENABLED) {
+          console.log(
+            `[${logPrefix}] audit:marker-bbox — skipped (set AUDIT_MARKER_BBOX_ENABLED=1 to enable)`,
+          );
+          return 0;
+        }
+        const res = spawnSync(
+          "pnpm --filter @workspace/db audit:marker-bbox -- --ci",
+          { shell: true, stdio: "inherit" },
+        );
+        return res.status ?? 1;
+      },
+      tiers: FULL,
+    },
   ];
 }
 
