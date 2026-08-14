@@ -1764,11 +1764,13 @@ describe("OverviewMap — puzzle geo-transform publication with a single grid", 
     setupStores();
     useUiStore.getState().clearPuzzleGeoTransforms();
     sessionStorage.removeItem("bathyscan:puzzleTransforms");
+    localStorage.removeItem("bathyscan:puzzleTransforms");
   });
 
   afterEach(() => {
     useUiStore.getState().clearPuzzleGeoTransforms();
     sessionStorage.removeItem("bathyscan:puzzleTransforms");
+    localStorage.removeItem("bathyscan:puzzleTransforms");
   });
 
   it("publishes non-zero dLon/dLat to uiStore when a positive tx pixel offset is set via sessionStorage hydration", async () => {

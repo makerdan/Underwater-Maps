@@ -109,6 +109,7 @@ vi.mock("@/lib/terrainStore", () => {
     hideAllOthers: vi.fn(),
     toggleVisible: vi.fn(),
     addSelected: vi.fn(),
+    addSelectedToPool: vi.fn(),
     removeSelected: vi.fn(),
     autoActivate: vi.fn(),
     autoEvict: vi.fn(),

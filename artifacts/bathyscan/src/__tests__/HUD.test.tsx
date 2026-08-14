@@ -54,8 +54,13 @@ vi.mock("@/lib/gpsStore", () => ({
 }));
 
 vi.mock("@/lib/terrainStore", () => ({
-  useTerrainStore: (sel: (s: { overviewGrid: null }) => unknown) =>
-    sel({ overviewGrid: null }),
+  useTerrainStore: (sel: (s: { overviewGrid: null; selectedIds: string[]; visibleDatasets: Array<{ datasetId: string }> }) => unknown) =>
+    sel({ overviewGrid: null, selectedIds: [], visibleDatasets: [] }),
+}));
+
+vi.mock("@/lib/proximityStreamingStore", () => ({
+  useProximityStreamingStore: (sel: (s: { loadingDatasetId: null; distanceTableM: Record<string, number>; nameMap: Record<string, string> }) => unknown) =>
+    sel({ loadingDatasetId: null, distanceTableM: {}, nameMap: {} }),
 }));
 
 vi.mock("@/lib/offlineStore", () => ({

@@ -270,10 +270,13 @@ async function clickAt(
 
 describe("OverviewMap — puzzle corner rotation handles", () => {
   beforeEach(() => {
-    // Clear sessionStorage so accumulated puzzle transforms from prior tests do
-    // not rotate the handles away from the unrotated positions that
-    // computeCornerHandles() (which assumes angleDeg=0) expects.
+    // Clear sessionStorage AND localStorage so accumulated puzzle transforms
+    // from prior tests do not rotate the handles away from the unrotated
+    // positions that computeCornerHandles() (which assumes angleDeg=0) expects.
+    // OverviewMap persists transforms to both stores; the init effect falls back
+    // to localStorage when sessionStorage is empty, so both must be wiped.
     sessionStorage.clear();
+    localStorage.removeItem("bathyscan:puzzleTransforms");
     setupStores();
   });
 
