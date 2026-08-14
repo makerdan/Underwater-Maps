@@ -2790,6 +2790,159 @@ export interface WeatherStationObsResponse {
   observation?: WeatherStationObsResponseObservation;
 }
 
+/**
+ * A single 6-minute tide-height prediction sample
+ */
+export interface TidePredictionSample {
+  /** ISO 8601 UTC timestamp of the prediction */
+  t: string;
+  /** Predicted water level in feet above MLLW */
+  v: number;
+}
+
+export type TideStationDatumsDatum = typeof TideStationDatumsDatum[keyof typeof TideStationDatumsDatum];
+
+
+export const TideStationDatumsDatum = {
+  MLLW: 'MLLW',
+} as const;
+
+export type TideStationDatumsUnits = typeof TideStationDatumsUnits[keyof typeof TideStationDatumsUnits];
+
+
+export const TideStationDatumsUnits = {
+  feet: 'feet',
+} as const;
+
+/**
+ * MHW/MHHW tidal datum values for a station
+ */
+export interface TideStationDatums {
+  stationId: string;
+  /** Mean High Water, feet above MLLW */
+  mhwFt: number | null;
+  /** Mean Higher High Water, feet above MLLW */
+  mhhwFt: number | null;
+  datum: TideStationDatumsDatum;
+  units: TideStationDatumsUnits;
+}
+
+export type TideStationPackDatum = typeof TideStationPackDatum[keyof typeof TideStationPackDatum];
+
+
+export const TideStationPackDatum = {
+  MLLW: 'MLLW',
+} as const;
+
+export type TideStationPackUnits = typeof TideStationPackUnits[keyof typeof TideStationPackUnits];
+
+
+export const TideStationPackUnits = {
+  feet: 'feet',
+} as const;
+
+/**
+ * A NOAA CO-OPS tide station with predictions and datums
+ */
+export interface TideStationPack {
+  stationId: string;
+  name: string;
+  lat: number;
+  lon: number;
+  distanceMiles: number;
+  /** UTC anchor of the prediction window */
+  windowStart: string;
+  /** UTC end of the prediction window */
+  windowEnd: string;
+  datum: TideStationPackDatum;
+  units: TideStationPackUnits;
+  predictions: TidePredictionSample[];
+  datums?: TideStationDatums | null;
+}
+
+/**
+ * A single period from an NWS hourly forecast grid
+ */
+export interface WeatherHourlyForecastPeriod {
+  startTime: string;
+  endTime: string;
+  temperature: number;
+  temperatureUnit: string;
+  windSpeed: string;
+  windDirection: string;
+  shortForecast: string;
+  isDaytime: boolean;
+}
+
+/**
+ * A NOAA ASOS/AWOS weather station with its latest observation and 7-day NWS hourly forecast
+ */
+export interface WeatherStationPack {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  windSpeedKnots?: number | null;
+  windDirDeg?: number | null;
+  visibilityMiles?: number | null;
+  ceilingFt?: number | null;
+  tempC?: number | null;
+  observedAt?: string | null;
+  /** 7-day NWS hourly forecast for the grid cell containing the station; null when the forecast endpoint was unreachable */
+  hourlyForecast?: WeatherHourlyForecastPeriod[] | null;
+}
+
+/**
+ * Open-Meteo Marine API 14-day hourly forecast at the center point. All arrays are parallel to `times`.
+ */
+export interface MarineConditionsPack {
+  /** ISO 8601 UTC timestamps, one per hour */
+  times: string[];
+  seaSurfaceTemperatureC: (number | null)[];
+  waveHeightM: (number | null)[];
+  waveDirectionDeg: (number | null)[];
+}
+
+export interface TemperatureProfilePackSample {
+  depthM: number;
+  temperatureC: number;
+}
+
+/**
+ * Depth-resolved temperature profile from WOA 2023 / Argo
+ */
+export interface TemperatureProfilePack {
+  available: boolean;
+  samples: TemperatureProfilePackSample[];
+  source: string;
+  sourceUrl?: string | null;
+  timestamp?: string | null;
+  provider: string;
+}
+
+/**
+ * Environmental Data Pack — all weather, tides, SST, and temperature profile data for an area over a caller-specified date window.
+ */
+export interface EnvPack {
+  /** ISO 8601 UTC timestamp when the pack was generated */
+  generatedAt: string;
+  /** generatedAt + 14 days — callers use this to detect stale packs */
+  expiresAt: string;
+  centerLat: number;
+  centerLon: number;
+  coverageRadiusMiles: number;
+  /** NOAA CO-OPS tide stations within the radius with predictions and datums; null when the NOAA station catalogue was unreachable */
+  tideStations?: TideStationPack[] | null;
+  /** NOAA ASOS/AWOS weather stations within the radius; null when NOAA was unreachable and no cached data exists */
+  weatherStations?: WeatherStationPack[] | null;
+  /** Open-Meteo Marine 14-day hourly forecast at the center point; null when Open-Meteo was unreachable */
+  marineConditions?: MarineConditionsPack | null;
+  /** Depth-resolved temperature profile; available=false when no WOA cast or Argo float was found for this location */
+  temperatureProfile?: TemperatureProfilePack | null;
+  /** Human-readable messages for any data sources that failed or were skipped; empty array when all sources returned data */
+  warnings: string[];
+}
+
 export interface WaterTemperature {
   /** True when a live sea-surface temperature was retrieved */
   available: boolean;
@@ -3838,6 +3991,29 @@ over a generic nearest-neighbour lookup.
 
  */
 datasetId?: string;
+};
+
+export type GetEnvPackParams = {
+/**
+ * Latitude of the center point
+ */
+lat: number;
+/**
+ * Longitude of the center point
+ */
+lon: number;
+/**
+ * Search radius in statute miles for tide and weather stations
+ * @minimum 0
+ * @maximum 200
+ */
+radiusMiles?: number;
+/**
+ * Number of days of tide predictions and marine forecast to include
+ * @minimum 1
+ * @maximum 14
+ */
+days?: number;
 };
 
 export type GetEfhParams = {

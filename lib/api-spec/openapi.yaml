@@ -2984,6 +2984,69 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /env-pack:
+    get:
+      operationId: getEnvPack
+      tags: [drift-planner]
+      summary: Fetch a 14-day environmental data pack for an area
+      description: |
+        Returns a single JSON blob containing all environmental data useful for
+        offline marine use: NOAA CO-OPS tide predictions and datums for all
+        stations within the radius, NOAA ASOS/AWOS weather station observations
+        plus the 7-day NWS hourly forecast, Open-Meteo Marine sea-surface
+        temperature, wave height, and wave direction for 14 days, and a
+        depth-resolved temperature profile from WOA 2023 / Argo.
+
+        Individual upstream failures are tolerated — any data source that is
+        unreachable produces a null field and a message in the top-level
+        `warnings` array. The endpoint always returns HTTP 200 unless the
+        query parameters are invalid. Response is cached server-side for 30
+        minutes.
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Latitude of the center point
+        - name: lon
+          in: query
+          required: true
+          schema:
+            type: number
+          description: Longitude of the center point
+        - name: radiusMiles
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 15
+            minimum: 0
+            maximum: 200
+          description: Search radius in statute miles for tide and weather stations
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 14
+            minimum: 1
+            maximum: 14
+          description: Number of days of tide predictions and marine forecast to include
+      responses:
+        "200":
+          description: Environmental data pack for the requested area and time window
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvPack"
+        "400":
+          description: Missing or invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /efh:
     get:
       operationId: getEfh
@@ -8106,6 +8169,303 @@ components:
               description: ISO 8601 UTC timestamp of the observation
       required:
         - available
+
+    TidePredictionSample:
+      type: object
+      description: A single 6-minute tide-height prediction sample
+      properties:
+        t:
+          type: string
+          description: ISO 8601 UTC timestamp of the prediction
+        v:
+          type: number
+          description: Predicted water level in feet above MLLW
+      required:
+        - t
+        - v
+
+    TideStationDatums:
+      type: object
+      description: MHW/MHHW tidal datum values for a station
+      properties:
+        stationId:
+          type: string
+        mhwFt:
+          type: number
+          nullable: true
+          description: Mean High Water, feet above MLLW
+        mhhwFt:
+          type: number
+          nullable: true
+          description: Mean Higher High Water, feet above MLLW
+        datum:
+          type: string
+          enum: [MLLW]
+        units:
+          type: string
+          enum: [feet]
+      required:
+        - stationId
+        - mhwFt
+        - mhhwFt
+        - datum
+        - units
+
+    TideStationPack:
+      type: object
+      description: A NOAA CO-OPS tide station with predictions and datums
+      properties:
+        stationId:
+          type: string
+        name:
+          type: string
+        lat:
+          type: number
+        lon:
+          type: number
+        distanceMiles:
+          type: number
+        windowStart:
+          type: string
+          description: UTC anchor of the prediction window
+        windowEnd:
+          type: string
+          description: UTC end of the prediction window
+        datum:
+          type: string
+          enum: [MLLW]
+        units:
+          type: string
+          enum: [feet]
+        predictions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TidePredictionSample"
+        datums:
+          nullable: true
+          oneOf:
+            - $ref: "#/components/schemas/TideStationDatums"
+      required:
+        - stationId
+        - name
+        - lat
+        - lon
+        - distanceMiles
+        - windowStart
+        - windowEnd
+        - datum
+        - units
+        - predictions
+
+    WeatherHourlyForecastPeriod:
+      type: object
+      description: A single period from an NWS hourly forecast grid
+      properties:
+        startTime:
+          type: string
+        endTime:
+          type: string
+        temperature:
+          type: number
+        temperatureUnit:
+          type: string
+        windSpeed:
+          type: string
+        windDirection:
+          type: string
+        shortForecast:
+          type: string
+        isDaytime:
+          type: boolean
+      required:
+        - startTime
+        - endTime
+        - temperature
+        - temperatureUnit
+        - windSpeed
+        - windDirection
+        - shortForecast
+        - isDaytime
+
+    WeatherStationPack:
+      type: object
+      description: >-
+        A NOAA ASOS/AWOS weather station with its latest observation and
+        7-day NWS hourly forecast
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        lat:
+          type: number
+        lon:
+          type: number
+        windSpeedKnots:
+          type: number
+          nullable: true
+        windDirDeg:
+          type: number
+          nullable: true
+        visibilityMiles:
+          type: number
+          nullable: true
+        ceilingFt:
+          type: number
+          nullable: true
+        tempC:
+          type: number
+          nullable: true
+        observedAt:
+          type: string
+          nullable: true
+        hourlyForecast:
+          nullable: true
+          type: array
+          items:
+            $ref: "#/components/schemas/WeatherHourlyForecastPeriod"
+          description: >-
+            7-day NWS hourly forecast for the grid cell containing the
+            station; null when the forecast endpoint was unreachable
+      required:
+        - id
+        - name
+        - lat
+        - lon
+
+    MarineConditionsPack:
+      type: object
+      description: >-
+        Open-Meteo Marine API 14-day hourly forecast at the center point.
+        All arrays are parallel to `times`.
+      properties:
+        times:
+          type: array
+          items:
+            type: string
+          description: ISO 8601 UTC timestamps, one per hour
+        seaSurfaceTemperatureC:
+          type: array
+          items:
+            type: number
+            nullable: true
+        waveHeightM:
+          type: array
+          items:
+            type: number
+            nullable: true
+        waveDirectionDeg:
+          type: array
+          items:
+            type: number
+            nullable: true
+      required:
+        - times
+        - seaSurfaceTemperatureC
+        - waveHeightM
+        - waveDirectionDeg
+
+    TemperatureProfilePackSample:
+      type: object
+      properties:
+        depthM:
+          type: number
+        temperatureC:
+          type: number
+      required:
+        - depthM
+        - temperatureC
+
+    TemperatureProfilePack:
+      type: object
+      description: Depth-resolved temperature profile from WOA 2023 / Argo
+      properties:
+        available:
+          type: boolean
+        samples:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemperatureProfilePackSample"
+        source:
+          type: string
+        sourceUrl:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          nullable: true
+        provider:
+          type: string
+      required:
+        - available
+        - samples
+        - source
+        - provider
+
+    EnvPack:
+      type: object
+      description: >-
+        Environmental Data Pack — all weather, tides, SST, and temperature
+        profile data for an area over a caller-specified date window.
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 UTC timestamp when the pack was generated
+        expiresAt:
+          type: string
+          format: date-time
+          description: generatedAt + 14 days — callers use this to detect stale packs
+        centerLat:
+          type: number
+        centerLon:
+          type: number
+        coverageRadiusMiles:
+          type: number
+        tideStations:
+          nullable: true
+          type: array
+          items:
+            $ref: "#/components/schemas/TideStationPack"
+          description: >-
+            NOAA CO-OPS tide stations within the radius with predictions and
+            datums; null when the NOAA station catalogue was unreachable
+        weatherStations:
+          nullable: true
+          type: array
+          items:
+            $ref: "#/components/schemas/WeatherStationPack"
+          description: >-
+            NOAA ASOS/AWOS weather stations within the radius; null when NOAA
+            was unreachable and no cached data exists
+        marineConditions:
+          nullable: true
+          oneOf:
+            - $ref: "#/components/schemas/MarineConditionsPack"
+          description: >-
+            Open-Meteo Marine 14-day hourly forecast at the center point;
+            null when Open-Meteo was unreachable
+        temperatureProfile:
+          nullable: true
+          oneOf:
+            - $ref: "#/components/schemas/TemperatureProfilePack"
+          description: >-
+            Depth-resolved temperature profile; available=false when no
+            WOA cast or Argo float was found for this location
+        warnings:
+          type: array
+          items:
+            type: string
+          description: >-
+            Human-readable messages for any data sources that failed or were
+            skipped; empty array when all sources returned data
+      required:
+        - generatedAt
+        - expiresAt
+        - centerLat
+        - centerLon
+        - coverageRadiusMiles
+        - warnings
 
     WaterTemperature:
       type: object

@@ -43,6 +43,7 @@ import type {
   DeleteGithubFileContentsBody,
   DeleteMarkersMine200,
   EfhFeatureCollection,
+  EnvPack,
   ExportUserData200,
   FederatedSaveBody,
   FederatedSearchResponse,
@@ -58,6 +59,7 @@ import type {
   GetDatasetsParams,
   GetEfhByIdParams,
   GetEfhParams,
+  GetEnvPackParams,
   GetGcsJobStatus200,
   GetGcsJobStatusParams,
   GetGithubFileContents200,
@@ -6311,6 +6313,103 @@ export function useGetTemperatureProfile<TData = Awaited<ReturnType<typeof getTe
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetTemperatureProfileQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetEnvPackUrl = (params: GetEnvPackParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/env-pack?${stringifiedParams}` : `/api/env-pack`
+}
+
+/**
+ * Returns a single JSON blob containing all environmental data useful for
+offline marine use: NOAA CO-OPS tide predictions and datums for all
+stations within the radius, NOAA ASOS/AWOS weather station observations
+plus the 7-day NWS hourly forecast, Open-Meteo Marine sea-surface
+temperature, wave height, and wave direction for 14 days, and a
+depth-resolved temperature profile from WOA 2023 / Argo.
+
+Individual upstream failures are tolerated — any data source that is
+unreachable produces a null field and a message in the top-level
+`warnings` array. The endpoint always returns HTTP 200 unless the
+query parameters are invalid. Response is cached server-side for 30
+minutes.
+
+ * @summary Fetch a 14-day environmental data pack for an area
+ */
+export const getEnvPack = async (params: GetEnvPackParams, options?: RequestInit): Promise<EnvPack> => {
+
+  return customFetch<EnvPack>(getGetEnvPackUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEnvPackQueryKey = (params?: GetEnvPackParams,) => {
+    return [
+    `/api/env-pack`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetEnvPackQueryOptions = <TData = Awaited<ReturnType<typeof getEnvPack>>, TError = ErrorType<ApiError>>(params: GetEnvPackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEnvPack>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEnvPackQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEnvPack>>> = ({ signal }) => getEnvPack(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEnvPack>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEnvPackQueryResult = NonNullable<Awaited<ReturnType<typeof getEnvPack>>>
+export type GetEnvPackQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Fetch a 14-day environmental data pack for an area
+ */
+
+export function useGetEnvPack<TData = Awaited<ReturnType<typeof getEnvPack>>, TError = ErrorType<ApiError>>(
+ params: GetEnvPackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEnvPack>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEnvPackQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

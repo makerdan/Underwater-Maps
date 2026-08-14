@@ -4267,6 +4267,109 @@ export const GetTemperatureProfileResponse = zod.object({
 
 
 /**
+ * Returns a single JSON blob containing all environmental data useful for
+offline marine use: NOAA CO-OPS tide predictions and datums for all
+stations within the radius, NOAA ASOS/AWOS weather station observations
+plus the 7-day NWS hourly forecast, Open-Meteo Marine sea-surface
+temperature, wave height, and wave direction for 14 days, and a
+depth-resolved temperature profile from WOA 2023 / Argo.
+
+Individual upstream failures are tolerated — any data source that is
+unreachable produces a null field and a message in the top-level
+`warnings` array. The endpoint always returns HTTP 200 unless the
+query parameters are invalid. Response is cached server-side for 30
+minutes.
+
+ * @summary Fetch a 14-day environmental data pack for an area
+ */
+export const getEnvPackQueryRadiusMilesDefault = 15;
+export const getEnvPackQueryRadiusMilesMin = 0;
+export const getEnvPackQueryRadiusMilesMax = 200;
+
+export const getEnvPackQueryDaysDefault = 14;
+export const getEnvPackQueryDaysMax = 14;
+
+
+
+export const GetEnvPackQueryParams = zod.object({
+  "lat": zod.coerce.number().describe('Latitude of the center point'),
+  "lon": zod.coerce.number().describe('Longitude of the center point'),
+  "radiusMiles": zod.coerce.number().min(getEnvPackQueryRadiusMilesMin).max(getEnvPackQueryRadiusMilesMax).default(getEnvPackQueryRadiusMilesDefault).describe('Search radius in statute miles for tide and weather stations'),
+  "days": zod.coerce.number().min(1).max(getEnvPackQueryDaysMax).default(getEnvPackQueryDaysDefault).describe('Number of days of tide predictions and marine forecast to include')
+})
+
+export const GetEnvPackResponse = zod.object({
+  "generatedAt": zod.coerce.date().describe('ISO 8601 UTC timestamp when the pack was generated'),
+  "expiresAt": zod.coerce.date().describe('generatedAt + 14 days — callers use this to detect stale packs'),
+  "centerLat": zod.number(),
+  "centerLon": zod.number(),
+  "coverageRadiusMiles": zod.number(),
+  "tideStations": zod.array(zod.object({
+  "stationId": zod.string(),
+  "name": zod.string(),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "distanceMiles": zod.number(),
+  "windowStart": zod.string().describe('UTC anchor of the prediction window'),
+  "windowEnd": zod.string().describe('UTC end of the prediction window'),
+  "datum": zod.enum(['MLLW']),
+  "units": zod.enum(['feet']),
+  "predictions": zod.array(zod.object({
+  "t": zod.string().describe('ISO 8601 UTC timestamp of the prediction'),
+  "v": zod.number().describe('Predicted water level in feet above MLLW')
+}).describe('A single 6-minute tide-height prediction sample')),
+  "datums": zod.object({
+  "stationId": zod.string(),
+  "mhwFt": zod.number().nullable().describe('Mean High Water, feet above MLLW'),
+  "mhhwFt": zod.number().nullable().describe('Mean Higher High Water, feet above MLLW'),
+  "datum": zod.enum(['MLLW']),
+  "units": zod.enum(['feet'])
+}).describe('MHW\/MHHW tidal datum values for a station').nullish()
+}).describe('A NOAA CO-OPS tide station with predictions and datums')).nullish().describe('NOAA CO-OPS tide stations within the radius with predictions and datums; null when the NOAA station catalogue was unreachable'),
+  "weatherStations": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "lat": zod.number(),
+  "lon": zod.number(),
+  "windSpeedKnots": zod.number().nullish(),
+  "windDirDeg": zod.number().nullish(),
+  "visibilityMiles": zod.number().nullish(),
+  "ceilingFt": zod.number().nullish(),
+  "tempC": zod.number().nullish(),
+  "observedAt": zod.string().nullish(),
+  "hourlyForecast": zod.array(zod.object({
+  "startTime": zod.string(),
+  "endTime": zod.string(),
+  "temperature": zod.number(),
+  "temperatureUnit": zod.string(),
+  "windSpeed": zod.string(),
+  "windDirection": zod.string(),
+  "shortForecast": zod.string(),
+  "isDaytime": zod.boolean()
+}).describe('A single period from an NWS hourly forecast grid')).nullish().describe('7-day NWS hourly forecast for the grid cell containing the station; null when the forecast endpoint was unreachable')
+}).describe('A NOAA ASOS\/AWOS weather station with its latest observation and 7-day NWS hourly forecast')).nullish().describe('NOAA ASOS\/AWOS weather stations within the radius; null when NOAA was unreachable and no cached data exists'),
+  "marineConditions": zod.object({
+  "times": zod.array(zod.string()).describe('ISO 8601 UTC timestamps, one per hour'),
+  "seaSurfaceTemperatureC": zod.array(zod.number().nullable()),
+  "waveHeightM": zod.array(zod.number().nullable()),
+  "waveDirectionDeg": zod.array(zod.number().nullable())
+}).describe('Open-Meteo Marine API 14-day hourly forecast at the center point. All arrays are parallel to `times`.').nullish().describe('Open-Meteo Marine 14-day hourly forecast at the center point; null when Open-Meteo was unreachable'),
+  "temperatureProfile": zod.object({
+  "available": zod.boolean(),
+  "samples": zod.array(zod.object({
+  "depthM": zod.number(),
+  "temperatureC": zod.number()
+})),
+  "source": zod.string(),
+  "sourceUrl": zod.string().nullish(),
+  "timestamp": zod.string().nullish(),
+  "provider": zod.string()
+}).describe('Depth-resolved temperature profile from WOA 2023 \/ Argo').nullish().describe('Depth-resolved temperature profile; available=false when no WOA cast or Argo float was found for this location'),
+  "warnings": zod.array(zod.string()).describe('Human-readable messages for any data sources that failed or were skipped; empty array when all sources returned data')
+}).describe('Environmental Data Pack — all weather, tides, SST, and temperature profile data for an area over a caller-specified date window.')
+
+
+/**
  * Returns GeoJSON Essential Fish Habitat zone polygons for the requested area.
 Currently covers the Thorne Bay / Clarence Strait / SE Alaska region.
 Data credit: NOAA Fisheries / NMFS Alaska Region.

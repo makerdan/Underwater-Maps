@@ -32,6 +32,7 @@ import searchFederatedRouter from "./search-federated";
 import adminRouter from "./admin";
 import githubRouter from "./github";
 import terrainBundlesRouter from "./terrain-bundles";
+import envPackRouter from "./env-pack";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(searchFederatedRouter);
 router.use(adminRouter);
 router.use("/github", githubRouter);
 router.use(terrainBundlesRouter);
+router.use(envPackRouter);
 
 export default router;
