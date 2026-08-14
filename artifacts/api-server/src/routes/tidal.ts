@@ -16,8 +16,7 @@ import {
   TidalScheduleQuerySchema,
   TidalPackQuerySchema,
 } from "./schemas.js";
-import { z } from "zod";
-import type { ZodError } from "zod";
+import { z, type ZodError } from "zod";
 import {
   GetTidalScheduleResponse,
   GetTidalPackResponse,

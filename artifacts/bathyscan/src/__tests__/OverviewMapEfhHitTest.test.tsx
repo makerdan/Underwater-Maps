@@ -4,8 +4,7 @@ import { act, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
 import { useUiStore } from "@/lib/uiStore";
-import { useTerrainStore } from "@/lib/terrainStore";
-import type { VisibleDataset } from "@/lib/terrainStore";
+import { useTerrainStore, type VisibleDataset } from "@/lib/terrainStore";
 
 /**
  * SELF-MAINTAINING API CLIENT MOCK — same Proxy pattern as

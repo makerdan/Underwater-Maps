@@ -17,14 +17,13 @@ import { useUiStore }             from "./uiStore";
 import { useCameraStore }         from "./cameraStore";
 import { useClassificationStore } from "./classificationStore";
 import { useHighlightStore }      from "./highlightStore";
-import { computeStatistic, lonLatToWorldXZ } from "./terrain";
+import { computeStatistic, lonLatToWorldXZ, type StatMetric } from "./terrain";
 import {
   SALTWATER_ZONES,
   FRESHWATER_ZONES,
   SALTWATER_ZONE_TO_SLOT,
   FRESHWATER_ZONE_TO_SLOT,
 } from "./zoneMap";
-import type { StatMetric } from "./terrain";
 
 export interface ToolOptions {
   /** Switch the active dataset — comes from AppContext so is injected by QueryPanel. */

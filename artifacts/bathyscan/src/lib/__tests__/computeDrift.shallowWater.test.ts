@@ -15,7 +15,6 @@
 
 import { describe, it, expect } from "vitest";
 import { computeDrift } from "../computeDrift";
-import type { ComputeDriftOptions } from "../computeDrift";
 import type { HourlySurfaceCondition } from "../driftStore";
 import type { TerrainData } from "@workspace/api-client-react";
 

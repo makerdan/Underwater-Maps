@@ -1,13 +1,12 @@
 import React from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, type MarkerType } from "@/lib/settingsStore";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { S } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
 import { SliderRow, ToggleRow, SelectRow, ColorRow } from "./components/RowWidgets";
 import { SALTWATER_MARKER_TYPE_OPTIONS, FRESHWATER_MARKER_TYPE_OPTIONS } from "./constants";
-import type { MarkerType } from "@/lib/settingsStore";
 
 export function MapLayersSection() {
   const s = useSettingsStore(useShallow((s) => s));

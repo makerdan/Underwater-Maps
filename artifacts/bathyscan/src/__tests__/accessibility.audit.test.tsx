@@ -26,8 +26,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { axe } from "vitest-axe";
 import { SimulatedDataConfirmDialog } from "@/components/SimulatedDataConfirmDialog";
-import { useSimulatedDataStore } from "@/lib/simulatedDataStore";
-import type { PendingSwitch } from "@/lib/simulatedDataStore";
+import { useSimulatedDataStore, type PendingSwitch } from "@/lib/simulatedDataStore";
 import { useCameraStore } from "@/lib/cameraStore";
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { TerrainData } from "@workspace/api-client-react";
 import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
-import type { VisibleDataset } from "@/lib/terrainStore";
 
 function makeGrid(datasetId: string): TerrainData {
   return {

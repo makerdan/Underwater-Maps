@@ -19,8 +19,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { FindDataPanel } from "@/components/FindDataPanel";
-import { useTerrainStore, MAX_ACTIVE_DATASETS } from "@/lib/terrainStore";
-import type { VisibleDataset } from "@/lib/terrainStore";
+import { useTerrainStore, MAX_ACTIVE_DATASETS, type VisibleDataset } from "@/lib/terrainStore";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 
 // ---------------------------------------------------------------------------

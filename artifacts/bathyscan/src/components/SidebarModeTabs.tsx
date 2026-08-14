@@ -13,8 +13,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { useAppState } from "@/lib/context";
 import { useDriftStore } from "@/lib/driftStore";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { SidebarMode } from "@/lib/settingsStore";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, type SidebarMode } from "@/lib/settingsStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 interface ModeTab {

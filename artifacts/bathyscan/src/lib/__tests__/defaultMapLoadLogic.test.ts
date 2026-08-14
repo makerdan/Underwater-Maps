@@ -7,7 +7,6 @@
  */
 import { describe, it, expect } from "vitest";
 import { resolveDefaultDataset } from "../defaultMapLoadLogic";
-import type { ResolveDefaultDatasetArgs } from "../defaultMapLoadLogic";
 
 const DATASET_A = { id: "ds-a", name: "Dataset A" };
 const DATASET_B = { id: "ds-b", name: "Dataset B" };

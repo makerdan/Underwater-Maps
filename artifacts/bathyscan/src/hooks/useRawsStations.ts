@@ -2,8 +2,7 @@
  * useRawsStations — fetches AOOS RAWS weather station list near the active
  * dataset centre. Fetches once on mount (station list is stable, cached 24h).
  */
-import { useGetRawsStations, getGetRawsStationsQueryKey } from "@workspace/api-client-react";
-import type { RawsStationItem } from "@workspace/api-client-react";
+import { useGetRawsStations, getGetRawsStationsQueryKey, type RawsStationItem } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 
 export type { RawsStationItem };

@@ -26,7 +26,6 @@ import { act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
 import { useTerrainStore } from "@/lib/terrainStore";
-import type { VisibleDataset } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { computeInitialTransform, lonLatToCanvas } from "@/lib/overviewRenderer";

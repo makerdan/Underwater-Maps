@@ -29,13 +29,13 @@ import {
   getGetEfhByIdQueryKey,
   useGetDatasets,
   getGetDatasetsQueryKey,
+  type EfhSpeciesProperties,
+  type EfhFeature,
 } from "@workspace/api-client-react";
-import type { EfhFeature, EfhSpeciesProperties } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ThreeEvent } from "@react-three/fiber";
 
-import { polygonIntersectsBbox } from "@/lib/efhBboxFilter";
-import type { Bbox } from "@/lib/efhBboxFilter";
+import { polygonIntersectsBbox, type Bbox } from "@/lib/efhBboxFilter";
 /** UUID format: custom (user-uploaded) dataset IDs. */
 const CUSTOM_DATASET_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,7 +52,6 @@ function lonToWorldX(lon: number, minLon: number, lonRange: number): number {
 function latToWorldZ(lat: number, minLat: number, latRange: number): number {
   return ((lat - minLat) / latRange) * WORLD_SIZE - WORLD_SIZE / 2;
 }
-
 
 /** Converts one GeoJSON Polygon ring to a closed THREE.BufferGeometry line loop. */
 function ringToLineGeometry(

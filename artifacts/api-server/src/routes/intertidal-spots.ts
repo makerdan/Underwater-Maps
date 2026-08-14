@@ -39,8 +39,7 @@ import {
   type ShoreZoneFeature,
   type SubstrateSource,
 } from "../lib/shoreZoneData.js";
-import { scoreTidepool, scoreBeachcombing, buildScoreSignals } from "../lib/intertidalScorer.js";
-import type { IntertidalScoringProps } from "../lib/intertidalScorer.js";
+import { scoreTidepool, scoreBeachcombing, buildScoreSignals, type IntertidalScoringProps } from "../lib/intertidalScorer.js";
 import { GetIntertidalSpotsResponse } from "@workspace/api-zod";
 
 const IntertidalSpotsQuerySchema = z.object({

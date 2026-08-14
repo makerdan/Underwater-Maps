@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { DEPTH_BAND_BOUNDARIES_FT, OCEAN_MAX_DEPTH_FT } from "../lib/colormap";
+import { DEPTH_BAND_BOUNDARIES_FT, OCEAN_MAX_DEPTH_FT, getColormap } from "../lib/colormap";
 
 // Shared stub — implementations live in src/__tests__/mocks/three.ts,
 // wired via __mocks__/three.ts so no factory is needed here.
 vi.mock("three");
 
-import { getColormap } from "../lib/colormap";
 import {
   usePaletteStore,
   DEFAULT_SHALLOW,

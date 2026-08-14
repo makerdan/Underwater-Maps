@@ -14,8 +14,7 @@
  * No React or Three.js dependencies — safe to import in unit tests.
  */
 import type { TerrainData } from "@workspace/api-client-react";
-import { lonLatToCanvas, canvasToLonLat } from "./overviewRenderer";
-import type { OverviewTransform } from "./overviewRenderer";
+import { lonLatToCanvas, canvasToLonLat, type OverviewTransform } from "./overviewRenderer";
 import type { PuzzleTransform } from "./puzzleStore";
 
 /**

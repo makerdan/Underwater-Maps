@@ -10,8 +10,7 @@
  * packed weather snapshot transparently.
  */
 import { useEffect, useState } from "react";
-import { useGetWeatherStations, getGetWeatherStationsQueryKey } from "@workspace/api-client-react";
-import type { WeatherStation } from "@workspace/api-client-react";
+import { useGetWeatherStations, getGetWeatherStationsQueryKey, type WeatherStation } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { getPackForLocation, getOfflineWeatherValue } from "@/lib/offlinePackStore";

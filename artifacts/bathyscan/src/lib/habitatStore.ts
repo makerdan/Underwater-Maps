@@ -19,13 +19,7 @@
 import { create } from "zustand";
 import type { TerrainData } from "@workspace/api-client-react";
 import { RemoteData } from "@workspace/shared-types";
-import type { RemoteData as RemoteDataT } from "@workspace/shared-types";
-import {
-  computeHabitatScore,
-  extractHotspots,
-  SPECIES_CONFIGS,
-} from "./habitat";
-import type { SpeciesId, HotspotCandidate, SpeciesConfig } from "./habitat";
+import { computeHabitatScore, extractHotspots, SPECIES_CONFIGS, type SpeciesConfig, type HotspotCandidate, type SpeciesId } from "./habitat";
 
 interface CacheEntry {
   scores: Float32Array;
@@ -35,7 +29,7 @@ interface CacheEntry {
 interface HabitatState {
   activeSpecies: SpeciesId | null;
   /** Score array for the active species. Use `.status === 'done'` to access `.data`. */
-  scores: RemoteDataT<Float32Array>;
+  scores: RemoteData<Float32Array>;
   hotspots: HotspotCandidate[];
   /** Per-species memo cache — cleared when terrain changes. */
   scoreCache: Map<SpeciesId, CacheEntry>;

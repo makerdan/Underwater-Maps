@@ -33,7 +33,6 @@ import {
   hitTestEfhLegend,
 } from "../lib/overviewRenderer";
 import { EfhFeatureType } from "@workspace/api-client-react";
-import type { EfhFeature } from "@workspace/api-client-react";
 
 vi.mock("three");
 

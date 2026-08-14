@@ -2,10 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Canvas, useThree } from "@react-three/fiber";
 import { useCameraStore } from "@/lib/cameraStore";
 import * as THREE from "three";
-import {
-  useGetDatasetsIdTerrain,
-  getGetDatasetsIdTerrainQueryKey,
-} from "@workspace/api-client-react";
+import { useGetDatasetsIdTerrain, getGetDatasetsIdTerrainQueryKey, type TerrainData } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { TerrainMesh } from "@/components/TerrainMesh";
 import { EfhZoneLayer } from "@/components/EfhZoneLayer";
@@ -32,7 +29,6 @@ import { runFollowBoundsCheck } from "@/lib/followBoundsCheck";
 import { WaterSurfacePlane } from "@/components/WaterSurfacePlane";
 import { WaterTempVolumeLayer } from "@/components/WaterTempVolumeLayer";
 import { LandmassMesh } from "@/components/LandmassMesh";
-import type { TerrainData } from "@workspace/api-client-react";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useDriftStore } from "@/lib/driftStore";
@@ -125,7 +121,6 @@ const StubFollowBoundsWatcher: React.FC = () => {
 // or upstream flat-plane fallback).
 // ---------------------------------------------------------------------------
 const MAX_LAND_HEIGHT_WORLD = MAX_DEPTH_WORLD * 0.4; // e.g. 20 world units
-
 
 // Exported for unit testing only (GPU-leak regression tests).
 export const LandTerrainMesh: React.FC = () => {

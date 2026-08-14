@@ -16,8 +16,8 @@
  * returns a no-coverage result. Heuristic / AI behaviour for those datasets
  * is identical to today.
  */
-import type { Bbox, ShoreZoneFeature, ShoreZoneSubstrate } from "./shoreZoneData.js";
-import { getSubstrateForDataset } from "./shoreZoneData.js";
+import { getSubstrateForDataset, type ShoreZoneSubstrate, type ShoreZoneFeature } from "./shoreZoneData.js";
+import { type Bbox } from "./fetchers/index.js";
 import { ALL_PRESET_DATASETS } from "./terrain.js";
 import { registerCache } from "./cacheRegistry.js";
 

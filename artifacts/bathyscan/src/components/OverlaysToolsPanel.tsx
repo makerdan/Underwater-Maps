@@ -25,18 +25,16 @@ import { useTerrainStore } from "@/lib/terrainStore";
 import {
   useGetUserDatasetsIdHyd93Features,
   getGetUserDatasetsIdHyd93FeaturesQueryKey,
-} from "@workspace/api-client-react";
-import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
-import { AdvancedSection } from "@/components/AdvancedSection";
-import {
   useGetDatasets,
   getGetDatasetsQueryKey,
   useGetEfh,
   getGetEfhQueryKey,
   useGetEfhById,
   getGetEfhByIdQueryKey,
+  type EfhFeature,
 } from "@workspace/api-client-react";
-import type { EfhFeature } from "@workspace/api-client-react";
+import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
+import { AdvancedSection } from "@/components/AdvancedSection";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { Spinner } from "@/components/ui/spinner";

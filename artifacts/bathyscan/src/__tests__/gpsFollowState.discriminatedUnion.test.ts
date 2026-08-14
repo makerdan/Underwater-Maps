@@ -18,7 +18,6 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { useCameraStore } from "@/lib/cameraStore";
-import type { GpsFollowState } from "@/lib/cameraStore";
 
 beforeEach(() => {
   useCameraStore.setState({

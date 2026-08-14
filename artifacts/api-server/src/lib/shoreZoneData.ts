@@ -32,8 +32,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scoreTidepool, scoreBeachcombing } from "./intertidalScorer.js";
-import type { IntertidalScoringProps } from "./intertidalScorer.js";
+import { scoreTidepool, scoreBeachcombing, type IntertidalScoringProps } from "./intertidalScorer.js";
 
 export type ShoreZoneSubstrate = "bedrock" | "gravel" | "sand" | "mud";
 

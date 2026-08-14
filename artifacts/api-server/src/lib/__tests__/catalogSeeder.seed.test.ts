@@ -9,8 +9,14 @@
  * a second boot), and assert against the actual rows in the table.
  */
 
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
-import { vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterAll,
+  vi,
+} from "vitest";
 import { db, datasetCatalogTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { ALL_PRESET_DATASETS } from "../terrain.js";

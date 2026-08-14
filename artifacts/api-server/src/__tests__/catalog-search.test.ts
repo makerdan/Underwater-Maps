@@ -21,8 +21,14 @@
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { describe, it, expect } from "vitest";
-import { scoreEntry, searchCatalog, EXTRA_CATALOG_ENTRIES, findDuplicateCatalogEntries, normalizedLakeIdBase } from "../lib/catalogSeeder.js";
-import type { CatalogSeedEntry } from "../lib/catalogSeeder.js";
+import {
+  scoreEntry,
+  searchCatalog,
+  EXTRA_CATALOG_ENTRIES,
+  findDuplicateCatalogEntries,
+  normalizedLakeIdBase,
+  type CatalogSeedEntry,
+} from "../lib/catalogSeeder.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

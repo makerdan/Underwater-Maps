@@ -11,10 +11,9 @@
  */
 import React from "react";
 import { usePaletteSuggestionStore } from "@/hooks/usePaletteSuggestion";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, type ColormapTheme } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { colormapCssGradient } from "@/lib/colormap";
-import type { ColormapTheme } from "@/lib/settingsStore";
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 

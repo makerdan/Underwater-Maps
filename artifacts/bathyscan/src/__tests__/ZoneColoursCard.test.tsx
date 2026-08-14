@@ -77,8 +77,7 @@ vi.mock("@/hooks/use-toast", () => ({
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { useZoneOverlayStore, DEFAULT_SLOTS, ZONE_DEFAULT_COLORS } from "@/lib/zoneOverlayStore";
-import { NAV_TABS } from "@/pages/settings/constants";
-import type { Tab } from "@/pages/settings/constants";
+import { NAV_TABS, type Tab } from "@/pages/settings/constants";
 const tabLabel = (id: Tab) => NAV_TABS.find((t) => t.id === id)!.label;
 
 function resetZoneStore() {

@@ -364,8 +364,14 @@ describe("getTerrainSurfaceY", () => {
 // rather than the React rendering layer so the test runs fast without R3F.
 // ---------------------------------------------------------------------------
 
-import { getColormap } from "../lib/colormap";
-import { usePaletteStore, DEFAULT_BAND_BOUNDARIES } from "../lib/paletteStore";
+import {
+  getColormap,
+  getColormapDepthDomain,
+  getColormapTRange,
+  OCEAN_MAX_DEPTH_M,
+  OCEAN_MAX_DEPTH_FT,
+} from "../lib/colormap";
+import { usePaletteStore, DEFAULT_BAND_BOUNDARIES, DEFAULT_BAND_COLORS } from "../lib/paletteStore";
 
 describe("applyColormapToVertexColors — band-boundary live repaint", () => {
   beforeEach(() => {
@@ -785,14 +791,6 @@ describe("getSeaSurfaceY", () => {
 //   1. A vertex at a band's labelled depth renders that band's colour.
 //   2. Shallow lakes never sample the near-black deep endpoint at t=1.
 // ---------------------------------------------------------------------------
-
-import {
-  getColormapDepthDomain,
-  getColormapTRange,
-  OCEAN_MAX_DEPTH_M,
-  OCEAN_MAX_DEPTH_FT,
-} from "../lib/colormap";
-import { DEFAULT_BAND_COLORS } from "../lib/paletteStore";
 
 const FT_TO_M_TEST = 0.3048;
 

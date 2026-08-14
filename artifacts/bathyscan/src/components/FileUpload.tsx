@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { useDropzone } from "react-dropzone";
-import type { FileRejection } from "react-dropzone";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePostDatasetsUpload } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";

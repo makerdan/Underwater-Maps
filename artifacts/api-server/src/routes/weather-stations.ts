@@ -14,8 +14,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { fetchWeatherStations, NoaaUnavailableError } from "../lib/noaaWeatherFetcher.js";
-import type { WeatherStation } from "../lib/noaaWeatherFetcher.js";
+import { fetchWeatherStations, NoaaUnavailableError, type WeatherStation } from "../lib/noaaWeatherFetcher.js";
 import { LatLonQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";

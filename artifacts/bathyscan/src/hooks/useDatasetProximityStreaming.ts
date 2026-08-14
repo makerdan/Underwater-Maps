@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useTerrainStore } from "@/lib/terrainStore";
-import type { DatasetSource } from "@/lib/terrainStore";
+import { useTerrainStore, type DatasetSource } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useProximityStreamingStore } from "@/lib/proximityStreamingStore";

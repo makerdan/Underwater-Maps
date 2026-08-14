@@ -37,8 +37,8 @@ import {
   useSettingsStore,
   selectDatasetManualConditions,
   selectManualConditionsActiveSource,
+  type ManualConditions,
 } from "@/lib/settingsStore";
-import type { ManualConditions } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 
 export type { ForecastHour };

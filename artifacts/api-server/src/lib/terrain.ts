@@ -1,6 +1,5 @@
 import { promises as fsPromises, readFileSync } from "fs";
-import path from "path";
-import { dirname, resolve as resolvePath } from "path";
+import path, { dirname, resolve as resolvePath } from "path";
 import { fileURLToPath } from "url";
 import { fromArrayBuffer } from "geotiff";
 import { registerCache } from "./cacheRegistry.js";

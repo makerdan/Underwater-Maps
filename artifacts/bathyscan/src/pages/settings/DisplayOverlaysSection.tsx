@@ -2,12 +2,11 @@ import React from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
-import { S } from "./styles";
+import { S, FONT } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
 import { SliderRow, ToggleRow, SelectRow } from "./components/RowWidgets";
 import { ZoneColourSwatches } from "./components/ZoneColourSwatches";
-import { FONT } from "./styles";
 
 export function DisplayOverlaysSection() {
   const s = useSettingsStore(useShallow((s) => s));

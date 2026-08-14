@@ -13,8 +13,8 @@ import {
   findDuplicateCatalogEntries,
   normalizedLakeIdBase,
   applySampleBboxFromStatic,
+  type CatalogSeedEntry,
 } from "./catalogSeeder.js";
-import type { CatalogSeedEntry } from "./catalogSeeder.js";
 import { nceiCoverageForEntry } from "../routes/catalog-saves.js";
 
 // Pull in a rich catalog that covers all test cases. We define entries

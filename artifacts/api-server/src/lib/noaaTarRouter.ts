@@ -30,8 +30,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { logger } from "./logger.js";
 import { fromArrayBuffer } from "geotiff";
-import type { RawPoint } from "./uploadParsers.js";
-import { parseGeoTiff } from "./uploadParsers.js";
+import { parseGeoTiff, type RawPoint } from "./uploadParsers.js";
 import { gunzipBounded } from "./gunzipBounded.js";
 
 /** 200 MB cap for inner tif.gz decompression — same as the top-level gz cap. */
@@ -401,7 +400,6 @@ export async function parseBottomSamples(filePath: string): Promise<SubstratePoi
 
   return points;
 }
-
 
 /** NOAA null-depth sentinel — rows with this exact depth value are discarded. */
 const NOAA_NULL_DEPTH = 99999.9;

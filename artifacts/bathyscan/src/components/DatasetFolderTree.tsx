@@ -36,8 +36,8 @@ import {
   getGetUserDatasetsQueryKey,
   getGetUserDatasetsIdTerrainQueryKey,
   getGetUserDatasetsIdOverviewQueryKey,
+  type UserDatasetMeta,
 } from "@workspace/api-client-react";
-import type { UserDatasetMeta } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/clerkCompat";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { formatDepthRange } from "@/lib/units";
@@ -354,7 +354,6 @@ export const DatasetFolderTree: React.FC<Props> = ({
     // toggleFolderSelection), so we must exclude covered ones here to avoid
     // issuing duplicate mutations and duplicate onDatasetsRemoved callbacks.
     const standaloneOnlyIds = [...standaloneDatasetIds];
-
 
     // Snapshot folder subtree info now for use inside the commit closure —
     // the fullTree ref may have changed by the time the timer fires.

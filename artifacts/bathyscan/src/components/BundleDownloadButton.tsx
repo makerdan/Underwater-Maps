@@ -4,8 +4,9 @@ import {
   useGetTerrainBundlesPresetIdStatus,
   getGetTerrainBundlesPresetIdStatusQueryKey,
   getTerrainBundlesPresetId,
+  type DatasetMeta,
+  type TerrainData,
 } from "@workspace/api-client-react";
-import type { DatasetMeta, TerrainData } from "@workspace/api-client-react";
 
 /**
  * BundleDownloadButton

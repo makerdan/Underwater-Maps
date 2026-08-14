@@ -18,8 +18,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { screen, fireEvent, act } from "@testing-library/react";
 import { renderWithProviders } from "./setup";
 import { IntertidalHotspotCard } from "@/components/IntertidalHotspotCard";
-import { useUiStore } from "@/lib/uiStore";
-import type { SelectedHotspot } from "@/lib/uiStore";
+import { useUiStore, type SelectedHotspot } from "@/lib/uiStore";
 
 // ---------------------------------------------------------------------------
 // Fixture

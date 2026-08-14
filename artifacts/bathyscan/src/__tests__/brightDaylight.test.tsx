@@ -22,8 +22,14 @@ import { render, act } from "@testing-library/react";
 
 // ---- Real production exports under test ----
 import { AccessibilityClassesEffect } from "@/App";
-import { useSettingsStore, DEFAULT_SETTINGS, deriveEffectiveColormapTheme, FONT_SIZE_SCALE } from "@/lib/settingsStore";
-import type { ColormapTheme, FontSizeLevel } from "@/lib/settingsStore";
+import {
+  useSettingsStore,
+  DEFAULT_SETTINGS,
+  deriveEffectiveColormapTheme,
+  FONT_SIZE_SCALE,
+  type ColormapTheme,
+  type FontSizeLevel,
+} from "@/lib/settingsStore";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -21,13 +21,10 @@
  */
 import React from "react";
 import { create } from "zustand";
-import { poeClassify } from "@workspace/api-client-react";
+import { poeClassify, type TerrainData, type DepthsArray, type ClassifyResultSource, type PoeClassifyRequest } from "@workspace/api-client-react";
 import { toast } from "@/hooks/use-toast";
-import { ToastAction } from "@/components/ui/toast";
-import type { ToastActionElement } from "@/components/ui/toast";
-import type { TerrainData, PoeClassifyRequest, DepthsArray } from "@workspace/api-client-react";
+import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { gridToBase64Png } from "./gridToImage";
-import type { ClassifyResultSource } from "@workspace/api-client-react";
 import { parseAndUpsampleZones, zoneMapToStorage, zoneMapFromStorage } from "./zoneMap";
 import { authorizedFetch } from "./authorizedFetch";
 

@@ -3,18 +3,13 @@ import { useQueries } from "@tanstack/react-query";
 import { useAppState } from "@/lib/context";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useUiStore } from "@/lib/uiStore";
-import { getGetMarkersQueryKey, getMarkers } from "@workspace/api-client-react";
-import type { Marker } from "@workspace/api-client-react";
+import { getGetMarkersQueryKey, getMarkers, type Marker, type TerrainData, type DepthsArray } from "@workspace/api-client-react";
 import { getColormap, getColormapDepthDomain, colormapCssGradient, getColormapTRange, getColormapStops } from "@/lib/colormap";
 import { usePaletteStore } from "@/lib/paletteStore";
-import { useSettingsStore } from "@/lib/settingsStore";
-import type { ColormapTheme } from "@/lib/settingsStore";
+import { useSettingsStore, type ColormapTheme } from "@/lib/settingsStore";
 import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
-import type { DepthsArray } from "@workspace/api-client-react";
-import type { TerrainData } from "@workspace/api-client-react";
 import { buildHillshadeLayer, buildHeatmapBitmap } from "@/lib/overviewRenderer";
-import { useTerrainStore } from "@/lib/terrainStore";
-import type { VisibleDataset } from "@/lib/terrainStore";
+import { useTerrainStore, type VisibleDataset } from "@/lib/terrainStore";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { loadMarkerIconImage, peekMarkerIconImage } from "@/lib/markerIcons";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -812,7 +807,6 @@ export const Minimap: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- compositeFrame is a render-scope helper; re-subscribing only on terrain change is intentional
   }, [terrain]);
 
-
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!terrain) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -952,7 +946,6 @@ export const Minimap: React.FC = () => {
           </button>
         </ViewscreenTooltip>
       </div>
-
 
       <div
         style={{

@@ -5,8 +5,9 @@ import {
   usePostUserDatasetsIdGeoref,
   getGetUserDatasetsQueryKey,
   getUserDatasetsIdRasterImage,
+  type UserDatasetMeta,
+  type GeorefControlPoint,
 } from "@workspace/api-client-react";
-import type { UserDatasetMeta, GeorefControlPoint } from "@workspace/api-client-react";
 
 interface Props {
   dataset: UserDatasetMeta;

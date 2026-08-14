@@ -9,8 +9,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { computeDepthProfile, suggestColormap } from "../lib/depthProfile";
-import { sanitizeBandBoundaries } from "../lib/paletteStore";
-import { usePaletteStore } from "../lib/paletteStore";
+import { sanitizeBandBoundaries, usePaletteStore } from "../lib/paletteStore";
 import { useSettingsStore } from "../lib/settingsStore";
 import { usePaletteSuggestionStore } from "../hooks/usePaletteSuggestion";
 

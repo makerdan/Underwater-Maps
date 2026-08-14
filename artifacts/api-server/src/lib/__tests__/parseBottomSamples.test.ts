@@ -14,7 +14,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { normaliseSubstrate, parseBottomSamples } from "../noaaTarRouter.js";
+import { normaliseSubstrate, parseBottomSamples, routeTarEntries } from "../noaaTarRouter.js";
 
 // ---------------------------------------------------------------------------
 // normaliseSubstrate
@@ -331,13 +331,10 @@ describe("parseBottomSamples — edge cases", () => {
 // routeTarEntries integration — bottom-samples no longer throws NOT_IMPLEMENTED
 // ---------------------------------------------------------------------------
 
-import * as fs2 from "fs";
-import { routeTarEntries } from "../noaaTarRouter.js";
-
 describe("routeTarEntries — bottom-samples integration", () => {
   it("populates substratePoints from a BSText file alongside a sounding file", async () => {
     const bsDir = path.join(tmpDir, "Bottom_Samples");
-    await fs2.promises.mkdir(bsDir, { recursive: true });
+    await fs.promises.mkdir(bsDir, { recursive: true });
 
     const bsFile = path.join(bsDir, "h09084_BSText.txt");
     const bsContent = [
@@ -345,7 +342,7 @@ describe("routeTarEntries — bottom-samples integration", () => {
       "55.70\t-132.50\tSAND\tFIRM",
       "55.71\t-132.51\tMUD\tSOFT",
     ].join("\n");
-    await fs2.promises.writeFile(bsFile, bsContent, "utf8");
+    await fs.promises.writeFile(bsFile, bsContent, "utf8");
 
     // A surveys.xyz file alongside the BSText file so the result carries both
     // sounding points and substrate points.
@@ -353,7 +350,7 @@ describe("routeTarEntries — bottom-samples integration", () => {
       "SURVEY\tLON\tLAT\tDEPTH",
       "H09084\t-132.530\t55.690\t42.5",
     ].join("\n");
-    await fs2.promises.writeFile(path.join(tmpDir, "surveys.xyz"), xyzContent, "utf8");
+    await fs.promises.writeFile(path.join(tmpDir, "surveys.xyz"), xyzContent, "utf8");
 
     const result = await routeTarEntries(
       tmpDir,

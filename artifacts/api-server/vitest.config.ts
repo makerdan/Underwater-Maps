@@ -1,6 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { BaseSequencer } from "vitest/node";
-import type { TestFile } from "vitest/node";
+import { BaseSequencer, type TestFile } from "vitest/node";
 import budgets from "../../tests/timeout-guard/budgets.json";
 
 /**

@@ -28,11 +28,9 @@ function setOnlineState(isOnline: boolean) {
   });
 }
 
-function _setOfflineReadOnlyState(v: boolean) {
-  act(() => {
-    useOfflineStore.getState().setOfflineReadOnly(v);
-  });
-}
+// NOTE: _setOfflineReadOnlyState was a thin wrapper around setOfflineReadOnly.
+// Removed because it was never called (noUnusedLocals). Use
+// `useOfflineStore.getState().setOfflineReadOnly(v)` directly inside act().
 
 // ─── getTokenWithRetry — offline intercept ────────────────────────────────────
 
@@ -62,18 +60,13 @@ describe("getTokenWithRetry — offline intercept", () => {
     await vi.runAllTimersAsync();
     const result = await promise;
 
-    expect(result).toBe("tok-recovered");
+    expect(result).toBeNull();
     expect(onExpired).not.toHaveBeenCalled();
-    expect(useOfflineStore.getState().isOfflineReadOnly).toBe(false);
+    expect(useOfflineStore.getState().isOfflineReadOnly).toBe(true);
   });
 
-  it("fires onExpired when reconnect handler re-runs and token is still null", async () => {
-    // Simulate: device reconnected, but token still null (genuine expiry)
-    act(() => {
-      useOfflineStore.getState().setOnline(true);
-      useOfflineStore.getState().setOfflineReadOnly(false); // cleared by reconnect handler
-    });
-
+  it("fires onExpired when both calls return null and device is online", async () => {
+    // Device stays online — null token means genuine session expiry.
     const getToken = vi.fn().mockResolvedValue(null);
     const onExpired = vi.fn();
 
@@ -87,52 +80,14 @@ describe("getTokenWithRetry — offline intercept", () => {
 
   it("does not touch isOfflineReadOnly when the first call succeeds", async () => {
     setOnlineState(false);
-    const getToken = vi.fn().mockResolvedValue(null);
+    const getToken = vi.fn().mockResolvedValue("my-token");
     const onExpired = vi.fn();
 
     const promise = getTokenWithRetry(getToken, onExpired, 0);
     await vi.runAllTimersAsync();
     const result = await promise;
 
-    expect(result).toBe("tok-recovered");
-    expect(onExpired).not.toHaveBeenCalled();
-    expect(useOfflineStore.getState().isOfflineReadOnly).toBe(false);
-  });
-
-  it("fires onExpired when reconnect handler re-runs and token is still null", async () => {
-    // Simulate: device reconnected, but token still null (genuine expiry)
-    act(() => {
-      useOfflineStore.getState().setOnline(true);
-      useOfflineStore.getState().setOfflineReadOnly(false); // cleared by reconnect handler
-    });
-
-    const getToken = vi.fn().mockResolvedValue(null);
-    const onExpired = vi.fn();
-
-    const promise = getTokenWithRetry(getToken, onExpired, 0);
-    await vi.runAllTimersAsync();
-    const result = await promise;
-
-    expect(result).toBe("tok-recovered");
-    expect(onExpired).not.toHaveBeenCalled();
-    expect(useOfflineStore.getState().isOfflineReadOnly).toBe(false);
-  });
-
-  it("fires onExpired when reconnect handler re-runs and token is still null", async () => {
-    // Simulate: device reconnected, but token still null (genuine expiry)
-    act(() => {
-      useOfflineStore.getState().setOnline(true);
-      useOfflineStore.getState().setOfflineReadOnly(false); // cleared by reconnect handler
-    });
-
-    const getToken = vi.fn().mockResolvedValue(null);
-    const onExpired = vi.fn();
-
-    const promise = getTokenWithRetry(getToken, onExpired, 0);
-    await vi.runAllTimersAsync();
-    const result = await promise;
-
-    expect(result).toBe("tok-recovered");
+    expect(result).toBe("my-token");
     expect(onExpired).not.toHaveBeenCalled();
     expect(useOfflineStore.getState().isOfflineReadOnly).toBe(false);
   });

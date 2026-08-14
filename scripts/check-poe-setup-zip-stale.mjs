@@ -20,14 +20,11 @@
  * To regenerate the zip manually:
  *   (cd .agents/skills && zip ../../artifacts/bathyscan/public/poe-setup-skill.zip poe-setup/SKILL.md)
  */
-import { readFileSync, existsSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { readFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
-import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");

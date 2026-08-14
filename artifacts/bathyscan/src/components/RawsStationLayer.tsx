@@ -8,8 +8,7 @@
  * clicked pin. It fetches the latest observation on-demand via useRawsWeather.
  */
 import React from "react";
-import { useRawsWeather } from "@/hooks/useRawsWeather";
-import type { RawsObservation } from "@/hooks/useRawsWeather";
+import { useRawsWeather, type RawsObservation } from "@/hooks/useRawsWeather";
 import { useSettingsStore } from "@/lib/settingsStore";
 
 const MONO: React.CSSProperties = {

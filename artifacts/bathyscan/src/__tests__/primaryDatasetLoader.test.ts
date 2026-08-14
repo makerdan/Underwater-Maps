@@ -13,10 +13,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  checkDatasetIdMatch,
-} from "@/lib/datasetResponseValidation";
-import type { DatasetIdMatchResult } from "@/lib/datasetResponseValidation";
+import { checkDatasetIdMatch } from "@/lib/datasetResponseValidation";
 
 describe("checkDatasetIdMatch", () => {
   // ── Happy path ─────────────────────────────────────────────────────────────

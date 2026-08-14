@@ -7,8 +7,7 @@
  */
 
 import { create } from "zustand";
-import type { FlowField } from "./flowField";
-import { sampleFlowField, vectorToDirectionDeg } from "./flowField";
+import { sampleFlowField, vectorToDirectionDeg, type FlowField } from "./flowField";
 
 export interface NoaaAmbient {
   /** Direction the current is going TO, degrees, 0=N→S? Compass convention used elsewhere. */

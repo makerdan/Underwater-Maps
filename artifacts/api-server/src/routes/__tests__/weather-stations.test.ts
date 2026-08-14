@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 
 import weatherStationsRouter from "../weather-stations";
-import { NoaaUnavailableError } from "../../lib/noaaWeatherFetcher";
+import { NoaaUnavailableError, fetchWeatherStations } from "../../lib/noaaWeatherFetcher";
 
 vi.mock("../../lib/noaaWeatherFetcher", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../lib/noaaWeatherFetcher")>();
@@ -12,8 +12,6 @@ vi.mock("../../lib/noaaWeatherFetcher", async (importOriginal) => {
     fetchWeatherStations: vi.fn(),
   };
 });
-
-import { fetchWeatherStations } from "../../lib/noaaWeatherFetcher";
 
 const fetchWeatherStationsMock = fetchWeatherStations as ReturnType<typeof vi.fn>;
 

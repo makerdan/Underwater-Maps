@@ -20,12 +20,8 @@ import { estimateWaterTemperature } from "@/lib/waterTemp";
 import { useSurfaceTemperature } from "@/hooks/useSurfaceTemperature";
 import { SPECIES_CONFIGS } from "@/lib/habitat";
 import { hitTestSubstrate } from "@/lib/overviewRenderer";
-import {
-  useGetSubstrate,
-  getGetSubstrateQueryKey,
-} from "@workspace/api-client-react";
+import { useGetSubstrate, getGetSubstrateQueryKey, type TerrainData } from "@workspace/api-client-react";
 import type { TidalDataResult } from "@/hooks/useTidalData";
-import type { TerrainData } from "@workspace/api-client-react";
 
 export interface WhatsHereData {
   depth: number | null;

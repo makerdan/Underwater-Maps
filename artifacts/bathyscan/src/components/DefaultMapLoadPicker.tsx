@@ -13,8 +13,7 @@ import {
   getGetUserDatasetsQueryKey,
 } from "@workspace/api-client-react";
 import { useUser } from "@/lib/clerkCompat";
-import { useSettingsStore } from "@/lib/settingsStore";
-import type { DefaultMapLoad } from "@/lib/settingsStore";
+import { useSettingsStore, type DefaultMapLoad } from "@/lib/settingsStore";
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 

@@ -11,8 +11,7 @@
  *   • Source selector toggle (when real data is also available)
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import type { ManualConditions } from "@/lib/settingsStore";
-import { useSettingsStore, selectDatasetManualConditions } from "@/lib/settingsStore";
+import { useSettingsStore, selectDatasetManualConditions, type ManualConditions } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { formatSpeedFromKnots } from "@/lib/units";
 import { computeBlendedDrift, KM_PER_DEG_LAT } from "@/lib/boatPhysics";

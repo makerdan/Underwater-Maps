@@ -9,13 +9,12 @@ import {
   findBindingConflicts,
   type ShortcutActionId,
 } from "@/lib/keyBindings";
-import { S } from "./styles";
+import { S, FONT } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
 import { SliderRow, ToggleRow, SelectRow } from "./components/RowWidgets";
 import { KeyBindingCapture, CrosshairMenuGamepadCapture } from "./components/KeyBindingCapture";
 import { FIXED_SHORTCUTS } from "./constants";
-import { FONT } from "./styles";
 
 export function NavigationSection() {
   const s = useSettingsStore(useShallow((s) => s));

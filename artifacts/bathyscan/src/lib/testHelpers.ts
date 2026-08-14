@@ -50,8 +50,7 @@ import {
 } from "@workspace/api-client-react";
 import { useDepthProfileStore, buildProfile } from "./depthProfileStore";
 import { getUpscaleCacheInfo, getInMemCacheStats } from "../hooks/useUpscaledHeatmap";
-import { useSettingsStore } from "./settingsStore";
-import type { LastSession } from "./settingsStore";
+import { useSettingsStore, type LastSession } from "./settingsStore";
 import { usePaletteStore } from "./paletteStore";
 import { usePaletteSuggestionStore } from "../hooks/usePaletteSuggestion";
 import { useShallowSuggestionStore } from "../hooks/useShallowSuggestion";

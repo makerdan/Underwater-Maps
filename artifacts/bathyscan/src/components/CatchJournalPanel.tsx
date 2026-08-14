@@ -18,8 +18,8 @@ import {
   useDeleteCatchesId,
   postCatchPhotosUploadUrl,
   getGetCatchesQueryKey,
+  type CatchEntry,
 } from "@workspace/api-client-react";
-import type { CatchEntry } from "@workspace/api-client-react";
 import { useCatchJournalStore } from "@/lib/catchJournalStore";
 import {
   searchCatchSymbols,

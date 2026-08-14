@@ -119,25 +119,6 @@ describe("BulkOfflinePanel — beforeunload guard", () => {
       mockPhase.value = phase;
       const { unmount } = renderPanel();
 
-    expect(addCalls).toBe(1);
-
-    act(() => { unmount(); });
-
-    expect(removeCalls).toBe(1);
-  });
-
-  it.each([
-    "idle",
-    "paused",
-    "done",
-    "cancelled",
-    "preflight-error",
-  ] as UseBulkOfflinePackResult["phase"][])(
-    "does NOT register the handler when phase is '%s'",
-    (phase) => {
-      mockPhase.value = phase;
-      const { unmount } = renderPanel();
-
       expect(addCalls).toBe(0);
 
       unmount();

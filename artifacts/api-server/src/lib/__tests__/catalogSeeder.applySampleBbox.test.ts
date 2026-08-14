@@ -37,8 +37,7 @@ vi.mock("../terrain.js", () => ({
   NCEI_DATASET_COVERAGES: {},
 }));
 
-import { applySampleBboxFromStatic } from "../catalogSeeder.js";
-import type { CatalogSeedEntry } from "../catalogSeeder.js";
+import { applySampleBboxFromStatic, type CatalogSeedEntry } from "../catalogSeeder.js";
 
 // ---------------------------------------------------------------------------
 // Test fixtures

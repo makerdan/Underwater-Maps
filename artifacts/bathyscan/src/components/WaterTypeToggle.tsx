@@ -3,8 +3,7 @@
  * saltwater and freshwater exploration modes.
  */
 import React from "react";
-import { useSettingsStore } from "@/lib/settingsStore";
-import type { WaterType } from "@/lib/settingsStore";
+import { useSettingsStore, type WaterType } from "@/lib/settingsStore";
 import { usePutSettings } from "@workspace/api-client-react";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 

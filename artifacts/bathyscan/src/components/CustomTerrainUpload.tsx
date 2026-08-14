@@ -1,13 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useDropzone } from "react-dropzone";
-import type { FileRejection } from "react-dropzone";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/clerkCompat";
-import {
-  usePostDatasetsUpload,
-  getGetUserDatasetsQueryKey,
-} from "@workspace/api-client-react";
-import type { UserDatasetMeta } from "@workspace/api-client-react";
+import { usePostDatasetsUpload, getGetUserDatasetsQueryKey, type UserDatasetMeta } from "@workspace/api-client-react";
+
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useClassificationStore } from "@/lib/classificationStore";

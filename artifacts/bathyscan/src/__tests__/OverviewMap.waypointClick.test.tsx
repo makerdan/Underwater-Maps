@@ -22,8 +22,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { fireEvent, screen, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
-import { useTerrainStore } from "@/lib/terrainStore";
-import type { VisibleDataset } from "@/lib/terrainStore";
+import { useTerrainStore, type VisibleDataset } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import * as waypointHelpers from "@/lib/waypointHelpers";
 

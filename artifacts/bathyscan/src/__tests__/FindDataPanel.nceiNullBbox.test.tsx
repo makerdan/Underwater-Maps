@@ -7,8 +7,7 @@
  * TypeError that blanks the entire results list, not just the affected card.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
-import { fireEvent, act } from "@testing-library/react";
+import { screen, waitFor, fireEvent, act } from "@testing-library/react";
 import React from "react";
 import { renderWithProviders } from "./setup";
 import { FindDataPanel } from "@/components/FindDataPanel";

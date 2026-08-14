@@ -8,11 +8,7 @@
  * the main bathymetry result list.
  */
 import React, { useState } from "react";
-import {
-  useGetNceiSearch,
-  getGetNceiSearchQueryKey,
-} from "@workspace/api-client-react";
-import type { NceiPortalResult } from "@workspace/api-client-react";
+import { useGetNceiSearch, getGetNceiSearchQueryKey, type NceiPortalResult } from "@workspace/api-client-react";
 import { classifyNceiDataType, NCEI_TYPE_BADGE_COLORS } from "@/lib/nceiClassify";
 
 export const OtherDataSection: React.FC<{

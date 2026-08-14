@@ -13,8 +13,7 @@
  *   beforeEach(async () => { await ctx.truncate(); });
  */
 import pg from "pg";
-import { drizzle } from "drizzle-orm/node-postgres";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema/index.js";
 
 const { Client } = pg;

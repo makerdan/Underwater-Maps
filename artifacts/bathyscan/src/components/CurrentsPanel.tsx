@@ -15,14 +15,13 @@
  */
 
 import React, { useEffect, useRef } from "react";
-import { useSettingsStore, selectManualConditionsActiveSource } from "@/lib/settingsStore";
+import { useSettingsStore, selectManualConditionsActiveSource, type UnitsSystem } from "@/lib/settingsStore";
 import { ManualConditionsForm } from "@/components/ManualConditionsForm";
 import { AdvancedSection } from "@/components/AdvancedSection";
 import { useCurrentsStore, type TidalStatus } from "@/lib/currentsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { CURRENT_RAMP_STOPS, speedToColor } from "@/lib/currentColor";
 import { formatSpeedFromKnots, speedSuffix, MPH_TO_KNOTS, MPH_TO_KPH, cardinal } from "@/lib/units";
-import type { UnitsSystem } from "@/lib/settingsStore";
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useTimelineVisible } from "@/lib/uiStore";
 import { useAppState } from "@/lib/context";

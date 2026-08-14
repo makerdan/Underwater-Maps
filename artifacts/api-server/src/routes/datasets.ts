@@ -66,6 +66,10 @@ import {
   UploadIdParamSchema,
   JobIdParamSchema,
   GcsJobStatusQuerySchema,
+  DatasetsQuerySchema,
+  ZonesQuerySchema,
+  TerrainLandQuerySchema,
+  TerrainDownloadInfoQuerySchema,
 } from "./schemas.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
 import { registerCache } from "../lib/cacheRegistry.js";
@@ -75,12 +79,6 @@ import {
   updateProgressWithEta,
   extensionDurationHistory,
 } from "../lib/etaCalibration.js";
-import {
-  DatasetsQuerySchema,
-  ZonesQuerySchema,
-  TerrainLandQuerySchema,
-  TerrainDownloadInfoQuerySchema,
-} from "./schemas.js";
 
 /**
  * Best-effort resolution of the nearest NOAA tide station for a freshly
@@ -363,7 +361,6 @@ export async function flushCalibrationPersistForTest(): Promise<void> {
 export function scheduleCalibrationPersistForTest(ext: string): void {
   schedulePersistCalibrationEntry(ext);
 }
-
 
 const uploadJobs = new Map<string, JobState>();
 registerCache(() => uploadJobs.clear());

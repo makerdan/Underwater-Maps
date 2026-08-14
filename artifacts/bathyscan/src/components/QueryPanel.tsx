@@ -12,16 +12,14 @@
  * Query history (last 10) is persisted in localStorage.
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { queryLLM } from "@/lib/queryLLM";
+import { queryLLM, type QueryContext } from "@/lib/queryLLM";
+import { executeTool, type ToolOptions } from "@/lib/queryTools";
 import { HelpIcon } from "@/components/help/HelpButton";
-import { executeTool } from "@/lib/queryTools";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { SALTWATER_ZONES, FRESHWATER_ZONES } from "@/lib/zoneMap";
-import type { QueryContext } from "@/lib/queryLLM";
-import type { ToolOptions } from "@/lib/queryTools";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useSettingsStore } from "@/lib/settingsStore";
 

@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { sortByRecency } from "@/lib/terrainStore";
-import type { VisibleDataset } from "@/lib/terrainStore";
 
 function makeDataset(
   datasetId: string,

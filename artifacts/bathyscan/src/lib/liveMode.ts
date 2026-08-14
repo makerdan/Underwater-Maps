@@ -32,9 +32,8 @@ import { create } from "zustand";
 import { useGpsStore } from "./gpsStore";
 import { useTrailStore } from "./trailStore";
 import { useCameraStore } from "./cameraStore";
-import { useSettingsStore } from "./settingsStore";
+import { useSettingsStore, type SidebarMode } from "./settingsStore";
 import { toast } from "@/hooks/use-toast";
-import type { SidebarMode } from "./settingsStore";
 
 /**
  * Observable store for Live-mode retry state.

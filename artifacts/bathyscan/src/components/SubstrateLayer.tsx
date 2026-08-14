@@ -24,23 +24,15 @@
  */
 import React, { useEffect, useMemo, useCallback, useRef } from "react";
 import * as THREE from "three";
-import type { ThreeEvent } from "@react-three/fiber";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { useZoneOverlayStore, substrateClassToSlot } from "@/lib/zoneOverlayStore";
 import { WORLD_SIZE } from "@/lib/terrain";
-import {
-  useGetSubstrate,
-  getGetSubstrateQueryKey,
-} from "@workspace/api-client-react";
+import { useGetSubstrate, getGetSubstrateQueryKey, type SubstrateFeature, type SubstrateFeatureCollection } from "@workspace/api-client-react";
 import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
 import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
 import { useTerrainStore } from "@/lib/terrainStore";
-import type {
-  SubstrateFeature,
-  SubstrateFeatureCollection,
-} from "@workspace/api-client-react";
 
 /** Y elevation for substrate filled polygons — just above ocean surface (Y=0). */
 const FILL_Y = 0.6;

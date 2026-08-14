@@ -76,8 +76,7 @@ vi.mock("@/hooks/use-toast", () => ({
 // ---- Imports under test ----
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
-import { NAV_TABS } from "@/pages/settings/constants";
-import type { Tab } from "@/pages/settings/constants";
+import { NAV_TABS, type Tab } from "@/pages/settings/constants";
 const tabLabel = (id: Tab) => NAV_TABS.find((t) => t.id === id)!.label;
 
 const mockCachesDelete = vi.fn(() => Promise.resolve(true));

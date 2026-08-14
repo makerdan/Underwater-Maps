@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useLandTerrainStore } from "@/lib/landTerrainStore";
-import type { LandGrid } from "@/lib/landTerrainStore";
+import { useLandTerrainStore, type LandGrid } from "@/lib/landTerrainStore";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 

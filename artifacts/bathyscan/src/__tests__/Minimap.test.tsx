@@ -33,8 +33,7 @@ const makeApiClientMock = vi.hoisted(() => {
 
 import { Minimap, drawArrow, drawHeatmap, computeMinimapUnionBbox } from "@/components/Minimap";
 import { useUiStore } from "@/lib/uiStore";
-import { useTerrainStore } from "@/lib/terrainStore";
-import type { VisibleDataset } from "@/lib/terrainStore";
+import { useTerrainStore, type VisibleDataset } from "@/lib/terrainStore";
 import { WORLD_SIZE, NO_DATA_COLOR } from "@/lib/terrain";
 import { usePaletteStore } from "@/lib/paletteStore";
 import type { ColormapTheme } from "@/lib/settingsStore";

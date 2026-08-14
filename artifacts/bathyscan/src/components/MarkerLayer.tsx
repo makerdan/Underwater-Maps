@@ -21,8 +21,10 @@ import {
   getGetMarkersQueryKey,
   useGetCatches,
   getGetCatchesQueryKey,
+  type Marker,
+  type TerrainData,
+  type CatchEntry,
 } from "@workspace/api-client-react";
-import type { Marker, CatchEntry, TerrainData } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { MarkerSprite } from "./MarkerSprite";

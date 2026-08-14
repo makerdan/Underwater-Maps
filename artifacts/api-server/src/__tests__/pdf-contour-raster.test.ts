@@ -31,8 +31,7 @@ import {
   commitCachedExtraction,
   __storeExtractionForTest,
 } from "../lib/pdfContourRaster.js";
-import { PdfStageError } from "../lib/pdfContour.js";
-import type { PdfDepthLabel } from "../lib/pdfContour.js";
+import { PdfStageError, type PdfDepthLabel } from "../lib/pdfContour.js";
 import { makeRasterContourPng, makeBlankPng } from "./helpers/rasterFixture.js";
 
 const BBOX = { minLon: -93.5, minLat: 45.1, maxLon: -93.4, maxLat: 45.2 };

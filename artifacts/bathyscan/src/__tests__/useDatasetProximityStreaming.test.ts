@@ -3,12 +3,7 @@ import type { TerrainData } from "@workspace/api-client-react";
 import { renderHook, act } from "@testing-library/react";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
-import {
-  LOAD_THRESHOLD_M,
-  UNLOAD_THRESHOLD_M,
-  useDatasetProximityStreaming,
-} from "@/hooks/useDatasetProximityStreaming";
-import type { DatasetBbox, ProximityStreamingOptions } from "@/hooks/useDatasetProximityStreaming";
+import { LOAD_THRESHOLD_M, UNLOAD_THRESHOLD_M, useDatasetProximityStreaming } from "@/hooks/useDatasetProximityStreaming";
 
 /**
  * Unit tests for proximity-streaming eviction logic.

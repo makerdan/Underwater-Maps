@@ -1,8 +1,7 @@
 // InputTransformerFn is used only as a TypeScript type annotation and is not
 // exported as a value from the local orval ESM build.  Mark it type-only so
 // jiti erases it at transform time instead of trying to import it at runtime.
-import type { InputTransformerFn } from "orval";
-import { defineConfig } from "orval";
+import { defineConfig, type InputTransformerFn } from "orval";
 import path from "path";
 import { fileURLToPath } from "url";
 

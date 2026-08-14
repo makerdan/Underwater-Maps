@@ -1,12 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { OverviewTransform } from "../lib/overviewRenderer";
-
-// Shared stub — implementations live in src/__tests__/mocks/three.ts,
-// wired via __mocks__/three.ts so no factory is needed here.
-vi.mock("three");
-
-import type { TerrainData, EfhFeature } from "@workspace/api-client-react";
-import { EfhFeatureType } from "@workspace/api-client-react";
 import {
   buildHeatmapBitmap,
   buildContourLines,
@@ -20,6 +12,12 @@ import {
   renderEfhOverlay,
   renderIntertidalBand,
 } from "../lib/overviewRenderer";
+
+// Shared stub — implementations live in src/__tests__/mocks/three.ts,
+// wired via __mocks__/three.ts so no factory is needed here.
+vi.mock("three");
+
+import { EfhFeatureType } from "@workspace/api-client-react";
 import { usePaletteStore } from "../lib/paletteStore";
 
 function makeGrid(

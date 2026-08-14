@@ -2,10 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useQueryClient } from "@tanstack/react-query";
 import * as THREE from "three";
-import type { Marker, TerrainData } from "@workspace/api-client-react";
-import {
-  getGetMarkersQueryKey,
-} from "@workspace/api-client-react";
+import { getGetMarkersQueryKey, type TerrainData, type Marker } from "@workspace/api-client-react";
 import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { useAppState, FLY_SPEEDS_MPH } from "@/lib/context";
 import { useDriftStore } from "@/lib/driftStore";

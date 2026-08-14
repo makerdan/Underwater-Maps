@@ -10,22 +10,28 @@ import {
   PoeHelpResponse,
   PoeUpscaleResponse,
 } from "@workspace/api-zod";
-import { promises as fsPromises } from "fs";
+import { promises as fsPromises, readFileSync, readdirSync, existsSync } from "fs";
 import path from "path";
 import { createHash } from "crypto";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { createRateLimit, stampBaselineRateLimitHeaders } from "../middlewares/rateLimit.js";
-import { getPoeClient } from "@workspace/poe";
-import { withRetry } from "@workspace/poe";
-import { PoeCreditsError, PoeRateLimitError, PoeAuthError, ZoneParseError } from "@workspace/poe";
-import { hashCacheKey, globalPoeCache } from "@workspace/poe";
-import { buildVisionInput } from "@workspace/poe";
-import { POE_MODELS } from "@workspace/poe";
-import { PoeCircuitBreaker } from "@workspace/poe";
+import {
+  getPoeClient,
+  withRetry,
+  PoeCreditsError,
+  PoeRateLimitError,
+  PoeAuthError,
+  ZoneParseError,
+  hashCacheKey,
+  globalPoeCache,
+  buildVisionInput,
+  POE_MODELS,
+  PoeCircuitBreaker,
+  type PoeToolSchema,
+} from "@workspace/poe";
 import { logger } from "../lib/logger.js";
 import { db } from "@workspace/db";
 import { poeUsageLogTable } from "@workspace/db/schema";
-import type { PoeToolSchema } from "@workspace/poe";
 import {
   sampleSubstrateGrid,
   substrateToZone,
@@ -2159,7 +2165,6 @@ router.post("/query", validateBody(PoeQueryBodySchema, "POST /api/poe/query"), a
 // system prompt. Auth + rate limit are already applied via router.use above.
 // ---------------------------------------------------------------------------
 
-import { readFileSync, readdirSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 
 function resolveHelpDir(): string | null {

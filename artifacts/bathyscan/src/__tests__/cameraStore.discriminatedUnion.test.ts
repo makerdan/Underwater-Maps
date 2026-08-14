@@ -17,7 +17,6 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { useCameraStore } from "@/lib/cameraStore";
-import type { CameraPosition } from "@/lib/cameraStore";
 
 beforeEach(() => {
   useCameraStore.setState({ cameraPosition: { known: false } });

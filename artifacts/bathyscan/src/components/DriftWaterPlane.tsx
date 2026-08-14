@@ -14,13 +14,11 @@
 import React, { useRef, useMemo, useCallback, useEffect } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
-import { WORLD_SIZE } from "@/lib/terrain";
-import { worldXZToLonLat } from "@/lib/terrain";
+import { WORLD_SIZE, worldXZToLonLat, lonLatToWorldXZ } from "@/lib/terrain";
 import { useDriftStore } from "@/lib/driftStore";
 import { computeDrift, reverseComputeDrift } from "@/lib/computeDrift";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { sampleCurrentAt } from "@/lib/currentsStore";
-import { lonLatToWorldXZ } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 
 const vertexShader = /* glsl */ `

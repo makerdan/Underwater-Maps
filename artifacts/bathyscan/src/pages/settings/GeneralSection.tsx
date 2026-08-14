@@ -3,10 +3,9 @@ import { useLocation } from "wouter";
 import { useShallow } from "zustand/react/shallow";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { DefaultMapLoadPicker } from "@/components/DefaultMapLoadPicker";
-import { S } from "./styles";
+import { S, FONT } from "./styles";
 import { SectionActionsRow } from "./components/SyncContext";
 import { SelectRow } from "./components/RowWidgets";
-import { FONT } from "./styles";
 
 export function GeneralSection() {
   const s = useSettingsStore(useShallow((s) => s));

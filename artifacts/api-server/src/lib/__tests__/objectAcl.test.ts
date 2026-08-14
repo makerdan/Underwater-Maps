@@ -27,8 +27,8 @@ import {
   DatasetViewersAccessGroup,
   ObjectPermission,
   ObjectAccessGroupType,
+  type ObjectAclPolicy,
 } from "../objectAcl.js";
-import type { ObjectAclPolicy } from "../objectAcl.js";
 
 // ---------------------------------------------------------------------------
 // GCS File stub factory — builds the minimal subset of the GCS File interface

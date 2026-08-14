@@ -13,9 +13,8 @@
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, render, screen } from "@testing-library/react";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, type ManualConditions } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
-import type { ManualConditions } from "@/lib/settingsStore";
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 

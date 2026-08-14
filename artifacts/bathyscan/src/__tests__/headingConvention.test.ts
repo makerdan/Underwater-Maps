@@ -5,7 +5,7 @@
  * If any of these break, the terrain North (+Z) / heading convention has
  * drifted — see the orientation decision in cameraSpawn.ts.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import * as THREE from "three";
 import { applyCameraSpawn } from "@/lib/cameraSpawn";
 import { drawArrow } from "@/components/Minimap";
@@ -41,8 +41,6 @@ function makeCtx(): { rotate: ReturnType<typeof vi.fn> } & Partial<CanvasRenderi
     fillStyle: "",
   } as unknown as { rotate: ReturnType<typeof vi.fn> } & Partial<CanvasRenderingContext2D>;
 }
-
-import { vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // 1. Heading formula — pure cardinal and diagonal cases

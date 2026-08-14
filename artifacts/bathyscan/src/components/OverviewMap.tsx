@@ -16,18 +16,28 @@ import {
   useGetDatasetsMySaves,
   getGetDatasetsMySavesQueryKey,
   usePostDatasetsCatalogIdSave,
-} from "@workspace/api-client-react";
-import type {
-  Marker,
-  GpsTrail,
-  DatasetCatalogSearchResult,
+  useGetEfh,
+  getGetEfhQueryKey,
+  useGetSubstrate,
+  getGetSubstrateQueryKey,
+  useGetIntertidalSpots,
+  getGetIntertidalSpotsQueryKey,
+  useGetUserDatasets,
+  getGetUserDatasetsQueryKey,
+  getGetDatasetsIdOverviewQueryKey,
+  getGetUserDatasetsIdOverviewQueryKey,
+  type Marker,
+  type GpsTrail,
+  type DatasetCatalogSearchResult,
+  type SubstrateFeature,
+  type SubstrateFeatureCollection,
+  type EfhFeature,
 } from "@workspace/api-client-react";
 import { OtherDataSection } from "@/components/OtherDataSection";
 import { useAppState } from "@/lib/context";
 import { useTerrainStore, sortByRecency } from "@/lib/terrainStore";
 import { useCameraStore } from "@/lib/cameraStore";
-import { useUiStore, useTimelineVisible } from "@/lib/uiStore";
-import type { SelectedHotspot } from "@/lib/uiStore";
+import { useUiStore, useTimelineVisible, type SelectedHotspot } from "@/lib/uiStore";
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { lonLatToWorldXZ, isSyntheticGrid } from "@/lib/terrain";
@@ -64,42 +74,28 @@ import {
   drawSelectionRect,
   buildIntertidalHotspotDescriptors,
   shouldDrawOverlayAtScale,
+  type ContourSegment,
+  type EfhLegendLayout,
+  type OverviewTransform,
+  type CanvasSavedTrail,
+  type NodataBoundarySegment,
+  type WeatherStationPin,
+  type RawsStationPin,
+  type IntertidalHotspotPin,
 } from "@/lib/overviewRenderer";
-import { appendWaypoint, planFlyThroughStops } from "@/lib/waypointHelpers";
-import type { Waypoint } from "@/lib/waypointHelpers";
-import type { OverviewTransform, CanvasSavedTrail, EfhLegendLayout, ContourSegment, NodataBoundarySegment, WeatherStationPin, RawsStationPin, IntertidalHotspotPin } from "@/lib/overviewRenderer";
+import { appendWaypoint, planFlyThroughStops, type Waypoint } from "@/lib/waypointHelpers";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { MarkerIconPaths } from "@/lib/markerIcons";
-import { useWeatherStations } from "@/hooks/useWeatherStations";
-import type { WeatherStation } from "@workspace/api-client-react";
+import { useWeatherStations, type WeatherStation } from "@/hooks/useWeatherStations";
 import { WeatherStationPopover } from "@/components/WeatherStationLayer";
-import { useRawsStations } from "@/hooks/useRawsStations";
-import type { RawsStationItem } from "@/hooks/useRawsStations";
+import { useRawsStations, type RawsStationItem } from "@/hooks/useRawsStations";
 import { RawsStationPopover } from "@/components/RawsStationLayer";
-import {
-  useGetEfh,
-  getGetEfhQueryKey,
-  useGetSubstrate,
-  getGetSubstrateQueryKey,
-  useGetIntertidalSpots,
-  getGetIntertidalSpotsQueryKey,
-  useGetUserDatasets,
-  getGetUserDatasetsQueryKey,
-  getGetDatasetsIdOverviewQueryKey,
-  getGetUserDatasetsIdOverviewQueryKey,
-} from "@workspace/api-client-react";
-import type {
-  EfhFeature,
-  SubstrateFeature,
-  SubstrateFeatureCollection,
-} from "@workspace/api-client-react";
 import { useHabitatStore } from "@/lib/habitatStore";
 import { filterEfhByBbox, getVisibleEfhFeatures } from "@/lib/efhBboxFilter";
 import { HabitatLegend } from "@/components/HabitatLegend";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
-import { useSettingsStore } from "@/lib/settingsStore";
-import type { PuzzleLayout } from "@/lib/settingsStore";
+import { useSettingsStore, type PuzzleLayout } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { formatDepth, formatDistance } from "@/lib/units";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
@@ -3904,7 +3900,6 @@ export const OverviewMap: React.FC = () => {
             );
           })()}
 
-
           {/* Fit to Data — zoom and pan to frame all loaded datasets */}
           <ViewscreenTooltip label="Zoom and pan to fit all loaded datasets in view" side="bottom">
             <button
@@ -3999,7 +3994,6 @@ export const OverviewMap: React.FC = () => {
               </button>
             </ViewscreenTooltip>
           )}
-
 
           {/* Save to Session button — visible when any tile has been moved or rotated */}
           {hasPuzzleTransforms && (

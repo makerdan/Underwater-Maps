@@ -13,8 +13,7 @@
 import React, { useCallback, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { useAppState } from "@/lib/context";
-import { useUiStore } from "@/lib/uiStore";
-import type { SelectedHotspot } from "@/lib/uiStore";
+import { useUiStore, type SelectedHotspot } from "@/lib/uiStore";
 import { WORLD_SIZE } from "@/lib/terrain";
 import { useGetIntertidalSpots, getGetIntertidalSpotsQueryKey } from "@workspace/api-client-react";
 import type { ThreeEvent } from "@react-three/fiber";

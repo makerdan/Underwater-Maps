@@ -1,8 +1,7 @@
 import { mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import glob from "fast-glob";
-import chokidar from "chokidar";
-import type { FSWatcher } from "chokidar";
+import chokidar, { type FSWatcher } from "chokidar";
 import type { Plugin } from "vite";
 
 const MOCKUPS_DIR = "src/components/mockups";

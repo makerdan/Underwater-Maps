@@ -19,14 +19,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { OverviewTransform } from "../lib/overviewRenderer";
-import {
-  POLYGON_LOD_MIN_ZOOM,
-  shouldDrawOverlayAtScale,
-  renderEfhOverlay,
-} from "../lib/overviewRenderer";
+import { POLYGON_LOD_MIN_ZOOM, shouldDrawOverlayAtScale, renderEfhOverlay } from "../lib/overviewRenderer";
 import { EfhFeatureType } from "@workspace/api-client-react";
-import type { EfhFeature, TerrainData } from "@workspace/api-client-react";
 
 vi.mock("three");
 

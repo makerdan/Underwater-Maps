@@ -38,8 +38,7 @@
  * TidalSceneContents (defined in TourScene) were imported here, and it keeps
  * this module independently testable.
  */
-import React from "react";
-import type { ComponentType } from "react";
+import React, { type ComponentType } from "react";
 import type { TerrainData } from "@workspace/api-client-react";
 import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";

@@ -24,8 +24,11 @@ import {
   SALTWATER_SPECIES_IDS,
   FRESHWATER_SPECIES_IDS,
   getHabitatSummary,
+  type HotspotCandidate,
+  type SpeciesId,
+  type FreshwaterSpeciesId,
+  type SaltwaterSpeciesId,
 } from "@/lib/habitat";
-import type { SpeciesId, FreshwaterSpeciesId, SaltwaterSpeciesId, HotspotCandidate } from "@/lib/habitat";
 import {
   usePostMarkers,
   getGetMarkersQueryKey,

@@ -24,7 +24,6 @@ import { describe, it, expect, vi } from "vitest";
 import type { TerrainData } from "@workspace/api-client-react";
 import { lonLatToWorldXZ } from "../lib/terrain";
 import { appendWaypoint, planFlyThroughStops } from "../lib/waypointHelpers";
-import type { Waypoint } from "../lib/waypointHelpers";
 
 vi.mock("three");
 

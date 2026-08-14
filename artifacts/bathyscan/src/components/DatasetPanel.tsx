@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { subscribeToReconnect, markServerUnreachable, queryClient } from "@/lib/queryClient";
-import { useDropzone } from "react-dropzone";
-import type { FileRejection } from "react-dropzone";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/clerkCompat";
 import {
@@ -26,15 +25,19 @@ import {
   getGetSubstrateQueryKey,
   getAuthToken,
   hasAuthTokenGetter,
+  getGetDatasetsIdTerrainUrl,
+  getGetDatasetsIdOverviewUrl,
+  getGetUserDatasetsIdTerrainUrl,
+  getGetUserDatasetsIdOverviewUrl,
+  type TerrainData,
+  type UserDatasetMeta,
+  type UserCatalogSave,
 } from "@workspace/api-client-react";
-import type { UserDatasetMeta, UserCatalogSave } from "@workspace/api-client-react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { useAppState } from "@/lib/context";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
-import { useTerrainStore } from "@/lib/terrainStore";
-import type { DatasetSource } from "@/lib/terrainStore";
-import { useDatasetProximityStreaming } from "@/hooks/useDatasetProximityStreaming";
-import type { DatasetBbox } from "@/hooks/useDatasetProximityStreaming";
+import { useTerrainStore, type DatasetSource } from "@/lib/terrainStore";
+import { useDatasetProximityStreaming, type DatasetBbox } from "@/hooks/useDatasetProximityStreaming";
 import { useUiStore } from "@/lib/uiStore";
 import { lonLatToWorldXZ, MAX_DEPTH_WORLD } from "@/lib/terrain";
 import {
@@ -50,8 +53,7 @@ import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { useClassificationStore } from "@/lib/classificationStore";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useOfflineStore } from "@/lib/offlineStore";
-import { useSettingsStore } from "@/lib/settingsStore";
-import type { CameraBookmark } from "@/lib/settingsStore";
+import { useSettingsStore, type CameraBookmark } from "@/lib/settingsStore";
 import { MySavesSection } from "@/components/MySavesSection";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
@@ -72,13 +74,6 @@ import { BulkOfflinePanel } from "@/components/BulkOfflinePanel";
 import { GeoreferenceModal } from "@/components/GeoreferenceModal";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import {
-  getGetDatasetsIdTerrainUrl,
-  getGetDatasetsIdOverviewUrl,
-  getGetUserDatasetsIdTerrainUrl,
-  getGetUserDatasetsIdOverviewUrl,
-} from "@workspace/api-client-react";
-import type { TerrainData } from "@workspace/api-client-react";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 

@@ -33,7 +33,7 @@ vi.mock("@/components/LandmassMesh", () => ({
   LandmassMesh: () => null,
 }));
 
-import { NonPrimaryDatasetMeshes } from "@/components/NonPrimaryDatasetMeshes";
+import { NonPrimaryDatasetMeshes, computeSecondaryYAlignment } from "@/components/NonPrimaryDatasetMeshes";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { MAX_DEPTH_WORLD } from "@/lib/terrain";
 
@@ -208,8 +208,6 @@ describe("NonPrimaryDatasetMeshes — primary-switch regression", () => {
 // ---------------------------------------------------------------------------
 // computeSecondaryYAlignment — depth alignment policy tests
 // ---------------------------------------------------------------------------
-
-import { computeSecondaryYAlignment } from "@/components/NonPrimaryDatasetMeshes";
 
 describe("computeSecondaryYAlignment — depth alignment policy", () => {
   it("returns naturalYScale < 1 and yScale = naturalYScale when secondary is shallower than primary", () => {

@@ -336,6 +336,7 @@ export default [
     },
     rules: {
       "no-dupe-keys": "error",
+      "no-duplicate-imports": "error",
     },
   },
   {
@@ -346,6 +347,7 @@ export default [
     },
     rules: {
       "no-dupe-keys": "error",
+      "no-duplicate-imports": "error",
     },
   },
   {
@@ -390,6 +392,7 @@ export default [
       // stub export to a vi.mock factory) must fail lint immediately instead
       // of surfacing later as TS1117 deep in the typecheck step.
       "no-dupe-keys": "error",
+      "no-duplicate-imports": "error",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-redeclare": "error",

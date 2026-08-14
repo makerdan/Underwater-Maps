@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  scoreTidepool,
-  scoreBeachcombing,
-  buildScoreSignals,
-} from "../intertidalScorer.js";
-import type { IntertidalScoringProps } from "../intertidalScorer.js";
+import { scoreTidepool, scoreBeachcombing, buildScoreSignals, type IntertidalScoringProps } from "../intertidalScorer.js";
 
 // ---------------------------------------------------------------------------
 // scoreTidepool
