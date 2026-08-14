@@ -186,6 +186,35 @@ export function temperatureSuffix(units: UnitsSystem = getTemperatureUnit()): st
   return units === "imperial" ? "°F" : "°C";
 }
 
+// ── Wave height ──────────────────────────────────────────────────────────
+/**
+ * Wave height where the source value is already in metres (e.g. the
+ * boatGoWaveM / boatNoGoWaveM / maxWaveM fields from tripWindow).
+ *
+ * - Metric / Nautical → metres, 1 decimal, suffix "m"
+ * - Imperial          → feet,   1 decimal, suffix "ft"
+ *
+ * Returns "—" for null, undefined, or non-finite input.
+ */
+export function formatWaveHeight(
+  metres: number | null | undefined,
+  opts: { units?: UnitsSystem; decimals?: number } = {},
+): string {
+  if (metres === null || metres === undefined || !Number.isFinite(metres)) return "—";
+  const units = opts.units ?? getUnits();
+  const decimals = opts.decimals ?? 1;
+  if (units === "imperial") {
+    const ft = metres * M_TO_FT;
+    return `${ft.toFixed(decimals)} ft`;
+  }
+  return `${metres.toFixed(decimals)} m`;
+}
+
+/** Short wave-height suffix matching `formatWaveHeight` — "m" or "ft". */
+export function waveHeightSuffix(units: UnitsSystem = getUnits()): string {
+  return units === "imperial" ? "ft" : "m";
+}
+
 // ── Short suffix helpers ─────────────────────────────────────────────────
 export function depthSuffix(units: UnitsSystem = getUnits()): string {
   return units === "metric" ? "m" : "ft";

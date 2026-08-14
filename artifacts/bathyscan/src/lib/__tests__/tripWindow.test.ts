@@ -1,5 +1,11 @@
 /**
  * tripWindow.test.ts — unit tests for the Trip Window finder's pure logic.
+ *
+ * These tests operate entirely on canonical kn/m values stored in TripWindow
+ * objects. Display-layer conversions (e.g. knots → mph/km/h, metres → feet)
+ * are the responsibility of TripWindowPanel via formatSpeedFromKnots /
+ * formatWaveHeight from lib/units. See TripWindowPanel.test.tsx for those
+ * assertions.
  */
 import { describe, it, expect } from "vitest";
 import {

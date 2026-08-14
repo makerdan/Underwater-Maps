@@ -18,6 +18,7 @@ import React from "react";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useDriftStore } from "@/lib/driftStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { formatSpeedFromKnots, formatWaveHeight } from "@/lib/units";
 import {
   computeTripWindows,
   findBestTripWindow,
@@ -79,6 +80,10 @@ export const TripWindowPanel: React.FC = () => {
   const setBoatGoWaveM = useSettingsStore((s) => s.setBoatGoWaveM);
   const setBoatNoGoWindKn = useSettingsStore((s) => s.setBoatNoGoWindKn);
   const setBoatNoGoWaveM = useSettingsStore((s) => s.setBoatNoGoWaveM);
+  // Subscribe to units so slider readouts and window summaries re-render when
+  // the user changes their unit preference in Settings.
+  const _units = useSettingsStore((s) => s.units);
+  void _units; // used for subscription side-effect only; format helpers read it via getUnits()
   const setDriftHour = useDriftStore((s) => s.setDriftHour);
   const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
 
@@ -165,29 +170,32 @@ export const TripWindowPanel: React.FC = () => {
         }}
       >
         {([
-          { label: "Go wind", value: boatGoWindKn, set: setBoatGoWindKn, min: 1, max: 50, step: 1, unit: "kn", testId: "boat-go-wind" },
-          { label: "Go wave", value: boatGoWaveM, set: setBoatGoWaveM, min: 0.1, max: 5.0, step: 0.1, unit: "m", testId: "boat-go-wave" },
-          { label: "No-go wind", value: boatNoGoWindKn, set: setBoatNoGoWindKn, min: 1, max: 70, step: 1, unit: "kn", testId: "boat-nogo-wind" },
-          { label: "No-go wave", value: boatNoGoWaveM, set: setBoatNoGoWaveM, min: 0.1, max: 8.0, step: 0.1, unit: "m", testId: "boat-nogo-wave" },
-        ] as const).map(({ label, value, set, min, max, step, unit, testId }) => (
-          <div key={label}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 2 }}>
-              <span>{label}</span>
-              <span style={{ color: "#94a3b8" }}>{value.toFixed(step < 1 ? 1 : 0)} {unit}</span>
+          { label: "Go wind",    value: boatGoWindKn,   set: setBoatGoWindKn,   min: 1,   max: 50,  step: 1,   format: formatSpeedFromKnots, testId: "boat-go-wind" },
+          { label: "Go wave",    value: boatGoWaveM,    set: setBoatGoWaveM,    min: 0.1, max: 5.0, step: 0.1, format: formatWaveHeight,     testId: "boat-go-wave" },
+          { label: "No-go wind", value: boatNoGoWindKn, set: setBoatNoGoWindKn, min: 1,   max: 70,  step: 1,   format: formatSpeedFromKnots, testId: "boat-nogo-wind" },
+          { label: "No-go wave", value: boatNoGoWaveM,  set: setBoatNoGoWaveM,  min: 0.1, max: 8.0, step: 0.1, format: formatWaveHeight,     testId: "boat-nogo-wave" },
+        ] as const).map(({ label, value, set, min, max, step, format, testId }) => {
+          const formatted = format(value);
+          return (
+            <div key={label}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 2 }}>
+                <span>{label}</span>
+                <span data-testid={`${testId}-readout`} style={{ color: "#94a3b8" }}>{formatted}</span>
+              </div>
+              <input
+                data-testid={testId}
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={value}
+                onChange={(e) => set(parseFloat(e.target.value))}
+                style={{ width: "100%", accentColor: "#00e5ff" }}
+                aria-label={`${label} threshold: ${formatted}`}
+              />
             </div>
-            <input
-              data-testid={testId}
-              type="range"
-              min={min}
-              max={max}
-              step={step}
-              value={value}
-              onChange={(e) => set(parseFloat(e.target.value))}
-              style={{ width: "100%", accentColor: "#00e5ff" }}
-              aria-label={`${label} threshold: ${value.toFixed(step < 1 ? 1 : 0)} ${unit}`}
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Trip length selector */}
@@ -276,7 +284,7 @@ export const TripWindowPanel: React.FC = () => {
                   {formatTripRange(w)}
                 </span>
                 <span style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#94a3b8", marginLeft: "auto" }}>
-                  {w.durationH} h · {w.maxWindKt.toFixed(0)} kn · {w.maxWaveM.toFixed(1)} m
+                  {w.durationH} h · {formatSpeedFromKnots(w.maxWindKt)} · {formatWaveHeight(w.maxWaveM)}
                 </span>
                 {isBest && (
                   <span

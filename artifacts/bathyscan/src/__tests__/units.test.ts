@@ -11,6 +11,8 @@ import {
   formatDistance,
   formatSpeed,
   formatTemperature,
+  formatWaveHeight,
+  waveHeightSuffix,
   depthSuffix,
   distanceLargeSuffix,
   getUnits,
@@ -187,5 +189,60 @@ describe("suffix helpers", () => {
     expect(depthSuffix("imperial")).toBe("ft");
     expect(distanceLargeSuffix("metric")).toBe("km");
     expect(distanceLargeSuffix("imperial")).toBe("mi");
+  });
+});
+
+describe("formatWaveHeight", () => {
+  it("returns the em-dash for null, undefined, and non-finite input", () => {
+    expect(formatWaveHeight(null)).toBe("—");
+    expect(formatWaveHeight(undefined)).toBe("—");
+    expect(formatWaveHeight(Number.NaN)).toBe("—");
+    expect(formatWaveHeight(Number.POSITIVE_INFINITY)).toBe("—");
+    expect(formatWaveHeight(Number.NEGATIVE_INFINITY)).toBe("—");
+  });
+
+  it("formats metres with 1 decimal and 'm' suffix for metric", () => {
+    expect(formatWaveHeight(1.5, { units: "metric" })).toBe("1.5 m");
+    expect(formatWaveHeight(0.0, { units: "metric" })).toBe("0.0 m");
+    expect(formatWaveHeight(2.37, { units: "metric" })).toBe("2.4 m");
+  });
+
+  it("formats metres with 1 decimal and 'm' suffix for nautical (same as metric)", () => {
+    expect(formatWaveHeight(1.5, { units: "nautical" })).toBe("1.5 m");
+    expect(formatWaveHeight(0.8, { units: "nautical" })).toBe("0.8 m");
+  });
+
+  it("converts metres → feet with 1 decimal and 'ft' suffix for imperial", () => {
+    // 1.5 m × 3.28084 = 4.92126 → 4.9 ft
+    expect(formatWaveHeight(1.5, { units: "imperial" })).toBe("4.9 ft");
+    // 0.8 m × 3.28084 = 2.624672 → 2.6 ft
+    expect(formatWaveHeight(0.8, { units: "imperial" })).toBe("2.6 ft");
+    // 0.3 m × 3.28084 = 0.984252 → 1.0 ft
+    expect(formatWaveHeight(0.3, { units: "imperial" })).toBe("1.0 ft");
+  });
+
+  it("respects a custom decimals option", () => {
+    expect(formatWaveHeight(1.5, { units: "metric", decimals: 0 })).toBe("2 m");
+    expect(formatWaveHeight(1.5, { units: "imperial", decimals: 2 })).toBe("4.92 ft");
+  });
+
+  it("falls back to the live store preference when no override is given", () => {
+    useSettingsStore.getState().setUnits("nautical");
+    expect(formatWaveHeight(1.0)).toBe("1.0 m");
+
+    useSettingsStore.getState().setUnits("metric");
+    expect(formatWaveHeight(1.0)).toBe("1.0 m");
+
+    useSettingsStore.getState().setUnits("imperial");
+    // 1.0 m × 3.28084 = 3.28084 → 3.3 ft
+    expect(formatWaveHeight(1.0)).toBe("3.3 ft");
+  });
+});
+
+describe("waveHeightSuffix", () => {
+  it("returns 'm' for metric and nautical, 'ft' for imperial", () => {
+    expect(waveHeightSuffix("metric")).toBe("m");
+    expect(waveHeightSuffix("nautical")).toBe("m");
+    expect(waveHeightSuffix("imperial")).toBe("ft");
   });
 });
