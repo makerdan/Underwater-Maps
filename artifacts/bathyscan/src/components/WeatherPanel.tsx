@@ -7,8 +7,9 @@
  * override sliders so the user can still plan a drift.
  */
 
-import React, { useEffect, useCallback, useRef, useState } from "react";
+import React, { useEffect, useCallback, useReducer, useRef, useState } from "react";
 import { useOfflineStore } from "@/lib/offlineStore";
+import { useEnvOfflineStore } from "@/lib/envOfflineStore";
 import {
   useGetTrollingPresets,
   usePostTrollingPresets,
@@ -161,6 +162,83 @@ const OfflineWeatherBadge: React.FC = () => {
       }}
     >
       ⚡ OFFLINE · AS OF {dateStr.toUpperCase()}
+    </div>
+  );
+};
+
+/**
+ * Amber chip shown when the device is offline and the env-pack has expired.
+ * Exported for isolated unit testing.
+ */
+export const EnvPackExpiryChip: React.FC = () => {
+  const isOnline = useOfflineStore((s) => s.isOnline);
+  const envPack = useEnvOfflineStore((s) => s.envPack);
+  // forceUpdate lets us re-render at the exact moment expiresAt is crossed so
+  // an already-open panel shows the warning without waiting for a store update.
+  const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
+
+  useEffect(() => {
+    if (!envPack || isOnline) return;
+    const msUntilExpiry = new Date(envPack.expiresAt).getTime() - Date.now();
+    if (msUntilExpiry <= 0) return; // already expired — chip will render now
+    const timer = setTimeout(forceUpdate, msUntilExpiry);
+    return () => clearTimeout(timer);
+  }, [envPack, isOnline]);
+
+  if (isOnline || !envPack) return null;
+  if (new Date(envPack.expiresAt).getTime() >= Date.now()) return null;
+
+  return (
+    <div
+      data-testid="env-pack-expiry-chip"
+      style={{
+        fontSize: "calc(12px * var(--bs-font-scale, 1))",
+        letterSpacing: "0.12em",
+        color: "#fbbf24",
+        background: "rgba(251,191,36,0.10)",
+        border: "1px solid rgba(251,191,36,0.35)",
+        borderRadius: 3,
+        padding: "3px 6px",
+        marginBottom: 8,
+      }}
+    >
+      ⚠ Weather data expired — reconnect to refresh
+    </div>
+  );
+};
+
+/**
+ * Small badge showing "Cached Mon DD" from the env-pack's generatedAt field.
+ * Visible only when offline and an env-pack has been downloaded.
+ * Exported for isolated unit testing.
+ */
+export const EnvPackCachedBadge: React.FC = () => {
+  const isOnline = useOfflineStore((s) => s.isOnline);
+  const envPack = useEnvOfflineStore((s) => s.envPack);
+
+  if (isOnline || !envPack) return null;
+
+  const dateStr = new Date(envPack.generatedAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+
+  return (
+    <div
+      data-testid="env-pack-cached-badge"
+      style={{
+        fontSize: "calc(12px * var(--bs-font-scale, 1))",
+        letterSpacing: "0.12em",
+        color: "#94a3b8",
+        background: "rgba(148,163,184,0.06)",
+        border: "1px solid rgba(148,163,184,0.18)",
+        borderRadius: 3,
+        padding: "3px 6px",
+        marginBottom: 8,
+      }}
+    >
+      Cached{" "}
+      <span style={{ fontWeight: 500 }}>{dateStr}</span>
     </div>
   );
 };
@@ -968,6 +1046,8 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
         </div>
       )}
       <OfflineWeatherBadge />
+      <EnvPackCachedBadge />
+      <EnvPackExpiryChip />
 
       {cond && !estimatedConditions && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

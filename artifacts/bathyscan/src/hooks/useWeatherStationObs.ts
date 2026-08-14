@@ -13,6 +13,7 @@ import {
   useEnvOfflineStore,
   getEnvPackWeatherStationById,
 } from "@/lib/envOfflineStore";
+import { getWeatherAtTime } from "@/lib/envPackInterpolation";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const CACHE_TTL_MS = 10 * 60_000;
@@ -73,16 +74,23 @@ export function useWeatherStationObs(
   const isOnline = useOfflineStore((s) => s.isOnline);
   const envPack = useEnvOfflineStore((s) => s.envPack);
 
-  // 15-minute bucket: effect fires only when the scrubber crosses a
-  // quarter-hour boundary, avoiding a fetch on every single tick while still
-  // recomputing nearest-obs at meaningful granularity within the hour.
+  // 15-minute bucket: used as the online fetch-cache key so network requests
+  // are throttled to at most one per quarter-hour boundary.
   const targetTime15MinKey =
     targetTime instanceof Date && !isNaN(targetTime.getTime())
       ? quarterKey(targetTime)
       : null;
 
-  // Ref holds the precise ISO string for the API request URL so we can send
-  // the exact time to the server without `targetTimeIso` in the dep array.
+  // Exact ms timestamp — kept outside the 15-min bucket so the offline
+  // interpolation re-runs on every targetTime change (not just at bucket
+  // boundaries), enabling smooth scrubbing of the offline timeline.
+  const targetTimeMs =
+    targetTime instanceof Date && !isNaN(targetTime.getTime())
+      ? targetTime.getTime()
+      : null;
+
+  // Ref holds the precise ISO string for the online API request URL so we can
+  // send the exact time to the server without `targetTimeIso` in the dep array.
   const targetTimeExactRef = useRef<string | null>(null);
   targetTimeExactRef.current =
     targetTime instanceof Date && !isNaN(targetTime.getTime())
@@ -108,20 +116,45 @@ export function useWeatherStationObs(
         envPack && !isExpired
           ? getEnvPackWeatherStationById(envPack, stationId)
           : null;
-      if (station) {
+      if (station && envPack) {
+        // Use smooth interpolation from the hourly forecast rather than the
+        // static observation snapshot so wind / temperature don't jump at
+        // whole-hour boundaries.
+        // Use the exact targetTime ms (from the dep array, not a ref) so the
+        // effect recomputes whenever the scrubber moves, even within a 15-min
+        // bucket where the online fetch would be cached.
+        const interpolated = getWeatherAtTime(
+          envPack,
+          targetTimeMs ?? Date.now(),
+          stationId,
+        );
+        // Convert interpolated temperatureF → tempC for the WeatherStationObs
+        // interface (NWS hourly forecast temps are always in °F).
+        const tempC =
+          interpolated?.temperatureF != null
+            ? (interpolated.temperatureF - 32) * (5 / 9)
+            : station.tempC; // fall back to snapshot value
+
         const obs: WeatherStationObs = {
-          windSpeedKnots: station.windSpeedKnots,
-          windDirDeg: station.windDirDeg,
+          windSpeedKnots: interpolated?.windSpeedKnots ?? station.windSpeedKnots,
+          windDirDeg: interpolated?.windDirDeg ?? station.windDirDeg,
           visibilityMiles: station.visibilityMiles,
           ceilingFt: station.ceilingFt,
-          tempC: station.tempC,
+          tempC,
           observedAt: station.observedAt,
         };
         setObservation(obs);
         setIsCachedPack(true);
         setIsLoading(false);
         setIsError(false);
+      } else if (!station && envPack && !isExpired) {
+        // Pack available but station not found — interpolation not possible.
+        setObservation(null);
+        setIsCachedPack(false);
+        setIsLoading(false);
+        setIsError(false);
       } else {
+        // No pack, or pack is expired and interpolation result would be null.
         setObservation(null);
         setIsCachedPack(false);
         setIsLoading(false);
@@ -203,7 +236,11 @@ export function useWeatherStationObs(
         pendingCache.delete(cacheKey);
       }
     };
-  }, [stationId, targetTime15MinKey, enabled, isOnline, envPack]);
+  // targetTimeMs is included so the offline interpolation recomputes on every
+  // exact timestamp change (smooth scrubbing). The online fetch path is still
+  // throttled by the cache key (stationId|targetTime15MinKey), so no extra
+  // network requests are made when targetTimeMs changes within a bucket.
+  }, [stationId, targetTime15MinKey, targetTimeMs, enabled, isOnline, envPack]);
 
   return { observation, isLoading, isError, isCachedPack };
 }
