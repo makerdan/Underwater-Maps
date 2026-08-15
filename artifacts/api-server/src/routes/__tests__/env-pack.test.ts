@@ -311,7 +311,7 @@ describe("GET /env-pack — partial failure graceful degradation", () => {
     expect(res.body.warnings.some((w: string) => w.toLowerCase().includes("temperature"))).toBe(true);
   });
 
-  it("returns 200 with all fields null when every source fails", async () => {
+  it("returns a structured 503 when every source fails", async () => {
     tidalMock.mockRejectedValue(new Error("tidal down"));
     weatherMock.mockRejectedValue(new Error("weather down"));
     marineMock.mockRejectedValue(new Error("marine down"));
@@ -320,16 +320,15 @@ describe("GET /env-pack — partial failure graceful degradation", () => {
 
     const res = await request(makeApp()).get("/env-pack?lat=37.8&lon=-122.4");
 
-    expect(res.status).toBe(200);
-    expect(res.body.tideStations).toBeNull();
-    expect(res.body.weatherStations).toBeNull();
-    expect(res.body.marineConditions).toBeNull();
-    // temperatureProfile is never null — it falls back to available:false
-    expect(res.body.temperatureProfile).not.toBeNull();
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe("no_data_available");
+    expect(Array.isArray(res.body.warnings)).toBe(true);
     expect(res.body.warnings.length).toBeGreaterThan(0);
+    expect(res.body.warnings.some((w: string) => w.includes("tidal down"))).toBe(true);
+    expect(res.body.warnings.some((w: string) => w.includes("weather down"))).toBe(true);
   });
 
-  it("returns 200 with a warning when tidal fetcher returns null (catalogue unreachable)", async () => {
+  it("returns 503 when every fetcher resolves but with no usable data", async () => {
     tidalMock.mockResolvedValue(null); // null = station catalogue unavailable
     weatherMock.mockResolvedValue([]);
     marineMock.mockResolvedValue(null);
@@ -338,11 +337,66 @@ describe("GET /env-pack — partial failure graceful degradation", () => {
 
     const res = await request(makeApp()).get("/env-pack?lat=37.8&lon=-122.4");
 
+    // All four sources empty (empty arrays / unavailable profile count as
+    // no-data) → structured 503, not a 200 full of nulls.
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe("no_data_available");
+    expect(Array.isArray(res.body.warnings)).toBe(true);
+  });
+
+  it("formats non-Error rejection reasons as readable warning strings", async () => {
+    tidalMock.mockRejectedValue("catalogue exploded"); // string, not Error
+    weatherMock.mockResolvedValue(SAMPLE_WEATHER_STATIONS);
+    marineMock.mockResolvedValue(SAMPLE_MARINE_CONDITIONS);
+    bundledMock.mockReturnValue(null);
+    argoMock.mockResolvedValue(SAMPLE_ARGO_PROFILE);
+
+    const res = await request(makeApp()).get("/env-pack?lat=37.8&lon=-122.4");
+
     expect(res.status).toBe(200);
-    // null from fetcher → tideStations=null (catalogue unreachable is not a warning,
-    // it just means no stations — already covered by the marine/profile warnings)
-    // The key assertion is that the request doesn't 500.
-    expect(typeof res.body.warnings).toBe("object");
+    const tideWarning = res.body.warnings.find((w: string) =>
+      w.toLowerCase().includes("tide"),
+    );
+    expect(tideWarning).toContain("catalogue exploded");
+    expect(tideWarning).not.toContain("unknown error");
+    expect(tideWarning).not.toContain("undefined");
+  });
+
+  it("does not cache the 503 complete-failure response", async () => {
+    const app = makeApp();
+    tidalMock.mockRejectedValueOnce(new Error("tidal down"));
+    weatherMock.mockRejectedValueOnce(new Error("weather down"));
+    marineMock.mockRejectedValueOnce(new Error("marine down"));
+    bundledMock.mockReturnValue(null);
+    argoMock.mockRejectedValueOnce(new Error("argo down"));
+
+    const first = await request(app).get("/env-pack?lat=37.8&lon=-122.4");
+    expect(first.status).toBe(503);
+
+    // Sources recover — the same query must succeed, proving the 503 was
+    // never written into the 30-minute pack cache.
+    tidalMock.mockResolvedValue(SAMPLE_TIDE_STATIONS);
+    weatherMock.mockResolvedValue(SAMPLE_WEATHER_STATIONS);
+    marineMock.mockResolvedValue(SAMPLE_MARINE_CONDITIONS);
+    argoMock.mockResolvedValue(SAMPLE_ARGO_PROFILE);
+
+    const second = await request(app).get("/env-pack?lat=37.8&lon=-122.4");
+    expect(second.status).toBe(200);
+    expect(second.body.tideStations).toHaveLength(1);
+  });
+
+  it("returns 200 when only marine conditions are available (marine-only pack)", async () => {
+    tidalMock.mockResolvedValue(null);
+    weatherMock.mockResolvedValue([]);
+    marineMock.mockResolvedValue(SAMPLE_MARINE_CONDITIONS);
+    bundledMock.mockReturnValue(null);
+    argoMock.mockResolvedValue(null);
+
+    const res = await request(makeApp()).get("/env-pack?lat=37.8&lon=-122.4");
+
+    expect(res.status).toBe(200);
+    expect(res.body.marineConditions).not.toBeNull();
+    expect(res.body.tideStations).toBeNull();
   });
 
   it("includes an empty warnings array when stations exist but no data sources fail", async () => {

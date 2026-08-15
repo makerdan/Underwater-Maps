@@ -2999,9 +2999,10 @@ paths:
 
         Individual upstream failures are tolerated — any data source that is
         unreachable produces a null field and a message in the top-level
-        `warnings` array. The endpoint always returns HTTP 200 unless the
-        query parameters are invalid. Response is cached server-side for 30
-        minutes.
+        `warnings` array. When ALL four data sources fail or return nothing,
+        the endpoint responds with HTTP 503 `no_data_available` instead of a
+        200 full of nulls (complete failures are never cached). Successful
+        responses are cached server-side for 30 minutes.
       parameters:
         - name: lat
           in: query
@@ -3046,6 +3047,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "503":
+          description: |
+            No environmental data is available for the requested area — all
+            four upstream sources (tide stations, weather stations, marine
+            conditions, temperature profile) failed or returned nothing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+                    enum: [no_data_available]
+                    description: Machine-readable failure code
+                  warnings:
+                    type: array
+                    items:
+                      type: string
+                    description: Per-source failure messages
 
   /efh:
     get:

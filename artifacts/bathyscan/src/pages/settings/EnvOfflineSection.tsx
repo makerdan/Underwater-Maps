@@ -6,7 +6,8 @@
  * (default: SE Alaska) with radiusMiles=15 and days=14.
  */
 import React, { useState } from "react";
-import { useEnvOfflineStore, ENV_PACK_IDB_KEY } from "@/lib/envOfflineStore";
+import { useEnvOfflineStore } from "@/lib/envOfflineStore";
+import { useOfflineStore } from "@/lib/offlineStore";
 import { useToast } from "@/hooks/use-toast";
 import { S } from "./styles";
 
@@ -14,17 +15,22 @@ import { S } from "./styles";
 const DEFAULT_LAT = 57.05;
 const DEFAULT_LON = -135.33;
 
-/** Small chip matching the offline/stale badge pattern used in TidePanel. */
-function CachedDataChip() {
+/**
+ * Small chip matching the offline/stale badge pattern used in TidePanel.
+ * Renders "⚡ CACHED" (amber) for a valid pack and "⚡ EXPIRED" (red) once
+ * the pack's expiresAt has passed, so users can tell the difference at a
+ * glance.
+ */
+function CachedDataChip({ expired }: { expired: boolean }) {
   return (
     <span
-      data-testid="env-cached-chip"
+      data-testid={expired ? "env-expired-chip" : "env-cached-chip"}
       style={{
         display: "inline-block",
         padding: "1px 6px",
         borderRadius: 3,
-        background: "rgba(251,191,36,0.15)",
-        color: "#fbbf24",
+        background: expired ? "rgba(248,113,113,0.15)" : "rgba(251,191,36,0.15)",
+        color: expired ? "#f87171" : "#fbbf24",
         fontSize: "calc(8px * var(--bs-font-scale, 1))",
         fontWeight: 700,
         letterSpacing: "0.04em",
@@ -32,7 +38,7 @@ function CachedDataChip() {
         verticalAlign: "middle",
       }}
     >
-      ⚡ CACHED
+      {expired ? "⚡ EXPIRED" : "⚡ CACHED"}
     </span>
   );
 }
@@ -51,9 +57,13 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
   const downloadEnvPack = useEnvOfflineStore((s) => s.downloadEnvPack);
   const clearEnvPack = useEnvOfflineStore((s) => s.clearEnvPack);
   const idbHydrationError = useEnvOfflineStore((s) => s.idbHydrationError);
+  const isHydrating = useEnvOfflineStore((s) => s.isHydrating);
+  const storeDeleteError = useEnvOfflineStore((s) => s.deleteError);
+  const isOnline = useOfflineStore((s) => s.isOnline);
   const { toast } = useToast();
 
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [localDeleteError, setLocalDeleteError] = useState<string | null>(null);
+  const deleteError = localDeleteError ?? storeDeleteError;
 
   const lat = centerLat ?? DEFAULT_LAT;
   const lon = centerLon ?? DEFAULT_LON;
@@ -70,12 +80,12 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
   };
 
   const handleDelete = async () => {
-    setDeleteError(null);
+    setLocalDeleteError(null);
     try {
       await clearEnvPack();
       toast({ title: "Cached weather data deleted", duration: 3000 });
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Delete failed — please try again");
+      setLocalDeleteError(err instanceof Error ? err.message : "Delete failed — please try again");
     }
   };
 
@@ -88,7 +98,7 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
     });
 
   return (
-    <div style={S.card}>
+    <div style={S.card} aria-busy={isDownloading}>
       <div style={S.cardHeader}>WEATHER &amp; OCEAN DATA</div>
       <div style={{ padding: "12px 16px" }}>
         <div
@@ -121,100 +131,117 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
           </div>
         )}
 
-        {envPack === null ? (
-          <div
-            data-testid="env-pack-empty"
-            style={{
-              fontSize: "calc(10px * var(--bs-font-scale, 1))",
-              color: "#64748b",
-              marginBottom: 10,
-            }}
-          >
-            No data downloaded. Tap the button below to save for offline use.
-          </div>
-        ) : (
-          <div
-            data-testid="env-pack-info"
-            style={{ marginBottom: 10 }}
-          >
-            {/* Downloaded date */}
+        {/* Live status region — announces hydration, pack state, and download
+            progress/errors to screen readers. */}
+        <div role="status" aria-live="polite" data-testid="env-pack-status">
+          {envPack === null && isHydrating ? (
             <div
+              data-testid="env-pack-hydrating"
               style={{
                 fontSize: "calc(10px * var(--bs-font-scale, 1))",
-                color: "#4ade80",
-                marginBottom: 3,
-              }}
-            >
-              ✓ Downloaded {fmtDate(envPack.generatedAt)}
-              <CachedDataChip />
-            </div>
-
-            {/* Expiry */}
-            <div
-              style={{
-                fontSize: "calc(9px * var(--bs-font-scale, 1))",
-                color: expired ? "#f87171" : "#94a3b8",
-                marginBottom: 2,
-              }}
-            >
-              {expired ? (
-                <span data-testid="env-pack-expired-msg">
-                  ⚠ Data expired — reconnect to refresh
-                </span>
-              ) : (
-                `Expires ${fmtDate(envPack.expiresAt)}`
-              )}
-            </div>
-
-            {/* Coverage */}
-            <div
-              style={{
-                fontSize: "calc(9px * var(--bs-font-scale, 1))",
                 color: "#64748b",
+                marginBottom: 10,
               }}
             >
-              {`${envPack.coverageRadiusMiles} mi radius · ${envPack.centerLat.toFixed(2)}°, ${envPack.centerLon.toFixed(2)}°`}
+              ◌ Checking for saved offline data…
             </div>
-
-            {/* Warnings */}
-            {envPack.warnings.length > 0 && (
+          ) : envPack === null ? (
+            <div
+              data-testid="env-pack-empty"
+              style={{
+                fontSize: "calc(10px * var(--bs-font-scale, 1))",
+                color: "#64748b",
+                marginBottom: 10,
+              }}
+            >
+              No data downloaded. Tap the button below to save for offline use.
+            </div>
+          ) : (
+            <div
+              data-testid="env-pack-info"
+              style={{ marginBottom: 10 }}
+            >
+              {/* Downloaded date */}
               <div
-                data-testid="env-pack-warnings"
                 style={{
-                  marginTop: 6,
-                  fontSize: "calc(9px * var(--bs-font-scale, 1))",
-                  color: "#fbbf24",
+                  fontSize: "calc(10px * var(--bs-font-scale, 1))",
+                  color: "#4ade80",
+                  marginBottom: 3,
                 }}
               >
-                {envPack.warnings.map((w, i) => (
-                  <div key={i}>⚠ {w}</div>
-                ))}
+                ✓ Downloaded {fmtDate(envPack.generatedAt)}
+                <CachedDataChip expired={expired} />
               </div>
-            )}
-          </div>
-        )}
 
-        {/* Download error */}
-        {downloadError && (
-          <div
-            data-testid={
-              downloadError.startsWith("No data available")
-                ? "env-pack-no-data"
-                : "env-pack-error"
-            }
-            style={{
-              fontSize: "calc(9px * var(--bs-font-scale, 1))",
-              color: downloadError.startsWith("No data available")
-                ? "#94a3b8"
-                : "#f87171",
-              marginBottom: 8,
-            }}
-          >
-            {downloadError.startsWith("No data available")
-              ? `ℹ ${downloadError}`
-              : `✗ ${downloadError}`}
-          </div>
-        )}
+              {/* Expiry */}
+              <div
+                style={{
+                  fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                  color: expired ? "#f87171" : "#94a3b8",
+                  marginBottom: 2,
+                }}
+              >
+                {expired ? (
+                  <span data-testid="env-pack-expired-msg">
+                    {isOnline
+                      ? "⚠ Data expired — download again to refresh"
+                      : "⚠ Data expired — reconnect to refresh"}
+                  </span>
+                ) : (
+                  `Expires ${fmtDate(envPack.expiresAt)}`
+                )}
+              </div>
+
+              {/* Coverage */}
+              <div
+                style={{
+                  fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                  color: "#64748b",
+                }}
+              >
+                {`${envPack.coverageRadiusMiles} mi radius · ${envPack.centerLat.toFixed(2)}°, ${envPack.centerLon.toFixed(2)}°`}
+              </div>
+
+              {/* Warnings */}
+              {envPack.warnings.length > 0 && (
+                <div
+                  data-testid="env-pack-warnings"
+                  style={{
+                    marginTop: 6,
+                    fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                    color: "#fbbf24",
+                  }}
+                >
+                  {envPack.warnings.map((w, i) => (
+                    <div key={i}>⚠ {w}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Download error */}
+          {downloadError && (
+            <div
+              data-testid={
+                downloadError.startsWith("No data available")
+                  ? "env-pack-no-data"
+                  : "env-pack-error"
+              }
+              style={{
+                fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                color: downloadError.startsWith("No data available")
+                  ? "#94a3b8"
+                  : "#f87171",
+                marginBottom: 8,
+              }}
+            >
+              {downloadError.startsWith("No data available")
+                ? `ℹ ${downloadError}`
+                : `✗ ${downloadError}`}
+            </div>
+          )}
+        </div>
 
         {/* Delete error */}
         {deleteError && (
@@ -247,7 +274,11 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
               opacity: isDownloading ? 0.6 : 1,
             }}
           >
-            {isDownloading ? "◌ DOWNLOADING…" : "⬇ DOWNLOAD ALL FOR OFFLINE USE"}
+            {isDownloading
+              ? "◌ DOWNLOADING…"
+              : expired && envPack !== null
+                ? "⬇ DOWNLOAD AGAIN TO REFRESH"
+                : "⬇ DOWNLOAD ALL FOR OFFLINE USE"}
           </button>
 
           {envPack !== null && (
@@ -264,17 +295,6 @@ export function EnvOfflineSection({ centerLat, centerLon }: Props) {
               DELETE CACHED DATA
             </button>
           )}
-        </div>
-
-        {/* IndexedDB key note (for developer reference) */}
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: "calc(8px * var(--bs-font-scale, 1))",
-            color: "#334155",
-          }}
-        >
-          {ENV_PACK_IDB_KEY}
         </div>
       </div>
     </div>

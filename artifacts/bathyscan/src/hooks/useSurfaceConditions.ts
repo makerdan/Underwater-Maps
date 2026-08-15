@@ -40,6 +40,8 @@ import {
   type ManualConditions,
 } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
+import { useOfflineStore } from "@/lib/offlineStore";
+import { useEnvOfflineStore } from "@/lib/envOfflineStore";
 
 export type { ForecastHour };
 
@@ -99,6 +101,12 @@ export interface SurfaceConditionsResult {
     tidalSpeedKnots: number;
     tidalDegrees: number;
   };
+  /**
+   * True when wave/SST data is served from the cached env pack because the
+   * device is offline. Wind and current values are the manual fallback in
+   * this state (the env pack carries no wind/current series).
+   */
+  isCachedPack?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,6 +153,9 @@ export function useSurfaceConditions(
   waterType?: "saltwater" | "freshwater",
 ): SurfaceConditionsResult {
   const { terrain } = useAppState();
+  const isOnline = useOfflineStore((s) => s.isOnline);
+  const envPack = useEnvOfflineStore((s) => s.envPack);
+  const isEnvPackExpired = useEnvOfflineStore((s) => s.isExpired);
   const manualWindSpeedKnots = useDriftStore((s) => s.manualWindSpeedKnots);
   const manualWindDegrees = useDriftStore((s) => s.manualWindDegrees);
   const manualTidalSpeedKnots = useDriftStore((s) => s.manualTidalSpeedKnots);
@@ -245,6 +256,67 @@ export function useSurfaceConditions(
       : null;
     const isManualActive = manualSource === "manual" && manualConds !== null;
 
+    // ── Offline env-pack fallback tier ───────────────────────────────────────
+    // When the device is offline and no live/query data is available, serve
+    // wave height/direction from the cached env pack's marine conditions so
+    // downloaded data is actually surfaced to users offline. Wind and current
+    // values fall back to the manual drift-store values (the env pack has no
+    // wind/current series). Manual conditions still take precedence.
+    if (!isOnline && !isManualActive && (!data || isError)) {
+      const pack = envPack !== null && !isEnvPackExpired() ? envPack : null;
+      const mc = pack?.marineConditions ?? null;
+      if (pack && mc && mc.times.length > 0) {
+        // Pick the marine sample closest to the current time.
+        const nowMs = Date.now();
+        let idx = 0;
+        let bestDelta = Infinity;
+        for (let i = 0; i < mc.times.length; i++) {
+          const t = new Date(mc.times[i] ?? "").getTime();
+          if (Number.isNaN(t)) continue;
+          const delta = Math.abs(t - nowMs);
+          if (delta < bestDelta) {
+            bestDelta = delta;
+            idx = i;
+          }
+        }
+        const waveH = mc.waveHeightM[idx];
+        const waveDir = mc.waveDirectionDeg[idx];
+        const packSnapshot: SurfaceSnapshot = {
+          hour: activeHour,
+          windSpeedKnots: fallback.windSpeedKnots,
+          windDegrees: fallback.windDegrees,
+          tidalSpeedKnots: fallback.tidalSpeedKnots,
+          tidalDegrees: fallback.tidalDegrees,
+          waveHeightM: typeof waveH === "number" ? waveH : 0,
+          ...(typeof waveDir === "number" ? { waveDirectionDeg: waveDir } : {}),
+          tideRising: true,
+        };
+        return {
+          data: undefined,
+          snapshot: packSnapshot,
+          hours: [packSnapshot],
+          forecast48h: [],
+          centerLat,
+          centerLon,
+          loading: false,
+          isFetching: false,
+          error: false,
+          // Wind/current values are manual fallbacks — keep estimated=true so
+          // consumers continue to badge them as estimates.
+          estimated: true,
+          currentsAvailable: false,
+          timestamp: pack.generatedAt,
+          fetchedAt: pack.generatedAt,
+          activeHour,
+          refetch: () => { void refetch(); },
+          fallback,
+          dataUpdatedAt: 0,
+          isCachedPack: true,
+        };
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const effectiveSnapshot: SurfaceSnapshot | null = isManualActive && manualConds
       ? {
           hour: activeHour,
@@ -299,5 +371,5 @@ export function useSurfaceConditions(
       manualTidalSpeedKnots, manualTidalDegrees,
       driftPlannerActive, driftHour, hourOverride, nowHour,
       manualConditionsActiveSource, datasetManualConditions, sessionManualConditions,
-      terrain]);
+      terrain, isOnline, envPack, isEnvPackExpired]);
 }

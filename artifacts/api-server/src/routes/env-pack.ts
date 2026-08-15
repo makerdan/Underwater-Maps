@@ -80,6 +80,17 @@ export function __clearEnvPackCacheForTests(): void {
   packCache.clear();
 }
 
+// ── Rejection formatting ──────────────────────────────────────────────────────
+
+/**
+ * Produce a readable message from a Promise.allSettled rejection reason.
+ * Reasons are not guaranteed to be Error instances — strings, objects, or
+ * undefined must still yield a useful warning string.
+ */
+function reasonMessage(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}
+
 // ── Temperature profile helper ────────────────────────────────────────────────
 
 async function fetchTemperatureProfile(
@@ -169,7 +180,7 @@ router.get(
       }
     } else {
       warnings.push(
-        `Tide predictions unavailable: NOAA station catalogue could not be reached (${(tidalResult.reason as Error)?.message ?? "unknown error"}).`,
+        `Tide predictions unavailable: NOAA station catalogue could not be reached (${reasonMessage(tidalResult.reason)}).`,
       );
     }
 
@@ -182,7 +193,7 @@ router.get(
       }
     } else {
       warnings.push(
-        `Weather observations unavailable: ${(weatherResult.reason as Error)?.message ?? "unknown error"}.`,
+        `Weather observations unavailable: ${reasonMessage(weatherResult.reason)}.`,
       );
     }
 
@@ -197,7 +208,7 @@ router.get(
       }
     } else {
       warnings.push(
-        `Marine conditions unavailable: ${(marineResult.reason as Error)?.message ?? "unknown error"}.`,
+        `Marine conditions unavailable: ${reasonMessage(marineResult.reason)}.`,
       );
     }
 
@@ -212,8 +223,23 @@ router.get(
       }
     } else {
       warnings.push(
-        `Temperature profile unavailable: ${(profileResult.reason as Error)?.message ?? "unknown error"}.`,
+        `Temperature profile unavailable: ${reasonMessage(profileResult.reason)}.`,
       );
+    }
+
+    // Complete failure: when every one of the four sources yielded nothing,
+    // return a structured 503 instead of a 200 full of nulls so clients can
+    // distinguish "partial success with warnings" from "no data at all".
+    // The failure is intentionally NOT cached so a transient outage does not
+    // poison the 30-minute cache window.
+    const hasTides = tideStations !== null && tideStations.length > 0;
+    const hasWeather = weatherStations !== null && weatherStations.length > 0;
+    const hasMarine = marineConditions !== null;
+    const hasProfile = temperatureProfile !== null && temperatureProfile.available;
+    if (!hasTides && !hasWeather && !hasMarine && !hasProfile) {
+      logger.warn({ lat, lon, radiusMiles, days, warnings }, "[env-pack] All data sources failed — returning 503");
+      res.status(503).json({ error: "no_data_available", warnings });
+      return;
     }
 
     const pack: EnvPack = {

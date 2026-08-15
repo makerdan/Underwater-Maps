@@ -22,6 +22,7 @@ vi.mock("@/hooks/use-toast", () => ({
 
 // ── Store import (after mocks) ────────────────────────────────────────────────
 import { useEnvOfflineStore } from "@/lib/envOfflineStore";
+import { useOfflineStore } from "@/lib/offlineStore";
 import type { EnvPack } from "@/lib/envPackTypes";
 import { EnvOfflineSection } from "../EnvOfflineSection";
 
@@ -44,10 +45,14 @@ function makePack(overrides: Partial<EnvPack> = {}): EnvPack {
 }
 
 function resetStore(overrides = {}) {
+  useOfflineStore.setState({ isOnline: true });
   useEnvOfflineStore.setState({
     envPack: null,
     isDownloading: false,
     downloadError: null,
+    idbHydrationError: false,
+    isHydrating: false,
+    deleteError: null,
     ...overrides,
   });
 }
@@ -85,6 +90,34 @@ describe("EnvOfflineSection", () => {
     it("does not show an error message initially", () => {
       render(<EnvOfflineSection />);
       expect(screen.queryByTestId("env-pack-error")).toBeNull();
+    });
+
+    it("does not render the raw IDB key anywhere in the card", () => {
+      render(<EnvOfflineSection />);
+      expect(screen.queryByText(/env-pack-v1/)).toBeNull();
+    });
+  });
+
+  describe("hydration loading state", () => {
+    it("shows a loading state instead of the empty state while hydrating", () => {
+      resetStore({ isHydrating: true });
+      render(<EnvOfflineSection />);
+      expect(screen.getByTestId("env-pack-hydrating")).toBeInTheDocument();
+      expect(screen.queryByTestId("env-pack-empty")).toBeNull();
+    });
+
+    it("shows pack info (not the loading state) when a pack is already in memory", () => {
+      resetStore({ isHydrating: true, envPack: makePack() });
+      render(<EnvOfflineSection />);
+      expect(screen.getByTestId("env-pack-info")).toBeInTheDocument();
+      expect(screen.queryByTestId("env-pack-hydrating")).toBeNull();
+    });
+
+    it("shows the empty state once hydration finishes with no pack", () => {
+      resetStore({ isHydrating: false });
+      render(<EnvOfflineSection />);
+      expect(screen.getByTestId("env-pack-empty")).toBeInTheDocument();
+      expect(screen.queryByTestId("env-pack-hydrating")).toBeNull();
     });
   });
 
@@ -137,14 +170,72 @@ describe("EnvOfflineSection", () => {
   });
 
   describe("expired state", () => {
+    const expiredPack = () =>
+      makePack({ expiresAt: new Date(Date.now() - 1000).toISOString() });
+
     it("shows expired warning when pack is past expiresAt", () => {
-      const expired = makePack({
-        expiresAt: new Date(Date.now() - 1000).toISOString(),
-      });
-      resetStore({ envPack: expired });
+      resetStore({ envPack: expiredPack() });
       render(<EnvOfflineSection />);
       expect(screen.getByTestId("env-pack-expired-msg")).toBeInTheDocument();
       expect(screen.getByTestId("env-pack-expired-msg").textContent).toMatch(/expired/i);
+    });
+
+    it("shows the EXPIRED chip (not CACHED) for an expired pack", () => {
+      resetStore({ envPack: expiredPack() });
+      render(<EnvOfflineSection />);
+      expect(screen.getByTestId("env-expired-chip")).toBeInTheDocument();
+      expect(screen.getByTestId("env-expired-chip").textContent).toContain("EXPIRED");
+      expect(screen.queryByTestId("env-cached-chip")).toBeNull();
+    });
+
+    it("shows the CACHED chip (not EXPIRED) for a fresh pack", () => {
+      resetStore({ envPack: makePack() });
+      render(<EnvOfflineSection />);
+      expect(screen.getByTestId("env-cached-chip")).toBeInTheDocument();
+      expect(screen.queryByTestId("env-expired-chip")).toBeNull();
+    });
+
+    it("tells the user to download again when expired and ONLINE", () => {
+      resetStore({ envPack: expiredPack() });
+      useOfflineStore.setState({ isOnline: true });
+      render(<EnvOfflineSection />);
+      expect(screen.getByTestId("env-pack-expired-msg").textContent).toMatch(
+        /download again/i,
+      );
+      expect(screen.getByTestId("env-pack-expired-msg").textContent).not.toMatch(
+        /reconnect/i,
+      );
+    });
+
+    it("tells the user to reconnect when expired and OFFLINE", () => {
+      resetStore({ envPack: expiredPack() });
+      useOfflineStore.setState({ isOnline: false });
+      render(<EnvOfflineSection />);
+      expect(screen.getByTestId("env-pack-expired-msg").textContent).toMatch(
+        /reconnect/i,
+      );
+    });
+  });
+
+  describe("accessibility", () => {
+    it("sets aria-busy on the card root while downloading", () => {
+      resetStore({ isDownloading: true });
+      const { container } = render(<EnvOfflineSection />);
+      expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    });
+
+    it("does not set aria-busy when idle", () => {
+      resetStore({ isDownloading: false });
+      const { container } = render(<EnvOfflineSection />);
+      expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    });
+
+    it("wraps the status text in an aria-live status region", () => {
+      resetStore({ envPack: makePack() });
+      render(<EnvOfflineSection />);
+      const status = screen.getByTestId("env-pack-status");
+      expect(status.getAttribute("role")).toBe("status");
+      expect(status.getAttribute("aria-live")).toBe("polite");
     });
   });
 

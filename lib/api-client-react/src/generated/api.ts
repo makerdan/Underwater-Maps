@@ -59,6 +59,7 @@ import type {
   GetDatasetsParams,
   GetEfhByIdParams,
   GetEfhParams,
+  GetEnvPack503,
   GetEnvPackParams,
   GetGcsJobStatus200,
   GetGcsJobStatusParams,
@@ -6350,9 +6351,10 @@ depth-resolved temperature profile from WOA 2023 / Argo.
 
 Individual upstream failures are tolerated — any data source that is
 unreachable produces a null field and a message in the top-level
-`warnings` array. The endpoint always returns HTTP 200 unless the
-query parameters are invalid. Response is cached server-side for 30
-minutes.
+`warnings` array. When ALL four data sources fail or return nothing,
+the endpoint responds with HTTP 503 `no_data_available` instead of a
+200 full of nulls (complete failures are never cached). Successful
+responses are cached server-side for 30 minutes.
 
  * @summary Fetch a 14-day environmental data pack for an area
  */
@@ -6378,7 +6380,7 @@ export const getGetEnvPackQueryKey = (params?: GetEnvPackParams,) => {
     }
 
 
-export const getGetEnvPackQueryOptions = <TData = Awaited<ReturnType<typeof getEnvPack>>, TError = ErrorType<ApiError>>(params: GetEnvPackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEnvPack>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetEnvPackQueryOptions = <TData = Awaited<ReturnType<typeof getEnvPack>>, TError = ErrorType<ApiError | GetEnvPack503>>(params: GetEnvPackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEnvPack>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -6397,14 +6399,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetEnvPackQueryResult = NonNullable<Awaited<ReturnType<typeof getEnvPack>>>
-export type GetEnvPackQueryError = ErrorType<ApiError>
+export type GetEnvPackQueryError = ErrorType<ApiError | GetEnvPack503>
 
 
 /**
  * @summary Fetch a 14-day environmental data pack for an area
  */
 
-export function useGetEnvPack<TData = Awaited<ReturnType<typeof getEnvPack>>, TError = ErrorType<ApiError>>(
+export function useGetEnvPack<TData = Awaited<ReturnType<typeof getEnvPack>>, TError = ErrorType<ApiError | GetEnvPack503>>(
  params: GetEnvPackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEnvPack>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {

@@ -102,6 +102,9 @@ function resetStore() {
     envPack: null,
     isDownloading: false,
     downloadError: null,
+    idbHydrationError: false,
+    isHydrating: false,
+    deleteError: null,
   });
 }
 
@@ -159,6 +162,85 @@ describe("envOfflineStore", () => {
       await useEnvOfflineStore.getState().loadFromIdb();
       expect(useEnvOfflineStore.getState().envPack).toBeNull();
     });
+
+    it("sets isHydrating true during hydration and false after", async () => {
+      const pack = makePack();
+      idbStore.set(ENV_PACK_IDB_KEY, pack);
+
+      const hydratingStates: boolean[] = [];
+      const unsub = useEnvOfflineStore.subscribe((s) =>
+        hydratingStates.push(s.isHydrating),
+      );
+
+      const promise = useEnvOfflineStore.getState().loadFromIdb();
+      expect(useEnvOfflineStore.getState().isHydrating).toBe(true);
+      await promise;
+      unsub();
+
+      expect(hydratingStates).toContain(true);
+      expect(useEnvOfflineStore.getState().isHydrating).toBe(false);
+    });
+
+    it("clears isHydrating even when hydration fails", async () => {
+      const { get } = await import("idb-keyval");
+      (get as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("IDB unavailable"),
+      );
+
+      await useEnvOfflineStore.getState().loadFromIdb();
+
+      expect(useEnvOfflineStore.getState().isHydrating).toBe(false);
+      expect(useEnvOfflineStore.getState().idbHydrationError).toBe(true);
+    });
+
+    it("rejects a corrupt IDB payload, sets idbHydrationError, and wipes the key", async () => {
+      idbStore.set(ENV_PACK_IDB_KEY, { generatedAt: 12345, warnings: "nope" });
+
+      await useEnvOfflineStore.getState().loadFromIdb();
+
+      const state = useEnvOfflineStore.getState();
+      expect(state.envPack).toBeNull();
+      expect(state.idbHydrationError).toBe(true);
+      expect(idbStore.has(ENV_PACK_IDB_KEY)).toBe(false);
+    });
+
+    it("does not overwrite the in-memory pack while a download is in flight", async () => {
+      const stale = makePack({
+        generatedAt: new Date(Date.now() - 3600_000).toISOString(),
+      });
+      idbStore.set(ENV_PACK_IDB_KEY, stale);
+      useEnvOfflineStore.setState({ isDownloading: true });
+
+      await useEnvOfflineStore.getState().loadFromIdb();
+
+      expect(useEnvOfflineStore.getState().envPack).toBeNull();
+    });
+
+    it("does not overwrite a fresher in-memory pack with an older IDB pack", async () => {
+      const fresh = makePack({ generatedAt: new Date().toISOString() });
+      const stale = makePack({
+        generatedAt: new Date(Date.now() - 3600_000).toISOString(),
+      });
+      idbStore.set(ENV_PACK_IDB_KEY, stale);
+      useEnvOfflineStore.setState({ envPack: fresh });
+
+      await useEnvOfflineStore.getState().loadFromIdb();
+
+      expect(useEnvOfflineStore.getState().envPack).toEqual(fresh);
+    });
+
+    it("replaces an older in-memory pack with a newer IDB pack", async () => {
+      const older = makePack({
+        generatedAt: new Date(Date.now() - 3600_000).toISOString(),
+      });
+      const newer = makePack({ generatedAt: new Date().toISOString() });
+      idbStore.set(ENV_PACK_IDB_KEY, newer);
+      useEnvOfflineStore.setState({ envPack: older });
+
+      await useEnvOfflineStore.getState().loadFromIdb();
+
+      expect(useEnvOfflineStore.getState().envPack).toEqual(newer);
+    });
   });
 
   describe("downloadEnvPack()", () => {
@@ -197,7 +279,7 @@ describe("envOfflineStore", () => {
     it("sets downloadError and throws on HTTP error", async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,
-        status: 503,
+        status: 500,
       } as Response);
 
       await expect(
@@ -206,6 +288,52 @@ describe("envOfflineStore", () => {
 
       expect(useEnvOfflineStore.getState().downloadError).toBeTruthy();
       expect(useEnvOfflineStore.getState().isDownloading).toBe(false);
+    });
+
+    it("maps a structured 503 to the 'No data available' message", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: async () => ({ error: "no_data_available", warnings: ["all down"] }),
+      } as Response);
+
+      await expect(
+        useEnvOfflineStore.getState().downloadEnvPack(57.05, -135.33, 15, 14),
+      ).rejects.toThrow("No data available for this location");
+
+      expect(useEnvOfflineStore.getState().downloadError).toMatch(
+        /No data available for this location/,
+      );
+      expect(useEnvOfflineStore.getState().envPack).toBeNull();
+    });
+
+    it("rejects malformed server JSON without persisting it", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ generatedAt: 42, warnings: "not-an-array" }),
+      } as Response);
+
+      await expect(
+        useEnvOfflineStore.getState().downloadEnvPack(57.05, -135.33, 15, 14),
+      ).rejects.toThrow(/malformed/i);
+
+      const state = useEnvOfflineStore.getState();
+      expect(state.envPack).toBeNull();
+      expect(state.downloadError).toMatch(/malformed/i);
+      expect(idbStore.has(ENV_PACK_IDB_KEY)).toBe(false);
+    });
+
+    it("is a no-op when a download is already in flight (concurrent guard)", async () => {
+      useEnvOfflineStore.setState({ isDownloading: true });
+      global.fetch = vi.fn();
+
+      await expect(
+        useEnvOfflineStore.getState().downloadEnvPack(57.05, -135.33, 15, 14),
+      ).resolves.toBeUndefined();
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      // The in-flight download's state is untouched.
+      expect(useEnvOfflineStore.getState().isDownloading).toBe(true);
     });
 
     it("sets downloadError and throws on network failure", async () => {
@@ -248,10 +376,52 @@ describe("envOfflineStore", () => {
       expect(useEnvOfflineStore.getState().downloadError).toBeNull();
     });
 
-    it("total failure — no tide or weather stations — throws and sets downloadError", async () => {
+    it("marine-only pack — no tide/weather stations — still persists", async () => {
       const pack = makePack({
         tideStations: null,
         weatherStations: null,
+        temperatureProfile: null,
+        warnings: ["No tide stations found", "No weather stations found"],
+      });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => pack,
+      } as Response);
+
+      await expect(
+        useEnvOfflineStore.getState().downloadEnvPack(57.05, -135.33, 15, 14),
+      ).resolves.toBeUndefined();
+
+      expect(useEnvOfflineStore.getState().envPack).toEqual(pack);
+      expect(useEnvOfflineStore.getState().downloadError).toBeNull();
+      expect(idbStore.get(ENV_PACK_IDB_KEY)).toEqual(pack);
+    });
+
+    it("profile-only pack — everything else empty — still persists", async () => {
+      const pack = makePack({
+        tideStations: [],
+        weatherStations: null,
+        marineConditions: null,
+        warnings: ["No stations nearby"],
+      });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => pack,
+      } as Response);
+
+      await expect(
+        useEnvOfflineStore.getState().downloadEnvPack(57.05, -135.33, 15, 14),
+      ).resolves.toBeUndefined();
+
+      expect(useEnvOfflineStore.getState().envPack).toEqual(pack);
+    });
+
+    it("total failure — all four sources empty — throws and sets downloadError", async () => {
+      const pack = makePack({
+        tideStations: null,
+        weatherStations: null,
+        marineConditions: null,
+        temperatureProfile: null,
         warnings: ["No tide stations found", "No weather stations found"],
       });
       global.fetch = vi.fn().mockResolvedValue({
@@ -275,6 +445,8 @@ describe("envOfflineStore", () => {
       const pack = makePack({
         tideStations: [],
         weatherStations: [],
+        marineConditions: null,
+        temperatureProfile: { available: false, samples: [], source: "none", sourceUrl: null, timestamp: null, provider: "none" },
         warnings: ["No stations nearby"],
       });
       global.fetch = vi.fn().mockResolvedValue({
@@ -326,6 +498,38 @@ describe("envOfflineStore", () => {
       useEnvOfflineStore.setState({ downloadError: "Something went wrong" });
       await useEnvOfflineStore.getState().clearEnvPack();
       expect(useEnvOfflineStore.getState().downloadError).toBeNull();
+    });
+
+    it("sets deleteError, keeps the in-memory pack, and rethrows when IDB deletion fails", async () => {
+      const pack = makePack();
+      idbStore.set(ENV_PACK_IDB_KEY, pack);
+      useEnvOfflineStore.setState({ envPack: pack });
+
+      const { del } = await import("idb-keyval");
+      (del as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("quota exceeded"),
+      );
+
+      await expect(useEnvOfflineStore.getState().clearEnvPack()).rejects.toThrow(
+        "quota exceeded",
+      );
+
+      const state = useEnvOfflineStore.getState();
+      expect(state.deleteError).toBe("quota exceeded");
+      // The pack must stay in memory — the IDB copy was NOT deleted.
+      expect(state.envPack).toEqual(pack);
+      expect(idbStore.has(ENV_PACK_IDB_KEY)).toBe(true);
+    });
+
+    it("clears deleteError on a subsequent successful delete", async () => {
+      const pack = makePack();
+      idbStore.set(ENV_PACK_IDB_KEY, pack);
+      useEnvOfflineStore.setState({ envPack: pack, deleteError: "old failure" });
+
+      await useEnvOfflineStore.getState().clearEnvPack();
+
+      expect(useEnvOfflineStore.getState().deleteError).toBeNull();
+      expect(useEnvOfflineStore.getState().envPack).toBeNull();
     });
   });
 });

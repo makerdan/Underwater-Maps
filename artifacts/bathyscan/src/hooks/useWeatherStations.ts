@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { useGetWeatherStations, getGetWeatherStationsQueryKey, type WeatherStation } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useOfflineStore } from "@/lib/offlineStore";
+import { useEnvOfflineStore } from "@/lib/envOfflineStore";
 import { getPackForLocation, getOfflineWeatherValue } from "@/lib/offlinePackStore";
 
 export type { WeatherStation };
@@ -58,6 +59,8 @@ export interface WeatherStationsResult {
 export function useWeatherStations(): WeatherStationsResult {
   const { terrain } = useAppState();
   const isOnline = useOfflineStore((s) => s.isOnline);
+  const envPack = useEnvOfflineStore((s) => s.envPack);
+  const isEnvPackExpired = useEnvOfflineStore((s) => s.isExpired);
 
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
   const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;
@@ -115,6 +118,43 @@ export function useWeatherStations(): WeatherStationsResult {
       isOfflinePack: true,
       weatherSnapshotAt: offlineSnapshotAt,
     };
+  }
+
+  // Secondary offline fallback: env pack weather stations (mirrors the tiered
+  // fallback in useTidalData). Used when the legacy per-dataset offline pack
+  // has no coverage but a downloaded env pack is available and not expired.
+  if (!isOnline && envPack && !isEnvPackExpired()) {
+    const packStations = envPack.weatherStations ?? [];
+    if (packStations.length > 0) {
+      const stations: ExtendedWeatherStation[] = packStations.map((st) => ({
+        id: st.id,
+        name: st.name,
+        lat: st.lat,
+        lon: st.lon,
+        windSpeedKnots: st.windSpeedKnots,
+        windDirDeg: st.windDirDeg,
+        visibilityMiles: st.visibilityMiles,
+        ceilingFt: st.ceilingFt,
+        tempC: st.tempC,
+        observedAt: st.observedAt,
+        isOfflinePack: true,
+        snapshotAt: envPack.generatedAt,
+      }));
+      return {
+        stations,
+        faaWeatherCamsUrl: null,
+        stateCode: null,
+        stale: false,
+        isLoading: false,
+        isFetching: false,
+        isError: false,
+        noaaUnavailable: false,
+        centerLat,
+        centerLon,
+        isOfflinePack: true,
+        weatherSnapshotAt: envPack.generatedAt,
+      };
+    }
   }
 
   return {

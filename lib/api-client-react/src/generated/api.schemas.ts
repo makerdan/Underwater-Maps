@@ -4030,6 +4030,23 @@ radiusMiles?: number;
 days?: number;
 };
 
+/**
+ * Machine-readable failure code
+ */
+export type GetEnvPack503Error = typeof GetEnvPack503Error[keyof typeof GetEnvPack503Error];
+
+
+export const GetEnvPack503Error = {
+  no_data_available: 'no_data_available',
+} as const;
+
+export type GetEnvPack503 = {
+  /** Machine-readable failure code */
+  error: GetEnvPack503Error;
+  /** Per-source failure messages */
+  warnings?: string[];
+};
+
 export type GetEfhParams = {
 /**
  * Filter to a known preset dataset's AOI (e.g. thorne-bay)

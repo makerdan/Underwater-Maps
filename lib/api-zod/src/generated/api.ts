@@ -4318,9 +4318,10 @@ depth-resolved temperature profile from WOA 2023 / Argo.
 
 Individual upstream failures are tolerated — any data source that is
 unreachable produces a null field and a message in the top-level
-`warnings` array. The endpoint always returns HTTP 200 unless the
-query parameters are invalid. Response is cached server-side for 30
-minutes.
+`warnings` array. When ALL four data sources fail or return nothing,
+the endpoint responds with HTTP 503 `no_data_available` instead of a
+200 full of nulls (complete failures are never cached). Successful
+responses are cached server-side for 30 minutes.
 
  * @summary Fetch a 14-day environmental data pack for an area
  */

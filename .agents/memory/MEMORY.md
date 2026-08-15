@@ -102,4 +102,3 @@
 - [cacheRegistry lint for new lib caches](cache-registry-lint.md) — any api-server lib module-level Map cache must call registerCache(() => cache.clear()) or cacheRegistry-lint.test.ts fails.
 - [orval "Failed to resolve input" root cause](orval-failed-resolve-input.md) — this misleading error is always a duplicate YAML key in openapi.yaml; @scalar/json-magic silently swallows the yaml.parse exception and returns ok:false.
 - [Vitest unhandled-error gate fails green runs](unhandled-rejection-gate.md) — "N errors, exit 1" with all tests passing = stale wholesale mock missing a newly-called export, not a test regression; check the Unhandled Errors section first.
-- [Offline-pack modal test baseline breakage](offline-pack-modal-mock-drift.md) — OfflinePackModal.idbError unhandled rejections (missing estimatePackStorageBytes mock export) fail every unit-tier run since 2026-08-15; pre-existing, fix is its own task.

@@ -33,6 +33,14 @@ export interface EnvOfflineState {
    * warning when this is set so the user knows cached data may be unavailable.
    */
   idbHydrationError: boolean;
+  /**
+   * True while the initial IndexedDB hydration is in flight.  EnvOfflineSection
+   * shows a loading state instead of the "No data downloaded" empty state so
+   * users with a saved pack never see a false empty-state flash.
+   */
+  isHydrating: boolean;
+  /** Non-null when the last clearEnvPack() attempt failed to delete from IDB. */
+  deleteError: string | null;
 
   // ── Selectors ──────────────────────────────────────────────────────────────
   /** True when a pack is cached and its expiresAt has passed. */
@@ -57,6 +65,65 @@ export interface EnvOfflineState {
   loadFromIdb: () => Promise<void>;
 }
 
+// ─── Runtime validation ───────────────────────────────────────────────────────
+
+/**
+ * Lightweight structural check applied to every env-pack payload before it is
+ * persisted (server responses) or hydrated into memory (IDB payloads).  This
+ * guards rendering code (`envPack.warnings.map`, `.toFixed`, `new Date(...)`)
+ * against malformed or truncated JSON and corrupted IDB data.
+ */
+export function isValidEnvPack(value: unknown): value is EnvPack {
+  if (value === null || typeof value !== "object") return false;
+  const p = value as Record<string, unknown>;
+
+  if (
+    typeof p.generatedAt !== "string" ||
+    Number.isNaN(new Date(p.generatedAt).getTime())
+  ) {
+    return false;
+  }
+  if (
+    typeof p.expiresAt !== "string" ||
+    Number.isNaN(new Date(p.expiresAt).getTime())
+  ) {
+    return false;
+  }
+  if (
+    typeof p.centerLat !== "number" ||
+    typeof p.centerLon !== "number" ||
+    typeof p.coverageRadiusMiles !== "number"
+  ) {
+    return false;
+  }
+  if (!Array.isArray(p.warnings)) return false;
+  if (p.tideStations !== null && !Array.isArray(p.tideStations)) return false;
+  if (p.weatherStations !== null && !Array.isArray(p.weatherStations)) {
+    return false;
+  }
+  if (p.marineConditions !== null) {
+    const mc = p.marineConditions as Record<string, unknown> | undefined;
+    if (
+      mc === undefined ||
+      typeof mc !== "object" ||
+      !Array.isArray(mc.times)
+    ) {
+      return false;
+    }
+  }
+  if (p.temperatureProfile !== null) {
+    const tp = p.temperatureProfile as Record<string, unknown> | undefined;
+    if (
+      tp === undefined ||
+      typeof tp !== "object" ||
+      !Array.isArray(tp.samples)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useEnvOfflineStore = create<EnvOfflineState>((set, get) => ({
@@ -64,6 +131,8 @@ export const useEnvOfflineStore = create<EnvOfflineState>((set, get) => ({
   isDownloading: false,
   downloadError: null,
   idbHydrationError: false,
+  isHydrating: false,
+  deleteError: null,
 
   isExpired: () => {
     const pack = get().envPack;
@@ -72,22 +141,48 @@ export const useEnvOfflineStore = create<EnvOfflineState>((set, get) => ({
   },
 
   downloadEnvPack: async (lat, lon, radiusMiles, days) => {
+    // Concurrent-download guard: a second call while a download is already in
+    // flight is a no-op so double-clicks or programmatic races cannot corrupt
+    // the loading/error state or issue duplicate network requests.
+    if (get().isDownloading) return;
+
     set({ isDownloading: true, downloadError: null });
     try {
       const url =
         `${API_BASE}/api/env-pack` +
         `?lat=${lat}&lon=${lon}&radiusMiles=${radiusMiles}&days=${days}`;
       const res = await fetch(url);
+      if (res.status === 503) {
+        // Structured "complete failure" response from the server — every
+        // upstream source failed or returned nothing for this location.
+        throw new Error(
+          "No data available for this location — try a different area",
+        );
+      }
       if (!res.ok) throw new Error(`Server error ${res.status}`);
-      const pack = (await res.json()) as EnvPack;
+      const raw: unknown = await res.json();
 
-      // Fail loudly if both tide and weather sources returned nothing —
-      // silently saving an empty pack would leave users offline with no data.
+      // Runtime-validate before persisting so malformed or truncated server
+      // JSON can never crash rendering (warnings.map, .toFixed, invalid Date).
+      if (!isValidEnvPack(raw)) {
+        throw new Error("Server returned malformed data — please try again");
+      }
+      const pack = raw;
+
+      // Fail loudly only when ALL FOUR sources returned nothing — a pack with
+      // marine conditions or a temperature profile is still useful offline
+      // even when no tide/weather stations are in range.
       const hasTides =
         pack.tideStations !== null && pack.tideStations.length > 0;
       const hasWeather =
         pack.weatherStations !== null && pack.weatherStations.length > 0;
-      if (!hasTides && !hasWeather) {
+      const hasMarine =
+        pack.marineConditions !== null && pack.marineConditions.times.length > 0;
+      const hasProfile =
+        pack.temperatureProfile !== null &&
+        pack.temperatureProfile.available &&
+        pack.temperatureProfile.samples.length > 0;
+      if (!hasTides && !hasWeather && !hasMarine && !hasProfile) {
         throw new Error(
           "No data available for this location — try a different area",
         );
@@ -104,22 +199,58 @@ export const useEnvOfflineStore = create<EnvOfflineState>((set, get) => ({
   },
 
   clearEnvPack: async () => {
-    await idbDel(ENV_PACK_IDB_KEY);
-    set({ envPack: null, downloadError: null });
+    try {
+      await idbDel(ENV_PACK_IDB_KEY);
+    } catch (err) {
+      // Keep the in-memory pack intact — the IDB copy still exists, so
+      // pretending it was deleted would leave the UI lying about state.
+      const msg =
+        err instanceof Error ? err.message : "Delete failed — please try again";
+      set({ deleteError: msg });
+      throw err;
+    }
+    set({ envPack: null, downloadError: null, deleteError: null });
   },
 
   loadFromIdb: async () => {
+    set({ isHydrating: true });
     try {
-      const pack = await idbGet(ENV_PACK_IDB_KEY) as EnvPack | undefined;
-      if (pack) {
-        set({ envPack: pack });
+      const raw = (await idbGet(ENV_PACK_IDB_KEY)) as unknown;
+      if (raw === undefined || raw === null) return;
+
+      if (!isValidEnvPack(raw)) {
+        // Corrupted IDB payload — surface a hydration error and wipe the bad
+        // key so the next hydration starts clean.
+        set({ idbHydrationError: true });
+        try {
+          await idbDel(ENV_PACK_IDB_KEY);
+        } catch {
+          // Best effort — the hydration error flag is already set.
+        }
+        return;
       }
+
+      // Don't overwrite a fresher pack that arrived mid-hydration (e.g. a
+      // download finished while the IDB read was in flight).
+      const { isDownloading, envPack: current } = get();
+      if (isDownloading) return;
+      if (
+        current !== null &&
+        new Date(current.generatedAt).getTime() >=
+          new Date(raw.generatedAt).getTime()
+      ) {
+        return;
+      }
+
+      set({ envPack: raw });
     } catch {
       // IDB unavailable (e.g. private-browsing in some browsers, storage
       // quota exceeded, or corrupted store).  Surface as a degraded-state
       // flag so EnvOfflineSection can show a visible warning instead of
       // silently acting as if no pack exists.
       set({ idbHydrationError: true });
+    } finally {
+      set({ isHydrating: false });
     }
   },
 }));

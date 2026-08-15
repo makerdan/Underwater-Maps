@@ -48,6 +48,8 @@ function resetStore(overrides = {}) {
     isDownloading: false,
     downloadError: null,
     idbHydrationError: false,
+    isHydrating: false,
+    deleteError: null,
     ...overrides,
   });
 }
@@ -106,6 +108,13 @@ describe("EnvOfflineSection — delete failure", () => {
 
     await waitFor(() => expect(clearMock).toHaveBeenCalled());
     expect(screen.queryByTestId("env-pack-delete-error")).toBeNull();
+  });
+
+  it("shows the store-level deleteError even without a local click failure", () => {
+    resetStore({ envPack: makePack(), deleteError: "quota exceeded" });
+    render(<EnvOfflineSection />);
+    expect(screen.getByTestId("env-pack-delete-error")).toBeInTheDocument();
+    expect(screen.getByTestId("env-pack-delete-error").textContent).toMatch(/quota exceeded/);
   });
 
   it("shows the IDB hydration error warning when idbHydrationError is true", () => {
