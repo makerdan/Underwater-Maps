@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { clear as idbClear } from "idb-keyval";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { clearUpscaleCache, getUpscaleCacheInfo } from "@/hooks/useUpscaledHeatmap";
@@ -24,9 +23,27 @@ import {
   clearCacheEntry,
   countPendingItems,
   formatCacheSize,
+  clearTerrainCaches,
+  clearPendingSyncQueue,
   type CachedDataset,
 } from "./constants";
 import { EnvOfflineSection } from "./EnvOfflineSection";
+
+const errorTextStyle: React.CSSProperties = {
+  fontSize: "calc(10px * var(--bs-font-scale, 1))",
+  color: "#f87171",
+};
+
+const retryBtnStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  marginLeft: 6,
+  color: "#00e5ff",
+  fontSize: "calc(10px * var(--bs-font-scale, 1))",
+  textDecoration: "underline",
+  cursor: "pointer",
+};
 
 export function DataStorageSection() {
   const s = useSettingsStore(useShallow((s) => s));
@@ -40,41 +57,107 @@ export function DataStorageSection() {
   const [upscaleInfo, setUpscaleInfo] = useState<{ count: number; bytes: number } | null>(null);
   const [offlinePacks, setOfflinePacks] = useState<OfflinePack[]>([]);
   const [helpStatus, setHelpStatus] = useState<HelpPackStatus | null>(null);
-  const [packClearing, setPackClearing] = useState<string | null>(null);
+  const [packsDeleting, setPacksDeleting] = useState<ReadonlySet<string>>(new Set());
   const [helpClearing, setHelpClearing] = useState(false);
+  // Loader error slots — rendered as "Failed to load — Retry" instead of an
+  // indefinite "Loading…" when the underlying IDB/Cache Storage read rejects.
+  const [cacheLoadError, setCacheLoadError] = useState(false);
+  const [upscaleLoadError, setUpscaleLoadError] = useState(false);
+  const [packsLoadError, setPacksLoadError] = useState(false);
+  // Per-operation mutation errors — shown inline near the failed control.
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const [clearAllError, setClearAllError] = useState<string | null>(null);
+  const [clearAllNote, setClearAllNote] = useState<string | null>(null);
+  const [upscaleClearError, setUpscaleClearError] = useState<string | null>(null);
+  const [packDeleteError, setPackDeleteError] = useState<string | null>(null);
+  const [helpDeleteError, setHelpDeleteError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Track transient-message timers so they can be cleared on unmount —
-  // otherwise a setState fires after teardown (React warning in the app,
-  // an unhandled "window is not defined" error in unit tests).
-  const msgTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const scheduleMsgReset = useCallback((fn: () => void, ms: number) => {
-    msgTimersRef.current.push(setTimeout(fn, ms));
+  // Unmount guard — async handlers resume after teardown during rapid
+  // navigation; every setter behind an await checks this first.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Track transient-message timers, keyed per message, so (a) they can all be
+  // cleared on unmount and (b) a rapid repeated clear reschedules its own
+  // reset instead of letting the older timer hide the newer message early.
+  const msgTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const scheduleMsgReset = useCallback((key: string, fn: () => void, ms: number) => {
+    if (!isMountedRef.current) return;
+    const prev = msgTimersRef.current.get(key);
+    if (prev !== undefined) clearTimeout(prev);
+    msgTimersRef.current.set(
+      key,
+      setTimeout(() => {
+        msgTimersRef.current.delete(key);
+        fn();
+      }, ms),
+    );
   }, []);
   useEffect(() => {
     const timers = msgTimersRef.current;
     return () => {
-      for (const t of timers) clearTimeout(t);
+      for (const t of timers.values()) clearTimeout(t);
+      timers.clear();
     };
   }, []);
 
   const refreshUpscaleInfo = useCallback(async () => {
-    const info = await getUpscaleCacheInfo();
-    setUpscaleInfo(info);
+    setUpscaleLoadError(false);
+    try {
+      const info = await getUpscaleCacheInfo();
+      if (!isMountedRef.current) return;
+      setUpscaleInfo(info);
+    } catch {
+      if (isMountedRef.current) setUpscaleLoadError(true);
+    }
   }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const [c, p] = await Promise.all([listCachedDatasets(), countPendingItems()]);
-    setCached(c);
-    setPending(p);
-    setLoading(false);
+    setCacheLoadError(false);
+    try {
+      const [c, p] = await Promise.all([listCachedDatasets(), countPendingItems()]);
+      if (!isMountedRef.current) return;
+      setCached(c);
+      setPending(p);
+    } catch {
+      if (isMountedRef.current) setCacheLoadError(true);
+    } finally {
+      if (isMountedRef.current) setLoading(false);
+    }
   }, []);
 
+  // De-duplicated pack refresh: concurrent callers (e.g. two pack deletes
+  // finishing close together) queue at most one extra pass instead of racing,
+  // so a stale result can never overwrite a newer one.
+  const refreshingPacksRef = useRef(false);
+  const packsRefreshQueuedRef = useRef(false);
   const refreshPacks = useCallback(async () => {
-    const [packs, help] = await Promise.all([listOfflinePacks(), getHelpPackStatus()]);
-    setOfflinePacks(packs);
-    setHelpStatus(help);
+    if (refreshingPacksRef.current) {
+      packsRefreshQueuedRef.current = true;
+      return;
+    }
+    refreshingPacksRef.current = true;
+    try {
+      do {
+        packsRefreshQueuedRef.current = false;
+        const [packs, help] = await Promise.all([listOfflinePacks(), getHelpPackStatus()]);
+        if (!isMountedRef.current) return;
+        setOfflinePacks(packs);
+        setHelpStatus(help);
+        setPacksLoadError(false);
+      } while (packsRefreshQueuedRef.current);
+    } catch {
+      if (isMountedRef.current) setPacksLoadError(true);
+    } finally {
+      refreshingPacksRef.current = false;
+    }
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
@@ -82,52 +165,100 @@ export function DataStorageSection() {
   useEffect(() => { void refreshPacks(); }, [refreshPacks]);
 
   const handleDeletePack = async (id: string) => {
-    setPackClearing(id);
-    await deleteOfflinePack(id);
-    await refreshPacks();
-    setPackClearing(null);
-    toast({ title: "Offline pack deleted", duration: 3000 });
+    // Per-pack-id lock: other packs stay deletable while this one runs.
+    setPacksDeleting((prev) => new Set(prev).add(id));
+    setPackDeleteError(null);
+    try {
+      await deleteOfflinePack(id);
+      await refreshPacks();
+      if (isMountedRef.current) toast({ title: "Offline pack deleted", duration: 3000 });
+    } catch {
+      if (isMountedRef.current) setPackDeleteError("Failed to delete offline pack. Try again.");
+    } finally {
+      if (isMountedRef.current) {
+        setPacksDeleting((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    }
   };
 
   const handleDeleteHelp = async () => {
     setHelpClearing(true);
-    await deleteHelpPack();
-    await refreshPacks();
-    setHelpClearing(false);
-    toast({ title: "Help pack deleted", duration: 3000 });
+    setHelpDeleteError(null);
+    try {
+      await deleteHelpPack();
+      await refreshPacks();
+      if (isMountedRef.current) toast({ title: "Help pack deleted", duration: 3000 });
+    } catch {
+      if (isMountedRef.current) setHelpDeleteError("Failed to delete help pack. Try again.");
+    } finally {
+      if (isMountedRef.current) setHelpClearing(false);
+    }
   };
 
   const handleClearEntry = async (url: string) => {
     setClearing(url);
-    await clearCacheEntry(url);
-    await refresh();
-    setClearing(null);
+    setEntryError(null);
+    try {
+      await clearCacheEntry(url);
+      await refresh();
+    } catch {
+      if (isMountedRef.current) setEntryError("Failed to clear this cache entry. Try again.");
+    } finally {
+      if (isMountedRef.current) setClearing(null);
+    }
   };
 
   const handleClearAll = async () => {
-    if (!("caches" in window)) return;
     setClearing("all");
-    const names = await caches.keys();
-    await Promise.all(names.map((n) => caches.delete(n)));
-    await idbClear();
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (k?.startsWith("pending-")) localStorage.removeItem(k!);
+    setClearAllError(null);
+    setClearAllNote(null);
+    try {
+      // Targeted clear: only terrain/overview caches, tile caches, and the
+      // pending sync queue. Offline packs, help content, weather packs and
+      // enhanced images are never touched here.
+      const cacheStorageCleared = await clearTerrainCaches();
+      // IDB + localStorage queues are independent of Cache Storage — clear
+      // them even when the tile caches can't be cleared.
+      await clearPendingSyncQueue();
+      if (isMountedRef.current) {
+        setAllClearedMsg(true);
+        if (!cacheStorageCleared) {
+          setClearAllNote(
+            "The tile cache could not be cleared (Cache Storage is unavailable in this browser). Pending sync data was cleared.",
+          );
+        }
+        scheduleMsgReset("all-cleared", () => setAllClearedMsg(false), 3000);
+      }
+      // The broad clear used to touch the enhanced-image store; keep its
+      // summary in sync too, not just the terrain-cache list.
+      await Promise.all([refresh(), refreshUpscaleInfo()]);
+    } catch {
+      if (isMountedRef.current) setClearAllError("Failed to clear cached data. Try again.");
+    } finally {
+      if (isMountedRef.current) setClearing(null);
     }
-    setAllClearedMsg(true);
-    await refresh();
-    setClearing(null);
-    scheduleMsgReset(() => setAllClearedMsg(false), 3000);
   };
 
   const handleClearUpscaleCache = async () => {
     setClearing("upscale");
-    await clearUpscaleCache();
-    await refreshUpscaleInfo();
-    setClearing(null);
-    setUpscaleClearMsg(true);
-    scheduleMsgReset(() => setUpscaleClearMsg(false), 3000);
-    toast({ title: "Enhanced image cache cleared", duration: 3000 });
+    setUpscaleClearError(null);
+    try {
+      await clearUpscaleCache();
+      await refreshUpscaleInfo();
+      if (isMountedRef.current) {
+        setUpscaleClearMsg(true);
+        scheduleMsgReset("upscale-cleared", () => setUpscaleClearMsg(false), 3000);
+        toast({ title: "Enhanced image cache cleared", duration: 3000 });
+      }
+    } catch {
+      if (isMountedRef.current) setUpscaleClearError("Failed to clear the enhanced image cache. Try again.");
+    } finally {
+      if (isMountedRef.current) setClearing(null);
+    }
   };
 
   return (
@@ -148,7 +279,14 @@ export function DataStorageSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>CACHED TERRAIN DATA</div>
         <div style={{ padding: "12px 16px" }}>
-          {loading ? (
+          {cacheLoadError ? (
+            <div data-testid="cache-load-error" style={errorTextStyle}>
+              Failed to load cached data.
+              <button data-testid="retry-cache-load" onClick={() => void refresh()} style={retryBtnStyle}>
+                Retry
+              </button>
+            </div>
+          ) : loading ? (
             <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#64748b" }}>◌ Loading…</div>
           ) : cached.length === 0 ? (
             <div data-testid="no-cache-msg" style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#64748b" }}>
@@ -184,20 +322,41 @@ export function DataStorageSection() {
               </div>
             ))
           )}
-          {cached.length > 0 && (
-            <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
-              <button
-                data-testid="clear-all-cache-btn"
-                onClick={() => void handleClearAll()}
-                disabled={clearing === "all"}
-                style={{ ...S.dangerBtn, padding: "4px 12px", fontSize: "calc(9px * var(--bs-font-scale, 1))" }}
+          {entryError && (
+            <div data-testid="clear-entry-error" style={{ ...errorTextStyle, marginTop: 8 }}>{entryError}</div>
+          )}
+          {cached.length > 0 && !cacheLoadError && (
+            <>
+              <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  data-testid="clear-all-cache-btn"
+                  onClick={() => void handleClearAll()}
+                  disabled={clearing === "all"}
+                  style={{ ...S.dangerBtn, padding: "4px 12px", fontSize: "calc(9px * var(--bs-font-scale, 1))" }}
+                >
+                  {clearing === "all" ? "CLEARING…" : "CLEAR ALL CACHE"}
+                </button>
+              </div>
+              <div
+                data-testid="clear-all-scope-note"
+                style={{ marginTop: 6, fontSize: "calc(9px * var(--bs-font-scale, 1))", color: "#64748b", textAlign: "right" }}
               >
-                {clearing === "all" ? "CLEARING…" : "CLEAR ALL CACHE"}
-              </button>
+                Clears cached terrain &amp; overview data, map tile caches, and the pending
+                sync queue. Offline packs, help content, weather packs and enhanced images
+                are kept.
+              </div>
+            </>
+          )}
+          {clearAllError && (
+            <div data-testid="clear-all-error" style={{ ...errorTextStyle, marginTop: 8 }}>{clearAllError}</div>
+          )}
+          {clearAllNote && (
+            <div data-testid="clear-all-note" style={{ marginTop: 8, fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#fbbf24" }}>
+              {clearAllNote}
             </div>
           )}
           {allClearedMsg && (
-            <div style={{ marginTop: 8, fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#4ade80" }}>✓ All cached data cleared</div>
+            <div style={{ marginTop: 8, fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#4ade80" }}>✓ Cached data cleared</div>
           )}
         </div>
       </div>
@@ -224,7 +383,14 @@ export function DataStorageSection() {
       <div style={S.card}>
         <div style={S.cardHeader}>ENHANCED IMAGE CACHE</div>
         <div style={{ padding: "12px 16px" }}>
-          {upscaleInfo !== null ? (
+          {upscaleLoadError ? (
+            <div data-testid="upscale-load-error" style={{ ...errorTextStyle, marginBottom: 10 }}>
+              Failed to load cache info.
+              <button data-testid="retry-upscale-load" onClick={() => void refreshUpscaleInfo()} style={retryBtnStyle}>
+                Retry
+              </button>
+            </div>
+          ) : upscaleInfo !== null ? (
             <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 10 }}>
               {upscaleInfo.count} image{upscaleInfo.count !== 1 ? "s" : ""} cached ·{" "}
               {formatCacheSize(upscaleInfo.bytes)}
@@ -236,6 +402,9 @@ export function DataStorageSection() {
             <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#4ade80", marginBottom: 8 }}>
               ✓ Enhanced image cache cleared
             </div>
+          )}
+          {upscaleClearError && (
+            <div data-testid="upscale-clear-error" style={{ ...errorTextStyle, marginBottom: 8 }}>{upscaleClearError}</div>
           )}
           <button
             data-testid="clear-upscale-cache-btn"
@@ -260,7 +429,14 @@ export function DataStorageSection() {
             Terrain, tide predictions, and weather snapshots saved for offline use.
             Each pack covers 7 days of tide data and can be updated from the dataset panel.
           </div>
-          {offlinePacks.length === 0 ? (
+          {packsLoadError ? (
+            <div data-testid="packs-load-error" style={errorTextStyle}>
+              Failed to load offline packs.
+              <button data-testid="retry-packs-load" onClick={() => void refreshPacks()} style={retryBtnStyle}>
+                Retry
+              </button>
+            </div>
+          ) : offlinePacks.length === 0 ? (
             <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#64748b" }}>
               No offline packs saved. Load a dataset and tap "⬇ Save Offline" to create one.
             </div>
@@ -299,7 +475,7 @@ export function DataStorageSection() {
                   <button
                     data-testid={`delete-pack-${pack.id}`}
                     onClick={() => void handleDeletePack(pack.id)}
-                    disabled={packClearing === pack.id}
+                    disabled={packsDeleting.has(pack.id)}
                     style={{
                       ...S.dangerBtn,
                       padding: "3px 8px",
@@ -307,11 +483,14 @@ export function DataStorageSection() {
                       flexShrink: 0,
                     }}
                   >
-                    {packClearing === pack.id ? "…" : "DELETE"}
+                    {packsDeleting.has(pack.id) ? "…" : "DELETE"}
                   </button>
                 </div>
               );
             })
+          )}
+          {packDeleteError && (
+            <div data-testid="pack-delete-error" style={{ ...errorTextStyle, marginTop: 8 }}>{packDeleteError}</div>
           )}
         </div>
       </div>
@@ -329,7 +508,14 @@ export function DataStorageSection() {
             Tutorial GIFs and images are cached for offline viewing. Download once to access
             help articles without a network connection.
           </div>
-          {helpStatus === null ? (
+          {packsLoadError ? (
+            <div data-testid="help-load-error" style={errorTextStyle}>
+              Failed to load help pack status.
+              <button data-testid="retry-help-load" onClick={() => void refreshPacks()} style={retryBtnStyle}>
+                Retry
+              </button>
+            </div>
+          ) : helpStatus === null ? (
             <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#64748b" }}>◌ Loading…</div>
           ) : helpStatus.saved ? (
             <div>
@@ -348,6 +534,9 @@ export function DataStorageSection() {
               >
                 {helpClearing ? "…" : "DELETE HELP PACK"}
               </button>
+              {helpDeleteError && (
+                <div data-testid="help-delete-error" style={{ ...errorTextStyle, marginTop: 8 }}>{helpDeleteError}</div>
+              )}
             </div>
           ) : (
             <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#64748b" }}>

@@ -104,6 +104,83 @@ export async function clearCacheEntry(url: string) {
   for (const n of await caches.keys()) await (await caches.open(n)).delete(url);
 }
 
+// ── "Clear all cache" scope ──────────────────────────────────────────────────
+// The Data & Storage "clear all" action must only touch caches owned by the
+// terrain-data feature. It must NEVER delete user-saved stores: offline packs
+// ("bathyscan-pack-terrain", idb "offline-pack-*"), help content
+// ("bathyscan-pack-help", idb "offline-help-pack"), the env pack
+// (idb "env-pack-v1"), or the enhanced-image cache (its own IDB database).
+
+export const PENDING_MARKER_KEY_PREFIX = "pending-marker-";
+export const PENDING_TRAIL_KEY_PREFIX = "pending-trail-";
+
+/** Unversioned Cache Storage buckets owned by the terrain-cache feature. */
+export const CLEAR_ALL_EXACT_CACHE_NAMES: readonly string[] = [
+  "api-terrain",
+  "api-overview",
+  "bathyscan-terrain-tiles",
+  "bathyscan-satellite-tiles",
+];
+
+// Build-versioned SW runtime caches ("bathyscan-v<hash>-api-terrain", …).
+// Deliberately excludes the version-independent pack caches
+// ("bathyscan-pack-terrain" / "bathyscan-pack-help"), which do not carry the
+// "bathyscan-v" prefix.
+const CLEAR_ALL_VERSIONED_CACHE_RE =
+  /^bathyscan-v.+-(api-terrain|api-overview|api-datasets)$/;
+
+/** User-saved stores that "clear all" must never touch, whatever else matches. */
+const PROTECTED_CACHE_PREFIX = "bathyscan-pack-";
+
+export function isClearAllTargetCache(name: string): boolean {
+  if (name.startsWith(PROTECTED_CACHE_PREFIX)) return false;
+  return (
+    CLEAR_ALL_EXACT_CACHE_NAMES.includes(name) ||
+    CLEAR_ALL_VERSIONED_CACHE_RE.test(name) ||
+    // Parity with the listCachedDatasets card filter, so every cache whose
+    // entries are shown in the card is actually covered by "clear all".
+    name.includes("terrain")
+  );
+}
+
+/**
+ * Delete only the Cache Storage buckets owned by the terrain-cache feature.
+ * Returns false (without touching anything) when Cache Storage is unavailable
+ * so callers can still clear the independent IDB/localStorage stores.
+ */
+export async function clearTerrainCaches(): Promise<boolean> {
+  if (!("caches" in window)) return false;
+  const names = await caches.keys();
+  await Promise.all(
+    names.filter(isClearAllTargetCache).map((n) => caches.delete(n)),
+  );
+  return true;
+}
+
+/**
+ * Clear the pending-sync queue: targeted deletes of "pending-marker-*" IDB
+ * keys and "pending-trail-*" localStorage keys. Never clears the whole
+ * idb-keyval store.
+ */
+export async function clearPendingSyncQueue(): Promise<void> {
+  // Dynamic import so test files that wholesale-mock idb-keyval without a
+  // `del` export don't break at module-init time (same pattern as offlineFlush).
+  const { keys, del } = await import("idb-keyval");
+  const allKeys = await keys();
+  await Promise.all(
+    allKeys
+      .filter(
+        (k): k is string =>
+          typeof k === "string" && k.startsWith(PENDING_MARKER_KEY_PREFIX),
+      )
+      .map((k) => del(k)),
+  );
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (k?.startsWith(PENDING_TRAIL_KEY_PREFIX)) localStorage.removeItem(k);
+  }
+}
+
 export async function countPendingItems() {
   let markers = 0, trails = 0;
   try {

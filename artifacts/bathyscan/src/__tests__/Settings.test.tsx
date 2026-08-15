@@ -279,7 +279,7 @@ describe("Settings page", () => {
     );
   });
 
-  it("OFFLINE CACHE section: clicking clear-all-cache-btn calls Cache API and idb-keyval clear", async () => {
+  it("OFFLINE CACHE section: clicking clear-all-cache-btn deletes only feature-owned caches and never calls idb-keyval clear", async () => {
     render(<Settings />);
     fireEvent.click(screen.getByText(tabLabel("data-storage")));
     const btn = await screen.findByTestId("clear-all-cache-btn");
@@ -288,10 +288,9 @@ describe("Settings page", () => {
     await waitFor(() =>
       expect(mockCachesDelete).toHaveBeenCalledWith("terrain-v1"),
     );
-    await waitFor(() =>
-      expect(mockCachesDelete).toHaveBeenCalledWith("tiles-v1"),
-    );
-    await waitFor(() => expect(mockIdbClear).toHaveBeenCalled());
+    // Non-terrain caches and the whole idb-keyval store are out of scope now.
+    expect(mockCachesDelete).not.toHaveBeenCalledWith("tiles-v1");
+    expect(mockIdbClear).not.toHaveBeenCalled();
   });
 
   it("OFFLINE CACHE section: confirmation message appears after clearing all cached data", async () => {
@@ -301,7 +300,7 @@ describe("Settings page", () => {
     fireEvent.click(btn);
     await waitFor(() =>
       expect(
-        screen.getByText("✓ All cached data cleared"),
+        screen.getByText("✓ Cached data cleared"),
       ).toBeInTheDocument(),
     );
   });

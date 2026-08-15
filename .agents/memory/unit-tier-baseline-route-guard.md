@@ -13,3 +13,10 @@ As of 2026-08-15 (evening), `artifacts/api-server/src/__tests__/router-duplicate
 **How to apply:** If a validation run's only api-server failures are these two, classify them pre-existing and do not investigate. A dedicated fix task exists in the backlog for the broken guard. If additional route-guard violations appear, they are NEW — check whether your diff added a route without openapi documentation or ROUTERS registration.
 
 **Related:** the duplicate-hooks SCANNED_FILES guard (`check:duplicate-hooks-registry`) breaks the same way when ANOTHER task's merge pushes a component over 500 lines/10 hooks; the guard's error message prescribes the exact one-line registry fix, which is safe to apply in-place (the scan itself must then pass on that file).
+
+## Second baseline failure (same run, same treatment)
+
+Also as of 2026-08-15, `routes-documented.test.ts` fails on
+`POST /trails/{id}/soft-delete` (added to `trails.ts` 2026-08-14 without an
+openapi.yaml entry). Same classification rule: pre-existing unless your
+changeset touches api-server routes/openapi.yaml. A follow-up task covers both.
