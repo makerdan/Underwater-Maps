@@ -117,6 +117,8 @@ interface UsgsStation {
   name: string;
   lat: number;
   lng: number;
+  /** Most-recent gage-height reading in feet (parameterCd=00065), when available. */
+  gageHeightFt?: number;
 }
 
 interface UsgsIvResponse {
@@ -129,6 +131,9 @@ interface UsgsIvResponse {
           geogLocation?: { latitude?: number; longitude?: number };
         };
       };
+      values?: Array<{
+        value?: Array<{ value?: string; dateTime?: string }>;
+      }>;
     }>;
   };
 }
@@ -184,7 +189,18 @@ export async function getNearestUsgsStation(
     const sLat = site.sourceInfo?.geoLocation?.geogLocation?.latitude ?? lat;
     const sLng = site.sourceInfo?.geoLocation?.geogLocation?.longitude ?? lon;
     if (!id) return null;
-    return { id, name, lat: sLat, lng: sLng };
+
+    // Extract the most-recent gage-height reading from the IV response.
+    // The API returns values newest-first within the PT1H window; the first
+    // non-empty, finite value is taken as the current reading.
+    let gageHeightFt: number | undefined;
+    const rawVal = site.values?.[0]?.value?.[0]?.value;
+    if (rawVal != null && rawVal !== "") {
+      const parsed = parseFloat(rawVal);
+      if (Number.isFinite(parsed)) gageHeightFt = parsed;
+    }
+
+    return { id, name, lat: sLat, lng: sLng, gageHeightFt };
   } catch {
     return null;
   }
@@ -805,7 +821,8 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
       return;
     }
 
-    // USGS station found — synthesise a schedule labelled as "usgs".
+    // USGS station found — use the real gage-height reading when the IV
+    // response included one, otherwise fall back to the synthetic model.
     const fwEvents = buildSyntheticEvents(refMs, lon);
     const fwPeakSpeedKnots = 0.3;
     // True modulo — JS % returns negative values when the left operand is
@@ -819,26 +836,33 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
       slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
     });
     const distanceKm = haversineKm(lat, lon, usgsStation.lat, usgsStation.lng);
-    // Source labels are "estimated" not "usgs": the USGS station lookup only
-    // confirms that a gage exists nearby; the heights and schedule come from
-    // buildSyntheticEvents (a sinusoidal model), NOT from actual USGS gage
-    // readings.  Mislabelling these as "usgs" implies the heights are measured
-    // data, which is incorrect.  A proper USGS gage-height fetch is a future
-    // improvement (see task backlog).
+
+    // Real gage-height reading available — use it and label the source "usgs"
+    // so callers know the height is a measured value, not a synthetic estimate.
+    // When the IV window returned no current reading (sensor offline, gap in
+    // record, etc.) fall back to the sinusoidal synthetic model and keep the
+    // source label as "estimated" so the UI can distinguish the two cases.
+    const hasRealGageHeight = usgsStation.gageHeightFt != null;
+    const tideHeightFt = hasRealGageHeight
+      ? usgsStation.gageHeightFt!
+      : interpolateHeight(fwEvents, refMs);
+    const usgsHeightsSource: TidalSource = hasRealGageHeight ? "usgs" : "estimated";
+    const usgsOverallSource: TidalSource = hasRealGageHeight ? "usgs" : "estimated";
+
     const usgsBody: TidalResponse = {
       available: true,
-      tideHeight: interpolateHeight(fwEvents, refMs),
+      tideHeight: tideHeightFt,
       currentDirection: fwSample.directionDeg,
       currentSpeed: fwSample.speedKnots,
       nextEvent: nextEventFrom(fwEvents, refMs),
       stationName: usgsStation.name,
       stationId: usgsStation.id,
-      isPredicted: true,
-      source: "estimated",
-      heightsSource: "estimated",
+      isPredicted: !hasRealGageHeight,
+      source: usgsOverallSource,
+      heightsSource: usgsHeightsSource,
       currentsSource: "estimated",
       distanceKm,
-      isModeled: true,
+      isModeled: !hasRealGageHeight,
       slack: fwSample.slack,
     };
     freshwaterResultCache.set(fwCacheKey, { body: usgsBody, ts: fwNow });

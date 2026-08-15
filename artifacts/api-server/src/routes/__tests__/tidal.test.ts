@@ -431,7 +431,9 @@ describe("GET /tidal?waterType=freshwater", () => {
     expect(res.body).toMatchObject(freshwaterUsgsUnavailable);
   });
 
-  it("returns available:true with source:'usgs' when a USGS gage station is nearby", async () => {
+  it("returns available:true with source:'estimated' when a USGS station is found but has no current gage reading", async () => {
+    // Station found in the IV response, but no values array — gage sensor offline
+    // or outside the PT1H window.  Heights come from the synthetic model.
     fetchSpy.mockResolvedValue(
       jsonResponse({
         value: {
@@ -444,6 +446,7 @@ describe("GET /tidal?waterType=freshwater", () => {
                   geogLocation: { latitude: 43.5422, longitude: -89.47 },
                 },
               },
+              // No "values" field → gageHeightFt remains undefined → synthetic fallback
             },
           ],
         },
@@ -456,8 +459,7 @@ describe("GET /tidal?waterType=freshwater", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.available).toBe(true);
-    // M-2 fix: USGS path serves synthetic heights, not real gage data —
-    // source must be "estimated" to avoid implying the heights are measured.
+    // No current reading — heights come from the synthetic model, so source stays "estimated".
     expect(res.body.source).toBe("estimated");
     expect(res.body.heightsSource).toBe("estimated");
     expect(res.body.currentsSource).toBe("estimated");
@@ -467,6 +469,88 @@ describe("GET /tidal?waterType=freshwater", () => {
     expect(typeof res.body.tideHeight).toBe("number");
     // Shape matches the shared fixture (subset check)
     expect(res.body).toMatchObject(freshwaterUsgsAvailable);
+  });
+
+  it("returns tideHeight from real gage reading and source:'usgs' when USGS IV data is present", async () => {
+    // Station found AND current values array includes a valid gage-height reading.
+    const GAGE_HEIGHT_FT = 4.23;
+    fetchSpy.mockResolvedValue(
+      jsonResponse({
+        value: {
+          timeSeries: [
+            {
+              sourceInfo: {
+                siteName: "Wisconsin River at Portage, WI",
+                siteCode: [{ value: "05407000" }],
+                geoLocation: {
+                  geogLocation: { latitude: 43.5422, longitude: -89.47 },
+                },
+              },
+              values: [
+                {
+                  value: [
+                    {
+                      value: String(GAGE_HEIGHT_FT),
+                      dateTime: "2026-07-20T12:00:00.000-05:00",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    const res = await request(makeApp()).get(
+      "/tidal?lat=43.55&lon=-89.47&datetime=2026-07-20T12:00:00Z&waterType=freshwater",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.available).toBe(true);
+    // Real gage data → source labels reflect measured data.
+    expect(res.body.source).toBe("usgs");
+    expect(res.body.heightsSource).toBe("usgs");
+    // Currents are always synthetic (no USGS currents IV product).
+    expect(res.body.currentsSource).toBe("estimated");
+    expect(res.body.stationId).toBe("05407000");
+    expect(res.body.stationName).toBe("Wisconsin River at Portage, WI");
+    // tideHeight must be the exact gage reading, not a synthetic interpolation.
+    expect(res.body.tideHeight).toBe(GAGE_HEIGHT_FT);
+    // Not predicted — this is a measured value.
+    expect(res.body.isPredicted).toBe(false);
+    expect(res.body.isModeled).toBe(false);
+  });
+
+  it("falls back to synthetic model when USGS IV values array is present but empty", async () => {
+    fetchSpy.mockResolvedValue(
+      jsonResponse({
+        value: {
+          timeSeries: [
+            {
+              sourceInfo: {
+                siteName: "Wisconsin River at Portage, WI",
+                siteCode: [{ value: "05407000" }],
+                geoLocation: {
+                  geogLocation: { latitude: 43.5422, longitude: -89.47 },
+                },
+              },
+              values: [{ value: [] }], // present but empty — no current reading
+            },
+          ],
+        },
+      }),
+    );
+
+    const res = await request(makeApp()).get(
+      "/tidal?lat=43.55&lon=-89.47&datetime=2026-07-20T12:00:00Z&waterType=freshwater",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.available).toBe(true);
+    expect(res.body.source).toBe("estimated");
+    expect(res.body.heightsSource).toBe("estimated");
+    expect(res.body.isPredicted).toBe(true);
   });
 
   it("returns available:true with source:'glerl' for Great Lakes coordinates", async () => {
