@@ -136,7 +136,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
       );
       setEstimatedBytes(estBytes);
     })();
-  }, [dataset.id, dataset.bbox]);
+  }, [dataset.id, dataset.bbox, dataset.resolutionM]);
 
   // Focus trap + Escape to close
   useEffect(() => {
