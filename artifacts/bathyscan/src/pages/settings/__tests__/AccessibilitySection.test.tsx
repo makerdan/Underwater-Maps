@@ -115,4 +115,26 @@ describe("AccessibilitySection", () => {
     fireEvent.click(screen.getByTestId("reset-section-accessibility-btn"));
     expect(h.resetSection).toHaveBeenCalledWith("accessibility");
   });
+
+  describe("accessibility semantics", () => {
+    it("getByLabelText('Text Size') resolves to the select element", () => {
+      render(<AccessibilitySection />);
+      const select = screen.getByLabelText("Text Size");
+      expect(select.tagName).toBe("SELECT");
+      expect(select).toHaveValue("medium");
+    });
+
+    it("clicking the Text Size label is associated to the select via htmlFor/id", () => {
+      render(<AccessibilitySection />);
+      const select = screen.getByLabelText("Text Size");
+      expect(select).toHaveAttribute("id", "settings-text-size-select");
+    });
+
+    it("Bright Daylight sublabel discloses the user-set colormap caveat", () => {
+      render(<AccessibilitySection />);
+      expect(
+        screen.getByText(/unless you've set a specific colormap/i),
+      ).toBeInTheDocument();
+    });
+  });
 });

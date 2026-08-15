@@ -438,6 +438,8 @@ describe("Settings → terrain live sync — reset to defaults", () => {
     });
     render(<Settings />);
     fireEvent.click(screen.getByText(tabLabel("display-overlays")));
+    // Reset now requires a confirming second click
+    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     await waitFor(() => {
       const slots = useZoneOverlayStore.getState().slots;
@@ -454,6 +456,8 @@ describe("Settings → terrain live sync — reset to defaults", () => {
     });
     render(<Settings />);
     fireEvent.click(screen.getByText(tabLabel("display-overlays")));
+    // Reset now requires a confirming second click
+    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     await waitFor(() => {
       const slots = useZoneOverlayStore.getState().slots;

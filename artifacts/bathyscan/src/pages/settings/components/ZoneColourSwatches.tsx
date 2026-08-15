@@ -1,12 +1,15 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
+import { useZoneOverlayStore, DEFAULT_SLOTS } from "@/lib/zoneOverlayStore";
 import {
   SLOT_NAMES_SALTWATER,
   SLOT_NAMES_FRESHWATER,
 } from "@/lib/zoneMap";
 import { FONT, S } from "../styles";
 import { Toggle } from "./Toggle";
+
+/** How long a first Reset click stays "armed" before it reverts to idle. */
+const RESET_CONFIRM_TIMEOUT_MS = 3000;
 
 export function ZoneColourSwatches() {
   const waterType = useSettingsStore((s) => s.waterType);
@@ -22,6 +25,42 @@ export function ZoneColourSwatches() {
     setActiveWaterType(waterType as "saltwater" | "freshwater");
   }, [waterType, setActiveWaterType]);
 
+  // Reset button: disabled when the palette already matches defaults, and a
+  // first click only "arms" the button — a second click within the timeout
+  // performs the actual wipe.
+  const isAtDefaults = slots.every((slot, i) => {
+    const def = DEFAULT_SLOTS[i]!;
+    return (
+      slot.color.toLowerCase() === def.color.toLowerCase() &&
+      slot.visible === def.visible
+    );
+  });
+  const [confirmArmed, setConfirmArmed] = useState(false);
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearConfirmTimer = () => {
+    if (confirmTimer.current) {
+      clearTimeout(confirmTimer.current);
+      confirmTimer.current = null;
+    }
+  };
+  useEffect(() => clearConfirmTimer, []);
+
+  const handleResetClick = () => {
+    if (isAtDefaults) return;
+    if (!confirmArmed) {
+      setConfirmArmed(true);
+      clearConfirmTimer();
+      confirmTimer.current = setTimeout(
+        () => setConfirmArmed(false),
+        RESET_CONFIRM_TIMEOUT_MS,
+      );
+      return;
+    }
+    clearConfirmTimer();
+    setConfirmArmed(false);
+    resetToDefaults();
+  };
+
   return (
     <div style={S.card}>
       <div
@@ -32,25 +71,35 @@ export function ZoneColourSwatches() {
           justifyContent: "space-between",
         }}
       >
-        <span>ZONE COLOURS</span>
+        <h3 style={{ margin: 0, fontSize: "inherit", fontWeight: "inherit", letterSpacing: "inherit" }}>ZONE COLOURS</h3>
         <button
           type="button"
           data-testid="settings-zone-colours-reset"
-          onClick={resetToDefaults}
+          onClick={handleResetClick}
+          disabled={isAtDefaults}
+          aria-disabled={isAtDefaults}
+          title={
+            isAtDefaults
+              ? "Zone colours are already at their defaults"
+              : confirmArmed
+                ? "Click again to confirm resetting zone colours"
+                : "Reset zone colours to defaults"
+          }
           style={{
             fontSize: "calc(9px * var(--bs-font-scale, 1))",
-            color: "#64748b",
+            color: confirmArmed ? "#fbbf24" : "#64748b",
             background: "transparent",
-            border: "1px solid rgba(100,116,139,0.3)",
+            border: `1px solid ${confirmArmed ? "rgba(251,191,36,0.5)" : "rgba(100,116,139,0.3)"}`,
             borderRadius: 3,
             padding: "1px 6px",
-            cursor: "pointer",
+            cursor: isAtDefaults ? "default" : "pointer",
+            opacity: isAtDefaults ? 0.5 : 1,
             letterSpacing: "0.06em",
             textTransform: "uppercase",
             fontFamily: FONT,
           }}
         >
-          Reset
+          {confirmArmed ? "Tap again to reset" : "Reset"}
         </button>
       </div>
       {slotNames.map((name, i) => {
@@ -66,6 +115,7 @@ export function ZoneColourSwatches() {
             <Toggle
               value={visible}
               onChange={(v) => setSlotVisible(i as 0 | 1 | 2 | 3, v)}
+              aria-label={`Show zone ${name}`}
             />
             <span
               data-testid={`settings-zone-swatch-${i}`}
@@ -86,6 +136,7 @@ export function ZoneColourSwatches() {
               <input
                 data-testid={`settings-zone-colour-input-${i}`}
                 title={`Click to change colour — ${name}`}
+                aria-label={`Colour for zone ${name}`}
                 type="color"
                 value={color}
                 onChange={(e) => setSlotColor(i as 0 | 1 | 2 | 3, e.target.value)}

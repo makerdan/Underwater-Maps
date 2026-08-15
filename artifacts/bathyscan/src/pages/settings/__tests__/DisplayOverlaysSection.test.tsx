@@ -113,7 +113,7 @@ describe("DisplayOverlaysSection", () => {
 
   it("renders the DISPLAY & OVERLAYS heading text", () => {
     render(<DisplayOverlaysSection />);
-    expect(screen.getByRole("heading", { name: /DISPLAY/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /DISPLAY & OVERLAYS/i })).toBeInTheDocument();
   });
 
   it("renders HUD & LAYOUT card header", () => {
@@ -164,5 +164,30 @@ describe("DisplayOverlaysSection", () => {
   it("does NOT render a reset button (withReset=false)", () => {
     render(<DisplayOverlaysSection />);
     expect(screen.queryByTestId("reset-section-hud-btn")).not.toBeInTheDocument();
+  });
+
+  describe("accessibility semantics", () => {
+    it("getByLabelText('Default Species') resolves to the text input", () => {
+      render(<DisplayOverlaysSection />);
+      const input = screen.getByLabelText("Default Species");
+      expect(input.tagName).toBe("INPUT");
+      expect(input).toHaveAttribute("type", "text");
+      expect(input).toHaveAttribute("id", "settings-default-species-input");
+    });
+
+    it.each([
+      "HUD & LAYOUT",
+      "VISIBILITY",
+      "FORMAT & DISPLAY",
+      "PANELS",
+      "TIME FORMAT",
+      "MAP & OVERLAYS",
+      "OVERVIEW MAP",
+      "HABITAT",
+      "HABITAT DEFAULTS",
+    ])("card header '%s' is a level-3 heading", (name) => {
+      render(<DisplayOverlaysSection />);
+      expect(screen.getByRole("heading", { level: 3, name })).toBeInTheDocument();
+    });
   });
 });

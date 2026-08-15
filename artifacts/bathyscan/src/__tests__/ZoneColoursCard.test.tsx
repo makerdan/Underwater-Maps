@@ -197,6 +197,8 @@ describe("ZoneColourSwatches — Reset to Defaults", () => {
     });
     render(<Settings />);
     navigateToMapOverlays();
+    // Reset now requires a confirming second click
+    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     await waitFor(() => {
       const { slots } = useZoneOverlayStore.getState();
@@ -214,6 +216,8 @@ describe("ZoneColourSwatches — Reset to Defaults", () => {
     });
     render(<Settings />);
     navigateToMapOverlays();
+    // Reset now requires a confirming second click
+    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     await waitFor(() => {
       for (let i = 0; i < 4; i++) {
@@ -230,6 +234,8 @@ describe("ZoneColourSwatches — Reset to Defaults", () => {
     });
     render(<Settings />);
     navigateToMapOverlays();
+    // Reset now requires a confirming second click
+    fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     fireEvent.click(screen.getByTestId("settings-zone-colours-reset"));
     await waitFor(() => {
       const { slots } = useZoneOverlayStore.getState();
@@ -237,6 +243,110 @@ describe("ZoneColourSwatches — Reset to Defaults", () => {
         expect(slots[i as 0 | 1 | 2 | 3]!.visible).toBe(true);
       }
     });
+  });
+});
+
+describe("ZoneColourSwatches — accessible names", () => {
+  const SALTWATER_NAMES = [
+    "Sandy Shelf / Reef",
+    "Coarse Sediment / Seamount",
+    "Silt Plain",
+    "Basalt / Volcanic",
+  ];
+
+  it("each zone visibility toggle has an accessible name containing the zone name", () => {
+    render(<Settings />);
+    navigateToMapOverlays();
+    for (const name of SALTWATER_NAMES) {
+      const toggle = screen.getByLabelText(`Show zone ${name}`);
+      expect(toggle).toHaveAttribute("role", "switch");
+    }
+  });
+
+  it("each colour input has an accessible name containing the zone name", () => {
+    render(<Settings />);
+    navigateToMapOverlays();
+    for (const name of SALTWATER_NAMES) {
+      const input = screen.getByLabelText(`Colour for zone ${name}`) as HTMLInputElement;
+      expect(input.type).toBe("color");
+    }
+  });
+
+  it("ZONE COLOURS header is a level-3 heading", () => {
+    render(<Settings />);
+    navigateToMapOverlays();
+    expect(screen.getByRole("heading", { level: 3, name: "ZONE COLOURS" })).toBeInTheDocument();
+  });
+});
+
+describe("ZoneColourSwatches — reset disabled state & confirmation", () => {
+  it("reset button is disabled when the palette is already at defaults", () => {
+    render(<Settings />);
+    navigateToMapOverlays();
+    const btn = screen.getByTestId("settings-zone-colours-reset");
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute("aria-disabled", "true");
+    expect(btn.getAttribute("title")).toMatch(/already at/i);
+  });
+
+  it("reset button is enabled once the palette differs from defaults", () => {
+    act(() => {
+      useZoneOverlayStore.getState().setSlotColor(0, "#123456");
+    });
+    render(<Settings />);
+    navigateToMapOverlays();
+    expect(screen.getByTestId("settings-zone-colours-reset")).toBeEnabled();
+  });
+
+  it("a single click arms the confirmation and does NOT wipe the palette", () => {
+    act(() => {
+      useZoneOverlayStore.getState().setSlotColor(0, "#123456");
+    });
+    render(<Settings />);
+    navigateToMapOverlays();
+    const btn = screen.getByTestId("settings-zone-colours-reset");
+    fireEvent.click(btn);
+    expect(btn).toHaveTextContent(/tap again to reset/i);
+    expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#123456");
+  });
+
+  it("a second click within the window performs the reset", async () => {
+    act(() => {
+      useZoneOverlayStore.getState().setSlotColor(0, "#123456");
+    });
+    render(<Settings />);
+    navigateToMapOverlays();
+    const btn = screen.getByTestId("settings-zone-colours-reset");
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    await waitFor(() => {
+      expect(useZoneOverlayStore.getState().slots[0]!.color.toLowerCase()).toBe(
+        ZONE_DEFAULT_COLORS[0]!.toLowerCase(),
+      );
+    });
+    expect(btn).toHaveTextContent(/^reset$/i);
+  });
+
+  it("the armed state reverts to idle after the 3-second window elapses", () => {
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        useZoneOverlayStore.getState().setSlotColor(0, "#123456");
+      });
+      render(<Settings />);
+      navigateToMapOverlays();
+      const btn = screen.getByTestId("settings-zone-colours-reset");
+      fireEvent.click(btn);
+      expect(btn).toHaveTextContent(/tap again to reset/i);
+      act(() => {
+        vi.advanceTimersByTime(3100);
+      });
+      expect(btn).toHaveTextContent(/^reset$/i);
+      // Palette untouched
+      expect(useZoneOverlayStore.getState().slots[0]!.color).toBe("#123456");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

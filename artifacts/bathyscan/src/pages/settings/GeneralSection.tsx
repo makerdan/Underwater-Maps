@@ -54,13 +54,16 @@ export function GeneralSection() {
               Switches datasets, species, marker types, and AI guidance
             </div>
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
+          <div role="radiogroup" aria-label="Water type" style={{ display: "flex", gap: 6 }}>
             {(["saltwater", "freshwater"] as const).map((wt) => {
               const active = s.waterType === wt;
               const color = wt === "freshwater" ? "#4ade80" : "#00e5ff";
               return (
                 <button
                   key={wt}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
                   data-testid={`settings-water-type-${wt}`}
                   onClick={() => handleWaterTypeChange(wt)}
                   style={{

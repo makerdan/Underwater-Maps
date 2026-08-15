@@ -18,10 +18,11 @@ export function Toggle({ value, onChange, "aria-label": ariaLabel }: { value: bo
 }
 
 export function Select<T extends string>({
-  value, onChange, options,
-}: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
+  value, onChange, options, id,
+}: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; id?: string }) {
   return (
     <select
+      id={id}
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
       style={S.select}

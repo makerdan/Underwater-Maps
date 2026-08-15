@@ -89,6 +89,7 @@ export function SectionSaveButton({
         </span>
       )}
       <button
+        type="button"
         data-testid={`save-section-${sectionKey}-btn`}
         data-state={status}
         data-dirty={dirty ? "true" : "false"}
@@ -141,6 +142,7 @@ export function SectionActionsRow({
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
       {withReset && (
         <button
+          type="button"
           onClick={() => allSections.forEach((sec) => resetSection(sec))}
           data-testid={`reset-section-${resetKey}-btn`}
           style={{

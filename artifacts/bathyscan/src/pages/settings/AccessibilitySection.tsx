@@ -28,10 +28,11 @@ export function AccessibilitySection() {
         />
         <div style={S.row}>
           <div>
-            <div style={S.label}>Text Size</div>
+            <label htmlFor="settings-text-size-select" style={S.label}>Text Size</label>
             <div style={S.sublabel}>Scales all panel and HUD text</div>
           </div>
           <Select
+            id="settings-text-size-select"
             value={s.globalFontSize}
             onChange={s.setGlobalFontSize}
             options={[
@@ -54,7 +55,7 @@ export function AccessibilitySection() {
           label="Bright Daylight"
           value={s.brightDaylight}
           onChange={s.setBrightDaylight}
-          sublabel="Opaque panels, bold text, and high contrast for outdoor use in direct sunlight — automatically switches the terrain to Grayscale for maximum depth contrast while active"
+          sublabel="Opaque panels, bold text, and high contrast for outdoor use in direct sunlight — automatically switches to Grayscale terrain while active, unless you've set a specific colormap in the Visuals tab"
         />
       </div>
     </>

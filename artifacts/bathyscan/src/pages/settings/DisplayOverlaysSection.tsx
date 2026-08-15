@@ -17,16 +17,16 @@ export function DisplayOverlaysSection() {
 
       {/* HUD & Layout */}
       <div style={S.card}>
-        <div style={S.cardHeader}>HUD &amp; LAYOUT</div>
+        <h3 style={S.cardHeader}>HUD &amp; LAYOUT</h3>
       </div>
       <div style={S.card}>
-        <div style={S.cardHeader}>VISIBILITY</div>
+        <h3 style={S.cardHeader}>VISIBILITY</h3>
         <ToggleRow label="Crosshair GPS" value={s.showCrosshairGps} onChange={s.setShowCrosshairGps} sublabel="Centre-screen target coordinates" />
         <ToggleRow label="Your Current Coordinates" value={s.showCameraPosition} onChange={s.setShowCameraPosition} sublabel="Shows your viewpoint's longitude and latitude in the side pane" />
         <ToggleRow label="Heading" value={s.showHeading} onChange={s.setShowHeading} sublabel="Top-left HDG compass value" />
       </div>
       <div style={S.card}>
-        <div style={S.cardHeader}>FORMAT &amp; DISPLAY</div>
+        <h3 style={S.cardHeader}>FORMAT &amp; DISPLAY</h3>
         <SelectRow
           label="Coordinate Format"
           value={s.coordinateFormat}
@@ -43,7 +43,7 @@ export function DisplayOverlaysSection() {
       </div>
       <AdvancedDisclosure testId="hud-advanced">
         <div style={S.card}>
-          <div style={S.cardHeader}>PANELS</div>
+          <h3 style={S.cardHeader}>PANELS</h3>
           <ToggleRow label="Depth Legend" value={s.showDepthLegend} onChange={s.setShowDepthLegend} sublabel="Floating depth/altitude legend" />
           <ToggleRow label="Depth Scale Bar" value={s.showDepthScaleBar} onChange={s.setShowDepthScaleBar} sublabel="Vertical gradient bar" />
           <ToggleRow label="Compass / Minimap" value={s.showCompassMinimap} onChange={s.setShowCompassMinimap} sublabel="Small compass rose and orientation indicator shown in the corner of the viewport." />
@@ -66,7 +66,7 @@ export function DisplayOverlaysSection() {
           />
         </div>
         <div style={S.card}>
-          <div style={S.cardHeader}>TIME FORMAT</div>
+          <h3 style={S.cardHeader}>TIME FORMAT</h3>
           <SelectRow
             label="Time Display"
             value={s.timeFormat}
@@ -84,10 +84,10 @@ export function DisplayOverlaysSection() {
 
       {/* Map & Overlays */}
       <div style={{ ...S.card, marginTop: 16 }}>
-        <div style={S.cardHeader}>MAP &amp; OVERLAYS</div>
+        <h3 style={S.cardHeader}>MAP &amp; OVERLAYS</h3>
       </div>
       <div style={S.card}>
-        <div style={S.cardHeader}>OVERVIEW MAP</div>
+        <h3 style={S.cardHeader}>OVERVIEW MAP</h3>
         <ToggleRow label="Show Grid Lines" value={s.overviewShowGrid} onChange={s.setOverviewShowGrid} />
         <ToggleRow label="Show Markers" value={s.overviewShowMarkers} onChange={s.setOverviewShowMarkers} />
         <ToggleRow label="Open on Load" value={s.overviewOpenOnLoad} onChange={s.setOverviewOpenOnLoad} sublabel="Auto-expand when a dataset loads" />
@@ -100,7 +100,7 @@ export function DisplayOverlaysSection() {
         />
       </div>
       <div style={S.card}>
-        <div style={S.cardHeader}>HABITAT</div>
+        <h3 style={S.cardHeader}>HABITAT</h3>
         <ToggleRow
           label="Auto-Show Zone Overlay"
           value={s.autoShowZoneOverlay}
@@ -121,13 +121,14 @@ export function DisplayOverlaysSection() {
       <ZoneColourSwatches />
       <AdvancedDisclosure testId="habitat-advanced">
         <div style={S.card}>
-          <div style={S.cardHeader}>HABITAT DEFAULTS</div>
+          <h3 style={S.cardHeader}>HABITAT DEFAULTS</h3>
           <div style={S.row}>
             <div>
-              <div style={S.label}>Default Species</div>
+              <label htmlFor="settings-default-species-input" style={S.label}>Default Species</label>
               <div style={S.sublabel}>Pre-fills the habitat species filter</div>
             </div>
             <input
+              id="settings-default-species-input"
               type="text"
               value={s.defaultHabitatSpecies}
               onChange={(e) => s.setDefaultHabitatSpecies(e.target.value)}

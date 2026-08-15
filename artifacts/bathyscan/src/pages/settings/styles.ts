@@ -86,6 +86,7 @@ export const S = {
   } as React.CSSProperties,
 
   cardHeader: {
+    margin: 0,
     padding: "10px 16px",
     borderBottom: "1px solid var(--bs-s-card-border, rgba(0,229,255,0.08))",
     fontSize: "calc(8px * var(--bs-font-scale, 1))",

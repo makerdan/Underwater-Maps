@@ -115,4 +115,32 @@ describe("GeneralSection", () => {
     render(<GeneralSection />);
     expect(screen.getByText("STARTUP DEFAULTS")).toBeInTheDocument();
   });
+
+  describe("water-type radio semantics", () => {
+    it("wraps the mode buttons in a radiogroup labelled 'Water type'", () => {
+      render(<GeneralSection />);
+      const group = screen.getByRole("radiogroup", { name: "Water type" });
+      expect(group).toBeInTheDocument();
+    });
+
+    it("both mode buttons expose role='radio'", () => {
+      render(<GeneralSection />);
+      const radios = screen.getAllByRole("radio");
+      expect(radios).toHaveLength(2);
+      expect(screen.getByTestId("settings-water-type-saltwater")).toHaveAttribute("role", "radio");
+      expect(screen.getByTestId("settings-water-type-freshwater")).toHaveAttribute("role", "radio");
+    });
+
+    it("aria-checked reflects the active water type (saltwater active)", () => {
+      render(<GeneralSection />);
+      expect(screen.getByTestId("settings-water-type-saltwater")).toHaveAttribute("aria-checked", "true");
+      expect(screen.getByTestId("settings-water-type-freshwater")).toHaveAttribute("aria-checked", "false");
+    });
+
+    it("both mode buttons have explicit type='button'", () => {
+      render(<GeneralSection />);
+      expect(screen.getByTestId("settings-water-type-saltwater")).toHaveAttribute("type", "button");
+      expect(screen.getByTestId("settings-water-type-freshwater")).toHaveAttribute("type", "button");
+    });
+  });
 });
