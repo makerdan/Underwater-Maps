@@ -10,11 +10,12 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 const h = vi.hoisted(() => {
   const resetSection = vi.fn();
-  return { resetSection };
+  const setDefaultHabitatSpecies = vi.fn();
+  return { resetSection, setDefaultHabitatSpecies };
 });
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
@@ -66,7 +67,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     habitatOverlayIntensity: 0.5,
     setHabitatOverlayIntensity: vi.fn(),
     defaultHabitatSpecies: "",
-    setDefaultHabitatSpecies: vi.fn(),
+    setDefaultHabitatSpecies: h.setDefaultHabitatSpecies,
     syncedSnapshot: null,
     lastSyncedAt: null,
     resetSection: h.resetSection,
@@ -104,6 +105,7 @@ import { DisplayOverlaysSection } from "../DisplayOverlaysSection";
 describe("DisplayOverlaysSection", () => {
   beforeEach(() => {
     h.resetSection.mockClear();
+    h.setDefaultHabitatSpecies.mockClear();
   });
 
   it("renders without crashing", () => {
@@ -188,6 +190,53 @@ describe("DisplayOverlaysSection", () => {
     ])("card header '%s' is a level-3 heading", (name) => {
       render(<DisplayOverlaysSection />);
       expect(screen.getByRole("heading", { level: 3, name })).toBeInTheDocument();
+    });
+  });
+
+  // Regression: group headings live inside the first control card — no
+  // standalone header-only ("empty") cards.
+  it("HUD & LAYOUT heading shares a card with the VISIBILITY controls (no empty card)", () => {
+    render(<DisplayOverlaysSection />);
+    const groupHeading = screen.getByText("HUD & LAYOUT");
+    const cardHeader = screen.getByText("VISIBILITY");
+    expect(groupHeading.parentElement).toBe(cardHeader.parentElement);
+    expect(groupHeading.parentElement!.children.length).toBeGreaterThan(1);
+  });
+
+  it("MAP & OVERLAYS heading shares a card with the OVERVIEW MAP controls (no empty card)", () => {
+    render(<DisplayOverlaysSection />);
+    const groupHeading = screen.getByText("MAP & OVERLAYS");
+    const cardHeader = screen.getByText("OVERVIEW MAP");
+    expect(groupHeading.parentElement).toBe(cardHeader.parentElement);
+    expect(groupHeading.parentElement!.children.length).toBeGreaterThan(1);
+  });
+
+  describe("Default Species input constraints", () => {
+    it("has maxLength 120 and a format-hint placeholder", () => {
+      render(<DisplayOverlaysSection />);
+      const input = screen.getByPlaceholderText("e.g. Oncorhynchus mykiss");
+      expect(input).toHaveAttribute("maxLength", "120");
+    });
+
+    it("stores a whitespace-only value as an empty string on blur", () => {
+      render(<DisplayOverlaysSection />);
+      const input = screen.getByPlaceholderText("e.g. Oncorhynchus mykiss");
+      fireEvent.blur(input, { target: { value: "   " } });
+      expect(h.setDefaultHabitatSpecies).toHaveBeenCalledWith("");
+    });
+
+    it("trims surrounding whitespace on blur", () => {
+      render(<DisplayOverlaysSection />);
+      const input = screen.getByPlaceholderText("e.g. Oncorhynchus mykiss");
+      fireEvent.blur(input, { target: { value: "  Oncorhynchus mykiss  " } });
+      expect(h.setDefaultHabitatSpecies).toHaveBeenCalledWith("Oncorhynchus mykiss");
+    });
+
+    it("does not call the setter on blur when the value is already trimmed", () => {
+      render(<DisplayOverlaysSection />);
+      const input = screen.getByPlaceholderText("e.g. Oncorhynchus mykiss");
+      fireEvent.blur(input, { target: { value: "Salmo trutta" } });
+      expect(h.setDefaultHabitatSpecies).not.toHaveBeenCalled();
     });
   });
 });

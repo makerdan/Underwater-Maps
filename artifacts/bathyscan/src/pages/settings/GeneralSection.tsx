@@ -146,15 +146,18 @@ export function GeneralSection() {
             onChange={s.setDefaultMapLoad}
           />
         </div>
-        <SelectRow
-          label="Default Region"
-          value={s.defaultRegion}
-          onChange={s.setDefaultRegion}
-          options={[
-            { value: "", label: "None — start with no dataset loaded" },
-          ]}
-          sublabel="No bundled preset regions are available. Upload your own data or save a dataset from Find Data to use as a default."
-        />
+        {/* No bundled preset regions exist yet, so show a plain note instead
+            of a single-option (non-functional) selector. Restore a SelectRow
+            here once bundled regions ship. */}
+        <div style={{ ...S.row, borderBottom: "none" }}>
+          <div>
+            <div style={S.label}>Default Region</div>
+            <p style={{ ...S.sublabel, margin: "2px 0 0" }} data-testid="default-region-note">
+              No bundled regions available. Upload your own data or save a
+              dataset from Find Data to use as a default.
+            </p>
+          </div>
+        </div>
       </div>
       {/* Guided Tour card — restored after the Settings.tsx split dropped it
           (e2e contract: replay-tour-btn lives in the GENERAL tab). */}

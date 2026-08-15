@@ -92,11 +92,10 @@ export function MapLayersSection() {
       <SectionTitle helpId="markers" helpLabel="Map Layers">◈ MAP LAYERS</SectionTitle>
       <SectionActionsRow sections={["markers", "gps", "tidal", "currents"]} />
 
-      {/* Markers & Trails */}
+      {/* Markers & Trails — group heading lives inside the first card of the
+          group (no standalone header-only card). */}
       <div style={S.card}>
-        <div style={S.cardHeader}>MARKERS &amp; TRAILS</div>
-      </div>
-      <div style={S.card}>
+        <div style={S.cardGroupHeader}>MARKERS &amp; TRAILS</div>
         <div style={S.cardHeader}>MARKERS</div>
         <ToggleRow label="Show Marker Labels" value={s.showMarkerLabels} onChange={s.setShowMarkerLabels} sublabel="Name text below marker sprites" />
         <ToggleRow label="Private Markers" value={s.privateMarkers} onChange={s.setPrivateMarkers} sublabel="Only show your own markers" />
@@ -187,11 +186,10 @@ export function MapLayersSection() {
         </div>
       </AdvancedDisclosure>
 
-      {/* Tides & Currents */}
+      {/* Tides & Currents — group heading lives inside the first card of the
+          group (no standalone header-only card). */}
       <div style={{ ...S.card, marginTop: 16 }}>
-        <div style={S.cardHeader}>TIDES &amp; CURRENTS</div>
-      </div>
-      <div style={S.card}>
+        <div style={S.cardGroupHeader}>TIDES &amp; CURRENTS</div>
         <div style={S.cardHeader}>BEHAVIOUR</div>
         <ToggleRow
           label="Auto-Load Tidal Data"

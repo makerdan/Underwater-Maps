@@ -121,6 +121,24 @@ describe("MapLayersSection", () => {
     expect(screen.getByText("MARKERS & TRAILS")).toBeInTheDocument();
   });
 
+  // Regression: group headings live inside the first control card — no
+  // standalone header-only ("empty") cards.
+  it("MARKERS & TRAILS heading shares a card with the MARKERS controls (no empty card)", () => {
+    render(<MapLayersSection />);
+    const groupHeading = screen.getByText("MARKERS & TRAILS");
+    const cardHeader = screen.getByText("MARKERS");
+    expect(groupHeading.parentElement).toBe(cardHeader.parentElement);
+    expect(groupHeading.parentElement!.children.length).toBeGreaterThan(1);
+  });
+
+  it("TIDES & CURRENTS heading shares a card with the BEHAVIOUR controls (no empty card)", () => {
+    render(<MapLayersSection />);
+    const groupHeading = screen.getByText("TIDES & CURRENTS");
+    const cardHeader = screen.getByText("BEHAVIOUR");
+    expect(groupHeading.parentElement).toBe(cardHeader.parentElement);
+    expect(groupHeading.parentElement!.children.length).toBeGreaterThan(1);
+  });
+
   it("renders Show Marker Labels label", () => {
     render(<MapLayersSection />);
     expect(screen.getByText("Show Marker Labels")).toBeInTheDocument();

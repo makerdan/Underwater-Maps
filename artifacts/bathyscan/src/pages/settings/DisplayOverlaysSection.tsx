@@ -15,11 +15,10 @@ export function DisplayOverlaysSection() {
       <SectionTitle helpId="interface-tour" helpLabel="Display & Overlays">◈ DISPLAY &amp; OVERLAYS</SectionTitle>
       <SectionActionsRow sections={["hud", "overview", "habitat"]} withReset={false} />
 
-      {/* HUD & Layout */}
+      {/* HUD & Layout — group heading lives inside the first card of the
+          group (no standalone header-only card). */}
       <div style={S.card}>
-        <h3 style={S.cardHeader}>HUD &amp; LAYOUT</h3>
-      </div>
-      <div style={S.card}>
+        <h3 style={S.cardGroupHeader}>HUD &amp; LAYOUT</h3>
         <h3 style={S.cardHeader}>VISIBILITY</h3>
         <ToggleRow label="Crosshair GPS" value={s.showCrosshairGps} onChange={s.setShowCrosshairGps} sublabel="Centre-screen target coordinates" />
         <ToggleRow label="Your Current Coordinates" value={s.showCameraPosition} onChange={s.setShowCameraPosition} sublabel="Shows your viewpoint's longitude and latitude in the side pane" />
@@ -82,11 +81,10 @@ export function DisplayOverlaysSection() {
         </div>
       </AdvancedDisclosure>
 
-      {/* Map & Overlays */}
+      {/* Map & Overlays — group heading lives inside the first card of the
+          group (no standalone header-only card). */}
       <div style={{ ...S.card, marginTop: 16 }}>
-        <h3 style={S.cardHeader}>MAP &amp; OVERLAYS</h3>
-      </div>
-      <div style={S.card}>
+        <h3 style={S.cardGroupHeader}>MAP &amp; OVERLAYS</h3>
         <h3 style={S.cardHeader}>OVERVIEW MAP</h3>
         <ToggleRow label="Show Grid Lines" value={s.overviewShowGrid} onChange={s.setOverviewShowGrid} />
         <ToggleRow label="Show Markers" value={s.overviewShowMarkers} onChange={s.setOverviewShowMarkers} />
@@ -131,8 +129,14 @@ export function DisplayOverlaysSection() {
               id="settings-default-species-input"
               type="text"
               value={s.defaultHabitatSpecies}
+              maxLength={120}
               onChange={(e) => s.setDefaultHabitatSpecies(e.target.value)}
-              placeholder="(none)"
+              onBlur={(e) => {
+                // Trim on save; whitespace-only values are stored as "".
+                const trimmed = e.target.value.trim();
+                if (trimmed !== e.target.value) s.setDefaultHabitatSpecies(trimmed);
+              }}
+              placeholder="e.g. Oncorhynchus mykiss"
               style={{
                 ...S.select, width: 160, fontFamily: FONT, fontSize: "calc(10px * var(--bs-font-scale, 1))",
               }}

@@ -95,6 +95,22 @@ export const S = {
     fontWeight: 700,
   } as React.CSSProperties,
 
+  /**
+   * Group heading rendered INSIDE the first card of a group of cards
+   * (e.g. "HUD & LAYOUT" above the "VISIBILITY" card header). Replaces the
+   * old pattern of a standalone header-only card, which rendered as an
+   * empty-looking panel.
+   */
+  cardGroupHeader: {
+    padding: "10px 16px",
+    borderBottom: "1px solid var(--bs-s-card-border, rgba(0,229,255,0.08))",
+    background: "var(--bs-s-nav-active-bg, rgba(0,229,255,0.05))",
+    fontSize: "calc(8px * var(--bs-font-scale, 1))",
+    letterSpacing: "0.25em",
+    color: "var(--bs-s-accent, #00e5ff)",
+    fontWeight: 700,
+  } as React.CSSProperties,
+
   row: {
     display: "flex",
     alignItems: "center",

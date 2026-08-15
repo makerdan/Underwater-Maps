@@ -143,4 +143,15 @@ describe("GeneralSection", () => {
       expect(screen.getByTestId("settings-water-type-freshwater")).toHaveAttribute("type", "button");
     });
   });
+
+  // Regression: Default Region is an informational note, not a
+  // single-option (non-functional) select, until bundled regions exist.
+  it("renders the Default Region no-regions note instead of a select", () => {
+    render(<GeneralSection />);
+    expect(screen.getByText("Default Region")).toBeInTheDocument();
+    expect(screen.getByTestId("default-region-note")).toBeInTheDocument();
+    expect(
+      screen.queryByText("None — start with no dataset loaded"),
+    ).not.toBeInTheDocument();
+  });
 });
