@@ -88,6 +88,7 @@ const SCANNED_FILES: string[] = [
   "components/DepthProfilePanel.tsx",
   "components/SubstrateLayer.tsx",
   "components/TerrainMesh.tsx",
+  "components/TrailRecorder.tsx",
   "components/ThrottlePanel.tsx",
   "components/TrailRecorder.tsx",
   "components/TidePanel.tsx",

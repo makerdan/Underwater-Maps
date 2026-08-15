@@ -323,6 +323,23 @@ describe("envOfflineStore", () => {
       expect(idbStore.has(ENV_PACK_IDB_KEY)).toBe(false);
     });
 
+    it("rejects a response missing required envelope fields (generatedAt/expiresAt)", async () => {
+      const { generatedAt: _g, expiresAt: _e, ...noEnvelope } = makePack();
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => noEnvelope,
+      } as Response);
+
+      await expect(
+        useEnvOfflineStore.getState().downloadEnvPack(57.05, -135.33, 15, 14),
+      ).rejects.toThrow(/malformed/i);
+
+      const state = useEnvOfflineStore.getState();
+      expect(state.envPack).toBeNull();
+      expect(state.downloadError).toMatch(/malformed/i);
+      expect(idbStore.has(ENV_PACK_IDB_KEY)).toBe(false);
+    });
+
     it("is a no-op when a download is already in flight (concurrent guard)", async () => {
       useEnvOfflineStore.setState({ isDownloading: true });
       global.fetch = vi.fn();
