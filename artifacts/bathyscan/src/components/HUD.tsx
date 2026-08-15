@@ -93,6 +93,7 @@ export const HUD: React.FC<HUDProps> = ({ panelRightEdge = 0 }) => {
 
   const gpsActive = useGpsStore((s) => s.active);
   const gpsPosition = useGpsStore((s) => s.position);
+  const gpsWatchId = useGpsStore((s) => s.watchId);
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
   const isOnline = useOfflineStore((s) => s.isOnline);
 
@@ -323,6 +324,42 @@ export const HUD: React.FC<HUDProps> = ({ panelRightEdge = 0 }) => {
         </div>
       )}
 
+      {/* ── GPS-active-outside-Live indicator ──
+          exitLiveMode() intentionally leaves the GPS watch running when the
+          user leaves the Live tab. On mobile that means continuous battery
+          drain, so surface a small badge whenever the watch is active and
+          the sidebar is NOT on the Live tab. Stacks below the offline badge
+          when both are visible. */}
+      {gpsWatchId != null && sidebarMode !== "live" && (
+        <ViewscreenTooltip
+          label="GPS is still running in the background — switch to the Live tab to stop it"
+          side="bottom"
+        >
+          <div
+            data-testid="hud-gps-active-badge"
+            role="status"
+            aria-label="GPS active — switch to Live tab to stop"
+            style={{
+              position: "absolute",
+              top: isOnline ? 8 : 56,
+              right: 8,
+              pointerEvents: "auto",
+              background: "rgba(74,222,128,0.10)",
+              border: "1px solid rgba(74,222,128,0.45)",
+              borderRadius: 4,
+              padding: "3px 9px",
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.18em",
+              color: "#4ade80",
+              fontWeight: 700,
+              textShadow: "0 0 6px rgba(74,222,128,0.4)",
+            }}
+          >
+            📡 GPS ACTIVE
+          </div>
+        </ViewscreenTooltip>
+      )}
+
       {/* ── Top-left: heading ──
           Positioned to sit directly to the right of the global Help
           button (which is anchored to top:8 / left:8 outside this HUD
@@ -500,22 +537,31 @@ export const HUD: React.FC<HUDProps> = ({ panelRightEdge = 0 }) => {
           </ViewscreenTooltip>
         )}
 
-        {/* Follow Me toggle — shown when GPS is active, enabled only when in bounds */}
-        {gpsActive && (
+        {/* Follow Me toggle — shown when GPS is active. The !gpsInBounds
+            guard only applies when follow is OFF (it exists to prevent
+            *enabling* follow outside the dataset). When follow is
+            'following' or 'paused' the button stays enabled so the user can
+            always turn it off from the HUD, even if GPS drifts out of
+            bounds. */}
+        {gpsActive && (() => {
+          const followBtnDisabled = gpsFollowState === "off" && !gpsInBounds;
+          return (
           <ViewscreenTooltip
             label={
-              gpsInBounds
-                ? gpsFollowMode
+              gpsFollowMode
+                ? gpsInBounds
                   ? "Following your GPS position — click to stop"
-                  : "Lock camera to your live GPS position"
-                : "GPS position is outside the current dataset"
+                  : "GPS is outside the current dataset — click to stop following"
+                : gpsInBounds
+                  ? "Lock camera to your live GPS position"
+                  : "GPS position is outside the current dataset"
             }
             side="bottom"
           >
             <button
               data-testid="hud-gps-follow-toggle"
               aria-pressed={gpsFollowMode}
-              disabled={!gpsInBounds}
+              disabled={followBtnDisabled}
               onClick={() => setGpsFollowMode(gpsFollowState === "off")}
               style={{
                 ...PANEL,
@@ -526,14 +572,14 @@ export const HUD: React.FC<HUDProps> = ({ panelRightEdge = 0 }) => {
                 border: gpsFollowMode
                   ? "1px solid rgba(59,130,246,0.80)"
                   : "1px solid rgba(59,130,246,0.30)",
-                color: gpsInBounds ? (gpsFollowMode ? "#93c5fd" : "#60a5fa") : "#475569",
+                color: followBtnDisabled ? "#475569" : gpsFollowMode ? "#93c5fd" : "#60a5fa",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: "calc(15px * var(--bs-font-scale, 1))",
                 padding: "4px 10px",
                 borderRadius: 4,
-                cursor: gpsInBounds ? "pointer" : "not-allowed",
+                cursor: followBtnDisabled ? "not-allowed" : "pointer",
                 letterSpacing: "0.1em",
-                opacity: gpsInBounds ? 1 : 0.5,
+                opacity: followBtnDisabled ? 0.5 : 1,
                 ...(IS_TOUCH_DEVICE ? { minWidth: 44, minHeight: 44 } : {}),
                 ...gloveButtonStyle,
               }}
@@ -541,7 +587,8 @@ export const HUD: React.FC<HUDProps> = ({ panelRightEdge = 0 }) => {
               {isNarrow ? (gpsFollowMode ? "🔵" : "🎯") : (gpsFollowMode ? "🔵 FOLLOWING" : "🎯 FOLLOW ME")}
             </button>
           </ViewscreenTooltip>
-        )}
+          );
+        })()}
       </div>
 
       {/* ── Centre: crosshair + GPS ── */}

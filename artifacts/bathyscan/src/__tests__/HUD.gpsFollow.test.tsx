@@ -208,6 +208,38 @@ describe("HUD — GPS Follow Mode button", () => {
     expect(btn).toBeDisabled();
   });
 
+  it("keeps the Follow Me button ENABLED when follow is 'paused' even though GPS is out of bounds", () => {
+    mockGps = { active: true, position: POS_OUT };
+    mockTerrain = { overviewGrid: GRID_IN };
+    useCameraStore.setState({ gpsFollowState: "paused", pauseReason: "interaction" });
+    renderHUD();
+
+    const btn = screen.getByTestId("hud-gps-follow-toggle");
+    expect(btn).toBeInTheDocument();
+    expect(btn).not.toBeDisabled();
+  });
+
+  it("keeps the Follow Me button ENABLED when follow is 'following' even though GPS is out of bounds", () => {
+    mockGps = { active: true, position: POS_OUT };
+    mockTerrain = { overviewGrid: GRID_IN };
+    useCameraStore.setState({ gpsFollowState: "following" });
+    renderHUD();
+
+    expect(screen.getByTestId("hud-gps-follow-toggle")).not.toBeDisabled();
+  });
+
+  it("clicking the button while 'paused' and out of bounds turns follow OFF", async () => {
+    mockGps = { active: true, position: POS_OUT };
+    mockTerrain = { overviewGrid: GRID_IN };
+    useCameraStore.setState({ gpsFollowState: "paused", pauseReason: "signal-loss" });
+
+    const user = userEvent.setup();
+    renderHUD();
+
+    await user.click(screen.getByTestId("hud-gps-follow-toggle"));
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
+  });
+
   it("renders the Follow Me button with aria-pressed=true when follow mode is on", () => {
     mockGps = { active: true, position: POS_IN };
     mockTerrain = { overviewGrid: GRID_IN };
