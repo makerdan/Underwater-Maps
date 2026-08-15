@@ -1,12 +1,42 @@
 import React from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useSettingsStore, type MarkerType } from "@/lib/settingsStore";
+import {
+  useSettingsStore,
+  DEFAULT_SETTINGS,
+  type MarkerType,
+  type TidalDepthLayer,
+  type CurrentArrowDensity,
+} from "@/lib/settingsStore";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { S } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
 import { SliderRow, ToggleRow, SelectRow, ColorRow } from "./components/RowWidgets";
 import { SALTWATER_MARKER_TYPE_OPTIONS, FRESHWATER_MARKER_TYPE_OPTIONS } from "./constants";
+
+/** The only Sample Rate values offered by the select below. */
+const GPS_INTERVAL_OPTIONS: readonly number[] = [1000, 2000, 10000];
+
+/**
+ * Snap an arbitrary persisted GPS interval to the nearest allowed option so
+ * the controlled select never renders blank. Non-finite input falls back to
+ * the field default.
+ */
+function nearestGpsInterval(ms: number): number {
+  if (!Number.isFinite(ms)) return DEFAULT_SETTINGS.gpsRecordingInterval;
+  return GPS_INTERVAL_OPTIONS.reduce((best, opt) =>
+    Math.abs(opt - ms) < Math.abs(best - ms) ? opt : best,
+  );
+}
+
+/**
+ * Clamp a slider value into [min, max]; NaN / non-finite persisted values
+ * fall back to the field's default so range inputs never show invalid state.
+ */
+function clampSlider(v: number, min: number, max: number, fallback: number): number {
+  const n = Number.isFinite(v) ? v : fallback;
+  return Math.min(max, Math.max(min, n));
+}
 
 export function MapLayersSection() {
   const s = useSettingsStore(useShallow((s) => s));
@@ -16,13 +46,46 @@ export function MapLayersSection() {
       : SALTWATER_MARKER_TYPE_OPTIONS;
 
   const toggleMarkerType = (type: MarkerType) => {
-    const current = s.visibleMarkerTypes;
-    if (current.includes(type)) {
-      s.setVisibleMarkerTypes(current.filter((t) => t !== type));
+    // Read at call time — not from the render snapshot — so two rapid
+    // toggles before a re-render each see the other's update instead of
+    // the second overwriting the first.
+    const { visibleMarkerTypes, setVisibleMarkerTypes } = useSettingsStore.getState();
+    if (visibleMarkerTypes.includes(type)) {
+      setVisibleMarkerTypes(visibleMarkerTypes.filter((t) => t !== type));
     } else {
-      s.setVisibleMarkerTypes([...current, type]);
+      setVisibleMarkerTypes([...visibleMarkerTypes, type]);
     }
   };
+
+  // Older schemas / partial migrations can leave layerArrowDensity absent or
+  // missing keys; fall back to the global density like the 3D renderer does.
+  const layerDensity: Partial<Record<TidalDepthLayer, CurrentArrowDensity>> =
+    s.layerArrowDensity ?? {};
+
+  // Normalise the persisted GPS sample rate to a valid select option.
+  const gpsInterval = s.gpsRecordingInterval;
+  const displayGpsInterval = GPS_INTERVAL_OPTIONS.includes(gpsInterval)
+    ? gpsInterval
+    : nearestGpsInterval(gpsInterval);
+
+  // 360° is the same compass bearing as 0°; normalise so equality checks and
+  // persistence don't churn between the two representations.
+  const storedDirection = s.currentsManualDirectionDeg;
+  const displayDirection = clampSlider(
+    storedDirection === 360 ? 0 : storedDirection,
+    0, 355, DEFAULT_SETTINGS.currentsManualDirectionDeg,
+  );
+
+  const { setGpsRecordingInterval, setCurrentsManualDirectionDeg } = s;
+  React.useEffect(() => {
+    // Write the normalised value back so the store never keeps an
+    // out-of-range interval (e.g. a persisted 3000 ms from an older schema).
+    if (displayGpsInterval !== gpsInterval) setGpsRecordingInterval(displayGpsInterval);
+  }, [displayGpsInterval, gpsInterval, setGpsRecordingInterval]);
+  React.useEffect(() => {
+    // Correct any persisted 360° (or out-of-range) bearing to its 0–355 form.
+    if (displayDirection !== storedDirection) setCurrentsManualDirectionDeg(displayDirection);
+  }, [displayDirection, storedDirection, setCurrentsManualDirectionDeg]);
 
   return (
     <>
@@ -71,7 +134,7 @@ export function MapLayersSection() {
         />
         <SelectRow
           label="Sample Rate"
-          value={String(s.gpsRecordingInterval) as "1000" | "2000" | "10000"}
+          value={String(displayGpsInterval) as "1000" | "2000" | "10000"}
           onChange={(v) => s.setGpsRecordingInterval(Number(v))}
           options={[
             { value: "1000", label: "1 Hz (1 / sec)" },
@@ -82,10 +145,10 @@ export function MapLayersSection() {
         />
         <SliderRow
           label="Follow Resume Delay"
-          value={s.followResumeDelaySec}
+          value={clampSlider(s.followResumeDelaySec, 5, 120, DEFAULT_SETTINGS.followResumeDelaySec)}
           min={5} max={120} step={5}
           format={(v) => `${v}s`}
-          onChange={s.setFollowResumeDelaySec}
+          onChange={(v) => s.setFollowResumeDelaySec(clampSlider(v, 5, 120, DEFAULT_SETTINGS.followResumeDelaySec))}
           sublabel="After you move the camera in Follow Me mode, following resumes after this many seconds of inactivity"
         />
       </div>
@@ -100,10 +163,10 @@ export function MapLayersSection() {
           />
           <SliderRow
             label="Cluster Threshold"
-            value={s.markerClusterThreshold}
+            value={clampSlider(s.markerClusterThreshold, 0, 200, DEFAULT_SETTINGS.markerClusterThreshold)}
             min={0} max={200} step={5}
             format={(v) => v === 0 ? "Off" : `${v}`}
-            onChange={s.setMarkerClusterThreshold}
+            onChange={(v) => s.setMarkerClusterThreshold(clampSlider(v, 0, 200, DEFAULT_SETTINGS.markerClusterThreshold))}
             sublabel="Markers within this pixel distance are grouped. 0 disables clustering."
           />
         </div>
@@ -168,16 +231,20 @@ export function MapLayersSection() {
         />
         <SliderRow
           label="Direction (°)"
-          value={s.currentsManualDirectionDeg}
-          min={0} max={360} step={5}
-          onChange={s.setCurrentsManualDirectionDeg}
+          value={displayDirection}
+          min={0} max={355} step={5}
+          onChange={(v) =>
+            s.setCurrentsManualDirectionDeg(
+              clampSlider(v === 360 ? 0 : v, 0, 355, DEFAULT_SETTINGS.currentsManualDirectionDeg),
+            )
+          }
           sublabel="Compass bearing the current flows toward (0 = south, 90 = east)"
         />
         <SliderRow
           label="Speed (kt)"
-          value={s.currentsManualSpeedKt}
+          value={clampSlider(s.currentsManualSpeedKt, 0, 5, DEFAULT_SETTINGS.currentsManualSpeedKt)}
           min={0} max={5} step={0.1}
-          onChange={s.setCurrentsManualSpeedKt}
+          onChange={(v) => s.setCurrentsManualSpeedKt(clampSlider(v, 0, 5, DEFAULT_SETTINGS.currentsManualSpeedKt))}
         />
       </div>
       <AdvancedDisclosure testId="tidal-advanced">
@@ -196,7 +263,7 @@ export function MapLayersSection() {
           />
           <SelectRow
             label="Surface Layer Density"
-            value={s.layerArrowDensity.surface}
+            value={layerDensity.surface ?? s.currentArrowDensity}
             onChange={(v) => s.setLayerArrowDensity("surface", v)}
             options={[
               { value: "sparse" as const, label: "Sparse" },
@@ -207,7 +274,7 @@ export function MapLayersSection() {
           />
           <SelectRow
             label="Mid-water Layer Density"
-            value={s.layerArrowDensity.mid}
+            value={layerDensity.mid ?? s.currentArrowDensity}
             onChange={(v) => s.setLayerArrowDensity("mid", v)}
             options={[
               { value: "sparse" as const, label: "Sparse" },
@@ -218,7 +285,7 @@ export function MapLayersSection() {
           />
           <SelectRow
             label="Near-bottom Layer Density"
-            value={s.layerArrowDensity["near-bottom"]}
+            value={layerDensity["near-bottom"] ?? s.currentArrowDensity}
             onChange={(v) => s.setLayerArrowDensity("near-bottom", v)}
             options={[
               { value: "sparse" as const, label: "Sparse" },

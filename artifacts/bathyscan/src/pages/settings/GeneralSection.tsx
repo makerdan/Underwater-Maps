@@ -1,7 +1,8 @@
 import React from "react";
 import { useLocation } from "wouter";
 import { useShallow } from "zustand/react/shallow";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { getDatasets } from "@workspace/api-client-react";
+import { useSettingsStore, type WaterType } from "@/lib/settingsStore";
 import { DefaultMapLoadPicker } from "@/components/DefaultMapLoadPicker";
 import { S, FONT } from "./styles";
 import { SectionActionsRow } from "./components/SyncContext";
@@ -14,6 +15,31 @@ export function GeneralSection() {
   const handleReplayTour = () => {
     s.setHasSeenOnboarding(false);
     setLocation("/");
+  };
+
+  const handleWaterTypeChange = (wt: WaterType) => {
+    s.setWaterType(wt);
+    // A preset Default Map Load is water-type specific. If the saved preset
+    // doesn't exist in the new mode's preset list, clear it so the picker
+    // never shows a blank selection and startup never loads an incompatible
+    // dataset. Uploads and "none" are mode-independent.
+    const current = useSettingsStore.getState().defaultMapLoad;
+    if (current?.kind !== "preset") return;
+    void getDatasets({ waterType: wt })
+      .then((presets) => {
+        const state = useSettingsStore.getState();
+        if (state.waterType !== wt) return; // user switched again mid-flight
+        if (
+          state.defaultMapLoad?.kind === "preset" &&
+          state.defaultMapLoad.id === current.id &&
+          !presets.some((p) => p.id === current.id)
+        ) {
+          state.setDefaultMapLoad(null);
+        }
+      })
+      .catch(() => {
+        // Network failure: keep the stored value rather than destroying it.
+      });
   };
   return (
     <>
@@ -36,7 +62,7 @@ export function GeneralSection() {
                 <button
                   key={wt}
                   data-testid={`settings-water-type-${wt}`}
-                  onClick={() => s.setWaterType(wt)}
+                  onClick={() => handleWaterTypeChange(wt)}
                   style={{
                     fontSize: "calc(9px * var(--bs-font-scale, 1))",
                     letterSpacing: "0.15em",
@@ -80,7 +106,7 @@ export function GeneralSection() {
             { value: "imperial", label: "Imperial (ft, mph)" },
             { value: "nautical", label: "Nautical (ft, kn)" },
           ]}
-          sublabel="Switching also updates depth and temperature unless overridden below"
+          sublabel="Switching also updates depth (unless you've picked a different depth unit below) and temperature (when set to Auto)"
         />
         <SelectRow
           label="Depth Unit"

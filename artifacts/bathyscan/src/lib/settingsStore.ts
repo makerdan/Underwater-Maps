@@ -1348,7 +1348,20 @@ export const useSettingsStore = create<SettingsStore>()(
         setCoordinateFormat: setter("coordinateFormat"),
         setDepthUnit: setter("depthUnit"),
         setUnits: (v) =>
-          set({ units: v, depthUnit: v === "metric" ? "metres" : "feet" }),
+          set((state) => {
+            // Unit-derived depth default: metric → metres, imperial/nautical → feet.
+            const derivedDepth = (u: UnitsSystem): DepthUnit =>
+              u === "metric" ? "metres" : "feet";
+            // Preserve an explicit depth-unit override. DepthUnit has no
+            // "auto" sentinel (unlike temperatureUnit), so divergence from
+            // the current units system's derived default is the override
+            // signal: a user who deliberately picked a different depth unit
+            // must not lose it merely by changing the global units.
+            const depthOverridden = state.depthUnit !== derivedDepth(state.units);
+            return depthOverridden
+              ? { units: v }
+              : { units: v, depthUnit: derivedDepth(v) };
+          }),
         setTemperatureUnit: setter("temperatureUnit"),
 
         // Overview
