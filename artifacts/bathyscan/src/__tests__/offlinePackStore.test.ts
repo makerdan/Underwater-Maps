@@ -25,6 +25,7 @@ import {
   deleteOfflinePack,
   getExpiringPacks,
   saveOfflinePack,
+  estimatePackStorageBytesFromBbox,
   type OfflinePack,
   type PackProgress,
   type TideHeightPrediction,
@@ -347,6 +348,103 @@ describe("saveOfflinePack — SW { ok: false } surface to caller", () => {
     );
     expect(successTerrainEvent).toBeDefined();
     expect(successTerrainEvent?.label).toBe("Terrain cached");
+  });
+});
+
+// ── storageBytesEstimate source ───────────────────────────────────────────
+//
+// saveOfflinePack must store an estimate derived from the dataset's bbox area
+// (via estimatePackStorageBytesFromBbox) when a bbox is available, and fall
+// back to the tide-entry-count formula only when no bbox is present.
+
+describe("saveOfflinePack — storageBytesEstimate uses bbox when available", () => {
+  const origNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (origNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", origNavigatorDescriptor);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThis as any).navigator;
+    }
+  });
+
+  function stubSwAndFetchOk(): void {
+    let capturedPort1: { onmessage: ((e: MessageEvent) => void) | null } | null = null;
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      capturedPort1 = { onmessage: null };
+      return { port1: capturedPort1, port2: {} };
+    });
+    const postMessageSpy = vi.fn().mockImplementation(() => {
+      Promise.resolve().then(() => {
+        capturedPort1?.onmessage?.({ data: { ok: true } } as MessageEvent);
+      });
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: { serviceWorker: { ready: Promise.resolve({ active: { postMessage: postMessageSpy } }) } },
+      configurable: true,
+      writable: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes("/tidal/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              station: "TEST",
+              heightPredictions: new Array(50).fill({ t: new Date().toISOString(), v: 1 }),
+              currentPredictions: new Array(50).fill({ t: new Date().toISOString(), speed: 0, dir: 0 }),
+              tidalExpiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(),
+              generatedAt: new Date().toISOString(),
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ station: null, observation: null, snapshotAt: new Date().toISOString() }),
+        });
+      }),
+    );
+  }
+
+  const TEST_BBOX = { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 };
+
+  it("stores estimatePackStorageBytesFromBbox result when dataset has a bbox", async () => {
+    stubSwAndFetchOk();
+    const pack = await saveOfflinePack(
+      { id: "ds-bbox-est", name: "Bbox Dataset", bbox: TEST_BBOX },
+      3,
+      () => { /* noop */ },
+    );
+    const expected = estimatePackStorageBytesFromBbox({ bbox: TEST_BBOX });
+    expect(pack.storageBytesEstimate).toBe(expected);
+  });
+
+  it("bbox estimate is independent of tide entry count", async () => {
+    stubSwAndFetchOk();
+    const pack = await saveOfflinePack(
+      { id: "ds-bbox-est2", name: "Bbox Dataset 2", bbox: TEST_BBOX },
+      3,
+      () => { /* noop */ },
+    );
+    // The bbox formula must dominate; the 50 height + 50 current predictions
+    // (4 000 bytes via estimateFromPredictions) must not appear in the result.
+    const tideOnlyEstimate = (50 + 50) * 40 + 2 * 1024 * 1024;
+    expect(pack.storageBytesEstimate).not.toBe(tideOnlyEstimate);
+  });
+
+  it("falls back to estimateFromPredictions when dataset has no bbox", async () => {
+    stubSwAndFetchOk();
+    const pack = await saveOfflinePack(
+      { id: "ds-no-bbox-est", name: "No Bbox Dataset" },
+      3,
+      () => { /* noop */ },
+    );
+    // No bbox → must use tide entry count formula (50 height + 50 current × 40 + 2 MiB).
+    const expectedFallback = (50 + 50) * 40 + 2 * 1024 * 1024;
+    expect(pack.storageBytesEstimate).toBe(expectedFallback);
   });
 });
 

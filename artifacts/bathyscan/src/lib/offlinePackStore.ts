@@ -248,7 +248,9 @@ export async function saveOfflinePack(
       overviewUrl,
       tidePack,
       weatherPack,
-      storageBytesEstimate: estimateFromPredictions(tidePack),
+      storageBytesEstimate: dataset.bbox
+        ? estimatePackStorageBytesFromBbox({ bbox: dataset.bbox })
+        : estimateFromPredictions(tidePack),
     };
 
     try {
