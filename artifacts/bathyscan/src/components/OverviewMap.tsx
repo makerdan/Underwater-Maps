@@ -107,6 +107,7 @@ import {
   registerRawsCanvasPositionGetter,
   registerSubstrateFeatureGetter,
   registerPuzzleTestHandlers,
+  markPuzzleBridgeReady,
 } from "@/lib/testHelpers";
 import { useSubstrateErrorToast } from "@/hooks/useSubstrateErrorToast";
 import { approxBboxForRadius } from "@/lib/coordinateParser";
@@ -1233,6 +1234,7 @@ export const OverviewMap: React.FC = () => {
         return out;
       },
     );
+    markPuzzleBridgeReady();
   }, [setPuzzleSelectedIds]);
   useEffect(() => {
     rawsActiveRef.current = rawsOverlayActive;

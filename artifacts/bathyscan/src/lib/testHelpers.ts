@@ -149,6 +149,14 @@ let _puzzleGetTransform:
 let _puzzleCreateGroup: ((ids: string[]) => string) | null = null;
 let _puzzleGetGroups: (() => Record<string, string[]>) | null = null;
 
+// Set to true at the end of the registerPuzzleTestHandlers useEffect so tests
+// can wait on a single unambiguous flag instead of probing side effects.
+let _puzzleBridgeReady = false;
+
+export function markPuzzleBridgeReady(): void {
+  _puzzleBridgeReady = true;
+}
+
 export function registerPuzzleTestHandlers(
   setMode: (on: boolean) => void,
   setSelection: (ids: string[]) => void,
@@ -859,6 +867,13 @@ export interface BathyTestApi {
    * Returns an empty object when OverviewMap is not mounted.
    */
   getPuzzleGroups: () => Record<string, string[]>;
+  /**
+   * True once `markPuzzleBridgeReady()` has been called at the end of the
+   * `registerPuzzleTestHandlers` useEffect in OverviewMap. Tests should poll
+   * this flag instead of probing side effects (e.g. empty-array
+   * `setPuzzleSelection` calls) to confirm the bridge is wired.
+   */
+  isPuzzleBridgeReady: () => boolean;
 }
 
 declare global {
@@ -1725,5 +1740,6 @@ export function installTestHelpers(): void {
     getPuzzleTransform: (id) => _puzzleGetTransform?.(id) ?? null,
     createPuzzleGroup: (ids) => _puzzleCreateGroup?.(ids) ?? "",
     getPuzzleGroups: () => _puzzleGetGroups?.() ?? {},
+    isPuzzleBridgeReady: () => _puzzleBridgeReady,
   };
 }

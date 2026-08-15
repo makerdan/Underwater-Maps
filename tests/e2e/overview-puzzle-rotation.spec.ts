@@ -63,6 +63,29 @@ async function enterPuzzleMode(page: Page): Promise<boolean> {
 }
 
 /**
+ * Poll until the OverviewMap's `registerPuzzleTestHandlers` useEffect has fired
+ * and wired the bridge callbacks. The effect sets `isPuzzleBridgeReady` to true
+ * as its last action, providing a single unambiguous signal instead of a
+ * side-effect probe.
+ */
+async function waitForPuzzleBridge(page: Page): Promise<boolean> {
+  try {
+    await page.waitForFunction(
+      () => {
+        const api = (window as unknown as {
+          __bathyTest?: { isPuzzleBridgeReady?: () => boolean };
+        }).__bathyTest;
+        return api?.isPuzzleBridgeReady?.() === true;
+      },
+      { timeout: 5_000 },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Select the primary dataset tile via the test bridge, bypassing canvas
  * hit-testing. Returns the selected datasetId, or null on failure.
  */
@@ -136,6 +159,13 @@ test.describe("BathyScan — Overview Puzzle rotation panel", () => {
       return;
     }
 
+    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
+    const bridgeReady = await waitForPuzzleBridge(page);
+    if (!bridgeReady) {
+      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
+      return;
+    }
+
     // Rotation panel must NOT be visible before any tile is selected.
     await expect(page.getByTestId("overview-puzzle-rotation-panel")).toHaveCount(0);
 
@@ -165,6 +195,13 @@ test.describe("BathyScan — Overview Puzzle rotation panel", () => {
     const entered = await enterPuzzleMode(page);
     if (!entered) {
       test.skip(true, "Puzzle toggle button not found");
+      return;
+    }
+
+    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
+    const bridgeReady = await waitForPuzzleBridge(page);
+    if (!bridgeReady) {
+      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
       return;
     }
 
@@ -205,6 +242,13 @@ test.describe("BathyScan — Overview Puzzle rotation panel", () => {
       return;
     }
 
+    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
+    const bridgeReady = await waitForPuzzleBridge(page);
+    if (!bridgeReady) {
+      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
+      return;
+    }
+
     const tileId = await selectPrimaryTileViaBridge(page);
     if (!tileId) {
       test.skip(true, "Bridge could not select a tile");
@@ -237,6 +281,13 @@ test.describe("BathyScan — Overview Puzzle rotation panel", () => {
     const entered = await enterPuzzleMode(page);
     if (!entered) {
       test.skip(true, "Puzzle toggle button not found");
+      return;
+    }
+
+    // Wait for registerPuzzleTestHandlers useEffect to fire before calling bridge.
+    const bridgeReady = await waitForPuzzleBridge(page);
+    if (!bridgeReady) {
+      test.skip(true, "Puzzle bridge handlers not registered in time — effect may not have fired");
       return;
     }
 

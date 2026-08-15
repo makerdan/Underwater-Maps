@@ -68,22 +68,18 @@ async function enterPuzzleMode(page: Page): Promise<boolean> {
 
 /**
  * Poll until the OverviewMap's `registerPuzzleTestHandlers` useEffect has fired
- * and wired the bridge callbacks. The effect runs asynchronously after the first
- * render of OverviewMap, so there is a timing gap between `setOverviewOpen(true)`
- * and the handlers becoming available.
- *
- * Uses `setPuzzleSelection([])` as a no-op probe: it returns `true` once the
- * bridge is wired and `false` (or undefined) before that.
+ * and wired the bridge callbacks. The effect sets `isPuzzleBridgeReady` to true
+ * as its last action, providing a single unambiguous signal instead of a
+ * side-effect probe.
  */
 async function waitForPuzzleBridge(page: Page): Promise<boolean> {
   try {
     await page.waitForFunction(
       () => {
         const api = (window as unknown as {
-          __bathyTest?: { setPuzzleSelection?: (ids: string[]) => boolean };
+          __bathyTest?: { isPuzzleBridgeReady?: () => boolean };
         }).__bathyTest;
-        // Empty-array call is a no-op but confirms the handler is registered.
-        return api?.setPuzzleSelection?.([]) === true;
+        return api?.isPuzzleBridgeReady?.() === true;
       },
       { timeout: 5_000 },
     );
