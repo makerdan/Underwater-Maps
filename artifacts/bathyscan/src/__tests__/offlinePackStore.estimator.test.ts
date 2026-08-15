@@ -191,3 +191,66 @@ describe("estimatePackStorageBytes", () => {
     expect(result).toBe(1_048_576 + OVERHEAD);
   });
 });
+
+// ── resolutionM without bbox: stub is scaled, not silently ignored ─────────────
+//
+// When only resolutionM is supplied (no bbox), the 2.5 MiB base stub is scaled
+// by the same resolution tier used in estimatePackStorageBytesFromBbox:
+//   ≤ 2 m → 4 × 2.5 MiB   (fine survey, worse compression)
+//   > 2 m → 1 × 2.5 MiB   (regional survey, better compression)
+// This prevents a 1 m multibeam survey from receiving the same stub estimate
+// as a 10 m regional survey when the dataset has no bbox.
+
+const STUB_BASE = 2.5 * 1024 * 1024;
+
+describe("estimatePackStorageBytes — resolutionM without bbox", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("scales stub by 4× for fine resolution (1 m) when fetch fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    const result = await estimatePackStorageBytes("ds-fine", { resolutionM: 1 });
+    expect(result).toBe(Math.round(STUB_BASE * 4));
+  });
+
+  it("scales stub by 4× for resolutionM = 2 (boundary value) when fetch fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    const result = await estimatePackStorageBytes("ds-2m", { resolutionM: 2 });
+    expect(result).toBe(Math.round(STUB_BASE * 4));
+  });
+
+  it("does not scale stub for coarse resolution (3 m, > 2 m threshold) when fetch fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    const result = await estimatePackStorageBytes("ds-coarse", { resolutionM: 3 });
+    expect(result).toBe(Math.round(STUB_BASE * 1));
+  });
+
+  it("1 m survey stub exceeds 10 m survey stub when fetch fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    const fine   = await estimatePackStorageBytes("ds-a", { resolutionM: 1 });
+    const coarse = await estimatePackStorageBytes("ds-b", { resolutionM: 10 });
+    expect(fine).toBeGreaterThan(coarse);
+  });
+
+  it("Content-Length is returned unscaled even for fine resolution (actual size wins)", async () => {
+    // When the HEAD response carries a real Content-Length, that value is
+    // authoritative — resolution scaling only applies to the blind stub.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, {
+        status: 200,
+        headers: { "content-length": "1048576" }, // 1 MiB
+      }),
+    );
+    const result = await estimatePackStorageBytes("ds-cl", { resolutionM: 1 });
+    expect(result).toBe(1_048_576 + OVERHEAD);
+  });
+
+  it("no hints and no bbox defaults to unscaled 2.5 MiB stub (resolutionM defaults to 10 m)", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    const withNoHints      = await estimatePackStorageBytes("ds-x");
+    const withDefault10m   = await estimatePackStorageBytes("ds-y", { resolutionM: 10 });
+    expect(withNoHints).toBe(Math.round(STUB_BASE));
+    expect(withDefault10m).toBe(Math.round(STUB_BASE));
+  });
+});

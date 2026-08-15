@@ -421,8 +421,13 @@ export function getOfflineWeatherValue(pack: OfflinePack): OfflineWeatherValue |
 
 /** Optional hints for a dataset-aware size estimate. */
 export interface BboxEstimateHints {
-  /** Bounding box of the dataset in WGS-84 degrees. */
-  bbox: { minLon: number; maxLon: number; minLat: number; maxLat: number };
+  /**
+   * Bounding box of the dataset in WGS-84 degrees.
+   * Required by `estimatePackStorageBytesFromBbox`; optional in
+   * `estimatePackStorageBytes` (which can still use `resolutionM` alone to
+   * scale the fallback stub when bbox is unavailable).
+   */
+  bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number };
   /**
    * Horizontal grid resolution in metres.
    * Used to select the compressed-bytes-per-sample factor.
@@ -445,7 +450,10 @@ export interface BboxEstimateHints {
  *
  * Exported for direct unit testing.
  */
-export function estimatePackStorageBytesFromBbox(hints: BboxEstimateHints): number {
+export function estimatePackStorageBytesFromBbox(hints: {
+  bbox: NonNullable<BboxEstimateHints["bbox"]>;
+  resolutionM?: number;
+}): number {
   const { bbox, resolutionM = 10 } = hints;
   const dLon = Math.abs(bbox.maxLon - bbox.minLon);
   const dLat = Math.abs(bbox.maxLat - bbox.minLat);
@@ -464,14 +472,19 @@ export function estimatePackStorageBytesFromBbox(hints: BboxEstimateHints): numb
 /**
  * Estimate the storage size of an offline pack for `datasetId`.
  *
- * When `hints` are provided (bbox + optional resolution) the estimate is
- * computed from the dataset's area using `estimatePackStorageBytesFromBbox`.
- * This is the preferred path — servers rarely expose Content-Length on
- * streaming terrain responses.
+ * When `hints.bbox` is provided the estimate is computed from the dataset's
+ * area using `estimatePackStorageBytesFromBbox` — the preferred path.
+ *
+ * When only `hints.resolutionM` is provided (no bbox), the 2.5 MiB base stub
+ * is scaled by the same resolution tier used in `estimatePackStorageBytesFromBbox`:
+ *   ≤ 2 m → 4 × stub  (high-density survey, worse compression)
+ *   > 2 m → 1 × stub  (regional survey, better compression)
+ * This ensures resolutionM is never silently ignored even when bbox is absent.
  *
  * Falls back (in order) to:
  *   1. A HEAD request on the terrain endpoint reading Content-Length.
- *   2. A fixed 2.5 MiB stub when the header is absent or the request fails.
+ *   2. The resolution-scaled 2.5 MiB stub when the header is absent or the
+ *      request fails.
  */
 export async function estimatePackStorageBytes(
   datasetId: string,
@@ -480,8 +493,16 @@ export async function estimatePackStorageBytes(
   // Prefer bbox-area formula — avoids a network round-trip and is more
   // accurate than Content-Length (which is absent on chunked responses).
   if (hints?.bbox) {
-    return estimatePackStorageBytesFromBbox(hints);
+    return estimatePackStorageBytesFromBbox({ bbox: hints.bbox, resolutionM: hints.resolutionM });
   }
+
+  // Scale the base stub by resolution tier so that a 1 m multibeam survey
+  // doesn't silently receive the same estimate as a 10 m regional survey when
+  // bbox is unavailable.  Mirrors the avgBytesPerSample threshold in
+  // estimatePackStorageBytesFromBbox.
+  const resM = Math.max(1, hints?.resolutionM ?? 10);
+  const stubMultiplier = resM <= 2 ? 4 : 1;
+  const scaledStub = Math.round(2.5 * 1024 * 1024 * stubMultiplier);
 
   const terrainUrl = `${API_BASE}/api/datasets/${datasetId}/terrain`;
   try {
@@ -491,13 +512,14 @@ export async function estimatePackStorageBytes(
       const bytes = parseInt(contentLength, 10);
       if (!isNaN(bytes) && bytes > 0) {
         // Add ~200 KB overhead for tide + weather JSON pack data.
+        // Content-Length reflects actual terrain bytes so no resolution scaling.
         return bytes + 200 * 1024;
       }
     }
   } catch {
     // Network unavailable or endpoint doesn't support HEAD — fall back.
   }
-  return 2.5 * 1024 * 1024;
+  return scaledStub;
 }
 
 // ─── Expiry detection ─────────────────────────────────────────────────────────
