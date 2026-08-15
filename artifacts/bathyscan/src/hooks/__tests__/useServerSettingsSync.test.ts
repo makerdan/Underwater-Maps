@@ -147,6 +147,9 @@ import {
   flushServerSync,
   hasUnackedSettingsEdits,
 } from "@/hooks/useServerSettingsSync";
+import { useTrailStore } from "@/lib/trailStore";
+import { useLiveModeStore } from "@/lib/liveMode";
+import { useCameraStore } from "@/lib/cameraStore";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -391,6 +394,118 @@ describe("useServerSettingsSync — singleton DEV-mode warning", () => {
 
     second.unmount();
     first.unmount();
+  });
+});
+
+// ── Tests — sign-out Live-mode isolation ─────────────────────────────────────
+//
+// A Clerk sign-out (isSignedIn true → false) must leave the Live tab fully
+// idle for the next user on the same device: no active trail recording, no
+// follow mode engaged, no GPS retry state, and no Drive Boat localStorage
+// keys inherited from the previous user.
+
+describe("useServerSettingsSync — sign-out clears Live-mode state", () => {
+  const resetLiveStores = () => {
+    useTrailStore.getState().resetForSignOut();
+    useLiveModeStore.getState().resetForSignOut();
+    useCameraStore.getState().setGpsFollowMode(false);
+    localStorage.removeItem("bathyscan:realisticMode");
+    localStorage.removeItem("bathyscan:boatSpeedMph");
+  };
+
+  beforeEach(() => {
+    mutateAsyncFn.mockResolvedValue({ __updatedAt: "2026-07-01T00:00:00Z" });
+    settingsStoreState.clearForSignOut.mockClear();
+    clerkAuthState.isLoaded = true;
+    clerkAuthState.isSignedIn = true;
+    resetLiveStores();
+  });
+
+  afterEach(() => {
+    resetLiveStores();
+    clerkAuthState.isSignedIn = true;
+    clerkAuthState.isLoaded = true;
+    vi.clearAllMocks();
+  });
+
+  it("resets trail, camera-follow, and live-mode stores plus Drive Boat localStorage keys on true → false", async () => {
+    const { rerender, unmount } = renderHook(() => useServerSettingsSync());
+
+    // Seed "User A was mid-session" state.
+    act(() => {
+      useTrailStore.getState().startRecording(10_000);
+      useTrailStore.setState({
+        currentPoints: [
+          { lon: -135.3, lat: 57.05, accuracy: 5, timestamp: 1_754_000_000_000, seq: 0 },
+        ],
+      });
+      useCameraStore.getState().setGpsFollowMode(true);
+      useLiveModeStore.setState({ gpsRetryAttempt: 2, gpsRecoveryFailed: true });
+    });
+    localStorage.setItem("bathyscan:realisticMode", "true");
+    localStorage.setItem("bathyscan:boatSpeedMph", "42");
+    sessionStorage.setItem(
+      "bathyscan-trail-draft",
+      JSON.stringify({ points: [], startedAt: 1, sessionSeq: 1 }),
+    );
+
+    expect(useTrailStore.getState().recording).toBe(true);
+    expect(useCameraStore.getState().gpsFollowState).toBe("following");
+
+    // Sign out: true → false transition.
+    clerkAuthState.isSignedIn = false;
+    await act(async () => {
+      rerender();
+      await Promise.resolve();
+    });
+
+    // Existing sign-out behavior still runs.
+    expect(settingsStoreState.clearForSignOut).toHaveBeenCalledTimes(1);
+
+    // Trail store is fully idle.
+    const trail = useTrailStore.getState();
+    expect(trail.recording).toBe(false);
+    expect(trail.currentPoints).toEqual([]);
+    expect(trail.startedAt).toBeNull();
+    expect(trail.intervalId).toBeNull();
+    expect(trail.draftTrail).toBeNull();
+    expect(sessionStorage.getItem("bathyscan-trail-draft")).toBeNull();
+
+    // Follow mode is off.
+    expect(useCameraStore.getState().gpsFollowState).toBe("off");
+
+    // Live-mode retry state is cleared.
+    expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(0);
+    expect(useLiveModeStore.getState().gpsRecoveryFailed).toBe(false);
+
+    // Drive Boat raw localStorage keys are gone.
+    expect(localStorage.getItem("bathyscan:realisticMode")).toBeNull();
+    expect(localStorage.getItem("bathyscan:boatSpeedMph")).toBeNull();
+
+    unmount();
+  });
+
+  it("does NOT clear Live-mode state on an initial signed-out load (no true → false transition)", async () => {
+    clerkAuthState.isSignedIn = false;
+
+    // Seed state before mounting — must survive an initial signed-out render.
+    act(() => {
+      useCameraStore.getState().setGpsFollowMode(true);
+      useLiveModeStore.setState({ gpsRetryAttempt: 1 });
+    });
+    localStorage.setItem("bathyscan:realisticMode", "true");
+
+    const { unmount } = renderHook(() => useServerSettingsSync());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(settingsStoreState.clearForSignOut).not.toHaveBeenCalled();
+    expect(useCameraStore.getState().gpsFollowState).toBe("following");
+    expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(1);
+    expect(localStorage.getItem("bathyscan:realisticMode")).toBe("true");
+
+    unmount();
   });
 });
 
