@@ -84,6 +84,16 @@ interface TrailStore {
    * Permanently discard the recovered draft (sessionStorage + state).
    */
   discardDraft: () => void;
+  /**
+   * Sign-out isolation reset — stops any active recording (clearing the
+   * sampling timer and beforeunload listener), wipes all recorded points,
+   * the sessionStorage draft, and the module-level seq counters so the next
+   * user on this device starts from a clean slate.
+   *
+   * Listed in SIGNOUT_STORE_MANIFEST (src/hooks/signoutManifest.ts) and
+   * called from performSignOutCleanup (src/hooks/signoutCleanup.ts).
+   */
+  resetForSignOut: () => void;
 }
 
 type Get = () => TrailStore;
@@ -356,5 +366,26 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
   discardDraft: () => {
     clearDraftStorage();
     set({ draftTrail: null });
+  },
+
+  resetForSignOut: () => {
+    const { intervalId, beforeUnloadCleanup } = get();
+    if (intervalId) clearInterval(intervalId);
+    if (beforeUnloadCleanup) {
+      window.removeEventListener("beforeunload", beforeUnloadCleanup);
+    }
+    sessionSeq = 0;
+    checkpointCounter = 0;
+    clearDraftStorage();
+    set({
+      recording: false,
+      intervalId: null,
+      beforeUnloadCleanup: null,
+      color: DEFAULT_TRAIL_COLOR,
+      currentPoints: [],
+      startedAt: null,
+      isOverflowing: false,
+      draftTrail: null,
+    });
   },
 }));

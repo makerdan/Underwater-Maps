@@ -29,10 +29,10 @@ import {
 import { useSettingsStore, getDataSnapshot } from "@/lib/settingsStore";
 import { parseSettingsResponse } from "@/lib/settingsResponseSchema";
 import { usePaletteStore } from "@/lib/paletteStore";
-import { usePanelCollapseStore, type PanelId, DEFAULTS as PANEL_DEFAULTS } from "@/lib/panelCollapseStore";
+import { usePanelCollapseStore, type PanelId } from "@/lib/panelCollapseStore";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useUiStore, CURRENT_DEPTH_LAYERS } from "@/lib/uiStore";
-import { useDriftStore } from "@/lib/driftStore";
+import { performSignOutCleanup } from "./signoutCleanup";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 
 // ─── Singleton mount guard ────────────────────────────────────────────────────
@@ -349,6 +349,12 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
   // ── Sign-out cleanup ───────────────────────────────────────────────────────
   // When the user signs out, clear all persisted local settings so a different
   // user logging in on the same device starts from a clean slate.
+  //
+  // The actual store resets + localStorage removals live in
+  // performSignOutCleanup (./signoutCleanup.ts). When adding a store reset or
+  // localStorage removal there, also update signoutManifest.ts —
+  // src/__tests__/signout-manifest.test.ts mechanically enforces that the
+  // cleanup routine and the manifest stay in sync.
   useEffect(() => {
     if (!isLoaded) return;
     const prev = prevIsSignedInRef.current;
@@ -357,13 +363,11 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     // Only act on an explicit true → false transition (not the initial load).
     if (prev !== true || isSignedIn !== false) return;
 
-    // Clear settingsStore and its localStorage entry.
-    useSettingsStore.getState().clearForSignOut();
+    performSignOutCleanup();
 
-    // Reset the colour palette and remove its localStorage entry. The reset
-    // bumps `rev`; realign the acked rev so the next sign-in's hydration
-    // isn't blocked by a phantom "dirty palette".
-    usePaletteStore.getState().reset();
+    // The palette reset inside performSignOutCleanup bumps `rev`; realign the
+    // acked rev so the next sign-in's hydration isn't blocked by a phantom
+    // "dirty palette".
     _ackedPaletteRev = usePaletteStore.getState().rev;
     // The clears above fire the store subscriptions and bump the edit revs;
     // realign the acked revs so the next sign-in's hydration isn't blocked
@@ -373,32 +377,6 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       _ackedPanelRev = _panelEditRev;
       _ackedZoneRev = _zoneEditRev;
     });
-    try { localStorage.removeItem("bathyscan:palette"); } catch { /* ignore */ }
-
-    // Reset panel collapse state and remove its localStorage entry.
-    usePanelCollapseStore.setState({ collapsed: { ...PANEL_DEFAULTS } });
-    try { localStorage.removeItem("bathyscan:panel-collapse"); } catch { /* ignore */ }
-
-    // Clear the zone-overlay colour slots (both water types).
-    try {
-      localStorage.removeItem("bathyscan:zoneOverlaySlots:saltwater");
-      localStorage.removeItem("bathyscan:zoneOverlaySlots:freshwater");
-    } catch { /* ignore */ }
-
-    // Clear saved drift plans so the next user on this device starts fresh.
-    useDriftStore.setState({ savedDriftPlans: [], skippedPlanCount: 0 });
-    try { localStorage.removeItem("bathyscan:savedDriftPlans"); } catch { /* ignore */ }
-
-    // Clear GPS column-mapping fingerprints (bathyscan:colmap:*).
-    try {
-      const colmapPrefix = "bathyscan:colmap:";
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(colmapPrefix)) keysToRemove.push(key);
-      }
-      for (const key of keysToRemove) localStorage.removeItem(key);
-    } catch { /* ignore */ }
   }, [isSignedIn, isLoaded]);
 
   // ── GET hydration ──────────────────────────────────────────────────────────

@@ -112,6 +112,16 @@ interface CameraStore {
   pauseFollowForSignalLoss: () => void;
   /** Clear the paused state and return to 'following'. */
   resumeFollow: () => void;
+  /**
+   * Sign-out isolation reset — clears the previous user's geographic
+   * position traces (crosshair, last click, camera geo) and follow-mode
+   * state so nothing about where they were exploring leaks to the next
+   * account on this device.
+   *
+   * Listed in SIGNOUT_STORE_MANIFEST (src/hooks/signoutManifest.ts) and
+   * called from performSignOutCleanup (src/hooks/signoutCleanup.ts).
+   */
+  resetForSignOut: () => void;
 }
 
 export const useCameraStore = create<CameraStore>((set) => ({
@@ -182,4 +192,20 @@ export const useCameraStore = create<CameraStore>((set) => ({
     ),
   resumeFollow: () =>
     set({ gpsFollowState: "following", pauseReason: null, followLastInteractionAt: 0 }),
+
+  resetForSignOut: () =>
+    set({
+      crosshairGps: null,
+      lastClickedGps: null,
+      turboActive: false,
+      cameraPosition: { known: false },
+      cameraDepth: null,
+      cameraAltitude: 0,
+      heading: 0,
+      speedIndex: 2,
+      isOrbitingTouch: false,
+      gpsFollowState: "off",
+      pauseReason: null,
+      followLastInteractionAt: 0,
+    }),
 }));

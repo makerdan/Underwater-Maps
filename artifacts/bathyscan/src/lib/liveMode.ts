@@ -53,12 +53,20 @@ interface LiveModeState {
    * starts fresh when the user toggles Live mode off and on again.
    */
   gpsRecoveryFailed: boolean;
+  /**
+   * Sign-out isolation reset. Held in store state (rather than only as the
+   * module-level resetLiveModeForSignOut) so the sign-out manifest guard can
+   * mechanically verify performSignOutCleanup invokes it, like every other
+   * manifest store. Delegates to resetLiveModeForSignOut below.
+   */
+  resetForSignOut: () => void;
 }
 
 export const useLiveModeStore = create<LiveModeState>(() => ({
   gpsRetryAttempt: 0,
   gpsMaxRetries: 3, // kept in sync with MAX_GPS_RETRIES below
   gpsRecoveryFailed: false,
+  resetForSignOut: () => resetLiveModeForSignOut(),
 }));
 
 /** Unsubscribe handle for the GPS-store subscription active while in Live mode. */
@@ -263,6 +271,20 @@ export function exitLiveMode(): void {
   trailStartedByLive = false;
 
   useCameraStore.getState().setGpsFollowMode(false);
+}
+
+/**
+ * Sign-out isolation reset — exits Live mode (cancelling GPS retry timers,
+ * unsubscribing the GPS listener, pausing any live-started trail recording,
+ * and disabling Follow Me) and returns the observable retry store to its
+ * defaults so the next user on this device starts fresh.
+ *
+ * Listed in SIGNOUT_STORE_MANIFEST (src/hooks/signoutManifest.ts) and called
+ * from performSignOutCleanup (src/hooks/signoutCleanup.ts).
+ */
+export function resetLiveModeForSignOut(): void {
+  exitLiveMode();
+  useLiveModeStore.setState({ gpsRetryAttempt: 0, gpsRecoveryFailed: false });
 }
 
 /**

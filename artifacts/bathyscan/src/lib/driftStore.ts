@@ -271,6 +271,18 @@ interface DriftStore {
   setSnapToDepthM: (v: number) => void;
 
   /**
+   * Sign-out isolation reset — restores EVERY user-controlled data field to
+   * its default (see DRIFT_SIGNOUT_DEFAULTS): saved plans, positional session
+   * state, gear settings, manual condition inputs, mode/heading/speed,
+   * backtroll/reverse, snap-to-depth, and boat profile. The matching
+   * localStorage keys are removed by performSignOutCleanup.
+   *
+   * Listed in SIGNOUT_STORE_MANIFEST (src/hooks/signoutManifest.ts) and
+   * called from performSignOutCleanup (src/hooks/signoutCleanup.ts).
+   */
+  resetForSignOut: () => void;
+
+  /**
    * Return the interpolated tidal vector from `driftConditions` at the given
    * hour offset (0–23). Returns null when no conditions are loaded.
    *
@@ -282,6 +294,58 @@ interface DriftStore {
 }
 
 export const TROLL_MAX_KNOTS = 10;
+
+/**
+ * Every non-function (data) field of DriftStore. Used to type
+ * DRIFT_SIGNOUT_DEFAULTS so that adding a new data field to the store without
+ * deciding its sign-out default is a compile error — the mechanical guard the
+ * sign-out isolation manifest relies on for this store.
+ */
+type DriftDataFields = {
+  [K in keyof DriftStore as DriftStore[K] extends (...args: never[]) => unknown
+    ? never
+    : K]: DriftStore[K];
+};
+
+/**
+ * Sign-out defaults for every user-controlled drift/Drive Boat data field:
+ * plans, positions, gear (line length/weight), manual wind/tide inputs, mode,
+ * heading/speed, backtroll/reverse, snap-to-depth, and boat profile. Applied
+ * wholesale by resetForSignOut so nothing the previous user configured
+ * survives into the next account. The manifest guard test asserts these match
+ * the store's clean initial state.
+ */
+export const DRIFT_SIGNOUT_DEFAULTS: DriftDataFields = {
+  driftPlannerActive: false,
+  driftConditions: null,
+  driftPath: null,
+  driftHour: 0,
+  driftStartLat: null,
+  driftStartLon: null,
+  lineLengthM: 200,
+  lineWeightG: 500,
+  estimatedConditions: false,
+  manualWindSpeedKnots: 8,
+  manualWindDegrees: 225,
+  manualTidalSpeedKnots: 0.8,
+  manualTidalDegrees: 180,
+  manualSlackNow: false,
+  driftMode: "drift",
+  boatHeadingDeg: 0,
+  boatSpeedKnots: 2.5,
+  backtroll: false,
+  driveBoatReverse: false,
+  driftWaypoints: [],
+  savedDriftPlans: [],
+  skippedPlanCount: 0,
+  reverseDriftPath: null,
+  reverseModeActive: false,
+  catchLat: null,
+  catchLon: null,
+  boatProfileId: DEFAULT_BOAT_PROFILE_ID,
+  snapToDepthEnabled: false,
+  snapToDepthM: 50,
+};
 
 function readLocalBool(key: string, fallback: boolean): boolean {
   try {
@@ -454,6 +518,8 @@ export const useDriftStore = create<DriftStore>((set, get) => ({
   setSnapToDepthEnabled: (v) => set({ snapToDepthEnabled: v }),
   snapToDepthM: 50,
   setSnapToDepthM: (v) => set({ snapToDepthM: Math.max(0, v) }),
+
+  resetForSignOut: () => set({ ...DRIFT_SIGNOUT_DEFAULTS }),
 
   getTidalVectorAtHour: (hourOffset) => {
     const conditions = get().driftConditions;
