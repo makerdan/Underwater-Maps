@@ -29,8 +29,7 @@ interface Dataset {
   id: string;
   name: string;
   bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
-  /** Horizontal grid resolution in metres — passed to the storage estimator. */
-  resolutionM?: number;
+  resolutionM?: number | null;
 }
 
 interface Props {
@@ -131,7 +130,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
       const estBytes = await estimatePackStorageBytes(
         dataset.id,
         dataset.bbox
-          ? { bbox: dataset.bbox, resolutionM: dataset.resolutionM }
+          ? { bbox: dataset.bbox, resolutionM: dataset.resolutionM ?? undefined }
           : undefined,
       );
       setEstimatedBytes(estBytes);

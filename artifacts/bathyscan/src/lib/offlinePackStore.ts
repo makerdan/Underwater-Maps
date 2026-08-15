@@ -153,7 +153,7 @@ export async function saveOfflinePack(
     name: string;
     bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
     /** Horizontal grid resolution in metres — forwarded to the storage estimator. */
-    resolutionM?: number;
+    resolutionM?: number | null;
   },
   days: number,
   onProgress: (p: PackProgress) => void,
@@ -251,7 +251,10 @@ export async function saveOfflinePack(
       tidePack,
       weatherPack,
       storageBytesEstimate: dataset.bbox
-        ? estimatePackStorageBytesFromBbox({ bbox: dataset.bbox, resolutionM: dataset.resolutionM })
+        ? estimatePackStorageBytesFromBbox({
+            bbox: dataset.bbox,
+            resolutionM: dataset.resolutionM ?? undefined,
+          })
         : estimateFromPredictions(tidePack),
     };
 

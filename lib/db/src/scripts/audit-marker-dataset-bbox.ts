@@ -24,8 +24,8 @@
  */
 
 import { isNotNull, inArray } from "drizzle-orm";
-import { db, pool, markersTable, datasetCatalogTable, customDatasetsTable } from "../index.js";
-import { classifyMarkers, ciExitCode, type Bbox } from "./audit-marker-dataset-bbox-helpers.js";
+import { db, pool, markersTable } from "../index.js";
+import { classifyMarkers, ciExitCode, resolveBboxes } from "./audit-marker-dataset-bbox-helpers.js";
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -34,84 +34,6 @@ const args = process.argv.slice(2);
 const FIX_MODE = args.includes("--fix");
 const DRY_RUN = args.includes("--dry-run");
 const CI_MODE = args.includes("--ci");
-
-// ---------------------------------------------------------------------------
-// Bbox resolver — batched by unique dataset ID
-// ---------------------------------------------------------------------------
-async function resolveBboxes(datasetIds: string[]): Promise<Map<string, Bbox | null>> {
-  const result = new Map<string, Bbox | null>();
-  if (datasetIds.length === 0) return result;
-
-  // --- catalog table ---
-  const catalogRows = await db
-    .select({
-      id: datasetCatalogTable.id,
-      coverageBbox: datasetCatalogTable.coverageBbox,
-    })
-    .from(datasetCatalogTable)
-    .where(inArray(datasetCatalogTable.id, datasetIds));
-
-  for (const row of catalogRows) {
-    const bbox = row.coverageBbox as unknown as Record<string, unknown> | null;
-    if (
-      bbox &&
-      typeof bbox["minLon"] === "number" &&
-      typeof bbox["minLat"] === "number" &&
-      typeof bbox["maxLon"] === "number" &&
-      typeof bbox["maxLat"] === "number"
-    ) {
-      result.set(row.id, {
-        minLon: bbox["minLon"],
-        minLat: bbox["minLat"],
-        maxLon: bbox["maxLon"],
-        maxLat: bbox["maxLat"],
-      });
-    }
-  }
-
-  // --- custom datasets table (for IDs not found in catalog) ---
-  const stillMissing = datasetIds.filter((id) => !result.has(id));
-  if (stillMissing.length > 0) {
-    const customRows = await db
-      .select({
-        id: customDatasetsTable.id,
-        terrainJson: customDatasetsTable.terrainJson,
-      })
-      .from(customDatasetsTable)
-      .where(inArray(customDatasetsTable.id, stillMissing));
-
-    for (const row of customRows) {
-      const tj = row.terrainJson as { minLon?: unknown; minLat?: unknown; maxLon?: unknown; maxLat?: unknown } | null;
-      if (
-        tj &&
-        typeof tj.minLon === "number" &&
-        typeof tj.minLat === "number" &&
-        typeof tj.maxLon === "number" &&
-        typeof tj.maxLat === "number"
-      ) {
-        result.set(row.id, {
-          minLon: tj.minLon,
-          minLat: tj.minLat,
-          maxLon: tj.maxLon,
-          maxLat: tj.maxLat,
-        });
-      }
-    }
-  }
-
-  // Mark any IDs we still could not resolve as null (dataset deleted/missing)
-  for (const id of datasetIds) {
-    if (!result.has(id)) {
-      result.set(id, null);
-    }
-  }
-
-  return result;
-}
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 async function main() {
   // 1. Fetch all markers with a non-null datasetId
   const markers = await db
@@ -136,7 +58,7 @@ async function main() {
   const uniqueDatasetIds = [...new Set(markers.map((m) => m.datasetId as string))];
   console.log(`[audit] Unique dataset IDs to resolve: ${uniqueDatasetIds.length}`);
 
-  const bboxMap = await resolveBboxes(uniqueDatasetIds);
+  const bboxMap = await resolveBboxes(db, uniqueDatasetIds);
 
   const resolvedCount = [...bboxMap.values()].filter((v) => v !== null).length;
   const unresolvableCount = uniqueDatasetIds.length - resolvedCount;

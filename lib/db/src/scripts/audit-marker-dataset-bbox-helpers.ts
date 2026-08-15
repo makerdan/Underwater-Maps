@@ -1,9 +1,20 @@
 /**
  * audit-marker-dataset-bbox-helpers.ts
  *
- * Pure, side-effect-free helpers extracted from audit-marker-dataset-bbox.ts
- * so they can be unit-tested without a real database connection.
+ * Helpers extracted from audit-marker-dataset-bbox.ts.
+ *
+ * The pure classification helpers (isInBbox, classifyMarkers, ciExitCode) have
+ * no database dependency and can be tested without a real DB connection.
+ *
+ * The DB helper (resolveBboxes) accepts a Drizzle db instance so it can be
+ * exercised in integration tests against a real (test-isolated) schema.
  */
+
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { inArray } from "drizzle-orm";
+import type * as schema from "../schema/index.js";
+import { datasetCatalogTable } from "../schema/dataset-catalog.js";
+import { customDatasetsTable } from "../schema/custom-datasets.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -82,4 +93,90 @@ export function ciExitCode(
   ciMode: boolean,
 ): 0 | 1 {
   return ciMode && problematicCount > 0 ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// DB helper — resolve bboxes for a set of dataset IDs.
+//
+// Checks the catalog table first; for IDs not found there it falls back to
+// custom_datasets.terrainJson.  Any ID whose stored bbox is missing or has
+// the wrong JSON shape (e.g. snake_case keys instead of camelCase) is treated
+// as unresolvable and mapped to null — the same outcome as a deleted dataset.
+//
+// Exported so integration tests can exercise this path against a real DB
+// without importing the side-effectful main script.
+// ---------------------------------------------------------------------------
+
+export async function resolveBboxes(
+  db: NodePgDatabase<typeof schema>,
+  datasetIds: string[],
+): Promise<Map<string, Bbox | null>> {
+  const result = new Map<string, Bbox | null>();
+  if (datasetIds.length === 0) return result;
+
+  // --- catalog table ---
+  const catalogRows = await db
+    .select({
+      id: datasetCatalogTable.id,
+      coverageBbox: datasetCatalogTable.coverageBbox,
+    })
+    .from(datasetCatalogTable)
+    .where(inArray(datasetCatalogTable.id, datasetIds));
+
+  for (const row of catalogRows) {
+    const bbox = row.coverageBbox as unknown as Record<string, unknown> | null;
+    if (
+      bbox &&
+      typeof bbox["minLon"] === "number" &&
+      typeof bbox["minLat"] === "number" &&
+      typeof bbox["maxLon"] === "number" &&
+      typeof bbox["maxLat"] === "number"
+    ) {
+      result.set(row.id, {
+        minLon: bbox["minLon"] as number,
+        minLat: bbox["minLat"] as number,
+        maxLon: bbox["maxLon"] as number,
+        maxLat: bbox["maxLat"] as number,
+      });
+    }
+  }
+
+  // --- custom datasets table (for IDs not found in catalog) ---
+  const stillMissing = datasetIds.filter((id) => !result.has(id));
+  if (stillMissing.length > 0) {
+    const customRows = await db
+      .select({
+        id: customDatasetsTable.id,
+        terrainJson: customDatasetsTable.terrainJson,
+      })
+      .from(customDatasetsTable)
+      .where(inArray(customDatasetsTable.id, stillMissing));
+
+    for (const row of customRows) {
+      const tj = row.terrainJson as { minLon?: unknown; minLat?: unknown; maxLon?: unknown; maxLat?: unknown } | null;
+      if (
+        tj &&
+        typeof tj.minLon === "number" &&
+        typeof tj.minLat === "number" &&
+        typeof tj.maxLon === "number" &&
+        typeof tj.maxLat === "number"
+      ) {
+        result.set(row.id, {
+          minLon: tj.minLon,
+          minLat: tj.minLat,
+          maxLon: tj.maxLon,
+          maxLat: tj.maxLat,
+        });
+      }
+    }
+  }
+
+  // Any ID still not resolved → null (dataset deleted / bbox shape unreadable)
+  for (const id of datasetIds) {
+    if (!result.has(id)) {
+      result.set(id, null);
+    }
+  }
+
+  return result;
 }
