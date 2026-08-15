@@ -102,3 +102,4 @@
 - [cacheRegistry lint for new lib caches](cache-registry-lint.md) — any api-server lib module-level Map cache must call registerCache(() => cache.clear()) or cacheRegistry-lint.test.ts fails.
 - [orval "Failed to resolve input" root cause](orval-failed-resolve-input.md) — this misleading error is always a duplicate YAML key in openapi.yaml; @scalar/json-magic silently swallows the yaml.parse exception and returns ok:false.
 - [Vitest unhandled-error gate fails green runs](unhandled-rejection-gate.md) — "N errors, exit 1" with all tests passing = stale wholesale mock missing a newly-called export, not a test regression; check the Unhandled Errors section first.
+- [Duplicate-hooks registry baseline breakage](duplicate-hooks-registry-baseline.md) — check:duplicate-hooks-registry fails on TrailRecorder.tsx (503 lines, not in SCANNED_FILES) since 2026-08-15; pre-existing, kills standard tier before test:unit.

@@ -1,10 +1,11 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useUser, useClerk } from "@/lib/clerkCompat";
 import { useDeleteMarkersMine } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { flushServerSync } from "@/hooks/useServerSettingsSync";
+import { performSignOutCleanup } from "@/hooks/signoutCleanup";
 import { useToast } from "@/hooks/use-toast";
 import { S, FONT } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
@@ -39,6 +40,46 @@ export function AccountSection() {
   }>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [accountDeleteMsg, setAccountDeleteMsg] = useState<string | null>(null);
+  // True once the server DELETE has succeeded. From that point on the delete
+  // button is removed from the DOM entirely — the account is gone, so a
+  // "retry" would be meaningless (and confusing if sign-out then failed).
+  const [accountDeleted, setAccountDeleted] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+
+  // Single in-flight sign-out guard: double-clicks must not issue concurrent
+  // Clerk signOut() calls. A ref (not state) so the guard is synchronous.
+  const signOutInFlightRef = useRef(false);
+
+  // The pending marker-deletion timer, kept in a ref so unmount cleanup and
+  // the sign-out watcher can cancel it without depending on render state.
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Live view of the auth state for the timeout callback: the setTimeout
+  // closure would otherwise capture a stale `isSignedIn` from the render in
+  // which the countdown started.
+  const isSignedInRef = useRef<boolean>(!!isSignedIn);
+  isSignedInRef.current = !!isSignedIn;
+
+  // Cancel a pending marker-deletion countdown when the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (deleteTimerRef.current !== null) {
+        clearTimeout(deleteTimerRef.current);
+        deleteTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Cancel a pending marker-deletion countdown if the user signs out before
+  // it fires — the request would be unauthorized anyway.
+  useEffect(() => {
+    if (!isSignedIn && deleteTimerRef.current !== null) {
+      clearTimeout(deleteTimerRef.current);
+      deleteTimerRef.current = null;
+      setDeleteMarkersUndo(null);
+    }
+  }, [isSignedIn]);
 
   const handleExportSettings = () => {
     setExportingSettings(true);
@@ -89,36 +130,100 @@ export function AccountSection() {
 
   const handleDeleteMarkers = () => {
     if (deleteMarkersUndo) return;
+    if (!isSignedInRef.current) return;
     const id = setTimeout(() => {
+      deleteTimerRef.current = null;
       setDeleteMarkersUndo(null);
+      // Re-check auth at fire time: the user may have signed out (or the
+      // session may have ended) during the 5-second countdown.
+      if (!isSignedInRef.current) return;
       deleteAllMarkers.mutate(undefined);
     }, 5000);
+    deleteTimerRef.current = id;
     setDeleteMarkersUndo({ message: "Deleting all markers in 5 s — tap UNDO to cancel", timeoutId: id });
   };
 
   const handleUndoDelete = () => {
     if (deleteMarkersUndo) {
       clearTimeout(deleteMarkersUndo.timeoutId);
+      deleteTimerRef.current = null;
       setDeleteMarkersUndo(null);
     }
   };
 
   const handleDeleteAccount = async () => {
+    if (!isSignedIn || !user || accountDeleted) return;
     if (!window.confirm("Permanently delete your BathyScan account and all data? This cannot be undone.")) {
       return;
     }
     setDeletingAccount(true);
     setAccountDeleteMsg(null);
+
+    // ── Phase 1: server DELETE. Failures here mean the account still exists,
+    // so the message must say whether a retry is safe.
+    let res: Response;
     try {
       const apiBase = basePath;
-      const res = await authorizedFetch(`${apiBase}/api/me`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Server returned " + res.status);
+      res = await authorizedFetch(`${apiBase}/api/me`, { method: "DELETE" });
+    } catch {
+      setAccountDeleteMsg(
+        "✗ Network error — your account was NOT deleted. Check your connection and try again.",
+      );
+      setDeletingAccount(false);
+      return;
+    }
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        setAccountDeleteMsg(
+          "✗ Not authorized — your session may have expired. No data was deleted; sign in again before retrying.",
+        );
+      } else {
+        setAccountDeleteMsg(
+          `✗ Server error (${res.status}) — deletion did not complete. It is safe to retry.`,
+        );
+      }
+      setDeletingAccount(false);
+      return;
+    }
+
+    // ── Phase 2: server deletion succeeded. Clear all locally persisted
+    // per-user state BEFORE attempting sign-out, so a delayed or failed
+    // sign-out can't leave deleted-account data visible in the UI.
+    setAccountDeleted(true);
+    performSignOutCleanup();
+    try {
       await signOut();
     } catch {
-      setAccountDeleteMsg("✗ Deletion failed. Contact support.");
+      // The account and its data are already gone — do NOT invite a retry.
+      setAccountDeleteMsg(
+        "✓ Account deleted. Sign-out failed — please close this tab. Do not retry deletion.",
+      );
       setDeletingAccount(false);
     }
   };
+
+  const handleSignOut = () => {
+    if (signOutInFlightRef.current) return;
+    signOutInFlightRef.current = true;
+    setSigningOut(true);
+    setSignOutError(null);
+    void (async () => {
+      try {
+        await signOut();
+      } catch {
+        setSignOutError("Sign-out failed. Please try again.");
+      } finally {
+        signOutInFlightRef.current = false;
+        setSigningOut(false);
+      }
+    })();
+  };
+
+  // Admin role comes from Clerk public metadata; the server independently
+  // enforces access (ADMIN_USER_IDS), this only decides whether to render
+  // the panel at all so ordinary users never see a 403 notice.
+  const isAdminUser =
+    (user?.publicMetadata as { role?: unknown } | undefined)?.role === "admin";
 
   return (
     <>
@@ -147,7 +252,8 @@ export function AccountSection() {
           <div style={{ padding: "0 16px 14px" }}>
             <button
               data-testid="settings-sign-out-btn"
-              onClick={() => void signOut()}
+              onClick={handleSignOut}
+              disabled={signingOut}
               style={{
                 background: "rgba(0,229,255,0.04)",
                 border: "1px solid rgba(0,229,255,0.2)",
@@ -156,12 +262,21 @@ export function AccountSection() {
                 fontSize: "calc(9px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.15em",
                 padding: "4px 12px",
-                cursor: "pointer",
+                cursor: signingOut ? "default" : "pointer",
+                opacity: signingOut ? 0.6 : 1,
                 fontFamily: FONT,
               }}
             >
-              SIGN OUT
+              {signingOut ? "SIGNING OUT…" : "SIGN OUT"}
             </button>
+            {signOutError && (
+              <div
+                data-testid="sign-out-error"
+                style={{ marginTop: 6, fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#f87171" }}
+              >
+                {signOutError}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -251,7 +366,9 @@ export function AccountSection() {
         </div>
       </div>
 
-      {/* Danger zone */}
+      {/* Danger zone — only rendered while authenticated: destructive
+          controls must never be actionable (or even visible) signed out. */}
+      {isSignedIn && !!user && (
       <div style={{ ...S.dangerCard }}>
         <div style={S.dangerHeader}>DANGER ZONE</div>
 
@@ -298,24 +415,39 @@ export function AccountSection() {
           <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8 }}>
             Permanently delete your account, all markers, trails, and settings.
           </div>
-          <button
-            data-testid="delete-account-btn"
-            onClick={() => void handleDeleteAccount()}
-            disabled={deletingAccount}
-            style={{ ...S.dangerBtn, padding: "4px 12px", fontSize: "calc(9px * var(--bs-font-scale, 1))" }}
-          >
-            {deletingAccount ? "DELETING…" : "DELETE ACCOUNT"}
-          </button>
+          {!accountDeleted && (
+            <button
+              data-testid="delete-account-btn"
+              onClick={() => void handleDeleteAccount()}
+              disabled={deletingAccount}
+              style={{ ...S.dangerBtn, padding: "4px 12px", fontSize: "calc(9px * var(--bs-font-scale, 1))" }}
+            >
+              {deletingAccount ? "DELETING…" : "DELETE ACCOUNT"}
+            </button>
+          )}
           {accountDeleteMsg && (
-            <div style={{ marginTop: 8, fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#f87171" }}>{accountDeleteMsg}</div>
+            <div
+              data-testid="account-delete-msg"
+              style={{
+                marginTop: 8,
+                fontSize: "calc(10px * var(--bs-font-scale, 1))",
+                color: accountDeleted ? "#fbbf24" : "#f87171",
+              }}
+            >
+              {accountDeleteMsg}
+            </div>
           )}
         </div>
       </div>
+      )}
 
-      {/* Admin-only stats panel — renders a 403 notice for non-admin users */}
-      <div style={{ marginTop: 24 }}>
-        <AdminPanel />
-      </div>
+      {/* Admin-only stats panel — rendered only for admin users so ordinary
+          users never see a 403 notice they can't act on. */}
+      {isAdminUser && (
+        <div style={{ marginTop: 24 }}>
+          <AdminPanel />
+        </div>
+      )}
     </>
   );
 }
