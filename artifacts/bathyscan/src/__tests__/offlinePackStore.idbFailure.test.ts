@@ -212,6 +212,32 @@ describe("saveOfflinePack — IDB set() failure", () => {
     expect(deleteMsg?.overviewUrl).toBe(`/api/datasets/${datasetId}/overview`);
   });
 
+  it("sends CACHE_PACK with the exact terrainUrl and overviewUrl for the dataset", async () => {
+    stubSwAndFetch();
+    // Do NOT mock idb.set() to fail — let the save succeed so we can inspect CACHE_PACK.
+
+    const datasetId = "ds-cache-pack-url-check";
+
+    await saveOfflinePack(
+      { id: datasetId, name: "CACHE_PACK URL Check Dataset" },
+      3,
+      () => {},
+    );
+
+    const cacheMsg = swMessages.find(
+      (m): m is { type: string; terrainUrl: string; overviewUrl: string } =>
+        typeof m === "object" &&
+        m !== null &&
+        (m as Record<string, unknown>)["type"] === "CACHE_PACK",
+    );
+
+    expect(cacheMsg).toBeDefined();
+    // The store builds URLs as: `${API_BASE}/api/datasets/${id}/terrain`
+    // In vitest, import.meta.env.BASE_URL defaults to "/" so API_BASE is "".
+    expect(cacheMsg?.terrainUrl).toBe(`/api/datasets/${datasetId}/terrain`);
+    expect(cacheMsg?.overviewUrl).toBe(`/api/datasets/${datasetId}/overview`);
+  });
+
   it("leaves no pack record in IDB when set() rejects", async () => {
     stubSwAndFetch();
     const idb = await import("idb-keyval");
