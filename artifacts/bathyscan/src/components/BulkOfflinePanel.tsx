@@ -729,7 +729,7 @@ export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
             if (datasetsWithBbox.length === 0) return null;
             const totalEstBytes = datasetsWithBbox.reduce(
               (sum, ds) =>
-                sum + estimatePackStorageBytesFromBbox({ bbox: ds.bbox! }),
+                sum + estimatePackStorageBytesFromBbox({ bbox: ds.bbox!, resolutionM: ds.resolutionM }),
               0,
             );
             return (

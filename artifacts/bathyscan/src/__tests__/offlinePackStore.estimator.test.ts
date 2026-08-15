@@ -115,6 +115,41 @@ describe("estimatePackStorageBytesFromBbox", () => {
   });
 });
 
+// ── resolutionM round-trip: dataset metadata → estimator → bytes ──────────────
+//
+// Verifies that a fine-resolution dataset (1 m multibeam) produces a
+// substantially larger estimate than a coarse regional survey (10 m default),
+// mirroring the wiring added in OfflinePackModal and BulkOfflinePanel.
+
+describe("resolutionM round-trip from dataset metadata", () => {
+  const bbox = { minLon: -135, maxLon: -134.9, minLat: 57, maxLat: 57.1 };
+
+  it("1 m multibeam yields more bytes than 10 m regional survey", () => {
+    const fine   = estimatePackStorageBytesFromBbox({ bbox, resolutionM: 1 });
+    const coarse = estimatePackStorageBytesFromBbox({ bbox, resolutionM: 10 });
+    expect(fine).toBeGreaterThan(coarse);
+  });
+
+  it("passing resolutionM through estimatePackStorageBytes honours the hint", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const fine   = await estimatePackStorageBytes("ds-fine",   { bbox, resolutionM: 1 });
+    const coarse = await estimatePackStorageBytes("ds-coarse", { bbox, resolutionM: 10 });
+
+    // Bbox path never touches the network.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fine).toBeGreaterThan(coarse);
+    // Fine estimate should match the direct formula call.
+    expect(fine).toBe(estimatePackStorageBytesFromBbox({ bbox, resolutionM: 1 }));
+  });
+
+  it("omitting resolutionM behaves identically to passing 10", async () => {
+    const withDefault  = await estimatePackStorageBytes("ds-a", { bbox });
+    const withExplicit = await estimatePackStorageBytes("ds-b", { bbox, resolutionM: 10 });
+    expect(withDefault).toBe(withExplicit);
+  });
+});
+
 // ── estimatePackStorageBytes (async wrapper) ───────────────────────────────────
 
 describe("estimatePackStorageBytes", () => {

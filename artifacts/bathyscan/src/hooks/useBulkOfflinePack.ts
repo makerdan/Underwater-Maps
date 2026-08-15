@@ -23,6 +23,8 @@ export interface BulkDataset {
   id: string;
   name: string;
   bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
+  /** Horizontal grid resolution in metres — passed to the storage estimator. */
+  resolutionM?: number;
 }
 
 export type RowStatus =
