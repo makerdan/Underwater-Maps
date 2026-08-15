@@ -185,6 +185,33 @@ describe("saveOfflinePack — IDB set() failure", () => {
     expect(deleteMsg).toBeDefined();
   });
 
+  it("sends DELETE_PACK_CACHE with the exact terrainUrl and overviewUrl that were cached", async () => {
+    stubSwAndFetch();
+    const idb = await import("idb-keyval");
+    vi.spyOn(idb, "set").mockRejectedValueOnce(new Error("QuotaExceededError"));
+
+    const datasetId = "ds-url-payload-check";
+
+    await saveOfflinePack(
+      { id: datasetId, name: "URL Payload Check Dataset" },
+      3,
+      () => {},
+    ).catch(() => {});
+
+    const deleteMsg = swMessages.find(
+      (m): m is { type: string; terrainUrl: string; overviewUrl: string } =>
+        typeof m === "object" &&
+        m !== null &&
+        (m as Record<string, unknown>)["type"] === "DELETE_PACK_CACHE",
+    );
+
+    expect(deleteMsg).toBeDefined();
+    // The store builds URLs as: `${API_BASE}/api/datasets/${id}/terrain`
+    // In vitest, import.meta.env.BASE_URL defaults to "/" so API_BASE is "".
+    expect(deleteMsg?.terrainUrl).toBe(`/api/datasets/${datasetId}/terrain`);
+    expect(deleteMsg?.overviewUrl).toBe(`/api/datasets/${datasetId}/overview`);
+  });
+
   it("leaves no pack record in IDB when set() rejects", async () => {
     stubSwAndFetch();
     const idb = await import("idb-keyval");
