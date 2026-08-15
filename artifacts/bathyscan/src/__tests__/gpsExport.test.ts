@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   serializeGpx,
   serializeKml,
+  serializeTrailsGpx,
   buildExportFilename,
   type ExportData,
+  type ExportTrail,
 } from "../lib/gpsExport";
 import { parseGpx, parseKml } from "../lib/gpsImport";
 
@@ -182,6 +184,76 @@ describe("serializeKml — null/undefined input guards", () => {
       ],
     };
     expect(() => serializeKml(data)).not.toThrow();
+  });
+});
+
+describe("serializeTrailsGpx", () => {
+  const TRAIL: ExportTrail = {
+    id: "t1",
+    name: "Morning drift",
+    colour: "#ff6600",
+    points: [
+      { lon: 142.5, lat: 11.35, timestamp: Date.UTC(2026, 0, 15, 8, 0, 0) },
+      { lon: 142.51, lat: 11.36, timestamp: Date.UTC(2026, 0, 15, 8, 0, 10) },
+    ],
+  };
+
+  it("emits <trk><trkseg><trkpt> with lat/lon and ISO <time> per point", () => {
+    const xml = serializeTrailsGpx([TRAIL]);
+    expect(xml).toContain("<trk>");
+    expect(xml).toContain("<name>Morning drift</name>");
+    expect(xml).toContain("<trkseg>");
+    expect(xml.match(/<trkpt /g)).toHaveLength(2);
+    expect(xml).toContain('lat="11.3500000"');
+    expect(xml).toContain('lon="142.5000000"');
+    expect(xml).toContain("<time>2026-01-15T08:00:00.000Z</time>");
+    expect(xml).toContain("<time>2026-01-15T08:00:10.000Z</time>");
+    // Well-formed nesting order.
+    expect(xml.indexOf("<trk>")).toBeLessThan(xml.indexOf("<trkseg>"));
+    expect(xml.indexOf("<trkseg>")).toBeLessThan(xml.indexOf("<trkpt "));
+    expect(xml.indexOf("</trkseg>")).toBeLessThan(xml.indexOf("</trk>"));
+  });
+
+  it("returns an empty string for no trails", () => {
+    expect(serializeTrailsGpx([])).toBe("");
+  });
+
+  it("escapes XML-special characters in trail names", () => {
+    const xml = serializeTrailsGpx([{ ...TRAIL, name: 'Reef <&> "run"' }]);
+    expect(xml).toContain("<name>Reef &lt;&amp;&gt; &quot;run&quot;</name>");
+  });
+
+  it("omits <time> for non-finite timestamps without throwing", () => {
+    const xml = serializeTrailsGpx([
+      {
+        ...TRAIL,
+        points: [{ lon: 1, lat: 2, timestamp: NaN }],
+      },
+    ]);
+    expect(xml).toContain("<trkpt ");
+    expect(xml).not.toContain("<time>");
+  });
+
+  it("full GPX document with trails re-parses cleanly (round-trip)", () => {
+    const xml = serializeGpx({ ...SAMPLE, trails: [TRAIL] });
+    expect(xml).toContain("<trk>");
+    // Track elements come after routes per the GPX 1.1 schema order.
+    expect(xml.indexOf("</rte>")).toBeLessThan(xml.indexOf("<trk>"));
+    const parsed = parseGpx(xml);
+    // The importer flattens <trk> segments into route entries.
+    expect(parsed.waypoints).toHaveLength(2);
+    const track = parsed.routes.find((r) => r.name === "Morning drift");
+    expect(track).toBeDefined();
+    expect(track!.points).toHaveLength(2);
+    expect(track!.points[0]!.lat).toBeCloseTo(11.35, 6);
+    expect(track!.points[0]!.lon).toBeCloseTo(142.5, 6);
+  });
+
+  it("KML export includes selected trails as LineStrings", () => {
+    const xml = serializeKml({ ...SAMPLE, trails: [TRAIL] });
+    const parsed = parseKml(xml);
+    // 1 route + 1 trail = 2 line placemarks.
+    expect(parsed.routes).toHaveLength(2);
   });
 });
 

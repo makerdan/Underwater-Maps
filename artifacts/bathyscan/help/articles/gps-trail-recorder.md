@@ -40,11 +40,11 @@ All GPS trail settings are under **Settings → GPS & Trail**:
 | Trail Colour | Colour picker | Colour of the breadcrumb trail line |
 | Trail Retention | 7 days / 30 days / 90 days / Forever | How long recorded trails are kept before automatic purge |
 
-## Exporting markers and trolling routes (GPS Export)
+## Exporting markers, routes, and trails (GPS Export)
 
-In the Datasets panel, the **▲ EXPORT GPS…** button lets you export your **markers** (as GPX waypoints) and any saved **trolling routes** to GPX or KML. This is the primary GPS export for sharing data with chart plotters.
+In the Datasets panel, the **▲ EXPORT GPS…** button lets you export your **markers** (as GPX waypoints), any saved **trolling routes**, and your **recorded breadcrumb trails** to GPX or KML. This is the primary GPS export for sharing data with chart plotters.
 
-> **Note:** Recorded breadcrumb trail data is stored server-side but is not currently included in the GPS Export dialog.
+To include a recorded trail, tick it in the **Recorded Trails** section of the export dialog. Each selected trail is written as a GPX `<trk>` track with timestamped track points, which chartplotters and tools like Garmin BaseCamp read as a voyage track. Trails are listed for the active dataset only, and respect your Trail Retention setting.
 
 ## Importing GPS files
 

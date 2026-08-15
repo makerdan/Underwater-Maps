@@ -51,9 +51,17 @@ vi.mock("@workspace/api-client-react", () => ({
     isError: false,
     refetch: vi.fn(),
   }),
+  useGetTrails: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
   getGetMarkersQueryKey: (...a: unknown[]) => ["markers", ...a],
   getGetTrollingPresetsQueryKey: () => ["trollingPresets"],
   getGetCatchesQueryKey: (...a: unknown[]) => ["catches", ...a],
+  getGetTrailsQueryKey: (...a: unknown[]) => ["trails", ...a],
+  getTrailsIdPoints: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({

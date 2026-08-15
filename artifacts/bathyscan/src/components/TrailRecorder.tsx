@@ -185,7 +185,10 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
         // onTrailSaved callback only makes sense if the parent still cares;
         // fire it unconditionally since it's a store/query action, not state.
         onTrailSaved?.();
-        toast({ title: "Trail saved", description: `"${name}" saved successfully.` });
+        toast({
+          title: "Trail saved to library",
+          description: `"${name}" saved · Export as GPX via the ▲ EXPORT GPS dialog in the Datasets panel.`,
+        });
       }
       if (isMounted.current) setTrailName("");
     } catch (err) {

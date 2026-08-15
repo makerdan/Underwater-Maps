@@ -21,6 +21,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 const mockMarkersRefetch = vi.hoisted(() => vi.fn());
 const mockPresetsRefetch = vi.hoisted(() => vi.fn());
 const mockCatchesRefetch = vi.hoisted(() => vi.fn());
+const mockTrailsRefetch = vi.hoisted(() => vi.fn());
 
 interface QueryResult {
   data: unknown;
@@ -53,6 +54,14 @@ const mockGetCatchesImpl = vi.hoisted(() =>
     refetch: mockCatchesRefetch,
   })),
 );
+const mockGetTrailsImpl = vi.hoisted(() =>
+  vi.fn<() => QueryResult>(() => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+    refetch: mockTrailsRefetch,
+  })),
+);
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -60,9 +69,12 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetMarkers: (_p: unknown, _o: unknown) => mockGetMarkersImpl(),
   useGetTrollingPresets: (_o: unknown) => mockGetTrollingPresetsImpl(),
   useGetCatches: (_p: unknown, _o: unknown) => mockGetCatchesImpl(),
+  useGetTrails: (_p: unknown, _o: unknown) => mockGetTrailsImpl(),
   getGetMarkersQueryKey: (...a: unknown[]) => ["markers", ...a],
   getGetTrollingPresetsQueryKey: () => ["trollingPresets"],
   getGetCatchesQueryKey: (...a: unknown[]) => ["catches", ...a],
+  getGetTrailsQueryKey: (...a: unknown[]) => ["trails", ...a],
+  getTrailsIdPoints: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -192,7 +204,7 @@ describe("GpsExportDialog — loading state", () => {
     expect(screen.queryByTestId("gps-export-loading")).not.toBeInTheDocument();
   });
 
-  it("(b) retry button calls refetch on all three queries", () => {
+  it("(b) retry button calls refetch on all queries", () => {
     mockGetMarkersImpl.mockReturnValue({
       data: undefined,
       isLoading: false,
@@ -219,6 +231,7 @@ describe("GpsExportDialog — loading state", () => {
     expect(mockMarkersRefetch).toHaveBeenCalledOnce();
     expect(mockPresetsRefetch).toHaveBeenCalledOnce();
     expect(mockCatchesRefetch).toHaveBeenCalledOnce();
+    expect(mockTrailsRefetch).toHaveBeenCalledOnce();
   });
 
   // (c) summary counts shown on success
@@ -324,7 +337,9 @@ describe("GpsExportDialog — loading state", () => {
 
     renderDialog();
 
-    expect(screen.getByText(/No markers or trolling routes to export yet/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/No markers, trolling routes, or recorded trails to export yet/),
+    ).toBeInTheDocument();
   });
 
   // (e) Download button disabled during loading/error

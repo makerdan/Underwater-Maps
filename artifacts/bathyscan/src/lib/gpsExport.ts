@@ -1,9 +1,11 @@
 /**
  * gpsExport.ts — serializers for GPS waypoint / route files.
  *
- * Sibling to `gpsImport.ts`. Takes the user's BathyScan markers and trolling
- * presets and renders them as GPX 1.1 or KML 2.2 text. Markers become
- * waypoints; trolling presets become routes (GPX <rte> / KML LineString).
+ * Sibling to `gpsImport.ts`. Takes the user's BathyScan markers, trolling
+ * presets, and recorded GPS trails and renders them as GPX 1.1 or KML 2.2
+ * text. Markers become waypoints; trolling presets become routes (GPX <rte> /
+ * KML LineString); recorded trails become tracks (GPX <trk> with timestamped
+ * <trkpt>s / KML LineString).
  *
  * Pure utility module — no React, no network. The DOM-touching download
  * helper is also exposed here so callers don't need to reimplement the
@@ -48,9 +50,27 @@ export interface ExportRoute {
   points: ExportRoutePoint[];
 }
 
+export interface ExportTrailPoint {
+  lon: number;
+  lat: number;
+  /** Milliseconds since the Unix epoch when the point was recorded. */
+  timestamp: number;
+}
+
+/** A recorded GPS breadcrumb trail, exported as a GPX <trk> track. */
+export interface ExportTrail {
+  id: string;
+  name: string;
+  colour: string;
+  points: ExportTrailPoint[];
+}
+
 export interface ExportData {
   markers: ExportMarker[];
   routes: ExportRoute[];
+  /** Recorded GPS breadcrumb trails (GPX <trk> / KML LineString). Optional
+   *  for backwards compatibility with callers that export only markers/routes. */
+  trails?: ExportTrail[];
   /** Dataset name (used as the GPX/KML document name). */
   datasetName: string;
 }
@@ -110,7 +130,46 @@ export function serializeGpx(data: ExportData): string {
     lines.push(`  </rte>`);
   }
 
+  // GPX 1.1 schema element order is wpt*, rte*, trk* — tracks go last.
+  const trkFragment = serializeTrailsGpx(data.trails ?? []);
+  if (trkFragment) lines.push(trkFragment);
+
   lines.push(`</gpx>`);
+  return lines.join("\n");
+}
+
+/**
+ * Serialize recorded GPS trails as GPX <trk> elements — one <trk> per trail,
+ * a single <trkseg>, and one <trkpt lat lon><time/> per point.
+ *
+ * Returns a fragment (no <gpx> wrapper) indented to sit directly inside the
+ * document element, or "" when there are no trails. Points with a missing or
+ * non-finite timestamp still emit a <trkpt> but omit the optional <time>
+ * child, so one corrupt point never invalidates the whole track.
+ */
+export function serializeTrailsGpx(trails: ExportTrail[]): string {
+  const lines: string[] = [];
+  for (const t of trails) {
+    lines.push(`  <trk>`);
+    lines.push(`    <name>${escXml(t.name)}</name>`);
+    lines.push(`    <trkseg>`);
+    for (const p of t.points) {
+      const time = fmtTime(p.timestamp);
+      if (time) {
+        lines.push(
+          `      <trkpt lat="${fmtCoord(p.lat)}" lon="${fmtCoord(p.lon)}">`,
+        );
+        lines.push(`        <time>${time}</time>`);
+        lines.push(`      </trkpt>`);
+      } else {
+        lines.push(
+          `      <trkpt lat="${fmtCoord(p.lat)}" lon="${fmtCoord(p.lon)}"/>`,
+        );
+      }
+    }
+    lines.push(`    </trkseg>`);
+    lines.push(`  </trk>`);
+  }
   return lines.join("\n");
 }
 
@@ -154,6 +213,24 @@ export function serializeKml(data: ExportData): string {
     lines.push(`      <LineString>`);
     lines.push(`        <coordinates>`);
     for (const p of r.points) {
+      lines.push(
+        `          ${fmtCoord(p.lon)},${fmtCoord(p.lat)},0`,
+      );
+    }
+    lines.push(`        </coordinates>`);
+    lines.push(`      </LineString>`);
+    lines.push(`    </Placemark>`);
+  }
+
+  // Recorded trails render as LineStrings too, so a KML export never silently
+  // drops trails the user selected (KML has no first-class timestamped track
+  // without the gx extension namespace).
+  for (const t of data.trails ?? []) {
+    lines.push(`    <Placemark>`);
+    lines.push(`      <name>${escXml(t.name)}</name>`);
+    lines.push(`      <LineString>`);
+    lines.push(`        <coordinates>`);
+    for (const p of t.points) {
       lines.push(
         `          ${fmtCoord(p.lon)},${fmtCoord(p.lat)},0`,
       );
@@ -327,4 +404,16 @@ function fmtNum(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "0";
   // Drop trailing zeros from a fixed-precision representation.
   return parseFloat(n.toFixed(3)).toString();
+}
+
+/**
+ * Format an epoch-ms timestamp as an ISO 8601 string for GPX <time>.
+ * Returns null when the value is missing, non-finite, or out of Date range
+ * so callers can omit the optional element instead of emitting garbage.
+ */
+function fmtTime(ts: number | null | undefined): string | null {
+  if (ts == null || !Number.isFinite(ts)) return null;
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
 }

@@ -1,10 +1,12 @@
 /**
- * GpsExportDialog — modal for exporting markers + trolling routes to GPX/KML.
+ * GpsExportDialog — modal for exporting markers, trolling routes, and
+ * recorded GPS trails to GPX/KML.
  *
  * Opened from DatasetPanel's "Export GPS…" button. Lets the user pick a
  * format (GPX or KML) and downloads a single file containing the active
- * dataset's markers (as waypoints) plus all of the user's trolling presets
- * (as routes). Filename is `<dataset>-<YYYY-MM-DD>.<ext>`.
+ * dataset's markers (as waypoints), all of the user's trolling presets
+ * (as routes), plus any recorded trails the user ticks in the Recorded
+ * Trails section (as GPX <trk> tracks). Filename is `<dataset>-<YYYY-MM-DD>.<ext>`.
  *
  * Mirrors GpsImportDialog's visual + portal/scrim conventions so the entry
  * points feel symmetric.
@@ -16,9 +18,12 @@ import {
   useGetMarkers,
   useGetTrollingPresets,
   useGetCatches,
+  useGetTrails,
   getGetMarkersQueryKey,
   getGetTrollingPresetsQueryKey,
   getGetCatchesQueryKey,
+  getGetTrailsQueryKey,
+  getTrailsIdPoints,
   type TerrainData,
 } from "@workspace/api-client-react";
 import {
@@ -27,12 +32,38 @@ import {
   downloadTextFile,
   mimeForFormat,
   type ExportFormat,
+  type ExportTrail,
+  type ExportTrailPoint,
 } from "@/lib/gpsExport";
 import { useToast } from "@/hooks/use-toast";
 
 interface Props {
   terrain: TerrainData;
   onClose: () => void;
+}
+
+/** Page size for trail point retrieval — the server-side maximum. */
+const TRAIL_POINTS_PAGE_SIZE = 1000;
+/** Hard cap on pages fetched per trail (server caps trails at 50k points). */
+const TRAIL_POINTS_MAX_PAGES = 100;
+
+/**
+ * Fetch every point of a trail, paging through GET /api/trails/:id/points
+ * until `total` is reached.
+ */
+async function fetchAllTrailPoints(trailId: string): Promise<ExportTrailPoint[]> {
+  const points: ExportTrailPoint[] = [];
+  for (let page = 1; page <= TRAIL_POINTS_MAX_PAGES; page++) {
+    const res = await getTrailsIdPoints(trailId, {
+      page,
+      pageSize: TRAIL_POINTS_PAGE_SIZE,
+    });
+    for (const p of res.points) {
+      points.push({ lon: p.lon, lat: p.lat, timestamp: p.timestamp });
+    }
+    if (res.points.length === 0 || points.length >= res.total) break;
+  }
+  return points;
 }
 
 export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
@@ -78,20 +109,52 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       },
     },
   );
+  const {
+    data: trails,
+    isLoading: trailsLoading,
+    isError: trailsError,
+    refetch: trailsRefetch,
+  } = useGetTrails(
+    { datasetId: terrain.datasetId },
+    {
+      query: {
+        enabled: !!terrain.datasetId,
+        queryKey: getGetTrailsQueryKey({ datasetId: terrain.datasetId }),
+      },
+    },
+  );
 
-  const isLoading = markersLoading || presetsLoading || catchesLoading;
-  const isError = !isLoading && (markersError || presetsError || catchesError);
+  const [selectedTrailIds, setSelectedTrailIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleTrail = (id: string) => {
+    setSelectedTrailIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isLoading = markersLoading || presetsLoading || catchesLoading || trailsLoading;
+  const isError = !isLoading && (markersError || presetsError || catchesError || trailsError);
   const isSuccess = !isLoading && !isError;
 
   const handleRetry = () => {
     void markersRefetch();
     void presetsRefetch();
     void catchesRefetch();
+    void trailsRefetch();
   };
 
   const markerCount = markers?.length ?? 0;
   const presetCount = presets?.length ?? 0;
-  const nothingToExport = isSuccess && markerCount === 0 && presetCount === 0;
+  const trailCount = trails?.length ?? 0;
+  // Only trails still present in the fetched list count as selected — a
+  // refetch may have dropped (deleted/retention-purged) a previously ticked id.
+  const selectedTrails = (trails ?? []).filter((t) => selectedTrailIds.has(t.id));
+  const nothingToExport =
+    isSuccess && markerCount === 0 && presetCount === 0 && trailCount === 0;
 
   const exportData = useMemo(
     () => {
@@ -124,23 +187,41 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
     [markers, presets, catches, terrain.name],
   );
 
+  // Nothing would end up in the file when there are no markers, no routes,
+  // and no ticked trails — trails only export when explicitly selected.
+  const nothingSelected =
+    markerCount === 0 &&
+    exportData.routes.length === 0 &&
+    selectedTrails.length === 0;
+
   const handleDownload = () => {
-    if (nothingToExport || !isSuccess || isSerializing) return;
+    if (nothingSelected || !isSuccess || isSerializing) return;
     const filename = buildExportFilename(exportData.datasetName, format);
     setIsSerializing(true);
-    serializeAsync(exportData, format)
-      .then((content) => {
-        downloadTextFile(content, filename, mimeForFormat(format));
-        toast({
-          title: "GPS export ready",
-          description: `Downloaded ${filename} (${markerCount} marker${
-            markerCount === 1 ? "" : "s"
-          }, ${exportData.routes.length} route${
-            exportData.routes.length === 1 ? "" : "s"
-          }).`,
-        });
-        onClose();
-      })
+    (async () => {
+      // Fetch full point lists for the ticked trails before serializing.
+      const exportTrails: ExportTrail[] = [];
+      for (const t of selectedTrails) {
+        const points = await fetchAllTrailPoints(t.id);
+        exportTrails.push({ id: t.id, name: t.name, colour: t.colour, points });
+      }
+      const content = await serializeAsync(
+        { ...exportData, trails: exportTrails },
+        format,
+      );
+      downloadTextFile(content, filename, mimeForFormat(format));
+      toast({
+        title: "GPS export ready",
+        description: `Downloaded ${filename} (${markerCount} marker${
+          markerCount === 1 ? "" : "s"
+        }, ${exportData.routes.length} route${
+          exportData.routes.length === 1 ? "" : "s"
+        }, ${exportTrails.length} trail${
+          exportTrails.length === 1 ? "" : "s"
+        }).`,
+      });
+      onClose();
+    })()
       .catch((err: unknown) => {
         toast({
           title: "Export failed",
@@ -225,8 +306,9 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
 
         <div style={{ padding: 14 }}>
           <p style={{ margin: "0 0 10px", color: "#e2e8f0", lineHeight: 1.5 }}>
-            Download this dataset's markers and your trolling routes as a
-            single <strong style={{ color: "#cbd5e1" }}>.gpx</strong> or{" "}
+            Download this dataset's markers, your trolling routes, and any
+            recorded trails you select as a single{" "}
+            <strong style={{ color: "#cbd5e1" }}>.gpx</strong> or{" "}
             <strong style={{ color: "#cbd5e1" }}>.kml</strong> file. Import it
             into your chartplotter, Garmin, or Navionics tools.
           </p>
@@ -320,7 +402,109 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                 {exportData.routes.length}
               </div>
             </div>
+            <div>
+              <div style={{ color: "#cbd5e1" }}>Trails selected</div>
+              <div
+                style={{ color: "#cbd5e1", fontSize: "calc(19.5px * var(--bs-font-scale, 1))" }}
+                data-testid="gps-export-trail-count"
+              >
+                {selectedTrails.length}/{trailCount}
+              </div>
+            </div>
           </div>
+          )}
+
+          {isSuccess && (
+            <div style={{ marginBottom: 12 }} data-testid="gps-export-trails-section">
+              <div
+                style={{
+                  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                  color: "#cbd5e1",
+                  marginBottom: 4,
+                  letterSpacing: "0.12em",
+                }}
+              >
+                RECORDED TRAILS
+              </div>
+              {trailCount === 0 ? (
+                <div
+                  data-testid="gps-export-trails-empty"
+                  style={{
+                    padding: "8px 10px",
+                    background: "rgba(148,163,184,0.06)",
+                    border: "1px solid rgba(148,163,184,0.2)",
+                    borderRadius: 4,
+                    color: "#94a3b8",
+                    fontSize: "calc(14px * var(--bs-font-scale, 1))",
+                  }}
+                >
+                  No recorded trails for this dataset yet. Record one with the
+                  GPS Trail recorder, then export it here.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                    maxHeight: 160,
+                    overflow: "auto",
+                    border: "1px solid rgba(0,229,255,0.15)",
+                    borderRadius: 4,
+                    padding: "4px 6px",
+                    background: "rgba(0,229,255,0.03)",
+                  }}
+                >
+                  {(trails ?? []).map((t) => (
+                    <label
+                      key={t.id}
+                      data-testid={`gps-export-trail-${t.id}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        cursor: "pointer",
+                        padding: "3px 2px",
+                        fontSize: "calc(14px * var(--bs-font-scale, 1))",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedTrailIds.has(t.id)}
+                        onChange={() => toggleTrail(t.id)}
+                        data-testid={`gps-export-trail-checkbox-${t.id}`}
+                        style={{ accentColor: "#00e5ff", cursor: "pointer" }}
+                      />
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background: t.colour,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          flex: 1,
+                          color: "#e2e8f0",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {t.name}
+                      </span>
+                      <span style={{ color: "#94a3b8", flexShrink: 0 }}>
+                        {t.pointCount.toLocaleString()} pts ·{" "}
+                        {new Date(t.startedAt).toLocaleDateString()}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           <div style={{ marginBottom: 12 }}>
@@ -366,7 +550,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                 fontSize: "calc(15px * var(--bs-font-scale, 1))",
               }}
             >
-              No markers or trolling routes to export yet.
+              No markers, trolling routes, or recorded trails to export yet.
             </div>
           )}
 
@@ -384,12 +568,12 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             <button
               onClick={handleDownload}
               data-testid="gps-export-confirm"
-              disabled={!isSuccess || nothingToExport || isSerializing}
+              disabled={!isSuccess || nothingSelected || isSerializing}
               aria-busy={isSerializing}
               style={{
                 ...btnStyle("primary"),
-                opacity: (!isSuccess || nothingToExport || isSerializing) ? 0.5 : 1,
-                cursor: (!isSuccess || nothingToExport || isSerializing) ? "not-allowed" : "pointer",
+                opacity: (!isSuccess || nothingSelected || isSerializing) ? 0.5 : 1,
+                cursor: (!isSuccess || nothingSelected || isSerializing) ? "not-allowed" : "pointer",
               }}
             >
               {isSerializing ? "Downloading…" : "Download"}
