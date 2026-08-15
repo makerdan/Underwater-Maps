@@ -1714,18 +1714,22 @@ export function findDuplicateCatalogEntries(entries: readonly CatalogSeedEntry[]
 export function buildPresetCatalogEntries(): CatalogSeedEntry[] {
   const entries = ALL_PRESET_DATASETS.map((d) => {
     const usesNcei = d.waterType === "saltwater" && d.id in NCEI_DATASET_COVERAGES;
+    const isBundled = d.fetchStrategy?.kind === "bundled";
     return {
       id: `preset-${d.id}`,
       name: d.name,
       sourceAgency: usesNcei
         ? "NOAA/NCEI + GEBCO"
-        : d.waterType === "saltwater"
-          ? "GEBCO"
-          : "GEBCO / Synthetic",
+        : isBundled
+          ? "USACE + USGS 3DEP"
+          : d.waterType === "saltwater"
+            ? "GEBCO"
+            : "GEBCO / Synthetic",
       dataType: "bathymetry" as const,
       // NCEI-preferred SE Alaska presets reach 1–24 m where multibeam / community
-      // DEM coverage exists; everything else falls through to GEBCO's ~400 m grid.
-      resolutionMMin: usesNcei ? 1 : 400,
+      // DEM coverage exists; bundled surveys are also high-resolution (~1 m);
+      // everything else falls through to GEBCO's ~400 m grid.
+      resolutionMMin: usesNcei || isBundled ? 1 : 400,
       resolutionMMax: 400,
       coverageBbox: d.bbox,
       endpointUrl: null,

@@ -19,7 +19,7 @@ import {
 } from "vitest";
 import { db, datasetCatalogTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
-import { ALL_PRESET_DATASETS } from "../terrain.js";
+import { ALL_PRESET_DATASETS, FRESHWATER_PRESET_DATASETS } from "../terrain.js";
 import { EXTRA_CATALOG_ENTRIES } from "../catalogSeeder.js";
 
 /** Catalog ids derived live from EXTRA_CATALOG_ENTRIES so this test can never
@@ -34,10 +34,10 @@ async function clearCatalog(): Promise<void> {
 }
 
 async function fetchAll(): Promise<
-  Array<{ id: string; name: string }>
+  Array<{ id: string; name: string; waterType: string }>
 > {
   const rows = await db.select().from(datasetCatalogTable);
-  return rows.map((r) => ({ id: r.id, name: r.name }));
+  return rows.map((r) => ({ id: r.id, name: r.name, waterType: r.waterType }));
 }
 
 /** Run `seedDatasetCatalog()` from a fresh module instance so the
@@ -194,6 +194,19 @@ describe("seedDatasetCatalog", () => {
     await db.execute(
       sql`DELETE FROM dataset_catalog WHERE id = 'user-save-my-bay-test481'`,
     );
+  });
+
+  it("freshwater presets land in the DB with waterType === 'freshwater'", async () => {
+    await boot();
+
+    const rows = await fetchAll();
+    const byId = new Map(rows.map((r) => [r.id, r]));
+
+    for (const d of FRESHWATER_PRESET_DATASETS) {
+      const row = byId.get(`preset-${d.id}`);
+      expect(row, `preset-${d.id} not found in DB`).toBeDefined();
+      expect(row!.waterType).toBe("freshwater");
+    }
   });
 
   it("preserves user-saved (non-preset-prefix) rows across a boot", async () => {

@@ -14,7 +14,7 @@ import {
 } from "../catalogSeeder.js";
 import { deriveCatalogFetchStrategy } from "../catalogFetchStrategy.js";
 import { getFetcher } from "../fetchers/index.js";
-import { ALL_PRESET_DATASETS } from "../terrain.js";
+import { ALL_PRESET_DATASETS, FRESHWATER_PRESET_DATASETS } from "../terrain.js";
 import { computeWcsAvailable } from "../../routes/ncei.js";
 
 const BATHY_ENTRIES = EXTRA_CATALOG_ENTRIES.filter(
@@ -253,5 +253,42 @@ describe("save-gate prefix guard — ncei-wcs strategy entries must have ncei- i
         mismatch.join(", "),
       ].join(" "),
     ).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildPresetCatalogEntries — metadata correctness for bundled freshwater
+// presets (no DB required).
+// ---------------------------------------------------------------------------
+
+describe("buildPresetCatalogEntries — freshwater / bundled preset metadata", () => {
+  const presetEntries = buildPresetCatalogEntries();
+  const byId = new Map(presetEntries.map((e) => [e.id, e]));
+
+  it("lake-ray-roberts entry has waterType 'freshwater'", () => {
+    const entry = byId.get("preset-lake-ray-roberts");
+    expect(entry, "preset-lake-ray-roberts not found in buildPresetCatalogEntries()").toBeDefined();
+    expect(entry!.waterType).toBe("freshwater");
+  });
+
+  it("lake-ray-roberts entry has resolutionMMin of 1 (bundled survey, not GEBCO 400 m)", () => {
+    const entry = byId.get("preset-lake-ray-roberts");
+    expect(entry).toBeDefined();
+    expect(entry!.resolutionMMin).toBe(1);
+  });
+
+  it("lake-ray-roberts entry sourceAgency does not say GEBCO", () => {
+    const entry = byId.get("preset-lake-ray-roberts");
+    expect(entry).toBeDefined();
+    expect(entry!.sourceAgency).not.toContain("GEBCO");
+    expect(entry!.sourceAgency).toContain("USGS 3DEP");
+  });
+
+  it("all FRESHWATER_PRESET_DATASETS entries carry waterType 'freshwater'", () => {
+    for (const d of FRESHWATER_PRESET_DATASETS) {
+      const entry = byId.get(`preset-${d.id}`);
+      expect(entry, `preset-${d.id} not found`).toBeDefined();
+      expect(entry!.waterType).toBe("freshwater");
+    }
   });
 });
