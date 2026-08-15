@@ -11,6 +11,11 @@ import { S, FONT } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { formatLastSynced } from "./constants";
 import { AdminPanel } from "@/components/AdminPanel";
+import {
+  buildSettingsExport,
+  parseSettingsImport,
+  MAX_IMPORT_FILE_BYTES,
+} from "@/lib/settingsBackup";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -33,7 +38,16 @@ export function AccountSection() {
 
   const [exportingSettings, setExportingSettings] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
+  const [importingSettings, setImportingSettings] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+
+  // Latest Clerk user id, readable from inside long-running async handlers.
+  // Used to detect an account transition (sign-out / different sign-in) that
+  // happens while an export request is in flight, so a slow response can
+  // never trigger a download of the PREVIOUS account's data.
+  const userIdRef = useRef<string | null>((user as { id?: string } | null | undefined)?.id ?? null);
+  userIdRef.current = (user as { id?: string } | null | undefined)?.id ?? null;
   const [deleteMarkersUndo, setDeleteMarkersUndo] = useState<null | {
     message: string;
     timeoutId: ReturnType<typeof setTimeout>;
@@ -83,49 +97,90 @@ export function AccountSection() {
 
   const handleExportSettings = () => {
     setExportingSettings(true);
-    const settings = useSettingsStore.getState();
-    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: "application/json" });
-    triggerBlobDownload(blob, `bathyscan-settings-${Date.now()}.json`);
-    setExportingSettings(false);
+    setExportMsg(null);
+    try {
+      // Serialize ONLY user-facing settings fields (DEFAULT_SETTINGS keys) —
+      // never the full Zustand state with its sync metadata and actions.
+      const payload = buildSettingsExport(useSettingsStore.getState());
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      triggerBlobDownload(blob, `bathyscan-settings-${Date.now()}.json`);
+    } catch {
+      setExportMsg("✗ Export failed — could not create the settings file");
+      toast({ title: "Failed to export settings", variant: "destructive", duration: 5000 });
+    } finally {
+      setExportingSettings(false);
+    }
   };
 
   const handleExportAll = async () => {
     setExportingAll(true);
+    // Capture the account this export belongs to; if the signed-in user
+    // changes while the request is in flight, the download is aborted.
+    const startUserId = userIdRef.current;
     try {
       const apiBase = basePath;
       const resp = await authorizedFetch(`${apiBase}/api/me/export`);
       if (!resp.ok) throw new Error("Export failed");
       const blob = await resp.blob();
+      if (userIdRef.current !== startUserId) {
+        // Account transition mid-request — never download the previous
+        // session's data into the now-current page.
+        return;
+      }
       triggerBlobDownload(blob, `bathyscan-export-${Date.now()}.json`);
     } catch {
       toast({ title: "Export failed", variant: "destructive", duration: 5000 });
+    } finally {
+      setExportingAll(false);
     }
-    setExportingAll(false);
   };
 
   const handleImportSettings = async (file: File) => {
     setImportMsg(null);
+    if (!isSignedIn) {
+      // Button is disabled while signed out; this guards direct calls.
+      setImportMsg("✗ Sign in to import — changes will not be saved to your account");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      setImportMsg(`✗ File too large (max ${Math.round(MAX_IMPORT_FILE_BYTES / 1024)} KB)`);
+      toast({ title: "Settings file too large", variant: "destructive", duration: 5000 });
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    setImportingSettings(true);
     try {
       const text = await file.text();
-      const raw = JSON.parse(text) as Record<string, unknown>;
-      const current = useSettingsStore.getState();
-      const merged: Record<string, unknown> = {};
-      for (const key of Object.keys(current)) {
-        if (key in raw) merged[key] = raw[key];
+      const raw: unknown = JSON.parse(text);
+      const parsed = parseSettingsImport(raw);
+      if (!parsed.ok) {
+        setImportMsg(`✗ ${parsed.reason}`);
+        toast({ title: "Failed to import settings", variant: "destructive", duration: 5000 });
+        return;
       }
-      const { lastSyncedAt: _l, ...settingsToApply } = merged as {
-        lastSyncedAt?: unknown;
-        [k: string]: unknown;
-      };
-      useSettingsStore.setState(settingsToApply);
-      void flushServerSync();
-      setImportMsg("✓ Settings imported");
-      toast({ title: "Settings imported", duration: 3000 });
+      // parsed.settings is schema-validated and already excludes internal
+      // keys (syncedSnapshot, lastSyncedAt, _hasHydrated, schemaVersion).
+      useSettingsStore.setState(parsed.settings);
+      const skippedNote =
+        parsed.skippedKeys.length > 0
+          ? ` (${parsed.skippedKeys.length} field${parsed.skippedKeys.length === 1 ? "" : "s"} skipped: unsupported values)`
+          : "";
+      try {
+        await flushServerSync();
+        setImportMsg(`✓ Settings imported and synced${skippedNote}`);
+        toast({ title: "Settings imported", duration: 3000 });
+      } catch {
+        setImportMsg(`✗ Saved locally — cloud sync failed${skippedNote}`);
+        toast({ title: "Saved locally — cloud sync failed", variant: "destructive", duration: 5000 });
+      }
     } catch {
       setImportMsg("✗ Invalid settings file");
       toast({ title: "Failed to import settings", variant: "destructive", duration: 5000 });
+    } finally {
+      setImportingSettings(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
-    if (fileRef.current) fileRef.current.value = "";
   };
 
   const handleDeleteMarkers = () => {
@@ -330,6 +385,12 @@ export function AccountSection() {
             <button
               data-testid="import-settings-btn"
               onClick={() => fileRef.current?.click()}
+              disabled={!isSignedIn || importingSettings}
+              title={
+                !isSignedIn
+                  ? "Sign in to import — changes will not be saved to your account."
+                  : undefined
+              }
               style={{
                 background: "rgba(0,229,255,0.06)",
                 border: "1px solid rgba(0,229,255,0.25)",
@@ -338,11 +399,12 @@ export function AccountSection() {
                 fontSize: "calc(9px * var(--bs-font-scale, 1))",
                 letterSpacing: "0.15em",
                 padding: "4px 12px",
-                cursor: "pointer",
+                cursor: !isSignedIn || importingSettings ? "not-allowed" : "pointer",
+                opacity: !isSignedIn || importingSettings ? 0.5 : 1,
                 fontFamily: FONT,
               }}
             >
-              IMPORT SETTINGS
+              {importingSettings ? "IMPORTING…" : "IMPORT SETTINGS"}
             </button>
             <input
               ref={fileRef}
@@ -355,12 +417,28 @@ export function AccountSection() {
               }}
             />
           </div>
+          {!isSignedIn && (
+            <div
+              data-testid="import-signed-out-hint"
+              style={{ marginTop: 8, fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#94a3b8" }}
+            >
+              Sign in to import — changes will not be saved to your account.
+            </div>
+          )}
           {importMsg && (
-            <div style={{
+            <div data-testid="import-settings-msg" style={{
               marginTop: 8, fontSize: "calc(10px * var(--bs-font-scale, 1))",
               color: importMsg.startsWith("✓") ? "#4ade80" : "#f87171",
             }}>
               {importMsg}
+            </div>
+          )}
+          {exportMsg && (
+            <div data-testid="export-settings-msg" style={{
+              marginTop: 8, fontSize: "calc(10px * var(--bs-font-scale, 1))",
+              color: "#f87171",
+            }}>
+              {exportMsg}
             </div>
           )}
         </div>

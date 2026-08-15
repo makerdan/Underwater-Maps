@@ -64,6 +64,10 @@ args = "test-e2e-palette"
 task = "workflow.run"
 args = "audit-marker-bbox"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-standard-skip-dup-hooks"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -195,6 +199,17 @@ isValidation = true
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/db audit:marker-bbox -- --ci"
+
+[[workflows.workflow]]
+name = "test-standard-skip-dup-hooks"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --skip check:duplicate-hooks-registry"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [agent]
 stack = "PNPM_WORKSPACE"

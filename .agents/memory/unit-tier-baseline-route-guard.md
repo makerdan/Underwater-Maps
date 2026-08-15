@@ -3,6 +3,7 @@ name: Unit-tier baseline route-guard breakage
 description: Current pre-existing failures in api-server router-duplicate-route-guard.test.ts that fail every standard/heavy tier run; not caused by frontend-only diffs.
 ---
 
+
 # Unit-tier baseline: router-duplicate-route-guard failures
 
 As of 2026-08-15 (evening), `artifacts/api-server/src/__tests__/router-duplicate-route-guard.test.ts` fails with exactly TWO pre-existing violations on every standard-tier run:
