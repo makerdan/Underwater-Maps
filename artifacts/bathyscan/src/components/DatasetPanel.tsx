@@ -13,10 +13,12 @@ import {
   useGetUserDatasetsIdOverview,
   useGetUserFolders,
   useGetMarkers,
+  useGetDatasetsMySaves,
   getGetDatasetsIdTerrainQueryKey,
   getGetDatasetsIdOverviewQueryKey,
   getGetUserDatasetsQueryKey,
   getGetUserFoldersQueryKey,
+  getGetDatasetsMySavesQueryKey,
   getGetUserDatasetsIdTerrainQueryKey,
   getGetUserDatasetsIdOverviewQueryKey,
   getGetMarkersQueryKey,
@@ -883,6 +885,14 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   useGetUserFolders({
     query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserFoldersQueryKey() },
   });
+  // Catalog saves — needed for "⬇ All" visibility and combined bulk-offline list.
+  const { data: mySaves = [] } = useGetDatasetsMySaves({
+    query: { queryKey: getGetDatasetsMySavesQueryKey(), enabled: isLoaded && isSignedIn === true },
+  });
+  const readyCatalogSaves = useMemo(
+    () => mySaves.filter((s) => s.status === "ready" && !!s.datasetId),
+    [mySaves],
+  );
 
   // ─── Eviction toast: fires when terrainStore silently evicts a dataset ─────
   useEffect(() => {
@@ -2968,10 +2978,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   <span className="animate-spin" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#cbd5e1" }}>◌</span>
                 )}
               </button>
-              {isSignedIn && (userDatasets?.length ?? 0) > 0 && (
+              {isSignedIn && ((userDatasets?.length ?? 0) > 0 || readyCatalogSaves.length > 0) && (
                 <button
                   type="button"
-                  title="Save all uploaded datasets for offline use"
+                  title="Save all library datasets for offline use"
+                  data-testid="btn-bulk-offline"
                   onClick={() => setBulkOfflineOpen(true)}
                   style={{
                     background: "none",
@@ -3139,6 +3150,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       onAddToView={visibleDatasetsForToast.length > 0 ? handleAddToView : undefined}
                       visibleDatasetIds={visibleDatasetIds}
                       atViewCap={atViewCap}
+                      onOfflineDownload={setOfflinePackDataset}
                     />
                   </>
                 )}
@@ -4369,11 +4381,27 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
       {bulkOfflineOpen && (
         <BulkOfflinePanel
-          datasets={(userDatasets ?? []).map((d) => ({
-            id: d.id,
-            name: d.name,
-            bbox: d.bbox ?? undefined,
-          }))}
+          datasets={(() => {
+            const seen = new Set<string>();
+            const combined: Array<{ id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } }> = [];
+            for (const d of userDatasets ?? []) {
+              if (!seen.has(d.id)) {
+                seen.add(d.id);
+                combined.push({ id: d.id, name: d.name, bbox: d.bbox ?? undefined });
+              }
+            }
+            for (const s of readyCatalogSaves) {
+              if (s.datasetId && !seen.has(s.datasetId)) {
+                seen.add(s.datasetId);
+                combined.push({
+                  id: s.datasetId,
+                  name: s.displayLabel ?? s.catalog?.name ?? s.catalogId,
+                  bbox: s.catalog?.coverageBbox ?? undefined,
+                });
+              }
+            }
+            return combined;
+          })()}
           onClose={() => setBulkOfflineOpen(false)}
         />
       )}

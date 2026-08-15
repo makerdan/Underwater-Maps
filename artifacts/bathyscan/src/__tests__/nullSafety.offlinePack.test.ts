@@ -50,6 +50,67 @@ async function runExpiryToastLogic(
   }
 }
 
+// ── onOfflineDownload null-bbox safety ────────────────────────────────────
+// When a catalog save has no coverageBbox (null), onOfflineDownload passes
+// bbox: null to OfflinePackModal. The modal's Dataset interface accepts
+// bbox?: ... | null, so this must not cause a runtime error.
+
+interface OfflinePackDatasetShape {
+  id: string;
+  name: string;
+  bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
+  resolutionM?: number | null;
+}
+
+/**
+ * Simulate the onOfflineDownload handler: builds the dataset shape and
+ * passes it to a setter that mirrors DatasetPanel's setOfflinePackDataset.
+ */
+function simulateOfflineDownload(
+  input: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null },
+  setter: (d: OfflinePackDatasetShape) => void,
+) {
+  setter({ id: input.id, name: input.name, bbox: input.bbox });
+}
+
+describe("onOfflineDownload null-bbox safety", () => {
+  it("passes null bbox without throwing when catalog save has no coverageBbox", () => {
+    const received: OfflinePackDatasetShape[] = [];
+    expect(() => {
+      simulateOfflineDownload(
+        { id: "cat-ds-1", name: "Alaska Shelf Survey", bbox: null },
+        (d) => received.push(d),
+      );
+    }).not.toThrow();
+    expect(received).toHaveLength(1);
+    expect(received[0]).toEqual({ id: "cat-ds-1", name: "Alaska Shelf Survey", bbox: null });
+  });
+
+  it("passes undefined bbox without throwing when catalog save has no coverageBbox key", () => {
+    const received: OfflinePackDatasetShape[] = [];
+    expect(() => {
+      simulateOfflineDownload(
+        { id: "cat-ds-2", name: "Catalog Save No Bbox" },
+        (d) => received.push(d),
+      );
+    }).not.toThrow();
+    expect(received[0]?.bbox).toBeUndefined();
+  });
+
+  it("passes a real bbox correctly when catalog save has coverageBbox", () => {
+    const received: OfflinePackDatasetShape[] = [];
+    simulateOfflineDownload(
+      {
+        id: "cat-ds-3",
+        name: "SE Alaska Survey",
+        bbox: { minLon: -135.5, maxLon: -134.0, minLat: 57.0, maxLat: 58.5 },
+      },
+      (d) => received.push(d),
+    );
+    expect(received[0]?.bbox).toMatchObject({ minLon: -135.5, maxLon: -134.0 });
+  });
+});
+
 describe("App.tsx offline-pack expiry date guard", () => {
   beforeEach(() => {
     mockToast.mockClear();

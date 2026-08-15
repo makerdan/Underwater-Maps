@@ -227,9 +227,29 @@ vi.mock("@/lib/terrain", () => ({
 }));
 
 // Heavy sub-components — render null or a lightweight stub.
+// The MySavesSection stub also exposes an offline-download trigger button so we
+// can test that the onOfflineDownload callback is wired by DatasetPanel.
 vi.mock("@/components/MySavesSection", () => ({
-  MySavesSection: () =>
-    React.createElement("div", { "data-testid": "my-saves-section" }),
+  MySavesSection: ({
+    onOfflineDownload,
+  }: {
+    onOfflineDownload?: (d: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null }) => void;
+  }) =>
+    React.createElement(
+      "div",
+      { "data-testid": "my-saves-section" },
+      onOfflineDownload
+        ? React.createElement("button", {
+            "data-testid": "mock-offline-save-trigger",
+            onClick: () =>
+              onOfflineDownload({
+                id: "cat-ds-1",
+                name: "Test Catalog Save",
+                bbox: { minLon: -135, maxLon: -134, minLat: 57, maxLat: 58 },
+              }),
+          })
+        : null,
+    ),
 }));
 
 vi.mock("@/components/ErrorBoundary", () => ({
@@ -341,5 +361,19 @@ describe("DatasetPanel — MY LIBRARY collapse / expand", () => {
 
     // Collapsed: spinner must still be visible (it lives in the button, not the tree).
     expect(within(getMyLibraryBtn()).getByText("◌")).toBeInTheDocument();
+  });
+
+  it("onOfflineDownload prop is wired: clicking the mock offline trigger opens OfflinePackModal", () => {
+    render(<DatasetPanel />);
+
+    // The mock MySavesSection renders a trigger button only when onOfflineDownload is provided.
+    const trigger = screen.getByTestId("mock-offline-save-trigger");
+    expect(trigger).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+
+    // OfflinePackModal should now be rendered with the dataset we passed.
+    // It renders a heading containing the dataset name.
+    expect(screen.getByText("Test Catalog Save")).toBeInTheDocument();
   });
 });

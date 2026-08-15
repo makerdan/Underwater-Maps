@@ -365,12 +365,34 @@ vi.mock("@/lib/terrain", () => ({
   MAX_DEPTH_WORLD: 10000,
 }));
 
+// Mutable flag: when true, mySaves returns one ready catalog save (no uploads).
+const mySavesHasReady = vi.hoisted(() => ({ value: false }));
+
 vi.mock(
   "@workspace/api-client-react",
   () =>
     makeApiClientMock({
       useGetDatasets: () => ({ data: [], isLoading: false }),
-      useGetUserDatasets: () => ({ data: undefined, isLoading: false }),
+      useGetUserDatasets: () => ({
+        data: mySavesHasReady.value ? [] : undefined,
+        isLoading: false,
+      }),
+      useGetDatasetsMySaves: () => ({
+        data: mySavesHasReady.value
+          ? [
+              {
+                id: "save-1",
+                catalogId: "cat-1",
+                status: "ready",
+                datasetId: "cat-ds-1",
+                requestedAt: new Date().toISOString(),
+                displayLabel: "Ready Catalog Save",
+                catalog: { name: "Ready Catalog Save", coverageBbox: null },
+              },
+            ]
+          : [],
+        isLoading: false,
+      }),
       useGetMarkers: () => ({ data: undefined }),
     }),
 );
@@ -390,6 +412,7 @@ describe("DatasetPanel — handleAddToView multi-dataset entry point", () => {
     terrainState.removeSelected.mockReset();
     terrainState.hideAllOthers.mockReset();
     fetchQueryMock.mockReset();
+    mySavesHasReady.value = false;
   });
 
   it("(a) ADD button present when a primary is loaded and dataset not in view", () => {
@@ -468,5 +491,25 @@ describe("DatasetPanel — handleAddToView multi-dataset entry point", () => {
 
     expect(screen.queryByTestId("mock-add-ds1")).not.toBeInTheDocument();
     expect(screen.queryByTestId("mock-add-ds2")).not.toBeInTheDocument();
+  });
+
+  it("(h) ⬇ All button appears when only catalog saves are present (no uploads)", () => {
+    // No uploaded datasets, but one ready catalog save.
+    mySavesHasReady.value = true;
+    terrainState.visibleDatasets = [];
+
+    render(<DatasetPanel />);
+
+    // The button is shown whenever isSignedIn && (uploads.length > 0 || readyCatalogSaves.length > 0).
+    expect(screen.getByTestId("btn-bulk-offline")).toBeInTheDocument();
+  });
+
+  it("(i) ⬇ All button is absent when there are no uploads and no ready catalog saves", () => {
+    mySavesHasReady.value = false;
+    terrainState.visibleDatasets = [];
+
+    render(<DatasetPanel />);
+
+    expect(screen.queryByTestId("btn-bulk-offline")).not.toBeInTheDocument();
   });
 });
