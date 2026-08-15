@@ -95,7 +95,9 @@ export function findBindingConflicts(
 ): Map<string, ShortcutActionId[]> {
   const byCode = new Map<string, ShortcutActionId[]>();
   for (const action of SHORTCUT_ACTIONS) {
-    const code = bindings[action.id] ?? action.defaultCode;
+    // `""` is canonically "unset" — treat it the same as a missing entry
+    // so all three consumers (display, conflicts, allDefault) agree.
+    const code = bindings[action.id] || action.defaultCode;
     if (!code) continue;
     const list = byCode.get(code) ?? [];
     list.push(action.id);
@@ -112,7 +114,17 @@ export function findBindingConflicts(
 export function resolveKeyBindings(
   partial: Partial<Record<ShortcutActionId, string>> | undefined,
 ): Record<ShortcutActionId, string> {
-  return { ...DEFAULT_KEY_BINDINGS, ...(partial ?? {}) };
+  // Normalize empty-string entries to "unset": drop them so the default
+  // fills in. Persisted `""` values (from older builds or hand-edited
+  // storage) previously displayed as "—" but were counted as non-default
+  // by allDefault and skipped by conflict detection — inconsistent.
+  const cleaned: Partial<Record<ShortcutActionId, string>> = {};
+  for (const [id, code] of Object.entries(partial ?? {})) {
+    if (typeof code === "string" && code !== "") {
+      cleaned[id as ShortcutActionId] = code;
+    }
+  }
+  return { ...DEFAULT_KEY_BINDINGS, ...cleaned };
 }
 
 /**
@@ -123,7 +135,9 @@ export function getBoundKey(
   bindings: Record<string, string> | undefined,
   action: ShortcutActionId,
 ): string {
-  return bindings?.[action] ?? DEFAULT_KEY_BINDINGS[action];
+  // `""` is canonically "unset" — fall back to the default, matching
+  // resolveKeyBindings/findBindingConflicts semantics.
+  return bindings?.[action] || DEFAULT_KEY_BINDINGS[action];
 }
 
 /**

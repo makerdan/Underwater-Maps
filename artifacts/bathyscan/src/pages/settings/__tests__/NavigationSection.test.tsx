@@ -16,7 +16,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 const h = vi.hoisted(() => {
   const resetSection = vi.fn();
   const resetAllKeyBindings = vi.fn();
-  return { resetSection, resetAllKeyBindings };
+  return {
+    resetSection,
+    resetAllKeyBindings,
+    keyBindings: {} as Record<string, string>,
+  };
 });
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
@@ -45,7 +49,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     setJoystickMode: vi.fn(),
     showJoystickInOrbit: false,
     setShowJoystickInOrbit: vi.fn(),
-    keyBindings: {} as Record<string, string>,
+    keyBindings: h.keyBindings,
     resetAllKeyBindings: h.resetAllKeyBindings,
     syncedSnapshot: null,
     lastSyncedAt: null,
@@ -104,6 +108,7 @@ describe("NavigationSection", () => {
   beforeEach(() => {
     h.resetSection.mockClear();
     h.resetAllKeyBindings.mockClear();
+    h.keyBindings = {};
   });
 
   it("renders without crashing", () => {
@@ -131,9 +136,24 @@ describe("NavigationSection", () => {
     expect(screen.getByText("Invert Mouse Y")).toBeInTheDocument();
   });
 
-  it("renders the KEYBOARD SHORTCUTS card header", () => {
+  it("renders KEYBOARD SHORTCUTS as an <h3> section heading, not a standalone card", () => {
+    const { container } = render(<NavigationSection />);
+    const heading = Array.from(container.querySelectorAll("h3")).find(
+      (el) => el.textContent === "KEYBOARD SHORTCUTS",
+    );
+    expect(heading).toBeTruthy();
+  });
+
+  it("treats an empty-string binding as default: RESET ALL stays disabled", () => {
+    h.keyBindings.moveForward = "";
     render(<NavigationSection />);
-    expect(screen.getByText("KEYBOARD SHORTCUTS")).toBeInTheDocument();
+    expect(screen.getByTestId("reset-all-bindings-btn")).toBeDisabled();
+  });
+
+  it("enables RESET ALL when a binding genuinely differs from its default", () => {
+    h.keyBindings.moveForward = "KeyZ";
+    render(<NavigationSection />);
+    expect(screen.getByTestId("reset-all-bindings-btn")).not.toBeDisabled();
   });
 
   it("renders FIXED CONTROLS card header", () => {

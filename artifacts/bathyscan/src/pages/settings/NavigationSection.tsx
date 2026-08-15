@@ -25,7 +25,9 @@ export function NavigationSection() {
     const byCode = findBindingConflicts(keyBindings);
     const out = new Map<ShortcutActionId, string[]>();
     for (const action of SHORTCUT_ACTIONS) {
-      const code = keyBindings[action.id] ?? action.defaultCode;
+      // `""` is canonically "unset" — fall back to the default (|| not ??)
+      // so conflicts, display and allDefault all agree.
+      const code = keyBindings[action.id] || action.defaultCode;
       const sharing = (byCode.get(code) ?? []).filter((id) => id !== action.id);
       out.set(
         action.id,
@@ -38,7 +40,8 @@ export function NavigationSection() {
   const allDefault = React.useMemo(
     () =>
       SHORTCUT_ACTIONS.every(
-        (a) => (keyBindings[a.id] ?? a.defaultCode) === DEFAULT_KEY_BINDINGS[a.id],
+        // `""` is "unset" and resolves to the default, so it counts as default.
+        (a) => (keyBindings[a.id] || a.defaultCode) === DEFAULT_KEY_BINDINGS[a.id],
       ),
     [keyBindings],
   );
@@ -170,10 +173,19 @@ export function NavigationSection() {
         </div>
       </AdvancedDisclosure>
 
-      {/* Keyboard Shortcuts */}
-      <div style={{ ...S.card, marginTop: 16 }}>
-        <div style={S.cardHeader}>KEYBOARD SHORTCUTS</div>
-      </div>
+      {/* Keyboard Shortcuts — section heading above its group cards */}
+      <h3
+        style={{
+          fontSize: "calc(9px * var(--bs-font-scale, 1))",
+          letterSpacing: "0.2em",
+          color: "var(--bs-s-card-header-fg, #cbd5e1)",
+          fontWeight: 700,
+          fontFamily: FONT,
+          margin: "16px 0 8px",
+        }}
+      >
+        KEYBOARD SHORTCUTS
+      </h3>
 
       {SHORTCUT_GROUPS.map((group) => {
         const actions = SHORTCUT_ACTIONS.filter((a) => a.group === group.id);

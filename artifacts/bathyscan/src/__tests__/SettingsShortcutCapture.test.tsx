@@ -97,19 +97,28 @@ describe("Settings — crosshair menu key capture", () => {
     const btn = screen.getByTestId("shortcut-crosshair-menu-key");
 
     fireEvent.click(btn);
-    expect(btn).toHaveTextContent(/PRESS ANY KEY/i);
+    expect(btn).toHaveTextContent(/PRESS A KEY/i);
 
-    // Bare modifier presses are ignored — the button stays armed.
-    fireEvent.keyDown(window, { code: "ShiftLeft" });
-    expect(btn).toHaveTextContent(/PRESS ANY KEY/i);
-    expect(useSettingsStore.getState().keyBindings.crosshairMenu).toBe("KeyQ");
-
-    // First real key resolves the capture.
+    // The first key resolves the capture.
     fireEvent.keyDown(window, { code: "KeyT" });
 
     expect(useSettingsStore.getState().keyBindings.crosshairMenu).toBe("KeyT");
     expect(btn).toHaveTextContent("T");
-    expect(btn).not.toHaveTextContent(/PRESS ANY KEY/i);
+    expect(btn).not.toHaveTextContent(/PRESS A KEY/i);
+  });
+
+  it("bare modifier presses are captured as bindings (descend defaults to ShiftLeft)", () => {
+    openShortcutsSection();
+    const btn = screen.getByTestId("shortcut-crosshair-menu-key");
+
+    fireEvent.click(btn);
+    expect(btn).toHaveTextContent(/PRESS A KEY/i);
+
+    // Modifier keys are valid bindings and resolve the capture immediately.
+    fireEvent.keyDown(window, { code: "ShiftRight" });
+    expect(useSettingsStore.getState().keyBindings.crosshairMenu).toBe("ShiftRight");
+    expect(btn).toHaveTextContent("SHIFT");
+    expect(btn).not.toHaveTextContent(/PRESS A KEY/i);
   });
 
   it("Escape during capture cancels without changing the binding", () => {
@@ -117,7 +126,7 @@ describe("Settings — crosshair menu key capture", () => {
     const btn = screen.getByTestId("shortcut-crosshair-menu-key");
 
     fireEvent.click(btn);
-    expect(btn).toHaveTextContent(/PRESS ANY KEY/i);
+    expect(btn).toHaveTextContent(/PRESS A KEY/i);
 
     fireEvent.keyDown(window, { code: "Escape" });
 

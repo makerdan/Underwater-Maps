@@ -25,10 +25,23 @@ describe("keyBindings", () => {
     expect(resolved.openSettings).toBe(DEFAULT_KEY_BINDINGS.openSettings);
   });
 
+  it("resolveKeyBindings normalizes persisted empty-string bindings to the default", () => {
+    const resolved = resolveKeyBindings({ moveForward: "", ascend: "KeyX" });
+    expect(resolved.moveForward).toBe(DEFAULT_KEY_BINDINGS.moveForward);
+    expect(resolved.ascend).toBe("KeyX");
+  });
+
   it("getBoundKey returns the user-bound code", () => {
     const bindings = { ...DEFAULT_KEY_BINDINGS, openSettings: "Semicolon" };
     expect(getBoundKey(bindings, "openSettings")).toBe("Semicolon");
     expect(getBoundKey(bindings, "moveForward")).toBe("KeyW");
+  });
+
+  it("getBoundKey treats an empty-string binding as unset (falls back to default)", () => {
+    const bindings = { ...DEFAULT_KEY_BINDINGS, openSettings: "" };
+    expect(getBoundKey(bindings, "openSettings")).toBe(
+      DEFAULT_KEY_BINDINGS.openSettings,
+    );
   });
 
   it("findBindingConflicts groups actions that share a code", () => {
@@ -44,6 +57,15 @@ describe("keyBindings", () => {
     expect(sharing.length).toBeGreaterThanOrEqual(2);
     // unique bindings appear too, but with a single action in the list
     expect(byCode.get("KeyS")).toEqual(["moveBackward"]);
+  });
+
+  it("findBindingConflicts treats an empty-string binding as its default code", () => {
+    // moveForward "" resolves to its default KeyW; ascend explicitly bound
+    // to KeyW must therefore conflict with it.
+    const bindings = { ...DEFAULT_KEY_BINDINGS, moveForward: "", ascend: "KeyW" };
+    const sharing = findBindingConflicts(bindings).get("KeyW") ?? [];
+    expect(sharing).toContain("moveForward");
+    expect(sharing).toContain("ascend");
   });
 
   it("defaults have no code shared by more than one action", () => {
