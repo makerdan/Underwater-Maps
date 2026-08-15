@@ -43,47 +43,79 @@ export interface TrailDraft {
 interface TrailStore {
   recording: boolean;
   /** Trail colour for the active or most-recently-recorded session. */
+
   color: string;
+
   currentPoints: TrailGpsPoint[];
+
   startedAt: number | null;
+
   intervalId: ReturnType<typeof setInterval> | null;
   /**
    * The `beforeunload` listener registered when recording starts.
    * Stored in state so `stopRecording` can remove it cleanly without
    * mutating the timer-id primitive (which throws in strict-mode ES modules).
    */
+
   beforeUnloadCleanup: (() => void) | null;
+
   isOverflowing: boolean;
+  /**
+   * True when a sessionStorage draft checkpoint has failed during the active
+   * recording session (private browsing, quota exhausted, storage policy).
+   * Set once per session on the first failure; cleared when recording stops
+   * or a fresh session starts. Drives a persistent "auto-backup unavailable"
+   * warning in TrailRecorder.
+   */
+
+  draftCheckpointFailed: boolean;
   /**
    * An in-progress trail draft recovered from sessionStorage after a page
    * reload during an active recording session. Null when there is no draft.
    */
+
   draftTrail: TrailDraft | null;
+
   startRecording: (intervalMs?: number, color?: string) => void;
   /**
    * Resume recording without clearing previously recorded points — used by
    * Live mode so switching tabs pauses (rather than resets) the trail.
    */
+
   resumeRecording: (intervalMs?: number) => void;
   /**
    * Change the sampling interval of an active recording session in place.
    * No-op when not recording.
    */
+
   setSamplingInterval: (intervalMs: number) => void;
   /** Update the trail colour stored in the session (for live TrailLayer sync). */
+
   setColor: (color: string) => void;
+
   addPoint: (pos: GpsPosition) => void;
+
   stopRecording: () => TrailGpsPoint[];
+
   clearPoints: () => void;
   /**
    * Restore a recovered draft into the live store state so `resumeRecording`
    * can continue the session where it left off.
    */
+
   resumeDraft: () => void;
   /**
    * Permanently discard the recovered draft (sessionStorage + state).
    */
+
   discardDraft: () => void;
+  /**
+   * Flag the current session's draft checkpointing as broken (sessionStorage
+   * write threw). Idempotent — the first failure sets the flag; subsequent
+   * calls are no-ops so repeated failures produce no extra UI noise.
+   */
+
+  markCheckpointFailed: () => void;
   /**
    * Sign-out isolation reset — stops any active recording (clearing the
    * sampling timer and beforeunload listener), wipes all recorded points,
@@ -93,6 +125,7 @@ interface TrailStore {
    * Listed in SIGNOUT_STORE_MANIFEST (src/hooks/signoutManifest.ts) and
    * called from performSignOutCleanup (src/hooks/signoutCleanup.ts).
    */
+
   resetForSignOut: () => void;
 }
 
@@ -149,7 +182,11 @@ function saveDraft(points: TrailGpsPoint[], startedAt: number): void {
     const draft: TrailDraft = { points, startedAt, sessionSeq };
     sessionStorage.setItem(TRAIL_DRAFT_KEY, JSON.stringify(draft));
   } catch {
-    // sessionStorage unavailable — silently skip checkpoint
+    // sessionStorage unavailable (private browsing / quota / policy) — the
+    // checkpoint is lost. Flag it so the UI can warn the user that
+    // auto-backup is not working; markCheckpointFailed is idempotent so
+    // repeated failures stay silent after the first.
+    useTrailStore.getState().markCheckpointFailed();
   }
 }
 
@@ -225,6 +262,7 @@ function beginRecording(get: Get, set: Set, intervalMs: number, preservePoints: 
     intervalId: null,
     beforeUnloadCleanup: null,
     draftTrail: null,
+    draftCheckpointFailed: false,
     ...colorPatch,
     ...(preservePoints
       ? { startedAt: startedAt ?? now }
@@ -260,6 +298,7 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
   intervalId: null,
   beforeUnloadCleanup: null,
   isOverflowing: false,
+  draftCheckpointFailed: false,
   // Surface any draft found at page load so the UI can offer resume/discard.
   draftTrail: initialDraft,
 
@@ -316,17 +355,21 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
         nextOverflowing = true;
       }
 
-      // Checkpoint to sessionStorage so a page reload can offer to resume.
-      // Throttled: write every DRAFT_CHECKPOINT_EVERY points to avoid
-      // quadratic serialisation cost on long sessions. The beforeunload
-      // handler always flushes the final state regardless of the counter.
-      checkpointCounter++;
-      if (state.startedAt !== null && checkpointCounter % DRAFT_CHECKPOINT_EVERY === 0) {
-        saveDraft(nextPoints, state.startedAt);
-      }
-
       return { currentPoints: nextPoints, isOverflowing: nextOverflowing };
     });
+
+    // Checkpoint to sessionStorage so a page reload can offer to resume.
+    // Throttled: write every DRAFT_CHECKPOINT_EVERY points to avoid
+    // quadratic serialisation cost on long sessions. The beforeunload
+    // handler always flushes the final state regardless of the counter.
+    // Runs AFTER the set() transition commits: saveDraft's failure path
+    // calls markCheckpointFailed() (a setState), which must never fire
+    // inside a set((state)=>…) reducer.
+    checkpointCounter++;
+    const { currentPoints, startedAt } = get();
+    if (startedAt !== null && checkpointCounter % DRAFT_CHECKPOINT_EVERY === 0) {
+      saveDraft(currentPoints, startedAt);
+    }
   },
 
   stopRecording: () => {
@@ -336,7 +379,7 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
       // Remove the listener so it doesn't dangle after a normal stop.
       window.removeEventListener("beforeunload", beforeUnloadCleanup);
     }
-    set({ recording: false, intervalId: null, beforeUnloadCleanup: null });
+    set({ recording: false, intervalId: null, beforeUnloadCleanup: null, draftCheckpointFailed: false });
     // Clear the draft — the session has ended (either saved or discarded by
     // the caller).
     clearDraftStorage();
@@ -347,7 +390,7 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
     sessionSeq = 0;
     checkpointCounter = 0;
     clearDraftStorage();
-    set({ currentPoints: [], startedAt: null, isOverflowing: false, draftTrail: null });
+    set({ currentPoints: [], startedAt: null, isOverflowing: false, draftTrail: null, draftCheckpointFailed: false });
   },
 
   resumeDraft: () => {
@@ -368,6 +411,14 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
     set({ draftTrail: null });
   },
 
+  markCheckpointFailed: () => {
+    // Idempotent: only the first failure flips the flag. Guarding here also
+    // avoids no-op set() churn on every subsequent failed checkpoint.
+    if (!get().draftCheckpointFailed) {
+      set({ draftCheckpointFailed: true });
+    }
+  },
+
   resetForSignOut: () => {
     const { intervalId, beforeUnloadCleanup } = get();
     if (intervalId) clearInterval(intervalId);
@@ -386,6 +437,7 @@ export const useTrailStore = create<TrailStore>((set, get) => ({
       startedAt: null,
       isOverflowing: false,
       draftTrail: null,
+      draftCheckpointFailed: false,
     });
   },
 }));

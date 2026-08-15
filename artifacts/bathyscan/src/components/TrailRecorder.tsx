@@ -98,6 +98,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
   const currentPoints = useTrailStore((s) => s.currentPoints);
   const startedAt = useTrailStore((s) => s.startedAt);
   const isOverflowing = useTrailStore((s) => s.isOverflowing);
+  const draftCheckpointFailed = useTrailStore((s) => s.draftCheckpointFailed);
   const draftTrail = useTrailStore((s) => s.draftTrail);
   const startRecording = useTrailStore((s) => s.startRecording);
   const resumeRecording = useTrailStore((s) => s.resumeRecording);
@@ -439,6 +440,25 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
           <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 6 }}>
             every {selectedInterval.label}
           </div>
+          {draftCheckpointFailed && (
+            /* Persistent (non-toast) warning: sessionStorage checkpointing is
+               broken for this session, so a crash/refresh would lose the
+               track. Stays visible until recording stops. */
+            <div
+              data-testid="trail-checkpoint-failed-warning"
+              style={{
+                background: "rgba(245,158,11,0.1)",
+                border: "1px solid rgba(245,158,11,0.4)",
+                borderRadius: 3,
+                padding: "6px 8px",
+                marginBottom: 6,
+                color: "#f59e0b",
+                fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+              }}
+            >
+              ⚠ Auto-backup unavailable — stop and save now to preserve your track.
+            </div>
+          )}
           <ViewscreenTooltip label="Stop recording and save this trail" side="top">
           <button
             onClick={() => void handleStop()}
