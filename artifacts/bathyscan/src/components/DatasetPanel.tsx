@@ -418,16 +418,63 @@ const VisibleDatasetRows: React.FC<{
 
   const nameMap = new Map(allDatasets.map((d) => [d.id, d.name]));
 
+  // Sort-and-group helper: splits IDs/objects into non-EFH (main) and EFH
+  // buckets, sorts each bucket by name descending (Z → A).
+  function sortAndGroup<T extends { datasetId: string } | string>(
+    items: T[],
+    getId: (item: T) => string,
+  ): { main: T[]; efh: T[] } {
+    const nameDesc = (a: T, b: T) => {
+      const na = nameMap.get(getId(a)) ?? getId(a);
+      const nb = nameMap.get(getId(b)) ?? getId(b);
+      return nb.localeCompare(na, undefined, { sensitivity: "base" });
+    };
+    const main = items.filter((item) => !getId(item).startsWith("noaa-efh-")).sort(nameDesc);
+    const efh = items.filter((item) => getId(item).startsWith("noaa-efh-")).sort(nameDesc);
+    return { main, efh };
+  }
+
+  const efhDivider = (
+    <div
+      style={{
+        padding: "2px 8px",
+        fontSize: "calc(12px * var(--bs-font-scale, 1))",
+        letterSpacing: "0.1em",
+        color: "#475569",
+        background: "rgba(0,229,255,0.02)",
+        borderTop: "1px solid rgba(0,229,255,0.06)",
+      }}
+    >
+      NOAA EFH
+    </div>
+  );
+
   // Pre-compute depth ranges for the depth-scale badge.
   const primaryDepthRange = primaryActiveGrid
     ? (primaryActiveGrid.maxDepth - primaryActiveGrid.minDepth) || 1
     : null;
 
+  const { main: activeMain, efh: activeEfh } = sortAndGroup(
+    visibleDatasets,
+    (vd) => vd.datasetId,
+  );
+
+  const { main: queuedMain, efh: queuedEfh } = sortAndGroup(
+    selectedButNotActive,
+    (id) => id,
+  );
+
   return (
     <>
       {/* ── Active datasets (in GPU memory, rendered in scene) ── */}
-      {visibleDatasets.map((vd) => {
-        const name = nameMap.get(vd.datasetId) ?? vd.datasetId;
+      {[...activeMain, ...(activeEfh.length > 0 ? [null as null, ...activeEfh] : [])].map(
+        (vdOrNull) => {
+          if (vdOrNull === null) {
+            // EFH divider sentinel
+            return <React.Fragment key="__efh-divider-active">{efhDivider}</React.Fragment>;
+          }
+          const vd = vdOrNull;
+          const name = nameMap.get(vd.datasetId) ?? vd.datasetId;
         // Multi-primary: all visible datasets share equal primary status.
         // `primaryDatasetId` is the legacy first-entry alias used only for the
         // depth-scale badge (non-first datasets may have compressed Y-axes).
@@ -583,7 +630,12 @@ const VisibleDatasetRows: React.FC<{
               SELECTED · WILL LOAD WHEN NEARBY
             </div>
           )}
-          {selectedButNotActive.map((id) => {
+          {[...queuedMain, ...(queuedEfh.length > 0 ? [null as null, ...queuedEfh] : [])].map(
+            (idOrNull) => {
+              if (idOrNull === null) {
+                return <React.Fragment key="__efh-divider-queued">{efhDivider}</React.Fragment>;
+              }
+              const id = idOrNull;
             const name = nameMap.get(id) ?? id;
             const source = selectedSources[id] ?? "preset";
             return (
