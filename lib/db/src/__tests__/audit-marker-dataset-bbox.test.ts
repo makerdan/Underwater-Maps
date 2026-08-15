@@ -10,7 +10,7 @@
  *  - ciExitCode: returns 1 with --ci + problems, 0 otherwise
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import {
   isInBbox,
   classifyMarkers,
@@ -18,6 +18,9 @@ import {
   type Bbox,
   type MarkerRow,
 } from "../scripts/audit-marker-dataset-bbox-helpers.js";
+import { createTestDb, type TestContext } from "./test-db.js";
+import { datasetCatalogTable, markersTable } from "../schema/index.js";
+import { eq } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -196,6 +199,165 @@ describe("ciExitCode", () => {
 
   it("returns 0 when ciMode is false even with problems", () => {
     expect(ciExitCode(3, false)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DB integration: bbox shrinks after markers are saved
+// ---------------------------------------------------------------------------
+
+describe("bbox shrinks after markers are saved — DB integration", () => {
+  let ctx: TestContext;
+
+  beforeAll(async () => {
+    ctx = await createTestDb();
+  });
+
+  afterAll(async () => {
+    await ctx.cleanup();
+  });
+
+  beforeEach(async () => {
+    await ctx.truncate();
+  });
+
+  it("detects a marker that drifts out-of-bounds when the catalog bbox shrinks", async () => {
+    // Bbox A — larger region (SE Alaska)
+    const bboxA: Bbox = { minLon: -136.0, minLat: 55.0, maxLon: -130.0, maxLat: 60.0 };
+    // Bbox B — smaller region: excludes the marker at lon=-133, lat=57.5
+    // (maxLon shrinks to -134, so lon=-133 is now outside)
+    const bboxB: Bbox = { minLon: -136.0, minLat: 55.0, maxLon: -134.0, maxLat: 60.0 };
+
+    const catalogId = "test-catalog-shrink-scenario-01";
+
+    // 1. Insert catalog entry with bbox A
+    await ctx.db.insert(datasetCatalogTable).values({
+      id: catalogId,
+      name: "Test Catalog Entry",
+      sourceAgency: "TEST",
+      dataType: "bathymetry",
+      coverageBbox: bboxA,
+      waterType: "saltwater",
+    });
+
+    // 2. Insert a marker inside bbox A (lon=-133, lat=57.5 is well inside)
+    const [marker] = await ctx.db
+      .insert(markersTable)
+      .values({
+        datasetId: catalogId,
+        lon: -133.0,
+        lat: 57.5,
+        depth: 100,
+        type: "custom",
+        label: "Test marker",
+        userId: "user-integration-test",
+      })
+      .returning({ id: markersTable.id });
+
+    expect(marker).toBeDefined();
+
+    // 3. Confirm the marker is in-bounds under bbox A (audit would pass)
+    const bboxMapA = new Map<string, Bbox | null>([[catalogId, bboxA]]);
+    const markerRow: MarkerRow = {
+      id: marker!.id,
+      userId: "user-integration-test",
+      datasetId: catalogId,
+      lon: -133.0,
+      lat: 57.5,
+    };
+    const resultA = classifyMarkers([markerRow], bboxMapA);
+    expect(resultA.outOfBounds).toHaveLength(0);
+    expect(resultA.unknownDataset).toHaveLength(0);
+    expect(ciExitCode(resultA.outOfBounds.length + resultA.unknownDataset.length, true)).toBe(0);
+
+    // 4. Shrink the catalog bbox to bbox B (UPDATE in the DB)
+    await ctx.db
+      .update(datasetCatalogTable)
+      .set({ coverageBbox: bboxB })
+      .where(eq(datasetCatalogTable.id, catalogId));
+
+    // 5. Re-read the catalog row (simulating what the audit script's resolveBboxes does)
+    const [updatedRow] = await ctx.db
+      .select({ coverageBbox: datasetCatalogTable.coverageBbox })
+      .from(datasetCatalogTable)
+      .where(eq(datasetCatalogTable.id, catalogId));
+
+    const updatedBbox = updatedRow!.coverageBbox as unknown as Bbox;
+    expect(updatedBbox.maxLon).toBe(-134.0); // verify the DB write took effect
+
+    // 6. Build the updated bboxMap and reclassify
+    const bboxMapB = new Map<string, Bbox | null>([[catalogId, updatedBbox]]);
+    const resultB = classifyMarkers([markerRow], bboxMapB);
+
+    // 7. The marker (lon=-133) now falls outside maxLon=-134 → out-of-bounds
+    expect(resultB.outOfBounds).toHaveLength(1);
+    expect(resultB.outOfBounds[0]!.id).toBe(marker!.id);
+    expect(resultB.unknownDataset).toHaveLength(0);
+
+    // 8. With --ci the audit would exit 1
+    const problematic = resultB.outOfBounds.length + resultB.unknownDataset.length;
+    expect(ciExitCode(problematic, true)).toBe(1);
+  });
+
+  it("keeps a marker in-bounds when the bbox shrinks but the marker stays inside", async () => {
+    const bboxA: Bbox = { minLon: -136.0, minLat: 55.0, maxLon: -130.0, maxLat: 60.0 };
+    // Shrink only the maxLon to -131 — marker at lon=-133 is still outside this range,
+    // so use a different marker at lon=-131.5 which is inside both A and B.
+    const bboxB: Bbox = { minLon: -136.0, minLat: 55.0, maxLon: -131.0, maxLat: 60.0 };
+
+    const catalogId = "test-catalog-shrink-still-inside-01";
+
+    await ctx.db.insert(datasetCatalogTable).values({
+      id: catalogId,
+      name: "Still-inside Catalog Entry",
+      sourceAgency: "TEST",
+      dataType: "bathymetry",
+      coverageBbox: bboxA,
+      waterType: "saltwater",
+    });
+
+    const [marker] = await ctx.db
+      .insert(markersTable)
+      .values({
+        datasetId: catalogId,
+        lon: -132.0,
+        lat: 57.5,
+        depth: 50,
+        type: "custom",
+        label: "Still-inside marker",
+        userId: "user-integration-test",
+      })
+      .returning({ id: markersTable.id });
+
+    // Shrink bbox to B — marker at lon=-132 is still inside (maxLon=-131 → -132 < -131, wait that's outside)
+    // Actually -132 < -131 means -132 is to the west of -131 so it IS inside [−136, −131].
+    // Let me verify: bbox B is minLon=-136, maxLon=-131. -132 >= -136 and -132 <= -131. YES, inside.
+
+    await ctx.db
+      .update(datasetCatalogTable)
+      .set({ coverageBbox: bboxB })
+      .where(eq(datasetCatalogTable.id, catalogId));
+
+    const [updatedRow] = await ctx.db
+      .select({ coverageBbox: datasetCatalogTable.coverageBbox })
+      .from(datasetCatalogTable)
+      .where(eq(datasetCatalogTable.id, catalogId));
+
+    const updatedBbox = updatedRow!.coverageBbox as unknown as Bbox;
+    const markerRow: MarkerRow = {
+      id: marker!.id,
+      userId: "user-integration-test",
+      datasetId: catalogId,
+      lon: -132.0,
+      lat: 57.5,
+    };
+
+    const bboxMapB = new Map<string, Bbox | null>([[catalogId, updatedBbox]]);
+    const result = classifyMarkers([markerRow], bboxMapB);
+
+    expect(result.outOfBounds).toHaveLength(0);
+    expect(result.unknownDataset).toHaveLength(0);
+    expect(ciExitCode(result.outOfBounds.length + result.unknownDataset.length, true)).toBe(0);
   });
 });
 

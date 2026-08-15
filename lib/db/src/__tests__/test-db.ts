@@ -118,6 +118,23 @@ export async function createTestDb(): Promise<TestContext> {
     CREATE INDEX user_catalog_saves_user_catalog_idx
       ON user_catalog_saves (user_id, catalog_id);
 
+    CREATE TABLE dataset_catalog (
+      id                text PRIMARY KEY,
+      name              text NOT NULL,
+      source_agency     text NOT NULL,
+      data_type         text NOT NULL,
+      resolution_m_min  real,
+      resolution_m_max  real,
+      coverage_bbox     jsonb NOT NULL,
+      endpoint_url      text,
+      access_notes      text,
+      description       text,
+      keywords          text,
+      last_updated      text,
+      water_type        text NOT NULL DEFAULT 'saltwater',
+      created_at        timestamp NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE markers (
       id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       dataset_id text,
@@ -138,7 +155,7 @@ export async function createTestDb(): Promise<TestContext> {
 
   const truncate = async () => {
     await client.query(`
-      TRUNCATE TABLE user_catalog_saves, markers, custom_datasets, dataset_folders
+      TRUNCATE TABLE user_catalog_saves, markers, custom_datasets, dataset_folders, dataset_catalog
         RESTART IDENTITY CASCADE
     `);
   };

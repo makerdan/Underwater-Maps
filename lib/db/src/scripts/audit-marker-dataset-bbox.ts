@@ -25,7 +25,7 @@
 
 import { isNotNull, inArray } from "drizzle-orm";
 import { db, pool, markersTable, datasetCatalogTable, customDatasetsTable } from "../index.js";
-import { isInBbox, classifyMarkers, ciExitCode, type Bbox } from "./audit-marker-dataset-bbox-helpers.js";
+import { classifyMarkers, ciExitCode, type Bbox } from "./audit-marker-dataset-bbox-helpers.js";
 
 // ---------------------------------------------------------------------------
 // Arg parsing
