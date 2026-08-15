@@ -21,6 +21,7 @@ import { OfflinePackModal } from "@/components/OfflinePackModal";
 const offlinePackMock = vi.hoisted(() => ({
   listOfflinePacks: vi.fn<() => Promise<unknown[]>>(),
   saveOfflinePack: vi.fn(),
+  estimatePackStorageBytes: vi.fn<() => Promise<number>>().mockResolvedValue(0),
 }));
 
 const helpPackMock = vi.hoisted(() => ({
@@ -34,6 +35,7 @@ const helpPackMock = vi.hoisted(() => ({
 vi.mock("@/lib/offlinePackStore", () => ({
   listOfflinePacks: offlinePackMock.listOfflinePacks,
   saveOfflinePack: offlinePackMock.saveOfflinePack,
+  estimatePackStorageBytes: offlinePackMock.estimatePackStorageBytes,
 }));
 
 vi.mock("@/lib/helpPackStore", () => ({
