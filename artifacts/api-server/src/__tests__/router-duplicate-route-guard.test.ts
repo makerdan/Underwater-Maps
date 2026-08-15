@@ -89,6 +89,7 @@ import searchFederatedRouter from "../routes/search-federated.js";
 import adminRouter from "../routes/admin.js";
 import githubRouter from "../routes/github.js";
 import terrainBundlesRouter from "../routes/terrain-bundles.js";
+import envPackRouter from "../routes/env-pack.js";
 
 /** name = the routes/<name>.ts module the router comes from. */
 const ROUTERS: Array<[name: string, router: unknown]> = [
@@ -125,6 +126,7 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["admin", adminRouter],
   ["github", githubRouter],
   ["terrain-bundles", terrainBundlesRouter],
+  ["env-pack", envPackRouter],
 ];
 
 describe("duplicate-route mis-merge guard (all routers)", () => {
