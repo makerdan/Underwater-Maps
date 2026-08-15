@@ -221,6 +221,53 @@ let _ackedZoneRev = 0;
 // silently dropped / is waiting on a retry".
 let _lastFlushFailed = false;
 
+// ─── Sync status subscription (Settings header indicator) ────────────────────
+// A minimal external-store contract (subscribe + cached snapshot) so React
+// components can render the live sync state via useSyncExternalStore without
+// polling the module-level flags. The snapshot object is only replaced when a
+// value actually changes, preserving referential equality across renders
+// (required by useSyncExternalStore to avoid render loops).
+export type SettingsSyncStatus = {
+  /** True while a debounce timer is armed or a PUT is in flight. */
+  syncing: boolean;
+  /**
+   * True when the most recent flush attempt failed and no successful PUT has
+   * landed since.
+   */
+  lastSyncFailed: boolean;
+};
+
+let _syncStatusSnapshot: SettingsSyncStatus = {
+  syncing: false,
+  lastSyncFailed: false,
+};
+const _syncStatusListeners = new Set<() => void>();
+
+function _notifySyncStatus(): void {
+  const syncing = _pendingDebounce || _flushInFlight > 0;
+  if (
+    syncing === _syncStatusSnapshot.syncing &&
+    _lastFlushFailed === _syncStatusSnapshot.lastSyncFailed
+  ) {
+    return;
+  }
+  _syncStatusSnapshot = { syncing, lastSyncFailed: _lastFlushFailed };
+  for (const listener of Array.from(_syncStatusListeners)) listener();
+}
+
+/** Subscribe to sync-status changes. Returns an unsubscribe function. */
+export function subscribeSettingsSyncStatus(listener: () => void): () => void {
+  _syncStatusListeners.add(listener);
+  return () => {
+    _syncStatusListeners.delete(listener);
+  };
+}
+
+/** Cached snapshot for useSyncExternalStore — stable until a flag changes. */
+export function getSettingsSyncStatus(): SettingsSyncStatus {
+  return _syncStatusSnapshot;
+}
+
 /** True when a debounce timer is armed OR a PUT is currently in flight. */
 export function hasPendingOrInFlightSettingsSync(): boolean {
   return _pendingDebounce || _flushInFlight > 0;
@@ -568,12 +615,14 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     }
     if (!isSignedIn) {
       markAllSaved(null);
+      _notifySyncStatus();
       return;
     }
     // Mark in-flight BEFORE queuing on the chain so
     // waitForServerSettingsSync sees the outstanding write even while this
     // flush is waiting for a previous one to settle.
     _flushInFlight++;
+    _notifySyncStatus();
     const run = async (): Promise<void> => {
       try {
       // Never send a full-state PUT before the initial server state is known
@@ -617,6 +666,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
         throw err;
       } finally {
         _flushInFlight--;
+        _notifySyncStatus();
       }
     };
     // Serialize: run strictly after the previous flush settles so an older
@@ -637,6 +687,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     // Signal that a write is outstanding so waitForServerSettingsSync knows
     // to poll rather than resolve immediately.
     _pendingDebounce = true;
+    _notifySyncStatus();
     debounceRef.current = setTimeout(() => {
       _pendingDebounce = false; // flush() takes over from here
       void flush().catch((err) => {

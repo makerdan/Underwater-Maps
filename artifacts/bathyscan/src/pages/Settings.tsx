@@ -7,10 +7,14 @@
  *
  * Route: /settings   Keyboard shortcut: ,
  */
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useSyncExternalStore } from "react";
 import { useLocation } from "wouter";
 import { useUser } from "@/lib/clerkCompat";
-import { flushServerSync } from "@/hooks/useServerSettingsSync";
+import {
+  flushServerSync,
+  subscribeSettingsSyncStatus,
+  getSettingsSyncStatus,
+} from "@/hooks/useServerSettingsSync";
 import {
   useSettingsStore,
   useAnySectionDirty,
@@ -33,10 +37,41 @@ import { DataStorageSection } from "./settings/DataStorageSection";
 import { AccessibilitySection } from "./settings/AccessibilitySection";
 import { AccountSection } from "./settings/AccountSection";
 
+// ─── Tab ↔ URL search-param helpers ──────────────────────────────────────────
+// The active tab is mirrored to `?tab=<id>` so specific sections are linkable
+// and a refresh restores the section. Unknown or missing values fall back to
+// the default "visuals" tab.
+const DEFAULT_TAB: Tab = "visuals";
+
+function isKnownTab(v: string | null): v is Tab {
+  return v !== null && NAV_TABS.some((t) => t.id === v);
+}
+
+function readTabFromUrl(): Tab {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("tab");
+    return isKnownTab(raw) ? raw : DEFAULT_TAB;
+  } catch {
+    return DEFAULT_TAB;
+  }
+}
+
+function writeTabToUrl(next: Tab): void {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    // replaceState (not pushState): tab switches must not stack history
+    // entries, or the back button would step through every visited tab.
+    window.history.replaceState(window.history.state, "", url.toString());
+  } catch {
+    // URL mirroring is best-effort — never block a tab switch on it.
+  }
+}
+
 export function Settings() {
   const [, setLocation] = useLocation();
   const { isSignedIn } = useUser();
-  const [tab, setTab] = useState<Tab>("visuals");
+  const [tab, setTab] = useState<Tab>(readTabFromUrl);
   const [savedMsg, setSavedMsg] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -58,12 +93,39 @@ export function Settings() {
     flashSavedMsg();
   }, [isSignedIn, markAllSaved, flashSavedMsg]);
 
+  const anyDirty = useAnySectionDirty();
+  const shouldGuard = !!isSignedIn && anyDirty;
+
+  // Keep a ref in sync so the unmount cleanup reads the CURRENT dirty state
+  // instead of the stale value closed over when the effect mounted.
+  const anyDirtyRef = useRef(anyDirty);
+  useEffect(() => {
+    anyDirtyRef.current = anyDirty;
+  }, [anyDirty]);
+
   useEffect(() => {
     return () => {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-      void flushServerSync();
+      // Only flush when there are unsaved changes: an unconditional flush on
+      // every unmount fires redundant PUTs on clean unmounts (route switches
+      // after everything saved, auth/layout remounts) and can race with the
+      // destination page's own sync lifecycle.
+      if (anyDirtyRef.current) void flushServerSync();
     };
   }, []);
+
+  // Live sync status (debounce pending / PUT in flight / last attempt failed)
+  // drives the three-state cloud indicator in the top bar.
+  const syncStatus = useSyncExternalStore(
+    subscribeSettingsSyncStatus,
+    getSettingsSyncStatus,
+  );
+  const cloudState: "saving" | "error" | "synced" =
+    syncStatus.lastSyncFailed && !syncStatus.syncing
+      ? "error"
+      : anyDirty || syncStatus.syncing
+        ? "saving"
+        : "synced";
 
   const syncCtx = React.useMemo(
     () => ({ flush: flushSync, isSignedIn: !!isSignedIn }),
@@ -72,9 +134,6 @@ export function Settings() {
 
   const showAdvancedEverywhere = useSettingsStore((s) => s.showAdvancedEverywhere);
   const setShowAdvancedEverywhere = useSettingsStore((s) => s.setShowAdvancedEverywhere);
-
-  const anyDirty = useAnySectionDirty();
-  const shouldGuard = !!isSignedIn && anyDirty;
 
   useEffect(() => {
     if (!shouldGuard) return;
@@ -92,11 +151,35 @@ export function Settings() {
       try {
         await flushSync();
       } catch {
-        // Swallow — user can retry via the section Save button.
+        // Swallow — user can retry via the sync indicator or section Save.
       }
     }
-    setLocation(basePath + "/");
+    // Return to wherever Settings was opened from (dataset page, deep link,
+    // another view). Fall back to the app root only when this is the first
+    // history entry (e.g. a direct /settings navigation in a fresh tab).
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      setLocation(basePath + "/");
+    }
   }, [shouldGuard, flushSync, setLocation]);
+
+  const handleTabSelect = useCallback(
+    (next: Tab) => {
+      if (next === tab) return;
+      if (shouldGuard) {
+        // Same policy as the back button: auto-flush unsaved changes before
+        // the current section unmounts. The switch is optimistic; a failed
+        // flush surfaces through the "save failed" indicator, not a blocker.
+        void flushSync().catch(() => {
+          /* surfaced via the sync-status indicator */
+        });
+      }
+      setTab(next);
+      writeTabToUrl(next);
+    },
+    [tab, shouldGuard, flushSync],
+  );
 
   return (
     <SyncContext.Provider value={syncCtx}>
@@ -168,8 +251,59 @@ export function Settings() {
                 ✓ SAVED
               </span>
             )}
-            {isSignedIn && !savedMsg && (
-              <span style={{ color: "#64748b", letterSpacing: "0.1em" }}>synced to cloud</span>
+            {isSignedIn && !savedMsg && cloudState === "saving" && (
+              <span
+                data-testid="topbar-sync-status"
+                data-sync-state="saving"
+                style={{ color: "#fbbf24", letterSpacing: "0.1em" }}
+              >
+                saving…
+              </span>
+            )}
+            {isSignedIn && !savedMsg && cloudState === "error" && (
+              <span
+                data-testid="topbar-sync-status"
+                data-sync-state="error"
+                style={{
+                  color: "#f87171",
+                  letterSpacing: "0.1em",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                save failed
+                <button
+                  data-testid="topbar-sync-retry"
+                  onClick={() => {
+                    void flushSync().catch(() => {
+                      /* stays in the error state; the user can retry again */
+                    });
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    color: "#00e5ff",
+                    cursor: "pointer",
+                    fontFamily: FONT,
+                    fontSize: "inherit",
+                    letterSpacing: "0.1em",
+                    textDecoration: "underline",
+                  }}
+                >
+                  retry
+                </button>
+              </span>
+            )}
+            {isSignedIn && !savedMsg && cloudState === "synced" && (
+              <span
+                data-testid="topbar-sync-status"
+                data-sync-state="synced"
+                style={{ color: "#64748b", letterSpacing: "0.1em" }}
+              >
+                synced to cloud
+              </span>
             )}
             <span
               style={{ color: "#64748b", letterSpacing: "0.1em" }}
@@ -183,13 +317,14 @@ export function Settings() {
         {/* Two-column layout */}
         <div style={S.layout}>
           {/* Sidebar */}
-          <nav style={S.sidebar}>
+          <nav style={S.sidebar} aria-label="Settings sections">
             {NAV_TABS.map((t) => (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => handleTabSelect(t.id)}
                 style={S.navItem(tab === t.id)}
                 data-nav-active={tab === t.id ? "true" : "false"}
+                aria-current={tab === t.id ? "page" : undefined}
               >
                 {t.label}
               </button>
