@@ -4372,6 +4372,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           datasets={(userDatasets ?? []).map((d) => ({
             id: d.id,
             name: d.name,
+            bbox: d.bbox ?? undefined,
           }))}
           onClose={() => setBulkOfflineOpen(false)}
         />

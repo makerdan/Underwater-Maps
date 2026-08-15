@@ -326,6 +326,41 @@ describe("useBulkOfflinePack — IDB unavailable", () => {
   });
 });
 
+describe("useBulkOfflinePack — bbox forwarding", () => {
+  it("calls saveOfflinePack with the dataset bbox when one is provided", async () => {
+    const DS_WITH_BBOX = {
+      id: "geo",
+      name: "Geo Dataset",
+      bbox: { minLon: -122.5, maxLon: -122.0, minLat: 37.5, maxLat: 38.0 },
+    };
+
+    const { result } = renderHook(() => useBulkOfflinePack([DS_WITH_BBOX]));
+
+    await act(async () => { void result.current.start(); });
+    await waitFor(() => expect(result.current.phase).toBe("done"), { timeout: 5000 });
+
+    expect(mockSaveOfflinePack).toHaveBeenCalledTimes(1);
+    expect(mockSaveOfflinePack.mock.calls[0][0]).toMatchObject({
+      id: "geo",
+      bbox: { minLon: -122.5, maxLon: -122.0, minLat: 37.5, maxLat: 38.0 },
+    });
+    expect(result.current.rows[0].status).toBe("done");
+  });
+
+  it("completes without throwing when a dataset has no bbox", async () => {
+    const DS_NO_BBOX = { id: "nobbox", name: "No Bbox Dataset" };
+
+    const { result } = renderHook(() => useBulkOfflinePack([DS_NO_BBOX]));
+
+    await act(async () => { void result.current.start(); });
+    await waitFor(() => expect(result.current.phase).toBe("done"), { timeout: 5000 });
+
+    expect(mockSaveOfflinePack).toHaveBeenCalledTimes(1);
+    expect(mockSaveOfflinePack.mock.calls[0][0]).toMatchObject({ id: "nobbox" });
+    expect(result.current.rows[0].status).toBe("done");
+  });
+});
+
 describe("useBulkOfflinePack — quota below low-water mark", () => {
   it("sets quotaWarning but still allows the batch to start", async () => {
     // Return a near-full quota (< 50 MB remaining)
