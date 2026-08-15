@@ -446,6 +446,30 @@ describe("saveOfflinePack — storageBytesEstimate uses bbox when available", ()
     const expectedFallback = (50 + 50) * 40 + 2 * 1024 * 1024;
     expect(pack.storageBytesEstimate).toBe(expectedFallback);
   });
+
+  it("forwards resolutionM so a 1 m dataset stores a larger estimate than a 20 m dataset", async () => {
+    stubSwAndFetchOk();
+    const finePack = await saveOfflinePack(
+      { id: "ds-fine-res", name: "Fine Dataset", bbox: TEST_BBOX, resolutionM: 1 },
+      3,
+      () => { /* noop */ },
+    );
+    stubSwAndFetchOk();
+    const coarsePack = await saveOfflinePack(
+      { id: "ds-coarse-res", name: "Coarse Dataset", bbox: TEST_BBOX, resolutionM: 20 },
+      3,
+      () => { /* noop */ },
+    );
+    // 1 m grid: 4 bytes/sample, many more samples → much larger estimate.
+    expect(finePack.storageBytesEstimate).toBeGreaterThan(coarsePack.storageBytesEstimate);
+    // Verify values match the formula directly.
+    expect(finePack.storageBytesEstimate).toBe(
+      estimatePackStorageBytesFromBbox({ bbox: TEST_BBOX, resolutionM: 1 }),
+    );
+    expect(coarsePack.storageBytesEstimate).toBe(
+      estimatePackStorageBytesFromBbox({ bbox: TEST_BBOX, resolutionM: 20 }),
+    );
+  });
 });
 
 // ── Weather-skip progress event ───────────────────────────────────────────
