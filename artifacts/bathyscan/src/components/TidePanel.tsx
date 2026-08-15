@@ -40,7 +40,7 @@ function timeToNext(isoStr: string, referenceTime: Date): string {
   if (diffMs <= 0) return "now";
   const h = Math.floor(diffMs / 3_600_000);
   const m = Math.floor((diffMs % 3_600_000) / 60_000);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`; // raw-unit-ok: m = minutes in time duration, not metres
 }
 
 function floodEbbLabel(direction: number, nextEventType?: "high" | "low"): string {

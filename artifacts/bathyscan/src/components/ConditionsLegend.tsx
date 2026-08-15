@@ -10,7 +10,7 @@ import React from "react";
 import { useUiStore, CURRENT_DEPTH_LAYERS } from "@/lib/uiStore";
 import { useDriftStore } from "@/lib/driftStore";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { formatSpeedFromKnots, cardinal } from "@/lib/units";
+import { formatSpeedFromKnots, formatWaveHeight, cardinal } from "@/lib/units";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useAppState } from "@/lib/context";
 import { windColor } from "@/components/ConditionsOverlays";
@@ -171,7 +171,7 @@ export const ConditionsLegend: React.FC = () => {
         <Row
           swatch="#60a5fa"
           label="Waves"
-          value={`${waveHeightM.toFixed(2)} m`}
+          value={formatWaveHeight(waveHeightM, { units })}
           detail={waveDirectionDeg !== undefined ? `${cardinal(waveDirectionDeg)} ${Math.round(waveDirectionDeg)}°` : undefined}
         />
       )}
@@ -240,7 +240,7 @@ export const ConditionsLegend: React.FC = () => {
           <div style={{ ...LABEL, color: "#fbbf24", marginBottom: 4 }}>Manual Override</div>
           {wind && (
             <div style={{ marginBottom: 4 }}>
-              <div style={LABEL}>Wind {manualWindSpeedKnots} kn @ {cardinal(manualWindDegrees)} ({manualWindDegrees}°)</div>
+              <div style={LABEL}>Wind {formatSpeedFromKnots(manualWindSpeedKnots, { units })} @ {cardinal(manualWindDegrees)} ({manualWindDegrees}°)</div>
               <input type="range" min={0} max={40}
                 value={manualWindSpeedKnots}
                 onChange={(e) => setManualWindSpeedKnots(Number(e.target.value))}
@@ -253,7 +253,7 @@ export const ConditionsLegend: React.FC = () => {
           )}
           {(tide || cur) && (
             <div>
-              <div style={LABEL}>Tidal {manualTidalSpeedKnots} kn @ {cardinal(manualTidalDegrees)} ({manualTidalDegrees}°)</div>
+              <div style={LABEL}>Tidal {formatSpeedFromKnots(manualTidalSpeedKnots, { units })} @ {cardinal(manualTidalDegrees)} ({manualTidalDegrees}°)</div>
               <input type="range" min={0} max={6} step={0.1}
                 value={manualTidalSpeedKnots}
                 onChange={(e) => setManualTidalSpeedKnots(Number(e.target.value))}

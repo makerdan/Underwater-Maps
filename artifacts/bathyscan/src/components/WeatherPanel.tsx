@@ -34,7 +34,7 @@ import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { formatFreshness } from "@/lib/freshnessUtils";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { LocationBadge } from "@/components/LocationBadge";
-import { formatSpeedFromKnots, cardinal } from "@/lib/units";
+import { formatSpeedFromKnots, formatWaveHeight, cardinal } from "@/lib/units";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 
@@ -354,7 +354,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
     xml += `  <trk>\n    <name>${escapeXml(planName)}</name>\n    <trkseg>\n`;
     for (const wp of driftPath) {
       const time = new Date(Date.now() + wp.hour * 3600000).toISOString();
-      const desc = `Hour ${wp.hour}: ${wp.driftSpeedKnots.toFixed(1)} kt drift, line ${Math.round(wp.lineAngleDeg)}°, hook ${Math.round(wp.hookDepthM)} m${wp.isSlack ? ", slack" : ""}${wp.bottomReached ? ", BOTTOM" : ""}`;
+      const desc = `Hour ${wp.hour}: ${wp.driftSpeedKnots.toFixed(1)} kt drift, line ${Math.round(wp.lineAngleDeg)}°, hook ${Math.round(wp.hookDepthM)} m${wp.isSlack ? ", slack" : ""}${wp.bottomReached ? ", BOTTOM" : ""}`; // raw-unit-ok: GPX <desc> uses SI units (kt, m) for cross-app interoperability
       xml += `      <trkpt lat="${wp.lat.toFixed(7)}" lon="${wp.lon.toFixed(7)}">\n`;
       xml += `        <ele>${(-wp.hookDepthM).toFixed(1)}</ele>\n`;
       xml += `        <time>${time}</time>\n`;
@@ -1014,7 +1014,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                   <div key={plan.id} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(0,10,20,0.5)", borderRadius: 3, padding: "2px 4px" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ color: "#e2e8f0", fontSize: "calc(12px * var(--bs-font-scale, 1))", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{plan.name}</div>
-                      <div style={{ color: "#64748b", fontSize: "calc(10.5px * var(--bs-font-scale, 1))" }}>{plan.driftMode} · {plan.lineLengthM}m · {new Date(plan.savedAt).toLocaleDateString()}</div>
+                      <div style={{ color: "#64748b", fontSize: "calc(10.5px * var(--bs-font-scale, 1))" }}>{plan.driftMode} · {formatWaveHeight(plan.lineLengthM, { units, decimals: 0 })} · {new Date(plan.savedAt).toLocaleDateString()}</div>
                     </div>
                     <button
                       onClick={() => loadDriftPlan(plan)}
@@ -1122,7 +1122,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
           </div>
           <div>
             <span style={LABEL}>WAVE HEIGHT </span>
-            <span style={{ ...VALUE, color: "#60a5fa" }}>{cond.waveHeightM.toFixed(2)} m</span>
+            <span style={{ ...VALUE, color: "#60a5fa" }}>{formatWaveHeight(cond.waveHeightM, { units })}</span>
             {cond.waveDirectionDeg !== undefined && (
               <span style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginLeft: 6 }}>
                 {cardinal(cond.waveDirectionDeg)} {Math.round(cond.waveDirectionDeg)}°
@@ -1228,7 +1228,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
             data-testid="snap-to-depth-toggle"
             onClick={() => setSnapToDepthEnabled(!snapToDepthEnabled)}
             title={snapToDepthEnabled
-              ? `Snap to depth ON: dragging waypoints snaps to the ${Math.round(snapToDepthM)} m contour. Click to disable.`
+              ? `Snap to depth ON: dragging waypoints snaps to the ${formatWaveHeight(snapToDepthM, { units, decimals: 0 })} contour. Click to disable.`
               : "Enable snap to depth: drag waypoints snap to the chosen depth contour."}
             style={{
               display: "block",
@@ -1423,10 +1423,10 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                     ) : (
                       <button
                         onClick={() => handleLoadPreset(p.id)}
-                        title={`Load ${p.name}: ${Math.round(p.headingDeg)}° @ ${p.speedKnots}kt`}
+                        title={`Load ${p.name}: ${Math.round(p.headingDeg)}° @ ${formatSpeedFromKnots(p.speedKnots, { units })}`}
                         style={{ flex: 1, textAlign: "left", background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#00e5ff", fontFamily: "inherit", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", padding: "3px 6px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                       >
-                        {p.name} · {Math.round(p.headingDeg)}° @ {p.speedKnots}kt
+                        {p.name} · {Math.round(p.headingDeg)}° @ {formatSpeedFromKnots(p.speedKnots, { units })}
                       </button>
                     )}
                     {sortedFolders.length > 0 && !isEditing && (
@@ -1652,7 +1652,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               />
             </div>
             <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 2 }}>
-              Max {TROLL_MAX_KNOTS} kt · 0 kt falls back to pure drift
+              Max {formatSpeedFromKnots(TROLL_MAX_KNOTS, { units })} · set to 0 for pure drift
             </div>
           </div>
 
@@ -1738,12 +1738,12 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
           <div style={{ ...LABEL, marginBottom: 4 }}>MANUAL OVERRIDE</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <div>
-              <div style={LABEL}>WIND {manualWindSpeedKnots} kt @ {cardinal(manualWindDegrees)} ({manualWindDegrees}°)</div>
+              <div style={LABEL}>WIND {formatSpeedFromKnots(manualWindSpeedKnots, { units })} @ {cardinal(manualWindDegrees)} ({manualWindDegrees}°)</div>
               <input type="range" min={0} max={40} value={manualWindSpeedKnots} onChange={(e) => setManualWindSpeedKnots(Number(e.target.value))} style={sliderStyle} />
               <input type="range" min={0} max={359} value={manualWindDegrees} onChange={(e) => setManualWindDegrees(Number(e.target.value))} style={sliderStyle} />
             </div>
             <div>
-              <div style={LABEL}>TIDAL {manualSlackNow ? "0.0 (slack)" : manualTidalSpeedKnots} kt @ {cardinal(manualTidalDegrees)} ({manualTidalDegrees}°)</div>
+              <div style={LABEL}>TIDAL {manualSlackNow ? "slack" : formatSpeedFromKnots(manualTidalSpeedKnots, { units })} @ {cardinal(manualTidalDegrees)} ({manualTidalDegrees}°)</div>
               <input type="range" min={0} max={6} step={0.1} value={manualTidalSpeedKnots} disabled={manualSlackNow} onChange={(e) => setManualTidalSpeedKnots(Number(e.target.value))} style={{ ...sliderStyle, opacity: manualSlackNow ? 0.4 : 1 }} />
               <input type="range" min={0} max={359} value={manualTidalDegrees} onChange={(e) => setManualTidalDegrees(Number(e.target.value))} style={sliderStyle} />
               <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, color: manualSlackNow ? "#c084fc" : "#cbd5e1", cursor: "pointer", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em" }}>

@@ -14,7 +14,7 @@
 import React, { useEffect } from "react";
 import { useDriftStore } from "@/lib/driftStore";
 import { useSettingsStore, type UnitsSystem } from "@/lib/settingsStore";
-import { formatSpeedFromKnots } from "@/lib/units";
+import { formatSpeedFromKnots, formatWaveHeight } from "@/lib/units";
 
 const PANEL_STYLE: React.CSSProperties = {
   position: "absolute",
@@ -120,12 +120,12 @@ export const DriftTimeline: React.FC<DriftTimelineProps> = ({ onClose }) => {
         >
           {isBacktrolling
             ? usingWaypoints
-              ? `⛵ BTROLL · ${driftWaypoints.length}-WP COURSE @ ${boatSpeedKnots.toFixed(1)} KT`
-              : `⛵ BTROLL · ${Math.round(boatHeadingDeg)}° @ ${boatSpeedKnots.toFixed(1)} KT`
+              ? `⛵ BTROLL · ${driftWaypoints.length}-WP COURSE @ ${formatSpeedFromKnots(boatSpeedKnots, { units })}`
+              : `⛵ BTROLL · ${Math.round(boatHeadingDeg)}° @ ${formatSpeedFromKnots(boatSpeedKnots, { units })}`
             : isTrolling
               ? usingWaypoints
-                ? `🎣 TROLLING · ${driftWaypoints.length}-WP COURSE @ ${boatSpeedKnots.toFixed(1)} KT`
-                : `🎣 TROLLING · ${Math.round(boatHeadingDeg)}° @ ${boatSpeedKnots.toFixed(1)} KT`
+                ? `🎣 TROLLING · ${driftWaypoints.length}-WP COURSE @ ${formatSpeedFromKnots(boatSpeedKnots, { units })}`
+                : `🎣 TROLLING · ${Math.round(boatHeadingDeg)}° @ ${formatSpeedFromKnots(boatSpeedKnots, { units })}`
               : "⛵ DRIFT"}
         </span>
         {usingWaypoints && typeof activeLegIdx === "number" && (
@@ -311,16 +311,16 @@ export const DriftTimeline: React.FC<DriftTimelineProps> = ({ onClose }) => {
           </div>
           <div>
             <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>HOOK DEPTH</div>
-            <div style={{ color: "#7dd3fc", fontWeight: 700 }}>{wp.hookDepthM.toFixed(0)} m</div>
+            <div style={{ color: "#7dd3fc", fontWeight: 700 }}>{formatWaveHeight(wp.hookDepthM, { units, decimals: 0 })}</div>
           </div>
           <div>
             <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>LINE SCOPE</div>
             <div style={{ color: "#a78bfa", fontWeight: 700 }} data-testid="line-scope-value">
-              {wp.lineScopeM.toFixed(0)} m
+              {formatWaveHeight(wp.lineScopeM, { units, decimals: 0 })}
             </div>
           </div>
           <div>
-            <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>BOTTOM {lineLengthM}m LINE</div>
+            <div style={{ color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.18em" }}>BOTTOM {formatWaveHeight(lineLengthM, { units, decimals: 0 })} LINE</div>
             <div style={{ fontWeight: 700, color: wp.bottomReached ? "#4ade80" : "#ef4444" }}>
               {wp.bottomReached ? "✓ IN REACH" : "✗ TOO DEEP"}
             </div>
@@ -358,7 +358,7 @@ export const DriftTimeline: React.FC<DriftTimelineProps> = ({ onClose }) => {
                 title="Predicted water level above chart datum (MLLW) — used to compute effective depth for tidal scaling"
                 style={{ color: "#34d399", fontWeight: 700, cursor: "help" }}
               >
-                {cond.tideHeightM >= 0 ? "+" : ""}{cond.tideHeightM.toFixed(1)} m
+                {cond.tideHeightM >= 0 ? "+" : ""}{formatWaveHeight(cond.tideHeightM, { units })}
               </div>
             </div>
           )}
