@@ -46,6 +46,15 @@ pnpm --filter db push
 # unit-test failures from blocking CI"). Running them here with || true
 # surfaces the output without failing the post-merge setup.
 pnpm run typecheck && pnpm run lint
+# Scheduled bbox drift audit — runs after every merge so drift is caught
+# automatically rather than only when someone remembers to run the script.
+# Requires a live DATABASE_URL (available here because the schema push above
+# already connected).  AUDIT_MARKER_BBOX_ENABLED=1 activates the audit;
+# without it the script exits 0 immediately (graceful no-op for offline runs).
+# Exit 1 when any marker falls outside its dataset's bbox or references a
+# deleted dataset — the merge completes but the output surfaces the drift.
+AUDIT_MARKER_BBOX_ENABLED=1 pnpm --filter @workspace/db audit:marker-bbox -- --ci || \
+  echo "[post-merge] WARNING: bbox audit found drift — run 'pnpm --filter @workspace/db audit:marker-bbox -- --fix' to clear stale dataset_id references."
 # Guardrail: catch hardcoded user-ID string literals in e2e specs before they ship.
 # Any string matching the "*-user*" pattern outside tests/e2e/fixtures.ts is flagged.
 bash scripts/check-e2e-user-ids.sh

@@ -142,15 +142,22 @@ export async function resolveBboxes(
   }
 
   // --- custom datasets table (for IDs not found in catalog) ---
+  // Only look up IDs that are UUID-shaped — catalog dataset IDs are human-readable
+  // slugs (e.g. "thorne-bay") and never appear in custom_datasets, whose `id`
+  // column is typed uuid. Passing a non-UUID string causes Postgres to throw
+  // "invalid input syntax for type uuid", crashing the audit.
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const stillMissing = datasetIds.filter((id) => !result.has(id));
-  if (stillMissing.length > 0) {
+  const uuidMissing = stillMissing.filter((id) => UUID_RE.test(id));
+  if (uuidMissing.length > 0) {
     const customRows = await db
       .select({
         id: customDatasetsTable.id,
         terrainJson: customDatasetsTable.terrainJson,
       })
       .from(customDatasetsTable)
-      .where(inArray(customDatasetsTable.id, stillMissing));
+      .where(inArray(customDatasetsTable.id, uuidMissing));
 
     for (const row of customRows) {
       const tj = row.terrainJson as { minLon?: unknown; minLat?: unknown; maxLon?: unknown; maxLat?: unknown } | null;
