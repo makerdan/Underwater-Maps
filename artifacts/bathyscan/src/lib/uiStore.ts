@@ -390,7 +390,7 @@ function readLocalBool(key: string, fallback: boolean): boolean {
 }
 
 function writeLocalBool(key: string, value: boolean): void {
-  try { localStorage.setItem(key, String(value)); } catch {}
+  try { localStorage.setItem(key, String(value)); } catch { /* intentional — localStorage unavailable (private browsing / quota); write is best-effort */ }
 }
 
 // ── Clean up stale localStorage keys (superseded by settingsStore v15) ────────

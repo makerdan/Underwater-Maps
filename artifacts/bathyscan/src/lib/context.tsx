@@ -90,12 +90,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const setRealisticMode = useCallback((b: boolean) => {
     setRealisticModeRaw(b);
-    try { localStorage.setItem("bathyscan:realisticMode", String(b)); } catch {}
+    try { localStorage.setItem("bathyscan:realisticMode", String(b)); } catch { /* intentional — best-effort persistence; React state is already updated */ }
   }, []);
 
   const setBoatSpeedMph = useCallback((mph: number) => {
     setBoatSpeedMphRaw(mph);
-    try { localStorage.setItem("bathyscan:boatSpeedMph", String(mph)); } catch {}
+    try { localStorage.setItem("bathyscan:boatSpeedMph", String(mph)); } catch { /* intentional — best-effort persistence; React state is already updated */ }
   }, []);
 
   return (

@@ -47,7 +47,7 @@ function loadHistory(): string[] {
 }
 
 function saveHistory(hist: string[]): void {
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(0, MAX_HISTORY))); } catch {}
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(0, MAX_HISTORY))); } catch { /* intentional — query history is a convenience; losing it is acceptable */ }
 }
 
 export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {

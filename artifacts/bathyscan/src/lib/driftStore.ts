@@ -155,7 +155,9 @@ function readSavedPlans(): { plans: SavedDriftPlan[]; skipped: number } {
 function writeSavedPlans(plans: SavedDriftPlan[]) {
   try {
     localStorage.setItem(SAVED_PLANS_KEY, JSON.stringify(plans));
-  } catch {}
+  } catch {
+    // intentional — localStorage unavailable (private browsing / quota); saved plans are best-effort
+  }
 }
 
 interface DriftStore {
@@ -360,7 +362,7 @@ function readLocalBool(key: string, fallback: boolean): boolean {
 export const useDriftStore = create<DriftStore>((set, get) => ({
   driftPlannerActive: readLocalBool("bathyscan:driftPlannerActive", false),
   setDriftPlannerActive: (active) => {
-    try { localStorage.setItem("bathyscan:driftPlannerActive", String(active)); } catch {}
+    try { localStorage.setItem("bathyscan:driftPlannerActive", String(active)); } catch { /* intentional — best-effort persistence; state is still set below */ }
     set({ driftPlannerActive: active });
   },
 
@@ -510,7 +512,7 @@ export const useDriftStore = create<DriftStore>((set, get) => ({
     }
   })(),
   setBoatProfileId: (id) => {
-    try { localStorage.setItem("bathyscan:boatProfileId", id); } catch {}
+    try { localStorage.setItem("bathyscan:boatProfileId", id); } catch { /* intentional — best-effort persistence; state is still set below */ }
     set({ boatProfileId: id });
   },
 

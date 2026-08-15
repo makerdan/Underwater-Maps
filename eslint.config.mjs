@@ -393,6 +393,11 @@ export default [
       // of surfacing later as TS1117 deep in the typecheck step.
       "no-dupe-keys": "error",
       "no-duplicate-imports": "error",
+      // Bare `catch {}` blocks silently swallow data-operation failures (audit
+      // finding F-005 and friends). Every catch must have a body that surfaces
+      // the error, logs it, or carries a comment explaining why the swallow is
+      // intentional (no-empty permits comment-only blocks by design).
+      "no-empty": ["error", { allowEmptyCatch: false }],
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-redeclare": "error",
@@ -438,6 +443,22 @@ export default [
     plugins: { local: localPlugin },
     rules: {
       "local/no-import-original-api-client": "error",
+    },
+  },
+  // Test files may use intentional bare catches for error-case setup (e.g.
+  // clearing localStorage in environments where it may throw) — the no-empty
+  // guard targets production source only.
+  {
+    files: [
+      "artifacts/bathyscan/src/**/__tests__/**/*.{ts,tsx}",
+      "artifacts/bathyscan/src/**/*.test.{ts,tsx}",
+      "artifacts/bathyscan/src/**/*.spec.{ts,tsx}",
+      "artifacts/api-server/src/**/__tests__/**/*.{ts,tsx}",
+      "artifacts/api-server/src/**/*.test.{ts,tsx}",
+      "artifacts/api-server/src/**/*.spec.{ts,tsx}",
+    ],
+    rules: {
+      "no-empty": "off",
     },
   },
 ];

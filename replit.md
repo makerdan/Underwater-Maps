@@ -54,6 +54,7 @@ Key source-of-truth files:
 - **Vite dedupes Zustand** — `@react-three/drei` (via tunnel-rat) pulls in Zustand v4 alongside the app's v5. `vite.config.ts` sets `resolve.dedupe: ["zustand"]` to force one copy.
 - **laz-perf WASM heap re-read** — capturing `lp.HEAPU8` before a LAZ decompression loop is unsafe; WASM memory can grow mid-loop, detaching the ArrayBuffer. Always re-read `lp.HEAPU8.buffer` inside `getPoint()`.
 - **Worker threads for heavy parsing** — CPU-intensive upload parsing (LAS/LAZ, GeoTIFF, BAG) runs in `parseWorker.ts` to avoid blocking the main event loop.
+- **No bare catch blocks** — Bare `catch {}` blocks are a lint error (`no-empty`) in BathyScan/API source. Every catch must have a body that either surfaces the error, logs it, or contains a comment explaining why the swallow is intentional (comment-only blocks satisfy the rule by design). Test files are exempt.
 
 ## Product
 
