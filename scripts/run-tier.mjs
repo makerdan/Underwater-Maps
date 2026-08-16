@@ -30,6 +30,7 @@
  *   aggregate    → 45 min (reused for "full")
  */
 import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getValidationSteps, getStepsForTier } from "./validation-steps.mjs";
@@ -111,6 +112,15 @@ function runSingleStep(name) {
   if (!step) {
     console.error(`[run-tier] unknown step name: ${JSON.stringify(name)}`);
     process.exit(2);
+  }
+  // --step mode only runs after the outer lock wrapper has acquired the
+  // resource lock. When the invoking runner (test-all-steps.mjs) asks for a
+  // post-acquisition start timestamp — so its per-step timing excludes
+  // lock-wait time — record it now.
+  if (process.env.VALIDATION_STEP_START_FILE) {
+    try {
+      writeFileSync(process.env.VALIDATION_STEP_START_FILE, String(Date.now()));
+    } catch { /* best-effort — caller falls back to spawn-start timing */ }
   }
   const exitCode = execStep(step);
   process.exit(exitCode);

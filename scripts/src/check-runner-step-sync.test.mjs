@@ -43,6 +43,29 @@ test("shared step list has valid entries and no duplicate names", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Resource-name guard — both runners wrap steps with a non-null resource in
+// validation-lock.mjs. A typo'd resource name would still "work" (the lock
+// wrapper creates a lock file for any name) but would silently stop
+// serializing against the real resource, so pin every declared resource to
+// the known set.
+// ---------------------------------------------------------------------------
+
+const KNOWN_RESOURCES = ["codegen", "unit-cpu", "e2e-port", "global"];
+
+test("every step with a non-null resource uses a known resource name", () => {
+  const steps = getValidationSteps("test");
+  for (const s of steps) {
+    if (s.resource === null) continue;
+    assert.ok(
+      KNOWN_RESOURCES.includes(s.resource),
+      `step ${s.name}: resource ${JSON.stringify(s.resource)} is not a known resource name ` +
+        `(${KNOWN_RESOURCES.join(", ")}) — a typo'd resource silently bypasses lock enforcement; ` +
+        `if this is a genuinely new resource, add it to KNOWN_RESOURCES here deliberately`,
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Tier-tag selection — every step must declare explicit tier membership
 // ---------------------------------------------------------------------------
 
