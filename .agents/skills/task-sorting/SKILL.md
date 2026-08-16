@@ -45,11 +45,15 @@ on any PROPOSED list.
 
 ## Phase 0 — Re-run guard and prefix normalisation
 
+Phase 0 has six steps: capture the snapshot (Step 0), drop any refs that are no longer PROPOSED (Step 0-B), run orphan-recovery on the filtered set, skip already-deleted tasks (Step A), strip stale tier prefixes (Step B), and translate Task Triage labels (Step C).
+
 **Step 0 — Capture snapshot.** Before anything else, call `queryProjectTasks` with `states: ["PROPOSED"]` and record the complete list of returned `taskRef` values as the immutable working set for this run. Log the count (e.g. "Snapshot captured: 42 PROPOSED tasks"). This snapshot is frozen — all subsequent phases operate exclusively on refs present in this list. Any task that becomes PROPOSED after this point is out of scope for the current run.
 
 Then fetch descriptions for all tasks in the snapshot.
 
-**Orphan-recovery check (run before Step A):** Scan the snapshot for any task whose title starts with `CONSOLIDATION - `. For each one found, extract all task refs from its description using the pattern `#\d+` (match every token of the form `#` followed by one or more digits, anywhere in the description — do **not** restrict the search to a named section, because template drift would silently suppress matches). For each extracted ref that is present in the Phase 0 snapshot and resolves to a PROPOSED task whose title does not yet start with `DELETE - `, immediately call `updateProjectTask({taskRef, title:"DELETE - <original title>"})` to prefix it. **Only act on refs present in the Phase 0 snapshot** — do not modify any task whose ref was not captured at snapshot time, even if it appears in a CONSOLIDATION task's description and is currently PROPOSED. Report how many orphaned originals were repaired (may be zero).
+**Step 0-B — Drop non-PROPOSED refs.** Immediately after capturing the snapshot, iterate every ref in the working set and verify its current state. Remove from the working set any ref whose state is not `PROPOSED` (i.e. any ref whose state is MERGED, MERGING, QUEUED, IMPLEMENTED, PENDING, IN_PROGRESS, or CANCELLED). Log the count of dropped refs (e.g. "Dropped 3 non-PROPOSED refs from working set"). These refs are silently excluded — do not rename or mutate them in any way. Record the drop count for the Phase 7 summary.
+
+**Orphan-recovery check (run after Step 0-B, before Step A):** Scan the working set for any task whose title starts with `CONSOLIDATION - `. For each one found, extract all task refs from its description using the pattern `#\d+` (match every token of the form `#` followed by one or more digits, anywhere in the description — do **not** restrict the search to a named section, because template drift would silently suppress matches). For each extracted ref that is present in the working set (after Step 0-B filtering) and resolves to a PROPOSED task whose title does not yet start with `DELETE - `, immediately call `updateProjectTask({taskRef, title:"DELETE - <original title>"})` to prefix it. **Only act on refs present in the working set after Step 0-B** — do not modify any task whose ref was not retained at that point, even if it appears in a CONSOLIDATION task's description and is currently PROPOSED. Report how many orphaned originals were repaired (may be zero).
 
 **Step A — Skip already-handled tasks.** For each task whose title starts
 with `DELETE - ` (case-sensitive), skip it entirely — it is already marked
@@ -74,6 +78,7 @@ must be classified like any other task.
 work remains, print a short summary table and stop.
 
 ---
+
 
 ## Phase 1 — Gather active and merged context
 
@@ -263,6 +268,7 @@ Print a final summary:
 
 ```
 Snapshot size at start: N tasks
+Dropped (non-PROPOSED at snapshot time): N tasks
 Tier 1 (critical):    N tasks
 Tier 2 (important):   N tasks
 Tier 3 (later):       N tasks
@@ -280,8 +286,11 @@ prominently in the conversation feed.
 
 - **Never mutate before user confirmation** — Phases 0–5 are analysis only;
   Phase 6 requires explicit approval.
-- **Never touch PENDING, IN_PROGRESS, IMPLEMENTED, or MERGED tasks** — scope
-  is PROPOSED only.
+- **Never touch non-PROPOSED tasks** — scope is PROPOSED only. Tasks in any
+  other state (PENDING, IN_PROGRESS, IMPLEMENTED, MERGING, QUEUED, MERGED, or
+  CANCELLED) are excluded in Step 0-B and must never be renamed or mutated. If
+  a task transitions out of PROPOSED mid-run (after the snapshot was taken), it
+  is silently skipped at the point of mutation — never mutated.
 - **Re-run safe** — tasks already prefixed `DELETE - ` are always skipped.
   Tasks with `Tier N:` or `T1:` prefixes are normalised in-memory and
   re-evaluated, not double-prefixed.
