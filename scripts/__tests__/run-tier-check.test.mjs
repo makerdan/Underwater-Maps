@@ -7,7 +7,8 @@
  * no actual validation steps execute, making this fast and self-contained.
  *
  * Covers:
- *   (a) TASK_PLAN_FILE absent → warn + exit 0 (graceful degradation)
+ *   (a) TASK_PLAN_FILE absent + --allow-no-plan → warn + exit 0 (opt-out for non-task runs)
+ *   (a2) TASK_PLAN_FILE absent, no --allow-no-plan → TIER-LOCK VIOLATION, exit 1
  *   (b) Plan has no ## Validation section → warn + exit 0 (graceful degradation)
  *   (c) Plan tier matches the requested tier → exit 0
  *   (d) Plan tier does not match the requested tier → TIER-LOCK VIOLATION, exit 1
@@ -39,17 +40,19 @@ after(() => {
  *
  * @param {string} tier - tier argument ("fast" | "standard" | "full")
  * @param {string|undefined} planFile - value for TASK_PLAN_FILE, or undefined to unset
+ * @param {{ allowNoPlan?: boolean }} [opts]
  */
-function runCheck(tier, planFile) {
+function runCheck(tier, planFile, opts = {}) {
   const env = { ...process.env };
   if (planFile !== undefined) {
     env.TASK_PLAN_FILE = planFile;
   } else {
     delete env.TASK_PLAN_FILE;
   }
+  const extraArgs = opts.allowNoPlan ? ["--allow-no-plan"] : [];
   const res = spawnSync(
     process.execPath,
-    [runTierScript, tier, "--check-tier-only"],
+    [runTierScript, tier, "--check-tier-only", ...extraArgs],
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env },
   );
   return {
@@ -98,12 +101,32 @@ function writePlanWithoutValidation(name) {
 // ── (a) TASK_PLAN_FILE absent ───────────────────────────────────────────────
 
 describe("TASK_PLAN_FILE absent", () => {
-  it("warns and exits 0 (graceful degradation)", () => {
+  it("exits 1 with TIER-LOCK VIOLATION when --allow-no-plan is NOT passed", () => {
+    // Task-driven invocations always have TASK_PLAN_FILE set.  When it is
+    // missing and the caller has not explicitly opted out with --allow-no-plan,
+    // run-tier.mjs must hard-error so agents cannot bypass tier enforcement
+    // simply by omitting the env var.
     const result = runCheck("fast", undefined);
     assert.equal(
       result.status,
+      1,
+      `expected exit 1 (hard error) when TASK_PLAN_FILE is unset and --allow-no-plan absent, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+    assert.ok(
+      result.stderr.includes("TIER-LOCK VIOLATION") && result.stderr.includes("TASK_PLAN_FILE"),
+      `stderr should emit TIER-LOCK VIOLATION mentioning TASK_PLAN_FILE.\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("warns and exits 0 when --allow-no-plan IS passed (opt-out for ad-hoc / non-task runs)", () => {
+    // Non-task callers (ad-hoc developer runs, test-heavy-serial.mjs internal
+    // preflight after stripping TASK_PLAN_FILE) pass --allow-no-plan to revert
+    // to the old warn-and-continue behaviour.
+    const result = runCheck("fast", undefined, { allowNoPlan: true });
+    assert.equal(
+      result.status,
       0,
-      `expected exit 0 when TASK_PLAN_FILE is unset, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+      `expected exit 0 when TASK_PLAN_FILE is unset but --allow-no-plan is set, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
     assert.ok(
       result.stderr.includes("WARNING") && result.stderr.includes("TASK_PLAN_FILE"),
@@ -207,15 +230,16 @@ describe("heavy-runner internal preflight regression", () => {
     );
   });
 
-  it("run-tier standard WITHOUT TASK_PLAN_FILE exits 0 (simulates preflight after env-var strip)", () => {
+  it("run-tier standard WITHOUT TASK_PLAN_FILE and WITH --allow-no-plan exits 0 (simulates preflight after env-var strip)", () => {
     // After the outer heavy-runner tier-lock check passes, test-heavy-serial
-    // strips TASK_PLAN_FILE before invoking the internal standard preflight.
-    // This test confirms that the stripped-env call is not blocked.
-    const result = runCheck("standard", undefined);
+    // strips TASK_PLAN_FILE and passes --allow-no-plan before invoking the
+    // internal standard preflight.  This test confirms that the stripped-env
+    // call with --allow-no-plan is not blocked.
+    const result = runCheck("standard", undefined, { allowNoPlan: true });
     assert.equal(
       result.status,
       0,
-      `expected exit 0 when TASK_PLAN_FILE is absent (stripped env), got ${result.status}\nstderr: ${result.stderr}`,
+      `expected exit 0 when TASK_PLAN_FILE is absent (stripped env) + --allow-no-plan, got ${result.status}\nstderr: ${result.stderr}`,
     );
     assert.ok(
       result.stderr.includes("WARNING") && result.stderr.includes("TASK_PLAN_FILE"),

@@ -40,6 +40,12 @@ const lockScript = resolve(root, "scripts/validation-lock.mjs");
 const timeoutScript = resolve(root, "scripts/run-with-timeout.mjs");
 mkdirSync(resolve(root, ".local/tmp"), { recursive: true });
 
+// --allow-no-plan: when present, a missing TASK_PLAN_FILE reverts to the old
+// warn-and-continue behaviour instead of a hard error.  Intended ONLY for
+// legitimate non-task callers such as ad-hoc developer runs.
+// Task-driven invocations MUST NOT pass this flag.
+const allowNoPlan = process.argv.includes("--allow-no-plan");
+
 // ---------------------------------------------------------------------------
 // Tier-lock pre-check (automatic Failure Gate enforcement)
 //
@@ -58,10 +64,21 @@ mkdirSync(resolve(root, ".local/tmp"), { recursive: true });
   const result = runTierLockDryRun(planFile);
 
   if (result.kind === "no-plan-file") {
-    console.warn(
-      "[test-heavy] WARNING: TASK_PLAN_FILE is not set — automatic tier-lock enforcement skipped.\n" +
-        "             Set TASK_PLAN_FILE=<path-to-plan> to enforce the tier ceiling from the plan file.",
-    );
+    if (allowNoPlan) {
+      console.warn(
+        "[test-heavy] WARNING: TASK_PLAN_FILE is not set — automatic tier-lock enforcement skipped.\n" +
+          "             (--allow-no-plan flag is set; this is expected for ad-hoc / non-task runs.)",
+      );
+    } else {
+      // Task-driven invocations must always have TASK_PLAN_FILE set.
+      console.error(
+        "[test-heavy] TIER-LOCK VIOLATION: TASK_PLAN_FILE is not set.\n" +
+          "             Every task-driven validation run must set TASK_PLAN_FILE=<path-to-plan>.\n" +
+          "             For ad-hoc non-task runs, pass --allow-no-plan to opt out of this check.\n" +
+          "             Example: node scripts/test-heavy-serial.mjs --allow-no-plan",
+      );
+      process.exit(1);
+    }
   } else if (result.kind === "no-validation-section") {
     // Plan file exists but has no ## Validation section — old plan that
     // predates the convention. Graceful degradation: warn and continue.
@@ -166,7 +183,12 @@ const preflightEnv = { ...process.env };
 delete preflightEnv.TASK_PLAN_FILE;
 const preflightRes = spawnSync(
   process.execPath,
-  [runTierScript, "standard", "--skip", "test:unit"],
+  // --allow-no-plan is required here: TASK_PLAN_FILE was stripped from
+  // preflightEnv above, so the internal standard-tier preflight run is a
+  // legitimate non-task invocation that must not hard-error on the missing
+  // env var.  The outer tier-lock check above has already verified that the
+  // plan authorises test-heavy before we reach this point.
+  [runTierScript, "standard", "--skip", "test:unit", "--allow-no-plan"],
   { stdio: "inherit", cwd: root, env: preflightEnv },
 );
 const preflightCode = preflightRes.status ?? 1;

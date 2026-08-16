@@ -229,9 +229,15 @@ The validation command named in `## Validation` is the **ceiling**. Do not run
 any heavier tier for any reason — including pre-existing failures, flaky retries,
 or self-classification outcomes. Escalation is never the Build agent's call.
 
-Set `TASK_PLAN_FILE=.local/tasks/<name>.md` once at task start and every
-subsequent `run-tier.mjs` call enforces the ceiling automatically — this is the
-primary path. For bare-shell callers that cannot use the env var, use
+**`TASK_PLAN_FILE` is mandatory for every task-driven run.**  Set
+`TASK_PLAN_FILE=.local/tasks/<name>.md` once at task start.  Every subsequent
+`run-tier.mjs` call then enforces the ceiling automatically.  If `TASK_PLAN_FILE`
+is not set and `--allow-no-plan` is not passed, `run-tier.mjs` exits 1 with a
+`TIER-LOCK VIOLATION` before any step runs — the warning-and-continue path is
+gone.  (The `--allow-no-plan` flag exists only for non-task ad-hoc runs such as
+developer spot-checks; task agents must never pass it.)
+
+For bare-shell callers that cannot use the env var, use
 `scripts/run-locked-tier.mjs` directly — pass the plan file path; the script
 resolves and runs the correct tier with no agent substitution surface.
 </HARD-GATE>
@@ -325,9 +331,15 @@ export TASK_PLAN_FILE=.local/tasks/task-1234.md
 # then trigger the validation command as normal
 ```
 
-**Graceful degradation:** If `TASK_PLAN_FILE` is not set, `run-tier.mjs`
-prints a one-line warning and proceeds normally. This ensures non-task CI
-calls (e.g. periodic audits, ad-hoc runs) are never blocked.
+**Hard error for task invocations:** If `TASK_PLAN_FILE` is not set and
+`--allow-no-plan` is not passed, `run-tier.mjs` exits 1 with a
+`TIER-LOCK VIOLATION` message before any step runs.  Task agents must always
+set `TASK_PLAN_FILE`.
+
+**Opt-out for non-task callers:** Pass `--allow-no-plan` (or use
+`scripts/run-validation-ad-hoc.mjs`) for ad-hoc developer runs and periodic CI
+audits that legitimately do not have a plan file.  With the flag present and
+`TASK_PLAN_FILE` absent, `run-tier.mjs` prints a one-line warning and continues.
 
 ---
 
