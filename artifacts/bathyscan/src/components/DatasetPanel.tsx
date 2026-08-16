@@ -699,22 +699,6 @@ const VisibleDatasetRows: React.FC<{
                   {name}
                 </span>
 
-                <span
-                  data-testid={`queued-badge-${id}`}
-                  title="Will load automatically when camera enters proximity"
-                  style={{
-                    flexShrink: 0,
-                    fontSize: "calc(10.5px * var(--bs-font-scale, 1))",
-                    letterSpacing: "0.06em",
-                    color: "rgba(0,229,255,0.3)",
-                    padding: "1px 4px",
-                    border: "1px dashed rgba(0,229,255,0.2)",
-                    borderRadius: 2,
-                  }}
-                >
-                  QUEUED
-                </span>
-
                 <ViewscreenTooltip label="Deselect dataset" side="right">
                   <button
                     type="button"
