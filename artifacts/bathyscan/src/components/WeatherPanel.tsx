@@ -435,6 +435,8 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
     setEditingFolderName("");
   }, []);
 
+  const { toast } = useToast();
+
   const handleCommitFolderRename = useCallback(async () => {
     if (!editingFolderId) return;
     const trimmed = editingFolderName.trim();
@@ -445,20 +447,30 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
     try {
       await patchFolderMutation.mutateAsync({ id: editingFolderId, data: { name: trimmed } });
       await queryClient.invalidateQueries({ queryKey: foldersQueryKey });
-    } catch {
-      // no-op; query will refetch
-    } finally {
       handleCancelFolderRename();
+    } catch (err) {
+      // Surface the failure and keep the edit box open with the typed value
+      // so the user can correct and retry without re-typing (SEED F-001).
+      toast({
+        title: "Couldn't rename folder",
+        description:
+          err instanceof Error && err.message
+            ? err.message
+            : "The rename didn't reach the server. Check your connection and try again.",
+        variant: "destructive",
+      });
+      setEditingFolderId(editingFolderId);
+      setEditingFolderName(trimmed);
     }
-  }, [editingFolderId, editingFolderName, patchFolderMutation, queryClient, foldersQueryKey, handleCancelFolderRename]);
+  }, [editingFolderId, editingFolderName, patchFolderMutation, queryClient, foldersQueryKey, handleCancelFolderRename, toast]);
 
   // ─── Shared undo infrastructure ──────────────────────────────────────────
   // Both folder deletes and preset deletes share the same pending-deletes ref
-  // and toast hook so a single flush-on-unmount effect covers all of them.
+  // and toast hook (declared above) so a single flush-on-unmount effect
+  // covers all of them.
   const pendingDeletesRef = useRef(
     new Map<string, { timer: ReturnType<typeof setTimeout>; commit: () => void }>(),
   );
-  const { toast } = useToast();
 
   const handleDeleteFolder = useCallback((id: string, folderName: string) => {
     const foldersSnapshot = queryClient.getQueryData<TrollingPresetFolder[]>(foldersQueryKey);

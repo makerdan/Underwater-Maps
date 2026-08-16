@@ -1,58 +1,59 @@
 # UX E2E Audit Report
 
 **Scope:** BathyScan — `artifacts/bathyscan` (React/Vite/R3F frontend) + `artifacts/api-server` (Express 5 API)
-**Mode:** Report-only (no code changes)
-**Date:** 2026-08-12
+**Mode:** Report-only (no code changes) — original audit 2026-08-12
+**Closure update:** 2026-08-16 — audit-and-fix passes complete. 28 of the 30 original findings are **Closed** (verified fixed in the codebase), SEED F-001 is **Fixed** in this closure pass, and SEED F-008 is **Deferred — architectural** (persisting upload job state to the DB is tracked as its own task). One new finding (NEW-001) was discovered during closure verification and fixed in the same pass.
 **Stack:** TypeScript 5.9, React 19 + Vite + React Three Fiber, Express 5, Drizzle/PostgreSQL, Zustand, Clerk auth, Poe AI
 
 ---
 
 ## Summary Table
 
-| Severity | Count |
-|---|---|
-| Critical | 0 |
-| High | 4 |
-| Medium | 11 |
-| Low | 15 |
-| **Total** | **30** |
+| Severity | Found | Closed | Fixed (closure pass) | Deferred |
+|---|---|---|---|---|
+| Critical | 0 | 0 | 0 | 0 |
+| High | 4 | 3 | 1 (SEED F-001) | 0 |
+| Medium | 12 | 10 | 1 (NEW-001) | 1 (SEED F-008) |
+| Low | 15 | 15 | 0 | 0 |
+| **Total** | **31** | **28** | **2** | **1** |
 
 ---
 
 ## Finding Index
 
-| ID | Journey | Phase | Sev | One-line description |
-|---|---|---|---|---|
-| [SEED F-001] | J8 Drift planner | Ph3 Silent failures | **High** | Folder rename PATCH failure silently swallowed — name reverts with no message |
-| [SEED F-003] | J9 Settings | Ph9 Auth/session | Medium | Server settings cast not validated before hydrating client stores |
-| [SEED F-004] | All | Ph2 State | Medium | uiStore ↔ settingsStore dual source of truth — mirrored setters can diverge |
-| [SEED F-006] | J4 Upload | Ph4 Edge cases | Medium | `jobId` destructured from finalize response without validation |
-| [SEED F-007] | All | Ph5 Navigation | Medium | No error boundary around the full sidebar or the top-level 3D scene |
-| [SEED F-008] | J4 Upload | Ph11 Lifecycle | Medium | Upload job state and concurrency queue are in-memory only (lost on server restart) |
-| [SEED F-009] | J2/J3 Load | Ph9 Auth | Low | Catalog startup seeding/recovery is fire-and-forget at module load |
-| [SEED F-010] | J2/J5 Search | Ph9 Auth | Low | Catalog list/search/bbox endpoints have no auth and no rate limit |
-| [SEED F-011] | J11 Offline | Ph11 Lifecycle | Low | Offline pack creation silently omits weather data on fetch failure |
-| [SEED F-012] | J12 Live | Ph10 Feedback | Low | Empty catch blocks on wake-lock acquire/release — no comment |
-| [SEED F-013] | J13 Overlays | Ph3 Silent | Low | CurrentsPanel effect keyed on `Date` object reference fires redundant settings writes |
-| F-001 | J9 Settings | Ph6 Keyboard | **High** | FlyControls keydown/wheel has no input-focus guard — camera moves while user types in Settings inputs |
-| F-002 | All | Ph5 Navigation | **High** | Missing 404 fallback route — `not-found.tsx` exists but is orphaned from the router Switch |
-| F-003 | J15 Auth | Ph9 Auth | **High** | `savedDriftPlans` localStorage key is not cleared on sign-out — prior user's plans visible on shared device |
-| F-004 | J15 Auth | Ph9 Auth | Medium | GPS column-mapping fingerprints (CSV localStorage keys) are not cleared on sign-out |
-| F-005 | J9 Settings | Ph6 Keyboard | Medium | Global Escape handler in App.tsx has no input-focus guard — closes panels while user types |
-| F-006 | J4/J7/J6/J11 | Ph5 Navigation | Medium | Four dialogs (GpsImportDialog, GeoreferenceModal, ReassignMarkersDialog, MarkerForm) lack Escape-key close |
-| F-007 | J4 Upload | Ph4 Validation | Medium | FileUpload has no `onDropRejected` callback — rejected files (wrong type, multiple) silently ignored |
-| F-008 | J4 Upload | Ph4 Validation | Medium | `.pdf` listed in `SUPPORTED_EXTENSIONS` display string but is absent from the `accept` map — false advertising |
-| F-009 | J6/J14 Markers | Ph12 Cross | Medium | MarkersPanel renders entire marker list without virtualization — degrades at large counts |
-| F-010 | All | Ph12 Cross | Medium | No `storage` event listeners anywhere — settings, palette, drift plans, panel-collapse don't sync across tabs |
-| F-011 | All | Ph12 Cross | Medium | DatasetPanel `minWidth: 536px` overflows narrow/mobile viewports with no responsive override |
-| F-012 | All | Ph5 Navigation | Low | No focus restoration after any of 5 dialogs close (GpsImport, OfflinePack, Georeference, ReassignMarkers, MarkerForm) |
-| F-013 | J2/J5 Search | Ph12 Cross | Low | FindDataPanel search-result dataset names are not truncated — long names wrap vertically |
-| F-014 | J14 Catch journal | Ph12 Cross | Low | CatchJournalPanel renders all entries without virtualization or pagination |
-| F-015 | J8 Drift planner | Ph11 Lifecycle | Low | `loadDriftPlan` does not clear stale start coordinates when the loaded plan has `null` start |
-| F-016 | J7/J8/J9 Mode | Ph7 Modes | Low | "Analyze" sidebar tab has no active-feature dot indicator, unlike Explore/Plan/Live |
-| F-017 | J9 Settings | Ph6 Keyboard | Low | App shortcuts H, M, Slash, Comma are registered but absent from ControlsLegend display |
-| F-018 | J11 Offline | Ph11 Lifecycle | Low | `cacheTerrain()` silently resolves after 10 s on timeout when no service worker is registered |
-| F-019 | J2/J3 Load | Ph10 Feedback | Low | No toast deduplication — rapid duplicate API errors produce multiple stacked toasts |
+| ID | Journey | Phase | Sev | One-line description | Status |
+|---|---|---|---|---|---|
+| [SEED F-001] | J8 Drift planner | Ph3 Silent failures | **High** | Folder rename PATCH failure silently swallowed — name reverts with no message | **Fixed (2026-08-16)** |
+| [SEED F-003] | J9 Settings | Ph9 Auth/session | Medium | Server settings cast not validated before hydrating client stores | Closed |
+| [SEED F-004] | All | Ph2 State | Medium | uiStore ↔ settingsStore dual source of truth — mirrored setters can diverge | Closed |
+| [SEED F-006] | J4 Upload | Ph4 Edge cases | Medium | `jobId` destructured from finalize response without validation | Closed |
+| [SEED F-007] | All | Ph5 Navigation | Medium | No error boundary around the full sidebar or the top-level 3D scene | Closed |
+| [SEED F-008] | J4 Upload | Ph11 Lifecycle | Medium | Upload job state and concurrency queue are in-memory only (lost on server restart) | **Deferred — architectural** |
+| [SEED F-009] | J2/J3 Load | Ph9 Auth | Low | Catalog startup seeding/recovery is fire-and-forget at module load | Closed |
+| [SEED F-010] | J2/J5 Search | Ph9 Auth | Low | Catalog list/search/bbox endpoints have no auth and no rate limit | Closed |
+| [SEED F-011] | J11 Offline | Ph11 Lifecycle | Low | Offline pack creation silently omits weather data on fetch failure | Closed |
+| [SEED F-012] | J12 Live | Ph10 Feedback | Low | Empty catch blocks on wake-lock acquire/release — no comment | Closed |
+| [SEED F-013] | J13 Overlays | Ph3 Silent | Low | CurrentsPanel effect keyed on `Date` object reference fires redundant settings writes | Closed |
+| F-001 | J9 Settings | Ph6 Keyboard | **High** | FlyControls keydown/wheel has no input-focus guard — camera moves while user types in Settings inputs | Closed |
+| F-002 | All | Ph5 Navigation | **High** | Missing 404 fallback route — `not-found.tsx` exists but is orphaned from the router Switch | Closed |
+| F-003 | J15 Auth | Ph9 Auth | **High** | `savedDriftPlans` localStorage key is not cleared on sign-out — prior user's plans visible on shared device | Closed |
+| F-004 | J15 Auth | Ph9 Auth | Medium | GPS column-mapping fingerprints (CSV localStorage keys) are not cleared on sign-out | Closed |
+| F-005 | J9 Settings | Ph6 Keyboard | Medium | Global Escape handler in App.tsx has no input-focus guard — closes panels while user types | Closed |
+| F-006 | J4/J7/J6/J11 | Ph5 Navigation | Medium | Four dialogs (GpsImportDialog, GeoreferenceModal, ReassignMarkersDialog, MarkerForm) lack Escape-key close | Closed |
+| F-007 | J4 Upload | Ph4 Validation | Medium | FileUpload has no `onDropRejected` callback — rejected files (wrong type, multiple) silently ignored | Closed |
+| F-008 | J4 Upload | Ph4 Validation | Medium | `.pdf` listed in `SUPPORTED_EXTENSIONS` display string but is absent from the `accept` map — false advertising | Closed |
+| F-009 | J6/J14 Markers | Ph12 Cross | Medium | MarkersPanel renders entire marker list without virtualization — degrades at large counts | Closed |
+| F-010 | All | Ph12 Cross | Medium | No `storage` event listeners anywhere — settings, palette, drift plans, panel-collapse don't sync across tabs | Closed |
+| F-011 | All | Ph12 Cross | Medium | DatasetPanel `minWidth: 536px` overflows narrow/mobile viewports with no responsive override | Closed |
+| F-012 | All | Ph5 Navigation | Low | No focus restoration after any of 5 dialogs close (GpsImport, OfflinePack, Georeference, ReassignMarkers, MarkerForm) | Closed |
+| F-013 | J2/J5 Search | Ph12 Cross | Low | FindDataPanel search-result dataset names are not truncated — long names wrap vertically | Closed |
+| F-014 | J14 Catch journal | Ph12 Cross | Low | CatchJournalPanel renders all entries without virtualization or pagination | Closed |
+| F-015 | J8 Drift planner | Ph11 Lifecycle | Low | `loadDriftPlan` does not clear stale start coordinates when the loaded plan has `null` start | Closed |
+| F-016 | J7/J8/J9 Mode | Ph7 Modes | Low | "Analyze" sidebar tab has no active-feature dot indicator, unlike Explore/Plan/Live | Closed |
+| F-017 | J9 Settings | Ph6 Keyboard | Low | App shortcuts H, M, Slash, Comma are registered but absent from ControlsLegend display | Closed |
+| F-018 | J11 Offline | Ph11 Lifecycle | Low | `cacheTerrain()` silently resolves after 10 s on timeout when no service worker is registered | Closed |
+| F-019 | J2/J3 Load | Ph10 Feedback | Low | No toast deduplication — rapid duplicate API errors produce multiple stacked toasts | Closed |
+| NEW-001 | J3 My Saves | Ph3 Silent failures | Medium | MySavesSection retry has no `catch` — a failed retry stops the spinner with no error message | **Fixed (2026-08-16)** |
 
 ---
 
@@ -60,19 +61,19 @@
 
 | ID | Seed finding | Status |
 |---|---|---|
-| SEED F-001 | Folder rename swallowed | **Carried forward** — code unchanged |
+| SEED F-001 | Folder rename swallowed | **Fixed (2026-08-16)** — `handleCommitFolderRename` now surfaces a destructive "Couldn't rename folder" toast and keeps the edit box open with the typed value so the user can retry |
 | SEED F-002 | Water-temp texture not disposed | **Closed (fixed)** — abortControllerRef dispose confirmed present in `useUpscaledHeatmap` and `useWaterTempTexture` now disposes correctly. Finding 5 in original report was already marked Fixed. |
-| SEED F-003 | Server settings cast not validated | **Carried forward** — `serverSettings as Parameters<...>` cast still present at `hooks/useServerSettingsSync.ts:445` |
-| SEED F-004 | uiStore/settingsStore dual source | **Carried forward** — MIRRORED_UI_KEYS pattern unchanged |
+| SEED F-003 | Server settings cast not validated | **Closed (fixed)** — server response is validated before hydrating client stores |
+| SEED F-004 | uiStore/settingsStore dual source | **Closed (fixed)** — mirrored-field invariant coverage added |
 | SEED F-005 | AI upscale not aborted on unmount | **Closed (fixed)** — `abortControllerRef.abort()` confirmed at `hooks/useUpscaledHeatmap.ts:243` |
-| SEED F-006 | jobId not validated | **Carried forward** — DatasetPanel finalize path unchanged |
-| SEED F-007 | No top-level error boundary | **Carried forward** — boundaries are sectional, not full-app |
-| SEED F-008 | Upload state in-memory only | **Carried forward** — bucketMonitor pattern unchanged |
-| SEED F-009 | Startup seeding fire-and-forget | **Carried forward** — catalog-saves.ts pattern unchanged |
-| SEED F-010 | Catalog endpoints no auth/rate-limit | **Carried forward** — still public |
-| SEED F-011 | Offline pack weather silent omit | **Carried forward** — catch at `offlinePackStore.ts:173` still produces empty weatherPack |
-| SEED F-012 | Empty catch on wake-lock | **Carried forward** — `hooks/useWakeLock.ts` unchanged |
-| SEED F-013 | Date reference effect | **Carried forward** — `CurrentsPanel.tsx:167-172` unchanged |
+| SEED F-006 | jobId not validated | **Closed (fixed)** — finalize response `jobId` validated before polling |
+| SEED F-007 | No top-level error boundary | **Closed (fixed)** — sidebar/app-level error boundary added |
+| SEED F-008 | Upload state in-memory only | **Deferred — architectural** — persisting upload job state to the DB is a larger change, tracked as its own task; not closed in this pass |
+| SEED F-009 | Startup seeding fire-and-forget | **Closed (fixed)** — seeding failures now logged via explicit `.catch` |
+| SEED F-010 | Catalog endpoints no auth/rate-limit | **Closed (fixed)** — rate limiting applied to catalog endpoints |
+| SEED F-011 | Offline pack weather silent omit | **Closed (fixed)** — weather omission surfaced through pack-creation progress |
+| SEED F-012 | Empty catch on wake-lock | **Closed (fixed)** — intent comments added; failures documented as non-fatal |
+| SEED F-013 | Date reference effect | **Closed (fixed)** — effect keyed on timestamp value, redundant writes skipped |
 | SEED F-014 | Dependency hygiene (accepted) | **Accepted** — no action needed |
 
 ---
@@ -133,6 +134,7 @@
 ---
 
 ### [SEED F-001] — Folder rename failure silently swallowed
+- **Status:** **Fixed (2026-08-16)** — the `catch` in `handleCommitFolderRename` now shows a destructive "Couldn't rename folder" toast with the error reason and keeps the edit UI open (typed value preserved) so the user can correct and retry.
 - **Journey:** J8 Drift planner (trolling-preset folder rename)
 - **Phase:** 3 — Silent failures
 - **Severity:** High
@@ -178,6 +180,7 @@
 ---
 
 ### [SEED F-008] — Upload job state in-memory only
+- **Status:** **Deferred — architectural.** Persisting upload job state to the database is a larger change than a catch-path fix and is tracked as its own dedicated task; it remains the only open finding from this audit.
 - **Journey:** J4 Custom file upload
 - **Phase:** 11 — Data lifecycle
 - **Severity:** Medium
@@ -402,6 +405,18 @@
 
 ---
 
+## Closure Pass (2026-08-16)
+
+### NEW-001 — MySavesSection retry failure is silent
+- **Status:** **Fixed (2026-08-16)** — `handleRetry` now has a `catch` that shows a destructive "Retry failed" toast with the error reason; the retry button re-enables (via the existing `finally`) so the user can try again.
+- **Journey:** J3 Terrain from My Saves (retry a failed catalog save)
+- **Phase:** 3 — Silent failures
+- **Severity:** Medium
+- **Failure (user perspective):** The user clicks "Retry" on a failed save while the server is unreachable (or the request errors). `handleRetry` in `artifacts/bathyscan/src/components/MySavesSection.tsx` had `try { await retryMutation.mutateAsync(...); } finally { ... }` with no `catch` — the "Retrying…" spinner stops, no error message appears, and the user has no indication whether the retry failed or is still processing.
+- **Fix applied:** Added a `catch (err)` between the `try` and `finally` that surfaces the failure via `toast({ title: "Retry failed", description: <reason>, variant: "destructive" })`.
+
+---
+
 ## Phase 13 — Triage Table
 
 | ID | Sev | Journey | Fix effort | Priority |
@@ -439,4 +454,4 @@
 
 ---
 
-*Report ends here. No code was modified during this audit.*
+*Report ends here. Original audit (2026-08-12) modified no code. Closure pass (2026-08-16): 28 of 30 original findings verified Closed; SEED F-001 and NEW-001 Fixed; SEED F-008 Deferred (architectural, tracked as its own task).*

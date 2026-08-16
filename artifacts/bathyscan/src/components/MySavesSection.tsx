@@ -942,9 +942,24 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   const handleRetry = useCallback(async (saveId: string) => {
     if (!isSignedIn) return;
     setRetryingIds((s) => new Set(s).add(saveId));
-    try { await retryMutation.mutateAsync({ id: saveId }); void refetchSaves(); }
-    finally { setRetryingIds((s) => { const n = new Set(s); n.delete(saveId); return n; }); }
-  }, [isSignedIn, retryMutation, refetchSaves]);
+    try {
+      await retryMutation.mutateAsync({ id: saveId });
+      void refetchSaves();
+    } catch (err) {
+      // Surface the failure so the user knows the retry didn't go through
+      // and can try again once the button re-enables (UX audit NEW-001).
+      toast({
+        title: "Retry failed",
+        description:
+          err instanceof Error && err.message
+            ? err.message
+            : "Could not retry this save. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRetryingIds((s) => { const n = new Set(s); n.delete(saveId); return n; });
+    }
+  }, [isSignedIn, retryMutation, refetchSaves, toast]);
 
   // ── Rename ────────────────────────────────────────────────────────────────
   const renameSaveMutation = usePatchDatasetsMySavesIdRename();
