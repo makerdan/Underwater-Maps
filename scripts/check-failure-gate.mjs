@@ -37,6 +37,7 @@
 import { readdir, readFile, appendFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
+import { VALIDATION_COMMANDS } from "./register-validation-commands.mjs";
 
 const TASKS_DIR = ".local/tasks";
 
@@ -81,12 +82,11 @@ handled above — they are never a reason to run a heavier tier.
 //                       Only called when the marker line IS present.
 // ---------------------------------------------------------------------------
 
-const VALID_TIERS = [
-  "test-fast",
-  "test-standard",
-  "test-standard-plus",
-  "test-heavy",
-];
+// Derive valid tier names from VALIDATION_COMMANDS (single source of truth).
+// Only tiered commands (non-null budgetKey) are accepted as **Command:** values.
+// Adding or removing a tier in register-validation-commands.mjs automatically
+// updates this set — no separate hardcoded list to keep in sync.
+const VALID_TIERS = VALIDATION_COMMANDS.filter((c) => c.budgetKey !== null).map((c) => c.name);
 
 const REQUIRED_VALIDATION_LINES = [
   {

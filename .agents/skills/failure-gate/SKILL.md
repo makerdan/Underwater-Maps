@@ -228,10 +228,58 @@ add the appropriate stub now — then continue. Do not skip this step.
 The validation command named in `## Validation` is the **ceiling**. Do not run
 any heavier tier for any reason — including pre-existing failures, flaky retries,
 or self-classification outcomes. Escalation is never the Build agent's call.
+
+Use `scripts/run-locked-tier.mjs` to enforce this mechanically — pass the plan
+file path; the script resolves and runs the correct tier with no agent
+substitution surface.
 </HARD-GATE>
 
 When a test or validation gate fails, work through the following decision tree
 in order. Do not skip steps.
+
+---
+
+### Tier-lock script (mechanical enforcement)
+
+`scripts/run-locked-tier.mjs` is the preferred mechanical enforcement path for
+the validation tier ceiling. Rather than accepting a tier name from the agent
+(which could be substituted), it reads the `**Command:**` value directly from
+the plan file, resolves it against `VALIDATION_COMMANDS` (the single source of
+truth in `scripts/register-validation-commands.mjs`), and runs exactly that
+command. There is no substitution surface.
+
+**Invocation:**
+
+```sh
+# Run the tier named in the plan file
+node scripts/run-locked-tier.mjs <plan-file>
+
+# Dry-run: print the resolved command without running it
+node scripts/run-locked-tier.mjs --dry-run <plan-file>
+```
+
+**What it does:**
+
+1. Reads the `## Validation` section of `<plan-file>`.
+2. Extracts the backtick-quoted value from the `**Command:**` line.
+3. Looks up that tier name in `VALIDATION_COMMANDS` (tiered entries only —
+   those with a non-null `budgetKey`).
+4. In `--dry-run` mode: prints the resolved command string and exits 0.
+5. Otherwise: runs the command via `spawnSync` with inherited stdio and exits
+   with the child process's exit code.
+
+**Error cases (all exit 1 with a clear diagnostic message):**
+
+- Plan file is missing or unreadable.
+- `## Validation` section is absent from the plan file.
+- `**Command:**` line is missing from the `## Validation` section.
+- `**Command:**` line does not contain a backtick-quoted value.
+- The quoted value is not a registered tier name in `VALIDATION_COMMANDS`.
+
+**Single source of truth:** The script imports `VALIDATION_COMMANDS` from
+`scripts/register-validation-commands.mjs`. It never maintains its own tier
+list. Adding or removing a tier in `register-validation-commands.mjs` is
+automatically reflected — no separate update required.
 
 ---
 
@@ -351,4 +399,5 @@ pipeline is.
 - Known-flaky patterns: `.agents/memory/MEMORY.md`
 - Canonical skill (tracked): `.agents/skills/failure-gate/SKILL.md`
 - Lint guard: the project's plan-file lint guard script (e.g. `scripts/check-failure-gate.mjs`)
+- Tier-lock script: `scripts/run-locked-tier.mjs` — mechanical tier enforcement; pass plan file path
 - Session mandate: the project's session mandate (e.g. `replit.md` § "Agent rules")
