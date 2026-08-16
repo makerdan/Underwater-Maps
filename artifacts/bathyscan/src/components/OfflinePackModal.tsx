@@ -495,6 +495,16 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
             </div>
           </div>
 
+          {/* TODO(#3975): Remove this note once markers are bundled into offline packs. */}
+          <p style={{
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+            color: "#64748b",
+            margin: "0 0 12px",
+            lineHeight: 1.5,
+          }}>
+            Markers and trolling routes are not yet included in offline packs — they require an active connection.
+          </p>
+
           {/* ── Help Content section ── */}
           <div style={{
             border: "1px solid rgba(0,229,255,0.12)",
