@@ -25,6 +25,23 @@ const grep = spawnSync(
   { encoding: "utf8" },
 );
 
+// grep exit codes: 0 = matches found, 1 = no matches, 2 = internal error.
+// Only 0 and 1 are healthy; a spawn error (e.g. ENOENT) or status 2 means the
+// scan itself failed and the result must not be trusted as "zero suppressions".
+if (grep.error) {
+  console.error(
+    `[check:deps-suppression] Failed to run grep: ${grep.error.message}`,
+  );
+  process.exit(1);
+}
+if (grep.status === 2) {
+  console.error(
+    "[check:deps-suppression] grep exited with status 2 (internal error):",
+  );
+  console.error((grep.stderr ?? "").trim());
+  process.exit(1);
+}
+
 const lines = (grep.stdout ?? "").split("\n").filter(Boolean);
 
 // A suppression is "bare" when it lacks a " -- " rationale suffix.
