@@ -14,9 +14,11 @@
 #   2. Copy committed fixtures to a temp directory (no git required).
 #   3. Run `node generate.mjs` in-place (it hard-codes its own dir as output).
 #   4. Compare fresh output against the temp copy:
-#        - SHA256 checksum for deterministic formats (TIF, NC, LAS, LAZ, GPX, NMEA)
+#        - SHA256 checksum for deterministic formats (TIF, NC, LAS, GPX, NMEA)
 #        - File size only for BAG/HDF5 (h5wasm embeds wall-clock timestamps in
 #          object headers, making checksums non-deterministic across runs)
+#        - File size only for LAZ (lazrs/LASzip compressor embeds
+#          environment-dependent bytes; size is stable for the same input)
 #   5. Scan the fixture directory for any NEW files not in the expected set —
 #      catches generator additions that haven't been committed yet.
 #   6. Restore committed fixtures from the temp copy (works without git).
@@ -103,15 +105,21 @@ for f in "${FIXTURES[@]}"; do
 
   ext="${f##*.}"
 
-  if [ "$ext" = "bag" ]; then
-    # HDF5 timestamps make checksums non-deterministic; compare sizes only.
+  if [ "$ext" = "bag" ] || [ "$ext" = "laz" ]; then
+    # HDF5 (.bag): timestamps embedded in object headers make checksums
+    #   non-deterministic across runs.
+    # LAZ (.laz):  the lazrs/LASzip compressor embeds environment-dependent
+    #   bytes (e.g. version strings, internal state) so the compressed stream
+    #   is not byte-identical across Python/lazrs versions even when the input
+    #   point data is identical.  File size IS stable for the same input, so
+    #   size-only comparison is the right gate here.
     if [ "$FRESH_SIZE" -ne "$COMMITTED_SIZE" ]; then
       printf "  STALE  %-22s  committed %d B  ≠  generated %d B  (size mismatch)\n" \
         "$f" "$COMMITTED_SIZE" "$FRESH_SIZE"
       STALE_FILES+=("$f")
       FAILED=1
     else
-      printf "  ok     %-22s  %d B  (size match; HDF5 timestamps excluded)\n" \
+      printf "  ok     %-22s  %d B  (size match; compressed bytes excluded)\n" \
         "$f" "$FRESH_SIZE"
     fi
   else
