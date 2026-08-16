@@ -30,10 +30,34 @@ vi.mock("@google-cloud/storage", () => ({
   })),
 }));
 
-vi.mock("@workspace/db", () => ({
-  db: {},
-  customDatasetsTable: {},
+// Use the shared db factory so uploadJobsTable is present and db is fully
+// chainable.  The hand-rolled mock ("db: {}, customDatasetsTable: {}") was
+// missing uploadJobsTable, which caused rehydrateBucketJobsFromDb() — called
+// fire-and-forget from startBucketMonitor() — to throw a TypeError synchronously
+// before its own try/catch, producing an unhandled rejection that triggered the
+// unhandled-error gate even when every test assertion passed.
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import(
+    "../../__tests__/helpers/db-mock.js"
+  );
+  return createDbMock();
+});
+
+// Mock drizzle-orm operators so they return opaque sentinel values instead of
+// trying to call .getSQL() on the plain-string column stubs in createDbMock().
+vi.mock("drizzle-orm", () => ({
+  and: vi.fn((...args: unknown[]) => args),
+  eq: vi.fn((_col: unknown, val: unknown) => `eq:${String(val)}`),
+  lt: vi.fn((_col: unknown, val: unknown) => ({ __lt: val })),
+  inArray: vi.fn(() => "inArray-condition"),
+  isNotNull: vi.fn(() => "isNotNull-condition"),
+  isNull: vi.fn(() => "isNull-condition"),
+  or: vi.fn((...args: unknown[]) => args),
+  desc: vi.fn(() => "desc"),
+  asc: vi.fn(() => "asc"),
+  sql: vi.fn((strings: TemplateStringsArray) => strings.join("")),
 }));
+
 vi.mock("../logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
