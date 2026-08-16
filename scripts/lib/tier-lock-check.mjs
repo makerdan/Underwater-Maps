@@ -27,17 +27,19 @@ export const TIER_RESOLVED_RE = /resolved tier "([^"]+)"/;
  * Result shapes returned by runTierLockDryRun.
  *
  * @typedef {{ kind: "no-plan-file" }} NoPlanFile
- * @typedef {{ kind: "no-validation-section"; output: string }} NoValidationSection
  * @typedef {{ kind: "violation"; output: string }} Violation
  * @typedef {{ kind: "unparseable"; output: string }} Unparseable
  * @typedef {{ kind: "ok"; tierName: string }} Ok
- * @typedef {NoPlanFile | NoValidationSection | Violation | Unparseable | Ok} TierLockResult
+ * @typedef {NoPlanFile | Violation | Unparseable | Ok} TierLockResult
  */
 
 /**
  * Runs `run-locked-tier.mjs --dry-run <planFile>` synchronously and returns a
  * typed result object describing the outcome.  Does NOT print anything or call
  * process.exit() — that responsibility stays with the caller.
+ *
+ * A missing ## Validation section now exits 1 (same as any other violation),
+ * so it falls into the "violation" result shape rather than a special branch.
  *
  * @param {string | undefined} planFile - value of TASK_PLAN_FILE (may be undefined)
  * @returns {TierLockResult}
@@ -55,13 +57,8 @@ export function runTierLockDryRun(planFile) {
 
   const output = (dryResult.stderr || dryResult.stdout || "").trim();
 
-  if (dryResult.status === 2) {
-    // Plan file exists but has no ## Validation section — old plan.
-    return { kind: "no-validation-section", output };
-  }
-
   if (dryResult.status !== 0) {
-    // tier name is missing, malformed, or not registered.
+    // tier name is missing, malformed, not registered, or ## Validation section absent.
     return { kind: "violation", output };
   }
 

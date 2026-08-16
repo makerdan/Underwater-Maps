@@ -149,16 +149,6 @@ function checkTierLock(requestedTier, allowNoPlan = false) {
     process.exit(1);
   }
 
-  if (result.kind === "no-validation-section") {
-    // Plan file exists but has no ## Validation section — old plan that
-    // predates the convention. Graceful degradation: warn and continue.
-    console.warn(
-      `[run-tier] WARNING: tier-lock pre-check skipped — "${planFile}" has no ## Validation section.\n` +
-        `           ${result.output}`,
-    );
-    return;
-  }
-
   if (result.kind === "violation") {
     // Plan file exists but tier name is missing, malformed, or not registered.
     console.error(

@@ -79,13 +79,7 @@ const allowNoPlan = process.argv.includes("--allow-no-plan");
       );
       process.exit(1);
     }
-  } else if (result.kind === "no-validation-section") {
-    // Plan file exists but has no ## Validation section — old plan that
-    // predates the convention. Graceful degradation: warn and continue.
-    console.warn(
-      `[test-heavy] WARNING: tier-lock pre-check skipped — "${planFile}" has no ## Validation section.\n` +
-        `             ${result.output}`,
-    );
+  
   } else if (result.kind === "violation") {
     // Plan exists but tier name is missing, malformed, or not registered.
     console.error(
