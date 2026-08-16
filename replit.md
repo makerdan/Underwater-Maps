@@ -349,6 +349,7 @@ Authentication is handled by **Clerk** across all surfaces:
 | GET | `/trails` | List GPS trails for a dataset |
 | POST | `/trails` | Create a new GPS trail |
 | DELETE | `/trails/:id` | Delete a GPS trail |
+| POST | `/trails/:id/soft-delete` | Soft-delete a GPS trail (beacon fallback) |
 | GET | `/trails/:id/points` | Get paginated trail points |
 
 #### Trolling Presets & Folders

@@ -355,6 +355,7 @@ All routes are served under the `/api` prefix by the Express 5 server.
 | GET | `/trails` | List GPS trails for a dataset |
 | POST | `/trails` | Create a new GPS trail |
 | DELETE | `/trails/:id` | Delete a GPS trail |
+| POST | `/trails/:id/soft-delete` | Soft-delete a GPS trail (beacon fallback) |
 | GET | `/trails/:id/points` | Get paginated trail points |
 
 ### Trolling Presets & Folders
