@@ -31,6 +31,7 @@ import { useLiveModeStore } from "@/lib/liveMode";
 import { useDriftStore } from "@/lib/driftStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
+import { useDriveBoatStore } from "@/lib/driveBoatStore";
 
 // ─── Stores that hold per-user session state ─────────────────────────────────
 
@@ -114,6 +115,14 @@ export const SIGNOUT_STORE_MANIFEST: readonly StoreManifestEntry[] = [
       typeof usePaletteStore.getState().reset === "function",
     installProbe: (probe) => swapAction(usePaletteStore, "reset", probe),
   },
+  {
+    storeName: "driveBoatStore",
+    module: "lib/driveBoatStore.ts",
+    hasResetAction: () =>
+      typeof useDriveBoatStore.getState().resetForSignOut === "function",
+    installProbe: (probe) =>
+      swapAction(useDriveBoatStore, "resetForSignOut", probe),
+  },
 ];
 
 // ─── Stores explicitly excluded from sign-out reset ──────────────────────────
@@ -135,7 +144,6 @@ export const SIGNOUT_EXCLUDED_STORES: readonly ExcludedStoreEntry[] = [
   { storeName: "contextMenuStore", module: "lib/contextMenuStore.ts", reason: "Transient context-menu open state." },
   { storeName: "currentsStore", module: "lib/currentsStore.ts", reason: "Runtime current-simulation flow field derived from public environmental data." },
   { storeName: "depthProfileStore", module: "lib/depthProfileStore.ts", reason: "Transient right-click depth-profile UI state; cleared on dataset change." },
-  { storeName: "driveBoatStore", module: "lib/driveBoatStore.ts", reason: "Drive Boat navigation session state (heading lock, route following); a dedicated sign-out shutdown for Drive Boat is tracked as its own task — move to the manifest when wired." },
   { storeName: "envOfflineStore", module: "lib/envOfflineStore.ts", reason: "Device-local offline environment pack index (IndexedDB); offline packs are deliberately device-scoped, not account-scoped." },
   { storeName: "flyRouteStore", module: "lib/flyRouteStore.ts", reason: "Transient fly-through camera waypoints for the current viewing session; routes are server-persisted per account." },
   { storeName: "gpsStore", module: "lib/gpsStore.ts", reason: "Device GPS watch plumbing (hardware/device-local, not account data); live-mode sign-out reset unsubscribes its consumers." },

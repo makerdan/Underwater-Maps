@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useState, ReactNode } from "react";
 import type { TerrainData } from "@workspace/api-client-react";
-import { BOAT_DEFAULT_MPH, BOAT_MIN_MPH, BOAT_MAX_MPH, FLY_SPEEDS_MPH } from "./boatSpeed";
+import { FLY_SPEEDS_MPH } from "./boatSpeed";
+import { useDriveBoatStore } from "./driveBoatStore";
 
 export { FLY_SPEEDS_MPH };
 
@@ -23,8 +24,18 @@ interface AppState {
    */
   tidalDataOverride: unknown;
   setTidalDataOverride: (data: unknown) => void;
+  /**
+   * Whether Drive Boat (realistic mode) is active.
+   * Backed by driveBoatStore so performSignOutCleanup can reset it without a
+   * page reload when the user signs out.
+   */
   realisticMode: boolean;
   setRealisticMode: (b: boolean) => void;
+  /**
+   * Target boat speed in mph for Drive Boat mode.
+   * Backed by driveBoatStore so performSignOutCleanup can reset it without a
+   * page reload when the user signs out.
+   */
   boatSpeedMph: number;
   setBoatSpeedMph: (mph: number) => void;
   // Cross-panel handoff: when FindDataPanel materializes a catalog save into
@@ -44,27 +55,6 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null);
 
-function readLocalBool(key: string, fallback: boolean): boolean {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    return raw === "true";
-  } catch {
-    return fallback;
-  }
-}
-
-function readLocalNumber(key: string, fallback: number): number {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    const n = parseFloat(raw);
-    return isNaN(n) ? fallback : n;
-  } catch {
-    return fallback;
-  }
-}
-
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [terrain, setTerrain] = useState<TerrainData | null>(null);
@@ -73,29 +63,23 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const [tidalOverlay, setTidalOverlayRaw] = useState<boolean>(false);
   const [tidalDataOverride, setTidalDataOverride] = useState<unknown>(null);
-  const [realisticMode, setRealisticModeRaw] = useState<boolean>(() =>
-    readLocalBool("bathyscan:realisticMode", false),
-  );
-  const [boatSpeedMph, setBoatSpeedMphRaw] = useState<number>(() => {
-    const raw = readLocalNumber("bathyscan:boatSpeedMph", BOAT_DEFAULT_MPH);
-    return Math.max(BOAT_MIN_MPH, Math.min(BOAT_MAX_MPH, raw));
-  });
+
+  // realisticMode and boatSpeedMph are backed by driveBoatStore so that
+  // performSignOutCleanup (signoutCleanup.ts) can reset them synchronously on
+  // sign-out without requiring a page reload.  The useAppState() API is
+  // unchanged: consumers still call setRealisticMode / setBoatSpeedMph as
+  // before; driveBoatStore handles localStorage persistence.
+  const realisticMode = useDriveBoatStore((s) => s.realisticMode);
+  const setRealisticMode = useDriveBoatStore((s) => s.setRealisticMode);
+  const boatSpeedMph = useDriveBoatStore((s) => s.boatSpeedMph);
+  const setBoatSpeedMph = useDriveBoatStore((s) => s.setBoatSpeedMph);
+
   const [pendingExternalUserDatasetId, setPendingExternalUserDatasetId] =
     useState<string | null>(null);
   const [catalogSourcedAt, setCatalogSourcedAt] = useState<{ forDatasetId: string; date: string | null } | null>(null);
 
   const setTidalOverlay = useCallback((b: boolean) => {
     setTidalOverlayRaw(b);
-  }, []);
-
-  const setRealisticMode = useCallback((b: boolean) => {
-    setRealisticModeRaw(b);
-    try { localStorage.setItem("bathyscan:realisticMode", String(b)); } catch { /* intentional — best-effort persistence; React state is already updated */ }
-  }, []);
-
-  const setBoatSpeedMph = useCallback((mph: number) => {
-    setBoatSpeedMphRaw(mph);
-    try { localStorage.setItem("bathyscan:boatSpeedMph", String(mph)); } catch { /* intentional — best-effort persistence; React state is already updated */ }
   }, []);
 
   return (

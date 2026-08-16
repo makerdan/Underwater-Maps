@@ -30,6 +30,7 @@ import { useDriftStore } from "@/lib/driftStore";
 import { useTrailStore } from "@/lib/trailStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useLiveModeStore } from "@/lib/liveMode";
+import { useDriveBoatStore } from "@/lib/driveBoatStore";
 
 function safeRemove(key: string): void {
   try {
@@ -89,12 +90,12 @@ export function performSignOutCleanup(): void {
   useTrailStore.getState().resetForSignOut();
   useCameraStore.getState().resetForSignOut();
 
-  // AppProvider-held prefs (audit F-004). The in-memory values live in React
-  // state inside AppProvider (src/lib/context.tsx) which stays mounted across
-  // sign-out; clearing the persisted copies guarantees the next session that
-  // hydrates from storage gets defaults instead of the previous user's prefs.
-  safeRemove("bathyscan:realisticMode");
-  safeRemove("bathyscan:boatSpeedMph");
+  // Drive Boat session state (heading lock, route following, distance counter)
+  // and UI prefs (realisticMode, boatSpeedMph). resetForSignOut() resets all
+  // in-memory fields to defaults and removes the two localStorage keys so the
+  // AppProvider (which now reads these from the store) reflects defaults
+  // immediately — without requiring a page reload.
+  useDriveBoatStore.getState().resetForSignOut();
 
   // Overview Map puzzle layout (localStorage + its sessionStorage twin).
   safeRemove("bathyscan:puzzleTransforms");

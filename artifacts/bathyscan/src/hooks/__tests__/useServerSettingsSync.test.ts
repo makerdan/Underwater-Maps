@@ -150,6 +150,8 @@ import {
 import { useTrailStore } from "@/lib/trailStore";
 import { useLiveModeStore } from "@/lib/liveMode";
 import { useCameraStore } from "@/lib/cameraStore";
+import { useDriveBoatStore } from "@/lib/driveBoatStore";
+import { BOAT_DEFAULT_MPH } from "@/lib/boatSpeed";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -409,8 +411,7 @@ describe("useServerSettingsSync — sign-out clears Live-mode state", () => {
     useTrailStore.getState().resetForSignOut();
     useLiveModeStore.getState().resetForSignOut();
     useCameraStore.getState().setGpsFollowMode(false);
-    localStorage.removeItem("bathyscan:realisticMode");
-    localStorage.removeItem("bathyscan:boatSpeedMph");
+    useDriveBoatStore.getState().resetForSignOut();
   };
 
   beforeEach(() => {
@@ -428,7 +429,7 @@ describe("useServerSettingsSync — sign-out clears Live-mode state", () => {
     vi.clearAllMocks();
   });
 
-  it("resets trail, camera-follow, and live-mode stores plus Drive Boat localStorage keys on true → false", async () => {
+  it("resets trail, camera-follow, live-mode, and Drive Boat stores on true → false", async () => {
     const { rerender, unmount } = renderHook(() => useServerSettingsSync());
 
     // Seed "User A was mid-session" state.
@@ -441,9 +442,15 @@ describe("useServerSettingsSync — sign-out clears Live-mode state", () => {
       });
       useCameraStore.getState().setGpsFollowMode(true);
       useLiveModeStore.setState({ gpsRetryAttempt: 2, gpsRecoveryFailed: true });
+      // Drive Boat: simulate an active session with heading lock and route following.
+      useDriveBoatStore.getState().setRealisticMode(true);
+      useDriveBoatStore.getState().setBoatSpeedMph(42);
+      useDriveBoatStore.getState().setHeadingLocked(true);
+      useDriveBoatStore.getState().setLockedBearing(135);
+      useDriveBoatStore.getState().setFollowingRoute(true);
+      useDriveBoatStore.getState().addDistanceNm(3.7);
+      useDriveBoatStore.getState().setActualBoatSpeedMph(38);
     });
-    localStorage.setItem("bathyscan:realisticMode", "true");
-    localStorage.setItem("bathyscan:boatSpeedMph", "42");
     sessionStorage.setItem(
       "bathyscan-trail-draft",
       JSON.stringify({ points: [], startedAt: 1, sessionSeq: 1 }),
@@ -478,9 +485,54 @@ describe("useServerSettingsSync — sign-out clears Live-mode state", () => {
     expect(useLiveModeStore.getState().gpsRetryAttempt).toBe(0);
     expect(useLiveModeStore.getState().gpsRecoveryFailed).toBe(false);
 
-    // Drive Boat raw localStorage keys are gone.
+    // Drive Boat store is fully reset — no heading lock, no route follow,
+    // distance counter at zero, realistic mode off, speed back to default.
+    const driveBoat = useDriveBoatStore.getState();
+    expect(driveBoat.headingLocked).toBe(false);
+    expect(driveBoat.followingRoute).toBe(false);
+    expect(driveBoat.distanceTraveledNm).toBe(0);
+    expect(driveBoat.realisticMode).toBe(false);
+    expect(driveBoat.boatSpeedMph).toBe(BOAT_DEFAULT_MPH);
+    // The persisted localStorage keys are removed so the next sign-in
+    // hydrates from defaults, not the previous user's prefs.
     expect(localStorage.getItem("bathyscan:realisticMode")).toBeNull();
     expect(localStorage.getItem("bathyscan:boatSpeedMph")).toBeNull();
+
+    unmount();
+  });
+
+  it("resets driveBoatStore heading lock and route-follow state on sign-out", async () => {
+    const { rerender, unmount } = renderHook(() => useServerSettingsSync());
+
+    // Simulate an active autopilot + route-follow session.
+    act(() => {
+      useDriveBoatStore.getState().setHeadingLocked(true);
+      useDriveBoatStore.getState().setLockedBearing(270);
+      useDriveBoatStore.getState().setFollowingRoute(true);
+      useDriveBoatStore.getState().setRouteLegIndex(3);
+      useDriveBoatStore.getState().addDistanceNm(12.5);
+      useDriveBoatStore.getState().setActualBoatSpeedMph(25);
+    });
+
+    expect(useDriveBoatStore.getState().headingLocked).toBe(true);
+    expect(useDriveBoatStore.getState().followingRoute).toBe(true);
+    expect(useDriveBoatStore.getState().distanceTraveledNm).toBeGreaterThan(0);
+
+    // Sign out.
+    clerkAuthState.isSignedIn = false;
+    await act(async () => {
+      rerender();
+      await Promise.resolve();
+    });
+
+    const driveBoat = useDriveBoatStore.getState();
+    expect(driveBoat.headingLocked).toBe(false);
+    expect(driveBoat.followingRoute).toBe(false);
+    expect(driveBoat.routeLegIndex).toBe(0);
+    expect(driveBoat.distanceTraveledNm).toBe(0);
+    expect(driveBoat.actualBoatSpeedMph).toBe(BOAT_DEFAULT_MPH);
+    expect(driveBoat.realisticMode).toBe(false);
+    expect(driveBoat.boatSpeedMph).toBe(BOAT_DEFAULT_MPH);
 
     unmount();
   });
