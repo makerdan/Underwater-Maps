@@ -153,7 +153,7 @@ export function MarkerSymbolsSection() {
         <SymbolCard
           key={section.category}
           label={section.label}
-          sublabel={CATEGORY_SUBLABELS[section.category]}
+          sublabel={CATEGORY_SUBLABELS[section.category] ?? ""}
           types={section.types}
         />
       ))}
