@@ -107,3 +107,4 @@
 - [orval "Failed to resolve input" root cause](orval-failed-resolve-input.md) — this misleading error is always a duplicate YAML key in openapi.yaml; @scalar/json-magic silently swallows the yaml.parse exception and returns ok:false.
 - [Vitest unhandled-error gate fails green runs](unhandled-rejection-gate.md) — "N errors, exit 1" with all tests passing = stale wholesale mock missing a newly-called export, not a test regression; check the Unhandled Errors section first.
 - [Shared walker ignore-dirs](shared-walker-ignore-dirs.md) — walker scripts must import IGNORED_DIRS from scripts/lib/ignored-dirs.mjs; local copies fail check:runner-step-sync in CI.
+- [skill-mirror-sync + foreign-commit review](skill-mirror-sync-check.md) — stale .local/custom_skills mirrors fail every tier after skill merges (fix: post-merge sync block, gitignored-only); mid-session merges from other tasks appear in YOUR completion-review diff — cite provenance in drift_reason.
