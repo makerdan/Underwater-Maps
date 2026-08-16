@@ -27,6 +27,12 @@ Both failures were fixed in task #3888:
 
 Both files now pass cleanly. No longer pre-existing.
 
+**Update 2026-08-16 (later run):** a standard-tier run confirms these two
+(terrain-mock-guard + env-pack woa warn) are the ONLY unit failures; typecheck,
+lint, and all static checks pass — the paletteStore.ts TS2352 typecheck break
+below is FIXED on main. A backlog task ("Fix the two pre-existing test failures
+that make every full validation run report as failed") covers both.
+
 ## Typecheck baseline breakage #2 (as of 2026-08-16 evening)
 
 `pnpm run typecheck` fails on `artifacts/bathyscan/src/lib/paletteStore.ts(842,16)`

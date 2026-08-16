@@ -1,0 +1,278 @@
+/**
+ * Self-test for scripts/check-testdb-schema-drift.mjs
+ *
+ * Run via:  node --test scripts/__tests__/check-testdb-schema-drift.test.mjs
+ *
+ * Covers the hardening for the scoped index search and I/O guards:
+ *   (a) index name appearing only in a comment → violation;
+ *   (b) index name appearing only in an unrelated table's DDL block → violation;
+ *   (c) correctly placed CREATE UNIQUE INDEX clause → passes;
+ *   (d) missing test-db.ts → exit 1 with a path-containing message;
+ *   (e) unreadable schema file → warning emitted, scan continues.
+ */
+import { describe, it, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync } from "node:fs";
+import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
+import {
+  stripComments,
+  extractTableSlices,
+  sliceHasUniqueClause,
+} from "../check-testdb-schema-drift.mjs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const scriptPath = resolve(__dirname, "..", "check-testdb-schema-drift.mjs");
+
+let sandbox;
+
+before(() => {
+  sandbox = mkdtempSync(join(tmpdir(), "testdb-drift-test-"));
+});
+
+after(() => {
+  rmSync(sandbox, { recursive: true, force: true });
+});
+
+/**
+ * Copy the real script into a fake repo layout so its resolve(scriptDir, "..")
+ * root points at the sandbox. This runs the genuine script end-to-end without
+ * touching the real lib/db tree.
+ */
+function makeFakeRepo(name) {
+  const repo = join(sandbox, name);
+  mkdirSync(join(repo, "scripts"), { recursive: true });
+  mkdirSync(join(repo, "lib", "db", "src", "schema"), { recursive: true });
+  mkdirSync(join(repo, "lib", "db", "src", "__tests__"), { recursive: true });
+  copyFileSync(scriptPath, join(repo, "scripts", "check-testdb-schema-drift.mjs"));
+  return repo;
+}
+
+function writeSchema(repo, fileName, content) {
+  writeFileSync(join(repo, "lib", "db", "src", "schema", fileName), content);
+}
+
+function writeTestDb(repo, ddl) {
+  writeFileSync(
+    join(repo, "lib", "db", "src", "__tests__", "test-db.ts"),
+    `export async function createTestDb() {\n  await client.query(\`\n${ddl}\n\`);\n}\n`,
+  );
+}
+
+function runScript(repo) {
+  const result = spawnSync(
+    "node",
+    [join(repo, "scripts", "check-testdb-schema-drift.mjs")],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  return {
+    status: result.status,
+    stdout: String(result.stdout ?? ""),
+    stderr: String(result.stderr ?? ""),
+  };
+}
+
+const MARKERS_SCHEMA = `
+import { pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+export const markers = pgTable(
+  "markers",
+  { id: text("id").primaryKey(), label: text("label").notNull() },
+  (table) => [uniqueIndex("markers_label_uniq").on(table.label)],
+);
+`;
+
+describe("scoped index search", () => {
+  it("(a) index name only in a comment → violation", () => {
+    const repo = makeFakeRepo("comment-only");
+    writeSchema(repo, "markers.ts", MARKERS_SCHEMA);
+    writeTestDb(
+      repo,
+      `
+    CREATE TABLE markers (
+      id    text PRIMARY KEY,
+      label text NOT NULL
+    );
+    -- TODO: CREATE UNIQUE INDEX markers_label_uniq ON markers (label);
+    `,
+    );
+
+    const result = runScript(repo);
+    assert.equal(result.status, 1, `expected exit 1\nstderr: ${result.stderr}`);
+    assert.ok(
+      result.stderr.includes("markers_label_uniq"),
+      `stderr should name the missing index.\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("(b) index name only in an unrelated table's block → violation", () => {
+    const repo = makeFakeRepo("wrong-table");
+    writeSchema(repo, "markers.ts", MARKERS_SCHEMA);
+    writeTestDb(
+      repo,
+      `
+    CREATE TABLE markers (
+      id    text PRIMARY KEY,
+      label text NOT NULL
+    );
+
+    CREATE TABLE other_things (
+      id text PRIMARY KEY
+    );
+
+    CREATE UNIQUE INDEX markers_label_uniq ON other_things (id);
+    `,
+    );
+
+    const result = runScript(repo);
+    assert.equal(result.status, 1, `expected exit 1\nstderr: ${result.stderr}`);
+    assert.ok(
+      result.stderr.includes("markers_label_uniq"),
+      `stderr should name the missing index.\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("(c) correctly placed UNIQUE INDEX clause → passes", () => {
+    const repo = makeFakeRepo("correct");
+    writeSchema(repo, "markers.ts", MARKERS_SCHEMA);
+    writeTestDb(
+      repo,
+      `
+    CREATE TABLE markers (
+      id    text PRIMARY KEY,
+      label text NOT NULL
+    );
+
+    CREATE UNIQUE INDEX markers_label_uniq ON markers (label);
+
+    CREATE TABLE other_things (
+      id text PRIMARY KEY
+    );
+    `,
+    );
+
+    const result = runScript(repo);
+    assert.equal(result.status, 0, `expected exit 0\nstderr: ${result.stderr}`);
+    assert.ok(
+      result.stdout.includes("OK"),
+      `stdout should report OK.\nstdout: ${result.stdout}`,
+    );
+  });
+
+  it("accepts a CONSTRAINT <name> UNIQUE clause inside the table block", () => {
+    const repo = makeFakeRepo("constraint-form");
+    writeSchema(repo, "markers.ts", MARKERS_SCHEMA);
+    writeTestDb(
+      repo,
+      `
+    CREATE TABLE markers (
+      id    text PRIMARY KEY,
+      label text NOT NULL,
+      CONSTRAINT markers_label_uniq UNIQUE (label)
+    );
+    `,
+    );
+
+    const result = runScript(repo);
+    assert.equal(result.status, 0, `expected exit 0\nstderr: ${result.stderr}`);
+  });
+
+  it("bare (non-UNIQUE) index name in the right block → violation", () => {
+    const repo = makeFakeRepo("non-unique");
+    writeSchema(repo, "markers.ts", MARKERS_SCHEMA);
+    writeTestDb(
+      repo,
+      `
+    CREATE TABLE markers (
+      id    text PRIMARY KEY,
+      label text NOT NULL
+    );
+
+    CREATE INDEX markers_label_uniq ON markers (label);
+    `,
+    );
+
+    const result = runScript(repo);
+    assert.equal(result.status, 1, `expected exit 1\nstderr: ${result.stderr}`);
+  });
+});
+
+describe("I/O guards", () => {
+  it("(d) missing test-db.ts → exit 1 with a path-containing message", () => {
+    const repo = makeFakeRepo("missing-testdb");
+    writeSchema(repo, "markers.ts", MARKERS_SCHEMA);
+    // No test-db.ts written.
+
+    const result = runScript(repo);
+    const expectedPath = join(repo, "lib", "db", "src", "__tests__", "test-db.ts");
+    assert.equal(result.status, 1, `expected exit 1\nstderr: ${result.stderr}`);
+    assert.ok(
+      result.stderr.includes(expectedPath),
+      `stderr should name the missing test-db.ts path.\nstderr: ${result.stderr}`,
+    );
+    // Guarded failure, not a raw uncaught ENOENT stack trace.
+    assert.ok(
+      !result.stderr.includes("Node.js v") && !result.stderr.includes("throw err"),
+      `stderr should not contain a raw Node.js stack trace.\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("(e) unreadable schema file → warning, scan continues", () => {
+    const repo = makeFakeRepo("unreadable-schema");
+    writeSchema(repo, "markers.ts", MARKERS_SCHEMA);
+    // A directory named like a schema file makes readFileSync throw EISDIR.
+    mkdirSync(join(repo, "lib", "db", "src", "schema", "broken.ts"));
+    writeTestDb(
+      repo,
+      `
+    CREATE TABLE markers (
+      id    text PRIMARY KEY,
+      label text NOT NULL
+    );
+
+    CREATE UNIQUE INDEX markers_label_uniq ON markers (label);
+    `,
+    );
+
+    const result = runScript(repo);
+    assert.equal(result.status, 0, `expected exit 0\nstderr: ${result.stderr}`);
+    assert.ok(
+      result.stderr.includes("WARN") && result.stderr.includes("broken.ts"),
+      `stderr should warn about the unreadable file.\nstderr: ${result.stderr}`,
+    );
+    assert.ok(
+      result.stdout.includes("OK"),
+      `remaining files should still be scanned.\nstdout: ${result.stdout}`,
+    );
+  });
+});
+
+describe("helper units", () => {
+  it("stripComments removes SQL line, block, and TS line comments", () => {
+    const out = stripComments(
+      "keep1 -- gone sql\nkeep2 /* gone\nblock */ keep3 // gone ts\nkeep4",
+    );
+    assert.ok(out.includes("keep1") && out.includes("keep2"));
+    assert.ok(out.includes("keep3") && out.includes("keep4"));
+    assert.ok(!out.includes("gone"));
+  });
+
+  it("extractTableSlices maps each table to its own block", () => {
+    const slices = extractTableSlices(
+      "create table alpha (id text);\ncreate unique index a_uniq on alpha (id);\n" +
+      "create table beta (id text);\ncreate unique index b_uniq on beta (id);",
+    );
+    assert.deepEqual([...slices.keys()].sort(), ["alpha", "beta"]);
+    assert.ok(slices.get("alpha").includes("a_uniq"));
+    assert.ok(!slices.get("alpha").includes("b_uniq"));
+    assert.ok(slices.get("beta").includes("b_uniq"));
+  });
+
+  it("sliceHasUniqueClause requires UNIQUE adjacency", () => {
+    assert.ok(sliceHasUniqueClause("create unique index foo_uniq on t (a);", "foo_uniq"));
+    assert.ok(sliceHasUniqueClause("constraint foo_uniq unique (a)", "foo_uniq"));
+    assert.ok(!sliceHasUniqueClause("create index foo_uniq on t (a);", "foo_uniq"));
+    assert.ok(!sliceHasUniqueClause("mentions foo_uniq in passing", "foo_uniq"));
+  });
+});
