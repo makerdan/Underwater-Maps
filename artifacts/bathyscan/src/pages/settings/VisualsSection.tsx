@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useIntertidal } from "@/lib/useIntertidal";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
@@ -143,6 +143,28 @@ export function VisualsSection() {
   // both stores in sync; direct settingsStore writes bypass uiStore and leave
   // the 3D scene stale until the next hydration.
   const setShowNodataBoundaryViaUi = useUiStore((s) => s.setShowNodataBoundary);
+
+  // Antialiasing is baked into the WebGL context at page load; capture the
+  // value the live context was created with so the reload hint only shows
+  // when the displayed value differs from the active runtime state.
+  const antialiasingAtLoad = useRef(s.antialiasing);
+  const antialiasingPending = s.antialiasing !== antialiasingAtLoad.current;
+
+  // One-time mount repair: null/invalid persisted values would otherwise
+  // display a fallback in the UI while the store (and every downstream
+  // consumer) still holds the invalid value.
+  useEffect(() => {
+    const st = useSettingsStore.getState();
+    const maxDs: unknown = st.maxActiveDatasets;
+    if (typeof maxDs !== "number" || !Number.isFinite(maxDs) || maxDs < 1 || maxDs > 6) {
+      st.setMaxActiveDatasets(DEFAULT_SETTINGS.maxActiveDatasets);
+    }
+    const prox: unknown = st.proximityMode;
+    if (typeof prox !== "boolean") {
+      st.setProximityMode(DEFAULT_SETTINGS.proximityMode);
+    }
+  }, []);
+
   return (
     <>
       <SectionTitle helpId="settings" helpLabel="Visuals & Performance">◈ VISUALS &amp; PERFORMANCE</SectionTitle>
@@ -319,25 +341,27 @@ export function VisualsSection() {
           />
           {/* Antialiasing is baked into the WebGL context at creation time,
               so toggling it has no visible effect until the page is reloaded.
-              Show a prominent inline note so users understand why the scene
-              does not change immediately after toggling. */}
-          <div style={{ padding: "0 16px 10px", marginTop: -2 }}>
-            <span
-              data-testid="antialiasing-reload-hint"
-              style={{
-                display: "inline-block",
-                fontSize: "calc(9px * var(--bs-font-scale, 1))",
-                letterSpacing: "0.06em",
-                color: "#f59e0b",
-                background: "rgba(245,158,11,0.08)",
-                border: "1px solid rgba(245,158,11,0.28)",
-                borderRadius: 3,
-                padding: "2px 7px",
-              }}
-            >
-              ⟳ takes effect after reload
-            </span>
-          </div>
+              Show the inline note only while a change is actually pending —
+              i.e. the setting differs from the value active at page load. */}
+          {antialiasingPending && (
+            <div style={{ padding: "0 16px 10px", marginTop: -2 }}>
+              <span
+                data-testid="antialiasing-reload-hint"
+                style={{
+                  display: "inline-block",
+                  fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                  letterSpacing: "0.06em",
+                  color: "#f59e0b",
+                  background: "rgba(245,158,11,0.08)",
+                  border: "1px solid rgba(245,158,11,0.28)",
+                  borderRadius: 3,
+                  padding: "2px 7px",
+                }}
+              >
+                ⟳ takes effect after reload
+              </span>
+            </div>
+          )}
         </div>
         <div style={S.card}>
           <div style={S.cardHeader}>ATMOSPHERE</div>

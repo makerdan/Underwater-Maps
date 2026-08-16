@@ -13,7 +13,12 @@ const RESET_CONFIRM_TIMEOUT_MS = 3000;
 
 export function ZoneColourSwatches() {
   const waterType = useSettingsStore((s) => s.waterType);
-  const slots = useZoneOverlayStore((s) => s.slots);
+  const wt: "saltwater" | "freshwater" =
+    waterType === "freshwater" ? "freshwater" : "saltwater";
+  // Derive slots synchronously from the settings water type — reading the
+  // store's `slots` mirror (updated by the post-render effect below) rendered
+  // the new type's labels against the previous type's colours for one frame.
+  const slots = useZoneOverlayStore((s) => s[wt]);
   const setSlotColor = useZoneOverlayStore((s) => s.setSlotColor);
   const setSlotVisible = useZoneOverlayStore((s) => s.setSlotVisible);
   const resetToDefaults = useZoneOverlayStore((s) => s.resetToDefaults);
@@ -21,9 +26,21 @@ export function ZoneColourSwatches() {
   const slotNames =
     waterType === "freshwater" ? SLOT_NAMES_FRESHWATER : SLOT_NAMES_SALTWATER;
 
+  // Keep the zone-overlay store's activeWaterType (used by the 3D overlay and
+  // by slot mutations) in sync with the settings water type.
   useEffect(() => {
-    setActiveWaterType(waterType as "saltwater" | "freshwater");
-  }, [waterType, setActiveWaterType]);
+    setActiveWaterType(wt);
+  }, [wt, setActiveWaterType]);
+
+  // Slot mutations write to the store's activeWaterType; make sure it matches
+  // what this component is displaying before mutating (the sync effect above
+  // runs after render, so a mutation in the stale window could hit the wrong
+  // water type's palette).
+  const ensureActiveWaterType = () => {
+    if (useZoneOverlayStore.getState().activeWaterType !== wt) {
+      setActiveWaterType(wt);
+    }
+  };
 
   // Reset button: disabled when the palette already matches defaults, and a
   // first click only "arms" the button — a second click within the timeout
@@ -58,6 +75,7 @@ export function ZoneColourSwatches() {
     }
     clearConfirmTimer();
     setConfirmArmed(false);
+    ensureActiveWaterType();
     resetToDefaults();
   };
 
@@ -104,8 +122,11 @@ export function ZoneColourSwatches() {
       </div>
       {slotNames.map((name, i) => {
         const slot = slots[i as 0 | 1 | 2 | 3];
-        const color = slot?.color ?? "#f5d58a";
-        const visible = slot?.visible ?? true;
+        // Missing/corrupted slots fall back to the store's canonical per-slot
+        // defaults (same source as DEFAULT_SETTINGS), not a hardcoded colour.
+        const def = DEFAULT_SLOTS[i as 0 | 1 | 2 | 3]!;
+        const color = slot?.color ?? def.color;
+        const visible = slot?.visible ?? def.visible;
         return (
           <div
             key={i}
@@ -114,7 +135,7 @@ export function ZoneColourSwatches() {
           >
             <Toggle
               value={visible}
-              onChange={(v) => setSlotVisible(i as 0 | 1 | 2 | 3, v)}
+              onChange={(v) => { ensureActiveWaterType(); setSlotVisible(i as 0 | 1 | 2 | 3, v); }}
               aria-label={`Show zone ${name}`}
             />
             <span
@@ -139,7 +160,7 @@ export function ZoneColourSwatches() {
                 aria-label={`Colour for zone ${name}`}
                 type="color"
                 value={color}
-                onChange={(e) => setSlotColor(i as 0 | 1 | 2 | 3, e.target.value)}
+                onChange={(e) => { ensureActiveWaterType(); setSlotColor(i as 0 | 1 | 2 | 3, e.target.value); }}
                 style={{
                   position: "absolute",
                   inset: 0,

@@ -15,7 +15,8 @@ import {
 } from "@/lib/paletteStore";
 import { colormapCanvas } from "@/lib/colormap";
 import { formatDepth } from "@/lib/units";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, DEFAULT_SETTINGS, type ColormapTheme } from "@/lib/settingsStore";
+import { toValidColormapTheme } from "@/lib/settingsGuards";
 import { flushServerSync } from "@/hooks/useServerSettingsSync";
 import { S } from "../styles";
 import { SliderRow, ToggleRow, ColorRow, ColormapSelectRow } from "./RowWidgets";
@@ -69,7 +70,7 @@ function DebouncedHexInput({
   );
 }
 
-function ContourIntervalRow() {
+function ContourIntervalRow({ disabled }: { disabled?: boolean }) {
   const units = useSettingsStore((s) => s.units);
   const contourInterval = useSettingsStore((s) => s.contourInterval);
   const setContourInterval = useSettingsStore((s) => s.setContourInterval);
@@ -100,6 +101,7 @@ function ContourIntervalRow() {
       format={formatInterval}
       onChange={setContourInterval}
       sublabel={`Depth spacing between lines (${unitLabel})`}
+      disabled={disabled}
     />
   );
 }
@@ -334,7 +336,7 @@ function DepthBandEditor({
         <ToggleRow
           label="Blend band colors"
           value={blendBands}
-          onChange={(v) => { setBlendBands(v); }}
+          onChange={(v) => { setBlendBands(v); void flushServerSync(); }}
           sublabel="On: smooth gradient between bands. Off: crisp discrete colour steps."
         />
       </div>
@@ -582,8 +584,15 @@ export function DepthColorsCard() {
   const setNodataColor = useSettingsStore((s) => s.setNodataColor);
   const contoursEnabled = useSettingsStore((s) => s.contoursEnabled);
   const setContoursEnabled = useSettingsStore((s) => s.setContoursEnabled);
+  const setContourInterval = useSettingsStore((s) => s.setContourInterval);
+  const setColormapTheme = useSettingsStore((s) => s.setColormapTheme);
+  const units = useSettingsStore((s) => s.units);
 
   const isBandTheme = colormapTheme === "ocean" || colormapTheme === "custom";
+
+  // Name of the last-applied saved theme that predates colormap tracking
+  // (no `colormapTheme` field — task #3535 adds it to newly saved themes).
+  const [legacyThemeNote, setLegacyThemeNote] = React.useState<string | null>(null);
 
   const bandColorsKey = usePaletteStore((s) => s.bandColors.join(","));
   const bandBoundariesKey = usePaletteStore((s) => s.bandBoundaries.join(","));
@@ -595,20 +604,57 @@ export function DepthColorsCard() {
     const horiz = document.createElement("canvas");
     horiz.width = 240;
     horiz.height = 14;
-    const hctx = horiz.getContext("2d")!;
+    const hctx = horiz.getContext("2d");
+    if (!hctx) {
+      console.warn("[palette] 2D canvas context unavailable — skipping palette preview render");
+      return;
+    }
     hctx.save();
     hctx.translate(0, 14);
     hctx.rotate(-Math.PI / 2);
     hctx.drawImage(vert, 0, 0, 14, 240);
     hctx.restore();
-    previewRef.current.src = horiz.toDataURL();
+    try {
+      previewRef.current.src = horiz.toDataURL();
+    } catch (err) {
+      console.warn("[palette] Failed to serialise palette preview canvas", err);
+    }
   }, [shallow, deep, colormapTheme, bandColorsKey, bandBoundariesKey, blendBands]);
 
-  const activePresetId = PALETTE_PRESETS.find(
-    (p) =>
-      p.shallow.toLowerCase() === shallow.toLowerCase() &&
-      p.deep.toLowerCase() === deep.toLowerCase(),
-  )?.id;
+  // A preset is "active" only when EVERY band colour matches the colours the
+  // preset would produce for the current band count — comparing just the
+  // shallow/deep endpoints falsely matched palettes with customised middle
+  // bands.
+  const activePresetId = React.useMemo(() => {
+    const current = bandColorsKey.split(",");
+    return PALETTE_PRESETS.find((p) => {
+      const presetColors = bandColorsFromPreset(p, current.length);
+      return (
+        presetColors.length === current.length &&
+        presetColors.every((c, i) => c.toLowerCase() === (current[i] ?? "").toLowerCase())
+      );
+    })?.id;
+  }, [bandColorsKey]);
+
+  const handleApplySavedTheme = (theme: (typeof savedDepthThemes)[number]) => {
+    applyTheme(theme.id);
+    // Themes saved after task #3535 carry the colormap they were created
+    // under; older themes have no field, so fall back to "ocean" (the band
+    // colormap saved bands are designed for) and surface an upgrade note.
+    const saved = (theme as { colormapTheme?: unknown }).colormapTheme;
+    const isValidSaved = typeof saved === "string" && toValidColormapTheme(saved) === saved;
+    if (isValidSaved) {
+      setColormapThemeByUser(saved as ColormapTheme);
+      setLegacyThemeNote(null);
+    } else {
+      console.warn(
+        `[palette] Saved theme "${theme.name}" has no colormapTheme field (saved before colormap tracking) — applying with the "ocean" colormap.`,
+      );
+      setColormapThemeByUser("ocean");
+      setLegacyThemeNote(theme.name);
+    }
+    void flushServerSync();
+  };
 
   const labelStyle: React.CSSProperties = {
     fontSize: "calc(9px * var(--bs-font-scale, 1))",
@@ -681,7 +727,7 @@ export function DepthColorsCard() {
         sublabel="Iso-depth lines on the 2D overview map"
       />
       <div style={{ opacity: contoursEnabled ? 1 : 0.4, pointerEvents: contoursEnabled ? "auto" : "none" }}>
-        <ContourIntervalRow />
+        <ContourIntervalRow disabled={!contoursEnabled} />
       </div>
 
       {/* Preset palettes */}
@@ -702,6 +748,7 @@ export function DepthColorsCard() {
                 title={preset.label}
                 onClick={() => {
                   setBandColors(bandColorsFromPreset(preset, bandCount));
+                  void flushServerSync();
                 }}
                 style={{
                   display: "flex",
@@ -761,13 +808,28 @@ export function DepthColorsCard() {
               <SavedThemeChip
                 key={theme.id}
                 theme={theme}
-                onApply={() => { applyTheme(theme.id); setColormapThemeByUser("ocean"); void flushServerSync(); }}
+                onApply={() => handleApplySavedTheme(theme)}
                 onRename={(name) => { renameTheme(theme.id, name); void flushServerSync(); }}
                 onDelete={() => { deleteTheme(theme.id); void flushServerSync(); }}
                 labelStyle={labelStyle}
                 hexStyle={hexStyle}
               />
             ))}
+          </div>
+        )}
+        {legacyThemeNote !== null && (
+          <div
+            data-testid="saved-theme-upgrade-note"
+            style={{
+              marginTop: 6,
+              fontSize: "calc(10px * var(--bs-font-scale, 1))",
+              color: "rgba(255, 200, 80, 0.9)",
+              lineHeight: 1.4,
+            }}
+          >
+            “{legacyThemeNote}” was saved before colormap tracking, so it was
+            applied with the Ocean colormap. Re-save it to store its colormap
+            for next time.
           </div>
         )}
         <SaveThemeRow
@@ -807,7 +869,16 @@ export function DepthColorsCard() {
       <div style={{ padding: "10px 16px 14px", display: "flex", justifyContent: "flex-end" }}>
         <button
           data-testid="palette-reset-btn"
-          onClick={() => { reset(); }}
+          onClick={() => {
+            // Card-wide reset: palette store bands PLUS every other setting
+            // this card controls (nodata colour, contours, interval, colormap).
+            reset();
+            setNodataColor(DEFAULT_SETTINGS.nodataColor);
+            setContoursEnabled(DEFAULT_SETTINGS.contoursEnabled);
+            setContourInterval(defaultContourInterval(units));
+            setColormapTheme(DEFAULT_SETTINGS.colormapTheme);
+            void flushServerSync();
+          }}
           style={{
             background: "rgba(0,229,255,0.06)",
             border: "1px solid rgba(0,229,255,0.25)",

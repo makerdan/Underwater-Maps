@@ -76,6 +76,7 @@ const SCANNED_FILES: string[] = [
   "components/TrailRecorder.tsx",
   "components/DriftPath.tsx",
   "components/FindDataPanel.tsx",
+  "components/TrailRecorder.tsx",
   "components/GpsImportDialog.tsx",
   "components/HabitatPanel.tsx",
   "components/HUD.tsx",
@@ -275,6 +276,12 @@ describe("parseScopes wrapper patterns (forwardRef / memo)", () => {
       const src = fs.readFileSync(absPath, "utf-8");
       const scopes = parseScopes(src);
     const terrainScope = scopes.find((s) => s.name === "TerrainMesh");
+
+      const _filePath = path.join(SRC_DIR, relPath);
+
+      const _filePath = path.join(SRC_DIR, relPath);
+
+      const _filePath = path.join(SRC_DIR, relPath);
     expect(terrainScope, "expected a TerrainMesh scope").toBeDefined();
     expect(terrainScope!.decls.length).toBeGreaterThanOrEqual(10);
   });

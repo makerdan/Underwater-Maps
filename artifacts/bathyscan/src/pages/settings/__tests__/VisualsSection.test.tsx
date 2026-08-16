@@ -16,8 +16,9 @@ const h = vi.hoisted(() => {
   const setIntertidalMhwOverrideFt = vi.fn();
   const setIntertidalMhhwOverrideFt = vi.fn();
   const setMaxActiveDatasets = vi.fn();
+  const setProximityMode = vi.fn();
   const stateOverrides: Record<string, unknown> = {};
-  return { resetSection, setIntertidalMhwOverrideFt, setIntertidalMhhwOverrideFt, setMaxActiveDatasets, stateOverrides };
+  return { resetSection, setIntertidalMhwOverrideFt, setIntertidalMhhwOverrideFt, setMaxActiveDatasets, setProximityMode, stateOverrides };
 });
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
@@ -84,6 +85,8 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     colormapUserSet: false,
     maxActiveDatasets: 3,
     setMaxActiveDatasets: h.setMaxActiveDatasets,
+    proximityMode: true,
+    setProximityMode: h.setProximityMode,
     ...h.stateOverrides,
   });
 
@@ -125,6 +128,8 @@ import { useUiStore } from "@/lib/uiStore";
 describe("VisualsSection", () => {
   beforeEach(() => {
     h.resetSection.mockClear();
+    h.setMaxActiveDatasets.mockClear();
+    h.setProximityMode.mockClear();
     for (const k of Object.keys(h.stateOverrides)) delete h.stateOverrides[k];
   });
 
@@ -287,11 +292,68 @@ describe("VisualsSection", () => {
     expect(screen.getByText("Antialiasing")).toBeInTheDocument();
   });
 
-  it("renders the antialiasing reload-hint badge with appropriate text", () => {
-    render(<VisualsSection />);
-    const hint = screen.getByTestId("antialiasing-reload-hint");
-    expect(hint).toBeInTheDocument();
-    expect(hint.textContent).toMatch(/takes effect after reload/i);
+  describe("antialiasing reload hint", () => {
+    it("is hidden when antialiasing matches the value active at page load", () => {
+      render(<VisualsSection />);
+      expect(screen.queryByTestId("antialiasing-reload-hint")).toBeNull();
+    });
+
+    it("appears when antialiasing changes from its page-load value", () => {
+      const { rerender } = render(<VisualsSection />);
+      expect(screen.queryByTestId("antialiasing-reload-hint")).toBeNull();
+      h.stateOverrides.antialiasing = false; // mount captured `true`
+      rerender(<VisualsSection />);
+      const hint = screen.getByTestId("antialiasing-reload-hint");
+      expect(hint.textContent).toMatch(/takes effect after reload/i);
+    });
+
+    it("hides again when antialiasing is toggled back to the page-load value", () => {
+      const { rerender } = render(<VisualsSection />);
+      h.stateOverrides.antialiasing = false;
+      rerender(<VisualsSection />);
+      expect(screen.getByTestId("antialiasing-reload-hint")).toBeInTheDocument();
+      delete h.stateOverrides.antialiasing; // back to true
+      rerender(<VisualsSection />);
+      expect(screen.queryByTestId("antialiasing-reload-hint")).toBeNull();
+    });
+  });
+
+  describe("mount repair of invalid persisted values", () => {
+    it("repairs a null maxActiveDatasets to the default", () => {
+      h.stateOverrides.maxActiveDatasets = null;
+      render(<VisualsSection />);
+      expect(h.setMaxActiveDatasets).toHaveBeenCalledWith(3);
+    });
+
+    it("repairs an out-of-range maxActiveDatasets to the default", () => {
+      h.stateOverrides.maxActiveDatasets = 99;
+      render(<VisualsSection />);
+      expect(h.setMaxActiveDatasets).toHaveBeenCalledWith(3);
+    });
+
+    it("repairs a non-numeric maxActiveDatasets to the default", () => {
+      h.stateOverrides.maxActiveDatasets = "4";
+      render(<VisualsSection />);
+      expect(h.setMaxActiveDatasets).toHaveBeenCalledWith(3);
+    });
+
+    it("leaves a valid maxActiveDatasets untouched", () => {
+      h.stateOverrides.maxActiveDatasets = 5;
+      render(<VisualsSection />);
+      expect(h.setMaxActiveDatasets).not.toHaveBeenCalled();
+    });
+
+    it("repairs a null proximityMode to the default (true)", () => {
+      h.stateOverrides.proximityMode = null;
+      render(<VisualsSection />);
+      expect(h.setProximityMode).toHaveBeenCalledWith(true);
+    });
+
+    it("leaves a valid proximityMode untouched", () => {
+      h.stateOverrides.proximityMode = false;
+      render(<VisualsSection />);
+      expect(h.setProximityMode).not.toHaveBeenCalled();
+    });
   });
 
   describe("Bright Daylight grayscale override note", () => {

@@ -6,10 +6,11 @@ import { FONT, S } from "../styles";
 import { Toggle, Select } from "./Toggle";
 
 export function SliderRow({
-  label, value, min, max, step, format, onChange, sublabel,
+  label, value, min, max, step, format, onChange, sublabel, disabled,
 }: {
   label: string; value: number; min: number; max: number; step: number;
   format?: (v: number) => string; onChange: (v: number) => void; sublabel?: string;
+  disabled?: boolean;
 }) {
   const fmt = format ?? ((v) => String(v));
   const inputId = `slider-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
@@ -25,6 +26,8 @@ export function SliderRow({
           type="range" min={min} max={max} step={step} value={value}
           onChange={(e) => onChange(Number(e.target.value))}
           style={S.slider}
+          disabled={disabled}
+          aria-disabled={disabled || undefined}
         />
         <span style={{ color: "#00e5ff", fontSize: "calc(10px * var(--bs-font-scale, 1))", minWidth: 48, textAlign: "right" }}>
           {fmt(value)}
