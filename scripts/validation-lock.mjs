@@ -214,6 +214,7 @@ function shouldYieldToPriorityWaiter() {
           entry.priority < priority &&
           typeof entry.enqueuedAt === "number" &&
           now - entry.enqueuedAt > PRIORITY_GRACE_MS &&
+          typeof entry.pid === "number" &&
           pidAlive(entry.pid)
         ) {
           return true;

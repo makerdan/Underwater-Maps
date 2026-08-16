@@ -58,6 +58,10 @@ export const CI_COVERAGE_ALLOWLIST = {
 // tooling). Keys are bare filenames; every entry MUST carry a reason.
 // ---------------------------------------------------------------------------
 
+// Intentionally empty: no check-* files currently need a permanent exemption.
+// Add an entry here (with a reason string) when a file must be kept on disk
+// but is not referenced by any npm script, workflow, or other script —
+// e.g. { "check-manual-only.mjs": "invoked by humans, not automated runners" }.
 export const ORPHAN_FILE_ALLOWLIST = {};
 
 // ---------------------------------------------------------------------------
