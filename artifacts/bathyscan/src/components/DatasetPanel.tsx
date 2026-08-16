@@ -160,6 +160,20 @@ const GCS_THRESHOLD = 50 * 1024 * 1024;      // files above 50 MB go straight to
 /** Maximum time to wait for a chunked-upload job to complete before giving up. */
 export const MAX_UPLOAD_POLL_DURATION_MS = 5 * 60 * 1_000; // 5 minutes
 
+/**
+ * React key sentinels for the EFH section divider rows injected into the
+ * active-datasets and queued-datasets lists.
+ *
+ * The leading null byte (\x00) makes these strings structurally impossible to
+ * collide with any valid dataset ID: catalog IDs are URL-path-safe slugs and
+ * user-upload IDs are UUIDs — neither can contain a null byte.  Using a bare
+ * double-underscore prefix (e.g. "__efh-divider-active") would work today, but
+ * a future catalog entry mis-named to that string would silently cause React to
+ * skip rendering either the divider or the real dataset row.
+ */
+export const EFH_DIVIDER_KEY_ACTIVE = "\x00efh-divider-active";
+export const EFH_DIVIDER_KEY_QUEUED = "\x00efh-divider-queued";
+
 const UPLOAD_SESSION_KEY = "bathyscan_upload_session";
 interface SavedUploadSession {
   uploadId: string;
@@ -471,7 +485,7 @@ const VisibleDatasetRows: React.FC<{
         (vdOrNull) => {
           if (vdOrNull === null) {
             // EFH divider sentinel
-            return <React.Fragment key="__efh-divider-active">{efhDivider}</React.Fragment>;
+            return <React.Fragment key={EFH_DIVIDER_KEY_ACTIVE}>{efhDivider}</React.Fragment>;
           }
           const vd = vdOrNull;
           const name = nameMap.get(vd.datasetId) ?? vd.datasetId;
@@ -633,7 +647,7 @@ const VisibleDatasetRows: React.FC<{
           {[...queuedMain, ...(queuedEfh.length > 0 ? [null as null, ...queuedEfh] : [])].map(
             (idOrNull) => {
               if (idOrNull === null) {
-                return <React.Fragment key="__efh-divider-queued">{efhDivider}</React.Fragment>;
+                return <React.Fragment key={EFH_DIVIDER_KEY_QUEUED}>{efhDivider}</React.Fragment>;
               }
               const id = idOrNull;
             const name = nameMap.get(id) ?? id;

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { DatasetPanel } from "@/components/DatasetPanel";
+import { DatasetPanel, EFH_DIVIDER_KEY_ACTIVE, EFH_DIVIDER_KEY_QUEUED } from "@/components/DatasetPanel";
 import { usePanelCollapseStore, DEFAULTS } from "@/lib/panelCollapseStore";
 import { useActiveLoadStore } from "@/lib/activeLoadStore";
 
@@ -382,5 +382,55 @@ describe("DatasetPanel — unmount cleanup clears activeLoadStore", () => {
 
     // Still null — cleanup should be a no-op.
     expect(useActiveLoadStore.getState().active).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EFH divider sentinel key collision guard
+//
+// The EFH divider sentinels injected into the active/queued dataset lists must
+// use React keys that can never collide with a valid dataset ID.  All dataset
+// IDs are either:
+//   • Catalog slugs — URL-path-safe ASCII, no control characters
+//   • User-upload UUIDs — hex digits and hyphens only
+//   • On-demand IDs — "ondemand-<source>-<timestamp>" format
+//
+// A null byte (\x00) is forbidden in all three formats, so a sentinel key
+// starting with \x00 is structurally impossible to collide with any real ID.
+//
+// This test is a permanent regression guard: if someone changes the sentinel
+// key format to one that *could* overlap with real IDs, this test fails
+// immediately in CI before any catalog data is needed.
+// ---------------------------------------------------------------------------
+describe("EFH divider sentinel keys — structural collision guard", () => {
+  it("EFH_DIVIDER_KEY_ACTIVE starts with a null byte", () => {
+    expect(EFH_DIVIDER_KEY_ACTIVE.charCodeAt(0)).toBe(0);
+  });
+
+  it("EFH_DIVIDER_KEY_QUEUED starts with a null byte", () => {
+    expect(EFH_DIVIDER_KEY_QUEUED.charCodeAt(0)).toBe(0);
+  });
+
+  it("sentinel keys are distinct from each other", () => {
+    expect(EFH_DIVIDER_KEY_ACTIVE).not.toBe(EFH_DIVIDER_KEY_QUEUED);
+  });
+
+  it("sentinel keys cannot be URL-path-safe strings (no null byte in URL slugs, UUIDs, or ondemand IDs)", () => {
+    // Demonstrate the invariant: valid dataset ID formats never contain \x00.
+    const validIdSamples = [
+      "noaa-efh-alaska-pcod",
+      "gebco-2024-global",
+      "fw-lake-superior",
+      "ondemand-gebco-1234567890",
+      "ondemand-ncei-crm-1234567890",
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890", // UUID
+      "__efh-divider-active",  // the OLD format — safe but not null-prefixed
+      "__efh-divider-queued",
+    ];
+    for (const id of validIdSamples) {
+      expect(id.charCodeAt(0)).not.toBe(0);
+      expect(id).not.toBe(EFH_DIVIDER_KEY_ACTIVE);
+      expect(id).not.toBe(EFH_DIVIDER_KEY_QUEUED);
+    }
   });
 });
