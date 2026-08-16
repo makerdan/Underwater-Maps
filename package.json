@@ -34,6 +34,7 @@
     "check:duplicate-hooks-registry": "node scripts/check-duplicate-hooks-registry.mjs",
     "check:runner-step-sync": "node scripts/check-runner-step-sync.mjs",
     "check:failure-gate": "node scripts/check-failure-gate.mjs",
+    "check:regression-guard": "node scripts/check-regression-guard.mjs",
     "check:skip-count": "node --test scripts/__tests__/check-skip-count.test.mjs && node scripts/check-skip-count.mjs",
     "check:testdb-schema-drift": "node --test scripts/__tests__/check-testdb-schema-drift.test.mjs && node scripts/check-testdb-schema-drift.mjs",
     "check:ports": "node scripts/check-hardcoded-ports.mjs",

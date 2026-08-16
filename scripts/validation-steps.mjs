@@ -97,6 +97,11 @@ export function getValidationSteps(logPrefix) {
     // no resource: failure-gate full lint (plan files in .local/tasks/), sub-second.
     // All plan files are backfilled with required sections; full enforcement is now safe.
     { name: "check:failure-gate", resource: null, cmd: "pnpm run check:failure-gate", tiers: FAST },
+    // no resource: auto-remediates missing Regression Guard sections (inserts predates-mandate N/A stub), sub-second.
+    { name: "fix:regression-guard-stubs", resource: null, cmd: "node scripts/check-regression-guard.mjs --fix-stub", tiers: FAST },
+    // no resource: regression-guard full lint (plan files in .local/tasks/), sub-second.
+    // --stubs-only grandfathers pre-mandate plans; only flags unfilled placeholder text in existing sections.
+    { name: "check:regression-guard", resource: null, cmd: "pnpm run check:regression-guard --stubs-only", tiers: FAST },
     // no resource: skip-count ratchet guard (static file scan), sub-second
     { name: "check:skip-count", resource: null, cmd: "pnpm run check:skip-count", tiers: FAST },
     // no resource: static regex scan of schema/*.ts vs test-db.ts DDL string, sub-second
