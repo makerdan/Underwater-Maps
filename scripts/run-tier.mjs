@@ -30,8 +30,9 @@
  *   aggregate    → 45 min (reused for "full")
  */
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getValidationSteps, getStepsForTier } from "./validation-steps.mjs";
 
@@ -140,15 +141,28 @@ function execStep(step) {
 
 /**
  * Runs a step, wrapping it in validation-lock.mjs if the step declares a
- * resource. Returns the exit code.
+ * resource. Returns the exit code plus the timestamp at which the step's
+ * actual work started — for locked steps that is after lock acquisition, so
+ * timings never include lock-wait time (mirrors test-all-steps.mjs).
+ *
+ * @returns {{exitCode: number, startMs: number}}
  */
 function runStep(step, tierPriority) {
   if (!step.resource) {
-    return execStep(step);
+    const startMs = Date.now();
+    return { exitCode: execStep(step), startMs };
   }
 
   // Steps with resources are invoked via the lock wrapper which calls back
-  // into run-tier.mjs in --step mode to execute the actual work.
+  // into run-tier.mjs in --step mode to execute the actual work. The child
+  // writes its post-acquisition start time into stampFile so elapsed-time
+  // logging starts after lock acquisition, not during the wait.
+  const stampFile = join(
+    tmpdir(),
+    `run-tier-step-start-${process.pid}-${step.name.replace(/[^a-zA-Z0-9-]/g, "-")}.txt`,
+  );
+  rmSync(stampFile, { force: true });
+  const spawnStart = Date.now();
   const lockCmd = [
     process.execPath, lockScript,
     "--resource", step.resource,
@@ -157,8 +171,17 @@ function runStep(step, tierPriority) {
     process.execPath, resolve(__dirname, "run-tier.mjs"),
     "--step", step.name,
   ];
-  const res = spawnSync(lockCmd[0], lockCmd.slice(1), { stdio: "inherit" });
-  return res.status ?? 1;
+  const res = spawnSync(lockCmd[0], lockCmd.slice(1), {
+    stdio: "inherit",
+    env: { ...process.env, VALIDATION_STEP_START_FILE: stampFile },
+  });
+  let startMs = spawnStart;
+  try {
+    const stamped = Number(readFileSync(stampFile, "utf8").trim());
+    if (Number.isFinite(stamped) && stamped >= spawnStart) startMs = stamped;
+  } catch { /* stamp missing (child died before writing) — fall back to spawn time */ }
+  rmSync(stampFile, { force: true });
+  return { exitCode: res.status ?? 1, startMs };
 }
 
 // ---------------------------------------------------------------------------
@@ -187,10 +210,10 @@ const overallStart = Date.now();
 const timings = [];
 
 for (const step of steps) {
-  const start = Date.now();
-  console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((start - overallStart) / 1000).toFixed(0)}s)`);
-  const exitCode = runStep(step, tierPriority);
-  const secs = ((Date.now() - start) / 1000).toFixed(1);
+  const loopNow = Date.now();
+  console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
+  const { exitCode, startMs } = runStep(step, tierPriority);
+  const secs = ((Date.now() - startMs) / 1000).toFixed(1);
   timings.push({ name: step.name, secs });
   console.log(`[run-tier] ■ step "${step.name}" finished in ${secs}s (exit ${exitCode})`);
   if (exitCode !== 0) {
