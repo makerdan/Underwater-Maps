@@ -45,7 +45,9 @@ on any PROPOSED list.
 
 ## Phase 0 — Re-run guard and prefix normalisation
 
-Before doing anything else, fetch all PROPOSED tasks with descriptions.
+**Step 0 — Capture snapshot.** Before anything else, call `queryProjectTasks` with `states: ["PROPOSED"]` and record the complete list of returned `taskRef` values as the immutable working set for this run. Log the count (e.g. "Snapshot captured: 42 PROPOSED tasks"). This snapshot is frozen — all subsequent phases operate exclusively on refs present in this list. Any task that becomes PROPOSED after this point is out of scope for the current run.
+
+Then fetch descriptions for all tasks in the snapshot.
 
 **Step A — Skip already-handled tasks.** For each task whose title starts
 with `DELETE - ` (case-sensitive), skip it entirely — it is already marked
@@ -73,6 +75,8 @@ work remains, print a short summary table and stop.
 
 ## Phase 1 — Gather active and merged context
 
+Only process refs present in the Phase 0 snapshot; ignore any task ref not in that list.
+
 Collect in parallel:
 
 - All PROPOSED tasks (already fetched in Phase 0)
@@ -82,6 +86,8 @@ Collect in parallel:
 ---
 
 ## Phase 2 — DELETE pass
+
+Only evaluate task refs present in the Phase 0 snapshot; silently ignore any ref not in the snapshot.
 
 For each non-skipped PROPOSED task, apply the following DELETE criteria in
 order. The first criterion that matches is the reason; stop checking further
@@ -126,6 +132,8 @@ Record all DELETE decisions in the working table. Do **not** call
 
 ## Phase 3 — Dependency graph
 
+Only include task refs present in the Phase 0 snapshot; refs not in the snapshot are excluded from both maps even if referenced in `dependsOn` fields.
+
 Build two maps from the `dependsOn` fields of all surviving (non-DELETE)
 PROPOSED tasks:
 
@@ -137,6 +145,8 @@ These maps drive tier classification and cascade promotion in Phase 4.
 ---
 
 ## Phase 4 — Tier classification (dry run only)
+
+Only classify task refs present in the Phase 0 snapshot; silently ignore any ref not in the snapshot.
 
 Classify every surviving (non-DELETE) task. Record the tier and a one-
 sentence reason in the working table. Do **not** call `updateProjectTask` yet.
@@ -217,6 +227,8 @@ do not proceed until they approve.
 
 ## Phase 6 — Apply mutations (only after confirmation)
 
+Only rename task refs present in the Phase 0 snapshot; silently ignore any ref not in the snapshot.
+
 Apply all renames in a single batch. Order matters — follow the sequence
 below exactly.
 
@@ -248,6 +260,7 @@ Batch all tier renames together and complete them before reporting.
 Print a final summary:
 
 ```
+Snapshot size at start: N tasks
 Tier 1 (critical):    N tasks
 Tier 2 (important):   N tasks
 Tier 3 (later):       N tasks
@@ -281,3 +294,6 @@ prominently in the conversation feed.
 - **Normalise before applying** — always strip any prior `Tier N:` or `T1:`
   prefix from the working title before applying a new one, to prevent
   compounding prefixes like `Tier 1: T1: Tier 2: ...`.
+- **Snapshot scope** — the working set is frozen at the start of Phase 0;
+  tasks that become PROPOSED after the snapshot is taken are not in scope for
+  the current run and must never be renamed or evaluated.
