@@ -6,9 +6,22 @@
  */
 
 import { get, set, del, keys } from "idb-keyval";
+import type { Marker } from "@workspace/api-client-react";
+import { authorizedFetch } from "./authorizedFetch";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const PACK_KEY_PREFIX = "offline-pack-";
+
+/**
+ * Build the markers API URL for a dataset.
+ *
+ * Must byte-match the URL the generated API client produces at runtime
+ * (URLSearchParams encoding) — the SW pack cache is keyed on this exact URL,
+ * so any mismatch means offline marker requests never hit the cached entry.
+ */
+export function markersUrlForDataset(datasetId: string): string {
+  return `${API_BASE}/api/markers?${new URLSearchParams({ datasetId }).toString()}`;
+}
 
 export interface TideHeightPrediction {
   t: string;
@@ -60,11 +73,17 @@ export interface OfflinePack {
   overviewUrl: string;
   tidePack: TidePack;
   weatherPack: WeatherPack;
+  /**
+   * Markers assigned to the dataset, captured at pack-save time.
+   * Optional — packs saved before markers were bundled lack this field, so
+   * every read path must nil-check (`pack.markersPack ?? []`).
+   */
+  markersPack?: Marker[];
   storageBytesEstimate: number;
 }
 
 export interface PackProgress {
-  step: "terrain" | "tide" | "weather" | "saving";
+  step: "terrain" | "tide" | "weather" | "markers" | "saving";
   label: string;
   done: boolean;
   error?: string;
@@ -126,9 +145,39 @@ async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<vo
   });
 }
 
+// ─── Tell the SW to cache a pre-fetched marker response (persistent cache) ────
+
+async function cachePackMarkers(markersUrl: string, body: string): Promise<void> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  const reg = await navigator.serviceWorker.ready.catch(() => null);
+  if (!reg?.active) return;
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const channel = new MessageChannel();
+    channel.port1.onmessage = (e: MessageEvent<{ ok: boolean; error?: string }>) => {
+      settled = true;
+      if (e.data.ok) resolve();
+      else reject(new Error(e.data.error ?? "SW CACHE_PACK_MARKERS failed"));
+    };
+    reg.active!.postMessage(
+      { type: "CACHE_PACK_MARKERS", markersUrl, body },
+      [channel.port2],
+    );
+    // Outdated SW without the handler never replies — markers are best-effort,
+    // so the caller catches this rejection and continues the save.
+    setTimeout(() => {
+      if (!settled) reject(new Error("SW CACHE_PACK_MARKERS timed out"));
+    }, 5000);
+  });
+}
+
 // ─── Tell the SW to remove cached terrain entries (rollback on pack failure) ──
 
-async function deletePackCache(terrainUrl: string, overviewUrl: string): Promise<void> {
+async function deletePackCache(
+  terrainUrl: string,
+  overviewUrl: string,
+  markersUrl?: string,
+): Promise<void> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
   const reg = await navigator.serviceWorker.ready.catch(() => null);
   if (!reg?.active) return;
@@ -137,7 +186,12 @@ async function deletePackCache(terrainUrl: string, overviewUrl: string): Promise
     // Resolve regardless of outcome — this is best-effort cleanup.
     channel.port1.onmessage = () => resolve();
     reg.active!.postMessage(
-      { type: "DELETE_PACK_CACHE", terrainUrl, overviewUrl },
+      {
+        type: "DELETE_PACK_CACHE",
+        terrainUrl,
+        overviewUrl,
+        ...(markersUrl !== undefined ? { markersUrl } : {}),
+      },
       [channel.port2],
     );
     // If the SW never responds (e.g. outdated SW without the handler), don't block.
@@ -235,7 +289,59 @@ export async function saveOfflinePack(
       }
     }
 
-    // Step 4: save to IndexedDB
+    // Step 4: fetch markers assigned to this dataset (best-effort — does not throw).
+    // /api/markers is behind requireAuth, so the fetch must carry the Clerk
+    // Bearer token via authorizedFetch (a plain fetch silently 401s).
+    onProgress({ step: "markers", label: "Fetching markers…", done: false });
+    const markersUrl = markersUrlForDataset(dataset.id);
+    let markersPack: Marker[] = [];
+    let markersBytes = 0;
+    let markersFetched = false;
+    try {
+      const markersRes = await authorizedFetch(markersUrl);
+      if (!markersRes.ok) throw new Error(`HTTP ${markersRes.status}`);
+      const markersBody = await markersRes.text();
+      const parsed: unknown = JSON.parse(markersBody);
+      if (!Array.isArray(parsed)) throw new Error("Unexpected markers response shape");
+      markersPack = parsed as Marker[];
+      markersBytes = new TextEncoder().encode(markersBody).length;
+      markersFetched = true;
+      // Pre-populate the persistent pack cache so the SW can serve markers
+      // offline even after a SW upgrade wipes the versioned runtime cache.
+      // Failure here keeps the markers in the IDB record but surfaces a
+      // warning label — the save itself never rolls back on marker errors.
+      try {
+        await cachePackMarkers(markersUrl, markersBody);
+        onProgress({
+          step: "markers",
+          label:
+            markersPack.length > 0
+              ? `Markers saved (${markersPack.length})`
+              : "No markers for this dataset",
+          done: true,
+        });
+      } catch {
+        onProgress({
+          step: "markers",
+          label: "Markers saved to pack, but offline cache could not be updated",
+          done: true,
+        });
+      }
+    } catch {
+      // Markers are best-effort — same policy as weather. Store an empty
+      // list and continue rather than failing the whole pack.
+      markersPack = [];
+      markersBytes = 0;
+      if (!markersFetched) {
+        onProgress({
+          step: "markers",
+          label: "Markers unavailable — pack saved without markers",
+          done: true,
+        });
+      }
+    }
+
+    // Step 5: save to IndexedDB
     onProgress({ step: "saving", label: "Writing to storage…", done: false });
     const id = newId();
     const pack: OfflinePack = {
@@ -250,12 +356,14 @@ export async function saveOfflinePack(
       overviewUrl,
       tidePack,
       weatherPack,
-      storageBytesEstimate: dataset.bbox
-        ? estimatePackStorageBytesFromBbox({
-            bbox: dataset.bbox,
-            resolutionM: dataset.resolutionM ?? undefined,
-          })
-        : estimateFromPredictions(tidePack),
+      markersPack,
+      storageBytesEstimate:
+        (dataset.bbox
+          ? estimatePackStorageBytesFromBbox({
+              bbox: dataset.bbox,
+              resolutionM: dataset.resolutionM ?? undefined,
+            })
+          : estimateFromPredictions(tidePack)) + markersBytes,
     };
 
     try {
@@ -271,8 +379,9 @@ export async function saveOfflinePack(
     return pack;
   } catch (err) {
     // Any failure after terrain was successfully cached — remove the orphaned
-    // Cache Storage entries so re-saving always starts clean.
-    await deletePackCache(terrainUrl, overviewUrl).catch(() => {
+    // Cache Storage entries (including any cached marker response) so
+    // re-saving always starts clean.
+    await deletePackCache(terrainUrl, overviewUrl, markersUrlForDataset(dataset.id)).catch(() => {
       // Best-effort; never mask the original error.
     });
     throw err;
@@ -297,6 +406,22 @@ export async function listOfflinePacks(): Promise<OfflinePack[]> {
 }
 
 export async function deleteOfflinePack(id: string): Promise<void> {
+  // Best-effort: remove the pack's persistent Cache Storage entries (terrain,
+  // overview, markers) before dropping the IDB record. Old packs saved before
+  // markersPack existed still carry datasetId, so the marker URL can always
+  // be reconstructed. SW cleanup failure never blocks the IDB delete.
+  try {
+    const pack = await get<OfflinePack>(`${PACK_KEY_PREFIX}${id}`);
+    if (pack) {
+      await deletePackCache(
+        pack.terrainUrl,
+        pack.overviewUrl,
+        markersUrlForDataset(pack.datasetId),
+      );
+    }
+  } catch {
+    // Best-effort cleanup only.
+  }
   await del(`${PACK_KEY_PREFIX}${id}`);
 }
 

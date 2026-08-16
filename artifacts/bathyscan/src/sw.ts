@@ -93,14 +93,34 @@ registerRoute(
   }),
 );
 
+// Markers: the persistent pack cache (populated at pack-save time by the
+// CACHE_PACK_MARKERS message handler) backs up the versioned runtime cache.
+// Registered as the single /api/markers route so the pack fallback is always
+// reachable — a separate route registered after the SWR route would never
+// match (Workbox routes match first-registered). Online behaviour is
+// unchanged: the SWR runtime strategy handles the request first, and the
+// pack cache is only consulted when SWR fails outright (offline AND no
+// runtime-cache entry, e.g. right after a SW upgrade wiped it). This also
+// guarantees the pack copy never shadows fresh network data while online.
+const markersRuntimeStrategy = new StaleWhileRevalidate({
+  cacheName: `${CACHE_VERSION}-api-markers`,
+  plugins: [
+    new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 }),
+  ],
+});
+
 registerRoute(
   ({ url }: { url: URL }) => /\/api\/markers/.test(url.pathname),
-  new StaleWhileRevalidate({
-    cacheName: `${CACHE_VERSION}-api-markers`,
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 }),
-    ],
-  }),
+  async ({ event, request }) => {
+    try {
+      return await markersRuntimeStrategy.handle({ event, request });
+    } catch (err) {
+      const packCache = await caches.open(PACK_TERRAIN_CACHE);
+      const hit = await packCache.match(request.url, { ignoreVary: true });
+      if (hit) return hit;
+      throw err;
+    }
+  },
 );
 
 // Help media: serve from pack cache when available, fall back to network.

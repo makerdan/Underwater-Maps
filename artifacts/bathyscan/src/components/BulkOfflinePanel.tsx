@@ -102,6 +102,7 @@ const STEP_LABELS = {
   terrain: "Terrain",
   tide: "Tides",
   weather: "Weather",
+  markers: "Markers",
   saving: "Storing",
 } as const;
 
@@ -115,7 +116,7 @@ function ProgressSteps({ row }: { row: BulkRow }) {
         flexWrap: "wrap",
       }}
     >
-      {(["terrain", "tide", "weather", "saving"] as const).map((step) => {
+      {(["terrain", "tide", "weather", "markers", "saving"] as const).map((step) => {
         const prog = row.progress.find((p) => p.step === step);
         const isDone = prog?.done === true && !prog.error;
         const isErr = prog?.error;

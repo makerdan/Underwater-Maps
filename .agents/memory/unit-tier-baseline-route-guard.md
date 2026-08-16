@@ -100,3 +100,10 @@ Previously 18 failures across 5 files. All FIXED:
 Two additional pre-existing failures on main, both verified by stash-clean re-runs and each already covered by an open fix task:
 - scripts `run-locked-tier.test.mjs` — "plan with no ## Validation section exits 1" asserts exit 1 but gets 2. This **aborts the recursive `pnpm -r test:unit` before api-server/bathyscan run** (pnpm FIRST_FAIL). Workaround: run `pnpm -r --filter '!@workspace/scripts' run test:unit` plus `run-tier.mjs standard --skip test:unit` as a task-scoped validation command.
 - api-server: 18 unit failures across 5 files (markers, markers-quickdrop, catalog-bbox, preview, mock-factory-guards) — a hidden startup crash; markers POST returns 404 instead of 201, bbox-query 400-validation tests fail. Land in shard 2/2.
+
+## Update 2026-08-16 (morning, task-3975 run)
+Current baseline, all verified pre-existing (stash-clean or diff-disjoint):
+- `check:tier-lock` fails: scripts `run-tier-check.test.mjs` has 2 failing meta-tests (expects exit 0 graceful degradation for plans with no ## Validation section; run-tier now hard-fails). Aborts the tier AND fails scripts `test:unit` (pnpm FIRST_FAIL hides artifact suites).
+- `check:failure-gate` fails: ~900 legacy `.local/tasks` plans have unfilled Validation stubs; only the fix step patches missing sections, placeholders need manual fill. Skip the step; keep YOUR plan file compliant.
+- api-server `test:unit` shard 1: all tests pass but the unhandled-error gate reports 4 errors from `bucketMonitor.test.ts` ("stop() resolves after STOP_TIMEOUT_MS…", origin bucketMonitor.ts startBucketMonitor). Reproduces solo on files no frontend diff touches.
+**How to apply:** for a bathyscan-only diff, a green equivalent of test-standard is: run-tier standard `--skip check:tier-lock --skip check:failure-gate` up to test:unit, then `pnpm -r --filter '!@workspace/scripts' --filter '!@workspace/api-server' run test:unit` + check:docs-stale + check:catalog-coverage + check:schema-stale.

@@ -27,10 +27,40 @@ export function isCachePackMessage(data: unknown): data is CachePackMessage {
   );
 }
 
+export interface CachePackMarkersMessage {
+  type: "CACHE_PACK_MARKERS";
+  /** Marker API URL used as the cache key — must match the runtime request URL. */
+  markersUrl: string;
+  /** Serialized JSON response body for the marker list. */
+  body: string;
+}
+
+/**
+ * Runtime type guard for CACHE_PACK_MARKERS postMessage payloads.
+ *
+ * Stricter than the other guards: `markersUrl` and `body` must both be
+ * strings because the handler constructs a synthetic `Response` from them.
+ */
+export function isCachePackMarkersMessage(data: unknown): data is CachePackMarkersMessage {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    (data as Record<string, unknown>)["type"] === "CACHE_PACK_MARKERS" &&
+    typeof (data as Record<string, unknown>)["markersUrl"] === "string" &&
+    typeof (data as Record<string, unknown>)["body"] === "string"
+  );
+}
+
 export interface DeletePackCacheMessage {
   type: "DELETE_PACK_CACHE";
   terrainUrl: string;
   overviewUrl: string;
+  /**
+   * Optional marker API URL to remove alongside terrain/overview.
+   * Absent in messages sent by app versions before markers were bundled
+   * into offline packs — the handler must treat it as optional.
+   */
+  markersUrl?: string;
 }
 
 /**

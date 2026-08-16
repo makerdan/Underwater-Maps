@@ -63,6 +63,7 @@ const STEP_LABELS: Record<PackProgress["step"], string> = {
   terrain: "Fetching terrain",
   tide: "Fetching tide predictions",
   weather: "Fetching weather snapshot",
+  markers: "Fetching markers",
   saving: "Writing to storage",
 };
 
@@ -465,7 +466,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
               {/* Progress steps */}
               {areaPhase === "downloading" && (
                 <div style={{ marginTop: 4 }}>
-                  {(["terrain", "tide", "weather", "saving"] as const).map((step) => {
+                  {(["terrain", "tide", "weather", "markers", "saving"] as const).map((step) => {
                     const prog = areaProgress.find((p) => p.step === step);
                     const isPending = !prog;
                     const isDone = prog?.done === true && !prog.error;
