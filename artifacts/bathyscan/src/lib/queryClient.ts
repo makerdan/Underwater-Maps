@@ -22,6 +22,20 @@ function is502(error: unknown): boolean {
 }
 
 /**
+ * Returns true for HTTP 503 Service Unavailable errors, which indicate a
+ * transient back-end issue (e.g. the DB hasn't accepted its first connection
+ * yet on a cold start). Treated identically to 502 in the error handler.
+ */
+function is503(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    (error as { status: unknown }).status === 503
+  );
+}
+
+/**
  * Returns true for network-level failures that indicate the server is
  * temporarily unreachable rather than returning a structured error response.
  * These should be treated identically to HTTP 502: show the connecting banner
@@ -400,13 +414,13 @@ function handleQueryError(error: unknown) {
     return;
   }
 
-  // 502s during startup mean the API server is still warming up. Network
-  // errors (TypeError: Failed to fetch / NetworkError) are also transient —
-  // both indicate the server is temporarily unreachable. The connecting banner
-  // (driven by useIsConnecting + useIsFetching in App.tsx) covers this case
-  // visually, so we suppress the destructive toast. The flag clears when the
-  // health poll confirms the server is back.
-  if (is502(error) || isNetworkError(error)) {
+  // 502s and 503s during startup mean the API server (or its DB) is still
+  // warming up. Network errors (TypeError: Failed to fetch / NetworkError)
+  // are also transient — all indicate the server is temporarily unreachable.
+  // The connecting banner (driven by useIsConnecting + useIsFetching in
+  // App.tsx) covers this case visually, so we suppress the destructive toast.
+  // The flag clears when the health poll confirms the server is back.
+  if (is502(error) || is503(error) || isNetworkError(error)) {
     setIsConnecting(true);
     return;
   }

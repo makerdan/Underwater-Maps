@@ -244,13 +244,16 @@ function mergeForResponse(
 router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
-  const [row] = await db
-    .select()
-    .from(userSettingsTable)
-    .where(eq(userSettingsTable.userId, userId));
-
-  const stored = (row?.settings ?? {}) as Record<string, unknown>;
-  const merged: Record<string, unknown> = { ...DEFAULT_SETTINGS, ...stored };
+  let row: { settings?: unknown } | undefined;
+  const stored = (existing?.settings ?? {}) as Record<string, unknown>;
+  const merged: Record<string, unknown> = Object.assign(
+    Object.create(null) as Record<string, unknown>,
+    DEFAULT_SETTINGS,
+    stored,
+    sentValidated,
+    extras,
+    { __updatedAt: updatedAt },
+  );
 
   // Migration for legacy rows: stored settings from before bandColors was
   // persisted server-side have paletteShallow but no bandColors. Derive
@@ -260,7 +263,7 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   // already runs in paletteStore's localStorage merge function.
   if (!("bandColors" in stored)) {
     const legacyShallow = merged.paletteShallow;
-    const bc = [...(DEFAULT_SETTINGS.bandColors as string[])];
+    const bc = sentValidated.bandColors as unknown[] | undefined;
     if (typeof legacyShallow === "string" && /^#[0-9a-fA-F]{6}$/i.test(legacyShallow)) {
       bc[0] = legacyShallow.toLowerCase();
     }
@@ -279,8 +282,8 @@ router.get("/settings", requireAuth, asyncHandler(async (req, res): Promise<void
   // colors length + 1), reset both to defaults so GET always returns a
   // schema-valid, mutually consistent pair.
   {
-    const bc = merged.bandColors;
-    const bb = merged.bandBoundaries;
+    const bc = sentValidated.bandColors as unknown[] | undefined;
+    const bb = sentValidated.bandBoundaries as unknown[] | undefined;
     if (!Array.isArray(bc) || !Array.isArray(bb) || bb.length !== bc.length + 1) {
       merged.bandColors = [...(DEFAULT_SETTINGS.bandColors as string[])];
       merged.bandBoundaries = [...DEFAULT_SETTINGS.bandBoundaries];
@@ -329,6 +332,8 @@ const MAX_TOTAL_SETTINGS_BYTES = 256 * 1024;
 
 router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
+
+  let row: { settings?: unknown } | undefined;
   const body = (req.body ?? {}) as Record<string, unknown>;
   const parsed = PutSettingsBody.safeParse(body);
   if (!parsed.success) {
@@ -473,7 +478,7 @@ router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(asy
       .from(userSettingsTable)
       .where(eq(userSettingsTable.userId, userId));
   } catch (selectErr) {
-    const e = selectErr as Error & { code?: string };
+    const e = upsertErr as Error & { code?: string };
     logger.error(
       { userId, errMessage: e.message, errCode: e.code, step: "db.select" },
       "PUT /api/settings — DB SELECT threw",
@@ -543,7 +548,7 @@ router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(asy
   try {
     mergedJson = JSON.stringify(merged);
   } catch (jsonErr) {
-    const e = jsonErr as Error;
+    const e = upsertErr as Error & { code?: string };
     logger.error(
       { userId, errMessage: e.message, step: "JSON.stringify(merged)" },
       "PUT /api/settings — JSON serialization of merged settings threw",
@@ -598,3 +603,8 @@ router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(asy
 }));
 
 export default router;
+
+    const rows = await db
+      .select()
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, userId));

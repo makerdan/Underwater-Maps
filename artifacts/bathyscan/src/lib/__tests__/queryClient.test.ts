@@ -173,6 +173,26 @@ describe("queryClient QueryCache onError — 502 suppression", () => {
   });
 });
 
+describe("queryClient QueryCache onError — 503 suppression", () => {
+  it("does NOT fire a toast for 503 object errors", () => {
+    triggerQueryError({ status: 503 });
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("does NOT fire a toast for 503 Error instances", () => {
+    triggerQueryError(makeStatusError(503, "Service Unavailable"));
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("sets isConnecting=true for a 503 query error", () => {
+    const { result } = renderHook(() => useIsConnecting());
+    act(() => {
+      triggerQueryError(makeStatusError(503));
+    });
+    expect(result.current).toBe(true);
+  });
+});
+
 describe("queryClient QueryCache onError — destructive toast for other errors", () => {
   it("fires a destructive toast for plain Error objects (no status field)", () => {
     triggerQueryError(new Error("Network failure"));
@@ -211,7 +231,9 @@ describe("queryClient QueryCache onError — destructive toast for other errors"
   });
 
   it("includes the error message from an Error instance in the toast description", () => {
-    triggerQueryError(Object.assign(new Error("Something broke"), { status: 503 }));
+    // 503 is now suppressed (treated like 502 — transient service unavailable),
+    // so use a 504 here to exercise the "message included in toast" path.
+    triggerQueryError(Object.assign(new Error("Something broke"), { status: 504 }));
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({ description: "Something broke" }),
     );
