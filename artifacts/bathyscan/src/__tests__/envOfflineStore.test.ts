@@ -28,6 +28,7 @@ import {
   getEnvPackTideStation,
   getEnvPackWeatherStation,
   getEnvPackTideHeight,
+  isValidEnvPack,
 } from "@/lib/envOfflineStore";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -548,6 +549,78 @@ describe("envOfflineStore", () => {
       expect(useEnvOfflineStore.getState().deleteError).toBeNull();
       expect(useEnvOfflineStore.getState().envPack).toBeNull();
     });
+  });
+});
+
+// ── isValidEnvPack tests ──────────────────────────────────────────────────────
+
+describe("isValidEnvPack — element shape validation", () => {
+  it("returns true for a fully valid pack with tide station predictions", () => {
+    const pack = makePack();
+    expect(isValidEnvPack(pack)).toBe(true);
+  });
+
+  it("returns false when a tide station element is missing the predictions key", () => {
+    const pack = makePack({
+      tideStations: [
+        {
+          stationId: "9452210",
+          name: "Juneau",
+          lat: 58.3,
+          lon: -134.41,
+          distanceMiles: 8,
+          windowStart: new Date().toISOString(),
+          windowEnd: new Date().toISOString(),
+          datum: "MLLW",
+          units: "feet",
+          // predictions intentionally omitted
+          datums: null,
+        } as never,
+      ],
+    });
+    expect(isValidEnvPack(pack)).toBe(false);
+  });
+
+  it("returns false when a prediction element is missing the t field", () => {
+    const pack = makePack({
+      tideStations: [
+        {
+          stationId: "9452210",
+          name: "Juneau",
+          lat: 58.3,
+          lon: -134.41,
+          distanceMiles: 8,
+          windowStart: new Date().toISOString(),
+          windowEnd: new Date().toISOString(),
+          datum: "MLLW",
+          units: "feet",
+          predictions: [{ v: 3.0 } as never],
+          datums: null,
+        },
+      ],
+    });
+    expect(isValidEnvPack(pack)).toBe(false);
+  });
+
+  it("returns false when a prediction element is missing the v field", () => {
+    const pack = makePack({
+      tideStations: [
+        {
+          stationId: "9452210",
+          name: "Juneau",
+          lat: 58.3,
+          lon: -134.41,
+          distanceMiles: 8,
+          windowStart: new Date().toISOString(),
+          windowEnd: new Date().toISOString(),
+          datum: "MLLW",
+          units: "feet",
+          predictions: [{ t: new Date().toISOString() } as never],
+          datums: null,
+        },
+      ],
+    });
+    expect(isValidEnvPack(pack)).toBe(false);
   });
 });
 

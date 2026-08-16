@@ -447,18 +447,18 @@ describe("GET /env-pack — partial failure graceful degradation", () => {
     const warnCalls = loggerWarnMock.mock.calls;
 
     const woaCall = warnCalls.find(
-      (c: unknown[]) => (c[1] as Record<string, unknown>)?.provider === "woa",
+      (c: unknown[]) => (c[0] as Record<string, unknown>)?.provider === "woa",
     );
     expect(woaCall).toBeDefined();
-    expect(woaCall![0]).toMatch(/temperature profile provider failed/i);
-    expect(woaCall![1]).toMatchObject({ provider: "woa", err: woaError });
+    expect(woaCall![0]).toMatchObject({ provider: "woa", err: woaError });
+    expect(woaCall![1]).toMatch(/temperature profile provider failed/i);
 
     const argoCall = warnCalls.find(
-      (c: unknown[]) => (c[1] as Record<string, unknown>)?.provider === "argo",
+      (c: unknown[]) => (c[0] as Record<string, unknown>)?.provider === "argo",
     );
     expect(argoCall).toBeDefined();
-    expect(argoCall![0]).toMatch(/temperature profile provider failed/i);
-    expect(argoCall![1]).toMatchObject({ provider: "argo", err: argoError });
+    expect(argoCall![0]).toMatchObject({ provider: "argo", err: argoError });
+    expect(argoCall![1]).toMatch(/temperature profile provider failed/i);
   });
 });
 

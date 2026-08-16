@@ -98,6 +98,17 @@ export function isValidEnvPack(value: unknown): value is EnvPack {
   }
   if (!Array.isArray(p.warnings)) return false;
   if (p.tideStations !== null && !Array.isArray(p.tideStations)) return false;
+  if (Array.isArray(p.tideStations) && p.tideStations.length > 0) {
+    const firstStation = p.tideStations[0] as Record<string, unknown>;
+    if (firstStation === null || typeof firstStation !== "object") return false;
+    if (!Array.isArray(firstStation.predictions)) return false;
+    if ((firstStation.predictions as unknown[]).length > 0) {
+      const firstPred = (firstStation.predictions as unknown[])[0] as Record<string, unknown>;
+      if (firstPred === null || typeof firstPred !== "object") return false;
+      if (typeof firstPred.t !== "string") return false;
+      if (firstPred.v === undefined) return false;
+    }
+  }
   if (p.weatherStations !== null && !Array.isArray(p.weatherStations)) {
     return false;
   }
