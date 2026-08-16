@@ -77,6 +77,7 @@ export function createTerrainMock(
     parseXyzCsv: vi.fn(),
     gridPoints: vi.fn(),
     datasetHasSurveySource: vi.fn().mockReturnValue(false),
+    flipGridRowsInPlace: vi.fn(),
     // ── Error classes ──
     NoDataError: class NoDataError extends Error {
       constructor(datasetId: string) {

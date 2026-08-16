@@ -16,21 +16,16 @@ As of 2026-08-15 (evening), `artifacts/api-server/src/__tests__/router-duplicate
 **Related:** the duplicate-hooks SCANNED_FILES guard (`check:duplicate-hooks-registry`) breaks the same way when ANOTHER task's merge pushes a component over 500 lines/10 hooks; the guard's error message prescribes the exact one-line registry fix, which is safe to apply in-place (the scan itself must then pass on that file).
 
 
-## Additional unit-tier failures (as of 2026-08-16 evening, main-side merges)
+## Additional unit-tier failures (as of 2026-08-16 evening, main-side merges) — FIXED 2026-08-16
 
-Beyond routes-documented, two more api-server unit files fail every standard+
-run after the 2026-08-16 evening merge wave:
+Both failures were fixed in task #3888:
 
-1. `src/__tests__/terrain-mock-guard.test.ts` — "lib/terrain.js has export(s)
-   missing from createTerrainMock": a merge added a terrain.js export without
-   updating `__tests__/helpers/terrainMock.ts`. Guard message prescribes the fix.
-2. `src/routes/__tests__/env-pack.test.ts` ("GET /env-pack — partial fail…",
-   line ~452) — the test still asserts the OLD pino arg order
-   (`warn(msg, obj)`) while main's fix changed the code to `warn(obj, msg)`;
-   swap the indices in the assertions.
+1. `src/__tests__/terrain-mock-guard.test.ts` — FIXED: `flipGridRowsInPlace`
+   added to `createTerrainMock()` in `__tests__/helpers/terrainMock.ts`.
+2. `src/routes/__tests__/env-pack.test.ts` — was already green at fix time
+   (the pino arg-order issue had already been resolved on main).
 
-Classify pre-existing unless your diff touches terrain.js/terrainMock.ts or
-env-pack code/tests.
+Both files now pass cleanly. No longer pre-existing.
 
 ## Typecheck baseline breakage #2 (as of 2026-08-16 evening)
 
