@@ -3021,6 +3021,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     id: string;
     name: string;
     bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
+    resolutionM?: number | null;
   } | null>(null);
 
   // ─── Bulk Offline Panel ───────────────────────────────────────────────────

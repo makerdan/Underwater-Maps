@@ -126,7 +126,7 @@ const SaveCard: React.FC<{
   onAddToView?: (dsId: string) => void;
   atViewCap?: boolean;
   visibleDatasetIds?: Set<string>;
-  onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null }) => void;
+  onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
 }> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onAddToView, atViewCap = false, visibleDatasetIds, onOfflineDownload }) => {
   const statusColor = STATUS_COLORS[save.status] ?? "#e2e8f0";
   const icon = save.catalog ? (DATA_TYPE_ICONS[save.catalog.dataType] ?? "📦") : "📦";
@@ -293,6 +293,7 @@ const SaveCard: React.FC<{
                   id: save.datasetId!,
                   name: save.displayLabel ?? save.catalog?.name ?? save.catalogId,
                   bbox: save.catalog?.coverageBbox ?? null,
+                  resolutionM: save.catalog?.resolutionMMin ?? null,
                 })}
                 style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 10px", background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#67e8f9", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
               >⬇ Offline</button>
@@ -361,7 +362,7 @@ const UploadCard: React.FC<{
   onAddToView?: (dsId: string) => void;
   isAlreadyInView?: boolean;
   atViewCap?: boolean;
-  onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null }) => void;
+  onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
 }> = ({ dataset, onLoad, onDelete, onRename, deleting, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload }) => {
   const createdDate = useMemo(() => {
     const d = new Date(dataset.createdAt);
@@ -485,7 +486,7 @@ const UploadCard: React.FC<{
           <ViewscreenTooltip label="Save this dataset for offline use" side="top">
             <button
               data-testid={`btn-offline-upload-${dataset.id}`}
-              onClick={() => onOfflineDownload({ id: dataset.id, name: dataset.name, bbox: dataset.bbox ?? null })}
+              onClick={() => onOfflineDownload({ id: dataset.id, name: dataset.name, bbox: dataset.bbox ?? null, resolutionM: null })}
               style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 10px", background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#67e8f9", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
             >⬇ Offline</button>
           </ViewscreenTooltip>
@@ -600,7 +601,7 @@ const DraggableSaveCard: React.FC<{
   onAddToView?: (dsId: string) => void;
   atViewCap?: boolean;
   visibleDatasetIds?: Set<string>;
-  onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null }) => void;
+  onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
 }> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo, onAddToView, atViewCap, visibleDatasetIds, onOfflineDownload }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `save-${save.id}`,
@@ -639,7 +640,7 @@ const DraggableUploadCard: React.FC<{
   onAddToView?: (dsId: string) => void;
   isAlreadyInView?: boolean;
   atViewCap?: boolean;
-  onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null }) => void;
+  onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
 }> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `upload-${dataset.id}`,
@@ -810,7 +811,7 @@ export interface MySavesSectionProps {
    * an UploadCard. Opens OfflinePackModal for the selected dataset.
    * When undefined the offline button is not rendered on any row.
    */
-  onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null }) => void;
+  onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
 }
 
 export const MySavesSection: React.FC<MySavesSectionProps> = ({
