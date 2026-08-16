@@ -32,7 +32,7 @@ This rule is enforced at four independent layers — all four must stay in sync:
 | 0 — Session mandate | the project's session mandate (e.g. `replit.md` § "Agent rules") | Loaded at every Planner session start; contains the project's hard-gate checklist and any project-specific known-flaky patterns |
 | 1 — Skill definition | `.agents/skills/failure-gate/SKILL.md` (this file) | Defines discovery checklist, templates, decision tree |
 | 2 — Lint guard | the project's plan-file lint guard (e.g. `scripts/check-failure-gate.mjs`) | Scans the plan directory and fails if any plan omits a required section or has an incomplete `## Validation` section |
-| 3 — Auto-remediate runner step | the project's validation runner (e.g. `scripts/validation-steps.mjs`) | Runs the lint guard in `--fix-stub` mode unconditionally before every strict lint step; the strict step then only fires on genuinely unfixable issues |
+| 3 — Auto-remediate runner step | the project's validation runner (e.g. `scripts/validation-steps.mjs`) | Runs the lint guard in `--fix-stub` mode unconditionally before every strict lint step; the strict step then only fires on genuinely unfixable issues. Also enforces the plan's tier ceiling via `TASK_PLAN_FILE` when set, so every `run-tier.mjs` call checks the ceiling without further agent action. |
 
 A change to the rule must be applied to all relevant layers in the same task.
 
@@ -229,9 +229,11 @@ The validation command named in `## Validation` is the **ceiling**. Do not run
 any heavier tier for any reason — including pre-existing failures, flaky retries,
 or self-classification outcomes. Escalation is never the Build agent's call.
 
-Use `scripts/run-locked-tier.mjs` to enforce this mechanically — pass the plan
-file path; the script resolves and runs the correct tier with no agent
-substitution surface.
+Set `TASK_PLAN_FILE=.local/tasks/<name>.md` once at task start and every
+subsequent `run-tier.mjs` call enforces the ceiling automatically — this is the
+primary path. For bare-shell callers that cannot use the env var, use
+`scripts/run-locked-tier.mjs` directly — pass the plan file path; the script
+resolves and runs the correct tier with no agent substitution surface.
 </HARD-GATE>
 
 When a test or validation gate fails, work through the following decision tree
@@ -241,12 +243,15 @@ in order. Do not skip steps.
 
 ### Tier-lock script (mechanical enforcement)
 
-`scripts/run-locked-tier.mjs` is the preferred mechanical enforcement path for
-the validation tier ceiling. Rather than accepting a tier name from the agent
+`scripts/run-locked-tier.mjs` is the required enforcement path for the
+validation tier ceiling. Rather than accepting a tier name from the agent
 (which could be substituted), it reads the `**Command:**` value directly from
 the plan file, resolves it against `VALIDATION_COMMANDS` (the single source of
 truth in `scripts/register-validation-commands.mjs`), and runs exactly that
-command. There is no substitution surface.
+command. There is no substitution surface. For the lighter-weight automatic
+mechanism, set the `TASK_PLAN_FILE` environment variable once at task start —
+`scripts/run-tier.mjs` will then enforce the ceiling on every tier invocation
+without further agent action.
 
 **Invocation:**
 
@@ -443,4 +448,5 @@ pipeline is.
 - Canonical skill (tracked): `.agents/skills/failure-gate/SKILL.md`
 - Lint guard: the project's plan-file lint guard script (e.g. `scripts/check-failure-gate.mjs`)
 - Tier-lock script: `scripts/run-locked-tier.mjs` — mechanical tier enforcement; pass plan file path
+- `TASK_PLAN_FILE` env var: set to `.local/tasks/<name>.md` at task start; `run-tier.mjs` reads it automatically and enforces the plan's tier ceiling on every invocation
 - Session mandate: the project's session mandate (e.g. `replit.md` § "Agent rules")
