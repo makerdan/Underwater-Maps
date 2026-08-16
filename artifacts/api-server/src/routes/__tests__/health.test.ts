@@ -13,6 +13,9 @@
  *   (e) DB query timeout → overall degraded, client.release() always called
  *   (f) shallow /healthz Zod parse failure → Express error handler (500),
  *       not uncaught exception
+ *
+ * Security regression (task 3698):
+ *   (g) raw env-var values must never appear in any health response body
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express, { type Request, type Response, type NextFunction } from "express";
@@ -281,6 +284,32 @@ describe("GET /healthz/deep — deep health check", () => {
   // that statement_timeout does not leak into subsequent queries on the same
   // pooled connection.
   // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // (g) Raw env-var values must never appear in any health response body
+  // -------------------------------------------------------------------------
+  it("(g) raw POE_API_KEY value is never embedded in the /healthz/deep response body", async () => {
+    const sensitiveKey = "sk-poe-super-secret-sentinel-value-12345";
+    vi.stubEnv("POE_API_KEY", sensitiveKey);
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+
+    const res = await request(makeApp()).get("/healthz/deep");
+    const bodyText = JSON.stringify(res.body);
+    expect(bodyText).not.toContain(sensitiveKey);
+  });
+
+  it("(g) when POE_API_KEY is absent the degraded response body contains no raw env values", async () => {
+    vi.stubEnv("POE_API_KEY", "");
+    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+
+    const res = await request(makeApp()).get("/healthz/deep");
+    expect(res.status).toBe(503);
+    // The error field must only mention that the key is not configured —
+    // not expose any portion of process.env itself.
+    const bodyText = JSON.stringify(res.body);
+    expect(bodyText).not.toMatch(/process\.env/);
+    expect(res.body.subsystems.poe.error).toBe("POE_API_KEY not configured");
+  });
+
   it("uses SET LOCAL inside a transaction so statement_timeout does not escape to reused connections", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
