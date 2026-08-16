@@ -277,11 +277,6 @@ describe("parseScopes wrapper patterns (forwardRef / memo)", () => {
       const scopes = parseScopes(src);
     const terrainScope = scopes.find((s) => s.name === "TerrainMesh");
 
-      const _filePath = path.join(SRC_DIR, relPath);
-
-      const _filePath = path.join(SRC_DIR, relPath);
-
-      const _filePath = path.join(SRC_DIR, relPath);
     expect(terrainScope, "expected a TerrainMesh scope").toBeDefined();
     expect(terrainScope!.decls.length).toBeGreaterThanOrEqual(10);
   });
