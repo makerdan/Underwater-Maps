@@ -17,6 +17,8 @@
  * Remediation when this fails:
  *   cd lib/db && pnpm exec drizzle-kit generate --config ./drizzle-check.config.ts
  *   git add lib/db/drizzle && commit the new migration + snapshot.
+ *
+ * Self-test: node --test scripts/__tests__/check-schema-drift.test.mjs
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, readdirSync, rmSync } from "node:fs";
@@ -28,12 +30,70 @@ const dbDir = resolve(root, "lib", "db");
 const drizzleDir = join(dbDir, "drizzle");
 const journalPath = join(drizzleDir, "meta", "_journal.json");
 
-function listFiles(dir) {
+// drizzle-kit can be verbose; the 1 MiB execFileSync default overflows and
+// surfaces as an opaque ENOBUFS "generation failed". 10 MiB gives headroom.
+const EXEC_MAX_BUFFER = 10 * 1024 * 1024;
+
+export function listFiles(dir) {
   const out = new Set();
   for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
     if (entry.isFile()) out.add(join(entry.parentPath ?? entry.path, entry.name));
   }
   return out;
+}
+
+/**
+ * Read + parse the migration journal with clear per-error diagnostics.
+ * Throws an Error whose message names the offending path; never a raw
+ * ENOENT stack trace.
+ */
+export function loadJournal(path) {
+  let raw;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch (err) {
+    if (err && err.code === "ENOENT") {
+      throw new Error(
+        `migration journal is missing: ${path} — fresh clone or partial checkout? ` +
+          `Ensure lib/db/drizzle/meta/ is checked out.`,
+      );
+    }
+    throw new Error(`cannot read migration journal ${path}: ${err.message}`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`migration journal ${path} is not valid JSON: ${err.message}`);
+  }
+}
+
+/**
+ * Guarded readdirSync with a path-named diagnostic on failure.
+ */
+export function listDirOrThrow(dir) {
+  try {
+    return readdirSync(dir);
+  } catch (err) {
+    if (err && err.code === "ENOENT") {
+      throw new Error(
+        `drizzle directory is missing: ${dir} — fresh clone or partial checkout?`,
+      );
+    }
+    throw new Error(`cannot list directory ${dir}: ${err.message}`);
+  }
+}
+
+/**
+ * Cleanup for Guard 2: remove any files drizzle-kit generate created and
+ * restore the journal from the backup string. Idempotent — safe to call
+ * with an empty `created` list and safe to call more than once (rmSync
+ * uses force:true; the journal write simply re-writes the same content).
+ */
+export function cleanupGenerated(created, journalFile, journalBackup) {
+  for (const f of created) rmSync(f, { force: true });
+  if (typeof journalBackup === "string") {
+    writeFileSync(journalFile, journalBackup);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -80,18 +140,25 @@ const LEGACY_SNAPSHOTLESS_TAGS = new Set([
 ]);
 
 function checkMigrationSnapshotPairing() {
-  const journal = JSON.parse(readFileSync(journalPath, "utf8"));
+  let journal;
+  let drizzleFiles;
+  let metaFiles;
+  try {
+    journal = loadJournal(journalPath);
+    drizzleFiles = listDirOrThrow(drizzleDir);
+    metaFiles = listDirOrThrow(join(drizzleDir, "meta"));
+  } catch (err) {
+    console.error(`ERROR: check:schema-drift cannot read migration state: ${err.message}`);
+    process.exit(1);
+  }
+
   const entries = journal.entries ?? [];
   const tags = new Set(entries.map((e) => e.tag));
   const sqlTags = new Set(
-    readdirSync(drizzleDir)
-      .filter((f) => f.endsWith(".sql"))
-      .map((f) => f.slice(0, -4)),
+    drizzleFiles.filter((f) => f.endsWith(".sql")).map((f) => f.slice(0, -4)),
   );
   const snapshotIdxs = new Set(
-    readdirSync(join(drizzleDir, "meta"))
-      .filter((f) => /^\d{4}_snapshot\.json$/.test(f))
-      .map((f) => f.slice(0, 4)),
+    metaFiles.filter((f) => /^\d{4}_snapshot\.json$/.test(f)).map((f) => f.slice(0, 4)),
   );
 
   const problems = [];
@@ -149,50 +216,86 @@ function checkMigrationSnapshotPairing() {
   );
 }
 
-checkMigrationSnapshotPairing();
-
 // ---------------------------------------------------------------------------
 // Guard 2: schema ↔ snapshot drift (original check).
 // ---------------------------------------------------------------------------
 
-const journalBackup = readFileSync(journalPath, "utf8");
-const before = listFiles(drizzleDir);
+function runDriftCheck() {
+  let journalBackup;
+  let before;
+  try {
+    journalBackup = readFileSync(journalPath, "utf8");
+  } catch (err) {
+    console.error(
+      err && err.code === "ENOENT"
+        ? `ERROR: migration journal is missing: ${journalPath} — fresh clone or partial checkout?`
+        : `ERROR: cannot read migration journal ${journalPath}: ${err.message}`,
+    );
+    process.exit(1);
+  }
+  try {
+    before = listFiles(drizzleDir);
+  } catch (err) {
+    console.error(
+      err && err.code === "ENOENT"
+        ? `ERROR: drizzle directory is missing: ${drizzleDir} — fresh clone or partial checkout?`
+        : `ERROR: cannot list drizzle directory ${drizzleDir}: ${err.message}`,
+    );
+    process.exit(1);
+  }
 
-let generateFailed = false;
-try {
-  execFileSync("pnpm", ["exec", "drizzle-kit", "generate", "--config", "./drizzle-check.config.ts"], {
-    cwd: dbDir,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-} catch (err) {
-  generateFailed = true;
-  console.error("ERROR: drizzle-kit generate failed:");
-  console.error(String(err.stdout ?? ""));
-  console.error(String(err.stderr ?? err.message));
+  let generateFailed = false;
+  let created = [];
+  try {
+    try {
+      execFileSync(
+        "pnpm",
+        ["exec", "drizzle-kit", "generate", "--config", "./drizzle-check.config.ts"],
+        {
+          cwd: dbDir,
+          stdio: ["ignore", "pipe", "pipe"],
+          maxBuffer: EXEC_MAX_BUFFER,
+        },
+      );
+    } catch (err) {
+      generateFailed = true;
+      console.error("ERROR: drizzle-kit generate failed:");
+      console.error(String(err.stdout ?? ""));
+      console.error(String(err.stderr ?? err.message));
+    }
+
+    const after = listFiles(drizzleDir);
+    created = [...after].filter((f) => !before.has(f));
+  } finally {
+    // Always clean up — even on an unexpected throw above — so an aborted
+    // run never leaves generated files behind or a corrupted journal.
+    cleanupGenerated(created, journalPath, journalBackup);
+  }
+
+  if (generateFailed) process.exit(1);
+
+  if (created.length > 0) {
+    console.error("ERROR: Database schema drift detected.");
+    console.error("");
+    console.error("The Drizzle schema in lib/db/src/schema/ has changed but no migration");
+    console.error("snapshot was generated. drizzle-kit produced:");
+    for (const f of created) console.error(`  - ${f.replace(root + "/", "")}`);
+    console.error("");
+    console.error("To fix, regenerate the migration + snapshot and commit the result:");
+    console.error("  cd lib/db && pnpm exec drizzle-kit generate --config ./drizzle-check.config.ts");
+    console.error("  git add lib/db/drizzle");
+    console.error("");
+    console.error("(The stray files above have been cleaned up automatically.)");
+    process.exit(1);
+  }
+
+  console.log("check:schema-drift — Drizzle schema is in sync with committed snapshots.");
 }
 
-const after = listFiles(drizzleDir);
-const created = [...after].filter((f) => !before.has(f));
+const isDirectRun =
+  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-// Always clean up: remove any files generate created and restore the journal.
-for (const f of created) rmSync(f, { force: true });
-writeFileSync(journalPath, journalBackup);
-
-if (generateFailed) process.exit(1);
-
-if (created.length > 0) {
-  console.error("ERROR: Database schema drift detected.");
-  console.error("");
-  console.error("The Drizzle schema in lib/db/src/schema/ has changed but no migration");
-  console.error("snapshot was generated. drizzle-kit produced:");
-  for (const f of created) console.error(`  - ${f.replace(root + "/", "")}`);
-  console.error("");
-  console.error("To fix, regenerate the migration + snapshot and commit the result:");
-  console.error("  cd lib/db && pnpm exec drizzle-kit generate --config ./drizzle-check.config.ts");
-  console.error("  git add lib/db/drizzle");
-  console.error("");
-  console.error("(The stray files above have been cleaned up automatically.)");
-  process.exit(1);
+if (isDirectRun) {
+  checkMigrationSnapshotPairing();
+  runDriftCheck();
 }
-
-console.log("check:schema-drift — Drizzle schema is in sync with committed snapshots.");
