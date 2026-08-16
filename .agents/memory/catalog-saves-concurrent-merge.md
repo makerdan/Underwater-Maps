@@ -1,0 +1,31 @@
+---
+name: catalog-saves.ts concurrent-merge damage
+description: Pattern for diagnosing and repairing merge conflicts when multiple task agents modify the same route file simultaneously.
+---
+
+## The rule
+
+When several task agents land PRs against the same route file in rapid succession, the resulting merges can:
+1. **Drop the `router.post(...)` wrapper line** — leaving handler body code floating at module scope (esbuild fails first with "already declared" duplicate-const errors)
+2. **Duplicate destructure lines** — same `const { a, b } = ...` appears twice consecutively
+3. **Corrupt variable names inside the body** — e.g. `west/south/east/north` where the destructured names are `minLon/minLat/maxLon/maxLat`, or `updated.catalogId` where `updated` is not yet in scope
+4. **Cross-pollinate `.set({})` calls** — e.g. retry route gets `.set({ folderId })` from the rename/move route that was merged in parallel
+
+**Why:** Git merge picks up the last-write for conflicting hunks; if two tasks each rewrote the same function header with different content, the loser's body can be spliced next to the winner's header.
+
+## How to apply
+
+When the API server build fails with esbuild "already declared" errors:
+1. Read the broken section — look for the floating body (no enclosing `router.*` call)
+2. `git log --oneline -8 -- <file>` to find the last good commit before the damage
+3. `git show <good-sha>:<file> | sed -n '<start>,<end>p'` to see the correct handler
+4. Restore: add back the `router.post(...)` wrapper, remove duplicate lines, fix variable names
+
+Common wrong-variable patterns seen:
+- `west/south/east/north` instead of `minLon/minLat/maxLon/maxLat` in catalog/search
+- `updated.catalogId` before `updated` is assigned (should be `row.catalogId` or `catalogId`)
+- `.set({ folderId })` in the retry route (should be `{ status: "processing", errorMessage: null, datasetId: null }`)
+- `.set({ folderId })` in the rename route (should be `{ displayLabel }`)
+- `eq(table.id, saveId)` in GET /my-saves where `saveId` is not in scope (should filter by `userId` only)
+
+Also check test files: `select: plainFn` in a `createDbMock` override fails `MockInstance` type — wrap in `vi.fn()`.
