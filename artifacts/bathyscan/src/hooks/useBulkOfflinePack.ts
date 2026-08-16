@@ -98,6 +98,9 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
   const [days, setDays] = useState(7);
 
   const cancelRef = useRef(false);
+  /** Prevents a second concurrent run when start() is called before the phase
+   *  state update reaches the caller (e.g. rapid double-tap). */
+  const runningRef = useRef(false);
   /** The row index to resume from after a network-loss pause. */
   const resumeIndexRef = useRef(0);
 
@@ -315,53 +318,62 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
   // ── start ────────────────────────────────────────────────────────────────
 
   const start = useCallback(async () => {
-    cancelRef.current = false;
-    // Enter "preflighting" so controls are hidden while checks run, but without
-    // committing to "running" before we know preflight succeeded.
-    setPhase("preflighting");
-    setPreflightError(null);
+    // Guard against rapid double-tap / re-entrant calls before React re-renders
+    // the phase state.  Any of preflighting/running/paused counts as in-flight.
+    if (runningRef.current) return;
+    runningRef.current = true;
 
-    const ok = await runPreflight();
-    if (!ok) {
-      setPhase("preflight-error");
-      return;
-    }
-
-    // Load existing packs so we can determine which rows to skip.
-    // Propagate failures as a preflight error — silently converting to [] would
-    // mean all packs are re-downloaded even when valid ones already exist.
-    let existingPacks: OfflinePack[] = [];
     try {
-      existingPacks = await listOfflinePacks();
-    } catch (e) {
-      setPreflightError(
-        `Cannot check existing packs — ${e instanceof Error ? e.message : "storage unavailable"}. Try closing and reopening the panel.`,
-      );
-      setPhase("preflight-error");
-      return;
+      cancelRef.current = false;
+      // Enter "preflighting" so controls are hidden while checks run, but without
+      // committing to "running" before we know preflight succeeded.
+      setPhase("preflighting");
+      setPreflightError(null);
+
+      const ok = await runPreflight();
+      if (!ok) {
+        setPhase("preflight-error");
+        return;
+      }
+
+      // Load existing packs so we can determine which rows to skip.
+      // Propagate failures as a preflight error — silently converting to [] would
+      // mean all packs are re-downloaded even when valid ones already exist.
+      let existingPacks: OfflinePack[] = [];
+      try {
+        existingPacks = await listOfflinePacks();
+      } catch (e) {
+        setPreflightError(
+          `Cannot check existing packs — ${e instanceof Error ? e.message : "storage unavailable"}. Try closing and reopening the panel.`,
+        );
+        setPhase("preflight-error");
+        return;
+      }
+
+      setPhase("running");
+
+      const initialRows: BulkRow[] = datasets.map((ds) => {
+        const existing = existingPacks.find((p) => p.datasetId === ds.id) ?? null;
+        return {
+          dataset: ds,
+          status: "pending",
+          progress: [],
+          pack: null,
+          error: null,
+          existingPack: existing,
+          warning: null,
+        };
+      });
+      setRows(initialRows);
+      resumeIndexRef.current = 0;
+
+      const forceIds = new Set(forceUpdateIds);
+      const tideDays = days;
+
+      await runBatch(0, initialRows, forceIds, tideDays);
+    } finally {
+      runningRef.current = false;
     }
-
-    setPhase("running");
-
-    const initialRows: BulkRow[] = datasets.map((ds) => {
-      const existing = existingPacks.find((p) => p.datasetId === ds.id) ?? null;
-      return {
-        dataset: ds,
-        status: "pending",
-        progress: [],
-        pack: null,
-        error: null,
-        existingPack: existing,
-        warning: null,
-      };
-    });
-    setRows(initialRows);
-    resumeIndexRef.current = 0;
-
-    const forceIds = new Set(forceUpdateIds);
-    const tideDays = days;
-
-    await runBatch(0, initialRows, forceIds, tideDays);
   }, [datasets, forceUpdateIds, days, runPreflight, runBatch]);
 
   // ── cancel ───────────────────────────────────────────────────────────────

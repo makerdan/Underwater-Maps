@@ -381,3 +381,47 @@ describe("useBulkOfflinePack — quota below low-water mark", () => {
     expect(result.current.quotaWarning).toMatch(/Storage is low/);
   });
 });
+
+describe("useBulkOfflinePack — double-tap guard", () => {
+  it("a second start() call while a run is in-flight is silently ignored", async () => {
+    // Hang the first saveOfflinePack so the run stays in "running" phase
+    // when the second start() fires — the same pattern as the cancellation test.
+    let resolveA!: () => void;
+    mockSaveOfflinePack.mockImplementationOnce(
+      (_ds: typeof DS_A, _d: number, onP: (p: unknown) => void) =>
+        new Promise<ReturnType<typeof makePack>>((res) => {
+          resolveA = () => {
+            onP({ step: "saving", label: "Saved", done: true });
+            res(makePack("a"));
+          };
+        }),
+    );
+
+    const { result } = renderHook(() => useBulkOfflinePack([DS_A, DS_B]));
+
+    // Start the first run and wait until it is definitely in the running phase
+    // (past preflight, past listOfflinePacks, iterating through the batch).
+    // At this point runningRef.current === true.
+    act(() => { void result.current.start(); });
+    await waitFor(() => expect(result.current.phase).toBe("running"), { timeout: 3000 });
+
+    // listOfflinePacks is called twice per run: once inside runPreflight and
+    // once in start() to build the existing-pack map.  Two calls = one run.
+    expect(mockListOfflinePacks).toHaveBeenCalledTimes(2);
+
+    // Fire the second start — runningRef.current is true so it must be a no-op.
+    act(() => { void result.current.start(); });
+
+    // Count must not have grown — the second call was blocked.
+    expect(mockListOfflinePacks).toHaveBeenCalledTimes(2);
+
+    // Complete the first run.
+    await act(async () => { resolveA(); });
+    await waitFor(() => expect(result.current.phase).toBe("done"), { timeout: 5000 });
+
+    // saveOfflinePack called once per dataset (2 total), not 4 (two parallel runs).
+    expect(mockSaveOfflinePack).toHaveBeenCalledTimes(2);
+    // listOfflinePacks still at 2 — no second run was ever started.
+    expect(mockListOfflinePacks).toHaveBeenCalledTimes(2);
+  });
+});
