@@ -37,6 +37,7 @@ import {
   getGetMarkersQueryKey,
   MarkerInputType,
 } from "@workspace/api-client-react";
+import { refreshOfflinePackMarkers } from "@/lib/offlinePackStore";
 import {
   getMarkerPickerSections,
   getSelectableMarkerTypes,
@@ -292,6 +293,10 @@ export const MarkerForm: React.FC = () => {
             void qc.invalidateQueries({
               queryKey: getGetMarkersQueryKey(),
             });
+            // Keep any saved offline pack for this dataset in sync — best-effort.
+            if (editMarker.datasetId) {
+              void refreshOfflinePackMarkers(editMarker.datasetId);
+            }
             closeEdit();
           },
           onError: (err) => {
@@ -362,6 +367,8 @@ export const MarkerForm: React.FC = () => {
           void qc.invalidateQueries({
             queryKey: getGetMarkersQueryKey(),
           });
+          // Keep any saved offline pack for this dataset in sync — best-effort.
+          void refreshOfflinePackMarkers(terrain.datasetId);
           setMarkerFormOpen(false);
           // "Log a catch here" flow: the terrain context menu set this flag
           // before opening the form — jump straight into the catch journal

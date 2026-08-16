@@ -33,6 +33,7 @@ import {
   listOfflinePacks,
   markersUrlForDataset,
   estimatePackStorageBytesFromBbox,
+  refreshOfflinePackMarkers,
   type OfflinePack,
   type PackProgress,
 } from "@/lib/offlinePackStore";
@@ -377,4 +378,133 @@ describe("legacy packs without markersPack", () => {
     // The read-path convention for all consumers:
     expect(packs[0]?.markersPack ?? []).toEqual([]);
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// refreshOfflinePackMarkers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const UPDATED_MARKERS = [
+  { id: "m1", datasetId: "ds-1", label: "Reef edge", lat: 42.5, lon: -69.5 },
+  { id: "m2", datasetId: "ds-1", label: "Drop-off", lat: 42.6, lon: -69.6 },
+  { id: "m3", datasetId: "ds-1", label: "New waypoint", lat: 42.7, lon: -69.7 },
+];
+
+/** Stub fetch so the markers endpoint returns the given payload (or errors). */
+function stubFetchForRefresh(behaviour: "ok" | "http500" | "reject"): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes("/api/markers")) {
+        if (behaviour === "reject") return Promise.reject(new Error("network error"));
+        if (behaviour === "http500") return Promise.resolve({ ok: false, status: 500 });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(UPDATED_MARKERS),
+        });
+      }
+      // Fallback for any other URL (shouldn't be hit in refresh)
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    }),
+  );
+}
+
+describe("refreshOfflinePackMarkers — with a saved pack", () => {
+  it("updates markersPack in IDB with the freshly-fetched list", async () => {
+    stubSw();
+    // Seed a pack with the original two markers
+    const legacyPack: OfflinePack = {
+      ...makeLegacyPack("r1"),
+      datasetId: "ds-1",
+      markersPack: MARKERS_PAYLOAD,
+      storageBytesEstimate:
+        estimatePackStorageBytesFromBbox({ bbox: BBOX }) +
+        new TextEncoder().encode(JSON.stringify(MARKERS_PAYLOAD)).length,
+    };
+    store.set("offline-pack-r1", legacyPack);
+
+    stubFetchForRefresh("ok");
+    await refreshOfflinePackMarkers("ds-1");
+
+    const packs = await listOfflinePacks();
+    expect(packs).toHaveLength(1);
+    expect(packs[0]?.markersPack).toEqual(UPDATED_MARKERS);
+  });
+
+  it("adjusts storageBytesEstimate by the delta in marker bytes", async () => {
+    stubSw();
+    const oldMarkersBytes = new TextEncoder().encode(JSON.stringify(MARKERS_PAYLOAD)).length;
+    const newMarkersBytes = new TextEncoder().encode(JSON.stringify(UPDATED_MARKERS)).length;
+    const baseEstimate = estimatePackStorageBytesFromBbox({ bbox: BBOX });
+
+    const legacyPack: OfflinePack = {
+      ...makeLegacyPack("r2"),
+      datasetId: "ds-1",
+      markersPack: MARKERS_PAYLOAD,
+      storageBytesEstimate: baseEstimate + oldMarkersBytes,
+    };
+    store.set("offline-pack-r2", legacyPack);
+
+    stubFetchForRefresh("ok");
+    await refreshOfflinePackMarkers("ds-1");
+
+    const packs = await listOfflinePacks();
+    expect(packs[0]?.storageBytesEstimate).toBe(baseEstimate + newMarkersBytes);
+  });
+
+  it("sends CACHE_PACK_MARKERS with the updated body to the SW", async () => {
+    stubSw();
+    const legacyPack: OfflinePack = {
+      ...makeLegacyPack("r3"),
+      datasetId: "ds-1",
+      markersPack: MARKERS_PAYLOAD,
+      storageBytesEstimate: 1_000_000,
+    };
+    store.set("offline-pack-r3", legacyPack);
+
+    stubFetchForRefresh("ok");
+    await refreshOfflinePackMarkers("ds-1");
+
+    const msg = findMessage<{ type: string; markersUrl: string; body: string }>(
+      "CACHE_PACK_MARKERS",
+    );
+    expect(msg).toBeDefined();
+    expect(msg?.markersUrl).toBe("/api/markers?datasetId=ds-1");
+    expect(JSON.parse(msg?.body ?? "null")).toEqual(UPDATED_MARKERS);
+  });
+});
+
+describe("refreshOfflinePackMarkers — no-op when no pack exists", () => {
+  it("does not throw and sends no SW messages when there is no saved pack", async () => {
+    stubSw();
+    stubFetchForRefresh("ok");
+
+    await expect(refreshOfflinePackMarkers("ds-no-pack")).resolves.toBeUndefined();
+    expect(findMessage("CACHE_PACK_MARKERS")).toBeUndefined();
+  });
+});
+
+describe("refreshOfflinePackMarkers — fetch failures are best-effort", () => {
+  it.each<"http500" | "reject">(["http500", "reject"])(
+    "does not throw and leaves the pack unchanged on %s",
+    async (behaviour) => {
+      stubSw();
+      const originalPack: OfflinePack = {
+        ...makeLegacyPack("r4"),
+        datasetId: "ds-1",
+        markersPack: MARKERS_PAYLOAD,
+        storageBytesEstimate: 1_234_567,
+      };
+      store.set("offline-pack-r4", originalPack);
+
+      stubFetchForRefresh(behaviour);
+      await expect(refreshOfflinePackMarkers("ds-1")).resolves.toBeUndefined();
+
+      // Pack is unchanged — stale is better than missing
+      const packs = await listOfflinePacks();
+      expect(packs[0]?.markersPack).toEqual(MARKERS_PAYLOAD);
+      expect(packs[0]?.storageBytesEstimate).toBe(1_234_567);
+    },
+  );
 });

@@ -394,6 +394,70 @@ function estimateFromPredictions(tidePack: TidePack): number {
   return tideBytesEst + 2 * 1024 * 1024;
 }
 
+// ─── Refresh markers in a saved pack after an online mutation ─────────────────
+
+/**
+ * After a successful marker create/update/delete, call this to keep any saved
+ * offline pack for the same dataset in sync.
+ *
+ * Best-effort and non-blocking: callers should fire-and-forget with `void`.
+ * Failures are swallowed — a stale pack is still better than a missing pack.
+ *
+ * What it does:
+ *   1. Finds all saved packs for `datasetId` (there is usually at most one).
+ *   2. Re-fetches the current marker list via `authorizedFetch` (Clerk token).
+ *   3. Updates each matching IDB record (`markersPack` + `storageBytesEstimate`).
+ *   4. Sends `CACHE_PACK_MARKERS` to the SW so the persistent pack cache is
+ *      also updated and survives SW upgrades.
+ */
+export async function refreshOfflinePackMarkers(datasetId: string): Promise<void> {
+  if (!datasetId) return;
+
+  const packs = await listOfflinePacks();
+  const matching = packs.filter((p) => p.datasetId === datasetId);
+  if (matching.length === 0) return; // no pack for this dataset — nothing to do
+
+  const markersUrl = markersUrlForDataset(datasetId);
+  let markersBody: string;
+  let markersPack: Marker[];
+  try {
+    const res = await authorizedFetch(markersUrl);
+    if (!res.ok) return; // best-effort: skip on HTTP error
+    markersBody = await res.text();
+    const parsed: unknown = JSON.parse(markersBody);
+    if (!Array.isArray(parsed)) return;
+    markersPack = parsed as Marker[];
+  } catch {
+    return; // network error — leave the existing pack as-is
+  }
+
+  const newMarkersBytes = new TextEncoder().encode(markersBody).length;
+
+  for (const pack of matching) {
+    const oldMarkersBytes = new TextEncoder().encode(
+      JSON.stringify(pack.markersPack ?? []),
+    ).length;
+    const updatedPack: OfflinePack = {
+      ...pack,
+      markersPack,
+      storageBytesEstimate: pack.storageBytesEstimate - oldMarkersBytes + newMarkersBytes,
+    };
+    try {
+      await set(`${PACK_KEY_PREFIX}${pack.id}`, updatedPack);
+    } catch {
+      // best-effort — IDB write failure is not fatal
+    }
+  }
+
+  // Update the SW persistent pack cache so offline requests stay current.
+  // cachePackMarkers uses cache.put which is idempotent — safe to call every time.
+  try {
+    await cachePackMarkers(markersUrl, markersBody);
+  } catch {
+    // best-effort — SW may be absent in dev or during an update
+  }
+}
+
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
 
 export async function listOfflinePacks(): Promise<OfflinePack[]> {

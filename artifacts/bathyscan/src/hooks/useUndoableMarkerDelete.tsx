@@ -29,6 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { authorizedFetch } from "@/lib/authorizedFetch";
+import { refreshOfflinePackMarkers } from "@/lib/offlinePackStore";
 
 const UNDO_DELETE_WINDOW_MS = 5000;
 
@@ -86,6 +87,8 @@ export function useUndoableMarkerDelete() {
               // so the minimap reflects the deletion regardless of which dataset
               // the deleted marker belonged to.
               void qc.invalidateQueries({ queryKey: getGetMarkersQueryKey() });
+              // Keep any saved offline pack for this dataset in sync — best-effort.
+              void refreshOfflinePackMarkers(datasetId);
             },
             onError: (err) => {
               mutatingRef.current.delete(marker.id);
