@@ -1152,7 +1152,7 @@ export function nceiCoverageForEntry(
 // or ready, returns the current row unchanged.
 // ---------------------------------------------------------------------------
 
-router.post("/datasets/my-saves/:id/retry", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.post("/datasets/my-saves/:id/retry", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const saveIdParsed = SaveIdParamSchema.safeParse(req.params["id"]);
   if (!saveIdParsed.success) {

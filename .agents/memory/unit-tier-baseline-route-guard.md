@@ -82,3 +82,20 @@ A verified `test-standard-plus` (`run-tier.mjs full`) run showed:
 full tier is green. A backlog task exists to fix the failures that make every
 full run report FAILED. Classify pre-existing unless your diff touches
 terrain.js/terrainMock.ts, fixtures, or dependency versions.
+
+## api-server shard-2 baseline breakage (2026-08-16, verified with stash repro)
+
+18 failures across 5 files fail on clean main (cfb7f8f8), signature is
+catalog-saves module-init side effect `recoverStuckSaves` crashing under
+partial `@workspace/db` mocks (`db.update is not a function` /
+`No "userCatalogSavesTable" export ... on the "@workspace/db" mock`):
+- `src/__tests__/markers.test.ts` (3), `src/__tests__/markers-quickdrop.test.ts` (5),
+- `src/routes/__tests__/catalog-bbox.test.ts` (5), `src/routes/__tests__/preview.test.ts` (4),
+- `src/__tests__/mock-factory-guards.test.ts` (1, bucketMonitor mock completeness).
+
+Also: `scripts/src/run-locked-tier.test.mjs` "plan with no ## Validation
+section exits 1" asserted exit 1 but got 2 — fixed on main same day; still
+red in task envs branched before the fix.
+
+**How to apply:** these fail every test:unit step (standard/full/heavy)
+regardless of diff; solo-repro with `git stash` before blaming your change.

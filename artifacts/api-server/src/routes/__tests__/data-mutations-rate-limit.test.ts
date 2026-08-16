@@ -354,6 +354,52 @@ describe("POST /api/datasets/catalog/:id/save — per-user rate limit (120/min)"
   });
 });
 
+describe("POST /api/datasets/my-saves/:id/retry — per-user rate limit (120/min)", () => {
+  const USER = "user_retry_rl_test";
+
+  it("allows request when under the limit (rate-limit headers present)", async () => {
+    const res = await request(app)
+      .post("/api/datasets/my-saves/save-row-1/retry")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", USER);
+
+    expect(res.status).not.toBe(429);
+    expect(res.headers["x-ratelimit-limit"]).toBe(String(DATA_MUTATION_MAX));
+    expect(res.headers["x-ratelimit-remaining"]).toBeDefined();
+  });
+
+  it("returns 429 with Retry-After when the per-user limit is exhausted", async () => {
+    __prefillRateLimitMemory(userKey(USER), DATA_MUTATION_MAX, DATA_MUTATION_WINDOW_MS);
+
+    const res = await request(app)
+      .post("/api/datasets/my-saves/save-row-1/retry")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", USER);
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(res.headers["retry-after"]).toBeDefined();
+    expect(res.headers["x-ratelimit-remaining"]).toBe("0");
+  });
+
+  it("retry shares the general data-mutation bucket with catalog save", async () => {
+    // Exhausting the shared bucket blocks both save and retry for the user.
+    __prefillRateLimitMemory(userKey(USER), DATA_MUTATION_MAX, DATA_MUTATION_WINDOW_MS);
+
+    const saveBlocked = await request(app)
+      .post("/api/datasets/catalog/preset-glba_main/save")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", USER);
+    expect(saveBlocked.status).toBe(429);
+
+    const retryBlocked = await request(app)
+      .post("/api/datasets/my-saves/save-row-1/retry")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", USER);
+    expect(retryBlocked.status).toBe(429);
+  });
+});
+
 // ── bulk-delete cap ────────────────────────────────────────────────────────────
 
 function bulkDeleteKey(userId: string): string {
