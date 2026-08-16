@@ -12,6 +12,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 
 import { ThrottlePanel } from "@/components/ThrottlePanel";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
+import { useDriveBoatStore } from "@/lib/driveBoatStore";
 import { AppProvider, useAppState } from "@/lib/context";
 import { MPH_TO_KPH } from "@/lib/units";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,6 +25,9 @@ function MphProbe({ onMph }: { onMph: (mph: number) => void }) {
 
 function renderWithState(initialMph: number) {
   try { localStorage.setItem("bathyscan:boatSpeedMph", String(initialMph)); } catch { /* ignore */ }
+  // driveBoatStore reads localStorage only at module-init time, so we must
+  // also update the store directly to make the value visible immediately.
+  useDriveBoatStore.getState().setBoatSpeedMph(initialMph);
   let latest = initialMph;
   const result = render(
     <TooltipProvider>
@@ -39,6 +43,9 @@ function renderWithState(initialMph: number) {
 beforeEach(() => {
   try { localStorage.clear(); } catch { /* ignore */ }
   useSettingsStore.setState({ ...useSettingsStore.getState(), ...DEFAULT_SETTINGS });
+  // driveBoatStore is module-level and persists across tests; reset it so
+  // boatSpeedMph committed in one test cannot leak into the next.
+  useDriveBoatStore.getState().resetForSignOut();
 });
 
 describe("ThrottlePanel — unit-aware text", () => {
