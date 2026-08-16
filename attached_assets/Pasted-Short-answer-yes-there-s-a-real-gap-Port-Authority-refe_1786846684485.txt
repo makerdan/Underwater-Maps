@@ -1,0 +1,28 @@
+Short answer: yes -- there's a real gap. Port Authority _references_ validation tiers that don't exist in this workspace, and the tiers that do exist are too thin for what the skill requires. Here's the evidence:
+
+## What Port Authority expects
+
+- Phase 1 says registered validation commands come in three tiers -- `test-fast`, `test-standard`, `test-heavy` -- and says "Read the `validation-tiers` skill for the decision table."
+- Phase 9's acceptance gate requires running "the validation tier appropriate for the work done" twice back-to-back, again pointing to the `validation-tiers` skill.
+
+## What actually exists here
+
+- No `validation-tiers` skill anywhere -- not in `.agents/skills/`, `.local/custom_skills/`, or `.local/secondary_skills/`. Both references are dangling.
+- Only two registered tiers: `scripts/ci-tiers.mjs` declares `TIER_NAMES = ['typecheck', 'build']`, consumed by `validation-steps.mjs` (the runner) and `check-failure-gate.mjs` (the plan-file gate).
+- No test tier at all, even though the project has substantial test surface that maps cleanly onto the three-tier model:
+    - api-server: `test` (tsc + async-route check + node test runner) and `test:smoke`
+    - lumina-studio: `test` (vitest) and `test:e2e`
+
+## A concrete bug this causes
+
+The Failure Gate skill's default plan stub is `**Command:** \`test-standard``-- but`check-failure-gate.mjs`rejects any Command not in`TIER_NAMES`(`typecheck`,`build`). So a plan that follows Failure Gate's own documented default fails the pre-commit gate. The three skills (Port Authority, Failure Gate, and the actual gate scripts) disagree with each other today.
+
+## My recommendation
+
+Install the missing tiers rather than dumbing down the skills, since the heavy suites genuinely exist:
+
+1. Extend `TIER_NAMES` to `['typecheck', 'build', 'test-fast', 'test-standard', 'test-heavy']` and wire each new tier in `validation-steps.mjs` (fast = typecheck+lint, standard = + unit tests, heavy = + smoke/e2e).
+2. Create the referenced `validation-tiers` skill with the decision table Port Authority points at (which tier for which kind of change).
+3. Both tier-consuming skills then become internally consistent, and Failure Gate's `test-standard` default stops being gate-invalid.
+
+One caveat: per Port Authority's own warning, `test-heavy` should stay reserved for high-risk changes -- the tier install shouldn't make it the default anywhere.
