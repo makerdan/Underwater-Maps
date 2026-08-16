@@ -839,7 +839,7 @@ export const usePaletteStore = create<PaletteStore>()(
           }
         }
 
-        return candidate as PaletteStore;
+        return candidate as unknown as PaletteStore;
       },
     },
   ),
