@@ -11,6 +11,10 @@ import request from "supertest";
 
 // ── Mock all upstream data-fetcher modules ────────────────────────────────────
 
+vi.mock("../../lib/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
 vi.mock("../../lib/envPackTidal", () => ({
   fetchTideStationsInRadius: vi.fn(),
 }));
@@ -38,12 +42,14 @@ import { fetchWeatherStationPacks } from "../../lib/envPackWeather";
 import { fetchMarineConditions } from "../../lib/envPackMarine";
 import { fetchArgoProfile } from "../../lib/argoErddap";
 import { findBundledTemperatureProfile } from "../../lib/temperatureProfiles";
+import { logger } from "../../lib/logger";
 
 const tidalMock = fetchTideStationsInRadius as ReturnType<typeof vi.fn>;
 const weatherMock = fetchWeatherStationPacks as ReturnType<typeof vi.fn>;
 const marineMock = fetchMarineConditions as ReturnType<typeof vi.fn>;
 const argoMock = fetchArgoProfile as ReturnType<typeof vi.fn>;
 const bundledMock = findBundledTemperatureProfile as ReturnType<typeof vi.fn>;
+const loggerWarnMock = logger.warn as ReturnType<typeof vi.fn>;
 
 // Import the route AFTER mocks are set up.
 import envPackRouter, { __clearEnvPackCacheForTests } from "../env-pack";
@@ -414,6 +420,45 @@ describe("GET /env-pack — partial failure graceful degradation", () => {
       (w: string) => w.includes("No NOAA"),
     );
     expect(hasStationWarnings).toBe(true);
+  });
+
+  it("logs a warn for each temperature provider that throws, without leaking error details to the client", async () => {
+    tidalMock.mockResolvedValue(SAMPLE_TIDE_STATIONS);
+    weatherMock.mockResolvedValue(SAMPLE_WEATHER_STATIONS);
+    marineMock.mockResolvedValue(SAMPLE_MARINE_CONDITIONS);
+
+    const woaError = new Error("WOA endpoint unavailable");
+    const argoError = new Error("Argo ERDDAP timeout");
+    bundledMock.mockRejectedValue(woaError);
+    argoMock.mockRejectedValue(argoError);
+
+    loggerWarnMock.mockClear();
+
+    const res = await request(makeApp()).get("/env-pack?lat=37.8&lon=-122.4");
+
+    // Client response must not expose upstream error details.
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).not.toContain("WOA endpoint unavailable");
+    expect(JSON.stringify(res.body)).not.toContain("Argo ERDDAP timeout");
+
+    // logger.warn must have been called once per failing provider.
+    expect(loggerWarnMock).toHaveBeenCalledTimes(2);
+
+    const warnCalls = loggerWarnMock.mock.calls;
+
+    const woaCall = warnCalls.find(
+      (c: unknown[]) => (c[1] as Record<string, unknown>)?.provider === "woa",
+    );
+    expect(woaCall).toBeDefined();
+    expect(woaCall![0]).toMatch(/temperature profile provider failed/i);
+    expect(woaCall![1]).toMatchObject({ provider: "woa", err: woaError });
+
+    const argoCall = warnCalls.find(
+      (c: unknown[]) => (c[1] as Record<string, unknown>)?.provider === "argo",
+    );
+    expect(argoCall).toBeDefined();
+    expect(argoCall![0]).toMatch(/temperature profile provider failed/i);
+    expect(argoCall![1]).toMatchObject({ provider: "argo", err: argoError });
   });
 });
 

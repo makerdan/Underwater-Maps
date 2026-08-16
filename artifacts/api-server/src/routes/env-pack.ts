@@ -98,9 +98,9 @@ async function fetchTemperatureProfile(
   lon: number,
 ): Promise<TemperatureProfilePack> {
   // Try bundled WOA profile first, then Argo.
-  for (const fetchFn of [
-    () => findBundledTemperatureProfile(lat, lon, null),
-    () => fetchArgoProfile(lat, lon),
+  for (const { name, fetchFn } of [
+    { name: "woa", fetchFn: () => findBundledTemperatureProfile(lat, lon, null) },
+    { name: "argo", fetchFn: () => fetchArgoProfile(lat, lon) },
   ]) {
     try {
       const payload = await fetchFn();
@@ -115,8 +115,8 @@ async function fetchTemperatureProfile(
           provider: payload.provider,
         };
       }
-    } catch {
-      // Try next provider.
+    } catch (err) {
+      logger.warn("Temperature profile provider failed", { provider: name, err });
     }
   }
   return {
