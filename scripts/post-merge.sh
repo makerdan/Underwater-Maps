@@ -36,10 +36,26 @@ pnpm --filter @workspace/api-spec run codegen:generate
 #   The pre-push-type-check.mjs script below now catches this automatically
 #   before the push runs.  If it fires, follow the instructions it prints to
 #   clean up the non-castable rows, then re-run post-merge.sh.
-# Pre-push guardrail: detect column-type changes that Postgres cannot
-# implicitly cast (no USING clause) and abort before the push runs.
-pnpm --filter @workspace/db exec node ../../scripts/pre-push-type-check.mjs
-echo y | timeout 120 pnpm --filter db push || { EC=$?; [ $EC -eq 124 ] && echo "[post-merge] ERROR: drizzle push timed out after 120 s — check for Postgres locks or stalled migrations"; exit $EC; }
+# Pre-flight DB connectivity check (5 s).  If the database is unreachable
+# (platform outage, cold start, etc.) skip the drizzle push entirely so
+# typecheck/lint can still complete and post-merge does not hang for 120 s.
+# The push is non-critical for code-correctness checks; re-run post-merge.sh
+# manually once Postgres is available.
+_db_ping() {
+  pnpm --filter @workspace/db exec node -e "
+    const { Pool } = require('pg');
+    const p = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 4000 });
+    p.query('SELECT 1').then(() => { p.end(); process.exit(0); }).catch(() => { p.end(); process.exit(1); });
+  " 2>/dev/null
+}
+if timeout 5 bash -c "$(declare -f _db_ping); _db_ping"; then
+  # Pre-push guardrail: detect column-type changes that Postgres cannot
+  # implicitly cast (no USING clause) and abort before the push runs.
+  pnpm --filter @workspace/db exec node ../../scripts/pre-push-type-check.mjs
+  echo y | timeout 120 pnpm --filter db push || { EC=$?; [ $EC -eq 124 ] && echo "[post-merge] ERROR: drizzle push timed out after 120 s — check for Postgres locks or stalled migrations"; exit $EC; }
+else
+  echo "[post-merge] WARNING: database unreachable (5 s ping timed out) — skipping drizzle push. Re-run post-merge.sh manually once Postgres is available."
+fi
 # Guardrail: surface typecheck/lint regressions immediately after a merge.
 # Unit tests are run separately (non-blocking) because there are known
 # pre-existing failures tracked in the backlog ("Stop the two pre-existing
