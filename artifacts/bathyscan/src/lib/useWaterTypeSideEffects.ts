@@ -24,6 +24,7 @@ export function useWaterTypeSideEffects(
   datasets: DatasetMeta[] | undefined,
   setDatasetId: (id: string | null) => void,
   onAfterSwitch?: () => void,
+  onBeforeSwitch?: () => void,
 ): void {
   const waterType = useSettingsStore((s) => s.waterType);
   const prevWaterTypeRef = useRef(waterType);
@@ -37,8 +38,20 @@ export function useWaterTypeSideEffects(
     // colormap default, and load the first preset of the new water type.
     // Wrapped so that if the dataset switch is cancelled (synthetic warning),
     // we preserve the previously-active dataset and its derived state.
+    // The teardown here only runs on a CONFIRMED switch — the cancel path
+    // never reaches applySwitch, so a dismissed dialog leaves the old
+    // dataset and its derived state fully intact.
     function applySwitch(newDatasetId: string | null): void {
-      try { useTerrainStore.getState().setGrids({ activeGrid: null, overviewGrid: null }); } catch { /* noop */ }
+      // Unmount the previous environment's dataset FIRST, before the new
+      // dataset id is committed, so no stale mesh (e.g. the pre-loaded Lake
+      // Ray Roberts demo) remains visible while — or after, if no preset of
+      // the new water type exists — the replacement loads.
+      //   1) onBeforeSwitch lets App.tsx synchronously null its React-level
+      //      terrain + datasetId state (the 3-D mesh source of truth).
+      //   2) terrainStore.clear() empties visibleDatasets, which also drives
+      //      the App bridge that clears context terrain when nothing is visible.
+      try { onBeforeSwitch?.(); } catch { /* noop */ }
+      try { useTerrainStore.getState().clear(); } catch { /* noop */ }
       try { useClassificationStore.getState().clearZoneMap?.(); } catch { /* noop */ }
       try { useHabitatStore.getState().clear?.(); } catch { /* noop */ }
 
@@ -72,5 +85,5 @@ export function useWaterTypeSideEffects(
     } else {
       applySwitch(null);
     }
-  }, [waterType, datasets, setDatasetId, onAfterSwitch]);
+  }, [waterType, datasets, setDatasetId, onAfterSwitch, onBeforeSwitch]);
 }

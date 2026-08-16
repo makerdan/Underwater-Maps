@@ -21,3 +21,8 @@ Also as of 2026-08-15, `routes-documented.test.ts` fails on
 `POST /trails/{id}/soft-delete` (added to `trails.ts` 2026-08-14 without an
 openapi.yaml entry). Same classification rule: pre-existing unless your
 changeset touches api-server routes/openapi.yaml. A follow-up task covers both.
+
+**Update 2026-08-16:** a standard-tier run showed `router-duplicate-route-guard`
+(env-pack) now PASSES — only `routes-documented` (trails soft-delete) still
+fails. Expect exactly ONE api-server baseline failure; a second route-guard
+failure is NEW breakage, not baseline.

@@ -116,7 +116,7 @@ async function fetchTemperatureProfile(
         };
       }
     } catch (err) {
-      logger.warn("Temperature profile provider failed", { provider: name, err });
+      logger.warn({ provider: name, err }, "Temperature profile provider failed");
     }
   }
   return {

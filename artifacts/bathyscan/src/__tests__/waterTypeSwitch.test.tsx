@@ -79,18 +79,36 @@ const DATASETS: FakeDataset[] = [
 function Harness({
   onDatasetChange,
   initialDatasetId = "salt-1",
+  datasets = DATASETS,
+  onSetTerrain,
 }: {
   onDatasetChange?: (id: string | null) => void;
   initialDatasetId?: string | null;
+  datasets?: FakeDataset[];
+  /**
+   * When provided, the harness wires an onBeforeSwitch callback that mirrors
+   * what App.tsx does: setTerrain(null) + setDatasetId(null) before the new
+   * dataset id is committed. Lets tests assert the unmount-before-load order.
+   */
+  onSetTerrain?: (t: null) => void;
 }) {
   const [datasetId, setDatasetId] = useState<string | null>(initialDatasetId);
+  const wrappedSetDatasetId = (id: string | null) => {
+    setDatasetId(id);
+    onDatasetChange?.(id);
+  };
   // Use the same hook App.tsx mounts so we test the real side-effect code path.
   useWaterTypeSideEffects(
-    DATASETS as unknown as Parameters<typeof useWaterTypeSideEffects>[0],
-    (id) => {
-      setDatasetId(id);
-      onDatasetChange?.(id);
-    },
+    datasets as unknown as Parameters<typeof useWaterTypeSideEffects>[0],
+    wrappedSetDatasetId,
+    undefined,
+    onSetTerrain
+      ? () => {
+          // Same sequence App.tsx performs in its onBeforeSwitch callback.
+          onSetTerrain(null);
+          wrappedSetDatasetId(null);
+        }
+      : undefined,
   );
   return (
     <TooltipProvider>
@@ -108,7 +126,15 @@ function resetAllStores() {
     ...useSettingsStore.getState(),
     ...DEFAULT_SETTINGS,
   });
-  useTerrainStore.setState({ activeGrid: null, overviewGrid: null });
+  useTerrainStore.setState({
+    activeGrid: null,
+    overviewGrid: null,
+    visibleDatasets: [],
+    primaryDatasetIds: [],
+    primaryDatasetId: null,
+    selectedIds: [],
+    selectedSources: {},
+  });
   useClassificationStore.setState({
     zoneMap: null,
     aiZoneMap: null,
@@ -246,6 +272,163 @@ describe("water-type switch (end-to-end)", () => {
     expect(useTerrainStore.getState().activeGrid).toBe(seededGrid);
     expect(useClassificationStore.getState().zoneMap).not.toBeNull();
     expect(useClassificationStore.getState().hasEdits).toBe(true);
+  });
+
+  it("unmounts lake-ray-roberts before the saltwater id is set on a confirmed Fresh → Salt switch", async () => {
+    const RAY = "lake-ray-roberts";
+    const datasetsWithRay: FakeDataset[] = [
+      ...DATASETS,
+      { id: RAY, waterType: "freshwater", title: "Lake Ray Roberts" },
+    ];
+
+    // Start in freshwater with the Ray Roberts demo pre-loaded: App-level
+    // terrain is non-null (represented by setTerrain tracking) and the
+    // terrainStore has a visible entry for it.
+    useSettingsStore.setState({ waterType: "freshwater", colormapTheme: "freshwater" });
+    const rayGrid = { datasetId: RAY, fakeGrid: true } as never;
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: RAY, source: "preset", activeGrid: rayGrid, overviewGrid: null },
+      ] as never,
+      primaryDatasetIds: [RAY],
+      primaryDatasetId: RAY,
+      activeGrid: rayGrid,
+      overviewGrid: null,
+    });
+
+    // Ordered event log so we can assert the teardown happens BEFORE the new
+    // saltwater dataset id is committed.
+    const events: string[] = [];
+    const setTerrain = vi.fn((t: null) => {
+      events.push(`setTerrain:${t === null ? "null" : "non-null"}`);
+    });
+
+    render(
+      <Harness
+        datasets={datasetsWithRay}
+        initialDatasetId={RAY}
+        onDatasetChange={(id) => events.push(`setDatasetId:${id ?? "null"}`)}
+        onSetTerrain={setTerrain}
+      />,
+    );
+    expect(screen.getByTestId("active-dataset").textContent).toBe(RAY);
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByTestId("water-type-saltwater"));
+    });
+
+    // Teardown ran: App terrain nulled and dataset id cleared BEFORE the new
+    // saltwater id was set.
+    expect(setTerrain).toHaveBeenCalledWith(null);
+    const terrainNullIdx = events.indexOf("setTerrain:null");
+    const datasetNullIdx = events.indexOf("setDatasetId:null");
+    const saltIdx = events.indexOf("setDatasetId:salt-1");
+    expect(terrainNullIdx).toBeGreaterThanOrEqual(0);
+    expect(datasetNullIdx).toBeGreaterThanOrEqual(0);
+    expect(saltIdx).toBeGreaterThanOrEqual(0);
+    expect(terrainNullIdx).toBeLessThan(saltIdx);
+    expect(datasetNullIdx).toBeLessThan(saltIdx);
+
+    // terrainStore fully unmounted the Ray Roberts entry — visibleDatasets is
+    // empty (no stale mesh source) and the legacy grid aliases are nulled.
+    const ts = useTerrainStore.getState();
+    expect(ts.visibleDatasets.some((v) => v.datasetId === RAY)).toBe(false);
+    expect(ts.visibleDatasets).toEqual([]);
+    expect(ts.activeGrid).toBeNull();
+    expect(ts.primaryDatasetId).toBeNull();
+
+    // The old id is never visible after the switch completes.
+    expect(screen.getByTestId("active-dataset").textContent).toBe("salt-1");
+  });
+
+  it("still unmounts lake-ray-roberts when NO saltwater preset is available", async () => {
+    const RAY = "lake-ray-roberts";
+    // Only freshwater datasets exist — the Fresh → Salt switch has nothing to
+    // load, so applySwitch(null) must still tear the old mesh down.
+    const freshOnly: FakeDataset[] = [
+      { id: RAY, waterType: "freshwater", title: "Lake Ray Roberts" },
+    ];
+
+    useSettingsStore.setState({ waterType: "freshwater", colormapTheme: "freshwater" });
+    const rayGrid = { datasetId: RAY, fakeGrid: true } as never;
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: RAY, source: "preset", activeGrid: rayGrid, overviewGrid: null },
+      ] as never,
+      primaryDatasetIds: [RAY],
+      primaryDatasetId: RAY,
+      activeGrid: rayGrid,
+      overviewGrid: null,
+    });
+
+    const setTerrain = vi.fn();
+    render(
+      <Harness
+        datasets={freshOnly}
+        initialDatasetId={RAY}
+        onSetTerrain={setTerrain}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByTestId("water-type-saltwater"));
+    });
+
+    // No dataset to request — the confirmation flow is bypassed entirely.
+    expect(requestDatasetSwitchMock).not.toHaveBeenCalled();
+    // But the teardown still ran: no orphaned freshwater mesh left mounted.
+    expect(setTerrain).toHaveBeenCalledWith(null);
+    expect(useTerrainStore.getState().visibleDatasets).toEqual([]);
+    expect(useTerrainStore.getState().activeGrid).toBeNull();
+    expect(screen.getByTestId("active-dataset").textContent).toBe("none");
+  });
+
+  it("does NOT tear down lake-ray-roberts when the switch is cancelled", async () => {
+    const RAY = "lake-ray-roberts";
+    const datasetsWithRay: FakeDataset[] = [
+      ...DATASETS,
+      { id: RAY, waterType: "freshwater", title: "Lake Ray Roberts" },
+    ];
+
+    // Simulate the user dismissing the synthetic-data warning dialog.
+    requestDatasetSwitchMock.mockImplementation(async (args) => {
+      args.onCancel?.();
+    });
+
+    useSettingsStore.setState({ waterType: "freshwater", colormapTheme: "freshwater" });
+    const rayGrid = { datasetId: RAY, fakeGrid: true } as never;
+    const rayEntry = { datasetId: RAY, source: "preset", activeGrid: rayGrid, overviewGrid: null };
+    useTerrainStore.setState({
+      visibleDatasets: [rayEntry] as never,
+      primaryDatasetIds: [RAY],
+      primaryDatasetId: RAY,
+      activeGrid: rayGrid,
+      overviewGrid: null,
+    });
+
+    const setTerrain = vi.fn();
+    render(
+      <Harness
+        datasets={datasetsWithRay}
+        initialDatasetId={RAY}
+        onSetTerrain={setTerrain}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByTestId("water-type-saltwater"));
+    });
+
+    // Cancel path: no teardown fired, dataset + terrain fully intact.
+    expect(setTerrain).not.toHaveBeenCalled();
+    expect(useSettingsStore.getState().waterType).toBe("freshwater");
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(1);
+    expect(useTerrainStore.getState().visibleDatasets[0]!.datasetId).toBe(RAY);
+    expect(useTerrainStore.getState().activeGrid).toBe(rayGrid);
+    expect(screen.getByTestId("active-dataset").textContent).toBe(RAY);
   });
 
   it("preserves a user-chosen non-default colormap across a water-type switch", async () => {

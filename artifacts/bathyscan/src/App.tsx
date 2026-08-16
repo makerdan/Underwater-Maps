@@ -848,9 +848,22 @@ function Main() {
   //   3) Auto-load the first preset of the new water type.
   // Resetting hasAutoSelectedRef here keeps the mount-time auto-select
   // path armed for the next dataset list refresh in the new mode.
-  useWaterTypeSideEffects(datasets, setDatasetId, () => {
-    hasAutoSelectedRef.current = false;
-  });
+  useWaterTypeSideEffects(
+    datasets,
+    setDatasetId,
+    () => {
+      hasAutoSelectedRef.current = false;
+    },
+    // onBeforeSwitch — runs only on a CONFIRMED water-type switch, before the
+    // new dataset id is set. Synchronously unmounts the previous environment's
+    // dataset (e.g. the pre-loaded Lake Ray Roberts demo) so no stale mesh
+    // remains visible while the replacement loads — or indefinitely, if the
+    // new water type has no preset available.
+    () => {
+      setTerrain(null);
+      setDatasetId(null);
+    },
+  );
 
   // Always-mounted orchestrator that owns terrain + overview fetches for the
   // active preset dataset and commits them atomically. Keeps overviewGrid in
