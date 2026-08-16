@@ -31,7 +31,13 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 // Import after the mock is registered (vi.mock is hoisted, so this is safe).
-import { queryClient, useIsConnecting } from "@/lib/queryClient";
+import {
+  queryClient,
+  useIsConnecting,
+  useIsServiceUnavailable,
+  markServerPersistentlyUnavailable,
+  SERVICE_UNAVAILABLE_POLL_THRESHOLD,
+} from "@/lib/queryClient";
 
 // ── Cache config helpers ──────────────────────────────────────────────────────
 
@@ -451,5 +457,75 @@ describe("_isConnecting flag — interaction with other error toasts", () => {
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({ variant: "destructive" }),
     );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useIsServiceUnavailable reactive hook
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("useIsServiceUnavailable hook", () => {
+  // Reset service-unavailable state before each test via the success path
+  // (same mechanism used to reset _isConnecting in the outer beforeEach).
+  beforeEach(() => {
+    triggerQuerySuccess();
+  });
+
+  it("returns false initially", () => {
+    const { result } = renderHook(() => useIsServiceUnavailable());
+    expect(result.current).toBe(false);
+  });
+
+  it("returns true after markServerPersistentlyUnavailable() is called", () => {
+    const { result } = renderHook(() => useIsServiceUnavailable());
+
+    act(() => {
+      markServerPersistentlyUnavailable();
+    });
+
+    expect(result.current).toBe(true);
+  });
+
+  it("resets to false when a subsequent query succeeds", () => {
+    const { result } = renderHook(() => useIsServiceUnavailable());
+
+    act(() => {
+      markServerPersistentlyUnavailable();
+    });
+    expect(result.current).toBe(true);
+
+    act(() => {
+      triggerQuerySuccess();
+    });
+    expect(result.current).toBe(false);
+  });
+
+  it("stays true across multiple markServerPersistentlyUnavailable calls (idempotent)", () => {
+    const { result } = renderHook(() => useIsServiceUnavailable());
+
+    act(() => {
+      markServerPersistentlyUnavailable();
+      markServerPersistentlyUnavailable();
+      markServerPersistentlyUnavailable();
+    });
+
+    expect(result.current).toBe(true);
+  });
+
+  it("is independent from useIsConnecting — both can be true simultaneously", () => {
+    const { result: connectingResult } = renderHook(() => useIsConnecting());
+    const { result: serviceResult } = renderHook(() => useIsServiceUnavailable());
+
+    act(() => {
+      triggerQueryError(makeStatusError(502)); // sets _isConnecting
+      markServerPersistentlyUnavailable();     // sets _isServiceUnavailable
+    });
+
+    expect(connectingResult.current).toBe(true);
+    expect(serviceResult.current).toBe(true);
+  });
+
+  it("SERVICE_UNAVAILABLE_POLL_THRESHOLD is exported and equals 5", () => {
+    expect(SERVICE_UNAVAILABLE_POLL_THRESHOLD).toBe(5);
   });
 });

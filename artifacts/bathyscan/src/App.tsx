@@ -7,6 +7,7 @@ import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
   queryClient,
   useIsConnecting,
+  useIsServiceUnavailable,
   useHealthResponseTime,
   setClerkLoaded,
   signalSessionExpired,
@@ -293,6 +294,7 @@ function Main() {
   // Shown regardless of whether there are active in-flight queries so the
   // banner stays visible even after TanStack Query exhausts its retry budget.
   const serverWarmingUp = useIsConnecting();
+  const isServiceUnavailable = useIsServiceUnavailable();
   const healthResponseMs = useHealthResponseTime();
   const isOnline = useOfflineStore((s) => s.isOnline);
   const waterTypeForDatasets = useSettingsStore((s) => s.waterType);
@@ -1172,11 +1174,15 @@ function Main() {
         </div>
       )}
 
-      {/* Connecting banner — shown from the first 502 / network error until
-          the health poll confirms the server is back. Only shown when the
-          device has internet (isOnline) — if the device is fully offline the
-          "offline" banner above already covers the user. Non-alarming: no red. */}
-      {serverWarmingUp && isOnline && (
+      {/* Connecting / service-unavailable banner — shown from the first 502 /
+          network error until the health poll confirms the server is back.
+          Only shown when the device has internet (isOnline) — if the device
+          is fully offline the "offline" banner above already covers the user.
+          After SERVICE_UNAVAILABLE_POLL_THRESHOLD consecutive failed health
+          probes (~30 s) we escalate from the transient spinner to a more
+          specific amber "Service unavailable" message so the user has
+          actionable feedback rather than an infinite spinner. */}
+      {serverWarmingUp && isOnline && !isServiceUnavailable && (
         <div
           role="status"
           aria-live="polite"
@@ -1197,6 +1203,17 @@ function Main() {
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
           </svg>
           Reconnecting to server…
+        </div>
+      )}
+      {isServiceUnavailable && isOnline && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          aria-label="Service unavailable"
+          data-testid="service-unavailable-banner"
+          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-amber-950/90 backdrop-blur-sm border-b border-amber-700/40 text-amber-400 text-[16.5px] font-mono tracking-wide select-none pointer-events-none"
+        >
+          ⚠ Service unavailable — reload the page or try again later
         </div>
       )}
 

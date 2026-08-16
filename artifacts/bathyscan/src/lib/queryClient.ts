@@ -89,7 +89,9 @@ function setIsConnecting(value: boolean): void {
       startHealthPoll();
     }
   } else if (wasConnecting) {
-    // Transition: connecting → connected — notify any upload resumption hooks.
+    // Transition: connecting → connected — clear persistent-unavailable flag
+    // (the server is back) and notify any upload resumption hooks.
+    setIsServiceUnavailable(false);
     _reconnectListeners.forEach((fn) => fn());
   }
 }
@@ -174,6 +176,55 @@ export function useHealthResponseTime(): number | null {
   );
 }
 
+// ─── Persistent service-unavailability signal ─────────────────────────────────
+// Upgraded from the transient "connecting" state after
+// SERVICE_UNAVAILABLE_POLL_THRESHOLD consecutive health-poll failures.  At
+// that point the DB (or API server) is clearly not recovering on its own and
+// we replace the infinite spinner with an actionable "Service unavailable"
+// message that tells the user to reload or try again later.
+//
+// Resets to false whenever the server comes back (setIsConnecting(false) path).
+
+export const SERVICE_UNAVAILABLE_POLL_THRESHOLD = 5;
+
+let _isServiceUnavailable = false;
+const _serviceUnavailableListeners = new Set<() => void>();
+
+function setIsServiceUnavailable(value: boolean): void {
+  if (_isServiceUnavailable === value) return;
+  _isServiceUnavailable = value;
+  _serviceUnavailableListeners.forEach((fn) => fn());
+}
+
+/**
+ * Signal that the server has been persistently unreachable beyond the
+ * health-poll threshold. Replaces the "Reconnecting…" spinner with a more
+ * specific "Service unavailable" message.
+ *
+ * Called automatically by the health-poll machinery after
+ * SERVICE_UNAVAILABLE_POLL_THRESHOLD consecutive failed probes. May also be
+ * called directly in tests or by other monitoring hooks.
+ */
+export function markServerPersistentlyUnavailable(): void {
+  setIsServiceUnavailable(true);
+}
+
+/**
+ * Reactive hook: true once the server has been unreachable for long enough
+ * that we consider it a persistent outage (not a transient warm-up delay).
+ * Resets to false when connectivity is restored.
+ */
+export function useIsServiceUnavailable(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      _serviceUnavailableListeners.add(cb);
+      return () => _serviceUnavailableListeners.delete(cb);
+    },
+    () => _isServiceUnavailable,
+    () => false,
+  );
+}
+
 // ─── Health poll ──────────────────────────────────────────────────────────────
 // Polls GET /api/healthz (no auth required) with exponential back-off (1 s →
 // 15 s max) whenever the server appears unreachable. Clears the connecting
@@ -227,6 +278,11 @@ async function runHealthProbe(): Promise<void> {
   // Only schedule the next probe if we're still in connecting state.
   if (_isConnecting) {
     _healthPollAttempt++;
+    // After enough consecutive failures, escalate to "service unavailable" so
+    // the UI shows an actionable message rather than an infinite spinner.
+    if (_healthPollAttempt >= SERVICE_UNAVAILABLE_POLL_THRESHOLD) {
+      setIsServiceUnavailable(true);
+    }
     scheduleHealthPoll();
   }
 }
@@ -454,11 +510,15 @@ export const queryClient = new QueryClient({
     onError: handleQueryError,
     onSuccess: () => {
       // Any successful query means the server is up — clear the connecting
-      // flag so the banner can dismiss itself.  Also reset the consecutive-401
-      // counter so a brief auth blip doesn't permanently trip the session-
-      // expired threshold.
+      // and service-unavailable flags so the banners dismiss themselves.
+      // Also reset the consecutive-401 counter so a brief auth blip doesn't
+      // permanently trip the session-expired threshold.
       _consecutive401Count = 0;
       setIsConnecting(false);
+      // Reset explicitly in case _isConnecting was already false but
+      // _isServiceUnavailable was set independently (e.g. via
+      // markServerPersistentlyUnavailable() in tests or external callers).
+      setIsServiceUnavailable(false);
     },
   }),
   mutationCache: new MutationCache({
