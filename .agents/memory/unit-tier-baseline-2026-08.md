@@ -7,11 +7,9 @@ description: Known pre-existing failures blocking test-standard/heavy and palett
 
 Confirmed by solo re-runs on a clean tree (not concurrency artifacts):
 
-1. **`api-server src/__tests__/routes-documented.test.ts`** — fails because
-   `POST /trails/{id}/soft-delete` (added in the trails soft-delete/undo work)
-   is not documented in `lib/api-spec/openapi.yaml` and not in
-   `UNDOCUMENTED_ALLOWLIST`. Blocks every test:unit run (test-standard and up).
-   A dedicated task exists to fix broken api-server checks.
+1. **`api-server src/__tests__/routes-documented.test.ts`** — FIXED 2026-08-16:
+   `POST /trails/{id}/soft-delete` added to `UNDOCUMENTED_ALLOWLIST` with
+   rationale (beacon fallback, intentionally internal). No longer a baseline.
 
 2. **`tests/e2e/overview-puzzle-multiselect.spec.ts`** — multiple tests fail
    with `expect.poll(...).toSatisfy is not a function` (Playwright's
