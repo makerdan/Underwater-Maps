@@ -103,12 +103,19 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import adminRouter from "../admin.js";
+import tidalRouter from "../tidal.js";
 
 const E2E_USER = "user_e2e_admin_test";
 
 function makeApp() {
   const app = express();
   app.use(adminRouter);
+  return app;
+}
+
+function makeTidalApp() {
+  const app = express();
+  app.use(tidalRouter);
   return app;
 }
 
@@ -356,5 +363,73 @@ describe("GET /admin/skill/failure-gate", () => {
     expect(res.headers["cache-control"]).toBe("no-store");
     expect(res.headers["content-disposition"]).toContain("failure-gate-skill.zip");
     expect(Buffer.from(res.body as Buffer).equals(FAKE_ZIP)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sentinel leak guard: 403 responses must never echo ADMIN_USER_IDS values
+// ---------------------------------------------------------------------------
+
+/**
+ * When a non-admin user hits any access-controlled route the 403 body must
+ * not contain the raw value of ADMIN_USER_IDS (or BUCKET_MONITOR_ADMIN).
+ * A distinct sentinel string is used so any accidental serialisation (e.g.
+ * including the env var in an error message) fails loudly.
+ */
+describe("Admin 403 responses — ADMIN_USER_IDS not leaked in body", () => {
+  const SENTINEL = "user_sentinel-secret-id-9999";
+  const NON_ADMIN = "user_other_9000";
+
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("E2E_AUTH_BYPASS", "1");
+    vi.stubEnv("BUCKET_MONITOR_ADMIN", "0");
+    vi.stubEnv("ADMIN_USER_IDS", SENTINEL);
+  });
+
+  function adminGet(path: string) {
+    return request(makeApp())
+      .get(path)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", NON_ADMIN);
+  }
+
+  it("GET /admin/bucket-monitor — sentinel absent from 403 body", async () => {
+    const res = await adminGet("/admin/bucket-monitor");
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
+  });
+
+  it("GET /admin/large-datasets-diff — sentinel absent from 403 body", async () => {
+    const res = await adminGet("/admin/large-datasets-diff");
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
+  });
+
+  it("GET /admin/rate-limit/usage — sentinel absent from 403 body", async () => {
+    const res = await adminGet("/admin/rate-limit/usage");
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
+  });
+
+  it("GET /admin/upscale-cache-stats — sentinel absent from 403 body", async () => {
+    const res = await adminGet("/admin/upscale-cache-stats");
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
+  });
+
+  it("GET /admin/skill/failure-gate — sentinel absent from 403 body", async () => {
+    const res = await adminGet("/admin/skill/failure-gate");
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
+  });
+
+  it("POST /tidal/admin/refresh-stations — sentinel absent from 403 body", async () => {
+    const res = await request(makeTidalApp())
+      .post("/tidal/admin/refresh-stations")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", NON_ADMIN);
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(res.body)).not.toContain(SENTINEL);
   });
 });
