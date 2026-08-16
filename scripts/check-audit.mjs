@@ -10,10 +10,14 @@
  * the reason the advisory is acceptable, and a planned-fix date.
  */
 
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 
 // ---------------------------------------------------------------------------
 // Documented exceptions — must be kept in sync with security-audit-exceptions.md
+//
+// When adding or extending an exception, set a realistic `fixDate` — the
+// script warns on every run once that date has passed, so a stale date
+// creates noise and an overly generous one hides overdue work.
 // ---------------------------------------------------------------------------
 const EXCEPTIONS = {
   "GHSA-22p9-wv53-3rq4": {
@@ -50,6 +54,21 @@ const EXCEPTIONS = {
     fixDate: "2026-10-17",
   },
 };
+
+// ---------------------------------------------------------------------------
+// Warn on overdue exception fix-dates (runs even on a clean audit so overdue
+// entries stay visible in CI output without reading the source).
+// ---------------------------------------------------------------------------
+const now = new Date();
+for (const [ghsa, ex] of Object.entries(EXCEPTIONS)) {
+  const fixDate = new Date(ex.fixDate);
+  if (!Number.isNaN(fixDate.getTime()) && fixDate < now) {
+    console.warn(
+      `check:audit — WARNING: exception ${ghsa} is past its planned fix date ` +
+        `(${ex.fixDate}). Reason: ${ex.reason}`,
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Run audit
