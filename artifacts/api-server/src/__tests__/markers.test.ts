@@ -22,7 +22,19 @@ const markersMocks = vi.hoisted(() => {
   // result must be a Promise.  Attach .orderBy so the GET handler still works.
   const selectWhereResult = Object.assign(Promise.resolve([]), { orderBy: orderByMock });
   const selectWhereMock = vi.fn().mockReturnValue(selectWhereResult);
-  const fromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
+  // For POST /api/markers resolveDatasetBbox checks: return a valid catalog
+  // bbox row when querying datasetCatalogTable (identified by coverageBbox key)
+  // so the handler doesn't 404 on a missing dataset.
+  const fromMock = vi.fn().mockImplementation((table: Record<string, unknown>) => {
+    if (table && "coverageBbox" in table) {
+      return {
+        where: vi.fn().mockResolvedValue([
+          { coverageBbox: { minLon: -133, minLat: 55, maxLon: -132, maxLat: 56 } },
+        ]),
+      };
+    }
+    return { where: selectWhereMock };
+  });
   const insertReturningMock = vi.fn().mockResolvedValue([row]);
   const valuesMock = vi.fn().mockReturnValue({ returning: insertReturningMock });
   const deleteReturningMock = vi.fn().mockResolvedValue([{ id: row.id }]);

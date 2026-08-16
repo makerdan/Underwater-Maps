@@ -235,6 +235,32 @@ const uploadCalibrationTableStub = {
   updatedAt: "updatedAt",
 };
 
+const conversationsTableStub = {
+  id: "id",
+  createdAt: "createdAt",
+};
+
+const messagesTableStub = {
+  id: "id",
+  conversationId: "conversationId",
+  role: "role",
+  content: "content",
+  createdAt: "createdAt",
+};
+
+const terrainBundleJobsTableStub = {
+  id: "id",
+  status: "status",
+  createdAt: "createdAt",
+};
+
+// Zod insert-schema stubs — only runtime presence is required; tests that
+// actually parse data should use the real schema or a custom mock.
+const insertSchemaStub = { parse: (v: unknown) => v, safeParse: (v: unknown) => ({ success: true as const, data: v }) };
+
+// MARKER_TYPES constant — abbreviated stub covering the canonical union.
+const MARKER_TYPES_STUB = ["fish", "custom", "depth_pole"] as const;
+
 function buildDefaultDb(): DbMockDb {
   const whereMock = vi.fn().mockResolvedValue([]);
   const fromMock = vi.fn().mockReturnValue({ where: whereMock });
@@ -304,6 +330,18 @@ export function createDbMock(options: DbMockOptions = {}) {
     poeUsageLogTable: poeUsageLogTableStub,
     rateLimitEventsTable: rateLimitEventsTableStub,
     uploadCalibrationTable: uploadCalibrationTableStub,
+    conversations: conversationsTableStub,
+    messages: messagesTableStub,
+    terrainBundleJobsTable: terrainBundleJobsTableStub,
+    MARKER_TYPES: MARKER_TYPES_STUB,
+    insertConversationSchema: insertSchemaStub,
+    insertGpsTrailPointSchema: insertSchemaStub,
+    insertGpsTrailSchema: insertSchemaStub,
+    insertMarkerSchema: insertSchemaStub,
+    insertMessageSchema: insertSchemaStub,
+    insertPoeUsageLogSchema: insertSchemaStub,
+    insertRouteSchema: insertSchemaStub,
+    insertTrollingPresetSchema: insertSchemaStub,
     // Passthrough schema validator — always succeeds so test pipelines using
     // FakeParseWorker (whose output omits many real schema fields) do not fail
     // the validateTerrainForDb() guard inside processUploadJob.

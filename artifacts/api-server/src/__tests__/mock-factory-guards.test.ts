@@ -15,6 +15,7 @@ import { describe, it, expect } from "vitest";
 import { createTileClassifyMock } from "./helpers/tileClassifyMock.js";
 import { createShoreZoneDataMock } from "./helpers/shoreZoneDataMock.js";
 import { createBucketMonitorMock } from "./helpers/bucketMonitorMock.js";
+import { createDbMock } from "./helpers/db-mock.js";
 
 interface GuardCase {
   moduleLabel: string;
@@ -45,6 +46,16 @@ const CASES: GuardCase[] = [
     factoryName: "createBucketMonitorMock",
     loadReal: () => import("../lib/bucketMonitor.js") as Promise<Record<string, unknown>>,
     createMock: () => createBucketMonitorMock(),
+  },
+  {
+    // @workspace/db — guards that createDbMock() covers every runtime export,
+    // so partial-mock suites that use createDbMock() don't crash if a new
+    // table or helper is added to the real module.
+    moduleLabel: "@workspace/db",
+    helperPath: "src/__tests__/helpers/db-mock.ts",
+    factoryName: "createDbMock",
+    loadReal: () => import("@workspace/db") as Promise<Record<string, unknown>>,
+    createMock: () => createDbMock() as Record<string, unknown>,
   },
 ];
 

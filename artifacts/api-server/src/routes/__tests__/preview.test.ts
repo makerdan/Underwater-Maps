@@ -17,13 +17,14 @@ const { dbSelectRowsMock, getAuthMock } = vi.hoisted(() => ({
   getAuthMock: vi.fn<(req: unknown) => { userId: string | null }>(),
 }));
 
-vi.mock("@workspace/db", () => ({
-  db: {
-    select: () => ({ from: () => ({ where: () => dbSelectRowsMock() }) }),
-  },
-  customDatasetsTable: {},
-  userSettingsTable: {},
-}));
+vi.mock("@workspace/db", async () => {
+  const { createDbMock } = await import("../../__tests__/helpers/db-mock.js");
+  return createDbMock({
+    db: {
+      select: () => ({ from: () => ({ where: () => dbSelectRowsMock() }) }),
+    },
+  });
+});
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(

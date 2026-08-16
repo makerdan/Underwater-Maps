@@ -38,6 +38,8 @@ export function createBucketMonitorMock(
     signDatasetUploadUrl: vi.fn(),
     getJobByObjectKey: vi.fn(),
     __resetProcessConcurrencyForTests: vi.fn(),
+    __withProcessSlotForTests: vi.fn().mockImplementation(async (fn: () => Promise<unknown>) => fn()),
+    __getActiveProcessCountForTests: vi.fn().mockReturnValue(0),
     processObject: vi.fn(),
     recoverGcsJobStatus: vi.fn(),
     getBucketStatus: vi.fn(),
@@ -45,6 +47,7 @@ export function createBucketMonitorMock(
     getLifecycleApplyStatus: vi.fn().mockReturnValue({ appliedAt: null, error: null }),
     applyBucketLifecycleRules: vi.fn(),
     startBucketMonitor: vi.fn(),
+    __setLifecycleFnForTests: vi.fn(),
   };
   Object.defineProperties(base, Object.getOwnPropertyDescriptors(overrides));
   return base;

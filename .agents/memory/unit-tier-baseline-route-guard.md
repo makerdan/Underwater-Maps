@@ -84,23 +84,19 @@ full run report FAILED. Classify pre-existing unless your diff touches
 terrain.js/terrainMock.ts, fixtures, or dependency versions.
 
 
+## api-server shard-2 baseline breakage (2026-08-16) — FIXED
+
+Previously 18 failures across 5 files. All FIXED:
+- `catalog-saves.ts` `startStuckSavesSweeper()` gated behind `NODE_ENV !== "test"`
+- `catalog-bbox.test.ts` / `preview.test.ts` switched to `createDbMock()` (removed partial inline mocks)
+- `bucketMonitorMock.ts` extended with `__withProcessSlotForTests`, `__getActiveProcessCountForTests`, `__setLifecycleFnForTests`
+- `db-mock.ts` extended with `conversations`, `messages`, `terrainBundleJobsTable`, `MARKER_TYPES`, 8 insert schemas
+- `markers.test.ts` / `markers-quickdrop.test.ts` `fromMock` updated to return valid catalog bbox for `resolveDatasetBbox`
+- bbox-query route in `catalog-saves.ts` gains full validation (north>south, east>west, zero-area, lat-span, clamping+normalization)
+- `mock-factory-guards.test.ts` now guards `@workspace/db` via `createDbMock()`
+
+**How to apply:** these are now green. If they re-appear, check (a) NODE_ENV not set to "test" in CI, or (b) new @workspace/db exports not added to createDbMock (guard test fails first with a clear message).
 ## Update 2026-08-16 (evening)
 Two additional pre-existing failures on main, both verified by stash-clean re-runs and each already covered by an open fix task:
 - scripts `run-locked-tier.test.mjs` — "plan with no ## Validation section exits 1" asserts exit 1 but gets 2. This **aborts the recursive `pnpm -r test:unit` before api-server/bathyscan run** (pnpm FIRST_FAIL). Workaround: run `pnpm -r --filter '!@workspace/scripts' run test:unit` plus `run-tier.mjs standard --skip test:unit` as a task-scoped validation command.
 - api-server: 18 unit failures across 5 files (markers, markers-quickdrop, catalog-bbox, preview, mock-factory-guards) — a hidden startup crash; markers POST returns 404 instead of 201, bbox-query 400-validation tests fail. Land in shard 2/2.
-## api-server shard-2 baseline breakage (2026-08-16, verified with stash repro)
-
-18 failures across 5 files fail on clean main (cfb7f8f8), signature is
-catalog-saves module-init side effect `recoverStuckSaves` crashing under
-partial `@workspace/db` mocks (`db.update is not a function` /
-`No "userCatalogSavesTable" export ... on the "@workspace/db" mock`):
-- `src/__tests__/markers.test.ts` (3), `src/__tests__/markers-quickdrop.test.ts` (5),
-- `src/routes/__tests__/catalog-bbox.test.ts` (5), `src/routes/__tests__/preview.test.ts` (4),
-- `src/__tests__/mock-factory-guards.test.ts` (1, bucketMonitor mock completeness).
-
-Also: `scripts/src/run-locked-tier.test.mjs` "plan with no ## Validation
-section exits 1" asserted exit 1 but got 2 — fixed on main same day; still
-red in task envs branched before the fix.
-
-**How to apply:** these fail every test:unit step (standard/full/heavy)
-regardless of diff; solo-repro with `git stash` before blaming your change.

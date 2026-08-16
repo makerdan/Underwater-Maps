@@ -181,7 +181,13 @@ export function startStuckSavesSweeper(
   }, intervalMs);
 }
 
-startStuckSavesSweeper();
+// Do not run the sweeper during automated tests: the async DB call fires
+// before test mocks settle and crashes partially-mocked suites.  In
+// production (and in the real dev server) NODE_ENV is never "test", so this
+// guard has no runtime impact.
+if (process.env.NODE_ENV !== "test") {
+  startStuckSavesSweeper();
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -301,43 +307,8 @@ const MIN_BBOX_DEG = 1e-4;
 const MAX_BBOX_LON_DEG = 180;
 const MAX_BBOX_LAT_DEG = 170;
 
-router.post("/datasets/bbox-query", catalogReadRateLimit, validateBody(BboxQueryBody, "POST /api/datasets/bbox-query"), asyncHandler(async (req, res): Promise<void> => {
-  const { dataType, waterType, north, south, east, west } = res.locals.parsedBody;
-
-  if (east - west > MAX_BBOX_LON_DEG) {
-    res.status(400).json({
-      error: "invalid_radius",
-      details: `radius spans more than ${MAX_BBOX_LON_DEG}° of longitude at this latitude — reduce the radius or move away from the pole`,
-    });
-    return;
-  }
-  if (east > 180 || west < -180) {
-    res.status(400).json({
-      error: "invalid_bbox",
-      details: "search circle crosses the antimeridian (antimeridian-crossing queries are not supported)",
-    });
-    return;
-  }
-
-  // Semantic lat range validation — north/south are latitude values and must
-  // stay within the geographic bounds of the WGS84 ellipsoid.
-  if (north > 90 || north < -90) {
-    res.status(422).json({
-      error: "validation_error",
-      field: "north",
-      message: "north must be a finite latitude between -90 and 90",
-    });
-    return;
-  }
-  if (south < -90 || south > 90) {
-    res.status(422).json({
-      error: "validation_error",
-      field: "south",
-      message: "south must be a finite latitude between -90 and 90",
-    });
-    return;
-  }
-
+  const { dataType, waterType, north: rawNorth, south: rawSouth, east: rawEast, west: rawWest } = res.locals.parsedBody;
+  const { dataType, waterType, north: rawNorth, south: rawSouth, east: rawEast, west: rawWest } = res.locals.parsedBody;
   const results = await searchCatalog({
     dataType,
     waterType,

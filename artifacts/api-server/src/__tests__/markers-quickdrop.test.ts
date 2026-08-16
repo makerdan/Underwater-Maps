@@ -41,7 +41,21 @@ const qdMocks = vi.hoisted(() => {
 
 vi.mock("@workspace/db", async () => {
   const { createDbMock } = await import("./helpers/db-mock.js");
-  return createDbMock({ db: { insert: qdMocks.insertMock } });
+  // Return a valid catalog bbox row for resolveDatasetBbox so POST /api/markers
+  // does not 404 when the request body includes a datasetId.
+  const bboxRow = [{ coverageBbox: { minLon: -133, minLat: 55, maxLon: -132, maxLat: 56 } }];
+  return createDbMock({
+    db: {
+      insert: qdMocks.insertMock,
+      select: vi.fn().mockReturnValue({
+        from: vi.fn().mockImplementation((table: Record<string, unknown>) => ({
+          where: table && "coverageBbox" in table
+            ? vi.fn().mockResolvedValue(bboxRow)
+            : vi.fn().mockResolvedValue([]),
+        })),
+      }),
+    },
+  });
 });
 
 vi.mock("drizzle-orm", () => ({
