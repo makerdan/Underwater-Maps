@@ -16,6 +16,12 @@ import { render, screen, fireEvent, within } from "@testing-library/react";
 import React from "react";
 import { usePanelCollapseStore, DEFAULTS } from "@/lib/panelCollapseStore";
 import { DatasetPanel } from "@/components/DatasetPanel";
+import type { UserCatalogSave } from "@workspace/api-client-react";
+
+// Module-level spies read lazily by mock factories (safe: only invoked during
+// tests, never at module init — see vi.hoisted TS inference gap note).
+const requestDatasetSwitchSpy = vi.fn();
+const toastSpy = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Proxy-based API client mock (same pattern as DatasetPanel.test.tsx).
@@ -79,6 +85,7 @@ vi.mock("@/lib/context", () => ({
     mode: "fly",
     pendingExternalUserDatasetId: null,
     setPendingExternalUserDatasetId: vi.fn(),
+    setCatalogSourcedAt: vi.fn(),
   }),
 }));
 
@@ -166,8 +173,9 @@ vi.mock("@/lib/settingsStore", () => {
 });
 
 vi.mock("@/lib/simulatedDataStore", () => ({
-  requestDatasetSwitch: ({ onConfirm }: { onConfirm: () => void }) => {
-    onConfirm();
+  requestDatasetSwitch: (args: { onConfirm: () => void }) => {
+    requestDatasetSwitchSpy(args);
+    args.onConfirm();
   },
 }));
 
@@ -205,7 +213,7 @@ vi.mock("@/lib/markerLayerStore", () => ({
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: (...args: unknown[]) => toastSpy(...args) }),
 }));
 
 vi.mock("@/hooks/useUndoableMarkerDelete", () => ({
@@ -228,12 +236,16 @@ vi.mock("@/lib/terrain", () => ({
 
 // Heavy sub-components — render null or a lightweight stub.
 // The MySavesSection stub also exposes an offline-download trigger button so we
-// can test that the onOfflineDownload callback is wired by DatasetPanel.
+// can test that the onOfflineDownload callback is wired by DatasetPanel, plus
+// two load triggers (null / non-null datasetId) so we can test the null guard
+// inside handleLoadCatalogSaveFromLeft.
 vi.mock("@/components/MySavesSection", () => ({
   MySavesSection: ({
     onOfflineDownload,
+    onLoadCatalogSave,
   }: {
     onOfflineDownload?: (d: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null }) => void;
+    onLoadCatalogSave?: (save: UserCatalogSave) => void;
   }) =>
     React.createElement(
       "div",
@@ -246,6 +258,36 @@ vi.mock("@/components/MySavesSection", () => ({
                 id: "cat-ds-1",
                 name: "Test Catalog Save",
                 bbox: { minLon: -135, maxLon: -134, minLat: 57, maxLat: 58 },
+              }),
+          })
+        : null,
+      onLoadCatalogSave
+        ? React.createElement("button", {
+            "data-testid": "mock-load-save-null-dataset",
+            onClick: () =>
+              onLoadCatalogSave({
+                id: "save-null",
+                catalogId: "cat-1",
+                status: "ready",
+                requestedAt: "2026-01-01T00:00:00Z",
+                datasetId: null,
+                displayLabel: "Null Dataset Save",
+                catalog: null,
+              }),
+          })
+        : null,
+      onLoadCatalogSave
+        ? React.createElement("button", {
+            "data-testid": "mock-load-save-ready",
+            onClick: () =>
+              onLoadCatalogSave({
+                id: "save-ready",
+                catalogId: "cat-2",
+                status: "ready",
+                requestedAt: "2026-01-01T00:00:00Z",
+                datasetId: "ds-1",
+                displayLabel: "Ready Save",
+                catalog: null,
               }),
           })
         : null,
@@ -304,6 +346,8 @@ describe("DatasetPanel — MY LIBRARY collapse / expand", () => {
       // jsdom may not expose localStorage in all configurations
     }
     usePanelCollapseStore.setState({ collapsed: { ...DEFAULTS } });
+    requestDatasetSwitchSpy.mockClear();
+    toastSpy.mockClear();
   });
 
   it("starts expanded: shows ▲ MY LIBRARY and renders MySavesSection", () => {
@@ -375,5 +419,50 @@ describe("DatasetPanel — MY LIBRARY collapse / expand", () => {
     // OfflinePackModal should now be rendered with the dataset we passed.
     // It renders a heading containing the dataset name.
     expect(screen.getByText("Test Catalog Save")).toBeInTheDocument();
+  });
+});
+
+describe("DatasetPanel — handleLoadCatalogSaveFromLeft null-datasetId guard", () => {
+  beforeEach(() => {
+    try {
+      localStorage.clear();
+    } catch {
+      // jsdom may not expose localStorage in all configurations
+    }
+    usePanelCollapseStore.setState({ collapsed: { ...DEFAULTS } });
+    requestDatasetSwitchSpy.mockClear();
+    toastSpy.mockClear();
+  });
+
+  it("loading a save with null datasetId shows a toast and never opens the switch dialog", () => {
+    render(<DatasetPanel />);
+
+    fireEvent.click(screen.getByTestId("mock-load-save-null-dataset"));
+
+    // The switch dialog must not be requested at all — no dialog that leads nowhere.
+    expect(requestDatasetSwitchSpy).not.toHaveBeenCalled();
+
+    // A toast must explain why nothing loaded.
+    expect(toastSpy).toHaveBeenCalledTimes(1);
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining("still processing"),
+      }),
+    );
+  });
+
+  it("loading a save with a non-null datasetId requests the switch as before, with no toast", () => {
+    render(<DatasetPanel />);
+
+    fireEvent.click(screen.getByTestId("mock-load-save-ready"));
+
+    expect(requestDatasetSwitchSpy).toHaveBeenCalledTimes(1);
+    expect(requestDatasetSwitchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        datasetId: "ds-1",
+        datasetName: "Ready Save",
+      }),
+    );
+    expect(toastSpy).not.toHaveBeenCalled();
   });
 });

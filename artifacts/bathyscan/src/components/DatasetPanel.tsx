@@ -2931,21 +2931,38 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // ── Load callbacks for MySavesSection (in MY LIBRARY) ────────────────────
   const handleLoadCatalogSaveFromLeft = useCallback(
     (save: UserCatalogSave) => {
-      const previewId = save.datasetId ?? save.catalogId;
+      // datasetId is nullable in the DB schema (notNull() migration pending).
+      // Without this early guard the switch dialog would open and then silently
+      // no-op on confirm — never show a dialog that leads nowhere.
+      if (!save.datasetId) {
+        toast({
+          title: "Dataset not ready",
+          description:
+            "This saved dataset is still processing — please wait for it to finish before loading.",
+          variant: "destructive",
+          duration: 5000,
+        });
+        return;
+      }
       const datasetName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
       void requestDatasetSwitch({
-        datasetId: previewId,
+        datasetId: save.datasetId,
         datasetName,
         onConfirm: () => {
-          // datasetId is nullable in the DB schema (notNull() migration pending).
-          // Guard here prevents a null string from reaching setPendingExternalUserDatasetId.
-          if (!save.datasetId) return;
+          if (!save.datasetId) {
+            // Unreachable: the early guard above returns before requestDatasetSwitch
+            // is called. Throw loudly so any future regression surfaces instead of
+            // silently doing nothing after the user confirmed the switch dialog.
+            throw new Error(
+              "handleLoadCatalogSaveFromLeft: save.datasetId is null in onConfirm despite early guard",
+            );
+          }
           setPendingExternalUserDatasetId(save.datasetId);
           setCatalogSourcedAt({ forDatasetId: save.datasetId, date: save.catalog?.createdAt ?? null });
         },
       });
     },
-    [setPendingExternalUserDatasetId, setCatalogSourcedAt],
+    [setPendingExternalUserDatasetId, setCatalogSourcedAt, toast],
   );
 
   const handleLoadUserDatasetFromLeft = useCallback(
