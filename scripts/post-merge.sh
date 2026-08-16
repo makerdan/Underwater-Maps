@@ -173,6 +173,37 @@ if [ -f "artifacts/bathyscan/public/port-authority-heavy-skill.zip" ]; then
     echo "[post-merge] port-authority-heavy-skill.zip updated."
   fi
 fi
+# Guardrail: keep .local/custom_skills/<name>/SKILL.md in sync with the
+# canonical .agents/skills/<name>/SKILL.md for every skill that already has a
+# live-copy directory. .local/ is gitignored so git never updates these copies;
+# this block re-copies and re-fingerprints them after every merge so agents
+# always read the current instructions.
+if [ -d ".local/custom_skills" ]; then
+  _synced=0
+  for canonical_dir in .agents/skills/*/; do
+    skill_name="$(basename "$canonical_dir")"
+    canonical_skill="$canonical_dir/SKILL.md"
+    [ -f "$canonical_skill" ] || continue
+
+    # Match case-insensitively: local dir names may differ in casing.
+    local_dir=""
+    for candidate in .local/custom_skills/*/; do
+      candidate_name="$(basename "$candidate")"
+      if [ "$(echo "$candidate_name" | tr '[:upper:]' '[:lower:]')" = "$(echo "$skill_name" | tr '[:upper:]' '[:lower:]')" ]; then
+        local_dir="$candidate"
+        break
+      fi
+    done
+    [ -n "$local_dir" ] || continue
+
+    cp "$canonical_skill" "${local_dir}SKILL.md"
+    md5sum "$canonical_skill" | awk '{print $1}' > "${local_dir}.fingerprint"
+    _synced=$((_synced + 1))
+  done
+  echo "[post-merge] Skill mirror sync: updated ${_synced} local custom_skills copy/copies."
+else
+  echo "[post-merge] .local/custom_skills/ not found — skipping skill mirror sync (normal in fresh CI)."
+fi
 # Re-register tiered validation commands so they survive future merges and are
 # always available on a fresh environment. The commands are defined in
 # scripts/register-validation-commands.mjs; agent sessions call

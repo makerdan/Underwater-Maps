@@ -72,6 +72,8 @@ export function getValidationSteps(logPrefix) {
     { name: "lint", resource: null, cmd: "pnpm run lint", tiers: FAST },
     // no resource: grep-based drift check, sub-second
     { name: "check:lock-skill-sync", resource: null, cmd: "pnpm run check:lock-skill-sync", tiers: FAST },
+    // no resource: md5 fingerprint check, sub-second — catches stale .local/custom_skills/ copies of .agents/skills/
+    { name: "check:skill-mirror-sync", resource: null, cmd: "pnpm run check:skill-mirror-sync", tiers: FAST },
     // no resource: binary-diff check, sub-second — catches stale failure-gate-skill.zip
     { name: "check:failure-gate-zip", resource: null, cmd: "pnpm run check:failure-gate-zip", tiers: FAST },
     // no resource: binary-diff check, sub-second — catches stale poe-setup-skill.zip (skip if zip not yet published)
