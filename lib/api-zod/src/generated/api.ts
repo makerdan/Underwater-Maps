@@ -1287,6 +1287,16 @@ export const DeleteTrailsIdParams = zod.object({
 
 
 /**
+ * Beacon-safe alternative to `DELETE /trails/{id}`. Called by `navigator.sendBeacon` on page unload so pending deletes survive tab-close without requiring an async auth-token lookup. Authentication relies on the session cookie the browser sends automatically with the beacon request. Silently returns 204 whether the trail was found or was already absent, to avoid leaking trail-ID existence to other users.
+
+ * @summary Soft-delete a GPS trail (beacon fallback)
+ */
+export const PostTrailsIdSoftDeleteParams = zod.object({
+  "id": zod.coerce.string().uuid()
+})
+
+
+/**
  * @summary Get paginated trail points
  */
 export const GetTrailsIdPointsParams = zod.object({

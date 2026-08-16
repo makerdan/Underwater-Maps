@@ -3089,6 +3089,78 @@ export const useDeleteTrailsId = <TError = ErrorType<ApiError>,
       return useMutation(getDeleteTrailsIdMutationOptions(options));
     }
 
+export const getPostTrailsIdSoftDeleteUrl = (id: string,) => {
+
+
+
+
+  return `/api/trails/${id}/soft-delete`
+}
+
+/**
+ * Beacon-safe alternative to `DELETE /trails/{id}`. Called by `navigator.sendBeacon` on page unload so pending deletes survive tab-close without requiring an async auth-token lookup. Authentication relies on the session cookie the browser sends automatically with the beacon request. Silently returns 204 whether the trail was found or was already absent, to avoid leaking trail-ID existence to other users.
+
+ * @summary Soft-delete a GPS trail (beacon fallback)
+ */
+export const postTrailsIdSoftDelete = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getPostTrailsIdSoftDeleteUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPostTrailsIdSoftDeleteMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTrailsIdSoftDelete>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postTrailsIdSoftDelete>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['postTrailsIdSoftDelete'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postTrailsIdSoftDelete>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  postTrailsIdSoftDelete(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostTrailsIdSoftDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof postTrailsIdSoftDelete>>>
+
+    export type PostTrailsIdSoftDeleteMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Soft-delete a GPS trail (beacon fallback)
+ */
+export const usePostTrailsIdSoftDelete = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postTrailsIdSoftDelete>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postTrailsIdSoftDelete>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getPostTrailsIdSoftDeleteMutationOptions(options));
+    }
+
 export const getGetTrailsIdPointsUrl = (id: string,
     params?: GetTrailsIdPointsParams,) => {
   const normalizedParams = new URLSearchParams();
