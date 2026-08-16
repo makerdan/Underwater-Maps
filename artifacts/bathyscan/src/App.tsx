@@ -1146,6 +1146,19 @@ function Main() {
     return () => window.removeEventListener("keydown", handler);
   }, [setLocation]);
 
+  // Service-unavailable banner dismiss state.
+  // Resets automatically when isServiceUnavailable flips back to false so the
+  // banner reappears if the server goes away again after a recovery.
+  const [serviceUnavailableDismissed, setServiceUnavailableDismissed] = useState(false);
+  const prevIsServiceUnavailable = useRef(isServiceUnavailable);
+  useEffect(() => {
+    if (prevIsServiceUnavailable.current && !isServiceUnavailable) {
+      // Server recovered — clear the dismiss so the banner shows next time.
+      setServiceUnavailableDismissed(false);
+    }
+    prevIsServiceUnavailable.current = isServiceUnavailable;
+  }, [isServiceUnavailable]);
+
   // Show "click to resume" hint when overview closes
   useEffect(() => {
     const wasOpen = prevOverviewOpenRef.current;
@@ -1205,15 +1218,38 @@ function Main() {
           Reconnecting to server…
         </div>
       )}
-      {isServiceUnavailable && isOnline && (
+      {isServiceUnavailable && isOnline && !serviceUnavailableDismissed && (
         <div
           role="alert"
           aria-live="assertive"
           aria-label="Service unavailable"
           data-testid="service-unavailable-banner"
-          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-amber-950/90 backdrop-blur-sm border-b border-amber-700/40 text-amber-400 text-[16.5px] font-mono tracking-wide select-none pointer-events-none"
+          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-between gap-2 px-3 h-9 bg-amber-950/90 backdrop-blur-sm border-b border-amber-700/40 text-amber-400 text-[13.5px] font-mono tracking-wide select-none"
         >
-          ⚠ Service unavailable — reload the page or try again later
+          {/* spacer so the message stays centred when buttons are present */}
+          <span className="w-16 shrink-0" aria-hidden="true" />
+          <span className="flex items-center gap-1.5 min-w-0 truncate">
+            <span aria-hidden="true">⚠</span>
+            <span>Service unavailable</span>
+          </span>
+          <span className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              aria-label="Reload the page"
+              className="px-2 py-0.5 rounded border border-amber-700/60 bg-amber-900/40 hover:bg-amber-800/60 active:bg-amber-700/60 text-amber-300 text-[12px] font-mono leading-none transition-colors"
+            >
+              Reload
+            </button>
+            <button
+              type="button"
+              onClick={() => setServiceUnavailableDismissed(true)}
+              aria-label="Dismiss service unavailable banner"
+              className="flex items-center justify-center w-6 h-6 rounded hover:bg-amber-900/60 active:bg-amber-800/60 text-amber-500 hover:text-amber-300 transition-colors"
+            >
+              ×
+            </button>
+          </span>
         </div>
       )}
 
