@@ -97,6 +97,8 @@ export function getValidationSteps(logPrefix) {
     // no resource: failure-gate full lint (plan files in .local/tasks/), sub-second.
     // All plan files are backfilled with required sections; full enforcement is now safe.
     { name: "check:failure-gate", resource: null, cmd: "pnpm run check:failure-gate", tiers: FAST },
+    // no resource: self-test for check-failure-gate.mjs — catches regressions in the linter itself, sub-second
+    { name: "check:failure-gate-self-test", resource: null, cmd: "pnpm run check:failure-gate-self-test", tiers: FAST },
     // no resource: auto-remediates missing Regression Guard sections (inserts predates-mandate N/A stub), sub-second.
     { name: "fix:regression-guard-stubs", resource: null, cmd: "node scripts/check-regression-guard.mjs --fix-stub", tiers: FAST },
     // no resource: regression-guard full lint (plan files in .local/tasks/), sub-second.
