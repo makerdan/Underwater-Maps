@@ -19,11 +19,11 @@ Trigger phrases: "clean up tasks", "audit drafts", "prune backlog", "too many op
 
 ---
 
-## Phase 0 — Re-run guard
+## Phase 0 — Re-run guard and snapshot capture
 
-Before doing anything else, fetch the full PROPOSED list.
+**Step 0 — Capture snapshot.** Before anything else, call `listProjectTasks({state:"PROPOSED"})` and record the complete list of returned `taskRef` values as the immutable working set for this run. Log the count (e.g. "Snapshot captured: 42 PROPOSED tasks"). This snapshot is frozen — all subsequent phases operate exclusively on refs present in this list. Any task that becomes PROPOSED after this point is out of scope for the current run.
 
-**Orphan-recovery check (run first):** Scan PROPOSED tasks for any whose title starts with `CONSOLIDATION - `. For each one found, extract all task refs from its description using the pattern `#\d+` (match every token of the form `#` followed by one or more digits, anywhere in the description — do **not** restrict the search to a named section like "What & Why", because template drift would silently suppress matches). For each extracted ref that resolves to a PROPOSED task whose title does not yet start with `DELETE - `, immediately call `updateProjectTask({taskRef, title:"DELETE - <original title>"})` to prefix it. Report how many orphaned originals were repaired (may be zero). This makes partial-run recovery fully automatic on re-run.
+**Orphan-recovery check (run after snapshot):** Scan PROPOSED tasks for any whose title starts with `CONSOLIDATION - `. For each one found, extract all task refs from its description using the pattern `#\d+` (match every token of the form `#` followed by one or more digits, anywhere in the description — do **not** restrict the search to a named section like "What & Why", because template drift would silently suppress matches). For each extracted ref that resolves to a PROPOSED task whose title does not yet start with `DELETE - `, immediately call `updateProjectTask({taskRef, title:"DELETE - <original title>"})` to prefix it. Report how many orphaned originals were repaired (may be zero). This makes partial-run recovery fully automatic on re-run.
 
 > **Format contract:** Consolidation task descriptions must cite each covered original as `#NNNN` (hash + digits) somewhere in the description body. Any change to the description template must preserve these bare `#NNNN` tokens so the broad regex sweep above continues to find them.
 
@@ -32,6 +32,8 @@ Before doing anything else, fetch the full PROPOSED list.
 ---
 
 ## Phase 1 — Gather inputs
+
+Only process refs present in the Phase 0 snapshot; ignore any task ref not in that list.
 
 Collect the following in parallel:
 
@@ -43,6 +45,8 @@ Collect the following in parallel:
 ---
 
 ## Phase 2 — Domain clustering
+
+Only cluster task refs present in the Phase 0 snapshot; ignore any ref not in that list.
 
 Before making any DELETE/CONSOLIDATE decisions, group all PROPOSED tasks into domain clusters by subsystem (e.g., "GPS import", "nodata color", "terrain rendering", "ETA display"). Two tasks belong to the same cluster if:
 
@@ -56,11 +60,15 @@ Tasks within a cluster are the primary consolidation candidates. List the cluste
 
 ## Phase 3 — Active task cross-check
 
+Only evaluate task refs present in the Phase 0 snapshot; silently ignore any ref not in that list.
+
 For each PROPOSED task, search the titles **and descriptions** of all PENDING + IN_PROGRESS tasks for overlapping component names, file paths mentioned, or keywords. A match means the active task is already covering that ground. Record the matching active task ref for use in the reasoning column.
 
 ---
 
 ## Phase 4 — Dependency chain check
+
+Only check dependents for task refs present in the Phase 0 snapshot; silently ignore any ref not in that list.
 
 Before marking any task DELETE, call `getProjectTask({taskRef})` on its dependents (if any are known from the `dependsOn` field of other tasks). If a PROPOSED task has one or more downstream PROPOSED dependents, do not silently delete it — instead flag it as "DELETE (check dependents: #X, #Y)" and note the orphan risk in the reasoning column.
 
@@ -68,7 +76,9 @@ Before marking any task DELETE, call `getProjectTask({taskRef})` on its dependen
 
 ## Phase 5 — Decision pass (dry run only — no mutations yet)
 
-Apply these rules to every non-skipped PROPOSED task and record the decision in a local table. **Do not call `updateProjectTask` yet.**
+Only evaluate task refs present in the Phase 0 snapshot; silently ignore any ref not in that list. **Do not call `updateProjectTask` yet.**
+
+Apply these rules to every non-skipped PROPOSED task and record the decision in a local table.
 
 ### DELETE — apply when any of the following is true
 
@@ -95,7 +105,9 @@ Every decision row **must** include a one-sentence reason (e.g., "superseded by 
 
 ## Phase 5b — Priority ranking (LEAVE ALONE tasks only)
 
-After the decision pass, assign a tier to every LEAVE ALONE task. CONSOLIDATE and DELETE tasks are not ranked.
+Only rank task refs present in the Phase 0 snapshot; silently ignore any ref not in that list. CONSOLIDATE and DELETE tasks are not ranked.
+
+After the decision pass, assign a tier to every LEAVE ALONE task.
 
 - **Tier 1**: the task is listed as a `dependsOn` prerequisite for another surviving task, OR its title or description references a broken typecheck, broken test gate, or validation failure that blocks every CI run.
 - **Tier 2**: standalone user-visible feature or data-correctness fix, no unmet dependencies, ready to start immediately.
@@ -120,6 +132,8 @@ After printing the table, call `user_query` to ask the user to confirm before pr
 ---
 
 ## Phase 7 — Apply mutations (only after confirmation)
+
+Only mutate task refs present in the Phase 0 snapshot; silently ignore any ref not in that list.
 
 In this order:
 
@@ -163,6 +177,7 @@ Minimum two bullets per consolidation task. Vague entries like "add a test for t
 Print a final markdown table and a three-line summary:
 
 ```
+Snapshot size at start: N tasks
 Deleted:       N tasks
 Consolidated:  N tasks into M consolidation tasks
 Left alone:    N tasks
@@ -179,3 +194,4 @@ Skipped (already prefixed): N tasks
 - **Orphan check first** — never DELETE a task with downstream dependents without flagging the orphan risk.
 - **Never place `updateProjectTask` rename calls after `proposeProjectTasks`** — `proposeProjectTasks` pauses the agent loop; any mutation placed after it will not execute in the same run. All renames must complete before `proposeProjectTasks` is called.
 - **No validation commands** — this skill makes no code changes; never invoke test-fast, test-standard, test-heavy, typecheck, or lint at any point during execution.
+- **Snapshot scope** — the working set is frozen at the start of Phase 0; tasks that become PROPOSED after the snapshot is taken are not in scope for the current run and must never be evaluated or mutated.
