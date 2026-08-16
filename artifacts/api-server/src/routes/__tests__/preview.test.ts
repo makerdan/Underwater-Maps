@@ -21,7 +21,7 @@ vi.mock("@workspace/db", async () => {
   const { createDbMock } = await import("../../__tests__/helpers/db-mock.js");
   return createDbMock({
     db: {
-      select: () => ({ from: () => ({ where: () => dbSelectRowsMock() }) }),
+      select: vi.fn(() => ({ from: () => ({ where: () => dbSelectRowsMock() }) })),
     },
   });
 });

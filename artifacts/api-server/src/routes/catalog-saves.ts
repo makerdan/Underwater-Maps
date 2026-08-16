@@ -263,10 +263,10 @@ router.get("/datasets/catalog/search", catalogReadRateLimit, asyncHandler(async 
   const results = await searchCatalog({
     dataType,
     waterType,
-    minLon: west,
-    minLat: south,
-    maxLon: east,
-    maxLat: north,
+    minLon,
+    minLat,
+    maxLon,
+    maxLat,
   });
   res.json(
     validateResponse(
@@ -307,8 +307,43 @@ const MIN_BBOX_DEG = 1e-4;
 const MAX_BBOX_LON_DEG = 180;
 const MAX_BBOX_LAT_DEG = 170;
 
-  const { dataType, waterType, north: rawNorth, south: rawSouth, east: rawEast, west: rawWest } = res.locals.parsedBody;
-  const { dataType, waterType, north: rawNorth, south: rawSouth, east: rawEast, west: rawWest } = res.locals.parsedBody;
+router.post("/datasets/bbox-query", catalogReadRateLimit, validateBody(BboxQueryBody, "POST /api/datasets/bbox-query"), asyncHandler(async (req, res): Promise<void> => {
+  const { dataType, waterType, north, south, east, west } = res.locals.parsedBody;
+
+  if (east - west > MAX_BBOX_LON_DEG) {
+    res.status(400).json({
+      error: "invalid_radius",
+      details: `radius spans more than ${MAX_BBOX_LON_DEG}° of longitude at this latitude — reduce the radius or move away from the pole`,
+    });
+    return;
+  }
+  if (east > 180 || west < -180) {
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: "search circle crosses the antimeridian (antimeridian-crossing queries are not supported)",
+    });
+    return;
+  }
+
+  // Semantic lat range validation — north/south are latitude values and must
+  // stay within the geographic bounds of the WGS84 ellipsoid.
+  if (north > 90 || north < -90) {
+    res.status(422).json({
+      error: "validation_error",
+      field: "north",
+      message: "north must be a finite latitude between -90 and 90",
+    });
+    return;
+  }
+  if (south < -90 || south > 90) {
+    res.status(422).json({
+      error: "validation_error",
+      field: "south",
+      message: "south must be a finite latitude between -90 and 90",
+    });
+    return;
+  }
+
   const results = await searchCatalog({
     dataType,
     waterType,
@@ -470,7 +505,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
 
   // Validate the catalog entry exists
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
+  const entry = entries.find((e) => e.id === catalogId) ?? null;
   if (!entry) {
     res.status(404).json({ error: "not_found", details: `Catalog entry '${catalogId}' not found` });
     return;
@@ -1224,7 +1259,7 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, dataMutationRateLimit, 
   }
 
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
+  const entry = entries.find((e) => e.id === row.catalogId) ?? null;
   if (!entry) {
     res.status(404).json({
       error: "not_found",
@@ -1258,7 +1293,7 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, dataMutationRateLimit, 
 
   const [updated] = await db
     .update(userCatalogSavesTable)
-    .set({ folderId })
+    .set({ status: "processing", errorMessage: null, datasetId: null })
     .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
     .returning();
 
@@ -1282,7 +1317,7 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
   const rows = await db
     .select()
     .from(userCatalogSavesTable)
-    .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)));
+    .where(eq(userCatalogSavesTable.userId, userId));
 
   const entries = await getCatalogEntries();
   const entryMap = new Map(entries.map((e) => [e.id, e]));
@@ -1323,7 +1358,7 @@ router.get("/datasets/my-saves/:id/status", requireAuth, asyncHandler(async (req
   }
 
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
+  const entry = entries.find((e) => e.id === statusRow.catalogId) ?? null;
   res.json(validateResponse(GetDatasetsMySavesIdStatusResponse, formatSaveRow(statusRow, entry), "GET /api/datasets/my-saves/:id/status"));
 }));
 
@@ -1456,7 +1491,7 @@ router.patch("/datasets/my-saves/:id/rename", requireAuth, validateBody(RenameSa
 
   const [updated] = await db
     .update(userCatalogSavesTable)
-    .set({ folderId })
+    .set({ displayLabel })
     .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
     .returning();
 
