@@ -149,17 +149,20 @@ describe("POST /api/datasets/bbox-query", () => {
     expect(res.status).toBe(200);
   });
 
-  it("normalizes out-of-range longitudes and clamps latitudes", async () => {
-    // west=190 wraps to -170, east=-170 stays -170 → east<west → antimeridian.
-    // Instead exercise normalization happy-path: send east=190 (→-170),
-    // west=170, north=95 (→clamp 90), south=80 → bbox becomes
-    // {north:90,south:80,east:-170,west:170} → east<west → antimeridian.
-    // Use east=200 (→-160), west=-170 → {east:-160,west:-170} valid 10° wide.
-    const res = await request(app)
+  it("rejects out-of-range longitudes (400) and out-of-range latitudes (422)", async () => {
+    // Since the 2026-08-14 lat-range guards, out-of-range coordinates are
+    // rejected, not silently normalized/clamped.
+    const lonRes = await request(app)
       .post("/api/datasets/bbox-query")
-      .send({ north: 95, south: 80, east: 200, west: -170 });
-    expect(res.status).toBe(200);
-    expect(res.body.bbox).toEqual({ north: 90, south: 80, east: -160, west: -170 });
+      .send({ north: 85, south: 80, east: 200, west: -170 });
+    expect(lonRes.status).toBe(400);
+    expect(lonRes.body.error).toBe("invalid_bbox");
+
+    const latRes = await request(app)
+      .post("/api/datasets/bbox-query")
+      .send({ north: 95, south: 80, east: -160, west: -170 });
+    expect(latRes.status).toBe(422);
+    expect(latRes.body).toMatchObject({ error: "validation_error", field: "north" });
   });
 
   it("400 when dataType is invalid", async () => {

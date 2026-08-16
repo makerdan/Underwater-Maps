@@ -312,8 +312,8 @@ router.post("/datasets/bbox-query", catalogReadRateLimit, validateBody(BboxQuery
 
   if (east - west > MAX_BBOX_LON_DEG) {
     res.status(400).json({
-      error: "invalid_radius",
-      details: `radius spans more than ${MAX_BBOX_LON_DEG}° of longitude at this latitude — reduce the radius or move away from the pole`,
+      error: "invalid_bbox",
+      details: `bbox is too large — longitude span must not exceed ${MAX_BBOX_LON_DEG}°`,
     });
     return;
   }
@@ -340,6 +340,38 @@ router.post("/datasets/bbox-query", catalogReadRateLimit, validateBody(BboxQuery
       error: "validation_error",
       field: "south",
       message: "south must be a finite latitude between -90 and 90",
+    });
+    return;
+  }
+
+  // Bbox shape validation (after the lat-range 422 guards above).
+  // Contract: out-of-range coordinates are REJECTED (400/422), never
+  // silently normalized or clamped.
+  if (east <= west) {
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: "east must be greater than west (antimeridian-crossing queries are not supported)",
+    });
+    return;
+  }
+  if (north <= south) {
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: "north must be greater than south",
+    });
+    return;
+  }
+  if (north - south < MIN_BBOX_DEG || east - west < MIN_BBOX_DEG) {
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: `bbox has (near-)zero area — each side must span at least ${MIN_BBOX_DEG}°`,
+    });
+    return;
+  }
+  if (north - south > MAX_BBOX_LAT_DEG) {
+    res.status(400).json({
+      error: "invalid_bbox",
+      details: `bbox is too large — latitude span must not exceed ${MAX_BBOX_LAT_DEG}°`,
     });
     return;
   }

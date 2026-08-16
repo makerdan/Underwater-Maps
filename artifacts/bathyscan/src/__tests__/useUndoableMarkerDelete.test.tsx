@@ -84,6 +84,12 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: toastFn }),
 }));
 
+// The hook's onSuccess fires refreshOfflinePackMarkers, which hits IndexedDB
+// (absent in the node test environment) and produced unhandled rejections.
+vi.mock("@/lib/offlinePackStore", () => ({
+  refreshOfflinePackMarkers: vi.fn(async () => {}),
+}));
+
 vi.mock("@/components/ui/toast", () => ({
   ToastAction: ({
     onClick,

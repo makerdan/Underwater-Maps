@@ -113,6 +113,20 @@ vi.mock("@workspace/api-client-react", () =>
   }),
 );
 
+// The offline-fallback wrapper uses a raw useQuery (needs a QueryClientProvider)
+// plus IndexedDB; neither exists in this headless test. Delegate straight to the
+// mocked useGetMarkers so slot behavior matches the pre-fallback contract.
+vi.mock("@/hooks/useGetMarkersWithOfflineFallback", async () => {
+  const api = await import("@workspace/api-client-react");
+  return {
+    useGetMarkersWithOfflineFallback: (datasetId: string, enabled: boolean) => {
+      const { data } = (api as { useGetMarkers: (p: { datasetId: string }) => { data: unknown } }).useGetMarkers({ datasetId });
+      void enabled;
+      return { data };
+    },
+  };
+});
+
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({ terrain: mockTerrain }),
 }));

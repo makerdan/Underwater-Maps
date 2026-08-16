@@ -983,11 +983,13 @@ const GONE_BUCKET_JOB_ERROR =
  * Never throws — called fire-and-forget from startBucketMonitor().
  */
 export async function rehydrateBucketJobsFromDb(): Promise<void> {
-  const inProgress = inArray(uploadJobsTable.status, ["queued", "processing"]);
-  const bucketOwned = isNotNull(uploadJobsTable.objectKey);
-
   let rows: Array<{ id: string; objectKey: string | null }>;
   try {
+    // Built inside the try so a broken/mocked schema (e.g. a test double
+    // missing uploadJobsTable) surfaces as a logged non-fatal warning, not an
+    // unhandled rejection out of the fire-and-forget startBucketMonitor call.
+    const inProgress = inArray(uploadJobsTable.status, ["queued", "processing"]);
+    const bucketOwned = isNotNull(uploadJobsTable.objectKey);
     const cutoff = new Date(Date.now() - STALE_BUCKET_JOB_MAX_AGE_MS);
     const swept = await db
       .update(uploadJobsTable)
@@ -1091,7 +1093,11 @@ export function startBucketMonitor(): () => Promise<void> {
   // Reconcile persisted job state from before the restart: sweep stale rows,
   // re-queue jobs whose source object still awaits processing, and mark
   // finished/vanished ones so client polls get a definitive answer.
-  void rehydrateBucketJobsFromDb();
+  // Defensive catch: rehydrateBucketJobsFromDb is documented never to throw,
+  // but this fire-and-forget call must never surface an unhandled rejection.
+  rehydrateBucketJobsFromDb().catch((err: unknown) => {
+    logger.warn({ err }, "[bucket-monitor] bucket-job rehydration failed (non-fatal)");
+  });
 
   // Apply lifecycle rules idempotently on every startup, then begin scanning.
   // Capture the promise so stop() can await it (bounded) before teardown.

@@ -9,7 +9,9 @@
  * Covers:
  *   (a) TASK_PLAN_FILE absent + --allow-no-plan → warn + exit 0 (opt-out for non-task runs)
  *   (a2) TASK_PLAN_FILE absent, no --allow-no-plan → TIER-LOCK VIOLATION, exit 1
- *   (b) Plan has no ## Validation section → warn + exit 0 (graceful degradation)
+ *   (b) Plan has no ## Validation section → TIER-LOCK VIOLATION, exit 1 (the
+ *       Failure Gate mandate requires every active plan to carry a Validation
+ *       section; run-locked-tier --dry-run exits non-zero for missing sections)
  *   (c) Plan tier matches the requested tier → exit 0
  *   (d) Plan tier does not match the requested tier → TIER-LOCK VIOLATION, exit 1
  */
@@ -138,7 +140,12 @@ describe("TASK_PLAN_FILE absent", () => {
 // ── (b) Plan has no ## Validation section ───────────────────────────────────
 
 describe("plan without ## Validation section", () => {
-  it("exits 1 with TIER-LOCK VIOLATION (hardened — missing section is an error)", () => {
+  it("exits 1 with TIER-LOCK VIOLATION (active plans must carry a Validation section)", () => {
+    // The Failure Gate mandate requires every active plan file to contain a
+    // ## Validation section. A plan without one cannot resolve to a tier, so
+    // run-tier.mjs must hard-fail rather than silently run an arbitrary tier.
+    // (Legacy pre-mandate plans in .local/tasks were bulk-backfilled, so this
+    // no longer needs graceful degradation.)
     const planFile = writePlanWithoutValidation("plan-no-validation.md");
     const result = runCheck("standard", planFile);
     assert.equal(
@@ -341,10 +348,11 @@ describe("tier mismatch — TIER-LOCK VIOLATION", () => {
     );
   });
 
-  it("plan with no ## Validation section → exits 1 with TIER-LOCK VIOLATION (hardened)", () => {
-    // A plan file that exists but has NO ## Validation section is a hard
-    // error since the tier-lock hardening: the section is mandatory and
-    // check-failure-gate --fix-stub can auto-add it.
+  it("plan with no ## Validation section → exits 1 with TIER-LOCK VIOLATION", () => {
+    // A plan file with NO ## Validation section cannot resolve to a tier.
+    // Since the Failure Gate mandate (and the bulk backfill of legacy plans),
+    // this is a hard violation — not graceful degradation; the section is
+    // mandatory and check-failure-gate --fix-stub can auto-add it.
     const planFile = writePlanWithoutValidation("plan-no-val-mismatch.md");
     const result = runCheck("standard", planFile);
     assert.equal(
