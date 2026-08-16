@@ -58,7 +58,7 @@ responsibility.
     stub: `
 ## Validation
 **Command:** \`test-standard\`
-**Why:** Placeholder — review before running this task (state what the command covers and why it fits the task scope).
+**Why:** <replace with one-line justification>
 **Do not escalate:** Run exactly this command. Pre-existing failures are
 handled above — they are never a reason to run a heavier tier.
 `,
@@ -121,11 +121,17 @@ const REQUIRED_VALIDATION_LINES = [
 ];
 
 const fixStub = process.argv.includes("--fix-stub");
-// --stubs-only: skip the required-headings check and only report unfilled stub
-// placeholders and missing required validation lines. Used by the CI fast-tier
-// step so that old pre-mandate plan files (which lack the required sections)
-// do not permanently break the fast tier. The missing-sections check remains
-// available for manual audits.
+// --stubs-only: skip the required-headings check (missing sections are not
+// reported) and only report unfilled stub placeholders and missing required
+// validation lines. Used by the CI fast-tier step so that old pre-mandate
+// plan files (which lack the required sections) do not permanently break the
+// fast tier.
+//
+// IMPORTANT: --stubs-only only skips the *missing-section* check. When a
+// ## Validation section IS present, all inner-line validation still runs in
+// full — including the validateLine check that rejects unrecognised
+// **Command:** tier names. A plan with `**Command:** \`not-a-real-tier\``
+// will be caught and exit 1 even in --stubs-only mode.
 const stubsOnly = process.argv.includes("--stubs-only");
 
 // ---------------------------------------------------------------------------
@@ -134,10 +140,30 @@ const stubsOnly = process.argv.includes("--stubs-only");
 // actual content (not merely mentioned in prose or task-description text).
 // Both anchors include the surrounding markup so incidental mentions of the
 // placeholder phrase in task descriptions do not trigger a false positive.
+//
+// Two families of placeholder are recognised:
+//   1. Fix-stub wording — the text that REQUIRED_VALIDATION_LINES[].fixLine
+//      inserts when a required inner line is absent (e.g. `<replace with
+//      one-line justification>`).  These come from the flatMap below.
+//   2. Skill-template wording — the Failure Gate SKILL.md offers two
+//      slightly different placeholder forms for the **Why:** line:
+//        a. "<one-line justification — what this command covers…>"  (long form)
+//        b. "<one-line justification>"                              (short form)
+//      Both share the prefix "<one-line justification" so one startsWith
+//      entry covers both.
+//   3. Legacy section-stub wording — when the entire ## Validation section
+//      was missing, the old REQUIRED_SECTIONS stub wrote a **Why:** line
+//      containing "Placeholder — review before running this task". Files
+//      that were stubbed before the current fix-stub wording was standardised
+//      must still be caught.
 // ---------------------------------------------------------------------------
 const STUB_PLACEHOLDERS = [
   "**Command:** `<mid-weight tier for this project>`",
   ...REQUIRED_VALIDATION_LINES.flatMap((r) => (r.placeholder ? [r.placeholder] : [])),
+  // Skill-template angle-bracket form for **Why:** (line 153 of failure-gate SKILL.md)
+  "**Why:** <one-line justification",
+  // Legacy section-stub wording written by older --fix-stub runs
+  "**Why:** Placeholder — review before running this task",
 ];
 
 // ---------------------------------------------------------------------------
@@ -223,24 +249,14 @@ for (const file of files) {
         ({ heading }) => !lines.some((line) => line.trimEnd() === heading),
       );
 
-  // Check only for placeholders that appear at the start of a line (ignoring
-  // leading whitespace). This avoids false positives when the placeholder
-  // string is mentioned in prose or a task description inside backticks.
-  const unfilledPlaceholders = STUB_PLACEHOLDERS.filter((p) =>
-    lines.some((line) => line.trimStart().startsWith(p)),
-  );
-
-  // Check for required lines within the Validation section — only when the
-  // section is present (missing section is already caught by missingSections).
-  // Each entry in validationLineIssues is { rvl, reason, absent } where:
-  //   absent — true when the marker line is entirely missing (fixable by --fix-stub)
-  //   reason — human-readable error description (marker name or validateLine message)
+  // Collect only the lines that belong to the ## Validation section (between the
+  // heading and the next ## heading or EOF). Used for both placeholder detection
+  // and required-line checks, preventing false positives when a marker string
+  // appears in prose, code-block examples, or task-description text elsewhere
+  // in the document.
   const valHeadingIdx = lines.findIndex((l) => l.trimEnd() === "## Validation");
   const hasValidationSection = valHeadingIdx !== -1;
 
-  // Collect only the lines that belong to the ## Validation section (between the
-  // heading and the next ## heading or EOF). This prevents false positives when a
-  // marker string appears in a code-block example earlier in the document.
   const validationSectionLines = hasValidationSection
     ? (() => {
         const sectionLines = [];
@@ -251,6 +267,20 @@ for (const file of files) {
         return sectionLines;
       })()
     : [];
+
+  // Check only for placeholders that appear at the start of a line within the
+  // ## Validation section (ignoring leading whitespace). Scoping to the section
+  // avoids false positives when a placeholder string is mentioned in prose,
+  // code-block templates, or task descriptions elsewhere in the document.
+  const unfilledPlaceholders = STUB_PLACEHOLDERS.filter((p) =>
+    validationSectionLines.some((line) => line.trimStart().startsWith(p)),
+  );
+
+  // Check for required lines within the Validation section — only when the
+  // section is present (missing section is already caught by missingSections).
+  // Each entry in validationLineIssues is { rvl, reason, absent } where:
+  //   absent — true when the marker line is entirely missing (fixable by --fix-stub)
+  //   reason — human-readable error description (marker name or validateLine message)
 
   const validationLineIssues = hasValidationSection
     ? REQUIRED_VALIDATION_LINES.flatMap((rvl) => {
@@ -322,6 +352,42 @@ for (const file of files) {
           }
         }
       }
+
+      // Re-stub non-standard placeholder Why lines — replace skill-template
+      // angle-bracket forms and legacy "Placeholder — review..." text with the
+      // canonical fix-stub placeholder so all unfilled Whys use a consistent,
+      // easily-recognised form.  The standard placeholder itself is NOT changed
+      // here; the agent must replace it with real content manually.
+      const WHY_STANDARD_PLACEHOLDER = REQUIRED_VALIDATION_LINES.find(
+        (r) => r.marker === "**Why:**",
+      )?.placeholder;
+      const NON_STANDARD_WHY_PREFIXES = [
+        "**Why:** <one-line justification",
+        "**Why:** Placeholder — review before running this task",
+      ];
+      if (WHY_STANDARD_PLACEHOLDER) {
+        const reReadLines = content.split("\n");
+        const reValIdx = reReadLines.findIndex((l) => l.trimEnd() === "## Validation");
+        if (reValIdx !== -1) {
+          let changed = false;
+          for (let i = reValIdx + 1; i < reReadLines.length; i++) {
+            if (reReadLines[i].startsWith("## ")) break;
+            const trimmed = reReadLines[i].trimStart();
+            if (NON_STANDARD_WHY_PREFIXES.some((p) => trimmed.startsWith(p))) {
+              reReadLines[i] = WHY_STANDARD_PLACEHOLDER;
+              changed = true;
+              console.warn(
+                `check-failure-gate [--fix-stub] ⚠ patched "${file}" — normalised non-standard **Why:** placeholder to canonical form.`,
+              );
+              break;
+            }
+          }
+          if (changed) {
+            content = reReadLines.join("\n");
+            await writeFile(filePath, content, "utf8");
+          }
+        }
+      }
     }
   }
 }
@@ -338,12 +404,18 @@ for (const { file, missingSections, unfilledPlaceholders, missingValidationLines
   const hasMissing = !fixStub && missingSections.length > 0;
   const hasMissingLines = !fixStub && missingValidationLines.length > 0;
   if (!hasMissing && !hasMissingLines && unfilledPlaceholders.length === 0) {
-    // patched by --fix-stub
+    // patched by --fix-stub (or invalid tier in fix-stub mode — noted in patch details)
     const patchDetails = [
       ...missingSections.map((s) => `section: ${s}`),
       ...missingValidationLines.map((m) => `line: ${m}`),
     ].join(", ");
     console.log(`  ✓ ${file} (patched by --fix-stub: ${patchDetails})`);
+  } else if (fixStub && unfilledPlaceholders.length > 0) {
+    // In --fix-stub mode, unfilled placeholders cannot be auto-corrected — they
+    // require manual intervention. Report them as warnings rather than errors so
+    // --fix-stub can still exit 0 (the strict check will catch them on next run).
+    const reasons = [`unfilled stub placeholder(s) require manual fix: ${unfilledPlaceholders.map((p) => `"${p}"`).join(", ")}`];
+    console.log(`  ⚠ ${file} — ${reasons.join("; ")}`);
   } else {
     const reasons = [];
     if (hasMissing) reasons.push(`missing section(s): ${missingSections.join(", ")}`);
@@ -361,14 +433,19 @@ for (const { file, missingSections, unfilledPlaceholders, missingValidationLines
 const trueNonCompliant = nonCompliant.filter(
   ({ missingSections, unfilledPlaceholders, _validationLineIssues }) => {
     const issues = _validationLineIssues || [];
-    // Absent lines are auto-inserted by --fix-stub, so skip them in fixStub mode.
-    // Invalid values (absent=false) cannot be auto-fixed — always surface them.
     const unfixableIssues = issues.filter((i) => !i.absent);
+    // In --fix-stub mode: absent lines and missing sections are auto-inserted
+    // (exit 0 after patching); unfilled placeholders and invalid tier values
+    // cannot be auto-fixed but --fix-stub still exits 0 so the pipeline can
+    // proceed to the strict check step which will catch them.
+    //
+    // In strict mode: ALL issues cause exit 1 — missing sections, unfilled
+    // placeholders, absent required lines, and invalid tier values.
     return (
       (!fixStub && missingSections.length > 0) ||
-      unfilledPlaceholders.length > 0 ||
+      (!fixStub && unfilledPlaceholders.length > 0) ||
       (!fixStub && issues.some((i) => i.absent)) ||
-      unfixableIssues.length > 0
+      (!fixStub && unfixableIssues.length > 0)
     );
   },
 );
