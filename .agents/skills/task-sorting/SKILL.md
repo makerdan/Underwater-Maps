@@ -49,6 +49,8 @@ on any PROPOSED list.
 
 Then fetch descriptions for all tasks in the snapshot.
 
+**Orphan-recovery check (run before Step A):** Scan the snapshot for any task whose title starts with `CONSOLIDATION - `. For each one found, extract all task refs from its description using the pattern `#\d+` (match every token of the form `#` followed by one or more digits, anywhere in the description — do **not** restrict the search to a named section, because template drift would silently suppress matches). For each extracted ref that is present in the Phase 0 snapshot and resolves to a PROPOSED task whose title does not yet start with `DELETE - `, immediately call `updateProjectTask({taskRef, title:"DELETE - <original title>"})` to prefix it. **Only act on refs present in the Phase 0 snapshot** — do not modify any task whose ref was not captured at snapshot time, even if it appears in a CONSOLIDATION task's description and is currently PROPOSED. Report how many orphaned originals were repaired (may be zero).
+
 **Step A — Skip already-handled tasks.** For each task whose title starts
 with `DELETE - ` (case-sensitive), skip it entirely — it is already marked
 for removal by a prior run of this skill or Task Triage.
