@@ -4505,11 +4505,16 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         <BulkOfflinePanel
           datasets={(() => {
             const seen = new Set<string>();
-            const combined: Array<{ id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } }> = [];
+            const combined: Array<{ id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number }; resolutionM?: number }> = [];
             for (const d of userDatasets ?? []) {
               if (!seen.has(d.id)) {
                 seen.add(d.id);
-                combined.push({ id: d.id, name: d.name, bbox: d.bbox ?? undefined });
+                combined.push({
+                  id: d.id,
+                  name: d.name,
+                  bbox: d.bbox ?? undefined,
+                  ...(d.resolutionM != null ? { resolutionM: d.resolutionM } : {}),
+                });
               }
             }
             for (const s of readyCatalogSaves) {

@@ -6894,6 +6894,13 @@ components:
             maxLat:
               type: number
           required: [minLon, maxLon, minLat, maxLat]
+        resolutionM:
+          type: number
+          description: |
+            Approximate horizontal grid resolution in metres, computed from the
+            stored terrain grid's bbox and cell count. Used by the offline
+            storage estimator to choose the correct bytes-per-sample factor.
+            Absent when the stored terrain grid lacks valid dimensions or bbox.
       required:
         - id
         - name

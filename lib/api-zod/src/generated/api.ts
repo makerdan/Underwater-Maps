@@ -331,7 +331,8 @@ export const PostDatasetsUploadResponse = zod.object({
   "maxLon": zod.number(),
   "minLat": zod.number(),
   "maxLat": zod.number()
-}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.'),
+  "resolutionM": zod.number().optional().describe('Approximate horizontal grid resolution in metres, computed from the\nstored terrain grid\'s bbox and cell count. Used by the offline\nstorage estimator to choose the correct bytes-per-sample factor.\nAbsent when the stored terrain grid lacks valid dimensions or bbox.\n')
 }).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch')
 }).describe('Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller\'s dataset library; `savedDatasetId` carries the new row\'s UUID.')
 
@@ -512,7 +513,8 @@ export const PostDatasetsRasterCommitResponse = zod.object({
   "maxLon": zod.number(),
   "minLat": zod.number(),
   "maxLat": zod.number()
-}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.'),
+  "resolutionM": zod.number().optional().describe('Approximate horizontal grid resolution in metres, computed from the\nstored terrain grid\'s bbox and cell count. Used by the offline\nstorage estimator to choose the correct bytes-per-sample factor.\nAbsent when the stored terrain grid lacks valid dimensions or bbox.\n')
 }).optional().describe('Metadata for the freshly-saved row, suitable for optimistically inserting into the \"My Uploads\" list without a refetch')
 }).describe('Full terrain and overview grids generated from an uploaded file. The upload is always persisted into the caller\'s dataset library; `savedDatasetId` carries the new row\'s UUID.')
 
@@ -543,7 +545,8 @@ export const GetUserDatasetsResponseItem = zod.object({
   "maxLon": zod.number(),
   "minLat": zod.number(),
   "maxLat": zod.number()
-}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.'),
+  "resolutionM": zod.number().optional().describe('Approximate horizontal grid resolution in metres, computed from the\nstored terrain grid\'s bbox and cell count. Used by the offline\nstorage estimator to choose the correct bytes-per-sample factor.\nAbsent when the stored terrain grid lacks valid dimensions or bbox.\n')
 }).describe('Metadata for a user-saved custom terrain dataset')
 export const GetUserDatasetsResponse = zod.array(GetUserDatasetsResponseItem)
 
@@ -753,7 +756,8 @@ export const PostUserDatasetsIdGeorefResponse = zod.object({
   "maxLon": zod.number(),
   "minLat": zod.number(),
   "maxLat": zod.number()
-}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.'),
+  "resolutionM": zod.number().optional().describe('Approximate horizontal grid resolution in metres, computed from the\nstored terrain grid\'s bbox and cell count. Used by the offline\nstorage estimator to choose the correct bytes-per-sample factor.\nAbsent when the stored terrain grid lacks valid dimensions or bbox.\n')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 
@@ -798,7 +802,8 @@ export const PatchUserDatasetsIdMoveResponse = zod.object({
   "maxLon": zod.number(),
   "minLat": zod.number(),
   "maxLat": zod.number()
-}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.'),
+  "resolutionM": zod.number().optional().describe('Approximate horizontal grid resolution in metres, computed from the\nstored terrain grid\'s bbox and cell count. Used by the offline\nstorage estimator to choose the correct bytes-per-sample factor.\nAbsent when the stored terrain grid lacks valid dimensions or bbox.\n')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 
@@ -843,7 +848,8 @@ export const PatchUserDatasetsIdRenameResponse = zod.object({
   "maxLon": zod.number(),
   "minLat": zod.number(),
   "maxLat": zod.number()
-}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.')
+}).optional().describe('Geographic bounding box derived from the dataset\'s stored terrain or overview grid. Present when the grid carries valid minLon\/maxLon\/minLat\/maxLat fields; absent when georeferencing data is missing.'),
+  "resolutionM": zod.number().optional().describe('Approximate horizontal grid resolution in metres, computed from the\nstored terrain grid\'s bbox and cell count. Used by the offline\nstorage estimator to choose the correct bytes-per-sample factor.\nAbsent when the stored terrain grid lacks valid dimensions or bbox.\n')
 }).describe('Metadata for a user-saved custom terrain dataset')
 
 

@@ -1743,6 +1743,12 @@ export interface UserDatasetMeta {
   tideStation?: StoredTideStation;
   /** Geographic bounding box derived from the dataset's stored terrain or overview grid. Present when the grid carries valid minLon/maxLon/minLat/maxLat fields; absent when georeferencing data is missing. */
   bbox?: UserDatasetMetaBbox;
+  /** Approximate horizontal grid resolution in metres, computed from the
+  stored terrain grid's bbox and cell count. Used by the offline
+  storage estimator to choose the correct bytes-per-sample factor.
+  Absent when the stored terrain grid lacks valid dimensions or bbox.
+   */
+  resolutionM?: number;
 }
 
 /**

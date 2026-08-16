@@ -138,6 +138,26 @@ function extractBbox(
   return null;
 }
 
+/**
+ * Compute the approximate horizontal grid resolution in metres from a stored
+ * terrain grid.  Uses the bbox extent and cell count — the same formula used
+ * by the client-side `estimatePackStorageBytesFromBbox`.
+ *
+ * Returns undefined when the grid lacks valid dimensions or bbox.
+ */
+function extractResolutionM(grid: StoredTerrainJson | null | undefined): number | undefined {
+  if (!grid) return undefined;
+  const { width, height, minLon, maxLon, minLat, maxLat } = grid;
+  if (!(width > 0) || !(height > 0)) return undefined;
+  if (!isFinite(minLon) || !isFinite(maxLon) || !isFinite(minLat) || !isFinite(maxLat)) return undefined;
+  const midLat = (minLat + maxLat) / 2;
+  const cosLat = Math.max(0, Math.cos((midLat * Math.PI) / 180));
+  const widthM = Math.abs(maxLon - minLon) * 111_000 * cosLat;
+  const heightM = Math.abs(maxLat - minLat) * 111_000;
+  const resM = (widthM / width + heightM / height) / 2;
+  return resM > 0 ? resM : undefined;
+}
+
 function metaJson(row: {
   id: string;
   name: string;
@@ -164,6 +184,9 @@ function metaJson(row: {
       : hasValidWaterType(storedJson)
         ? ((storedJson as unknown as Record<string, unknown>)["waterType"] as WaterType)
         : "saltwater";
+  // Resolution from the stored terrain grid (preferred) or overview fallback.
+  // terrainJson uses the full-resolution grid — the better source for storage estimates.
+  const resolutionM = extractResolutionM(row.terrainJson ?? row.overviewJson);
   return {
     id: row.id,
     name: row.name,
@@ -178,6 +201,7 @@ function metaJson(row: {
       : {}),
     ...(row.tideStationJson ? { tideStation: row.tideStationJson } : {}),
     ...(bbox !== null ? { bbox } : {}),
+    ...(resolutionM !== undefined ? { resolutionM } : {}),
   };
 }
 
