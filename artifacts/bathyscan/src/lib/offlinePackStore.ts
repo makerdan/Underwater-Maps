@@ -394,6 +394,31 @@ function estimateFromPredictions(tidePack: TidePack): number {
   return tideBytesEst + 2 * 1024 * 1024;
 }
 
+/**
+ * Return the most-recently saved offline pack whose `datasetId` matches, or
+ * `null` if none exists.
+ *
+ * Why newest: re-saving a pack creates a new IDB record (new UUID key) rather
+ * than overwriting the old one.  The SW cache path is keyed on URL so it is
+ * always current; to keep the IDB fallback consistent we must select the same
+ * data the SW cache would have served — the latest save.
+ *
+ * Used by the offline marker fallback when the SW cache has been evicted but
+ * the IDB record is still intact.
+ */
+export async function getOfflinePackByDatasetId(
+  datasetId: string,
+): Promise<OfflinePack | null> {
+  const packs = await listOfflinePacks();
+  const matching = packs.filter((p) => p.datasetId === datasetId);
+  if (matching.length === 0) return null;
+  // Sort descending by savedAt so the most-recent pack is first.
+  matching.sort(
+    (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime(),
+  );
+  return matching[0] ?? null;
+}
+
 // ─── Refresh markers in a saved pack after an online mutation ─────────────────
 
 /**

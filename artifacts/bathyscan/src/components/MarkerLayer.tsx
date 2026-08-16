@@ -17,14 +17,13 @@
  */
 import React, { useEffect, useMemo } from "react";
 import {
-  useGetMarkers,
-  getGetMarkersQueryKey,
   useGetCatches,
   getGetCatchesQueryKey,
   type Marker,
   type TerrainData,
   type CatchEntry,
 } from "@workspace/api-client-react";
+import { useGetMarkersWithOfflineFallback } from "@/hooks/useGetMarkersWithOfflineFallback";
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { MarkerSprite } from "./MarkerSprite";
@@ -49,23 +48,11 @@ function useAllDatasetMarkers(): Marker[] {
   const id2 = visible[2]?.datasetId ?? "";
   const id3 = visible[3]?.datasetId ?? "";
 
-  const { data: m0 } = useGetMarkers(
-    { datasetId: id0 },
-    { query: { enabled: !!id0, queryKey: getGetMarkersQueryKey({ datasetId: id0 }) } },
-  );
-  const { data: m1 } = useGetMarkers(
-    { datasetId: id1 },
-    { query: { enabled: !!id1, queryKey: getGetMarkersQueryKey({ datasetId: id1 }) } },
-  );
-  const { data: m2 } = useGetMarkers(
-    { datasetId: id2 },
-    { query: { enabled: !!id2, queryKey: getGetMarkersQueryKey({ datasetId: id2 }) } },
-  );
+  const { data: m0 } = useGetMarkersWithOfflineFallback(id0, !!id0);
+  const { data: m1 } = useGetMarkersWithOfflineFallback(id1, !!id1);
+  const { data: m2 } = useGetMarkersWithOfflineFallback(id2, !!id2);
   const maxActiveDatasets = useSettingsStore((s) => s.maxActiveDatasets ?? 3);
-  const { data: m3 } = useGetMarkers(
-    { datasetId: id3 },
-    { query: { enabled: !!id3 && maxActiveDatasets >= 4, queryKey: getGetMarkersQueryKey({ datasetId: id3 }) } },
-  );
+  const { data: m3 } = useGetMarkersWithOfflineFallback(id3, !!id3 && maxActiveDatasets >= 4);
 
   const merged: Marker[] = [
     ...(m0 ?? []),
