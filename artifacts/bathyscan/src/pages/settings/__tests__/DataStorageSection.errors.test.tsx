@@ -386,3 +386,67 @@ describe("concurrent pack deletes", () => {
     expect(screen.getByText(/No offline packs saved/)).toBeInTheDocument();
   });
 });
+
+describe("concurrent clear handler mutex", () => {
+  it("a second clear handler fired while another is in flight is a no-op", async () => {
+    // Keep clearTerrainCaches (handleClearAll) pending so it stays in-flight.
+    const clearAllDeferred = deferred<boolean>();
+    h.clearTerrainCaches.mockReturnValue(clearAllDeferred.promise);
+
+    render(<DataStorageSection />);
+    // Wait for the cache entry to appear so both buttons are rendered.
+    await screen.findByTestId("cache-entry");
+
+    // Fire Clear All — this handler acquires the mutex.
+    fireEvent.click(screen.getByTestId("clear-all-cache-btn"));
+
+    // Immediately fire the per-entry clear — must be a no-op.
+    const entryBtn = screen.getByTestId("cache-entry").querySelector("button")!;
+    fireEvent.click(entryBtn);
+
+    // clearCacheEntry must never have been called while Clear All was in-flight.
+    expect(h.clearCacheEntry).not.toHaveBeenCalled();
+
+    // Buttons are visually disabled while the operation is in-flight.
+    expect(screen.getByTestId("clear-all-cache-btn")).toBeDisabled();
+    expect(entryBtn).toBeDisabled();
+
+    // Resolve Clear All so the component cleans up properly.
+    await act(async () => {
+      clearAllDeferred.resolve(true);
+    });
+
+    // After completion both buttons re-enable.
+    await waitFor(() => expect(screen.getByTestId("clear-all-cache-btn")).toBeEnabled());
+    expect(h.clearCacheEntry).not.toHaveBeenCalled();
+  });
+
+  it("handleClearUpscaleCache cannot start while handleClearAll is in flight", async () => {
+    const clearAllDeferred = deferred<boolean>();
+    h.clearTerrainCaches.mockReturnValue(clearAllDeferred.promise);
+    // Give upscale count > 0 so its button is enabled when not clearing.
+    h.getUpscaleCacheInfo.mockResolvedValue({ count: 3, bytes: 3072 });
+
+    render(<DataStorageSection />);
+    await screen.findByTestId("cache-entry");
+    // Wait for upscale button to become enabled (count > 0 loaded).
+    const upscaleBtn = await screen.findByTestId("clear-upscale-cache-btn");
+    await waitFor(() => expect(upscaleBtn).toBeEnabled());
+
+    // Fire Clear All — acquires mutex.
+    fireEvent.click(screen.getByTestId("clear-all-cache-btn"));
+
+    // Fire upscale clear — must be blocked by the mutex.
+    fireEvent.click(upscaleBtn);
+
+    expect(h.clearUpscaleCache).not.toHaveBeenCalled();
+
+    // Resolve Clear All.
+    await act(async () => {
+      clearAllDeferred.resolve(true);
+    });
+
+    // Still never called — the button click was a no-op.
+    expect(h.clearUpscaleCache).not.toHaveBeenCalled();
+  });
+});

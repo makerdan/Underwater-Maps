@@ -76,6 +76,12 @@ export function DataStorageSection() {
   // Unmount guard — async handlers resume after teardown during rapid
   // navigation; every setter behind an await checks this first.
   const isMountedRef = useRef(true);
+
+  // Shared mutex — prevents handleClearAll, handleClearEntry and
+  // handleClearUpscaleCache from running concurrently. Using a ref (not
+  // state) gives a synchronous guard that fires before React has had a
+  // chance to re-render with the new `clearing` value.
+  const clearingAnyRef = useRef(false);
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -200,6 +206,8 @@ export function DataStorageSection() {
   };
 
   const handleClearEntry = async (url: string) => {
+    if (clearingAnyRef.current) return;
+    clearingAnyRef.current = true;
     setClearing(url);
     setEntryError(null);
     try {
@@ -208,11 +216,14 @@ export function DataStorageSection() {
     } catch {
       if (isMountedRef.current) setEntryError("Failed to clear this cache entry. Try again.");
     } finally {
+      clearingAnyRef.current = false;
       if (isMountedRef.current) setClearing(null);
     }
   };
 
   const handleClearAll = async () => {
+    if (clearingAnyRef.current) return;
+    clearingAnyRef.current = true;
     setClearing("all");
     setClearAllError(null);
     setClearAllNote(null);
@@ -239,11 +250,14 @@ export function DataStorageSection() {
     } catch {
       if (isMountedRef.current) setClearAllError("Failed to clear cached data. Try again.");
     } finally {
+      clearingAnyRef.current = false;
       if (isMountedRef.current) setClearing(null);
     }
   };
 
   const handleClearUpscaleCache = async () => {
+    if (clearingAnyRef.current) return;
+    clearingAnyRef.current = true;
     setClearing("upscale");
     setUpscaleClearError(null);
     try {
@@ -257,6 +271,7 @@ export function DataStorageSection() {
     } catch {
       if (isMountedRef.current) setUpscaleClearError("Failed to clear the enhanced image cache. Try again.");
     } finally {
+      clearingAnyRef.current = false;
       if (isMountedRef.current) setClearing(null);
     }
   };
@@ -308,7 +323,7 @@ export function DataStorageSection() {
                 </div>
                 <button
                   onClick={() => void handleClearEntry(entry.url)}
-                  disabled={clearing === entry.url}
+                  disabled={clearing !== null}
                   style={{
                     ...S.dangerBtn,
                     padding: "2px 8px",
@@ -331,7 +346,7 @@ export function DataStorageSection() {
                 <button
                   data-testid="clear-all-cache-btn"
                   onClick={() => void handleClearAll()}
-                  disabled={clearing === "all"}
+                  disabled={clearing !== null}
                   style={{ ...S.dangerBtn, padding: "4px 12px", fontSize: "calc(9px * var(--bs-font-scale, 1))" }}
                 >
                   {clearing === "all" ? "CLEARING…" : "CLEAR ALL CACHE"}
@@ -409,7 +424,7 @@ export function DataStorageSection() {
           <button
             data-testid="clear-upscale-cache-btn"
             onClick={() => void handleClearUpscaleCache()}
-            disabled={clearing === "upscale" || (upscaleInfo?.count ?? 0) === 0}
+            disabled={clearing !== null || (upscaleInfo?.count ?? 0) === 0}
             style={{
               ...S.dangerBtn,
               padding: "4px 12px",
