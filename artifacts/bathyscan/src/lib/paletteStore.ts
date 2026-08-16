@@ -22,6 +22,7 @@
  *      variable-length arrays, so they migrate without transformation.
  */
 
+import { z } from "zod";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -156,6 +157,19 @@ export const DEFAULT_CUSTOM_STOPS: CustomStop[] = [
 ];
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Zod schema for the non-array, non-action scalar fields that are persisted in
+ * the palette store. Used by the `merge` function as an additional safety net
+ * to catch schema drift (e.g. a boolean stored as 0/1 from an older schema)
+ * and emit a developer-visible warning rather than silently passing through a
+ * malformed value.
+ */
+const paletteStateScalarSchema = z.object({
+  blendBands: z.boolean(),
+  shallow: z.string().regex(HEX_RE),
+  deep: z.string().regex(HEX_RE),
+});
 
 /**
  * Build a 4-stop custom palette for a preset (Default / High-Contrast / Warm).
@@ -787,15 +801,45 @@ export const usePaletteStore = create<PaletteStore>()(
             cleanedBands[0] = ps.shallow.toLowerCase();
           }
         }
-        return {
+        const candidate: Record<string, unknown> = {
           ...merged,
           customStops: cleanedStops ?? DEFAULT_CUSTOM_STOPS.map((s) => ({ ...s })),
           bandColors: cleanedBands,
           bandBoundaries: cleanedBoundaries,
           shallow: cleanedBands[0]!,
           deep: cleanedBands[cleanedBands.length - 1]!,
-          blendBands: typeof ps?.blendBands === "boolean" ? ps.blendBands : true,
-        } as PaletteStore;
+          // Use nullish coalescing so absent keys silently default to `true`
+          // while present-but-wrong-type values (e.g. `1`) flow through to the
+          // Zod check below and surface a developer warning.
+          blendBands: ps?.blendBands ?? true,
+        };
+
+        // Additional safety net: validate scalar fields with Zod so any
+        // persisted value with an unexpected type is replaced with its default
+        // and a developer-visible warning is emitted. Arrays are already
+        // sanitised by the logic above and are not re-validated here.
+        const scalarParsed = paletteStateScalarSchema.safeParse(candidate);
+        if (!scalarParsed.success) {
+          const failingKeys = scalarParsed.error.issues.map((i) => i.path.join("."));
+          console.warn(
+            "[paletteStore] persisted scalar fields failed validation; substituting defaults for:",
+            failingKeys,
+            scalarParsed.error.issues,
+          );
+          const scalarDefaults: Record<string, unknown> = {
+            blendBands: true,
+            shallow: cleanedBands[0]!,
+            deep: cleanedBands[cleanedBands.length - 1]!,
+          };
+          for (const issue of scalarParsed.error.issues) {
+            const key = issue.path[0] as string;
+            if (Object.prototype.hasOwnProperty.call(scalarDefaults, key)) {
+              candidate[key] = scalarDefaults[key];
+            }
+          }
+        }
+
+        return candidate as PaletteStore;
       },
     },
   ),

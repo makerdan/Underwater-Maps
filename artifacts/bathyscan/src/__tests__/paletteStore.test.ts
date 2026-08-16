@@ -2,7 +2,7 @@
  * Unit tests for paletteStore — custom-stop CRUD, normalisation, sanitisation
  * of malformed persisted state, and minimum-stop enforcement.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   usePaletteStore,
   sanitizeCustomStops,
@@ -339,6 +339,28 @@ describe("persist merge hook", () => {
     );
     usePaletteStore.persist.rehydrate();
     expect(usePaletteStore.getState().bandBoundaries).toEqual([...DEFAULT_BAND_BOUNDARIES]);
+  });
+
+  it("Zod guard: corrects blendBands stored as 1 (number) to true and emits console.warn", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      localStorage.setItem(
+        "bathyscan:palette",
+        JSON.stringify({
+          state: { blendBands: 1 },
+          version: 0,
+        }),
+      );
+      usePaletteStore.persist.rehydrate();
+      expect(usePaletteStore.getState().blendBands).toBe(true);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[paletteStore]"),
+        expect.arrayContaining(["blendBands"]),
+        expect.anything(),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });
 
