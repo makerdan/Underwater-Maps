@@ -35,6 +35,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getValidationSteps, getStepsForTier } from "./validation-steps.mjs";
+import { runTierLockDryRun } from "./lib/tier-lock-check.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -112,8 +113,9 @@ if (!isStepMode) {
  */
 function checkTierLock(requestedTier) {
   const planFile = process.env.TASK_PLAN_FILE;
+  const result = runTierLockDryRun(planFile);
 
-  if (!planFile) {
+  if (result.kind === "no-plan-file") {
     console.warn(
       "[run-tier] WARNING: TASK_PLAN_FILE is not set — automatic tier-lock enforcement skipped.\n" +
         "           Set TASK_PLAN_FILE=<path-to-plan> to enforce the tier ceiling from the plan file.",
@@ -121,46 +123,34 @@ function checkTierLock(requestedTier) {
     return; // graceful degradation for non-task runs
   }
 
-  // Resolve the plan's tier via run-locked-tier.mjs --dry-run so that
-  // parsing logic stays in a single place and cannot drift.
-  const dryResult = spawnSync(
-    process.execPath,
-    [resolve(__dirname, "run-locked-tier.mjs"), "--dry-run", planFile],
-    { encoding: "utf8" },
-  );
-
-  if (dryResult.status === 2) {
-    // Exit 2 means run-locked-tier found the plan file but it has no
-    // ## Validation section — old plan that predates the convention.
-    // Graceful degradation: warn and continue without enforcement.
+  if (result.kind === "no-validation-section") {
+    // Plan file exists but has no ## Validation section — old plan that
+    // predates the convention. Graceful degradation: warn and continue.
     console.warn(
       `[run-tier] WARNING: tier-lock pre-check skipped — "${planFile}" has no ## Validation section.\n` +
-        `           ${(dryResult.stderr || dryResult.stdout || "").trim()}`,
+        `           ${result.output}`,
     );
     return;
   }
 
-  if (dryResult.status !== 0) {
-    // Exit 1 (or any other nonzero code): plan file exists but tier name is
-    // missing, malformed, or not registered — treat as a TIER-LOCK VIOLATION.
+  if (result.kind === "violation") {
+    // Plan file exists but tier name is missing, malformed, or not registered.
     console.error(
       `[run-tier] TIER-LOCK VIOLATION: plan file "${planFile}" could not be resolved to a valid tier.\n` +
-        `           ${(dryResult.stderr || dryResult.stdout || "").trim()}\n` +
+        `           ${result.output}\n` +
         `           Fix the **Command:** line in the plan's ## Validation section before running.`,
     );
     process.exit(1);
   }
 
-  // run-locked-tier prints: run-locked-tier [--dry-run] resolved tier "X" → command: ...
-  const m = (dryResult.stdout || "").match(/resolved tier "([^"]+)"/);
-  if (!m) {
+  if (result.kind === "unparseable") {
     console.warn(
       `[run-tier] WARNING: tier-lock pre-check output was not parseable — skipping ceiling check.`,
     );
     return;
   }
 
-  const lockedTierName = m[1]; // e.g. "test-standard"
+  const lockedTierName = result.tierName; // e.g. "test-standard"
 
   // Map VALIDATION_COMMANDS tier names → run-tier.mjs tier arguments.
   // test-heavy routes through test-heavy-serial.mjs which ultimately runs

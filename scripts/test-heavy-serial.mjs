@@ -33,6 +33,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runTierLockDryRun } from "./lib/tier-lock-check.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const lockScript = resolve(root, "scripts/validation-lock.mjs");
@@ -54,60 +55,48 @@ mkdirSync(resolve(root, ".local/tmp"), { recursive: true });
 
 {
   const planFile = process.env.TASK_PLAN_FILE;
+  const result = runTierLockDryRun(planFile);
 
-  if (!planFile) {
+  if (result.kind === "no-plan-file") {
     console.warn(
       "[test-heavy] WARNING: TASK_PLAN_FILE is not set — automatic tier-lock enforcement skipped.\n" +
         "             Set TASK_PLAN_FILE=<path-to-plan> to enforce the tier ceiling from the plan file.",
     );
-  } else {
-    const lockedTierScript = resolve(root, "scripts/run-locked-tier.mjs");
-    const dryResult = spawnSync(
-      process.execPath,
-      [lockedTierScript, "--dry-run", planFile],
-      { encoding: "utf8" },
+  } else if (result.kind === "no-validation-section") {
+    // Plan file exists but has no ## Validation section — old plan that
+    // predates the convention. Graceful degradation: warn and continue.
+    console.warn(
+      `[test-heavy] WARNING: tier-lock pre-check skipped — "${planFile}" has no ## Validation section.\n` +
+        `             ${result.output}`,
     );
-
-    if (dryResult.status === 2) {
-      // Exit 2 means the plan has no ## Validation section — old plan that
-      // predates the convention. Graceful degradation: warn and continue.
-      console.warn(
-        `[test-heavy] WARNING: tier-lock pre-check skipped — "${planFile}" has no ## Validation section.\n` +
-          `             ${(dryResult.stderr || dryResult.stdout || "").trim()}`,
-      );
-    } else if (dryResult.status !== 0) {
-      // Exit 1 (or any other nonzero): plan exists but tier name is missing,
-      // malformed, or not registered — treat as a TIER-LOCK VIOLATION.
+  } else if (result.kind === "violation") {
+    // Plan exists but tier name is missing, malformed, or not registered.
+    console.error(
+      `[test-heavy] TIER-LOCK VIOLATION: plan file "${planFile}" could not be resolved to a valid tier.\n` +
+        `             ${result.output}\n` +
+        `             Fix the **Command:** line in the plan's ## Validation section before running.`,
+    );
+    process.exit(1);
+  } else if (result.kind === "unparseable") {
+    console.warn(
+      `[test-heavy] WARNING: tier-lock pre-check output was not parseable — skipping ceiling check.`,
+    );
+  } else {
+    const lockedTierName = result.tierName; // e.g. "test-standard"
+    if (lockedTierName !== "test-heavy") {
       console.error(
-        `[test-heavy] TIER-LOCK VIOLATION: plan file "${planFile}" could not be resolved to a valid tier.\n` +
-          `             ${(dryResult.stderr || dryResult.stdout || "").trim()}\n` +
-          `             Fix the **Command:** line in the plan's ## Validation section before running.`,
+        `[test-heavy] TIER-LOCK VIOLATION: plan requires "${lockedTierName}" but the heavy runner was invoked.\n` +
+          `             The heavy runner ("test-heavy") must only be used when the plan's ## Validation\n` +
+          `             section specifies **Command:** \`test-heavy\`.\n` +
+          `             Use: node scripts/run-locked-tier.mjs <plan-file>\n` +
+          `             to let the plan file choose the tier automatically.\n` +
+          `             Plan file: "${planFile}"`,
       );
       process.exit(1);
-    } else {
-      const m = (dryResult.stdout || "").match(/resolved tier "([^"]+)"/);
-      if (!m) {
-        console.warn(
-          `[test-heavy] WARNING: tier-lock pre-check output was not parseable — skipping ceiling check.`,
-        );
-      } else {
-        const lockedTierName = m[1]; // e.g. "test-standard"
-        if (lockedTierName !== "test-heavy") {
-          console.error(
-            `[test-heavy] TIER-LOCK VIOLATION: plan requires "${lockedTierName}" but the heavy runner was invoked.\n` +
-              `             The heavy runner ("test-heavy") must only be used when the plan's ## Validation\n` +
-              `             section specifies **Command:** \`test-heavy\`.\n` +
-              `             Use: node scripts/run-locked-tier.mjs <plan-file>\n` +
-              `             to let the plan file choose the tier automatically.\n` +
-              `             Plan file: "${planFile}"`,
-          );
-          process.exit(1);
-        }
-        console.log(
-          `[test-heavy] tier-lock pre-check passed — plan "${planFile}" requires "${lockedTierName}" ✓`,
-        );
-      }
     }
+    console.log(
+      `[test-heavy] tier-lock pre-check passed — plan "${planFile}" requires "${lockedTierName}" ✓`,
+    );
   }
 }
 

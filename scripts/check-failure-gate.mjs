@@ -177,7 +177,7 @@ async function insertValidationLine(filePath, content, fixLine, insertAfterMarke
   let insertAfter = -1;
   for (let i = valIdx + 1; i < lines.length; i++) {
     if (lines[i].startsWith("## ")) break; // next section
-    if (insertAfterMarker && lines[i].startsWith(insertAfterMarker)) {
+    if (insertAfterMarker && lines[i].trimStart().startsWith(insertAfterMarker)) {
       insertAfter = i;
       break;
     }
