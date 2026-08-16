@@ -192,6 +192,34 @@ describe("POST /api/trails/:id/soft-delete — idempotency", () => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/trails/:id/soft-delete — ownership check (cross-user beacon)
+//
+// The WHERE clause filters by BOTH id AND userId, so a beacon sent by an
+// attacker targeting another user's trail will find zero rows and return 204
+// with no deletion occurring.  This is intentionally indistinguishable from
+// the "already gone" 204 — returning 404 would leak the existence of the trail
+// to the attacker.  The two silent-204 scenarios are:
+//   • "already gone"  — row was previously deleted by the real owner
+//   • "wrong owner"   — row exists but belongs to a different userId
+// ---------------------------------------------------------------------------
+
+describe("POST /api/trails/:id/soft-delete — cross-user ownership", () => {
+  it("returns 204 without deleting when the trail belongs to a different user", async () => {
+    // db.delete returns [] because the WHERE(id AND userId) matched zero rows —
+    // the trail exists but its userId does not match the authenticated user.
+    // This is the "wrong owner" 204: identical response to "already gone" so
+    // the caller cannot distinguish ownership from non-existence (no info leak).
+    trailsMocks.deleteReturningMock.mockResolvedValueOnce([]);
+
+    const res = await request(app)
+      .post(`/api/trails/${TRAIL_ID}/soft-delete`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(204);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // DELETE /api/trails/:id — basic smoke tests (ensure route still works)
 // ---------------------------------------------------------------------------
 

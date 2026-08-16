@@ -286,8 +286,11 @@ router.post("/trails/:id/soft-delete", requireAuth, dataMutationRateLimit, async
     .returning({ id: gpsTrailsTable.id });
 
   if (!deleted.length) {
-    // Return 204 rather than 404 — a beacon fired on unload may arrive after a
-    // normal DELETE has already committed, so "already gone" is not an error.
+    // Return 204 rather than 404 for two intentionally indistinguishable cases:
+    //   • "already gone"  — a prior normal DELETE or beacon already committed
+    //   • "wrong owner"   — the trail exists but belongs to a different userId
+    // Both collapse to 204 so an attacker cannot use the response to determine
+    // whether a given trail ID exists for another user (no existence leak).
     res.status(204).send();
     return;
   }
