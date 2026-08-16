@@ -256,6 +256,19 @@ function scheduleHealthPoll(): void {
   }, delay);
 }
 
+/**
+ * Test-only helper: cancel any in-flight health poll timer and reset the
+ * attempt counter so the next startHealthPoll() call starts cleanly.
+ * Never call this in production code.
+ */
+export function __resetHealthPollForTests(): void {
+  if (_healthPollTimer !== null) {
+    clearTimeout(_healthPollTimer);
+    _healthPollTimer = null;
+  }
+  _healthPollAttempt = 0;
+}
+
 async function runHealthProbe(): Promise<void> {
   const t0 = performance.now();
   try {

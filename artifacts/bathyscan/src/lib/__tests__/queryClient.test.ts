@@ -37,6 +37,7 @@ import {
   useIsServiceUnavailable,
   markServerPersistentlyUnavailable,
   SERVICE_UNAVAILABLE_POLL_THRESHOLD,
+  __resetHealthPollForTests,
 } from "@/lib/queryClient";
 
 // ── Cache config helpers ──────────────────────────────────────────────────────
@@ -527,5 +528,115 @@ describe("useIsServiceUnavailable hook", () => {
 
   it("SERVICE_UNAVAILABLE_POLL_THRESHOLD is exported and equals 5", () => {
     expect(SERVICE_UNAVAILABLE_POLL_THRESHOLD).toBe(5);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Health-poll cycle — service-unavailable escalation and auto-recovery
+//
+// Drives the full probe schedule with fake timers and a mocked fetch so the
+// test never hits the network.  Verifies:
+//   1. useIsServiceUnavailable() becomes true after
+//      SERVICE_UNAVAILABLE_POLL_THRESHOLD consecutive probe failures.
+//   2. Both useIsServiceUnavailable() and useIsConnecting() reset to false
+//      without a page reload the moment a probe returns ok:true.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("health-poll cycle — service-unavailable escalation and auto-recovery", () => {
+  // Backoff delays for each probe attempt (ms):
+  //   attempt 0 → 1 000 ms
+  //   attempt 1 → 2 000 ms
+  //   attempt 2 → 4 000 ms
+  //   attempt 3 → 8 000 ms
+  //   attempt 4 → 15 000 ms  (min(2^4 * 1000, 15 000))
+  //   attempt 5 → 15 000 ms  (service-unavailable threshold crossed here)
+  const PROBE_DELAYS = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000] as const;
+
+  beforeEach(() => {
+    // Cancel any health-poll timer left over from a previous test so that
+    // startHealthPoll() in the new test always schedules a fresh probe cycle.
+    __resetHealthPollForTests();
+    vi.useFakeTimers();
+    // Ensure both reactive flags start from false before each probe-cycle test.
+    triggerQuerySuccess();
+  });
+
+  afterEach(() => {
+    // Clear any lingering connecting/service-unavailable state, cancel timers,
+    // then restore real timers and the real global fetch.
+    __resetHealthPollForTests();
+    triggerQuerySuccess();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("raises useIsServiceUnavailable after SERVICE_UNAVAILABLE_POLL_THRESHOLD consecutive probe failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new TypeError("Failed to fetch")),
+    );
+
+    const { result } = renderHook(() => useIsServiceUnavailable());
+
+    // Trigger _isConnecting = true, which starts the health poll.
+    act(() => {
+      triggerQueryError(makeStatusError(502));
+    });
+    expect(result.current).toBe(false); // threshold not reached yet
+
+    // Advance through 4 failed probes — still below the threshold.
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[0]); }); // probe 1
+    expect(result.current).toBe(false); // attempt = 1
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[1]); }); // probe 2
+    expect(result.current).toBe(false); // attempt = 2
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[2]); }); // probe 3
+    expect(result.current).toBe(false); // attempt = 3
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[3]); }); // probe 4
+    expect(result.current).toBe(false); // attempt = 4
+
+    // 5th probe: attempt reaches SERVICE_UNAVAILABLE_POLL_THRESHOLD (5) → escalate.
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[4]); }); // probe 5
+    expect(result.current).toBe(true);
+  });
+
+  it("clears both useIsServiceUnavailable and useIsConnecting the moment a probe succeeds", async () => {
+    let probeCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => {
+        probeCount++;
+        // First SERVICE_UNAVAILABLE_POLL_THRESHOLD probes fail; the next succeeds.
+        if (probeCount <= SERVICE_UNAVAILABLE_POLL_THRESHOLD) {
+          throw new TypeError("Failed to fetch");
+        }
+        return { ok: true } as unknown as Response;
+      }),
+    );
+
+    const { result: connectingResult } = renderHook(() => useIsConnecting());
+    const { result: unavailableResult } = renderHook(() => useIsServiceUnavailable());
+
+    act(() => {
+      triggerQueryError(makeStatusError(502));
+    });
+
+    // Run through the 5 failing probes.
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[0]); }); // probe 1
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[1]); }); // probe 2
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[2]); }); // probe 3
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[3]); }); // probe 4
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[4]); }); // probe 5 → unavailable
+
+    expect(unavailableResult.current).toBe(true);
+    expect(connectingResult.current).toBe(true);
+
+    // 6th probe succeeds → both flags must clear without a page reload.
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROBE_DELAYS[5]); }); // probe 6
+
+    expect(unavailableResult.current).toBe(false);
+    expect(connectingResult.current).toBe(false);
   });
 });
