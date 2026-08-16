@@ -675,6 +675,7 @@ export const usePaletteStore = create<PaletteStore>()(
         const { savedDepthThemes } = get();
         const theme = savedDepthThemes.find((t) => t.id === id);
         if (!theme) return;
+        if (theme.bandBoundaries.length !== theme.bandColors.length + 1) return;
         const bc = [...theme.bandColors];
         setEdit({
           bandColors: bc,

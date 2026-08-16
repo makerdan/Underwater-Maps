@@ -751,6 +751,59 @@ describe("paletteStore.saveCurrentTheme / applyTheme", () => {
     expect(s.deep).toBe("#cccccc");
   });
 
+  it("applyTheme is a no-op when bandBoundaries.length !== bandColors.length + 1", () => {
+    const store = usePaletteStore.getState();
+    // Set a known baseline so we can confirm nothing changed.
+    store.setBandColors(["#ff0000", "#00ff00", "#0000ff"]);
+    store.setBandBoundaries([0, 100, 500, 2000]);
+    const beforeColors = usePaletteStore.getState().bandColors.slice();
+    const beforeBoundaries = usePaletteStore.getState().bandBoundaries.slice();
+
+    // Inject a mismatched theme directly (bandBoundaries.length !== bandColors.length + 1).
+    const mismatchedId = "mismatched-id";
+    usePaletteStore.setState((s) => ({
+      savedDepthThemes: [
+        ...s.savedDepthThemes,
+        {
+          id: mismatchedId,
+          name: "Bad Theme",
+          bandColors: ["#aaaaaa", "#bbbbbb"], // 2 colors → expects 3 boundaries
+          bandBoundaries: [0, 500, 1000, 2000], // 4 boundaries → mismatch
+          blendBands: true,
+        },
+      ],
+    }));
+
+    store.applyTheme(mismatchedId);
+
+    const s = usePaletteStore.getState();
+    expect(s.bandColors).toEqual(beforeColors);
+    expect(s.bandBoundaries).toEqual(beforeBoundaries);
+  });
+
+  it("applyTheme with a valid theme correctly applies all fields", () => {
+    const store = usePaletteStore.getState();
+    store.setBandColors(["#ff0000", "#00ff00", "#0000ff"]);
+    store.setBandBoundaries([0, 100, 500, 2000]);
+    store.setBlendBands(false);
+    store.saveCurrentTheme("Valid Theme");
+    const savedId = usePaletteStore.getState().savedDepthThemes.find((t) => t.name === "Valid Theme")!.id;
+
+    // Mutate state so we can confirm applyTheme restores it.
+    store.setBandColors(["#111111", "#222222", "#333333"]);
+    store.setBandBoundaries([0, 200, 800, 2000]);
+    store.setBlendBands(true);
+
+    store.applyTheme(savedId);
+
+    const s = usePaletteStore.getState();
+    expect(s.bandColors).toEqual(["#ff0000", "#00ff00", "#0000ff"]);
+    expect(s.bandBoundaries).toEqual([0, 100, 500, 2000]);
+    expect(s.blendBands).toBe(false);
+    expect(s.shallow).toBe("#ff0000");
+    expect(s.deep).toBe("#0000ff");
+  });
+
   it("applyTheme is a no-op for an unknown id", () => {
     const store = usePaletteStore.getState();
     store.setBandColors(["#ff0000", "#0000ff"]);
