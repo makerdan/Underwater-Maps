@@ -22,6 +22,7 @@ import {
   type HelpPackProgress,
   HELP_ASSETS,
 } from "@/lib/helpPackStore";
+import { formatBytes } from "@/lib/formatBytes";
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -35,12 +36,6 @@ interface Dataset {
 interface Props {
   dataset: Dataset;
   onClose: () => void;
-}
-
-function formatBytes(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatDate(iso: string): string {

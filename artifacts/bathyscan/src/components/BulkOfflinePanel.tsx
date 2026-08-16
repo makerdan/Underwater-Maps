@@ -33,11 +33,7 @@ const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function formatBytes(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { formatBytes } from "@/lib/formatBytes";
 
 function formatDate(iso: string): string {
   const d = new Date(iso);

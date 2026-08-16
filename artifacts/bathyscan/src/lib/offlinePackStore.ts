@@ -458,7 +458,11 @@ export function estimatePackStorageBytesFromBbox(hints: {
   const dLon = Math.abs(bbox.maxLon - bbox.minLon);
   const dLat = Math.abs(bbox.maxLat - bbox.minLat);
   // Convert degrees to metres (approx 111 000 m/degree).
-  const widthM = dLon * 111_000;
+  // Apply cosine latitude correction so polar/high-latitude bboxes are not
+  // over-estimated.  cos(0) = 1 so equatorial tests are unchanged.
+  const midLat = (bbox.minLat + bbox.maxLat) / 2;
+  const cosLat = Math.max(0, Math.cos((midLat * Math.PI) / 180));
+  const widthM = dLon * 111_000 * cosLat;
   const heightM = dLat * 111_000;
   const areaM2 = widthM * heightM;
   const resM = Math.max(1, resolutionM);

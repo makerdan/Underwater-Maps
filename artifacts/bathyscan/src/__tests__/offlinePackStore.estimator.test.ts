@@ -25,12 +25,17 @@ import {
 const OVERHEAD = 200 * 1024; // 204 800 bytes
 
 // ── Formula reference ─────────────────────────────────────────────────────────
-//   widthM  = dLon × 111 000
+//   midLat  = (minLat + maxLat) / 2
+//   cosLat  = max(0, cos(midLat × π/180))
+//   widthM  = dLon × 111 000 × cosLat   ← cosine latitude correction
 //   heightM = dLat × 111 000
 //   areaM2  = widthM × heightM
 //   samples = areaM2 / resolutionM²
 //   bytes   = samples × avgBytesPerSample + OVERHEAD
 //   avgBytesPerSample: resolutionM ≤ 2 → 4, else → 1
+//
+//   Note: equatorial tests (minLat=0, maxLat=0.01) have midLat≈0, cos≈1,
+//   so expected values are identical to the pre-correction formula.
 
 describe("estimatePackStorageBytesFromBbox", () => {
   it("returns overhead-only for a zero-area bbox", () => {
@@ -147,6 +152,22 @@ describe("resolutionM round-trip from dataset metadata", () => {
     const withDefault  = await estimatePackStorageBytes("ds-a", { bbox });
     const withExplicit = await estimatePackStorageBytes("ds-b", { bbox, resolutionM: 10 });
     expect(withDefault).toBe(withExplicit);
+  });
+
+  it("cosine latitude correction: 57 °N estimate is strictly less than flat-earth", () => {
+    // Flat-earth (pre-fix) formula: widthM = dLon × 111 000 (no cos correction)
+    const dLon = Math.abs(bbox.maxLon - bbox.minLon); // 0.1
+    const dLat = Math.abs(bbox.maxLat - bbox.minLat); // 0.1
+    const flatWidthM  = dLon * 111_000;
+    const flatHeightM = dLat * 111_000;
+    const flatSamples = (flatWidthM * flatHeightM) / (10 * 10);
+    const flatEarth   = Math.round(flatSamples * 1 + OVERHEAD);
+
+    const corrected = estimatePackStorageBytesFromBbox({ bbox, resolutionM: 10 });
+
+    expect(corrected).toBeLessThan(flatEarth);
+    // At 57 °N, cos ≈ 0.544, so width is roughly halved → estimate ~54 % of flat-earth.
+    expect(corrected).toBeLessThan(flatEarth * 0.8);
   });
 });
 
