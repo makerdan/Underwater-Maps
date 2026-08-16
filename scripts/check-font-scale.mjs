@@ -31,6 +31,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { IGNORED_DIRS } from "./lib/ignored-dirs.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const repoRoot = resolve(__dirname, "..");
@@ -39,9 +40,8 @@ export const SCAN_ROOT = "artifacts/bathyscan/src";
 
 const SCAN_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
-const SKIP_DIRS = new Set([
-  "node_modules", ".git", "dist", "build", "coverage", "__mocks__",
-]);
+// Extends the canonical IGNORED_DIRS with scanner-specific extras.
+const SKIP_DIRS = new Set([...IGNORED_DIRS, "build", "__mocks__"]);
 
 /**
  * Regex that matches a bare numeric `fontSize:` object property.

@@ -35,6 +35,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { IGNORED_DIRS } from "./lib/ignored-dirs.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -49,7 +50,7 @@ const E2E_DIR = "tests/e2e";
 const E2E_FILE_RE = /\.ts$/;
 const E2E_SKIP_RE = /\btest\.skip\(/g;
 
-const IGNORED_DIRS = new Set(["node_modules", "dist", ".git", "test-results", "playwright-report"]);
+// IGNORED_DIRS is imported from ./lib/ignored-dirs.mjs — do not re-declare locally.
 
 function* walk(dir) {
   let entries;

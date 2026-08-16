@@ -18,6 +18,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { IGNORED_DIRS } from "./lib/ignored-dirs.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -30,17 +31,7 @@ const SEARCH_DIRS = [
 
 const BARE_MOCK_RE = /vi\.mock\(\s*['"]pino-http['"]\s*,\s*\(/;
 
-// Keep in sync with the identical IGNORED_DIRS constant in other check
-// scripts (e.g. scripts/check-skip-count.mjs) so all walkers skip the same
-// generated/vendored sub-trees.
-const IGNORED_DIRS = new Set([
-  "node_modules",
-  "dist",
-  ".git",
-  "test-results",
-  "playwright-report",
-  "coverage",
-]);
+// IGNORED_DIRS is imported from ./lib/ignored-dirs.mjs — do not re-declare locally.
 
 /**
  * Recursively walks a directory and returns all .test.ts / .test.js file paths.

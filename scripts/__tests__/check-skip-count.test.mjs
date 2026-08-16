@@ -37,6 +37,7 @@ import { countMatches, loadBaseline, findMissingScanRoots } from "../check-skip-
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const scriptPath = resolve(__dirname, "..", "check-skip-count.mjs");
+const ignoredDirsPath = resolve(__dirname, "..", "lib", "ignored-dirs.mjs");
 
 // Built dynamically so the ratchet scanning THIS file never counts them.
 const UNIT_SKIP_CALL = ["it", "skip("].join(".");
@@ -59,8 +60,9 @@ after(() => {
  */
 function makeFakeRepo(name) {
   const repo = join(sandbox, name);
-  mkdirSync(join(repo, "scripts"), { recursive: true });
+  mkdirSync(join(repo, "scripts", "lib"), { recursive: true });
   copyFileSync(scriptPath, join(repo, "scripts", "check-skip-count.mjs"));
+  copyFileSync(ignoredDirsPath, join(repo, "scripts", "lib", "ignored-dirs.mjs"));
   for (const d of ["artifacts", "lib", join("tests", "e2e")]) {
     mkdirSync(join(repo, d), { recursive: true });
   }

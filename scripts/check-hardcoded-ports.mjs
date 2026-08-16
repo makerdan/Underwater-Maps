@@ -19,6 +19,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { IGNORED_DIRS } from "./lib/ignored-dirs.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -49,9 +50,11 @@ const SCAN_EXTENSIONS = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".sh",
 ]);
 
+// Extends the canonical IGNORED_DIRS with scanner-specific extras.
 const SKIP_DIRS = new Set([
-  "node_modules", ".git", "dist", "dist-e2e", "dist-porttest", "build",
-  "coverage", "test-results", "generated", "public", "attached_assets",
+  ...IGNORED_DIRS,
+  "dist-e2e", "dist-porttest", "build",
+  "generated", "public", "attached_assets",
 ]);
 
 // Patterns that indicate a hardcoded port. Each requires port *context* so

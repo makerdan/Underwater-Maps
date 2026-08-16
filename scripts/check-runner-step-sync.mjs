@@ -96,6 +96,33 @@ export function listCheckFiles(scriptsDir) {
 }
 
 /**
+ * Scans all check-*.mjs files in scriptsDir for a local `const IGNORED_DIRS`
+ * re-declaration (instead of importing from scripts/lib/ignored-dirs.mjs).
+ *
+ * Returns an array of bare filenames that contain such a re-declaration.
+ * A re-declaration is detected by the pattern /^\s*const IGNORED_DIRS\s*=/m
+ * (a standalone const assignment, not an import destructuring).
+ *
+ * Scripts that need extra entries beyond the canonical set should use a
+ * *different* local name (e.g. SKIP_DIRS) built by spreading IGNORED_DIRS:
+ *   const SKIP_DIRS = new Set([...IGNORED_DIRS, "build", ...]);
+ */
+export function findLocalIgnoredDirsDeclarations(scriptsDir) {
+  const RE = /^\s*const IGNORED_DIRS\s*=/m;
+  return readdirSync(scriptsDir)
+    .filter((f) => /^check-.*\.mjs$/.test(f))
+    .filter((f) => {
+      let src;
+      try {
+        src = readFileSync(resolve(scriptsDir, f), "utf8");
+      } catch {
+        return false;
+      }
+      return RE.test(src);
+    });
+}
+
+/**
  * Builds the searchable reference text: root package.json, the .replit
  * workflow config, and every non-check *.mjs / *.sh script in scripts/.
  * Check files themselves are excluded as sources so a check file cannot
@@ -190,6 +217,21 @@ function main() {
     console.error("[check-runner-step-sync] FAIL — stale ORPHAN_FILE_ALLOWLIST entr(ies):");
     for (const f of staleOrphans) console.error(`  ${f} (file removed from scripts/, or now referenced somewhere)`);
     console.error("  Fix: remove the entry from ORPHAN_FILE_ALLOWLIST in scripts/check-runner-step-sync.mjs.");
+  }
+
+  // Guard: no check script may re-declare a local IGNORED_DIRS constant.
+  // All walkers must import it from scripts/lib/ignored-dirs.mjs instead.
+  const ignoredDirsViolators = findLocalIgnoredDirsDeclarations(__dirname);
+  if (ignoredDirsViolators.length > 0) {
+    failed = true;
+    console.error("[check-runner-step-sync] FAIL — check script(s) re-declare a local IGNORED_DIRS instead of importing from scripts/lib/ignored-dirs.mjs:");
+    for (const f of ignoredDirsViolators) console.error(`  scripts/${f}`);
+    console.error(
+      "  Fix: remove the local `const IGNORED_DIRS = new Set(...)` declaration and\n" +
+      "  add `import { IGNORED_DIRS } from \"./lib/ignored-dirs.mjs\";` instead.\n" +
+      "  Scripts needing extra entries beyond the base set should use a different\n" +
+      "  local name (e.g. SKIP_DIRS) built by spreading: new Set([...IGNORED_DIRS, ...]).",
+    );
   }
 
   if (failed) process.exit(1);

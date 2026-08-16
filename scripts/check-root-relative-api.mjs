@@ -72,6 +72,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { IGNORED_DIRS } from "./lib/ignored-dirs.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -103,9 +104,8 @@ export const WRAPPER_DEF_SCAN_ROOTS = [
 
 const SCAN_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 
-const SKIP_DIRS = new Set([
-  "node_modules", ".git", "dist", "build", "coverage", "__mocks__",
-]);
+// Extends the canonical IGNORED_DIRS with scanner-specific extras.
+const SKIP_DIRS = new Set([...IGNORED_DIRS, "build", "__mocks__"]);
 
 /**
  * Central registry of fetch wrappers that accept a URL as their first
