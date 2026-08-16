@@ -77,6 +77,97 @@ for (let i = 0; i < args.length; i++) {
 }
 
 // ---------------------------------------------------------------------------
+// Tier-lock pre-check (automatic Failure Gate enforcement)
+//
+// When TASK_PLAN_FILE is set, reads the plan's ## Validation section via
+// run-locked-tier.mjs --dry-run and verifies the tier named there matches
+// the tier being run.  This catches accidental escalation without requiring
+// the agent to remember to call run-locked-tier.mjs manually.
+//
+// When TASK_PLAN_FILE is not set (e.g. ad-hoc or non-task CI calls), a one-
+// line warning is printed and execution continues — graceful degradation.
+//
+// Skipped in --step mode (the inner re-entrant invocation from the lock
+// wrapper) to avoid recursive checking.
+// ---------------------------------------------------------------------------
+
+if (!isStepMode) {
+  checkTierLock(tier);
+}
+
+/**
+ * Verifies the plan-file tier ceiling matches the tier argument being run.
+ * Always exits gracefully (warn + return) when the plan file is absent or
+ * unparseable — only exits 1 on a provable tier mismatch.
+ *
+ * @param {string} requestedTier - the run-tier.mjs arg ("fast"|"standard"|"full")
+ */
+function checkTierLock(requestedTier) {
+  const planFile = process.env.TASK_PLAN_FILE;
+
+  if (!planFile) {
+    console.warn(
+      "[run-tier] WARNING: TASK_PLAN_FILE is not set — automatic tier-lock enforcement skipped.\n" +
+        "           Set TASK_PLAN_FILE=<path-to-plan> to enforce the tier ceiling from the plan file.",
+    );
+    return; // graceful degradation for non-task runs
+  }
+
+  // Resolve the plan's tier via run-locked-tier.mjs --dry-run so that
+  // parsing logic stays in a single place and cannot drift.
+  const dryResult = spawnSync(
+    process.execPath,
+    [resolve(__dirname, "run-locked-tier.mjs"), "--dry-run", planFile],
+    { encoding: "utf8" },
+  );
+
+  if (dryResult.status !== 0) {
+    console.warn(
+      `[run-tier] WARNING: tier-lock pre-check could not parse "${planFile}" — continuing anyway.\n` +
+        `           ${(dryResult.stderr || dryResult.stdout || "").trim()}`,
+    );
+    return; // graceful degradation — unreadable/malformed plan file
+  }
+
+  // run-locked-tier prints: run-locked-tier [--dry-run] resolved tier "X" → command: ...
+  const m = (dryResult.stdout || "").match(/resolved tier "([^"]+)"/);
+  if (!m) {
+    console.warn(
+      `[run-tier] WARNING: tier-lock pre-check output was not parseable — skipping ceiling check.`,
+    );
+    return;
+  }
+
+  const lockedTierName = m[1]; // e.g. "test-standard"
+
+  // Map VALIDATION_COMMANDS tier names → run-tier.mjs tier arguments.
+  // test-heavy routes through test-heavy-serial.mjs which ultimately runs
+  // the full step set, so it maps to "full" here.
+  const TIER_NAME_TO_ARG = {
+    "test-fast": "fast",
+    "test-standard": "standard",
+    "test-standard-plus": "full",
+    "test-heavy": "full",
+  };
+  const expectedArg = TIER_NAME_TO_ARG[lockedTierName] ?? lockedTierName;
+
+  if (expectedArg !== requestedTier) {
+    console.error(
+      `[run-tier] TIER-LOCK VIOLATION: plan requires "${lockedTierName}" (run-tier arg: "${expectedArg}") ` +
+        `but this run is using tier "${requestedTier}".\n` +
+        `           Use: node scripts/run-locked-tier.mjs <plan-file>\n` +
+        `           to let the plan file choose the tier automatically.\n` +
+        `           Plan file: "${planFile}"`,
+    );
+    process.exit(1);
+  }
+
+  console.log(
+    `[run-tier] tier-lock pre-check passed — plan "${planFile}" requires "${lockedTierName}" ✓`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Step registry — canonical list lives in scripts/validation-steps.mjs
 // (shared with test-all-steps.mjs so the two runners cannot drift).
 // ---------------------------------------------------------------------------

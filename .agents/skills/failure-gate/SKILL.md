@@ -283,6 +283,49 @@ automatically reflected — no separate update required.
 
 ---
 
+### Automatic tier-lock wiring (`TASK_PLAN_FILE`)
+
+`scripts/run-tier.mjs` performs a **tier-lock pre-check** automatically at the
+start of every tier run (i.e., every `test-fast`, `test-standard`, or
+`test-standard-plus` invocation), before any validation step executes.
+
+**How it works:**
+
+1. Reads the `TASK_PLAN_FILE` environment variable.
+2. If the variable is set, calls `run-locked-tier.mjs --dry-run <plan-file>`
+   to extract the plan's intended tier without running it.
+3. Maps the plan's tier name (e.g. `test-standard`) to the corresponding
+   `run-tier.mjs` argument (e.g. `standard`).
+4. If the tier being run does not match the plan's tier → **exits 1** with a
+   clear `TIER-LOCK VIOLATION` message before any step runs.
+5. If the plan file is absent, unreadable, or unparseable → logs a warning
+   and **continues** (graceful degradation, so ad-hoc non-task runs are
+   unaffected).
+
+**How to use it:**
+
+```sh
+# Let the pre-check enforce the plan's tier automatically:
+TASK_PLAN_FILE=.local/tasks/task-1234.md node scripts/run-tier.mjs standard
+
+# Or let run-locked-tier.mjs choose AND run the tier:
+node scripts/run-locked-tier.mjs .local/tasks/task-1234.md
+```
+
+When running via a registered `VALIDATION_COMMAND` (e.g. `test-standard`),
+set `TASK_PLAN_FILE` in the shell environment before invoking the command:
+
+```sh
+export TASK_PLAN_FILE=.local/tasks/task-1234.md
+# then trigger the validation command as normal
+```
+
+**Graceful degradation:** If `TASK_PLAN_FILE` is not set, `run-tier.mjs`
+prints a one-line warning and proceeds normally. This ensures non-task CI
+calls (e.g. periodic audits, ad-hoc runs) are never blocked.
+
+---
+
 ### Decision tree
 
 **Step 1 — Check the plan section.**
