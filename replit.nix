@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.killall
     pkgs.tesseract
     pkgs.laszip
     pkgs.libgbm

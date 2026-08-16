@@ -39,7 +39,7 @@ pnpm --filter @workspace/api-spec run codegen:generate
 # Pre-push guardrail: detect column-type changes that Postgres cannot
 # implicitly cast (no USING clause) and abort before the push runs.
 pnpm --filter @workspace/db exec node ../../scripts/pre-push-type-check.mjs
-pnpm --filter db push
+echo y | timeout 120 pnpm --filter db push || { EC=$?; [ $EC -eq 124 ] && echo "[post-merge] ERROR: drizzle push timed out after 120 s — check for Postgres locks or stalled migrations"; exit $EC; }
 # Guardrail: surface typecheck/lint regressions immediately after a merge.
 # Unit tests are run separately (non-blocking) because there are known
 # pre-existing failures tracked in the backlog ("Stop the two pre-existing
