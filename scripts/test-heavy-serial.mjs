@@ -39,6 +39,67 @@ const lockScript = resolve(root, "scripts/validation-lock.mjs");
 const timeoutScript = resolve(root, "scripts/run-with-timeout.mjs");
 mkdirSync(resolve(root, ".local/tmp"), { recursive: true });
 
+// ---------------------------------------------------------------------------
+// Tier-lock pre-check (automatic Failure Gate enforcement)
+//
+// When TASK_PLAN_FILE is set, reads the plan's ## Validation section via
+// run-locked-tier.mjs --dry-run and verifies the tier named there is
+// "test-heavy". This catches accidental escalation to the heavy runner when
+// the plan only permitted a lighter tier — a plan ceiling of test-standard
+// should never silently run a 45-min heavy suite.
+//
+// When TASK_PLAN_FILE is not set (e.g. ad-hoc or non-task CI calls), a one-
+// line warning is printed and execution continues — graceful degradation.
+// ---------------------------------------------------------------------------
+
+{
+  const planFile = process.env.TASK_PLAN_FILE;
+
+  if (!planFile) {
+    console.warn(
+      "[test-heavy] WARNING: TASK_PLAN_FILE is not set — automatic tier-lock enforcement skipped.\n" +
+        "             Set TASK_PLAN_FILE=<path-to-plan> to enforce the tier ceiling from the plan file.",
+    );
+  } else {
+    const lockedTierScript = resolve(root, "scripts/run-locked-tier.mjs");
+    const dryResult = spawnSync(
+      process.execPath,
+      [lockedTierScript, "--dry-run", planFile],
+      { encoding: "utf8" },
+    );
+
+    if (dryResult.status !== 0) {
+      console.warn(
+        `[test-heavy] WARNING: tier-lock pre-check could not parse "${planFile}" — continuing anyway.\n` +
+          `             ${(dryResult.stderr || dryResult.stdout || "").trim()}`,
+      );
+    } else {
+      const m = (dryResult.stdout || "").match(/resolved tier "([^"]+)"/);
+      if (!m) {
+        console.warn(
+          `[test-heavy] WARNING: tier-lock pre-check output was not parseable — skipping ceiling check.`,
+        );
+      } else {
+        const lockedTierName = m[1]; // e.g. "test-standard"
+        if (lockedTierName !== "test-heavy") {
+          console.error(
+            `[test-heavy] TIER-LOCK VIOLATION: plan requires "${lockedTierName}" but the heavy runner was invoked.\n` +
+              `             The heavy runner ("test-heavy") must only be used when the plan's ## Validation\n` +
+              `             section specifies **Command:** \`test-heavy\`.\n` +
+              `             Use: node scripts/run-locked-tier.mjs <plan-file>\n` +
+              `             to let the plan file choose the tier automatically.\n` +
+              `             Plan file: "${planFile}"`,
+          );
+          process.exit(1);
+        }
+        console.log(
+          `[test-heavy] tier-lock pre-check passed — plan "${planFile}" requires "${lockedTierName}" ✓`,
+        );
+      }
+    }
+  }
+}
+
 /**
  * Build a command array that wraps <cmd> with one or more named resource
  * locks at the given priority (nesting them for multi-resource steps).
