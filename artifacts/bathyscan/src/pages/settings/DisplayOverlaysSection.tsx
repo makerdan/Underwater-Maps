@@ -1,11 +1,11 @@
 import React from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { S, FONT } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
-import { SliderRow, ToggleRow, SelectRow } from "./components/RowWidgets";
+import { SliderRow, ToggleRow, SelectRow, clampSlider } from "./components/RowWidgets";
 import { ZoneColourSwatches } from "./components/ZoneColourSwatches";
 
 export function DisplayOverlaysSection() {
@@ -34,10 +34,10 @@ export function DisplayOverlaysSection() {
         />
         <SliderRow
           label="HUD Opacity"
-          value={s.hudOpacity}
+          value={clampSlider(s.hudOpacity, 0.3, 1.0, DEFAULT_SETTINGS.hudOpacity)}
           min={0.3} max={1.0} step={0.05}
           format={(v) => `${Math.round(v * 100)}%`}
-          onChange={s.setHudOpacity}
+          onChange={(v) => s.setHudOpacity(clampSlider(v, 0.3, 1.0, DEFAULT_SETTINGS.hudOpacity))}
         />
       </div>
       <AdvancedDisclosure testId="hud-advanced">
@@ -91,10 +91,10 @@ export function DisplayOverlaysSection() {
         <ToggleRow label="Open on Load" value={s.overviewOpenOnLoad} onChange={s.setOverviewOpenOnLoad} sublabel="Auto-expand when a dataset loads" />
         <SliderRow
           label="Default Zoom"
-          value={s.overviewDefaultZoom}
+          value={clampSlider(s.overviewDefaultZoom, 0.5, 5.0, DEFAULT_SETTINGS.overviewDefaultZoom)}
           min={0.5} max={5.0} step={0.1}
           format={(v) => `${v.toFixed(1)}×`}
-          onChange={s.setOverviewDefaultZoom}
+          onChange={(v) => s.setOverviewDefaultZoom(clampSlider(v, 0.5, 5.0, DEFAULT_SETTINGS.overviewDefaultZoom))}
         />
       </div>
       <div style={S.card}>
@@ -107,12 +107,12 @@ export function DisplayOverlaysSection() {
         />
         <SliderRow
           label="Overlay Intensity"
-          value={s.habitatOverlayIntensity}
+          value={clampSlider(s.habitatOverlayIntensity, 0, 1, DEFAULT_SETTINGS.habitatOverlayIntensity)}
           min={0}
           max={1}
           step={0.05}
           format={(v) => `${Math.round(v * 100)}%`}
-          onChange={s.setHabitatOverlayIntensity}
+          onChange={(v) => s.setHabitatOverlayIntensity(clampSlider(v, 0, 1, DEFAULT_SETTINGS.habitatOverlayIntensity))}
           sublabel="Default strength of the amber habitat tint on terrain"
         />
       </div>

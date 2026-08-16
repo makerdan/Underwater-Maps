@@ -8,7 +8,7 @@ import { PaletteSuggestionBanner } from "@/components/PaletteSuggestionBanner";
 import { S } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
-import { SliderRow, ToggleRow, SelectRow, ColorRow } from "./components/RowWidgets";
+import { SliderRow, ToggleRow, SelectRow, ColorRow, clampSlider } from "./components/RowWidgets";
 import { Select } from "./components/Toggle";
 import { DepthColorsCard } from "./components/DepthColorsCard";
 
@@ -273,10 +273,10 @@ export function VisualsSection() {
           <div style={S.cardHeader}>TERRAIN SHADING</div>
           <SliderRow
             label="Vertical Exaggeration"
-            value={s.terrainExaggeration}
+            value={clampSlider(s.terrainExaggeration, 1, 20, DEFAULT_SETTINGS.terrainExaggeration)}
             min={1} max={20} step={0.5}
             format={(v) => `${v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)}× vertical exaggeration`}
-            onChange={s.setTerrainExaggeration}
+            onChange={(v) => s.setTerrainExaggeration(clampSlider(v, 1, 20, DEFAULT_SETTINGS.terrainExaggeration))}
             sublabel={
               s.terrainExaggeration > 1
                 ? "Scale is exaggerated — not true-to-life"
@@ -367,10 +367,10 @@ export function VisualsSection() {
           <div style={S.cardHeader}>ATMOSPHERE</div>
           <SliderRow
             label="Fog Density"
-            value={s.fogDensity}
+            value={clampSlider(s.fogDensity, 0.004, 0.030, DEFAULT_SETTINGS.fogDensity)}
             min={0.004} max={0.030} step={0.001}
             format={(v) => v.toFixed(3)}
-            onChange={s.setFogDensity}
+            onChange={(v) => s.setFogDensity(clampSlider(v, 0.004, 0.030, DEFAULT_SETTINGS.fogDensity))}
             sublabel="Exponential underwater haze"
           />
           <ColorRow
@@ -384,34 +384,34 @@ export function VisualsSection() {
           <div style={S.cardHeader}>LIGHTING</div>
           <SliderRow
             label="Ambient Light Intensity"
-            value={s.ambientLightIntensity}
+            value={clampSlider(s.ambientLightIntensity, 0, 1, DEFAULT_SETTINGS.ambientLightIntensity)}
             min={0} max={1} step={0.01}
             format={(v) => v.toFixed(2)}
-            onChange={s.setAmbientLightIntensity}
+            onChange={(v) => s.setAmbientLightIntensity(clampSlider(v, 0, 1, DEFAULT_SETTINGS.ambientLightIntensity))}
             sublabel="Uniform baseline brightness applied to the entire underwater scene."
           />
           <SliderRow
             label="Directional Light Intensity"
-            value={s.directionalLightIntensity}
+            value={clampSlider(s.directionalLightIntensity, 0, 1.5, DEFAULT_SETTINGS.directionalLightIntensity)}
             min={0} max={1.5} step={0.01}
             format={(v) => v.toFixed(2)}
-            onChange={s.setDirectionalLightIntensity}
+            onChange={(v) => s.setDirectionalLightIntensity(clampSlider(v, 0, 1.5, DEFAULT_SETTINGS.directionalLightIntensity))}
             sublabel="Brightness of the sun-like light that casts shading and depth shadows across terrain."
           />
           <SliderRow
             label="Lamp Intensity"
-            value={s.lampIntensity}
+            value={clampSlider(s.lampIntensity, 0, 5, DEFAULT_SETTINGS.lampIntensity)}
             min={0} max={5} step={0.1}
             format={(v) => v.toFixed(1)}
-            onChange={s.setLampIntensity}
+            onChange={(v) => s.setLampIntensity(clampSlider(v, 0, 5, DEFAULT_SETTINGS.lampIntensity))}
             sublabel="Camera-attached point light"
           />
           <SliderRow
             label="Lamp Range"
-            value={s.lampRange}
+            value={clampSlider(s.lampRange, 10, 150, DEFAULT_SETTINGS.lampRange)}
             min={10} max={150} step={5}
             format={(v) => `${v} m`}
-            onChange={s.setLampRange}
+            onChange={(v) => s.setLampRange(clampSlider(v, 10, 150, DEFAULT_SETTINGS.lampRange))}
             sublabel="Radius in metres of the camera-attached point light that illuminates nearby terrain."
           />
         </div>

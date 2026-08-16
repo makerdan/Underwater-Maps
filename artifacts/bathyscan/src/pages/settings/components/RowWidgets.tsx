@@ -5,6 +5,15 @@ import type { ColormapTheme } from "@/lib/settingsStore";
 import { FONT, S } from "../styles";
 import { Toggle, Select } from "./Toggle";
 
+/**
+ * Clamp a slider value into [min, max]; NaN / non-finite persisted values
+ * fall back to the field's default so range inputs never show invalid state.
+ */
+export function clampSlider(v: number, min: number, max: number, fallback: number): number {
+  const n = Number.isFinite(v) ? v : fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 export function SliderRow({
   label, value, min, max, step, format, onChange, sublabel, disabled,
 }: {

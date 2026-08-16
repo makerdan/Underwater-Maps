@@ -19,7 +19,7 @@ import { useSettingsStore, DEFAULT_SETTINGS, type ColormapTheme } from "@/lib/se
 import { toValidColormapTheme } from "@/lib/settingsGuards";
 import { flushServerSync } from "@/hooks/useServerSettingsSync";
 import { S } from "../styles";
-import { SliderRow, ToggleRow, ColorRow, ColormapSelectRow } from "./RowWidgets";
+import { SliderRow, ToggleRow, ColorRow, ColormapSelectRow, clampSlider } from "./RowWidgets";
 import { defaultContourInterval } from "../constants";
 
 const FT_TO_M_SETTINGS = 0.3048;
@@ -94,12 +94,12 @@ function ContourIntervalRow({ disabled }: { disabled?: boolean }) {
   return (
     <SliderRow
       label="Contour Interval"
-      value={Math.min(sliderMax, Math.max(sliderMin, contourInterval))}
+      value={clampSlider(contourInterval, sliderMin, sliderMax, defaultContourInterval(units))}
       min={sliderMin}
       max={sliderMax}
       step={sliderStep}
       format={formatInterval}
-      onChange={setContourInterval}
+      onChange={(v) => setContourInterval(clampSlider(v, sliderMin, sliderMax, defaultContourInterval(units)))}
       sublabel={`Depth spacing between lines (${unitLabel})`}
       disabled={disabled}
     />

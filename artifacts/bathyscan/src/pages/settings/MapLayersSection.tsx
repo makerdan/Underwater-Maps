@@ -11,7 +11,7 @@ import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { S } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
-import { SliderRow, ToggleRow, SelectRow, ColorRow } from "./components/RowWidgets";
+import { SliderRow, ToggleRow, SelectRow, ColorRow, clampSlider } from "./components/RowWidgets";
 import { SALTWATER_MARKER_TYPE_OPTIONS, FRESHWATER_MARKER_TYPE_OPTIONS } from "./constants";
 
 /** The only Sample Rate values offered by the select below. */
@@ -27,15 +27,6 @@ function nearestGpsInterval(ms: number): number {
   return GPS_INTERVAL_OPTIONS.reduce((best, opt) =>
     Math.abs(opt - ms) < Math.abs(best - ms) ? opt : best,
   );
-}
-
-/**
- * Clamp a slider value into [min, max]; NaN / non-finite persisted values
- * fall back to the field's default so range inputs never show invalid state.
- */
-function clampSlider(v: number, min: number, max: number, fallback: number): number {
-  const n = Number.isFinite(v) ? v : fallback;
-  return Math.min(max, Math.max(min, n));
 }
 
 export function MapLayersSection() {

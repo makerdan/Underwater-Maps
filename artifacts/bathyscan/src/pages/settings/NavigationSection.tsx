@@ -1,6 +1,6 @@
 import React from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import {
   SHORTCUT_ACTIONS,
@@ -12,7 +12,7 @@ import {
 import { S, FONT } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
-import { SliderRow, ToggleRow, SelectRow } from "./components/RowWidgets";
+import { SliderRow, ToggleRow, SelectRow, clampSlider } from "./components/RowWidgets";
 import { KeyBindingCapture, CrosshairMenuGamepadCapture } from "./components/KeyBindingCapture";
 import { FIXED_SHORTCUTS } from "./constants";
 
@@ -59,21 +59,22 @@ export function NavigationSection() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
-              type="range" min={0} max={4} step={1} value={s.defaultSpeedTier}
-              onChange={(e) => s.setDefaultSpeedTier(Number(e.target.value))}
+              type="range" min={0} max={4} step={1} value={clampSlider(s.defaultSpeedTier, 0, 4, DEFAULT_SETTINGS.defaultSpeedTier)}
+              onChange={(e) => s.setDefaultSpeedTier(clampSlider(Number(e.target.value), 0, 4, DEFAULT_SETTINGS.defaultSpeedTier))}
               style={S.slider}
+              aria-label="Default Speed Tier"
             />
             <span style={{ color: "#00e5ff", fontSize: "calc(10px * var(--bs-font-scale, 1))", minWidth: 24, textAlign: "center" }}>
-              {s.defaultSpeedTier}
+              {clampSlider(s.defaultSpeedTier, 0, 4, DEFAULT_SETTINGS.defaultSpeedTier)}
             </span>
           </div>
         </div>
         <SliderRow
           label="Mouse Sensitivity"
-          value={s.mouseSensitivity}
+          value={clampSlider(s.mouseSensitivity, 0.1, 3.0, DEFAULT_SETTINGS.mouseSensitivity)}
           min={0.1} max={3.0} step={0.1}
           format={(v) => `${v.toFixed(1)}×`}
-          onChange={s.setMouseSensitivity}
+          onChange={(v) => s.setMouseSensitivity(clampSlider(v, 0.1, 3.0, DEFAULT_SETTINGS.mouseSensitivity))}
           sublabel="Multiplier applied to look rotation"
         />
         <ToggleRow
@@ -84,26 +85,26 @@ export function NavigationSection() {
         />
         <SliderRow
           label="Mouse Wheel Zoom Sensitivity"
-          value={s.mouseZoomSensitivity}
+          value={clampSlider(s.mouseZoomSensitivity, 0.1, 3.0, DEFAULT_SETTINGS.mouseZoomSensitivity)}
           min={0.1} max={3.0} step={0.1}
           format={(v) => `${v.toFixed(1)}×`}
-          onChange={s.setMouseZoomSensitivity}
+          onChange={(v) => s.setMouseZoomSensitivity(clampSlider(v, 0.1, 3.0, DEFAULT_SETTINGS.mouseZoomSensitivity))}
           sublabel="How fast the wheel zooms (mouse notches)"
         />
         <SliderRow
           label="Touchpad Zoom Sensitivity"
-          value={s.touchpadZoomSensitivity}
+          value={clampSlider(s.touchpadZoomSensitivity, 0.1, 3.0, DEFAULT_SETTINGS.touchpadZoomSensitivity)}
           min={0.1} max={3.0} step={0.1}
           format={(v) => `${v.toFixed(1)}×`}
-          onChange={s.setTouchpadZoomSensitivity}
+          onChange={(v) => s.setTouchpadZoomSensitivity(clampSlider(v, 0.1, 3.0, DEFAULT_SETTINGS.touchpadZoomSensitivity))}
           sublabel="How fast two-finger scroll zooms the camera"
         />
         <SliderRow
           label="Mobile Pinch Zoom Sensitivity"
-          value={s.pinchZoomSensitivity}
+          value={clampSlider(s.pinchZoomSensitivity, 0.1, 3.0, DEFAULT_SETTINGS.pinchZoomSensitivity)}
           min={0.1} max={3.0} step={0.1}
           format={(v) => `${v.toFixed(1)}×`}
-          onChange={s.setPinchZoomSensitivity}
+          onChange={(v) => s.setPinchZoomSensitivity(clampSlider(v, 0.1, 3.0, DEFAULT_SETTINGS.pinchZoomSensitivity))}
           sublabel="How fast pinch gestures zoom on touch devices"
         />
       </div>
@@ -112,18 +113,18 @@ export function NavigationSection() {
           <div style={S.cardHeader}>CAMERA ADVANCED</div>
           <SliderRow
             label="Field of View"
-            value={s.fieldOfView}
+            value={clampSlider(s.fieldOfView, 30, 90, DEFAULT_SETTINGS.fieldOfView)}
             min={30} max={90} step={1}
             format={(v) => `${v}°`}
-            onChange={s.setFieldOfView}
+            onChange={(v) => s.setFieldOfView(clampSlider(v, 30, 90, DEFAULT_SETTINGS.fieldOfView))}
             sublabel="Perspective FOV in degrees"
           />
           <SliderRow
             label="Render Distance"
-            value={s.renderDistance}
+            value={clampSlider(s.renderDistance, 100, 2000, DEFAULT_SETTINGS.renderDistance)}
             min={100} max={2000} step={50}
             format={(v) => `${v} m`}
-            onChange={s.setRenderDistance}
+            onChange={(v) => s.setRenderDistance(clampSlider(v, 100, 2000, DEFAULT_SETTINGS.renderDistance))}
             sublabel="Camera far clip plane"
           />
           <SelectRow

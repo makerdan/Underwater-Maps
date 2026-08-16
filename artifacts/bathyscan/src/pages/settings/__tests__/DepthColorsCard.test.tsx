@@ -177,6 +177,8 @@ vi.mock(
     ),
     ColorRow: ({ label }: { label: string }) => <div>{label}</div>,
     ColormapSelectRow: ({ label }: { label: string }) => <div>{label}</div>,
+    clampSlider: (v: number, min: number, max: number, fallback: number) =>
+      Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback,
   }),
 );
 
