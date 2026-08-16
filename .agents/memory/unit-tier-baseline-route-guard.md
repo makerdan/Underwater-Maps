@@ -63,3 +63,21 @@ changeset touches api-server routes/openapi.yaml. A follow-up task covers both.
 (env-pack) now PASSES — only `routes-documented` (trails soft-delete) still
 fails. Expect exactly ONE api-server baseline failure; a second route-guard
 failure is NEW breakage, not baseline.
+
+## Full-tier baseline (2026-08-16 late, verified run)
+
+A verified `test-standard-plus` (`run-tier.mjs full`) run showed:
+- typecheck PASSES again (paletteStore TS2352 fixed on main).
+- routes-documented and env-pack pino arg-order no longer appeared; the ONLY
+  api-server unit failure was `terrain-mock-guard.test.ts`
+  (`flipGridRowsInPlace` missing from `createTerrainMock`).
+- `check:fixture-freshness` fails on `survey.laz` (known nondeterminism, see
+  laz-fixture-nondeterminism.md).
+- `check:audit` fails with 5 unexempted HIGH findings (undici, js-yaml !!omap,
+  pdfjs, nanoid ×2).
+
+**How to apply:** with these three steps skipped
+(`--skip test:unit --skip check:fixture-freshness --skip check:audit`) the
+full tier is green. A backlog task exists to fix the failures that make every
+full run report FAILED. Classify pre-existing unless your diff touches
+terrain.js/terrainMock.ts, fixtures, or dependency versions.

@@ -30,6 +30,18 @@ const SEARCH_DIRS = [
 
 const BARE_MOCK_RE = /vi\.mock\(\s*['"]pino-http['"]\s*,\s*\(/;
 
+// Keep in sync with the identical IGNORED_DIRS constant in other check
+// scripts (e.g. scripts/check-skip-count.mjs) so all walkers skip the same
+// generated/vendored sub-trees.
+const IGNORED_DIRS = new Set([
+  "node_modules",
+  "dist",
+  ".git",
+  "test-results",
+  "playwright-report",
+  "coverage",
+]);
+
 /**
  * Recursively walks a directory and returns all .test.ts / .test.js file paths.
  */
@@ -42,6 +54,7 @@ function findTestFiles(dir) {
     return results;
   }
   for (const entry of entries) {
+    if (IGNORED_DIRS.has(entry)) continue;
     const full = join(dir, entry);
     let stat;
     try {
