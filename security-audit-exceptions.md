@@ -3,7 +3,7 @@
 Findings that cannot be patched in-place and have been reviewed as acceptable.
 Run `pnpm check:audit` (audit-level=high) to confirm no new high/critical issues.
 
-Last reviewed: 2026-07-17
+Last reviewed: 2026-08-16
 
 ---
 
@@ -37,6 +37,24 @@ were reorganized in undici 7.28.0, causing `MODULE_NOT_FOUND` errors across the 
 
 **Planned fix date**: 2026-10-17 — reassess when jsdom releases a version that ships undici >=7.28.0
 natively (without internal-path breakage). Track via `pnpm update --filter @workspace/bathyscan jsdom`.
+
+---
+
+## High — `undici` degenerate private cache directives (GHSA-4cwx-7wf7-3272)
+
+**Path affected**
+- `artifacts/bathyscan > jsdom > undici` (version `7.28.0`)
+
+**Risk assessment**: Patched in undici >=7.29.0, but upgrading is blocked — jsdom 29.1.1
+hard-requires internal paths (e.g. `undici/lib/handler/wrap-handler.js`) removed in undici
+7.28.0; 7.28.0 is therefore the highest installable version. The vulnerable code path (parsing
+degenerate `private` cache directives) is never reachable through jsdom's HTTP fetch usage in
+test environments.
+
+**Why not overridden**: Same jsdom 29.1.1 constraint as the other undici exceptions above.
+
+**Planned fix date**: 2026-10-17 — reassess when jsdom releases a version that ships undici
+>=7.29.0 natively. Track via `pnpm update --filter @workspace/bathyscan jsdom`.
 
 ---
 

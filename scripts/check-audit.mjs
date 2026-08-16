@@ -53,6 +53,19 @@ const EXCEPTIONS = {
       "<7.28.0 internal paths. Fix: upgrade jsdom when a version shipping undici>=7.28.0 is released.",
     fixDate: "2026-10-17",
   },
+  // undici 7.28.0 via jsdom — test-only devDep, not deployed to production.
+  // Patched in undici >=7.29.0, but cannot upgrade: jsdom 29.1.1 hard-requires
+  // internal paths (e.g. undici/lib/handler/wrap-handler.js) removed in undici
+  // 7.28.0; upgrading further breaks all Vitest/jsdom tests.
+  // The vulnerable path (degenerate private cache directives) is never reachable
+  // through jsdom's HTTP fetch usage in test environments.
+  "GHSA-4cwx-7wf7-3272": {
+    reason:
+      "undici cross-user info disclosure via degenerate private cache directives — only reachable via jsdom (test devDep). " +
+      "Cannot upgrade: jsdom 29.1.1 requires undici <7.28.0 internal paths; undici 7.28.0 is the " +
+      "highest installable version. Fix: upgrade jsdom when a version shipping undici>=7.29.0 is released.",
+    fixDate: "2026-10-17",
+  },
 };
 
 // ---------------------------------------------------------------------------

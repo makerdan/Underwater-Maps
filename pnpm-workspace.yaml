@@ -78,9 +78,9 @@ overrides:
   # markdown-it <=14.1.1: quadratic DoS in smartquotes via orval->typedoc; build-only exposure
   markdown-it: '>=14.2.0'
   # js-yaml <=4.1.1: quadratic DoS in merge-key via orval; build-only exposure.
-  # Use ">=4.2.0 <5" to stay in the 4.x series (4.3.0 is the patched release)
-  # and avoid v5.x which has a different ESM export shape that breaks orval.
-  js-yaml: '>=4.2.0 <5'
+  # js-yaml 4.3.0: quadratic CPU in !!omap (GHSA-5p4m-2wfm-xmqj, CVE-2026-59870);
+  # patched in 4.3.1. Pinned to 4.3.1 in package.json pnpm.overrides (keyed as
+  # js-yaml@4) to stay in the 4.x series and avoid v5.x which breaks orval ESM imports.
   # undici: cannot override to >=7.28.0 — jsdom 29.1.1 hard-requires internal
   # paths removed in 7.28.0 (lib/handler/wrap-handler.js), breaking all Vitest tests.
   # Documented as exception in check-audit.mjs + security-audit-exceptions.md.
@@ -169,3 +169,6 @@ overrides:
   rollup>@rollup/rollup-win32-x64-gnu: '-'
   rollup>@rollup/rollup-win32-x64-msvc: '-'
   uuid: '>=11.1.1'
+  # pdfjs-dist <6.2.108: arbitrary JavaScript execution on malicious PDF
+  # (GHSA-hq66-cqwq-w95j) via api-server direct dep; patched in 6.2.108.
+  pdfjs-dist: '>=6.2.108'
