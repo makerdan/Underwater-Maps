@@ -2497,9 +2497,21 @@ paths:
       operationId: getDatasetsMySaves
       tags: [datasets]
       summary: List the authenticated user's saved catalog datasets
-      description: Returns all catalog datasets the user has saved, joined with catalog metadata.
+      description: |
+        Returns all catalog datasets the user has saved, joined with catalog
+        metadata. When `waterType` is provided, only saves whose catalog entry
+        matches that water type are returned; saves with no catalog entry
+        (orphans) are always included regardless of the filter.
       security:
         - clerkAuth: []
+      parameters:
+        - in: query
+          name: waterType
+          required: false
+          description: Filter saves by the linked catalog entry's water body type
+          schema:
+            type: string
+            enum: [saltwater, freshwater]
       responses:
         "200":
           description: List of user save records with embedded catalog metadata
@@ -6846,6 +6858,13 @@ components:
         createdAt:
           type: string
           format: date-time
+        waterType:
+          type: string
+          enum: [saltwater, freshwater]
+          description: |
+            Water body type from the stored terrain grid. Rows stored before
+            the freshwater feature (2026-07-19) default to saltwater on the
+            read path. Absent when the stored grids carry no usable value.
         needsGeoreferencing:
           type: boolean
           description: |

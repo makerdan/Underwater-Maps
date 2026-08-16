@@ -32,6 +32,12 @@ const makeApiClientMock = vi.hoisted(() => {
 
 vi.mock("@workspace/api-client-react", () => makeApiClientMock());
 
+// useWaterTypeSideEffects now invalidates the my-saves query via
+// useQueryClient; these tests render without a QueryClientProvider.
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+}));
+
 // Bypass the async preview/confirmation flow so the side-effect runs
 // synchronously inside the test's `act()` block.
 vi.mock("@/lib/simulatedDataStore", () => ({

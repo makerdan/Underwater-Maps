@@ -138,17 +138,17 @@ describe("TASK_PLAN_FILE absent", () => {
 // ── (b) Plan has no ## Validation section ───────────────────────────────────
 
 describe("plan without ## Validation section", () => {
-  it("warns and exits 0 (graceful degradation for old plans)", () => {
+  it("exits 1 with TIER-LOCK VIOLATION (hardened — missing section is an error)", () => {
     const planFile = writePlanWithoutValidation("plan-no-validation.md");
     const result = runCheck("standard", planFile);
     assert.equal(
       result.status,
-      0,
-      `expected exit 0 when plan has no ## Validation section, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+      1,
+      `expected exit 1 (TIER-LOCK VIOLATION) when plan has no ## Validation section, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
     assert.ok(
-      result.stderr.includes("WARNING"),
-      `stderr should contain a WARNING.\nstderr: ${result.stderr}`,
+      result.stderr.includes("TIER-LOCK VIOLATION"),
+      `stderr should contain TIER-LOCK VIOLATION.\nstderr: ${result.stderr}`,
     );
   });
 });
@@ -341,19 +341,20 @@ describe("tier mismatch — TIER-LOCK VIOLATION", () => {
     );
   });
 
-  it("plan with no ## Validation section → warns and exits 0 (graceful degradation for old plans)", () => {
-    // A plan file that exists but has NO ## Validation section at all is an
-    // old plan predating the convention — graceful degradation, not a violation.
+  it("plan with no ## Validation section → exits 1 with TIER-LOCK VIOLATION (hardened)", () => {
+    // A plan file that exists but has NO ## Validation section is a hard
+    // error since the tier-lock hardening: the section is mandatory and
+    // check-failure-gate --fix-stub can auto-add it.
     const planFile = writePlanWithoutValidation("plan-no-val-mismatch.md");
     const result = runCheck("standard", planFile);
     assert.equal(
       result.status,
-      0,
-      `expected exit 0 (graceful degradation) for plan with no ## Validation section, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+      1,
+      `expected exit 1 (TIER-LOCK VIOLATION) for plan with no ## Validation section, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
     assert.ok(
-      result.stderr.includes("WARNING"),
-      `stderr should contain a WARNING.\nstderr: ${result.stderr}`,
+      result.stderr.includes("TIER-LOCK VIOLATION"),
+      `stderr should contain TIER-LOCK VIOLATION.\nstderr: ${result.stderr}`,
     );
   });
 });

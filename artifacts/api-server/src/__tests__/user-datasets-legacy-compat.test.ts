@@ -33,6 +33,12 @@ const dbState = vi.hoisted(() => ({
   overviewSelectResult: [] as unknown[],
 }));
 
+// Catalog entries returned by the mocked catalogSeeder — used by the legacy
+// waterType override tests (linked catalog save → canonical waterType).
+const catalogState = vi.hoisted(() => ({
+  entries: [] as Array<{ id: string; waterType: string }>,
+}));
+
 // ---------------------------------------------------------------------------
 // Mocks (declared before module imports so Vitest hoisting applies)
 // ---------------------------------------------------------------------------
@@ -48,10 +54,13 @@ vi.mock("@workspace/db", async () => {
     const whereFn = vi.fn(() => {
       // Terrain tests push two entries (size row then terrain row).
       // Overview tests push one entry.
-      if (dbState.terrainSelectQueue.length > 0) {
-        return Promise.resolve(dbState.terrainSelectQueue.shift()!);
-      }
-      return Promise.resolve(dbState.overviewSelectResult);
+      const result =
+        dbState.terrainSelectQueue.length > 0
+          ? Promise.resolve(dbState.terrainSelectQueue.shift()!)
+          : Promise.resolve(dbState.overviewSelectResult);
+      // GET /user/datasets chains .orderBy() after .where() — support both
+      // awaiting the where() result directly and chaining orderBy first.
+      return Object.assign(result, { orderBy: vi.fn(() => result) });
     });
     void callIndex; // suppress unused-variable lint
     return { from: vi.fn().mockReturnValue({ where: whereFn }) };
@@ -86,12 +95,21 @@ vi.mock("@clerk/shared/keys", () => ({
   publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
 }));
 
+// Catalog seeder — the legacy waterType read-path fix looks up the linked
+// catalog entry's waterType via getCatalogEntries().
+vi.mock("../lib/catalogSeeder.js", () => ({
+  seedDatasetCatalog: vi.fn(async () => {}),
+  getCatalogEntries: vi.fn(async () => catalogState.entries),
+  searchCatalog: vi.fn(async () => []),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
 import app from "../app.js";
 import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
+import { sanitizeLegacyStoredJson } from "../routes/user-datasets.js";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -133,6 +151,7 @@ beforeEach(() => {
   __resetRateLimitMemory();
   dbState.terrainSelectQueue = [];
   dbState.overviewSelectResult = [];
+  catalogState.entries = [];
 });
 
 // ===========================================================================
@@ -272,5 +291,157 @@ describe("GET /api/user/datasets/:id/overview — legacy blob sanitization", () 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("waterType", "saltwater");
     expect(res.body).toHaveProperty("dataSource", "ncei");
+  });
+});
+
+// ===========================================================================
+// Legacy waterType override — linked catalog save resolves the real type
+// ===========================================================================
+
+describe("legacy waterType override from linked catalog save", () => {
+  const FRESH_ENTRY = { id: "preset-lake-ray-roberts", waterType: "freshwater" };
+
+  it("terrain: legacy blob linked to a freshwater catalog save returns waterType=freshwater", async () => {
+    catalogState.entries = [FRESH_ENTRY];
+    dbState.terrainSelectQueue.push(
+      [{ size: SAFE_SIZE }],                          // pg_column_size pre-check
+      [{ terrainJson: minimalTerrainBlob() }],        // legacy blob, no waterType
+      [{ catalogId: "preset-lake-ray-roberts" }],     // linked user_catalog_saves row
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/terrain`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "freshwater");
+  });
+
+  it("terrain: legacy blob whose linked save points at a deleted catalog entry falls back to saltwater", async () => {
+    catalogState.entries = [FRESH_ENTRY];
+    dbState.terrainSelectQueue.push(
+      [{ size: SAFE_SIZE }],
+      [{ terrainJson: minimalTerrainBlob() }],
+      [{ catalogId: "gone-entry" }],
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/terrain`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "saltwater");
+  });
+
+  it("terrain: modern blob with stored waterType is NOT overridden by the catalog lookup", async () => {
+    catalogState.entries = [FRESH_ENTRY];
+    dbState.terrainSelectQueue.push(
+      [{ size: SAFE_SIZE }],
+      [{ terrainJson: minimalTerrainBlob({ waterType: "saltwater" }) }],
+      // No third select expected — stored value wins without a lookup.
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/terrain`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "saltwater");
+  });
+
+  it("overview: legacy blob linked to a freshwater catalog save returns waterType=freshwater", async () => {
+    catalogState.entries = [FRESH_ENTRY];
+    dbState.terrainSelectQueue.push(
+      [{ overviewJson: minimalTerrainBlob() }],       // overview fetch
+      [{ catalogId: "preset-lake-ray-roberts" }],     // linked save lookup
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/overview`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "freshwater");
+  });
+});
+
+// ===========================================================================
+// sanitizeLegacyStoredJson — fallback override unit tests
+// ===========================================================================
+
+describe("sanitizeLegacyStoredJson fallback override", () => {
+  it("uses the provided fallback when waterType is missing", () => {
+    expect(sanitizeLegacyStoredJson({}, "freshwater")["waterType"]).toBe("freshwater");
+  });
+
+  it("defaults to saltwater when no fallback is provided", () => {
+    expect(sanitizeLegacyStoredJson({})["waterType"]).toBe("saltwater");
+  });
+
+  it("keeps a valid stored waterType even when a different fallback is provided", () => {
+    expect(
+      sanitizeLegacyStoredJson({ waterType: "saltwater" }, "freshwater")["waterType"],
+    ).toBe("saltwater");
+  });
+
+  it("replaces an invalid stored waterType with the fallback", () => {
+    expect(
+      sanitizeLegacyStoredJson({ waterType: "brackish" }, "freshwater")["waterType"],
+    ).toBe("freshwater");
+  });
+});
+
+// ===========================================================================
+// GET /api/user/datasets — metaJson waterType exposure
+// ===========================================================================
+
+describe("GET /api/user/datasets — metaJson waterType", () => {
+  function makeListRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: DATASET_ID,
+      name: "Upload",
+      minDepth: 5,
+      maxDepth: 50,
+      folderId: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      needsGeoreferencing: null,
+      pendingRasterGzBase64: null,
+      tideStationJson: null,
+      terrainJson: null,
+      overviewJson: null,
+      ...overrides,
+    };
+  }
+
+  it("exposes waterType=freshwater from the stored terrain JSON", async () => {
+    dbState.terrainSelectQueue.push([
+      makeListRow({ terrainJson: minimalTerrainBlob({ waterType: "freshwater" }) }),
+    ]);
+
+    const res = await request(app).get("/api/user/datasets").set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toHaveProperty("waterType", "freshwater");
+  });
+
+  it("defaults a legacy grid (no stored waterType) to saltwater", async () => {
+    dbState.terrainSelectQueue.push([
+      makeListRow({ terrainJson: minimalTerrainBlob() }),
+    ]);
+
+    const res = await request(app).get("/api/user/datasets").set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toHaveProperty("waterType", "saltwater");
+  });
+
+  it("omits waterType entirely when the row has no stored grids", async () => {
+    dbState.terrainSelectQueue.push([makeListRow()]);
+
+    const res = await request(app).get("/api/user/datasets").set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body[0]).not.toHaveProperty("waterType");
   });
 });

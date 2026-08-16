@@ -1674,6 +1674,20 @@ export interface TerrainUploadInput {
 }
 
 /**
+ * Water body type from the stored terrain grid. Rows stored before
+the freshwater feature (2026-07-19) default to saltwater on the
+read path. Absent when the stored grids carry no usable value.
+
+ */
+export type UserDatasetMetaWaterType = typeof UserDatasetMetaWaterType[keyof typeof UserDatasetMetaWaterType];
+
+
+export const UserDatasetMetaWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
+
+/**
  * Nearest NOAA tide station binding stored on a user dataset at upload time
  */
 export interface StoredTideStation {
@@ -1709,6 +1723,11 @@ export interface UserDatasetMeta {
   /** Parent folder UUID, or null when at the library root */
   folderId?: string | null;
   createdAt: string;
+  /** Water body type from the stored terrain grid. Rows stored before
+  the freshwater feature (2026-07-19) default to saltwater on the
+  read path. Absent when the stored grids carry no usable value.
+   */
+  waterType?: UserDatasetMetaWaterType;
   /** True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked
   georeferencing tags and the user must manually pin it to geographic
   coordinates using the georeferencing wizard. Absent (falsy) once
@@ -3918,6 +3937,21 @@ from?: number;
  */
 max?: number;
 };
+
+export type GetDatasetsMySavesParams = {
+/**
+ * Filter saves by the linked catalog entry's water body type
+ */
+waterType?: GetDatasetsMySavesWaterType;
+};
+
+export type GetDatasetsMySavesWaterType = typeof GetDatasetsMySavesWaterType[keyof typeof GetDatasetsMySavesWaterType];
+
+
+export const GetDatasetsMySavesWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
 
 export type GetSurfaceConditionsParams = {
 /**

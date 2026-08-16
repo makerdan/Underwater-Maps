@@ -87,7 +87,7 @@ test.describe("SaveCard inline rename flow", () => {
 
     // (1) Serve the fixture save list so the SaveCard renders without a real DB.
     let currentFixture = makeSaveFixture(null);
-    await page.route("**/api/datasets/my-saves", (route) => {
+    await page.route("**/api/datasets/my-saves*", (route) => {
       if (route.request().method() !== "GET") return route.continue();
       return route.fulfill({
         status: 200,
@@ -204,7 +204,7 @@ test.describe("SaveCard inline rename flow", () => {
       } catch {}
     });
 
-    await page.route("**/api/datasets/my-saves", (route) => {
+    await page.route("**/api/datasets/my-saves*", (route) => {
       if (route.request().method() !== "GET") return route.continue();
       return route.fulfill({
         status: 200,

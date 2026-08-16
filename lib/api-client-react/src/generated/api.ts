@@ -56,6 +56,7 @@ import type {
   GetDatasetsCatalogParams,
   GetDatasetsCatalogSearchParams,
   GetDatasetsIdTerrainParams,
+  GetDatasetsMySavesParams,
   GetDatasetsParams,
   GetEfhByIdParams,
   GetEfhParams,
@@ -5310,21 +5311,32 @@ export const usePostDatasetsCatalogIdSave = <TError = ErrorType<ApiError>,
       return useMutation(getPostDatasetsCatalogIdSaveMutationOptions(options));
     }
 
-export const getGetDatasetsMySavesUrl = () => {
+export const getGetDatasetsMySavesUrl = (params?: GetDatasetsMySavesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/datasets/my-saves`
+  return stringifiedParams.length > 0 ? `/api/datasets/my-saves?${stringifiedParams}` : `/api/datasets/my-saves`
 }
 
 /**
- * Returns all catalog datasets the user has saved, joined with catalog metadata.
+ * Returns all catalog datasets the user has saved, joined with catalog
+metadata. When `waterType` is provided, only saves whose catalog entry
+matches that water type are returned; saves with no catalog entry
+(orphans) are always included regardless of the filter.
+
  * @summary List the authenticated user's saved catalog datasets
  */
-export const getDatasetsMySaves = async ( options?: RequestInit): Promise<UserCatalogSave[]> => {
+export const getDatasetsMySaves = async (params?: GetDatasetsMySavesParams, options?: RequestInit): Promise<UserCatalogSave[]> => {
 
-  return customFetch<UserCatalogSave[]>(getGetDatasetsMySavesUrl(),
+  return customFetch<UserCatalogSave[]>(getGetDatasetsMySavesUrl(params),
   {
     ...options,
     method: 'GET'
@@ -5337,23 +5349,23 @@ export const getDatasetsMySaves = async ( options?: RequestInit): Promise<UserCa
 
 
 
-export const getGetDatasetsMySavesQueryKey = () => {
+export const getGetDatasetsMySavesQueryKey = (params?: GetDatasetsMySavesParams,) => {
     return [
-    `/api/datasets/my-saves`
+    `/api/datasets/my-saves`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetDatasetsMySavesQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetsMySaves>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsMySaves>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetDatasetsMySavesQueryOptions = <TData = Awaited<ReturnType<typeof getDatasetsMySaves>>, TError = ErrorType<ApiError>>(params?: GetDatasetsMySavesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsMySaves>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsMySavesQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetDatasetsMySavesQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetsMySaves>>> = ({ signal }) => getDatasetsMySaves({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDatasetsMySaves>>> = ({ signal }) => getDatasetsMySaves(params, { signal, ...requestOptions });
 
 
 
@@ -5371,11 +5383,11 @@ export type GetDatasetsMySavesQueryError = ErrorType<ApiError>
  */
 
 export function useGetDatasetsMySaves<TData = Awaited<ReturnType<typeof getDatasetsMySaves>>, TError = ErrorType<ApiError>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsMySaves>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetDatasetsMySavesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDatasetsMySaves>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetDatasetsMySavesQueryOptions(options)
+  const queryOptions = getGetDatasetsMySavesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

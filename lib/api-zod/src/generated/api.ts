@@ -316,6 +316,7 @@ export const PostDatasetsUploadResponse = zod.object({
   "maxDepth": zod.number(),
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Water body type from the stored terrain grid. Rows stored before\nthe freshwater feature (2026-07-19) default to saltwater on the\nread path. Absent when the stored grids carry no usable value.\n'),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
   "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
   "tideStation": zod.object({
@@ -496,6 +497,7 @@ export const PostDatasetsRasterCommitResponse = zod.object({
   "maxDepth": zod.number(),
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Water body type from the stored terrain grid. Rows stored before\nthe freshwater feature (2026-07-19) default to saltwater on the\nread path. Absent when the stored grids carry no usable value.\n'),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
   "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
   "tideStation": zod.object({
@@ -526,6 +528,7 @@ export const GetUserDatasetsResponseItem = zod.object({
   "maxDepth": zod.number(),
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Water body type from the stored terrain grid. Rows stored before\nthe freshwater feature (2026-07-19) default to saltwater on the\nread path. Absent when the stored grids carry no usable value.\n'),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
   "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
   "tideStation": zod.object({
@@ -735,6 +738,7 @@ export const PostUserDatasetsIdGeorefResponse = zod.object({
   "maxDepth": zod.number(),
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Water body type from the stored terrain grid. Rows stored before\nthe freshwater feature (2026-07-19) default to saltwater on the\nread path. Absent when the stored grids carry no usable value.\n'),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
   "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
   "tideStation": zod.object({
@@ -779,6 +783,7 @@ export const PatchUserDatasetsIdMoveResponse = zod.object({
   "maxDepth": zod.number(),
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Water body type from the stored terrain grid. Rows stored before\nthe freshwater feature (2026-07-19) default to saltwater on the\nread path. Absent when the stored grids carry no usable value.\n'),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
   "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
   "tideStation": zod.object({
@@ -823,6 +828,7 @@ export const PatchUserDatasetsIdRenameResponse = zod.object({
   "maxDepth": zod.number(),
   "folderId": zod.string().nullish().describe('Parent folder UUID, or null when at the library root'),
   "createdAt": zod.coerce.date(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Water body type from the stored terrain grid. Rows stored before\nthe freshwater feature (2026-07-19) default to saltwater on the\nread path. Absent when the stored grids carry no usable value.\n'),
   "needsGeoreferencing": zod.boolean().optional().describe('True when an inner GeoTIFF from a Smooth_Sheets NOAA archive lacked\ngeoreferencing tags and the user must manually pin it to geographic\ncoordinates using the georeferencing wizard. Absent (falsy) once\ncontrol points have been submitted.\n'),
   "hasRasterImage": zod.boolean().optional().describe('True when a pending raster image is stored and available from\nGET \/user\/datasets\/{id}\/raster-image for display in the wizard.\nAbsent when the raster exceeded the storage cap or has been cleared.\n'),
   "tideStation": zod.object({
@@ -3838,9 +3844,17 @@ export const PostDatasetsCatalogIdSaveBody = zod.object({
 
 
 /**
- * Returns all catalog datasets the user has saved, joined with catalog metadata.
+ * Returns all catalog datasets the user has saved, joined with catalog
+metadata. When `waterType` is provided, only saves whose catalog entry
+matches that water type are returned; saves with no catalog entry
+(orphans) are always included regardless of the filter.
+
  * @summary List the authenticated user's saved catalog datasets
  */
+export const GetDatasetsMySavesQueryParams = zod.object({
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Filter saves by the linked catalog entry\'s water body type')
+})
+
 export const GetDatasetsMySavesResponseItem = zod.object({
   "id": zod.string().describe('UUID primary key'),
   "catalogId": zod.string().describe('References the dataset_catalog.id'),

@@ -58,7 +58,7 @@ export const ReassignMarkersDialog: React.FC<Props> = ({ onClose }) => {
   }, [onClose, isReassigning]);
 
   // Fetch user's saved catalog datasets.
-  const { data: mySavesData, isLoading: savesLoading } = useGetDatasetsMySaves({
+  const { data: mySavesData, isLoading: savesLoading } = useGetDatasetsMySaves(undefined, {
     query: { queryKey: getGetDatasetsMySavesQueryKey(), staleTime: 60_000 },
   });
   const mySaves = (mySavesData ?? []).filter((s) => s.status === "ready");

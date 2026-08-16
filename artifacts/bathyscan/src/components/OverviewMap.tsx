@@ -789,7 +789,7 @@ export const OverviewMap: React.FC = () => {
   const [bboxError, setBboxError] = useState<string | null>(null);
   const { setDatasetId, setTerrain } = useAppState();
   const saveMutation = usePostDatasetsCatalogIdSave();
-  const { data: mySaves = [], refetch: refetchMySaves } = useGetDatasetsMySaves({
+  const { data: mySaves = [], refetch: refetchMySaves } = useGetDatasetsMySaves(undefined, {
     query: { queryKey: getGetDatasetsMySavesQueryKey() },
   });
   const savedCatalogIds = React.useMemo(

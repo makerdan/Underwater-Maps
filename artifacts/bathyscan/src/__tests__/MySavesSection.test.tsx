@@ -143,6 +143,7 @@ let currentUserDatasets: unknown[] = [];
 let currentMySaves: unknown[] = [];
 let currentUserFolders: unknown[] = [];
 let currentSaveFolderExpanded: Record<string, boolean> = {};
+let currentWaterType = "saltwater";
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -247,7 +248,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
     sel: (s: { waterType: string; saveFolderExpanded: Record<string, boolean> }) => unknown,
   ) =>
     sel({
-      waterType: "saltwater",
+      waterType: currentWaterType,
       saveFolderExpanded: currentSaveFolderExpanded,
     });
   Object.assign(mockUseSettingsStore, {
@@ -306,6 +307,7 @@ function resetState() {
   currentMySaves = [];
   currentUserFolders = [];
   currentSaveFolderExpanded = {};
+  currentWaterType = "saltwater";
 }
 
 // ---------------------------------------------------------------------------
@@ -771,5 +773,71 @@ describe("MySavesSection — processing/failed saves render inline", () => {
 
     expect(screen.getByTestId("save-card-save-fail")).toBeInTheDocument();
     expect(screen.getByTestId("save-retry-save-fail")).toBeInTheDocument();
+  });
+});
+
+describe("MySavesSection — water type badges & mode filtering", () => {
+  beforeEach(resetState);
+
+  it("save cards show FRESH for freshwater catalog entries and SALT for saltwater", () => {
+    currentMySaves = [
+      {
+        ...SAVE_FOR_UPLOAD_A,
+        id: "save-fresh",
+        datasetId: "ds-x",
+        catalog: { name: "Lake Ray Roberts", sourceAgency: "TWDB", dataType: "bathymetry", waterType: "freshwater" },
+      },
+      {
+        ...SAVE_FOR_UPLOAD_A,
+        id: "save-salt",
+        datasetId: "ds-y",
+        catalog: { name: "Ocean Survey", sourceAgency: "NOAA", dataType: "bathymetry", waterType: "saltwater" },
+      },
+    ];
+    renderSection();
+
+    expect(screen.getByTestId("watertype-save-save-fresh")).toHaveTextContent(/fresh/i);
+    expect(screen.getByTestId("watertype-save-save-salt")).toHaveTextContent(/salt/i);
+  });
+
+  it("orphan save cards (no catalog entry) render without a water badge", () => {
+    currentMySaves = [
+      { ...SAVE_FOR_UPLOAD_A, id: "save-orphan", datasetId: "ds-z", catalog: null },
+    ];
+    renderSection();
+
+    expect(screen.getByTestId("save-card-save-orphan")).toBeInTheDocument();
+    expect(screen.queryByTestId("watertype-save-save-orphan")).toBeNull();
+  });
+
+  it("saltwater mode: saltwater uploads show a SALT badge, freshwater uploads are hidden", () => {
+    currentUserDatasets = [
+      { ...UPLOAD_A, waterType: "saltwater" },
+      { ...UPLOAD_B, waterType: "freshwater" },
+    ];
+    renderSection(); // currentWaterType defaults to "saltwater"
+
+    expect(screen.getByTestId("watertype-upload-upload-a")).toHaveTextContent(/salt/i);
+    expect(screen.queryByTestId("provenance-upload-upload-b")).toBeNull();
+  });
+
+  it("freshwater mode: freshwater uploads show a FRESH badge, saltwater uploads are hidden", () => {
+    currentWaterType = "freshwater";
+    currentUserDatasets = [
+      { ...UPLOAD_A, waterType: "saltwater" },
+      { ...UPLOAD_B, waterType: "freshwater" },
+    ];
+    renderSection();
+
+    expect(screen.getByTestId("watertype-upload-upload-b")).toHaveTextContent(/fresh/i);
+    expect(screen.queryByTestId("provenance-upload-upload-a")).toBeNull();
+  });
+
+  it("uploads without a waterType stay visible in both modes and carry no badge", () => {
+    currentUserDatasets = [UPLOAD_A];
+    renderSection(); // saltwater mode
+
+    expect(screen.getByTestId("provenance-upload-upload-a")).toBeInTheDocument();
+    expect(screen.queryByTestId("watertype-upload-upload-a")).toBeNull();
   });
 });

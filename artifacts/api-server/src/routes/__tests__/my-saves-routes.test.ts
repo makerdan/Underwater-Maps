@@ -156,7 +156,7 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
 // Catalog seeder: returns a deterministic entry when the id is "preset-ocean".
 vi.mock("../../lib/catalogSeeder.js", () => ({
   seedDatasetCatalog: vi.fn(async () => {}),
-  getCatalogEntries: vi.fn(async () => [CATALOG_ENTRY]),
+  getCatalogEntries: vi.fn(async () => [CATALOG_ENTRY, CATALOG_ENTRY_FRESH]),
   searchCatalog: vi.fn(async () => []),
 }));
 
@@ -203,6 +203,15 @@ const CATALOG_ENTRY = {
   keywords: null,
   lastUpdated: null,
   waterType: "saltwater" as const,
+};
+
+/** Freshwater catalog entry — exercises the ?waterType= filter. */
+const CATALOG_ENTRY_FRESH = {
+  ...CATALOG_ENTRY,
+  id: "preset-lake-ray-roberts",
+  name: "Lake Ray Roberts",
+  sourceAgency: "TWDB",
+  waterType: "freshwater" as const,
 };
 
 const SAVE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -311,6 +320,62 @@ describe("GET /api/datasets/my-saves", () => {
     expect(res.status).toBe(200);
     const item = res.body[0];
     expect(item.catalog).toBeNull();
+  });
+});
+
+// ===========================================================================
+// GET /api/datasets/my-saves — waterType filter
+// ===========================================================================
+
+describe("GET /api/datasets/my-saves — waterType filter", () => {
+  const FRESH_SAVE_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const ORPHAN_SAVE_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+  /** One saltwater save, one freshwater save, one orphan (catalog entry gone). */
+  function seedMixedSaves() {
+    state.saves = [
+      makeSaveRow(), // saltwater (preset-ocean)
+      makeSaveRow({ id: FRESH_SAVE_ID, catalogId: "preset-lake-ray-roberts", datasetId: "ds-2" }),
+      makeSaveRow({ id: ORPHAN_SAVE_ID, catalogId: "deleted-entry", datasetId: "ds-3" }),
+    ];
+  }
+
+  it("?waterType=freshwater returns only freshwater saves plus orphans", async () => {
+    seedMixedSaves();
+
+    const res = await request(app).get("/api/datasets/my-saves?waterType=freshwater");
+
+    expect(res.status).toBe(200);
+    const ids = (res.body as Array<{ id: string }>).map((s) => s.id).sort();
+    expect(ids).toEqual([FRESH_SAVE_ID, ORPHAN_SAVE_ID].sort());
+  });
+
+  it("?waterType=saltwater returns only saltwater saves plus orphans", async () => {
+    seedMixedSaves();
+
+    const res = await request(app).get("/api/datasets/my-saves?waterType=saltwater");
+
+    expect(res.status).toBe(200);
+    const ids = (res.body as Array<{ id: string }>).map((s) => s.id).sort();
+    expect(ids).toEqual([SAVE_ID, ORPHAN_SAVE_ID].sort());
+  });
+
+  it("no waterType param returns all saves (unfiltered)", async () => {
+    seedMixedSaves();
+
+    const res = await request(app).get("/api/datasets/my-saves");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(3);
+  });
+
+  it("returns 400 invalid_param for an unknown waterType value", async () => {
+    seedMixedSaves();
+
+    const res = await request(app).get("/api/datasets/my-saves?waterType=brackish");
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_param");
   });
 });
 

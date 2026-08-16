@@ -85,6 +85,33 @@ const CARD: React.CSSProperties = {
 };
 
 // ---------------------------------------------------------------------------
+// WaterTypeBadge — small FRESH/SALT chip shown on save + upload cards
+// ---------------------------------------------------------------------------
+
+const WaterTypeBadge: React.FC<{
+  waterType: string | undefined;
+  testId: string;
+}> = ({ waterType, testId }) => {
+  if (waterType !== "saltwater" && waterType !== "freshwater") return null;
+  const fresh = waterType === "freshwater";
+  return (
+    <span
+      data-testid={testId}
+      style={{
+        fontSize: "calc(9.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        color: fresh ? "#86efac" : "#7dd3fc",
+        border: `1px solid ${fresh ? "rgba(74,222,128,0.4)" : "rgba(56,189,248,0.4)"}`,
+        borderRadius: 3,
+        padding: "0px 5px", flexShrink: 0, lineHeight: 1.6,
+      }}
+    >
+      {fresh ? "🏞 Fresh" : "🌊 Salt"}
+    </span>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // SaveCard
 // ---------------------------------------------------------------------------
 
@@ -190,6 +217,10 @@ const SaveCard: React.FC<{
             >
               Catalog
             </span>
+            <WaterTypeBadge
+              waterType={save.catalog?.waterType}
+              testId={`watertype-save-${save.id}`}
+            />
             <span style={{
               fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -395,6 +426,10 @@ const UploadCard: React.FC<{
               data-testid={`provenance-upload-${dataset.id}`}
               style={{ fontSize: "calc(9.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em", textTransform: "uppercase", color: "#c4b5fd", border: "1px solid rgba(167,139,250,0.45)", borderRadius: 3, padding: "0px 5px", flexShrink: 0, lineHeight: 1.6 }}
             >Upload</span>
+            <WaterTypeBadge
+              waterType={dataset.waterType}
+              testId={`watertype-upload-${dataset.id}`}
+            />
             <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>{createdDate}</span>
           </div>
         </div>
@@ -792,15 +827,19 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   const { isSignedIn, isLoaded } = useAuth();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const waterType = useSettingsStore((s) => s.waterType);
 
   // ── Queries ──────────────────────────────────────────────────────────────
+  // The active SALT/FRESH mode is passed to the server so only matching saves
+  // return (orphan saves — no catalog entry — always pass). waterType is part
+  // of the query key, so toggling the mode fetches from a separate cache slot.
   const {
     data: mySaves = [],
     refetch: refetchSaves,
     isPending: isSavePending,
-  } = useGetDatasetsMySaves({
+  } = useGetDatasetsMySaves({ waterType }, {
     query: {
-      queryKey: getGetDatasetsMySavesQueryKey(),
+      queryKey: getGetDatasetsMySavesQueryKey({ waterType }),
       enabled: isLoaded && isSignedIn === true,
       refetchInterval: (q) => {
         const data = q.state.data as UserCatalogSave[] | undefined;
@@ -840,9 +879,17 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
     () => new Set(mySaves.map((s) => s.datasetId).filter(Boolean) as string[]),
     [mySaves],
   );
+  // Upload-only datasets are filtered by the active water mode client-side.
+  // Rows with no waterType (older responses / missing grids) stay visible in
+  // both modes — never silently hide a dataset we can't classify.
   const uploadOnlyDatasets = useMemo(
-    () => userDatasets.filter((d) => !catalogSaveDatasetIds.has(d.id)),
-    [userDatasets, catalogSaveDatasetIds],
+    () =>
+      userDatasets.filter(
+        (d) =>
+          !catalogSaveDatasetIds.has(d.id) &&
+          (!d.waterType || d.waterType === waterType),
+      ),
+    [userDatasets, catalogSaveDatasetIds, waterType],
   );
 
   // ── Delete — catalog saves (with undo) ───────────────────────────────────

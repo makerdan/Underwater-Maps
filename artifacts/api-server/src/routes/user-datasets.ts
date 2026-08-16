@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { db, customDatasetsTable, datasetFoldersTable, type StoredTerrainJson, type GeorefControlPoint, type StoredTideStation } from "@workspace/db";
+import { db, customDatasetsTable, datasetFoldersTable, userCatalogSavesTable, type StoredTerrainJson, type GeorefControlPoint, type StoredTideStation } from "@workspace/db";
 import { MAX_TERRAIN_JSON_BYTES } from "../lib/constants.js";
 import {
   GetUserDatasetsResponse,
@@ -23,26 +23,32 @@ import sharp from "sharp";
  * throw a 500:
  *
  *  1. Pre-freshwater rows (before 2026-07-19) have no `waterType` field.
- *     We default these to "saltwater" because every dataset that predates
- *     the freshwater feature is a saltwater/ocean dataset.
+ *     These default to `fallbackWaterType` — "saltwater" unless the caller
+ *     resolved a better value (e.g. the linked catalog entry's waterType via
+ *     resolveCatalogWaterType), because every *upload* that predates the
+ *     freshwater feature is a saltwater/ocean dataset, but catalog saves may
+ *     be freshwater (e.g. Lake Ray Roberts).
  *
  *  2. Old rows may carry `dataSource: "synthetic"` — the fbm procedural
  *     fallback was removed; "synthetic" is no longer a valid enum value.
  *     We delete the field so the optional `dataSource` is simply absent.
  *
- * This is a read-path shim.  The DB backfill script
- * (lib/db/src/scripts/backfill-water-type-and-datasource.ts) fixes rows at
- * rest so future reads no longer need the shim.
+ * This is a read-path shim; no DB backfill required.
  */
 const VALID_WATER_TYPES = new Set(["saltwater", "freshwater"]);
 
-function sanitizeLegacyStoredJson(raw: unknown): Record<string, unknown> {
+type WaterType = "saltwater" | "freshwater";
+
+export function sanitizeLegacyStoredJson(
+  raw: unknown,
+  fallbackWaterType: WaterType = "saltwater",
+): Record<string, unknown> {
   const obj = (raw ?? {}) as Record<string, unknown>;
   const patched: Record<string, unknown> = { ...obj };
 
   // 1. Inject missing waterType
   if (!VALID_WATER_TYPES.has(patched["waterType"] as string)) {
-    patched["waterType"] = "saltwater";
+    patched["waterType"] = fallbackWaterType;
   }
 
   // 2. Strip removed "synthetic" dataSource
@@ -52,6 +58,42 @@ function sanitizeLegacyStoredJson(raw: unknown): Record<string, unknown> {
 
   return patched;
 }
+
+/** True when the stored JSON already carries a valid waterType. */
+function hasValidWaterType(raw: unknown): boolean {
+  const obj = raw as Record<string, unknown> | null | undefined;
+  return VALID_WATER_TYPES.has(obj?.["waterType"] as string);
+}
+
+/**
+ * Legacy read-path fix: for a custom_datasets row whose stored JSON predates
+ * the freshwater feature (no `waterType`), resolve the correct water type
+ * from the linked catalog save (user_catalog_saves.dataset_id → catalogId →
+ * catalog entry). Returns null when the dataset has no linked save, the
+ * catalog entry is gone, or anything about the lookup is off — callers then
+ * fall back to the legacy "saltwater" default.
+ */
+async function resolveCatalogWaterType(datasetId: string): Promise<WaterType | null> {
+  try {
+    const [save] = await db
+      .select({ catalogId: userCatalogSavesTable.catalogId })
+      .from(userCatalogSavesTable)
+      .where(eq(userCatalogSavesTable.datasetId, datasetId));
+    if (!save || typeof save.catalogId !== "string" || !save.catalogId) return null;
+
+    const entries = await getCatalogEntries();
+    const entry = entries.find((e) => e.id === save.catalogId);
+    const wt = entry?.waterType;
+    return wt === "saltwater" || wt === "freshwater" ? wt : null;
+  } catch (err) {
+    logger.warn(
+      { datasetId, err },
+      "[user-datasets] catalog waterType lookup failed — falling back to saltwater",
+    );
+    return null;
+  }
+}
+import { getCatalogEntries } from "../lib/catalogSeeder.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
@@ -110,6 +152,18 @@ function metaJson(row: {
   overviewJson?: StoredTerrainJson | null;
 }) {
   const bbox = extractBbox(row.terrainJson, row.overviewJson);
+  // Water type from the stored grids. When a grid is present but carries no
+  // valid value (legacy pre-2026-07-19 rows), default to "saltwater" — the
+  // same read-path shim as sanitizeLegacyStoredJson. When no grid exists at
+  // all (e.g. pending georeferencing), omit the field so the client keeps the
+  // row visible in both water modes instead of guessing.
+  const storedJson = row.terrainJson ?? row.overviewJson;
+  const waterType: WaterType | undefined =
+    storedJson == null
+      ? undefined
+      : hasValidWaterType(storedJson)
+        ? ((storedJson as unknown as Record<string, unknown>)["waterType"] as WaterType)
+        : "saltwater";
   return {
     id: row.id,
     name: row.name,
@@ -117,6 +171,7 @@ function metaJson(row: {
     maxDepth: row.maxDepth,
     folderId: row.folderId,
     createdAt: row.createdAt.toISOString(),
+    ...(waterType ? { waterType } : {}),
     ...(row.needsGeoreferencing ? { needsGeoreferencing: true as const } : {}),
     ...(row.needsGeoreferencing && row.pendingRasterGzBase64
       ? { hasRasterImage: true as const }
@@ -311,7 +366,14 @@ router.get("/user/datasets/:id/terrain", terrainFetchIpRateLimit, requireAuth, t
     return;
   }
 
-  res.json(GetUserDatasetsIdTerrainResponse.parse(sanitizeLegacyStoredJson(row.terrainJson)));
+  // Legacy rows (no stored waterType): prefer the linked catalog entry's
+  // known water type over the blanket "saltwater" default.
+  const terrainFallback = hasValidWaterType(row.terrainJson)
+    ? undefined
+    : await resolveCatalogWaterType(id);
+  res.json(GetUserDatasetsIdTerrainResponse.parse(
+    sanitizeLegacyStoredJson(row.terrainJson, terrainFallback ?? "saltwater"),
+  ));
 }));
 
 // ── GET /user/datasets/:id/overview ────────────────────────────────────────
@@ -329,7 +391,14 @@ router.get("/user/datasets/:id/overview", requireAuth, asyncHandler(async (req, 
     return;
   }
 
-  res.json(GetUserDatasetsIdOverviewResponse.parse(sanitizeLegacyStoredJson(row.overviewJson)));
+  // Legacy rows (no stored waterType): prefer the linked catalog entry's
+  // known water type over the blanket "saltwater" default.
+  const overviewFallback = hasValidWaterType(row.overviewJson)
+    ? undefined
+    : await resolveCatalogWaterType(id);
+  res.json(GetUserDatasetsIdOverviewResponse.parse(
+    sanitizeLegacyStoredJson(row.overviewJson, overviewFallback ?? "saltwater"),
+  ));
 }));
 
 // ── GET /user/datasets/:id/raster-image ────────────────────────────────────

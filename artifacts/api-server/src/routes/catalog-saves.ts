@@ -29,7 +29,7 @@ import { Router } from "express";
 import { eq, and, lt, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
-import { CatalogSearchQuerySchema, CatalogIdParamSchema, SaveIdParamSchema } from "./schemas.js";
+import { CatalogSearchQuerySchema, CatalogIdParamSchema, SaveIdParamSchema, DatasetsQuerySchema } from "./schemas.js";
 import { db, userCatalogSavesTable, customDatasetsTable, datasetFoldersTable, type StoredTerrainJson } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -1314,6 +1314,17 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, dataMutationRateLimit, 
 router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
+  // Optional ?waterType=saltwater|freshwater filter (same shape as GET /datasets).
+  const queryParsed = DatasetsQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: queryParsed.error.issues[0]?.message ?? "Invalid query parameter",
+    });
+    return;
+  }
+  const { waterType } = queryParsed.data;
+
   const rows = await db
     .select()
     .from(userCatalogSavesTable)
@@ -1322,10 +1333,15 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
   const entries = await getCatalogEntries();
   const entryMap = new Map(entries.map((e) => [e.id, e]));
 
-  const result = rows.map((row) => {
-    const entry = entryMap.get(row.catalogId);
-    return formatSaveRow(row, entry ?? null);
-  });
+  const result = rows
+    .map((row) => {
+      const entry = entryMap.get(row.catalogId);
+      return { row, entry: entry ?? null };
+    })
+    // Orphan saves (no catalog entry) always pass through — never silently
+    // hide a save just because its catalog entry disappeared.
+    .filter(({ entry }) => !waterType || !entry || entry.waterType === waterType)
+    .map(({ row, entry }) => formatSaveRow(row, entry));
 
   res.json(validateResponse(GetDatasetsMySavesResponse, result, "GET /api/datasets/my-saves"));
 }));

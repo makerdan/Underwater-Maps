@@ -167,7 +167,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const [reassignExisting, setReassignExisting] = useState(true);
 
   // Fetch the user's saved catalog datasets (only when no active terrain)
-  const { data: mySavesData, isLoading: mySavesLoading } = useGetDatasetsMySaves({
+  const { data: mySavesData, isLoading: mySavesLoading } = useGetDatasetsMySaves(undefined, {
     query: { queryKey: getGetDatasetsMySavesQueryKey(), enabled: !terrain, staleTime: 60_000 },
   });
   const mySaves = useMemo(() => mySavesData ?? [], [mySavesData]);

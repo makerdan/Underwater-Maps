@@ -41,6 +41,12 @@ const makeApiClientMock = vi.hoisted(() => {
 
 vi.mock("@workspace/api-client-react", () => makeApiClientMock());
 
+// useWaterTypeSideEffects now invalidates the my-saves query via
+// useQueryClient; these tests render without a QueryClientProvider.
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+}));
+
 // Default: auto-confirm any synthetic-data prompt so the existing tests
 // (which assert the switch happens) keep exercising the post-confirm path.
 // Individual tests can override via requestDatasetSwitchMock.

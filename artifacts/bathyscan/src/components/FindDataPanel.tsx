@@ -1180,7 +1180,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const {
     data: mySaves = [],
     refetch: refetchSaves,
-  } = useGetDatasetsMySaves({
+  } = useGetDatasetsMySaves(undefined, {
     query: {
       queryKey: getGetDatasetsMySavesQueryKey(),
       // Always fetch when signed in so the search tab can reflect already-saved

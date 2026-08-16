@@ -13,7 +13,8 @@
  * vitest suite (see __tests__/waterTypeSwitch.test.tsx).
  */
 import { useEffect, useRef } from "react";
-import type { DatasetMeta } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { getGetDatasetsMySavesQueryKey, type DatasetMeta } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useClassificationStore } from "@/lib/classificationStore";
@@ -28,11 +29,17 @@ export function useWaterTypeSideEffects(
 ): void {
   const waterType = useSettingsStore((s) => s.waterType);
   const prevWaterTypeRef = useRef(waterType);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (prevWaterTypeRef.current === waterType) return;
     const prev = prevWaterTypeRef.current;
     prevWaterTypeRef.current = waterType;
+
+    // Re-fetch My Library saves for the new mode immediately (the my-saves
+    // query key includes waterType, so this prefix invalidation covers every
+    // cached slot instead of waiting for the next poll interval).
+    void queryClient.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() });
 
     // Apply the full water-type switch: clear derived state, flip the
     // colormap default, and load the first preset of the new water type.
@@ -85,5 +92,5 @@ export function useWaterTypeSideEffects(
     } else {
       applySwitch(null);
     }
-  }, [waterType, datasets, setDatasetId, onAfterSwitch, onBeforeSwitch]);
+  }, [waterType, datasets, setDatasetId, onAfterSwitch, onBeforeSwitch, queryClient]);
 }

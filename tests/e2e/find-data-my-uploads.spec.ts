@@ -86,7 +86,7 @@ test.describe("Find Data — My Uploads browse and reload smoke test", () => {
 
     // Intercept GET /api/datasets/my-saves → empty so the Tolstoi dataset
     // is NOT deduplicated away as a catalog save entry.
-    await page.route("**/api/datasets/my-saves", (route) => {
+    await page.route("**/api/datasets/my-saves*", (route) => {
       if (route.request().method() !== "GET") {
         return route.continue();
       }

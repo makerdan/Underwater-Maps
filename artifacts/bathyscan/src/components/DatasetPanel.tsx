@@ -936,7 +936,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserFoldersQueryKey() },
   });
   // Catalog saves — needed for "⬇ All" visibility and combined bulk-offline list.
-  const { data: mySaves = [] } = useGetDatasetsMySaves({
+  const { data: mySaves = [] } = useGetDatasetsMySaves(undefined, {
     query: { queryKey: getGetDatasetsMySavesQueryKey(), enabled: isLoaded && isSignedIn === true },
   });
   const readyCatalogSaves = useMemo(
