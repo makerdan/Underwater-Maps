@@ -86,10 +86,6 @@ const UNDOCUMENTED_ALLOWLIST = new Set([
   // bbox at the given size. Uses TerrainLandQuerySchema (bbox CSV + size).
   // New feature — OpenAPI spec entry pending.
   "GET /terrain/tile",
-  // Beacon fallback for DELETE /trails/:id — called by navigator.sendBeacon on
-  // page unload so pending deletes survive tab-close without an async auth-token
-  // lookup. Intentionally internal; not part of the public API surface.
-  "POST /trails/{id}/soft-delete",
 ]);
 
 // ---------------------------------------------------------------------------

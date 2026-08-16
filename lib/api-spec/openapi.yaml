@@ -1408,6 +1408,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /trails/{id}/soft-delete:
+    post:
+      operationId: postTrailsIdSoftDelete
+      tags: [trails]
+      summary: Soft-delete a GPS trail (beacon fallback)
+      description: >
+        Beacon-safe alternative to `DELETE /trails/{id}`. Called by
+        `navigator.sendBeacon` on page unload so pending deletes survive
+        tab-close without requiring an async auth-token lookup. Authentication
+        relies on the session cookie the browser sends automatically with the
+        beacon request. Silently returns 204 whether the trail was found or was
+        already absent, to avoid leaking trail-ID existence to other users.
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Trail deleted (or was already absent)
+        "400":
+          description: Invalid trail id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /trails/{id}/points:
     get:
       operationId: getTrailsIdPoints
