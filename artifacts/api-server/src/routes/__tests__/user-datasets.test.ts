@@ -71,7 +71,9 @@ vi.mock("@workspace/db", () => ({
               }
             } else {
               // Second select: full terrain fetch
-              directResult = [{ terrainJson: { type: "grid", datasetId: "ds-1" } }];
+              // Include a valid waterType so hasValidWaterType() is satisfied and
+              // resolveCatalogWaterType() (which would add a 3rd select) is not called.
+              directResult = [{ terrainJson: { type: "grid", datasetId: "ds-1", waterType: "saltwater" } }];
             }
             return {
               // orderBy: called by GET /user/datasets — returns the datasets list

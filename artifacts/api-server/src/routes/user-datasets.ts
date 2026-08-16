@@ -395,6 +395,25 @@ router.get("/user/datasets/:id/terrain", terrainFetchIpRateLimit, requireAuth, t
   const terrainFallback = hasValidWaterType(row.terrainJson)
     ? undefined
     : await resolveCatalogWaterType(id);
+
+  // Write-back: once resolved, persist the waterType into the stored JSON so
+  // subsequent reads are self-describing and skip this extra catalog lookup.
+  if (terrainFallback != null) {
+    const patched = {
+      ...(row.terrainJson as unknown as Record<string, unknown>),
+      waterType: terrainFallback,
+    };
+    db.update(customDatasetsTable)
+      .set({ terrainJson: patched as unknown as StoredTerrainJson })
+      .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, userId)))
+      .catch((err: unknown) => {
+        logger.warn(
+          { datasetId: id, err },
+          "[user-datasets] terrain waterType write-back failed — will retry on next fetch",
+        );
+      });
+  }
+
   res.json(GetUserDatasetsIdTerrainResponse.parse(
     sanitizeLegacyStoredJson(row.terrainJson, terrainFallback ?? "saltwater"),
   ));
@@ -420,6 +439,25 @@ router.get("/user/datasets/:id/overview", requireAuth, asyncHandler(async (req, 
   const overviewFallback = hasValidWaterType(row.overviewJson)
     ? undefined
     : await resolveCatalogWaterType(id);
+
+  // Write-back: once resolved, persist the waterType into the stored JSON so
+  // subsequent reads are self-describing and skip this extra catalog lookup.
+  if (overviewFallback != null) {
+    const patched = {
+      ...(row.overviewJson as unknown as Record<string, unknown>),
+      waterType: overviewFallback,
+    };
+    db.update(customDatasetsTable)
+      .set({ overviewJson: patched as unknown as StoredTerrainJson })
+      .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, userId)))
+      .catch((err: unknown) => {
+        logger.warn(
+          { datasetId: id, err },
+          "[user-datasets] overview waterType write-back failed — will retry on next fetch",
+        );
+      });
+  }
+
   res.json(GetUserDatasetsIdOverviewResponse.parse(
     sanitizeLegacyStoredJson(row.overviewJson, overviewFallback ?? "saltwater"),
   ));
