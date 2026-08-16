@@ -257,10 +257,10 @@ router.get("/datasets/catalog/search", catalogReadRateLimit, asyncHandler(async 
   const results = await searchCatalog({
     dataType,
     waterType,
-    minLon,
-    minLat,
-    maxLon,
-    maxLat,
+    minLon: west,
+    minLat: south,
+    maxLon: east,
+    maxLat: north,
   });
   res.json(
     validateResponse(
@@ -499,7 +499,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
 
   // Validate the catalog entry exists
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === catalogId) ?? null;
+  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
   if (!entry) {
     res.status(404).json({ error: "not_found", details: `Catalog entry '${catalogId}' not found` });
     return;
@@ -626,12 +626,36 @@ export async function materializeSave(
   try {
     try {
       // Read requestBboxJson from the save row so materializers can use the
-      // user-supplied bbox rather than the full coverage bbox.
+      // user-supplied bbox rather than the full coverage bbox. userId and
+      // status are read alongside so the cancellation guard below can verify
+      // the save still exists, belongs to the expected user, and is still
+      // in-flight before any expensive work starts.
       const [saveRowForBbox] = await db
-        .select({ requestBboxJson: userCatalogSavesTable.requestBboxJson })
+        .select({
+          requestBboxJson: userCatalogSavesTable.requestBboxJson,
+          userId: userCatalogSavesTable.userId,
+          status: userCatalogSavesTable.status,
+        })
         .from(userCatalogSavesTable)
         .where(eq(userCatalogSavesTable.id, saveId));
-      const requestBbox = parseRequestBbox(saveRowForBbox?.requestBboxJson);
+
+      // Cancellation guard #1 (before the grid build): if the save row was
+      // deleted, re-owned, or is no longer "processing", abort without doing
+      // any work — otherwise a deleted save's job would insert an orphaned
+      // custom_datasets row that no save record points to.
+      if (
+        !saveRowForBbox ||
+        saveRowForBbox.userId !== userId ||
+        saveRowForBbox.status !== "processing"
+      ) {
+        logger.info(
+          { saveId, entryId: entry.id, found: Boolean(saveRowForBbox), status: saveRowForBbox?.status ?? null },
+          `[catalog-saves] materialize ${saveId} aborted before grid build: save row missing, owned by another user, or no longer processing`,
+        );
+        return;
+      }
+
+      const requestBbox = parseRequestBbox(saveRowForBbox.requestBboxJson);
 
       const materialized = await buildCatalogGrids(entry, requestBbox);
       if (!materialized) {
@@ -648,10 +672,28 @@ export async function materializeSave(
       // (potentially slow) grid build so an auto-folder created for the
       // save's area request while it was downloading/parsing is honored.
       const [saveRow] = await db
-        .select({ folderId: userCatalogSavesTable.folderId })
+        .select({
+          folderId: userCatalogSavesTable.folderId,
+          userId: userCatalogSavesTable.userId,
+          status: userCatalogSavesTable.status,
+        })
         .from(userCatalogSavesTable)
         .where(eq(userCatalogSavesTable.id, saveId));
-      const saveFolderId = saveRow?.folderId ?? null;
+
+      // Cancellation guard #2 (after the grid build, before the INSERT):
+      // the grid build can take minutes, so re-check that the save row still
+      // exists and is still processing. This is the guard that actually
+      // prevents delete-while-processing from orphaning a custom_datasets
+      // row.
+      if (!saveRow || saveRow.userId !== userId || saveRow.status !== "processing") {
+        logger.info(
+          { saveId, entryId: entry.id, found: Boolean(saveRow), status: saveRow?.status ?? null },
+          `[catalog-saves] materialize ${saveId} aborted after grid build (before insert): save row missing, owned by another user, or no longer processing`,
+        );
+        return;
+      }
+
+      const saveFolderId = saveRow.folderId ?? null;
 
       // Insert the materialized grids into the user's dataset store. We let
       // Postgres allocate the row UUID, then patch the in-memory grid copies
@@ -672,6 +714,41 @@ export async function materializeSave(
 
       if (!created) {
         throw new Error("custom_datasets insert returned no row");
+      }
+
+      // Immediately link the new dataset row to the save (status stays
+      // "processing"; the final update below flips it to "ready"). This
+      // serves two purposes:
+      //  1. A failure between this point and completion leaves the save's
+      //     dataset_id pointing at the partial row, so the retry and delete
+      //     paths can find and clean it up (no orphan accumulates).
+      //  2. It doubles as a delete-while-processing tripwire: if the save
+      //     row vanished between the pre-insert guard and this UPDATE, zero
+      //     rows match — roll back the insert instead of orphaning it.
+      const stamped = await db
+        .update(userCatalogSavesTable)
+        .set({ datasetId: created.id })
+        .where(
+          and(
+            eq(userCatalogSavesTable.id, saveId),
+            eq(userCatalogSavesTable.userId, userId),
+          ),
+        )
+        .returning({ id: userCatalogSavesTable.id });
+      if (stamped.length === 0) {
+        logger.warn(
+          { saveId, entryId: entry.id, datasetId: created.id },
+          `[catalog-saves] materialize ${saveId}: save row disappeared between insert and link — rolling back custom_datasets row ${created.id}`,
+        );
+        await db
+          .delete(customDatasetsTable)
+          .where(
+            and(
+              eq(customDatasetsTable.id, created.id),
+              eq(customDatasetsTable.userId, userId),
+            ),
+          );
+        return;
       }
 
       // Rewrite the stored grids so their datasetId matches the new row id.
@@ -1176,7 +1253,7 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, dataMutationRateLimit, 
   }
 
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === row.catalogId) ?? null;
+  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
   if (!entry) {
     res.status(404).json({
       error: "not_found",
@@ -1192,9 +1269,25 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, dataMutationRateLimit, 
     return;
   }
 
+  // Clean up any stale custom_datasets row left by the prior failed attempt.
+  // materializeSave stamps dataset_id onto the save right after its INSERT,
+  // so a failure between that insert and completion leaves row.datasetId
+  // pointing at a partial dataset row. Delete it (ownership-gated) and clear
+  // the link so the retry starts clean instead of accumulating orphans.
+  if (row.datasetId) {
+    await db
+      .delete(customDatasetsTable)
+      .where(
+        and(
+          eq(customDatasetsTable.id, row.datasetId),
+          eq(customDatasetsTable.userId, userId),
+        ),
+      );
+  }
+
   const [updated] = await db
     .update(userCatalogSavesTable)
-    .set({ status: "processing", errorMessage: null })
+    .set({ folderId })
     .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
     .returning();
 
@@ -1218,7 +1311,7 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
   const rows = await db
     .select()
     .from(userCatalogSavesTable)
-    .where(eq(userCatalogSavesTable.userId, userId));
+    .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)));
 
   const entries = await getCatalogEntries();
   const entryMap = new Map(entries.map((e) => [e.id, e]));
@@ -1259,7 +1352,7 @@ router.get("/datasets/my-saves/:id/status", requireAuth, asyncHandler(async (req
   }
 
   const entries = await getCatalogEntries();
-  const entry = entries.find((e) => e.id === statusRow.catalogId) ?? null;
+  const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
   res.json(validateResponse(GetDatasetsMySavesIdStatusResponse, formatSaveRow(statusRow, entry), "GET /api/datasets/my-saves/:id/status"));
 }));
 
@@ -1285,7 +1378,11 @@ router.delete("/datasets/my-saves/:id", requireAuth, asyncHandler(async (req, re
   const saveId = saveIdParsed.data;
 
   const [save] = await db
-    .select({ id: userCatalogSavesTable.id, datasetId: userCatalogSavesTable.datasetId })
+    .select({
+      id: userCatalogSavesTable.id,
+      datasetId: userCatalogSavesTable.datasetId,
+      status: userCatalogSavesTable.status,
+    })
     .from(userCatalogSavesTable)
     .where(
       and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)),
@@ -1293,6 +1390,20 @@ router.delete("/datasets/my-saves/:id", requireAuth, asyncHandler(async (req, re
 
   if (!save) {
     res.status(404).json({ error: "not_found", details: `Save record '${saveId}' not found` });
+    return;
+  }
+
+  // Deleting a save while its materialization job is still running would
+  // orphan the custom_datasets row the job is about to insert (the job's
+  // final UPDATE would match zero rows). Reject with 409 instead; stuck
+  // jobs are flipped to "failed" by the sweeper within ~10 minutes, after
+  // which the delete succeeds.
+  if (save.status === "processing") {
+    res.status(409).json({
+      error: "conflict",
+      details:
+        "Dataset is still processing — please wait for it to finish (or fail), then delete it.",
+    });
     return;
   }
 
@@ -1374,7 +1485,7 @@ router.patch("/datasets/my-saves/:id/rename", requireAuth, validateBody(RenameSa
 
   const [updated] = await db
     .update(userCatalogSavesTable)
-    .set({ displayLabel })
+    .set({ folderId })
     .where(and(eq(userCatalogSavesTable.id, saveId), eq(userCatalogSavesTable.userId, userId)))
     .returning();
 

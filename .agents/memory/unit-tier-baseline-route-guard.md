@@ -83,6 +83,11 @@ full tier is green. A backlog task exists to fix the failures that make every
 full run report FAILED. Classify pre-existing unless your diff touches
 terrain.js/terrainMock.ts, fixtures, or dependency versions.
 
+
+## Update 2026-08-16 (evening)
+Two additional pre-existing failures on main, both verified by stash-clean re-runs and each already covered by an open fix task:
+- scripts `run-locked-tier.test.mjs` — "plan with no ## Validation section exits 1" asserts exit 1 but gets 2. This **aborts the recursive `pnpm -r test:unit` before api-server/bathyscan run** (pnpm FIRST_FAIL). Workaround: run `pnpm -r --filter '!@workspace/scripts' run test:unit` plus `run-tier.mjs standard --skip test:unit` as a task-scoped validation command.
+- api-server: 18 unit failures across 5 files (markers, markers-quickdrop, catalog-bbox, preview, mock-factory-guards) — a hidden startup crash; markers POST returns 404 instead of 201, bbox-query 400-validation tests fail. Land in shard 2/2.
 ## api-server shard-2 baseline breakage (2026-08-16, verified with stash repro)
 
 18 failures across 5 files fail on clean main (cfb7f8f8), signature is

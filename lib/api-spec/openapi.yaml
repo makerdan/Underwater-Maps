@@ -2550,6 +2550,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "409":
+          description: >-
+            Save is still processing — deleting now would orphan the dataset
+            row its background job is about to create. Wait for the job to
+            finish (or fail), then delete.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   /datasets/my-saves/{id}/status:
     get:
