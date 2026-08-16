@@ -448,6 +448,46 @@ describe("PUT /api/settings — maxActiveDatasets Zod validation", () => {
   });
 });
 
+// ─── defaultHabitatSpecies whitespace normalisation ───────────────────────────
+
+describe("PUT /api/settings — defaultHabitatSpecies whitespace normalisation", () => {
+  it("trims a padded species string", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ defaultHabitatSpecies: "  Oncorhynchus mykiss  " });
+    expect(res.status).toBe(200);
+    expect(res.body.defaultHabitatSpecies).toBe("Oncorhynchus mykiss");
+  });
+
+  it("coerces a whitespace-only value to empty string", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ defaultHabitatSpecies: "   " });
+    expect(res.status).toBe(200);
+    expect(res.body.defaultHabitatSpecies).toBe("");
+  });
+
+  it("leaves an already-clean value unchanged", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ defaultHabitatSpecies: "Salmo salar" });
+    expect(res.status).toBe(200);
+    expect(res.body.defaultHabitatSpecies).toBe("Salmo salar");
+  });
+
+  it("leaves an empty string unchanged", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ defaultHabitatSpecies: "" });
+    expect(res.status).toBe(200);
+    expect(res.body.defaultHabitatSpecies).toBe("");
+  });
+});
+
 // ─── proximityMode Zod validation ─────────────────────────────────────────────
 
 describe("PUT /api/settings — proximityMode Zod validation", () => {

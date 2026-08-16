@@ -1655,6 +1655,13 @@ export const useSettingsStore = create<SettingsStore>()(
               else if (k === "waterType") safeVal = toValidWaterType(serverVal);
               else if (k === "defaultSpeedTier") safeVal = toValidDefaultSpeedTier(serverVal);
               else if (k === "terrainExaggeration") safeVal = clampTerrainExaggeration(serverVal);
+              else if (k === "defaultHabitatSpecies") {
+                // Trim legacy values that were saved with surrounding spaces or
+                // consist entirely of whitespace (which would silently fail to
+                // match any species in the habitat filter).
+                const trimmed = typeof serverVal === "string" ? serverVal.trim() : "";
+                safeVal = trimmed;
+              }
               applied[k] = safeVal;
               nextSnap[k] = safeVal;
             }

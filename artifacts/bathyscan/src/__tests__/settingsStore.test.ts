@@ -346,6 +346,24 @@ describe("settingsStore", () => {
       expect(localStorage.getItem("bathyscan:settings")).toBeNull();
     });
 
+    it("hydrateFromServer trims a padded defaultHabitatSpecies from the server", () => {
+      useSettingsStore.getState().markAllSaved(null);
+      useSettingsStore.getState().hydrateFromServer({
+        defaultHabitatSpecies: "  Oncorhynchus mykiss  ",
+        __updatedAt: "2026-06-01T00:00:00.000Z",
+      } as Partial<typeof DEFAULT_SETTINGS>);
+      expect(useSettingsStore.getState().defaultHabitatSpecies).toBe("Oncorhynchus mykiss");
+    });
+
+    it("hydrateFromServer coerces a whitespace-only defaultHabitatSpecies to empty string", () => {
+      useSettingsStore.getState().markAllSaved(null);
+      useSettingsStore.getState().hydrateFromServer({
+        defaultHabitatSpecies: "   ",
+        __updatedAt: "2026-06-01T01:00:00.000Z",
+      } as Partial<typeof DEFAULT_SETTINGS>);
+      expect(useSettingsStore.getState().defaultHabitatSpecies).toBe("");
+    });
+
     it("sign-out then hydrateFromServer applies fresh server values (no stale local interference)", () => {
       // Simulate a user who had custom settings and a sync timestamp.
       useSettingsStore.getState().setFieldOfView(99);

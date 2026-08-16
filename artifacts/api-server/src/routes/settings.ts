@@ -361,6 +361,13 @@ router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(asy
     if (sentKeys.has(k)) sentValidated[k] = v;
   }
 
+  // Normalise defaultHabitatSpecies: trim surrounding whitespace and collapse
+  // whitespace-only values to "" so legacy-saved "   " never silently fails to
+  // match any species in the habitat filter.
+  if (sentKeys.has("defaultHabitatSpecies") && typeof sentValidated.defaultHabitatSpecies === "string") {
+    sentValidated.defaultHabitatSpecies = sentValidated.defaultHabitatSpecies.trim();
+  }
+
   // Cross-field guard: when the client sends BOTH band arrays, they must be
   // consistent — bandBoundaries always has exactly one more entry than
   // bandColors (N bands need N+1 boundaries). Sending only one of the two is
