@@ -252,31 +252,56 @@ function countBraces(line: string): number {
 
 describe("parseScopes wrapper patterns (forwardRef / memo)", () => {
   it("opens a scope for a multi-line React.forwardRef component and finds its hooks", () => {
-      const src = fs.readFileSync(absPath, "utf-8");
-      const scopes = parseScopes(src);
+    const src = [
+      "export const Comp = React.forwardRef<HTMLDivElement, Props>(",
+      "  ({ value }, ref) => {",
+      "    const a = useStore((s) => s.a);",
+      "    const b = useRef(null);",
+      "    const a = useStore((s) => s.a);",
+      "    return null;",
+      "  },",
+      ");",
+    ].join("\n");
+    const scopes = parseScopes(src);
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0].name).toBe("Comp");
+    expect(scopes[0].decls.map((d) => d.name)).toEqual(["a", "b", "a"]);
+  });
+
+  it("opens a scope for a single-line React.memo(function …) component", () => {
+    const src = [
+      "export const Memoed = React.memo(function Memoed({ x }: Props) {",
+      "  const foo = useCallback(() => {}, []);",
+      "  const bar = useState(0);",
+      "  return null;",
+      "});",
+    ].join("\n");
+    const scopes = parseScopes(src);
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0].decls.map((d) => d.name)).toEqual(["foo", "bar"]);
+  });
+
+  it("opens a scope for a multi-line memo(forwardRef(…)) component", () => {
+    const src = [
+      "const Wrapped = memo(",
+      "  forwardRef<HTMLSpanElement, Props>(({ y }, ref) => {",
+      "    const z = useMemo(() => y * 2, [y]);",
+      "    return null;",
+      "  }),",
+      ");",
+    ].join("\n");
+    const scopes = parseScopes(src);
     expect(scopes).toHaveLength(1);
     expect(scopes[0].decls.map((d) => d.name)).toEqual(["z"]);
   });
 
   it("attributes TerrainMesh.tsx hooks to a component scope (forwardRef real file)", () => {
-      const src = fs.readFileSync(absPath, "utf-8");
-      const scopes = parseScopes(src);
-    expect(scopes).toHaveLength(1);
-    expect(scopes[0].decls.map((d) => d.name)).toEqual(["z"]);
-  });
-
-  it("attributes TerrainMesh.tsx hooks to a component scope (forwardRef real file)", () => {
-      const src = fs.readFileSync(absPath, "utf-8");
-      const scopes = parseScopes(src);
-    expect(scopes).toHaveLength(1);
-    expect(scopes[0].decls.map((d) => d.name)).toEqual(["z"]);
-  });
-
-  it("attributes TerrainMesh.tsx hooks to a component scope (forwardRef real file)", () => {
-      const src = fs.readFileSync(absPath, "utf-8");
-      const scopes = parseScopes(src);
+    const src = fs.readFileSync(
+      path.join(SRC_DIR, "components/TerrainMesh.tsx"),
+      "utf-8",
+    );
+    const scopes = parseScopes(src);
     const terrainScope = scopes.find((s) => s.name === "TerrainMesh");
-
     expect(terrainScope, "expected a TerrainMesh scope").toBeDefined();
     expect(terrainScope!.decls.length).toBeGreaterThanOrEqual(10);
   });
@@ -284,8 +309,8 @@ describe("parseScopes wrapper patterns (forwardRef / memo)", () => {
 
 describe("App.tsx lint suppressors", () => {
   it("App.tsx has no eslint-disable-next-line react-hooks/exhaustive-deps suppressors", () => {
-      const _filePath = path.join(SRC_DIR, relPath);
-      const src = fs.readFileSync(absPath, "utf-8");
+    const filePath = path.join(SRC_DIR, "App.tsx");
+    const src = fs.readFileSync(filePath, "utf-8");
     const lines = src.split("\n");
     const offenders: string[] = [];
     for (let i = 0; i < lines.length; i++) {
@@ -306,8 +331,8 @@ describe("duplicate hook-variable declarations", () => {
     const violations: string[] = [];
 
     for (const relPath of SCANNED_FILES) {
-      const _filePath = path.join(SRC_DIR, relPath);
-      const src = fs.readFileSync(absPath, "utf-8");
+      const filePath = path.join(SRC_DIR, relPath);
+      const src = fs.readFileSync(filePath, "utf-8");
       const scopes = parseScopes(src);
 
       for (const scope of scopes) {
@@ -343,8 +368,8 @@ describe("duplicate hook-variable declarations", () => {
     // they stay listed so duplicate detection keeps covering them. This
     // sanity floor only guards against the parser silently finding nothing.
     for (const relPath of SCANNED_FILES) {
-      const _filePath = path.join(SRC_DIR, relPath);
-      const src = fs.readFileSync(absPath, "utf-8");
+      const filePath = path.join(SRC_DIR, relPath);
+      const src = fs.readFileSync(filePath, "utf-8");
       const scopes = parseScopes(src);
       const total = scopes.reduce((sum, s) => sum + s.decls.length, 0);
       expect(
