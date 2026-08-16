@@ -23,7 +23,9 @@ Trigger phrases: "clean up tasks", "audit drafts", "prune backlog", "too many op
 
 **Step 0 — Capture snapshot.** Before anything else, call `listProjectTasks({state:"PROPOSED"})` and record the complete list of returned `taskRef` values as the immutable working set for this run. Log the count (e.g. "Snapshot captured: 42 PROPOSED tasks"). This snapshot is frozen — all subsequent phases operate exclusively on refs present in this list. Any task that becomes PROPOSED after this point is out of scope for the current run.
 
-**Orphan-recovery check (run after snapshot):** Scan PROPOSED tasks for any whose title starts with `CONSOLIDATION - `. For each one found, extract all task refs from its description using the pattern `#\d+` (match every token of the form `#` followed by one or more digits, anywhere in the description — do **not** restrict the search to a named section like "What & Why", because template drift would silently suppress matches). For each extracted ref that resolves to a PROPOSED task whose title does not yet start with `DELETE - `, immediately call `updateProjectTask({taskRef, title:"DELETE - <original title>"})` to prefix it. Report how many orphaned originals were repaired (may be zero). This makes partial-run recovery fully automatic on re-run.
+**Step 0-B — Drop non-PROPOSED refs (run immediately after snapshot).** For every `taskRef` in the snapshot, call `getProjectTask({taskRef})` and check its current `state`. Remove from the working set any ref whose state is not `PROPOSED` (i.e. state is one of `PENDING`, `IN_PROGRESS`, `IMPLEMENTED`, `MERGING`, `QUEUED`, `MERGED`, or `CANCELLED`). Log the drop count (e.g. "Dropped 3 non-PROPOSED tasks from working set"). These dropped refs are silently ignored for the remainder of the run — they are never evaluated, renamed, or mutated. If a task transitions out of PROPOSED mid-run (after the snapshot check), it is also silently skipped during any mutation step.
+
+**Orphan-recovery check (run after Step 0-B):** Scan PROPOSED tasks for any whose title starts with `CONSOLIDATION - `. For each one found, extract all task refs from its description using the pattern `#\d+` (match every token of the form `#` followed by one or more digits, anywhere in the description — do **not** restrict the search to a named section like "What & Why", because template drift would silently suppress matches). For each extracted ref that resolves to a PROPOSED task whose title does not yet start with `DELETE - `, immediately call `updateProjectTask({taskRef, title:"DELETE - <original title>"})` to prefix it. Report how many orphaned originals were repaired (may be zero). This makes partial-run recovery fully automatic on re-run.
 
 > **Format contract:** Consolidation task descriptions must cite each covered original as `#NNNN` (hash + digits) somewhere in the description body. Any change to the description template must preserve these bare `#NNNN` tokens so the broad regex sweep above continues to find them.
 
@@ -178,6 +180,7 @@ Print a final markdown table and a three-line summary:
 
 ```
 Snapshot size at start: N tasks
+Dropped (non-PROPOSED at snapshot time): N tasks
 Deleted:       N tasks
 Consolidated:  N tasks into M consolidation tasks
 Left alone:    N tasks
@@ -189,7 +192,7 @@ Skipped (already prefixed): N tasks
 ## Safety rules
 
 - **Never mutate before user confirmation** — Phase 5 is analysis only; Phase 7 requires explicit approval from Phase 6.
-- **Never touch PENDING, IN_PROGRESS, IMPLEMENTED, or MERGED tasks** — scope is PROPOSED only.
+- **Never touch non-PROPOSED tasks** — scope is PROPOSED only. The full list of excluded states is: `PENDING`, `IN_PROGRESS`, `IMPLEMENTED`, `MERGING`, `QUEUED`, `MERGED`, `CANCELLED`. Tasks in any of these states are dropped from the working set in Step 0-B and are silently skipped for the entire run — they are never evaluated, renamed, or mutated. If a task transitions to one of these states mid-run (after snapshot capture), it is also silently skipped, not mutated.
 - **Re-run safe** — tasks already prefixed `DELETE - ` or `CONSOLIDATION - ` are always skipped in Phase 0.
 - **Orphan check first** — never DELETE a task with downstream dependents without flagging the orphan risk.
 - **Never place `updateProjectTask` rename calls after `proposeProjectTasks`** — `proposeProjectTasks` pauses the agent loop; any mutation placed after it will not execute in the same run. All renames must complete before `proposeProjectTasks` is called.
