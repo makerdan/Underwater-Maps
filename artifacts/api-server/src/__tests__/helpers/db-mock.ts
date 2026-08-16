@@ -71,6 +71,8 @@ const uploadJobsTableStub = {
   resolution: "resolution",
   smoothing: "smoothing",
   stageStartedAt: "stageStartedAt",
+  // GCS bucket-monitor jobs — NULL for chunked uploads.
+  objectKey: "objectKey",
 };
 
 const disabledPresetsTableStub = {

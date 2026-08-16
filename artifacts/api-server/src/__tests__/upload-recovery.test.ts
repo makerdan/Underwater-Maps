@@ -99,6 +99,8 @@ vi.mock("drizzle-orm", () => ({
   or: vi.fn((...args: unknown[]) => args),
   lt: vi.fn(() => "lt-condition"),
   inArray: vi.fn(() => "in-condition"),
+  // recoverStaleUploadJobs excludes bucket-monitor rows (objectKey IS NOT NULL).
+  isNull: vi.fn(() => "isNull-condition"),
 }));
 
 vi.mock("@clerk/express", () => ({

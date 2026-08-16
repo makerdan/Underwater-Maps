@@ -15,7 +15,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { Storage } from "@google-cloud/storage";
-import { db, customDatasetsTable, type StoredTerrainJson } from "@workspace/db";
+import { db, customDatasetsTable, uploadJobsTable, type StoredTerrainJson } from "@workspace/db";
+import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { logger } from "./logger.js";
 import { parseXyzCsv, gridPoints } from "./terrain.js";
 import { parseUploadedFile } from "./uploadParsers.js";
@@ -120,6 +121,67 @@ registerCache(() => activeJobs.clear());
 
 export function getJobByObjectKey(objectKey: string): BucketJob | undefined {
   return activeJobs.get(objectKey);
+}
+
+// ─── DB persistence (survives server restarts) ────────────────────────────
+//
+// Bucket jobs mirror their state into the shared upload_jobs table (with
+// objectKey set — chunked-upload rows leave it NULL) so that a restarted
+// server can answer status polls and resume/reconcile in-flight jobs
+// instead of losing all knowledge of them.  Persistence is best-effort:
+// a DB hiccup must never fail the processing pipeline itself.
+
+const OBJECT_KEY_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Derive the upload_jobs primary key for a bucket job from its objectKey
+ * (`pending-datasets/<userId>/<uuid>/<filename>` — the `<uuid>` segment).
+ * Deterministic, so re-processing the same object after a restart updates
+ * the same row.  Returns null for keys that don't carry a valid uuid
+ * segment (manually placed objects, test fixtures) — those stay memory-only.
+ */
+export function bucketJobDbId(objectKey: string): string | null {
+  const uuid = objectKey.split("/")[2];
+  return uuid && OBJECT_KEY_UUID_RE.test(uuid) ? uuid.toLowerCase() : null;
+}
+
+/** BucketJob.status → upload_jobs.status (the table uses "error", not "failed"). */
+const BUCKET_STATUS_TO_DB = {
+  queued: "queued",
+  processing: "processing",
+  done: "done",
+  failed: "error",
+} as const;
+
+/**
+ * Upsert the job's current state into upload_jobs. Never throws — a DB
+ * failure here must not break the processing pipeline (the in-memory job
+ * remains authoritative while this process lives).
+ */
+async function persistBucketJob(job: BucketJob): Promise<void> {
+  const id = bucketJobDbId(job.objectKey);
+  if (!id) return;
+
+  const status = BUCKET_STATUS_TO_DB[job.status];
+  const progress = job.status === "done" ? 100 : job.status === "processing" ? 50 : 0;
+  const row = {
+    status,
+    progress,
+    error: job.error ?? null,
+    datasetId: job.datasetId ?? null,
+    objectKey: job.objectKey,
+    updatedAt: new Date(),
+  };
+
+  try {
+    await db
+      .insert(uploadJobsTable)
+      .values({ id, userId: job.userId ?? "unknown", ...row })
+      .onConflictDoUpdate({ target: uploadJobsTable.id, set: row });
+  } catch (err) {
+    logger.warn({ objectKey: job.objectKey, err }, "[bucket-monitor] job DB persist failed (non-fatal)");
+  }
 }
 
 // ─── Processing pipeline ──────────────────────────────────────────────────
@@ -321,6 +383,7 @@ export async function processObject(bucketName: string, objectKey: string): Prom
     userId,
   };
   activeJobs.set(objectKey, job);
+  await persistBucketJob(job);
 
   // The job is registered above with status "queued" (so scan() dedupes
   // re-queued keys) but the heavy pipeline waits for a concurrency slot.
@@ -335,6 +398,7 @@ async function runProcessPipeline(
 ): Promise<void> {
   // A concurrency slot has been acquired — flip status from queued → processing.
   job.status = "processing";
+  await persistBucketJob(job);
 
   const parts = objectKey.split("/");
   const userId = parts[1] ?? "unknown";
@@ -455,12 +519,14 @@ async function runProcessPipeline(
     job.status = "done";
     job.finishedAt = Date.now();
     job.datasetId = gridId;
+    await persistBucketJob(job);
     logger.info({ objectKey, userId, datasetId: gridId }, "[bucket-monitor] processed object");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Processing failed";
     job.status = "failed";
     job.finishedAt = Date.now();
     job.error = msg;
+    await persistBucketJob(job);
 
     try {
       const destKey = objectKey.replace(/^pending-datasets\//, "failed-datasets/");
@@ -888,6 +954,110 @@ export async function applyBucketLifecycleRules(): Promise<void> {
 const SCAN_INTERVAL_MS = 30_000;
 let scanTimer: ReturnType<typeof setInterval> | null = null;
 
+// ─── Startup rehydration & stale-job sweep ─────────────────────────────────
+
+/** In-progress bucket rows untouched for this long are marked failed at startup. */
+export const STALE_BUCKET_JOB_MAX_AGE_MS = 30 * 60 * 1000;
+
+const STALE_BUCKET_JOB_ERROR =
+  "The server restarted while this upload was processing and it did not resume — please re-upload your file.";
+const GONE_BUCKET_JOB_ERROR =
+  "The server restarted and the uploaded file could no longer be found — please re-upload your file.";
+
+/**
+ * Reconcile persisted bucket jobs after a server restart.
+ *
+ * 1. Sweep: rows still queued/processing whose updatedAt is older than
+ *    STALE_BUCKET_JOB_MAX_AGE_MS are marked error — they are from a long-dead
+ *    run and their client has almost certainly given up.
+ * 2. Rehydrate: for each recent in-progress row, probe GCS for the object's
+ *    actual location:
+ *      pending-datasets/   → re-queue via processObject() (repopulates
+ *                            activeJobs so scan() won't double-process)
+ *      processed-datasets/ → mark done (dataset row was already inserted)
+ *      failed-datasets/    → mark error with the recorded message
+ *      gone                → mark error asking the user to re-upload
+ *
+ * Chunked-upload rows (objectKey IS NULL) are owned by
+ * recoverStaleUploadJobs() in routes/datasets.ts and are never touched here.
+ * Never throws — called fire-and-forget from startBucketMonitor().
+ */
+export async function rehydrateBucketJobsFromDb(): Promise<void> {
+  const inProgress = inArray(uploadJobsTable.status, ["queued", "processing"]);
+  const bucketOwned = isNotNull(uploadJobsTable.objectKey);
+
+  let rows: Array<{ id: string; objectKey: string | null }>;
+  try {
+    const cutoff = new Date(Date.now() - STALE_BUCKET_JOB_MAX_AGE_MS);
+    const swept = await db
+      .update(uploadJobsTable)
+      .set({ status: "error", error: STALE_BUCKET_JOB_ERROR, updatedAt: new Date() })
+      .where(and(bucketOwned, inProgress, lt(uploadJobsTable.updatedAt, cutoff)))
+      .returning({ id: uploadJobsTable.id });
+    if (swept.length > 0) {
+      logger.warn({ count: swept.length }, "[bucket-monitor] swept stale bucket jobs to error");
+    }
+
+    rows = await db
+      .select({ id: uploadJobsTable.id, objectKey: uploadJobsTable.objectKey })
+      .from(uploadJobsTable)
+      .where(and(bucketOwned, inProgress));
+  } catch (err) {
+    logger.warn({ err }, "[bucket-monitor] bucket-job rehydration query failed (non-fatal)");
+    return;
+  }
+
+  if (rows.length === 0) return;
+  logger.info({ count: rows.length }, "[bucket-monitor] rehydrating in-progress bucket jobs from DB");
+
+  const bucketName = getBucketName();
+
+  for (const row of rows) {
+    const objectKey = row.objectKey;
+    if (!objectKey || activeJobs.has(objectKey)) continue;
+
+    let recovered: RecoveredJobStatus;
+    try {
+      recovered = await recoverGcsJobStatus(objectKey);
+    } catch (err) {
+      logger.warn({ objectKey, err }, "[bucket-monitor] GCS probe failed during rehydration — leaving row as-is");
+      continue;
+    }
+
+    if (recovered.status === "pending") {
+      // scan() may have picked the object up while we awaited the GCS probe;
+      // re-check before queueing (processObject registers synchronously, so
+      // there is no gap between this check and registration).
+      if (activeJobs.has(objectKey)) continue;
+      logger.info({ objectKey }, "[bucket-monitor] re-queuing bucket job after restart");
+      processObject(bucketName, objectKey).catch((err: unknown) => {
+        logger.error({ objectKey, err }, "[bucket-monitor] re-queued job failed");
+      });
+      continue;
+    }
+
+    // Terminal outcome — reconcile the row so status polls get a real answer.
+    const patch =
+      recovered.status === "complete"
+        ? { status: "done" as const, progress: 100, error: null }
+        : {
+            status: "error" as const,
+            error:
+              recovered.status === "failed"
+                ? (recovered.error ?? "Processing failed. Please try uploading again.")
+                : GONE_BUCKET_JOB_ERROR,
+          };
+    try {
+      await db
+        .update(uploadJobsTable)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(eq(uploadJobsTable.id, row.id));
+    } catch (err) {
+      logger.warn({ objectKey, err }, "[bucket-monitor] failed to reconcile bucket job row (non-fatal)");
+    }
+  }
+}
+
 /**
  * Test hook: replace the lifecycle-rules function called at monitor startup.
  * Pass null to restore the default (applyBucketLifecycleRules).
@@ -917,6 +1087,11 @@ export function startBucketMonitor(): () => Promise<void> {
   }
 
   logger.info({ bucket: bucketId, intervalMs: SCAN_INTERVAL_MS }, "[bucket-monitor] starting");
+
+  // Reconcile persisted job state from before the restart: sweep stale rows,
+  // re-queue jobs whose source object still awaits processing, and mark
+  // finished/vanished ones so client polls get a definitive answer.
+  void rehydrateBucketJobsFromDb();
 
   // Apply lifecycle rules idempotently on every startup, then begin scanning.
   // Capture the promise so stop() can await it (bounded) before teardown.

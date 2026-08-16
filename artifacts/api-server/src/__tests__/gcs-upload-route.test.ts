@@ -32,7 +32,11 @@ vi.mock("@workspace/db", async () => {
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
   and: vi.fn((...args: unknown[]) => args),
+  or: vi.fn((...args: unknown[]) => args),
   lt: vi.fn(() => "lt-condition"),
+  inArray: vi.fn(() => "inArray-condition"),
+  isNull: vi.fn(() => "isNull-condition"),
+  isNotNull: vi.fn(() => "isNotNull-condition"),
 }));
 
 // ── Clerk / proxy mocks ───────────────────────────────────────────────────────
@@ -55,7 +59,8 @@ vi.mock("@clerk/shared/keys", () => ({
 // ── Import app after all mocks are in place ───────────────────────────────────
 
 import app from "../app.js";
-import { signDatasetUploadUrl, getBucketStatus, getJobByObjectKey, recoverGcsJobStatus } from "../lib/bucketMonitor.js";
+import { signDatasetUploadUrl, getBucketStatus, getJobByObjectKey, recoverGcsJobStatus, bucketJobDbId } from "../lib/bucketMonitor.js";
+import { db } from "@workspace/db";
 import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 const AUTHED = { "x-mock-clerk-user-id": "user_test_gcs" };
@@ -394,5 +399,132 @@ describe("GET /api/datasets/upload/gcs-job-status — GCS fallback", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ status: "done", datasetId: "dataset-abc" });
     expect(vi.mocked(recoverGcsJobStatus)).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/datasets/upload/gcs-job-status — persisted upload_jobs DB fallback
+// (consulted after the in-memory miss, before GCS probing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("GET /api/datasets/upload/gcs-job-status — DB fallback", () => {
+  const DB_UUID = "88888888-8888-4888-8888-888888888888";
+  const DB_KEY = `pending-datasets/user_test_gcs/${DB_UUID}/survey.csv`;
+
+  /** Point db.select().from().where() at a fixed result set. */
+  function mockDbRows(rows: Array<Record<string, unknown>>) {
+    const whereMock = vi.fn().mockResolvedValue(rows);
+    vi.mocked(db.select).mockReturnValue({
+      from: vi.fn().mockReturnValue({ where: whereMock }),
+    } as never);
+  }
+
+  function dbRow(overrides: Record<string, unknown> = {}) {
+    return {
+      userId: "user_test_gcs",
+      status: "processing",
+      error: null,
+      datasetId: null,
+      objectKey: DB_KEY,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.mocked(getJobByObjectKey).mockReturnValue(undefined);
+    vi.mocked(recoverGcsJobStatus).mockReset();
+    // The mock factory defaults bucketJobDbId to null (skip DB); these tests
+    // exercise the DB path, so return the uuid the real helper would derive.
+    vi.mocked(bucketJobDbId).mockReturnValue(DB_UUID);
+  });
+
+  it("returns done + datasetId from the persisted row without probing GCS", async () => {
+    mockDbRows([dbRow({ status: "done", datasetId: "dataset-restored" })]);
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: DB_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: "done", datasetId: "dataset-restored" });
+    expect(vi.mocked(recoverGcsJobStatus)).not.toHaveBeenCalled();
+  });
+
+  it("returns complete when the row is done but lost its datasetId", async () => {
+    mockDbRows([dbRow({ status: "done", datasetId: null })]);
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: DB_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: "complete" });
+  });
+
+  it("maps a persisted 'error' row to status=failed with its message", async () => {
+    mockDbRows([dbRow({ status: "error", error: "Depth column missing" })]);
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: DB_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: "failed", error: "Depth column missing" });
+  });
+
+  it("passes queued/processing through so the client keeps polling", async () => {
+    mockDbRows([dbRow({ status: "processing" })]);
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: DB_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: "processing" });
+    expect(vi.mocked(recoverGcsJobStatus)).not.toHaveBeenCalled();
+  });
+
+  it("ignores a row recorded for a different objectKey (uuid collision guard)", async () => {
+    mockDbRows([dbRow({ objectKey: "pending-datasets/user_test_gcs/other/other.csv" })]);
+    vi.mocked(recoverGcsJobStatus).mockResolvedValueOnce({ status: "pending" });
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: DB_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: "pending" });
+    expect(vi.mocked(recoverGcsJobStatus)).toHaveBeenCalledWith(DB_KEY);
+  });
+
+  it("ignores a row owned by a different user", async () => {
+    mockDbRows([dbRow({ userId: "user_someone_else" })]);
+    vi.mocked(recoverGcsJobStatus).mockResolvedValueOnce({ status: "unknown" });
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: DB_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("unknown");
+  });
+
+  it("falls back to GCS probing when no row exists", async () => {
+    mockDbRows([]);
+    vi.mocked(recoverGcsJobStatus).mockResolvedValueOnce({ status: "complete" });
+
+    const res = await request(app)
+      .get("/api/datasets/upload/gcs-job-status")
+      .set(GCS_STATUS_AUTHED)
+      .query({ objectKey: DB_KEY });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: "complete" });
   });
 });

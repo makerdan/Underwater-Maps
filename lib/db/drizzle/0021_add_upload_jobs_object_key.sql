@@ -1,0 +1,1 @@
+ALTER TABLE "upload_jobs" ADD COLUMN "object_key" text;

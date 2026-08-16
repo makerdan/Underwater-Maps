@@ -48,6 +48,17 @@ export const uploadJobsTable = pgTable("upload_jobs", {
    * current stage has been running.
    */
   stageStartedAt: timestamp("stage_started_at", { withTimezone: true }),
+
+  /**
+   * GCS object key (`pending-datasets/<userId>/<uuid>/<filename>`) for jobs
+   * created by the bucket monitor's direct-to-GCS upload path (>50 MB files).
+   * NULL for chunked-upload jobs.  The row id is the `<uuid>` path segment so
+   * re-processing the same object after a restart updates the same row.
+   *
+   * Rows with a non-null objectKey are owned by the bucket monitor's
+   * rehydrate/sweep logic; recoverStaleUploadJobs() must exclude them.
+   */
+  objectKey: text("object_key"),
 }, (table) => [
   index("upload_jobs_user_id_idx").on(table.userId),
   index("upload_jobs_status_idx").on(table.status),

@@ -2020,11 +2020,27 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           }
 
           // Track server-reported queued/processing sub-status for UI display.
+          // "pending" is the post-restart equivalent of "queued": the file is
+          // safe in cloud storage and the server will pick it up shortly.
           if (job.status === "queued" || job.status === "processing") {
             setGcsServerStatus(job.status);
+          } else if (job.status === "pending") {
+            setGcsServerStatus("queued");
           }
 
-          const knownStatuses = new Set(["queued", "processing", "done", "failed"]);
+          // "pending", "complete", "error" and "unknown" are returned by the
+          // server's restart-recovery fallbacks (DB row / GCS probing) when
+          // the in-memory job was lost to a restart or deploy.
+          const knownStatuses = new Set([
+            "pending",
+            "queued",
+            "processing",
+            "done",
+            "failed",
+            "error",
+            "complete",
+            "unknown",
+          ]);
           if (!knownStatuses.has(job.status)) {
             clearInterval(pollIntervalId);
             gcsPollIntervalRef.current = null;
@@ -2102,9 +2118,47 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                 description: job.parseWarnings.join(" "),
               });
             }
-          } else if (job.status === "failed") {
+          } else if (job.status === "complete") {
+            // Post-restart recovery: the file finished processing but the
+            // restart lost the dataset ID.  The dataset row exists — refresh
+            // the list so the user can load it from My Datasets.
             clearInterval(pollIntervalId);
             gcsPollIntervalRef.current = null;
+            clearTimeout(gcsWatchdogTimeoutRef.current ?? undefined);
+            gcsWatchdogTimeoutRef.current = null;
+            void qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
+            setGcsPhase("idle");
+            setGcsError(null);
+            setGcsServerStatus(null);
+            const displayName = file.name.replace(/\.[^.]+$/, "");
+            toast({
+              title: `Dataset ready: ${displayName}`,
+              description:
+                "Your upload finished processing. Find it in your saved datasets list.",
+            });
+          } else if (job.status === "unknown") {
+            // Post-restart recovery found no trace of the upload — the server
+            // restarted and the file never reached a recoverable state.
+            clearInterval(pollIntervalId);
+            gcsPollIntervalRef.current = null;
+            clearTimeout(gcsWatchdogTimeoutRef.current ?? undefined);
+            gcsWatchdogTimeoutRef.current = null;
+            const interruptedMsg =
+              job.error ??
+              "Upload interrupted — the server was restarted. Please retry your upload.";
+            setGcsPhase("error");
+            setGcsError(interruptedMsg);
+            setGcsServerStatus(null);
+            toast({
+              title: "Upload interrupted",
+              description: interruptedMsg,
+              variant: "destructive",
+            });
+          } else if (job.status === "failed" || job.status === "error") {
+            clearInterval(pollIntervalId);
+            gcsPollIntervalRef.current = null;
+            clearTimeout(gcsWatchdogTimeoutRef.current ?? undefined);
+            gcsWatchdogTimeoutRef.current = null;
             const failMsg = job.error ?? "Processing failed. Please try uploading again.";
             setGcsPhase("error");
             setGcsError(failMsg);

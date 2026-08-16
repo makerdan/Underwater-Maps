@@ -6,7 +6,7 @@ import * as os from "os";
 import { Worker } from "worker_threads";
 import { fileURLToPath } from "url";
 import multer from "multer";
-import { eq, and, inArray, or, lt } from "drizzle-orm";
+import { eq, and, inArray, or, lt, isNull } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { z } from "zod";
 import { db, customDatasetsTable, userSettingsTable, uploadJobsTable, disabledPresetsTable, uploadCalibrationTable, StoredTerrainJsonSchema, type StoredTerrainJson, type StoredTideStation } from "@workspace/db";
@@ -15,7 +15,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateQuery, validateParams } from "../middlewares/validateBody.js";
-import { signDatasetUploadUrl, getJobByObjectKey, recoverGcsJobStatus } from "../lib/bucketMonitor.js";
+import { signDatasetUploadUrl, getJobByObjectKey, recoverGcsJobStatus, bucketJobDbId } from "../lib/bucketMonitor.js";
 import {
   GetDatasetsResponse,
   GetDatasetsIdTerrainResponse,
@@ -534,9 +534,15 @@ export async function recoverStaleUploadJobs(): Promise<void> {
         smoothing: uploadJobsTable.smoothing,
       })
       .from(uploadJobsTable)
-      .where(or(
-        eq(uploadJobsTable.status, "queued"),
-        eq(uploadJobsTable.status, "processing"),
+      .where(and(
+        or(
+          eq(uploadJobsTable.status, "queued"),
+          eq(uploadJobsTable.status, "processing"),
+        ),
+        // Bucket-monitor jobs (objectKey set) are rehydrated by
+        // rehydrateBucketJobsFromDb() in lib/bucketMonitor.ts — touching them
+        // here would wrongly mark them as unrecoverable chunked uploads.
+        isNull(uploadJobsTable.objectKey),
       ));
 
     if (staleJobs.length === 0) return;
@@ -3138,13 +3144,15 @@ router.post(
 // key path: pending-datasets/<userId>/...).
 //
 // When the job is not in the in-memory activeJobs map (e.g. after a server
-// restart), the handler falls back to checking GCS object metadata directly:
+// restart), the handler first consults the persisted upload_jobs row (which
+// carries datasetId/error across restarts), then falls back to checking GCS
+// object metadata directly:
 //   failed-datasets/    → { status: "failed",  error: "<message>" }
 //   processed-datasets/ → { status: "complete" }
 //   pending-datasets/   → { status: "pending" }
 //   not found anywhere  → { status: "unknown", error: "…re-upload…" }
 //
-// Fallback results are cached for 30 s to avoid hammering GCS on every poll.
+// GCS fallback results are cached for 30 s to avoid hammering GCS on every poll.
 // Response: { status, datasetId?, error? }
 router.get(
   "/datasets/upload/gcs-job-status",
@@ -3166,7 +3174,45 @@ router.get(
 
     const job = getJobByObjectKey(objectKey);
     if (!job) {
-      // Not in memory — fall back to GCS metadata (handles server restarts)
+      // Not in memory — try the persisted upload_jobs row first (survives
+      // server restarts and carries datasetId/error, which GCS probing
+      // cannot recover).  Bucket rows are keyed by the uuid path segment.
+      const dbId = bucketJobDbId(objectKey);
+      if (dbId) {
+        const [dbJob] = await db
+          .select({
+            userId: uploadJobsTable.userId,
+            status: uploadJobsTable.status,
+            error: uploadJobsTable.error,
+            datasetId: uploadJobsTable.datasetId,
+            objectKey: uploadJobsTable.objectKey,
+          })
+          .from(uploadJobsTable)
+          .where(eq(uploadJobsTable.id, dbId));
+
+        // Guard against uuid collisions with chunked-upload rows: only trust
+        // a row that records this exact objectKey and owner.
+        if (dbJob && dbJob.objectKey === objectKey && dbJob.userId === userId) {
+          const payload =
+            dbJob.status === "done"
+              ? dbJob.datasetId
+                // Fully recorded success — client can load the dataset directly.
+                ? { status: "done", datasetId: dbJob.datasetId }
+                // Success recorded without a dataset id (restart hit the tiny
+                // window between GCS move and final persist) — report
+                // "complete" so the client refreshes its dataset list.
+                : { status: "complete" }
+              : dbJob.status === "error"
+                ? { status: "failed", ...(dbJob.error ? { error: dbJob.error } : {}) }
+                // queued/processing — the startup rehydrator / scanner will
+                // advance the job; the client should keep polling.
+                : { status: dbJob.status };
+          res.json(validateResponse(GetGcsJobStatusResponse, payload, "GET /api/datasets/upload/gcs-job-status"));
+          return;
+        }
+      }
+
+      // No usable DB row — fall back to GCS metadata (handles server restarts)
       const recovered = await recoverGcsJobStatus(objectKey);
       if (recovered.status === "unknown") {
         res.json(validateResponse(GetGcsJobStatusResponse, { status: "unknown", error: "Job not found — please re-upload your file." }, "GET /api/datasets/upload/gcs-job-status"));

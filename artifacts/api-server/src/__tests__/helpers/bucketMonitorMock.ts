@@ -34,12 +34,19 @@ export function createBucketMonitorMock(
     gcsClient: {},
     PROCESS_CONCURRENCY_CAP: 3,
     LIFECYCLE_TTLS: { processedDays: 30, failedDays: 14 },
+    STALE_BUCKET_JOB_MAX_AGE_MS: 30 * 60 * 1000,
     // ── Functions ──
     signDatasetUploadUrl: vi.fn(),
     getJobByObjectKey: vi.fn(),
+    // Default to the real derivation logic's "no valid uuid" behaviour:
+    // returning null makes route code skip the DB fallback unless a test
+    // explicitly overrides this with a value.
+    bucketJobDbId: vi.fn().mockReturnValue(null),
+    rehydrateBucketJobsFromDb: vi.fn(),
     __resetProcessConcurrencyForTests: vi.fn(),
     __withProcessSlotForTests: vi.fn().mockImplementation(async (fn: () => Promise<unknown>) => fn()),
     __getActiveProcessCountForTests: vi.fn().mockReturnValue(0),
+    __setLifecycleFnForTests: vi.fn(),
     processObject: vi.fn(),
     recoverGcsJobStatus: vi.fn(),
     getBucketStatus: vi.fn(),
@@ -47,7 +54,6 @@ export function createBucketMonitorMock(
     getLifecycleApplyStatus: vi.fn().mockReturnValue({ appliedAt: null, error: null }),
     applyBucketLifecycleRules: vi.fn(),
     startBucketMonitor: vi.fn(),
-    __setLifecycleFnForTests: vi.fn(),
   };
   Object.defineProperties(base, Object.getOwnPropertyDescriptors(overrides));
   return base;
