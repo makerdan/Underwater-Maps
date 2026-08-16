@@ -138,10 +138,10 @@ test("no argument exits 1 with usage hint", () => {
   assert.match(stderr, /missing plan file argument/);
 });
 
-test("plan with no ## Validation section exits 1", () => {
+test("plan with no ## Validation section exits 2 (graceful degradation)", () => {
   const planFile = writePlan(PLAN_NO_VALIDATION);
   const { code, stderr } = run(["--dry-run", planFile]);
-  assert.equal(code, 1);
+  assert.equal(code, 2);
   assert.match(stderr, /no "## Validation" section/);
 });
 
