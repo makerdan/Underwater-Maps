@@ -145,8 +145,13 @@ export interface TerrainGrid {
  *       depths 3.3x too deep). Lake George and Cayuga dropped `nysdec-bathy`
  *       (no coverage in the successor Finger Lakes service). Previously
  *       cached nysdec/mn-dnr grids must be rebuilt.
+ *  12 — Task #3836: the bundled Lake Ray Roberts grid is now flipped
+ *       north–south at load time (see loadBundledTerrain) so it is served
+ *       with row 0 = minLat (south), matching the client mesh convention.
+ *       Previously cached lake-ray-roberts grids render upside-down and
+ *       must be rebuilt.
  */
-export const TERRAIN_CACHE_VERSION = 11;
+export const TERRAIN_CACHE_VERSION = 12;
 
 export interface DatasetMeta {
   id: string;
@@ -1721,10 +1726,46 @@ export interface BundledTerrain {
 
 const __terrainDir = dirname(fileURLToPath(import.meta.url));
 
-function loadBundledTerrain(fileName: string): BundledTerrain | null {
+/**
+ * Reverse the row order of a row-major grid in place (north ↕ south flip).
+ *
+ * The `.gen.json` bundle files store rows top-down exactly as they come out
+ * of the source GeoTIFFs: row 0 = maxLat (north). The serving contract for
+ * terrain grids, however, is row 0 = minLat (south) — that is what the
+ * client's PlaneGeometry vertex loop, picking/`getTerrainSurfaceY` math and
+ * overview renderer assume, and it is the order `gridPoints` produces for
+ * uploaded/raster datasets (`row = ((lat - minLat) / latRange) * N`).
+ *
+ * Exported for unit tests.
+ */
+export function flipGridRowsInPlace(values: number[], width: number, height: number): void {
+  for (let row = 0; row < Math.floor(height / 2); row++) {
+    const a = row * width;
+    const b = (height - 1 - row) * width;
+    for (let col = 0; col < width; col++) {
+      const tmp = values[a + col]!;
+      values[a + col] = values[b + col]!;
+      values[b + col] = tmp;
+    }
+  }
+}
+
+function loadBundledTerrain(
+  fileName: string,
+  opts: { flipRows?: boolean } = {},
+): BundledTerrain | null {
   try {
     const raw = readFileSync(resolvePath(__terrainDir, fileName), "utf8");
-    return JSON.parse(raw) as BundledTerrain;
+    const bundle = JSON.parse(raw) as BundledTerrain;
+    if (opts.flipRows) {
+      // Convert the file's top-down (row 0 = north) order to the served
+      // row 0 = south contract at read time — the committed .gen.json file
+      // itself is left in generator output order, so the offline
+      // build/refresh scripts keep working unchanged.
+      flipGridRowsInPlace(bundle.depths, bundle.width, bundle.height);
+      flipGridRowsInPlace(bundle.topography, bundle.width, bundle.height);
+    }
+    return bundle;
   } catch (err) {
     logger.warn({ err, fileName }, `[terrain] Bundled terrain '${fileName}' unavailable: ${(err as Error).message}`);
     return null;
@@ -1745,7 +1786,11 @@ function loadBundledTerrain(fileName: string): BundledTerrain | null {
  * null — the ranked resolver then falls through to the next source.
  */
 export const BUNDLED_TERRAIN: Record<string, BundledTerrain | null> = {
-  "lake-ray-roberts": loadBundledTerrain("demoTerrain.gen.json"),
+  // demoTerrain.gen.json stores rows north-first (GeoTIFF order); flip to the
+  // served row-0-south contract so the mesh renders right-side up (#3836).
+  // The crater-lake / tahoe bundles keep their as-built orientation for now —
+  // verifying and flipping them is deliberately out of scope here.
+  "lake-ray-roberts": loadBundledTerrain("demoTerrain.gen.json", { flipRows: true }),
   "fw-crater-lake-or": loadBundledTerrain("craterLakeTerrain.gen.json"),
   "fw-lake-tahoe-ca-nv": loadBundledTerrain("lakeTahoeTerrain.gen.json"),
 };
