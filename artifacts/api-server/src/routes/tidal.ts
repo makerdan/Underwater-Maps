@@ -3,6 +3,7 @@ import { logger } from "../lib/logger.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
+import { isAdmin } from "../lib/adminAccess.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
 import {
   buildSyntheticEvents,
@@ -41,16 +42,6 @@ function tidalValidationDetails(error: ZodError): string {
 const router = Router();
 
 const NOAA_BASE = "https://api.tidesandcurrents.noaa.gov";
-
-function isAdmin(userId: string): boolean {
-  const flag = process.env["BUCKET_MONITOR_ADMIN"] ?? "";
-  if (flag === "1" || flag === "true") return true;
-  const allowedIds = (process.env["ADMIN_USER_IDS"] ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return allowedIds.includes(userId);
-}
 
 export interface NoaaStation {
   id: string;

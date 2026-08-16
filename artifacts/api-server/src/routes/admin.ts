@@ -3,6 +3,7 @@ import { z } from "zod";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
+import { isAdmin } from "../lib/adminAccess.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateQuery } from "../middlewares/validateBody.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
@@ -21,21 +22,6 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
-
-function isAdmin(userId: string): boolean {
-  // BUCKET_MONITOR_ADMIN is a dev-only shortcut that bypasses per-user ID
-  // checks. It must NEVER be set in a production deployment — validateStartupEnv()
-  // will refuse to start the server if it detects this combination.
-  const flag = process.env["BUCKET_MONITOR_ADMIN"] ?? "";
-  if (flag === "1" || flag === "true") return true;
-
-  const allowedIds = (process.env["ADMIN_USER_IDS"] ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  return allowedIds.includes(userId);
-}
 
 /**
  * GET /admin/bucket-monitor
