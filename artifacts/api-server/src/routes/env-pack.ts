@@ -179,6 +179,7 @@ router.get(
         warnings.push("No NOAA CO-OPS tide stations found within the requested radius.");
       }
     } else {
+      logger.warn({ source: "tidal", err: tidalResult.reason }, "env-pack upstream source failed");
       warnings.push(
         `Tide predictions unavailable: NOAA station catalogue could not be reached (${reasonMessage(tidalResult.reason)}).`,
       );
@@ -192,6 +193,7 @@ router.get(
         warnings.push("No NOAA weather stations found within the requested radius.");
       }
     } else {
+      logger.warn({ source: "weather", err: weatherResult.reason }, "env-pack upstream source failed");
       warnings.push(
         `Weather observations unavailable: ${reasonMessage(weatherResult.reason)}.`,
       );
@@ -207,6 +209,7 @@ router.get(
         );
       }
     } else {
+      logger.warn({ source: "marine", err: marineResult.reason }, "env-pack upstream source failed");
       warnings.push(
         `Marine conditions unavailable: ${reasonMessage(marineResult.reason)}.`,
       );

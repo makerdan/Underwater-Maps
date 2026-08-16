@@ -422,6 +422,66 @@ describe("GET /env-pack — partial failure graceful degradation", () => {
     expect(hasStationWarnings).toBe(true);
   });
 
+  it("logs a warn with source=tidal when the tidal fetch rejects", async () => {
+    const tidalError = new Error("NOAA catalogue unreachable");
+    tidalMock.mockRejectedValue(tidalError);
+    weatherMock.mockResolvedValue(SAMPLE_WEATHER_STATIONS);
+    marineMock.mockResolvedValue(SAMPLE_MARINE_CONDITIONS);
+    bundledMock.mockReturnValue(null);
+    argoMock.mockResolvedValue(SAMPLE_ARGO_PROFILE);
+
+    loggerWarnMock.mockClear();
+
+    await request(makeApp()).get("/env-pack?lat=37.8&lon=-122.4");
+
+    const tidalWarnCall = loggerWarnMock.mock.calls.find(
+      (c: unknown[]) => (c[0] as Record<string, unknown>)?.source === "tidal",
+    );
+    expect(tidalWarnCall).toBeDefined();
+    expect(tidalWarnCall![0]).toMatchObject({ source: "tidal", err: tidalError });
+    expect(tidalWarnCall![1]).toMatch(/env-pack upstream source failed/i);
+  });
+
+  it("logs a warn with source=weather when the weather fetch rejects", async () => {
+    const weatherError = new Error("NOAA weather unavailable");
+    tidalMock.mockResolvedValue(SAMPLE_TIDE_STATIONS);
+    weatherMock.mockRejectedValue(weatherError);
+    marineMock.mockResolvedValue(SAMPLE_MARINE_CONDITIONS);
+    bundledMock.mockReturnValue(null);
+    argoMock.mockResolvedValue(SAMPLE_ARGO_PROFILE);
+
+    loggerWarnMock.mockClear();
+
+    await request(makeApp()).get("/env-pack?lat=37.8&lon=-122.4");
+
+    const weatherWarnCall = loggerWarnMock.mock.calls.find(
+      (c: unknown[]) => (c[0] as Record<string, unknown>)?.source === "weather",
+    );
+    expect(weatherWarnCall).toBeDefined();
+    expect(weatherWarnCall![0]).toMatchObject({ source: "weather", err: weatherError });
+    expect(weatherWarnCall![1]).toMatch(/env-pack upstream source failed/i);
+  });
+
+  it("logs a warn with source=marine when the marine fetch rejects", async () => {
+    const marineError = new Error("Open-Meteo timeout");
+    tidalMock.mockResolvedValue(SAMPLE_TIDE_STATIONS);
+    weatherMock.mockResolvedValue(SAMPLE_WEATHER_STATIONS);
+    marineMock.mockRejectedValue(marineError);
+    bundledMock.mockReturnValue(null);
+    argoMock.mockResolvedValue(SAMPLE_ARGO_PROFILE);
+
+    loggerWarnMock.mockClear();
+
+    await request(makeApp()).get("/env-pack?lat=37.8&lon=-122.4");
+
+    const marineWarnCall = loggerWarnMock.mock.calls.find(
+      (c: unknown[]) => (c[0] as Record<string, unknown>)?.source === "marine",
+    );
+    expect(marineWarnCall).toBeDefined();
+    expect(marineWarnCall![0]).toMatchObject({ source: "marine", err: marineError });
+    expect(marineWarnCall![1]).toMatch(/env-pack upstream source failed/i);
+  });
+
   it("logs a warn for each temperature provider that throws, without leaking error details to the client", async () => {
     tidalMock.mockResolvedValue(SAMPLE_TIDE_STATIONS);
     weatherMock.mockResolvedValue(SAMPLE_WEATHER_STATIONS);
