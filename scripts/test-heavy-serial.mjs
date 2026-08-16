@@ -68,11 +68,22 @@ mkdirSync(resolve(root, ".local/tmp"), { recursive: true });
       { encoding: "utf8" },
     );
 
-    if (dryResult.status !== 0) {
+    if (dryResult.status === 2) {
+      // Exit 2 means the plan has no ## Validation section — old plan that
+      // predates the convention. Graceful degradation: warn and continue.
       console.warn(
-        `[test-heavy] WARNING: tier-lock pre-check could not parse "${planFile}" — continuing anyway.\n` +
+        `[test-heavy] WARNING: tier-lock pre-check skipped — "${planFile}" has no ## Validation section.\n` +
           `             ${(dryResult.stderr || dryResult.stdout || "").trim()}`,
       );
+    } else if (dryResult.status !== 0) {
+      // Exit 1 (or any other nonzero): plan exists but tier name is missing,
+      // malformed, or not registered — treat as a TIER-LOCK VIOLATION.
+      console.error(
+        `[test-heavy] TIER-LOCK VIOLATION: plan file "${planFile}" could not be resolved to a valid tier.\n` +
+          `             ${(dryResult.stderr || dryResult.stdout || "").trim()}\n` +
+          `             Fix the **Command:** line in the plan's ## Validation section before running.`,
+      );
+      process.exit(1);
     } else {
       const m = (dryResult.stdout || "").match(/resolved tier "([^"]+)"/);
       if (!m) {
@@ -157,7 +168,18 @@ const HEAVY_PRIORITY = 3;
 const runTierScript = resolve(root, "scripts/run-tier.mjs");
 const preflightStart = Date.now();
 console.log("\n[test-heavy] ▶ PREFLIGHT: typecheck + lint + static checks (run-tier.mjs standard --skip test:unit)");
-const preflightRes = spawnSync(process.execPath, [runTierScript, "standard", "--skip", "test:unit"], { stdio: "inherit", cwd: root });
+// Strip TASK_PLAN_FILE from the preflight environment. The outer tier-lock
+// check above has already verified that the plan authorises test-heavy. The
+// internal preflight deliberately runs a lighter tier (standard, minus
+// test:unit) as a fail-fast gate — it is NOT a second entry point from the
+// outside and must not be re-validated against the plan's ceiling.
+const preflightEnv = { ...process.env };
+delete preflightEnv.TASK_PLAN_FILE;
+const preflightRes = spawnSync(
+  process.execPath,
+  [runTierScript, "standard", "--skip", "test:unit"],
+  { stdio: "inherit", cwd: root, env: preflightEnv },
+);
 const preflightCode = preflightRes.status ?? 1;
 const preflightSecs = ((Date.now() - preflightStart) / 1000).toFixed(1);
 console.log(`[test-heavy] ■ PREFLIGHT finished in ${preflightSecs}s (exit ${preflightCode})`);

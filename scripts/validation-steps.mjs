@@ -80,6 +80,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:port-authority-zip", resource: null, cmd: "pnpm run check:port-authority-zip", tiers: FAST },
     // no resource: binary-diff check, sub-second — catches stale port-authority-heavy-skill.zip (skip if zip not yet published)
     { name: "check:port-authority-heavy-zip", resource: null, cmd: "pnpm run check:port-authority-heavy-zip", tiers: FAST },
+    // no resource: tier-lock pre-check self-test (run-tier.mjs checkTierLock), sub-second
+    { name: "check:tier-lock", resource: null, cmd: "pnpm run check:tier-lock", tiers: FAST },
     // no resource: grep-based root-relative /api/ fetch guard, sub-second
     { name: "check:root-relative-api", resource: null, cmd: "pnpm run check:root-relative-api", tiers: FAST },
     // no resource: grep-based exhaustive-deps suppression rationale gate, sub-second

@@ -18,8 +18,10 @@
  *
  * Exit codes:
  *   0  — command ran and exited 0, or --dry-run succeeded
- *   1  — plan file missing / unreadable, ## Validation section absent,
- *         **Command:** line missing, or tier name not registered
+ *   1  — plan file missing / unreadable, **Command:** line missing, or
+ *         tier name not registered (callers treat this as TIER-LOCK VIOLATION)
+ *   2  — ## Validation section absent (plan predates the convention;
+ *         callers treat this as graceful degradation, not a violation)
  *   N  — the wrapped command's own exit code (pass-through)
  */
 
@@ -64,9 +66,11 @@ const valHeadingIdx = lines.findIndex((l) => l.trimEnd() === "## Validation");
 if (valHeadingIdx === -1) {
   console.error(
     `run-locked-tier: "${planFile}" has no "## Validation" section.\n` +
-      `Every plan must contain a ## Validation section with a **Command:** line.`,
+      `This plan predates the ## Validation convention; tier-lock enforcement is skipped.`,
   );
-  process.exit(1);
+  // Exit 2 signals "no Validation section" — callers treat this as graceful
+  // degradation (old plan) rather than a TIER-LOCK VIOLATION.
+  process.exit(2);
 }
 
 // Collect lines belonging to the section (between heading and next ## or EOF)

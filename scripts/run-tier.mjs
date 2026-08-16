@@ -55,6 +55,10 @@ const args = process.argv.slice(2);
 // --step mode is handled later (after ALL_STEPS is initialised); skip tier
 // validation for that path so we don't emit a spurious "invalid tier" error.
 const isStepMode = args.includes("--step");
+// --check-tier-only: run only the tier-lock pre-check and exit, without
+// executing any validation steps. Used by tests to verify checkTierLock()
+// in isolation without triggering a full validation run.
+const checkTierOnly = args.includes("--check-tier-only");
 const tier = args[0];
 if (!isStepMode && (!tier || !VALID_TIERS.includes(tier))) {
   console.error(`Usage: run-tier.mjs <fast|standard|full> [--skip <step> ...]\nGot: ${JSON.stringify(tier)}`);
@@ -93,6 +97,10 @@ for (let i = 0; i < args.length; i++) {
 
 if (!isStepMode) {
   checkTierLock(tier);
+  // --check-tier-only: exit now without running any validation steps.
+  // checkTierLock() itself calls process.exit(1) on a TIER-LOCK VIOLATION,
+  // so reaching this point means the check passed (or gracefully degraded).
+  if (checkTierOnly) process.exit(0);
 }
 
 /**
@@ -121,12 +129,26 @@ function checkTierLock(requestedTier) {
     { encoding: "utf8" },
   );
 
-  if (dryResult.status !== 0) {
+  if (dryResult.status === 2) {
+    // Exit 2 means run-locked-tier found the plan file but it has no
+    // ## Validation section — old plan that predates the convention.
+    // Graceful degradation: warn and continue without enforcement.
     console.warn(
-      `[run-tier] WARNING: tier-lock pre-check could not parse "${planFile}" — continuing anyway.\n` +
+      `[run-tier] WARNING: tier-lock pre-check skipped — "${planFile}" has no ## Validation section.\n` +
         `           ${(dryResult.stderr || dryResult.stdout || "").trim()}`,
     );
-    return; // graceful degradation — unreadable/malformed plan file
+    return;
+  }
+
+  if (dryResult.status !== 0) {
+    // Exit 1 (or any other nonzero code): plan file exists but tier name is
+    // missing, malformed, or not registered — treat as a TIER-LOCK VIOLATION.
+    console.error(
+      `[run-tier] TIER-LOCK VIOLATION: plan file "${planFile}" could not be resolved to a valid tier.\n` +
+        `           ${(dryResult.stderr || dryResult.stdout || "").trim()}\n` +
+        `           Fix the **Command:** line in the plan's ## Validation section before running.`,
+    );
+    process.exit(1);
   }
 
   // run-locked-tier prints: run-locked-tier [--dry-run] resolved tier "X" → command: ...
