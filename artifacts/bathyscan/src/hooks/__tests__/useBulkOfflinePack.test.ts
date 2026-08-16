@@ -361,6 +361,37 @@ describe("useBulkOfflinePack — bbox forwarding", () => {
   });
 });
 
+describe("useBulkOfflinePack — cancel during preflight", () => {
+  it("stops before runBatch when cancel is called while preflight is in-flight", async () => {
+    // Make the IDB availability probe hang so we can cancel mid-preflight.
+    let resolveListPacks!: () => void;
+    mockListOfflinePacks.mockImplementationOnce(
+      () => new Promise<[]>((res) => { resolveListPacks = () => res([]); }),
+    );
+
+    const { result } = renderHook(() => useBulkOfflinePack([DS_A, DS_B]));
+
+    // Start — preflight enters the hanging IDB probe.
+    act(() => { void result.current.start(); });
+    await waitFor(() => expect(result.current.phase).toBe("preflighting"), { timeout: 3000 });
+
+    // Cancel while the IDB probe is awaited — this sets cancelRef and aborts the signal.
+    act(() => { result.current.cancel(); });
+
+    // Resolve the IDB probe; runPreflight will then see signal.aborted and return false.
+    await act(async () => { resolveListPacks(); });
+
+    // Phase must reach "cancelled", not "running" or "done".
+    await waitFor(() => expect(result.current.phase).toBe("cancelled"), { timeout: 3000 });
+
+    // runBatch must never have been entered.
+    expect(mockSaveOfflinePack).not.toHaveBeenCalled();
+
+    // No row-state mutations after cancel — rows stay empty (never initialised).
+    expect(result.current.rows).toHaveLength(0);
+  });
+});
+
 describe("useBulkOfflinePack — quota below low-water mark", () => {
   it("sets quotaWarning but still allows the batch to start", async () => {
     // Return a near-full quota (< 50 MB remaining)

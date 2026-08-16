@@ -101,6 +101,8 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
   /** Prevents a second concurrent run when start() is called before the phase
    *  state update reaches the caller (e.g. rapid double-tap). */
   const runningRef = useRef(false);
+  /** AbortController for the current runPreflight call; null when idle. */
+  const abortControllerRef = useRef<AbortController | null>(null);
   /** The row index to resume from after a network-loss pause. */
   const resumeIndexRef = useRef(0);
 
@@ -290,7 +292,7 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
 
   // ── Pre-flight checks ────────────────────────────────────────────────────
 
-  const runPreflight = useCallback(async (): Promise<boolean> => {
+  const runPreflight = useCallback(async (signal: AbortSignal): Promise<boolean> => {
     setPreflightError(null);
 
     // (a) Online check.
@@ -300,6 +302,7 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
     }
 
     // (b) IDB availability probe.
+    if (signal.aborted) return false;
     try {
       await listOfflinePacks();
     } catch (e) {
@@ -310,6 +313,7 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
     }
 
     // (c) Quota check (advisory — sets quotaWarning, does not return false).
+    if (signal.aborted) return false;
     await refreshQuota();
 
     return true;
@@ -323,6 +327,9 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
     if (runningRef.current) return;
     runningRef.current = true;
 
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
+
     try {
       cancelRef.current = false;
       // Enter "preflighting" so controls are hidden while checks run, but without
@@ -330,7 +337,16 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
       setPhase("preflighting");
       setPreflightError(null);
 
-      const ok = await runPreflight();
+      const ok = await runPreflight(ac.signal);
+
+      // Check cancellation before inspecting the preflight result — cancel()
+      // sets cancelRef and aborts the signal, so runPreflight may have returned
+      // false due to an aborted signal rather than a genuine preflight failure.
+      if (cancelRef.current) {
+        setPhase("cancelled");
+        return;
+      }
+
       if (!ok) {
         setPhase("preflight-error");
         return;
@@ -372,6 +388,7 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
 
       await runBatch(0, initialRows, forceIds, tideDays);
     } finally {
+      abortControllerRef.current = null;
       runningRef.current = false;
     }
   }, [datasets, forceUpdateIds, days, runPreflight, runBatch]);
@@ -380,6 +397,8 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
 
   const cancel = useCallback(() => {
     cancelRef.current = true;
+    // Abort any in-flight runPreflight so its async steps return early.
+    abortControllerRef.current?.abort();
     // If currently paused (not iterating), set phase immediately.
     setPhase((prev) => (prev === "paused" ? "cancelled" : prev));
   }, []);
