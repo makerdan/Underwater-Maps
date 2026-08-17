@@ -169,23 +169,67 @@ const STUB_PLACEHOLDERS = [
 // ---------------------------------------------------------------------------
 // Read plan files
 // ---------------------------------------------------------------------------
-if (!existsSync(TASKS_DIR)) {
-  console.log(`check-failure-gate — tasks directory "${TASKS_DIR}" does not exist. Nothing to check. ✓`);
-  process.exit(0);
-}
+
+// When TASK_PLAN_FILE is set (task-agent and CI environments always set it),
+// restrict the check to that single file rather than scanning the full
+// .local/tasks/ archive. This prevents 909 gitignored pre-existing plan files
+// from blocking the fast tier in every fresh environment.
+//
+// When TASK_PLAN_FILE is not set (developer / manual run), the full archive
+// scan proceeds as before.
+
+const TASK_PLAN_FILE = process.env.TASK_PLAN_FILE;
 
 let files;
-try {
-  const entries = await readdir(TASKS_DIR);
-  files = entries.filter((f) => f.endsWith(".md")).sort();
-} catch (err) {
-  console.error(`check-failure-gate — failed to read "${TASKS_DIR}": ${err.message}`);
-  process.exit(1);
-}
+/** Given an entry from `files`, return the filesystem path to read. */
+let resolveFilePath;
+/** Human-readable description of what was scanned, for the summary line. */
+let scanDescription;
 
-if (files.length === 0) {
-  console.log(`check-failure-gate — no .md files found in "${TASKS_DIR}". Nothing to check. ✓`);
-  process.exit(0);
+if (TASK_PLAN_FILE) {
+  // Single-file mode —————————————————————————————————————————————————————
+  console.log(`check-failure-gate — single-file mode: ${TASK_PLAN_FILE}`);
+
+  if (!TASK_PLAN_FILE.endsWith(".md")) {
+    console.error(
+      `check-failure-gate — TASK_PLAN_FILE "${TASK_PLAN_FILE}" is not a .md file. Aborting.`,
+    );
+    process.exit(1);
+  }
+
+  if (!existsSync(TASK_PLAN_FILE)) {
+    console.error(
+      `check-failure-gate — TASK_PLAN_FILE "${TASK_PLAN_FILE}" does not exist. Aborting.`,
+    );
+    process.exit(1);
+  }
+
+  // Use the full/relative path as the sole entry; resolveFilePath is the identity.
+  files = [TASK_PLAN_FILE];
+  resolveFilePath = (f) => f;
+  scanDescription = `single file "${TASK_PLAN_FILE}"`;
+} else {
+  // Archive mode — scan the full .local/tasks/ directory ——————————————————
+  if (!existsSync(TASKS_DIR)) {
+    console.log(`check-failure-gate — tasks directory "${TASKS_DIR}" does not exist. Nothing to check. ✓`);
+    process.exit(0);
+  }
+
+  try {
+    const entries = await readdir(TASKS_DIR);
+    files = entries.filter((f) => f.endsWith(".md")).sort();
+  } catch (err) {
+    console.error(`check-failure-gate — failed to read "${TASKS_DIR}": ${err.message}`);
+    process.exit(1);
+  }
+
+  if (files.length === 0) {
+    console.log(`check-failure-gate — no .md files found in "${TASKS_DIR}". Nothing to check. ✓`);
+    process.exit(0);
+  }
+
+  resolveFilePath = (f) => join(TASKS_DIR, f);
+  scanDescription = `"${TASKS_DIR}"`;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +271,7 @@ const compliant = [];
 const nonCompliant = []; // { file, missingSections[], unfilledPlaceholders[], missingValidationLines[] }
 
 for (const file of files) {
-  const filePath = join(TASKS_DIR, file);
+  const filePath = resolveFilePath(file);
   let content;
   try {
     content = await readFile(filePath, "utf8");
@@ -395,7 +439,7 @@ for (const file of files) {
 // ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
-console.log(`\ncheck-failure-gate — scanned ${files.length} plan file(s) in "${TASKS_DIR}":\n`);
+console.log(`\ncheck-failure-gate — scanned ${files.length} plan file(s) in ${scanDescription}:\n`);
 
 for (const f of compliant) {
   console.log(`  ✓ ${f}`);

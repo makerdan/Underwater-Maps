@@ -29,13 +29,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const scriptPath = resolve(__dirname, "..", "check-failure-gate.mjs");
 
 // ---------------------------------------------------------------------------
-// Helper — run check-failure-gate.mjs from a specific working directory
+// Helper — run check-failure-gate.mjs from a specific working directory.
+// Pass extraEnv to inject/override environment variables (merged with
+// process.env so the script can still resolve modules).
 // ---------------------------------------------------------------------------
-function runScript(args, cwd) {
+function runScript(args, cwd, extraEnv = {}) {
   const res = spawnSync(process.execPath, [scriptPath, ...args], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     cwd,
+    env: { ...process.env, ...extraEnv },
   });
   return {
     status: res.status ?? 1,
@@ -434,6 +437,210 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
     assert.ok(
       compliantLine.includes("✓") && !compliantLine.includes("✗"),
       `expected ${COMPLIANT} to be marked ✓ (compliant), not ✗\nline: ${compliantLine}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (d) Single-file mode via TASK_PLAN_FILE
+// ---------------------------------------------------------------------------
+
+describe("single-file mode: TASK_PLAN_FILE set to a compliant plan", () => {
+  let sfDir;
+  let sfTasksDir;
+  let compliantPath;
+  let nonCompliantPath;
+
+  before(() => {
+    sfDir = mkdtempSync(join(tmpdir(), "cfgt-sf-compliant-"));
+    sfTasksDir = join(sfDir, ".local", "tasks");
+    mkdirSync(sfTasksDir, { recursive: true });
+
+    // The file we will lint via TASK_PLAN_FILE — fully compliant
+    compliantPath = join(sfTasksDir, "sf-compliant.md");
+    writeFileSync(
+      compliantPath,
+      [
+        "# My Task",
+        "",
+        "## Pre-existing failures to ignore",
+        "None known at plan time. Treat every failure as a potential regression.",
+        "",
+        "**Flaky-test rule:** If a test fails, retry it 3× in isolation before concluding",
+        "it is a regression you caused. Only treat a consistent 3/3 failure as your",
+        "responsibility.",
+        "",
+        "## Validation",
+        "**Command:** `test-fast`",
+        "**Why:** Only check-failure-gate.mjs and its self-test are changed.",
+        "**Do not escalate:** Run exactly this command. Pre-existing failures are",
+        "handled above — they are never a reason to run a heavier tier.",
+      ].join("\n"),
+      "utf8",
+    );
+
+    // A non-compliant plan sitting in the same tasks dir — must be ignored
+    nonCompliantPath = join(sfTasksDir, "sf-non-compliant.md");
+    writeFileSync(
+      nonCompliantPath,
+      [
+        "# Bad Plan",
+        "",
+        "## Validation",
+        "**Command:** `test-standard`",
+        "**Why:** <replace with one-line justification>",
+        "**Do not escalate:** Run exactly this command.",
+      ].join("\n"),
+      "utf8",
+    );
+  });
+
+  after(() => {
+    rmSync(sfDir, { recursive: true, force: true });
+  });
+
+  it("exits 0 when TASK_PLAN_FILE points at a compliant plan", () => {
+    const result = runScript([], sfDir, { TASK_PLAN_FILE: compliantPath });
+    assert.equal(
+      result.status,
+      0,
+      `expected exit 0 for compliant TASK_PLAN_FILE, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("logs the single-file mode notice", () => {
+    const result = runScript([], sfDir, { TASK_PLAN_FILE: compliantPath });
+    assert.ok(
+      result.stdout.includes("single-file mode"),
+      `expected 'single-file mode' in stdout\nstdout: ${result.stdout}`,
+    );
+  });
+
+  it("does NOT report the non-compliant sibling file when linting a compliant target", () => {
+    const result = runScript([], sfDir, { TASK_PLAN_FILE: compliantPath });
+    assert.ok(
+      !result.stdout.includes("sf-non-compliant.md"),
+      `expected sibling non-compliant file to be ignored\nstdout: ${result.stdout}`,
+    );
+  });
+});
+
+describe("single-file mode: TASK_PLAN_FILE set to a non-compliant plan", () => {
+  let sfDir;
+  let sfTasksDir;
+  let nonCompliantPath;
+  let otherCompliantPath;
+
+  before(() => {
+    sfDir = mkdtempSync(join(tmpdir(), "cfgt-sf-noncompliant-"));
+    sfTasksDir = join(sfDir, ".local", "tasks");
+    mkdirSync(sfTasksDir, { recursive: true });
+
+    // The file we will lint — has an unfilled Why placeholder
+    nonCompliantPath = join(sfTasksDir, "sf-bad-plan.md");
+    writeFileSync(
+      nonCompliantPath,
+      [
+        "# Bad Plan",
+        "",
+        "## Pre-existing failures to ignore",
+        "None known.",
+        "",
+        "## Validation",
+        "**Command:** `test-standard`",
+        "**Why:** <replace with one-line justification>",
+        "**Do not escalate:** Run exactly this command.",
+      ].join("\n"),
+      "utf8",
+    );
+
+    // A compliant sibling — must be ignored entirely
+    otherCompliantPath = join(sfTasksDir, "sf-other-good.md");
+    writeFileSync(
+      otherCompliantPath,
+      [
+        "# Good Plan",
+        "",
+        "## Pre-existing failures to ignore",
+        "None known at plan time. Treat every failure as a potential regression.",
+        "",
+        "**Flaky-test rule:** If a test fails, retry it 3× in isolation before concluding",
+        "it is a regression you caused. Only treat a consistent 3/3 failure as your",
+        "responsibility.",
+        "",
+        "## Validation",
+        "**Command:** `test-standard`",
+        "**Why:** Covers all changed modules.",
+        "**Do not escalate:** Run exactly this command. Pre-existing failures are",
+        "handled above — they are never a reason to run a heavier tier.",
+      ].join("\n"),
+      "utf8",
+    );
+  });
+
+  after(() => {
+    rmSync(sfDir, { recursive: true, force: true });
+  });
+
+  it("exits 1 when TASK_PLAN_FILE points at a non-compliant plan", () => {
+    const result = runScript([], sfDir, { TASK_PLAN_FILE: nonCompliantPath });
+    assert.equal(
+      result.status,
+      1,
+      `expected exit 1 for non-compliant TASK_PLAN_FILE, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("reports only the non-compliant target file, not the compliant sibling", () => {
+    const result = runScript([], sfDir, { TASK_PLAN_FILE: nonCompliantPath });
+    assert.ok(
+      result.stdout.includes("sf-bad-plan.md"),
+      `expected non-compliant target to appear in output\nstdout: ${result.stdout}`,
+    );
+    assert.ok(
+      !result.stdout.includes("sf-other-good.md"),
+      `expected compliant sibling to be ignored\nstdout: ${result.stdout}`,
+    );
+  });
+});
+
+describe("single-file mode: TASK_PLAN_FILE points at a missing file", () => {
+  let sfDir;
+
+  before(() => {
+    sfDir = mkdtempSync(join(tmpdir(), "cfgt-sf-missing-"));
+  });
+
+  after(() => {
+    rmSync(sfDir, { recursive: true, force: true });
+  });
+
+  it("exits 1 with a descriptive error when TASK_PLAN_FILE does not exist", () => {
+    const missingPath = join(sfDir, "does-not-exist.md");
+    const result = runScript([], sfDir, { TASK_PLAN_FILE: missingPath });
+    assert.equal(
+      result.status,
+      1,
+      `expected exit 1 for missing TASK_PLAN_FILE, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+    assert.ok(
+      result.stderr.includes("does not exist") || result.stdout.includes("does not exist"),
+      `expected 'does not exist' message in output\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("exits 1 with a descriptive error when TASK_PLAN_FILE is not a .md file", () => {
+    const notMd = join(sfDir, "some-file.txt");
+    writeFileSync(notMd, "content", "utf8");
+    const result = runScript([], sfDir, { TASK_PLAN_FILE: notMd });
+    assert.equal(
+      result.status,
+      1,
+      `expected exit 1 for non-.md TASK_PLAN_FILE, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+    assert.ok(
+      result.stderr.includes("not a .md file") || result.stdout.includes("not a .md file"),
+      `expected 'not a .md file' message in output\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
   });
 });
