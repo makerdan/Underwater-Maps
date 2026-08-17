@@ -1,0 +1,124 @@
+name: E2E — Playwright (PR smoke)
+
+# Fast e2e smoke subset that runs on every pull request and blocks merge on
+# failure. The full suite takes ~20–25 minutes, so this workflow selects a
+# curated set of specs that cover the most regression-prone paths and finish
+# in well under 10 minutes — fast enough to be a practical PR gate.
+#
+# The full suite continues to run on push to main (ci-e2e.yml), so flaky
+# specs that are not in this subset are still caught after every merge.
+#
+# ── How to extend the PR subset ──────────────────────────────────────────────
+# Add spec paths to the `run` command under "Run Playwright PR smoke subset"
+# below. Keep each path on its own line for readability. Aim to keep the
+# total wall-clock time under 10 minutes on a fresh ubuntu-latest runner.
+# If a spec takes >2 minutes on its own, consider adding it to ci-e2e.yml
+# (main-only) instead.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  e2e-pr:
+    name: Playwright e2e smoke (PR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bathyscan
+          POSTGRES_PASSWORD: bathyscan
+          POSTGRES_DB: bathyscan_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bathyscan -d bathyscan_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgres://bathyscan:bathyscan@localhost:5432/bathyscan_e2e
+      CI: 'true'
+      # Dummy Clerk keys — same rationale as ci-e2e.yml: clerkMiddleware needs
+      # a syntactically valid key pair even though auth is bypassed in e2e mode.
+      # pk decodes to "clerk.example.com$".
+      CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+      CLERK_SECRET_KEY: sk_test_ci-dummy-never-used
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      # bag_parser.py is exercised by file-upload specs not included in the PR
+      # subset, but the api-server imports the parser module unconditionally on
+      # boot, so the Python deps must be present or the server crashes at start.
+      - name: Set up Python 3.11 (BAG parser subprocess deps)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install BAG parser Python deps
+        run: pip install "numpy>=1.26,<3" h5py pyproj
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared libs (emit .d.ts for workspace packages)
+        run: pnpm run typecheck:libs
+
+      - name: Run database migrations
+        run: pnpm --filter @workspace/db run migrate
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build api-server e2e bundle
+        run: DIST_DIR=dist-e2e pnpm --filter @workspace/api-server run build:e2e
+
+      # ── PR smoke subset ─────────────────────────────────────────────────────
+      # Specs are listed explicitly so the set is visible and easy to extend
+      # (see the "How to extend" comment at the top of this file). The
+      # api-liveness health probe runs automatically via playwright.config.ts
+      # "setup" project before any spec. --grep-invert "signed upload" mirrors
+      # the main workflow exclusion (object-storage sidecar not present in CI).
+      - name: Run Playwright PR smoke subset
+        run: >-
+          pnpm exec playwright test
+          --reporter=list,html
+          --grep-invert "signed upload"
+          tests/e2e/smoke.spec.ts
+          tests/e2e/terrain-visibility.spec.ts
+          tests/e2e/settings.spec.ts
+          tests/e2e/settings-save-buttons.spec.ts
+          tests/e2e/onboarding-tour.spec.ts
+          tests/e2e/sidebar-modes.spec.ts
+          tests/e2e/webgl-smoke.spec.ts
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-pr
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
