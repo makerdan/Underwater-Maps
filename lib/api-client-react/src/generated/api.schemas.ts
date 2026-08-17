@@ -1178,6 +1178,8 @@ export interface UserSettings {
   contourInterval?: number;
   /** MOBILE-ONLY key: contour-density multiplier for the mobile 2D Chart View's 1x/2x/3x stepper. Divides the effective contour interval (2 = twice as many lines). The desktop Overview Map ignores this key. */
   contourDensity?: UserSettingsContourDensity;
+  /** MOBILE-ONLY key: when true, the mobile 2D chart canvas is rendered with a subtle CSS perspective tilt (~4°) to give it a tactile sense of physical scale. Off by default. The desktop 3D view ignores this key. */
+  mobileMapTiltEnabled?: boolean;
   /**
      * Default hex colour applied to new depth-pole markers.
      * @pattern ^#[0-9a-fA-F]{6}$
