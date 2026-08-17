@@ -113,4 +113,5 @@
 - [Validation workflow boot storm](validation-workflow-boot-storm.md) — env restart autostarts ALL validation workflows queuing on the global lock; stop extras + kill orphaned boot pgids. test:unit fail-fast hides artifact suites behind an early package failure.
 - [catalog-saves.ts concurrent-merge damage](catalog-saves-concurrent-merge.md) — parallel task-agent merges on the same route file can drop router.post wrappers and duplicate destructures; esbuild build fails first, then tsc reveals variable-name corruption in the handler bodies.
 - [Playwright route glob vs query strings](playwright-route-glob-query.md) — page.route("**/path") stops matching once the client adds ?query; append "*" to the glob (won't cross into subpaths).
+- [New route module checklist](new-route-module-checklist.md) — mounting a new api-server router breaks wholesale api-zod mocks (add new exports) and the router-duplicate-route-guard ROUTERS list; sweep both in one pass.
 - [Plan-lint gate backlog blocks all tiers](plan-lint-gate-backlog.md) — archive-wide strict plan lints abort every tier pre-test:unit; triage via stash-run, then run same tier with --skip via upserted command.

@@ -936,6 +936,89 @@ export const DeleteUserFoldersIdBody = zod.object({
 
 
 /**
+ * @summary List all dataset collections (with members) for the current user
+ */
+export const GetUserCollectionsResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "members": zod.array(zod.object({
+  "id": zod.string().describe('Membership row UUID (use for removal)'),
+  "kind": zod.enum(['dataset', 'catalogSave']),
+  "refId": zod.string().describe('The referenced custom_datasets.id (kind=dataset) or user_catalog_saves.id (kind=catalogSave)'),
+  "name": zod.string().describe('Display name of the referenced item at read time'),
+  "createdAt": zod.coerce.date()
+}).describe('A membership row linking a collection to exactly one library item — either an uploaded dataset (kind=dataset) or a saved catalog entry (kind=catalogSave).')),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).describe('A user-defined, named group of library datasets (spans folders)')
+export const GetUserCollectionsResponse = zod.array(GetUserCollectionsResponseItem)
+
+
+/**
+ * @summary Create a new dataset collection
+ */
+export const PostUserCollectionsBody = zod.object({
+  "name": zod.string()
+})
+
+
+/**
+ * @summary Rename a dataset collection
+ */
+export const PatchUserCollectionsIdRenameParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const PatchUserCollectionsIdRenameBody = zod.object({
+  "name": zod.string()
+})
+
+export const PatchUserCollectionsIdRenameResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "members": zod.array(zod.object({
+  "id": zod.string().describe('Membership row UUID (use for removal)'),
+  "kind": zod.enum(['dataset', 'catalogSave']),
+  "refId": zod.string().describe('The referenced custom_datasets.id (kind=dataset) or user_catalog_saves.id (kind=catalogSave)'),
+  "name": zod.string().describe('Display name of the referenced item at read time'),
+  "createdAt": zod.coerce.date()
+}).describe('A membership row linking a collection to exactly one library item — either an uploaded dataset (kind=dataset) or a saved catalog entry (kind=catalogSave).')),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).describe('A user-defined, named group of library datasets (spans folders)')
+
+
+/**
+ * @summary Delete a dataset collection (members are removed; datasets are never deleted)
+ */
+export const DeleteUserCollectionsIdParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary Add a dataset or catalog save to a collection (idempotent for existing members)
+ */
+export const PostUserCollectionsIdMembersParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const PostUserCollectionsIdMembersBody = zod.object({
+  "datasetId": zod.string().optional(),
+  "catalogSaveId": zod.string().optional()
+}).describe('Exactly one of datasetId \/ catalogSaveId must be provided')
+
+
+/**
+ * @summary Remove a member from a collection (never deletes the dataset itself)
+ */
+export const DeleteUserCollectionsIdMembersMemberIdParams = zod.object({
+  "id": zod.coerce.string(),
+  "memberId": zod.coerce.string()
+})
+
+
+/**
  * @summary List persisted markers for a dataset or within bounds
  */
 export const getMarkersQueryMinLatMin = -90;

@@ -337,6 +337,12 @@ All routes are served under the `/api` prefix by the Express 5 server.
 | PATCH | `/user/folders/:id/move` | Move a folder to a new parent |
 | POST | `/user/folders/:id/duplicate` | Duplicate a folder (recursive deep copy) |
 | DELETE | `/user/folders/:id` | Delete a folder |
+| GET | `/user/collections` | List all dataset collections (with members) for the current user |
+| POST | `/user/collections` | Create a new dataset collection |
+| PATCH | `/user/collections/:id/rename` | Rename a dataset collection |
+| DELETE | `/user/collections/:id` | Delete a dataset collection (members are removed; datasets are never deleted) |
+| POST | `/user/collections/:id/members` | Add a dataset or catalog save to a collection (idempotent for existing members) |
+| DELETE | `/user/collections/:id/members/:memberId` | Remove a member from a collection (never deletes the dataset itself) |
 
 ### Markers
 

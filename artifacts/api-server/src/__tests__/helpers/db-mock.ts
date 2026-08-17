@@ -131,6 +131,22 @@ const datasetFoldersTableStub = {
   updatedAt: "updatedAt",
 };
 
+const datasetCollectionsTableStub = {
+  id: "id",
+  userId: "userId",
+  name: "name",
+  createdAt: "createdAt",
+  updatedAt: "updatedAt",
+};
+
+const datasetCollectionMembersTableStub = {
+  id: "id",
+  collectionId: "collectionId",
+  datasetId: "datasetId",
+  catalogSaveId: "catalogSaveId",
+  createdAt: "createdAt",
+};
+
 const gpsTrailsTableStub = {
   id: "id",
   userId: "userId",
@@ -321,6 +337,8 @@ export function createDbMock(options: DbMockOptions = {}) {
     catchCountersTable: catchCountersTableStub,
     catchEntriesTable: catchEntriesTableStub,
     datasetFoldersTable: datasetFoldersTableStub,
+    datasetCollectionsTable: datasetCollectionsTableStub,
+    datasetCollectionMembersTable: datasetCollectionMembersTableStub,
     gpsTrailsTable: gpsTrailsTableStub,
     gpsTrailPointsTable: gpsTrailPointsTableStub,
     datasetCatalogTable: datasetCatalogTableStub,

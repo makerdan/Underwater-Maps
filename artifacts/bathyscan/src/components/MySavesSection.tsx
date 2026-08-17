@@ -53,6 +53,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { buildMergedTree, type MergedFolderNode, type MergedEntry } from "@/lib/datasetLibrary";
+import { AddToCollectionDialog, type AddToCollectionTarget } from "@/components/CollectionsSection";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -602,7 +603,8 @@ const DraggableSaveCard: React.FC<{
   atViewCap?: boolean;
   visibleDatasetIds?: Set<string>;
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
-}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo, onAddToView, atViewCap, visibleDatasetIds, onOfflineDownload }) => {
+  onAddToCollection?: (save: UserCatalogSave) => void;
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo, onAddToView, atViewCap, visibleDatasetIds, onOfflineDownload, onAddToCollection }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `save-${save.id}`,
     data: { kind: "save", saveId: save.id },
@@ -616,6 +618,11 @@ const DraggableSaveCard: React.FC<{
       <button aria-label={`Move "${displayName}" to folder`} title="Move to folder" onClick={() => onMoveTo(save)}
         style={{ position: "absolute", top: 6, right: 63, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
       >📁</button>
+      {onAddToCollection && (
+        <button aria-label={`Add "${displayName}" to collection`} title="Add to collection" data-testid={`btn-add-to-collection-save-${save.id}`} onClick={() => onAddToCollection(save)}
+          style={{ position: "absolute", top: 6, right: 113, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
+        >🗂</button>
+      )}
       <SaveCard
         save={save} onLoadUserDataset={onLoadUserDataset} onRetry={onRetry}
         retrying={retrying} onDelete={onDelete} deleting={deleting} onRename={onRename}
@@ -641,7 +648,8 @@ const DraggableUploadCard: React.FC<{
   isAlreadyInView?: boolean;
   atViewCap?: boolean;
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
-}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload }) => {
+  onAddToCollection?: (dataset: UserDatasetMeta) => void;
+}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload, onAddToCollection }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `upload-${dataset.id}`,
     data: { kind: "upload", datasetId: dataset.id },
@@ -654,6 +662,11 @@ const DraggableUploadCard: React.FC<{
       <button aria-label={`Move "${dataset.name}" to folder`} title="Move to folder" data-testid={`btn-move-upload-${dataset.id}`} onClick={() => onMoveTo(dataset)}
         style={{ position: "absolute", top: 6, right: 63, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
       >📁</button>
+      {onAddToCollection && (
+        <button aria-label={`Add "${dataset.name}" to collection`} title="Add to collection" data-testid={`btn-add-to-collection-upload-${dataset.id}`} onClick={() => onAddToCollection(dataset)}
+          style={{ position: "absolute", top: 6, right: 113, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
+        >🗂</button>
+      )}
       <UploadCard
         dataset={dataset} onLoad={(id) => onLoad(id, dataset.createdAt)}
         onDelete={onDelete} onRename={onRename} deleting={deleting}
@@ -892,6 +905,10 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       ),
     [userDatasets, catalogSaveDatasetIds, waterType],
   );
+
+  // ── Add to collection ─────────────────────────────────────────────────────
+  // Dialog state for adding a single card (save or upload) to a collection.
+  const [addToCollection, setAddToCollection] = useState<{ label: string; targets: AddToCollectionTarget[] } | null>(null);
 
   // ── Delete — catalog saves (with undo) ───────────────────────────────────
   const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set());
@@ -1166,6 +1183,10 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
         atViewCap={atViewCap}
         visibleDatasetIds={visibleDatasetIds}
         onOfflineDownload={onOfflineDownload}
+        onAddToCollection={(s) => setAddToCollection({
+          label: s.displayLabel ?? s.catalog?.name ?? s.catalogId,
+          targets: [{ catalogSaveId: s.id }],
+        })}
       />
     ) : (
       <DraggableUploadCard
@@ -1180,6 +1201,10 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
         isAlreadyInView={visibleDatasetIds?.has(item.dataset.id) ?? false}
         atViewCap={atViewCap}
         onOfflineDownload={onOfflineDownload}
+        onAddToCollection={(d) => setAddToCollection({
+          label: d.name,
+          targets: [{ datasetId: d.id }],
+        })}
       />
     );
 
@@ -1297,6 +1322,15 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
             else await handleMoveUpload(moveTarget.dataset.id, folderId);
             setMoveTarget(null);
           }}
+        />
+      )}
+
+      {/* Add-to-collection dialog */}
+      {addToCollection && (
+        <AddToCollectionDialog
+          label={addToCollection.label}
+          targets={addToCollection.targets}
+          onClose={() => setAddToCollection(null)}
         />
       )}
 

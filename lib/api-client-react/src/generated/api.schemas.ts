@@ -1846,6 +1846,55 @@ export interface MoveDatasetBody {
   folderId: string | null;
 }
 
+export type DatasetCollectionMemberKind = typeof DatasetCollectionMemberKind[keyof typeof DatasetCollectionMemberKind];
+
+
+export const DatasetCollectionMemberKind = {
+  dataset: 'dataset',
+  catalogSave: 'catalogSave',
+} as const;
+
+/**
+ * A membership row linking a collection to exactly one library item — either an uploaded dataset (kind=dataset) or a saved catalog entry (kind=catalogSave).
+ */
+export interface DatasetCollectionMember {
+  /** Membership row UUID (use for removal) */
+  id: string;
+  kind: DatasetCollectionMemberKind;
+  /** The referenced custom_datasets.id (kind=dataset) or user_catalog_saves.id (kind=catalogSave) */
+  refId: string;
+  /** Display name of the referenced item at read time */
+  name: string;
+  createdAt: string;
+}
+
+/**
+ * A user-defined, named group of library datasets (spans folders)
+ */
+export interface DatasetCollection {
+  id: string;
+  name: string;
+  members: DatasetCollectionMember[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDatasetCollectionBody {
+  name: string;
+}
+
+export interface RenameDatasetCollectionBody {
+  name: string;
+}
+
+/**
+ * Exactly one of datasetId / catalogSaveId must be provided
+ */
+export interface AddDatasetCollectionMemberBody {
+  datasetId?: string;
+  catalogSaveId?: string;
+}
+
 export type MarkerType = typeof MarkerType[keyof typeof MarkerType];
 
 

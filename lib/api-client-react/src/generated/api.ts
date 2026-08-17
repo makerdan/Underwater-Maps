@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AddDatasetCollectionMemberBody,
   AdminBucketMonitor200,
   AdminLargeDatasetsDiff200,
   ApiError,
@@ -28,11 +29,14 @@ import type {
   CatchEntryInput,
   CatchEntryPatch,
   ClassifyResult,
+  CreateDatasetCollectionBody,
   CreateDatasetFolderBody,
   CreateRouteBody,
   CreateTrollingPresetFolderBody,
   DatasetCatalogEntry,
   DatasetCatalogSearchResult,
+  DatasetCollection,
+  DatasetCollectionMember,
   DatasetFolder,
   DatasetMeta,
   DatasetPreview,
@@ -151,6 +155,7 @@ import type {
   QueryTerrainBody,
   RawsStationsResponse,
   RawsWeatherResponse,
+  RenameDatasetCollectionBody,
   RenameDatasetFolderBody,
   RenameTrollingPresetFolderBody,
   RequestGcsUploadUrl200,
@@ -1971,6 +1976,440 @@ export const useDeleteUserFoldersId = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getDeleteUserFoldersIdMutationOptions(options));
+    }
+
+export const getGetUserCollectionsUrl = () => {
+
+
+
+
+  return `/api/user/collections`
+}
+
+/**
+ * @summary List all dataset collections (with members) for the current user
+ */
+export const getUserCollections = async ( options?: RequestInit): Promise<DatasetCollection[]> => {
+
+  return customFetch<DatasetCollection[]>(getGetUserCollectionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserCollectionsQueryKey = () => {
+    return [
+    `/api/user/collections`
+    ] as const;
+    }
+
+
+export const getGetUserCollectionsQueryOptions = <TData = Awaited<ReturnType<typeof getUserCollections>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserCollections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserCollectionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserCollections>>> = ({ signal }) => getUserCollections({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserCollections>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserCollectionsQueryResult = NonNullable<Awaited<ReturnType<typeof getUserCollections>>>
+export type GetUserCollectionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all dataset collections (with members) for the current user
+ */
+
+export function useGetUserCollections<TData = Awaited<ReturnType<typeof getUserCollections>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserCollections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserCollectionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPostUserCollectionsUrl = () => {
+
+
+
+
+  return `/api/user/collections`
+}
+
+/**
+ * @summary Create a new dataset collection
+ */
+export const postUserCollections = async (createDatasetCollectionBody: CreateDatasetCollectionBody, options?: RequestInit): Promise<DatasetCollection> => {
+
+  return customFetch<DatasetCollection>(getPostUserCollectionsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createDatasetCollectionBody,)
+  }
+);}
+
+
+
+
+export const getPostUserCollectionsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserCollections>>, TError,{data: BodyType<CreateDatasetCollectionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postUserCollections>>, TError,{data: BodyType<CreateDatasetCollectionBody>}, TContext> => {
+
+const mutationKey = ['postUserCollections'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postUserCollections>>, {data: BodyType<CreateDatasetCollectionBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postUserCollections(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostUserCollectionsMutationResult = NonNullable<Awaited<ReturnType<typeof postUserCollections>>>
+    export type PostUserCollectionsMutationBody = BodyType<CreateDatasetCollectionBody>
+    export type PostUserCollectionsMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Create a new dataset collection
+ */
+export const usePostUserCollections = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserCollections>>, TError,{data: BodyType<CreateDatasetCollectionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postUserCollections>>,
+        TError,
+        {data: BodyType<CreateDatasetCollectionBody>},
+        TContext
+      > => {
+      return useMutation(getPostUserCollectionsMutationOptions(options));
+    }
+
+export const getPatchUserCollectionsIdRenameUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/collections/${id}/rename`
+}
+
+/**
+ * @summary Rename a dataset collection
+ */
+export const patchUserCollectionsIdRename = async (id: string,
+    renameDatasetCollectionBody: RenameDatasetCollectionBody, options?: RequestInit): Promise<DatasetCollection> => {
+
+  return customFetch<DatasetCollection>(getPatchUserCollectionsIdRenameUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      renameDatasetCollectionBody,)
+  }
+);}
+
+
+
+
+export const getPatchUserCollectionsIdRenameMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserCollectionsIdRename>>, TError,{id: string;data: BodyType<RenameDatasetCollectionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchUserCollectionsIdRename>>, TError,{id: string;data: BodyType<RenameDatasetCollectionBody>}, TContext> => {
+
+const mutationKey = ['patchUserCollectionsIdRename'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchUserCollectionsIdRename>>, {id: string;data: BodyType<RenameDatasetCollectionBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchUserCollectionsIdRename(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchUserCollectionsIdRenameMutationResult = NonNullable<Awaited<ReturnType<typeof patchUserCollectionsIdRename>>>
+    export type PatchUserCollectionsIdRenameMutationBody = BodyType<RenameDatasetCollectionBody>
+    export type PatchUserCollectionsIdRenameMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Rename a dataset collection
+ */
+export const usePatchUserCollectionsIdRename = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserCollectionsIdRename>>, TError,{id: string;data: BodyType<RenameDatasetCollectionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchUserCollectionsIdRename>>,
+        TError,
+        {id: string;data: BodyType<RenameDatasetCollectionBody>},
+        TContext
+      > => {
+      return useMutation(getPatchUserCollectionsIdRenameMutationOptions(options));
+    }
+
+export const getDeleteUserCollectionsIdUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/collections/${id}`
+}
+
+/**
+ * @summary Delete a dataset collection (members are removed; datasets are never deleted)
+ */
+export const deleteUserCollectionsId = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteUserCollectionsIdUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteUserCollectionsIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsId>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteUserCollectionsId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUserCollectionsId>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteUserCollectionsId(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUserCollectionsIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUserCollectionsId>>>
+
+    export type DeleteUserCollectionsIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete a dataset collection (members are removed; datasets are never deleted)
+ */
+export const useDeleteUserCollectionsId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsId>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUserCollectionsId>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteUserCollectionsIdMutationOptions(options));
+    }
+
+export const getPostUserCollectionsIdMembersUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/collections/${id}/members`
+}
+
+/**
+ * @summary Add a dataset or catalog save to a collection (idempotent for existing members)
+ */
+export const postUserCollectionsIdMembers = async (id: string,
+    addDatasetCollectionMemberBody: AddDatasetCollectionMemberBody, options?: RequestInit): Promise<DatasetCollectionMember> => {
+
+  return customFetch<DatasetCollectionMember>(getPostUserCollectionsIdMembersUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      addDatasetCollectionMemberBody,)
+  }
+);}
+
+
+
+
+export const getPostUserCollectionsIdMembersMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserCollectionsIdMembers>>, TError,{id: string;data: BodyType<AddDatasetCollectionMemberBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postUserCollectionsIdMembers>>, TError,{id: string;data: BodyType<AddDatasetCollectionMemberBody>}, TContext> => {
+
+const mutationKey = ['postUserCollectionsIdMembers'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postUserCollectionsIdMembers>>, {id: string;data: BodyType<AddDatasetCollectionMemberBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  postUserCollectionsIdMembers(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostUserCollectionsIdMembersMutationResult = NonNullable<Awaited<ReturnType<typeof postUserCollectionsIdMembers>>>
+    export type PostUserCollectionsIdMembersMutationBody = BodyType<AddDatasetCollectionMemberBody>
+    export type PostUserCollectionsIdMembersMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Add a dataset or catalog save to a collection (idempotent for existing members)
+ */
+export const usePostUserCollectionsIdMembers = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserCollectionsIdMembers>>, TError,{id: string;data: BodyType<AddDatasetCollectionMemberBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postUserCollectionsIdMembers>>,
+        TError,
+        {id: string;data: BodyType<AddDatasetCollectionMemberBody>},
+        TContext
+      > => {
+      return useMutation(getPostUserCollectionsIdMembersMutationOptions(options));
+    }
+
+export const getDeleteUserCollectionsIdMembersMemberIdUrl = (id: string,
+    memberId: string,) => {
+
+
+
+
+  return `/api/user/collections/${id}/members/${memberId}`
+}
+
+/**
+ * @summary Remove a member from a collection (never deletes the dataset itself)
+ */
+export const deleteUserCollectionsIdMembersMemberId = async (id: string,
+    memberId: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteUserCollectionsIdMembersMemberIdUrl(id,memberId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteUserCollectionsIdMembersMemberIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsIdMembersMemberId>>, TError,{id: string;memberId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsIdMembersMemberId>>, TError,{id: string;memberId: string}, TContext> => {
+
+const mutationKey = ['deleteUserCollectionsIdMembersMemberId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUserCollectionsIdMembersMemberId>>, {id: string;memberId: string}> = (props) => {
+          const {id,memberId} = props ?? {};
+
+          return  deleteUserCollectionsIdMembersMemberId(id,memberId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUserCollectionsIdMembersMemberIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUserCollectionsIdMembersMemberId>>>
+
+    export type DeleteUserCollectionsIdMembersMemberIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Remove a member from a collection (never deletes the dataset itself)
+ */
+export const useDeleteUserCollectionsIdMembersMemberId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsIdMembersMemberId>>, TError,{id: string;memberId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUserCollectionsIdMembersMemberId>>,
+        TError,
+        {id: string;memberId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteUserCollectionsIdMembersMemberIdMutationOptions(options));
     }
 
 export const getGetMarkersUrl = (params?: GetMarkersParams,) => {

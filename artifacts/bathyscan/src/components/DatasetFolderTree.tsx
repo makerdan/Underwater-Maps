@@ -101,6 +101,13 @@ interface Props {
    * Disables ADD for rows that are not already in view.
    */
   atViewCap?: boolean;
+  /**
+   * Called with dataset ids when the user picks "Add to collection…" from a
+   * dataset's context menu, or "Add to collection" in the multi-select
+   * header (fires with every selected dataset id). The parent owns the
+   * collection-picker dialog. When undefined neither entry point renders.
+   */
+  onAddToCollection?: (datasetIds: string[]) => void;
 }
 
 type DragKind = "folder" | "dataset";
@@ -136,6 +143,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
   onAddToView,
   visibleDatasetIds,
   atViewCap = false,
+  onAddToCollection,
 }) => {
   const qc = useQueryClient();
   const expanded = useSettingsStore((s) => s.datasetFolderExpanded);
@@ -1079,6 +1087,14 @@ export const DatasetFolderTree: React.FC<Props> = ({
             currentParentId: ds.folderId ?? null,
           }),
       },
+      // Only offered when the parent wires a collection-picker dialog.
+      ...(onAddToCollection
+        ? [{
+            label: "Add to collection…",
+            icon: "🗂",
+            onClick: () => onAddToCollection([ds.id]),
+          }]
+        : []),
       { label: "", separator: true, onClick: () => {} },
       {
         label: "Delete…",
@@ -1361,6 +1377,32 @@ export const DatasetFolderTree: React.FC<Props> = ({
           style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", color: "#64748b" }}
         >
           {selectionMode ? (
+            <>
+            {onAddToCollection && (() => {
+              // Collections hold datasets only — folder ids in the selection
+              // are ignored by this action.
+              const selectedDatasetIds = datasets.filter((d) => selectedIds.has(d.id)).map((d) => d.id);
+              return selectedDatasetIds.length > 0 ? (
+                <button
+                  data-testid="btn-add-selected-to-collection"
+                  onClick={() => onAddToCollection(selectedDatasetIds)}
+                  title="Add selected datasets to a collection"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid rgba(0,229,255,0.3)",
+                    color: "#00e5ff",
+                    fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                    padding: "0 6px",
+                    borderRadius: 2,
+                    cursor: "pointer",
+                    lineHeight: 1.6,
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  🗂 Add to collection
+                </button>
+              ) : null;
+            })()}
             <button
               data-testid="btn-cancel-selection"
               onClick={exitSelectionMode}
@@ -1378,6 +1420,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
             >
               ✕ Cancel
             </button>
+            </>
           ) : (
             <button
               data-testid="btn-new-folder"

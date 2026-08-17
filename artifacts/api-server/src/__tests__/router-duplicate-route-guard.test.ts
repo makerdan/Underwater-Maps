@@ -88,6 +88,7 @@ import nceiRouter from "../routes/ncei.js";
 import searchFederatedRouter from "../routes/search-federated.js";
 import adminRouter from "../routes/admin.js";
 import githubRouter from "../routes/github.js";
+import collectionsRouter from "../routes/collections.js";
 import terrainBundlesRouter from "../routes/terrain-bundles.js";
 import envPackRouter from "../routes/env-pack.js";
 
@@ -111,6 +112,7 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["efh", efhRouter],
   ["intertidal-spots", intertidalSpotsRouter],
   ["catalog-saves", catalogSavesRouter],
+  ["collections", collectionsRouter],
   ["surface-conditions", surfaceConditionsRouter],
   ["trolling-presets", trollingPresetsRouter],
   ["trolling-preset-folders", trollingPresetFoldersRouter],

@@ -1,0 +1,16 @@
+---
+name: New api-server route module checklist
+description: Test files that must be updated whenever a new routes/<name>.ts module is added and mounted in routes/index.ts
+---
+
+# New api-server route module checklist
+
+Adding a new route module (`artifacts/api-server/src/routes/<name>.ts` mounted in `routes/index.ts`) breaks two classes of existing tests unless updated in the same change:
+
+1. **Wholesale `@workspace/api-zod` mocks** — any test file with `vi.mock("@workspace/api-zod", () => {...})` that does NOT use `importOriginal`/`importActual` must have the new module's zod exports added (as of Aug 2026: `markers.test.ts`, `markers-delete.test.ts`, `markers-delete-cross-tenant.test.ts`). Failure mode: suite-load error `No "<Schema>" export is defined on the "@workspace/api-zod" mock` in unrelated marker tests.
+   - Find them: `grep -rl 'vi.mock("@workspace/api-zod"' src --include='*.test.ts'` then filter out files containing `importOriginal`.
+2. **Router registry guard** — `src/__tests__/router-duplicate-route-guard.test.ts` asserts every router imported in `routes/index.ts` is in its `ROUTERS` list; import and add the new router.
+
+**Why:** Both failed the heavy tier when the collections routes were added; each is a deterministic suite-level failure that hides behind shard fail-fast (fixing one reveals the next on the other shard), so fix all occurrences in one pass.
+
+**How to apply:** Run the grep sweep and update the guard list in the same commit that mounts any new router.

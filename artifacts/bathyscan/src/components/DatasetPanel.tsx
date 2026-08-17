@@ -57,6 +57,7 @@ import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { useSettingsStore, type CameraBookmark } from "@/lib/settingsStore";
 import { MySavesSection } from "@/components/MySavesSection";
+import { CollectionsSection } from "@/components/CollectionsSection";
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { WaterTypeToggle } from "@/components/WaterTypeToggle";
 import { HelpIcon } from "@/components/help/HelpButton";
@@ -3274,6 +3275,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                       atViewCap={atViewCap}
                       onOfflineDownload={setOfflinePackDataset}
                     />
+                    <CollectionsSection />
                   </>
                 )}
 

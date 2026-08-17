@@ -925,6 +925,177 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /user/collections:
+    get:
+      operationId: getUserCollections
+      tags: [user-datasets]
+      summary: List all dataset collections (with members) for the current user
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Collection list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DatasetCollection"
+    post:
+      operationId: postUserCollections
+      tags: [user-datasets]
+      summary: Create a new dataset collection
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDatasetCollectionBody"
+      responses:
+        "201":
+          description: Created collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetCollection"
+        "400":
+          description: Invalid name or duplicate collection name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/collections/{id}/rename:
+    patch:
+      operationId: patchUserCollectionsIdRename
+      tags: [user-datasets]
+      summary: Rename a dataset collection
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameDatasetCollectionBody"
+      responses:
+        "200":
+          description: Renamed collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetCollection"
+        "400":
+          description: Invalid name or duplicate collection name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Collection not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/collections/{id}:
+    delete:
+      operationId: deleteUserCollectionsId
+      tags: [user-datasets]
+      summary: Delete a dataset collection (members are removed; datasets are never deleted)
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Collection deleted
+        "404":
+          description: Collection not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/collections/{id}/members:
+    post:
+      operationId: postUserCollectionsIdMembers
+      tags: [user-datasets]
+      summary: Add a dataset or catalog save to a collection (idempotent for existing members)
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddDatasetCollectionMemberBody"
+      responses:
+        "201":
+          description: Membership row (newly created, or the existing row when already a member)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetCollectionMember"
+        "400":
+          description: Invalid body (must reference exactly one of datasetId / catalogSaveId)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Collection or referenced dataset/save not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/collections/{id}/members/{memberId}:
+    delete:
+      operationId: deleteUserCollectionsIdMembersMemberId
+      tags: [user-datasets]
+      summary: Remove a member from a collection (never deletes the dataset itself)
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: memberId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Member removed
+        "404":
+          description: Collection or member not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /markers:
     get:
       operationId: getMarkers
@@ -7044,6 +7215,85 @@ components:
           nullable: true
       required:
         - folderId
+
+    DatasetCollectionMember:
+      type: object
+      description: >-
+        A membership row linking a collection to exactly one library item —
+        either an uploaded dataset (kind=dataset) or a saved catalog entry
+        (kind=catalogSave).
+      properties:
+        id:
+          type: string
+          description: Membership row UUID (use for removal)
+        kind:
+          type: string
+          enum: [dataset, catalogSave]
+        refId:
+          type: string
+          description: The referenced custom_datasets.id (kind=dataset) or user_catalog_saves.id (kind=catalogSave)
+        name:
+          type: string
+          description: Display name of the referenced item at read time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - kind
+        - refId
+        - name
+        - createdAt
+
+    DatasetCollection:
+      type: object
+      description: A user-defined, named group of library datasets (spans folders)
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetCollectionMember"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - members
+        - createdAt
+        - updatedAt
+
+    CreateDatasetCollectionBody:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
+    RenameDatasetCollectionBody:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
+    AddDatasetCollectionMemberBody:
+      type: object
+      description: Exactly one of datasetId / catalogSaveId must be provided
+      properties:
+        datasetId:
+          type: string
+        catalogSaveId:
+          type: string
 
     Marker:
       type: object

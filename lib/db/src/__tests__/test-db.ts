@@ -135,6 +135,46 @@ export async function createTestDb(): Promise<TestContext> {
     CREATE INDEX user_catalog_saves_user_catalog_idx
       ON user_catalog_saves (user_id, catalog_id);
 
+    CREATE TABLE dataset_collections (
+      id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id     text NOT NULL,
+      name        text NOT NULL,
+      created_at  timestamp NOT NULL DEFAULT now(),
+      updated_at  timestamp NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX dataset_collections_user_id_idx
+      ON dataset_collections (user_id);
+
+    -- Collection names are unique per user, case-insensitively.
+    CREATE UNIQUE INDEX dataset_collections_user_name_uniq
+      ON dataset_collections (user_id, lower(name));
+
+    CREATE TABLE dataset_collection_members (
+      id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      collection_id   uuid NOT NULL REFERENCES dataset_collections(id) ON DELETE CASCADE,
+      dataset_id      uuid REFERENCES custom_datasets(id) ON DELETE CASCADE,
+      catalog_save_id uuid REFERENCES user_catalog_saves(id) ON DELETE CASCADE,
+      created_at      timestamp NOT NULL DEFAULT now(),
+      CONSTRAINT dataset_collection_members_exactly_one_ref
+        CHECK ((dataset_id IS NOT NULL) <> (catalog_save_id IS NOT NULL))
+    );
+
+    CREATE INDEX dataset_collection_members_collection_idx
+      ON dataset_collection_members (collection_id);
+    CREATE INDEX dataset_collection_members_dataset_idx
+      ON dataset_collection_members (dataset_id);
+    CREATE INDEX dataset_collection_members_save_idx
+      ON dataset_collection_members (catalog_save_id);
+
+    -- A given dataset / catalog save appears at most once per collection.
+    CREATE UNIQUE INDEX dataset_collection_members_dataset_uniq
+      ON dataset_collection_members (collection_id, dataset_id)
+      WHERE dataset_id IS NOT NULL;
+    CREATE UNIQUE INDEX dataset_collection_members_save_uniq
+      ON dataset_collection_members (collection_id, catalog_save_id)
+      WHERE catalog_save_id IS NOT NULL;
+
     CREATE TABLE markers (
       id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       dataset_id text,
@@ -155,7 +195,8 @@ export async function createTestDb(): Promise<TestContext> {
 
   const truncate = async () => {
     await client.query(`
-      TRUNCATE TABLE user_catalog_saves, markers, custom_datasets, dataset_folders, dataset_catalog
+      TRUNCATE TABLE dataset_collection_members, dataset_collections, user_catalog_saves,
+        markers, custom_datasets, dataset_folders, dataset_catalog
         RESTART IDENTITY CASCADE
     `);
   };
