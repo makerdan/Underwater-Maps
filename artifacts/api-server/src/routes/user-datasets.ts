@@ -137,6 +137,7 @@ async function resolveCatalogWaterType(datasetId: string): Promise<WaterType | n
 }
 import { getCatalogEntries, EXTRA_CATALOG_ENTRIES } from "../lib/catalogSeeder.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
+import { DatasetIdParamSchema } from "./schemas.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
@@ -634,7 +635,15 @@ router.get("/user/datasets/:id/hyd93-features", requireAuth, asyncHandler(async 
 // ── DELETE /user/datasets/:id ───────────────────────────────────────────────
 router.delete("/user/datasets/:id", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const id = String(req.params["id"] ?? "");
+  const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({
+      error: "invalid_param",
+      details: idParsed.error.issues[0]?.message ?? "Invalid dataset id",
+    });
+    return;
+  }
+  const id = idParsed.data;
 
   const deleted = await db
     .delete(customDatasetsTable)

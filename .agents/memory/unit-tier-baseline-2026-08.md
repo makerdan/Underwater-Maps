@@ -25,3 +25,6 @@ Update 2026-08-17 (later): new pre-existing baseline breakage from mobile-task m
 - unit: appTsxDuplicateHooks.test.ts corrupted (undefined absPath/relPath, duplicated test bodies — concurrent-merge damage; 7 failures) + MobileChrome.test.tsx 3 gear-button failures
 - lint: no-duplicate-imports in App.tsx and useMobileChartOverlays.ts; no-unused-vars in the corrupted test file
 - check:failure-gate-self-test fails on branches predating the #4090-era fix; check:regression-guard self-test has the same TASK_PLAN_FILE env-leak (fix still pending) — same-tier --skip both.
+
+## 2026-08-17 (later) — resolved same day
+A mobile-chart merge wave briefly broke repo-wide typecheck/lint (truncated test file) plus the settings sentinel and terrain-mock guard; all repaired on main the same day. Durable lesson: mid-session foreign merges can break AND repair the shared tree while a task runs — re-verify any "baseline" failure at current HEAD before skipping steps or citing it, and re-check again before task completion; the set changes hourly on busy days.

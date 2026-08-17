@@ -655,6 +655,12 @@ paths:
       responses:
         "204":
           description: Dataset deleted
+        "400":
+          description: Malformed dataset id (must be a UUID)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthenticated
           content:

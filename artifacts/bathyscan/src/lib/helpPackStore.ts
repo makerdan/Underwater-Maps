@@ -12,6 +12,21 @@ import { type HelpArticle } from "./helpContent";
 const HELP_PACK_KEY = "offline-help-pack";
 export const HELP_CACHE_NAME = "bathyscan-pack-help";
 
+const HELP_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+/**
+ * @deprecated Legacy fixed asset list. New code derives the asset set from
+ * article bodies via extractHelpMediaUrls(). Kept for OfflinePackModal, which
+ * still offers the fixed five-asset help pack.
+ */
+export const HELP_ASSETS = [
+  `${HELP_BASE}/help/marker-drop.gif`,
+  `${HELP_BASE}/help/paint-mode.gif`,
+  `${HELP_BASE}/help/upload-dropzone.png`,
+  `${HELP_BASE}/help/full-screen.png`,
+  `${HELP_BASE}/help/depth-profile.png`,
+];
+
 // ── Manifest derivation ───────────────────────────────────────────────────────
 
 const IMAGE_RE = /!\[[^\]]*\]\(([^)]+)\)/g;
@@ -142,6 +157,20 @@ export async function getHelpOfflineStatus(
   return "downloaded";
 }
 
+/**
+ * @deprecated Use getHelpOfflineStatus() instead. Legacy saved/size summary
+ * consumed by OfflinePackModal and DataStorageSection.
+ */
+export async function getHelpPackStatus(): Promise<HelpPackStatus> {
+  const record = await get<HelpPackRecord>(HELP_PACK_KEY);
+  if (!record) return { saved: false };
+  return {
+    saved: true,
+    savedAt: record.savedAt,
+    totalBytes: record.totalBytes,
+  };
+}
+
 // ── Download engine ───────────────────────────────────────────────────────────
 
 /**
@@ -156,8 +185,24 @@ export async function saveHelpPack(
   articles: HelpArticle[],
   onProgress: (p: HelpPackProgress) => void,
   basePath?: string,
+): Promise<HelpPackRecord>;
+/**
+ * @deprecated Legacy signature — downloads the fixed HELP_ASSETS list.
+ * Still used by OfflinePackModal's help section.
+ */
+export async function saveHelpPack(
+  onProgress: (p: HelpPackProgress) => void,
+): Promise<HelpPackRecord>;
+export async function saveHelpPack(
+  articlesOrOnProgress: HelpArticle[] | ((p: HelpPackProgress) => void),
+  onProgressArg?: (p: HelpPackProgress) => void,
+  basePath?: string,
 ): Promise<HelpPackRecord> {
-  const urls = extractHelpMediaUrls(articles, basePath);
+  const legacy = typeof articlesOrOnProgress === "function";
+  const onProgress = legacy ? articlesOrOnProgress : onProgressArg!;
+  const urls = legacy
+    ? [...HELP_ASSETS]
+    : extractHelpMediaUrls(articlesOrOnProgress, basePath);
   const fingerprint = computeManifestFingerprint(urls);
   const cache = await caches.open(HELP_CACHE_NAME);
   const assetRecords: HelpAssetRecord[] = [];

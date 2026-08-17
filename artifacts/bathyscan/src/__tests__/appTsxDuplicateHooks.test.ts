@@ -67,6 +67,9 @@ const SCANNED_FILES: string[] = [
   // MOBILE-ONLY: the 2D chart view crossed the 500-line/10-hook threshold
   // when the Analyze overlay + tap-to-query wiring landed (task 4003).
   "components/mobile/MobileChartView.tsx",
+  // Crossed the threshold when the offline help download landed (Help window
+  // status states + download progress wiring).
+  "components/help/HelpWindow.tsx",
   "pages/Settings.tsx",
   "pages/TourScene.tsx",
   "pages/settings/components/DepthColorsCard.tsx",

@@ -68,6 +68,19 @@ import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
 
 const UNDO_DELETE_WINDOW_MS = 5_000;
 
+/**
+ * True when a mutation error is an ApiError-style 404 — the row is already
+ * gone server-side (deleted from another tab/session, or removed by the
+ * my-saves cascade delete). Deletes treat this as "already deleted" rather
+ * than a hard failure so the list self-heals instead of keeping a ghost row.
+ */
+function isNotFoundError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { status?: unknown }).status === 404
+  );
+}
 const STATUS_COLORS: Record<string, string> = {
   queued: "#f59e0b",
   processing: "#60a5fa",
@@ -1140,13 +1153,28 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
         qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() }),
       ]);
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Could not delete saved dataset");
-      setPendingDeleteSaveIds((s) => { const n = new Set(s); n.delete(target.id); return n; });
+      if (isNotFoundError(err)) {
+        // Already gone server-side — treat as success: refresh the lists so
+        // the ghost row disappears, and clear any linked active dataset.
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() }),
+        ]);
+        if (target.datasetId) onDatasetsRemoved?.([target.datasetId]);
+      } else {
+        setDeleteError(err instanceof Error ? err.message : "Could not delete saved dataset");
+        setPendingDeleteSaveIds((s) => { const n = new Set(s); n.delete(target.id); return n; });
+        // Self-heal: refresh the lists so stale rows reflect true server state.
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() }),
+        ]);
+      }
     } finally {
       setDeletingIds((s) => { const n = new Set(s); n.delete(target.id); return n; });
       setPendingDeleteSaveIds((s) => { if (!s.has(target.id)) return s; const n = new Set(s); n.delete(target.id); return n; });
     }
-  }, [deleteSaveMutation, qc]);
+  }, [deleteSaveMutation, qc, onDatasetsRemoved]);
 
   const handleConfirmDelete = useCallback(() => {
     if (!confirmDelete) return;
@@ -1205,7 +1233,22 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       await qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() });
       onDatasetsRemoved?.([target.id]);
     } catch (err) {
-      setDeleteUploadError(err instanceof Error ? err.message : "Could not delete uploaded dataset");
+      if (isNotFoundError(err)) {
+        // Already gone server-side — treat as success: refresh the lists so
+        // the ghost row disappears, and clear the active-dataset state.
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() }),
+        ]);
+        onDatasetsRemoved?.([target.id]);
+      } else {
+        setDeleteUploadError(err instanceof Error ? err.message : "Could not delete uploaded dataset");
+        // Self-heal: refresh the lists so stale rows reflect true server state.
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetUserDatasetsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetDatasetsMySavesQueryKey() }),
+        ]);
+      }
     } finally {
       setDeletingUploadIds((s) => { const n = new Set(s); n.delete(target.id); return n; });
     }

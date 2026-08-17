@@ -18,9 +18,12 @@
  *      inside the indented container for both card kinds.
  *   9. "Move to folder…" for uploads hits the dataset move endpoint.
  *  10. Processing/failed saves render inline with status/retry.
+ *  11. Delete 404s are treated as "already deleted": lists are invalidated,
+ *      no error dialog renders; non-404 failures show the error but still
+ *      invalidate the lists so ghost rows self-heal.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import React from "react";
 import { renderWithProviders } from "./setup";
 import { MySavesSection } from "@/components/MySavesSection";
@@ -30,9 +33,12 @@ import { MySavesSection } from "@/components/MySavesSection";
 // ---------------------------------------------------------------------------
 const mocks = vi.hoisted(() => ({
   deleteUploadMutateAsync: vi.fn().mockResolvedValue(undefined),
+  deleteSaveMutateAsync: vi.fn().mockResolvedValue(undefined),
   renameUploadMutateAsync: vi.fn().mockResolvedValue(undefined),
   moveUploadMutateAsync: vi.fn().mockResolvedValue(undefined),
   moveSaveMutateAsync: vi.fn().mockResolvedValue(undefined),
+  invalidateQueries: vi.fn().mockResolvedValue(undefined),
+  toast: vi.fn(() => ({ id: "toast-1", dismiss: vi.fn(), update: vi.fn() })),
   onLoadCatalogSave: vi.fn(),
   onLoadUserDataset: vi.fn(),
   onDatasetsRemoved: vi.fn(),
@@ -179,6 +185,13 @@ vi.mock(
         isSuccess: false,
         variables: undefined,
       }),
+      useDeleteDatasetsMySavesId: () => ({
+        mutate: () => {},
+        mutateAsync: mocks.deleteSaveMutateAsync,
+        isPending: false,
+        isSuccess: false,
+        variables: undefined,
+      }),
       usePatchUserDatasetsIdRename: () => ({
         mutate: () => {},
         mutateAsync: mocks.renameUploadMutateAsync,
@@ -216,7 +229,7 @@ vi.mock("@/lib/clerkCompat", async () => {
 });
 
 vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
   useQueries: ({ queries }: { queries: unknown[] }) =>
     queries.map(() => ({
       data: undefined,
@@ -227,7 +240,7 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: mocks.toast }),
 }));
 
 vi.mock("@/components/help/HelpButton", () => ({
@@ -300,8 +313,11 @@ function resetState() {
   mocks.onDatasetsRemoved.mockClear();
   mocks.onBrowseDatasets.mockClear();
   mocks.deleteUploadMutateAsync.mockClear();
+  mocks.deleteSaveMutateAsync.mockClear();
   mocks.moveUploadMutateAsync.mockClear();
   mocks.moveSaveMutateAsync.mockClear();
+  mocks.invalidateQueries.mockClear();
+  mocks.toast.mockClear();
   currentIsSignedIn = true;
   currentUserDatasets = [];
   currentMySaves = [];
@@ -544,6 +560,113 @@ describe("MySavesSection — delete confirmations differ by kind", () => {
     expect(dialog).toHaveTextContent(/re-save it from the catalog later/i);
     // No permanent-upload-deletion phrasing on the save dialog.
     expect(dialog).not.toHaveTextContent(/permanently remove the uploaded dataset/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Delete 404 = "already deleted" + self-healing list on failures
+// ---------------------------------------------------------------------------
+// Regression guard for the My Library ghost-row bug: a delete that 404s
+// (row already gone server-side — another tab/session, or the my-saves
+// cascade delete) must NOT surface an error dialog, and every failed delete
+// must still invalidate the list queries so stale rows self-heal.
+
+function notFoundError(): Error {
+  return Object.assign(new Error("HTTP 404 Not Found"), { status: 404 });
+}
+
+describe("MySavesSection — upload delete 404 treated as already-deleted", () => {
+  beforeEach(resetState);
+
+  it("404 delete: invalidates both lists, notifies removal, shows no error dialog", async () => {
+    currentUserDatasets = [UPLOAD_B];
+    mocks.deleteUploadMutateAsync.mockRejectedValueOnce(notFoundError());
+    renderSection();
+
+    fireEvent.click(screen.getByTestId("btn-delete-upload-upload-b"));
+    fireEvent.click(screen.getByTestId("confirm-delete-upload-confirm"));
+
+    await waitFor(() => {
+      expect(mocks.onDatasetsRemoved).toHaveBeenCalledWith(["upload-b"]);
+    });
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["UserDatasets"] });
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["DatasetsMySaves"] });
+    // 404 must never render the delete-error dialog again.
+    expect(screen.queryByTestId("upload-delete-error")).not.toBeInTheDocument();
+  });
+
+  it("non-404 delete failure shows the error AND still invalidates the lists", async () => {
+    currentUserDatasets = [UPLOAD_B];
+    mocks.deleteUploadMutateAsync.mockRejectedValueOnce(
+      Object.assign(new Error("server exploded"), { status: 500 }),
+    );
+    renderSection();
+
+    fireEvent.click(screen.getByTestId("btn-delete-upload-upload-b"));
+    fireEvent.click(screen.getByTestId("confirm-delete-upload-confirm"));
+
+    expect(await screen.findByTestId("upload-delete-error")).toHaveTextContent(
+      "server exploded",
+    );
+    // Self-heal: the lists must refresh even though the delete failed.
+    await waitFor(() => {
+      expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["UserDatasets"] });
+      expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["DatasetsMySaves"] });
+    });
+    expect(mocks.onDatasetsRemoved).not.toHaveBeenCalled();
+  });
+});
+
+describe("MySavesSection — catalog-save delete 404 treated as already-deleted", () => {
+  beforeEach(resetState);
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function confirmSaveDeleteAndFlushUndoWindow() {
+    fireEvent.click(screen.getByTestId("btn-delete-save-save-001"));
+    fireEvent.click(screen.getByTestId("confirm-delete-confirm"));
+    // The commit runs after the 5 s undo window — advance past it and let the
+    // async delete chain settle.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6_000);
+    });
+  }
+
+  it("404 delete: invalidates both lists, notifies linked dataset removal, no error dialog", async () => {
+    vi.useFakeTimers();
+    currentMySaves = [SAVE_FOR_UPLOAD_A];
+    currentUserDatasets = [UPLOAD_A];
+    mocks.deleteSaveMutateAsync.mockRejectedValueOnce(notFoundError());
+    renderSection();
+
+    await confirmSaveDeleteAndFlushUndoWindow();
+
+    expect(mocks.deleteSaveMutateAsync).toHaveBeenCalledWith({ id: "save-001" });
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["DatasetsMySaves"] });
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["UserDatasets"] });
+    // The save's materialized dataset is gone too — active state must clear.
+    expect(mocks.onDatasetsRemoved).toHaveBeenCalledWith(["upload-a"]);
+    // 404 must never render the delete-error dialog again.
+    expect(screen.queryByTestId("save-delete-error")).not.toBeInTheDocument();
+  });
+
+  it("non-404 delete failure shows the error AND still invalidates the lists", async () => {
+    vi.useFakeTimers();
+    currentMySaves = [SAVE_FOR_UPLOAD_A];
+    currentUserDatasets = [UPLOAD_A];
+    mocks.deleteSaveMutateAsync.mockRejectedValueOnce(
+      Object.assign(new Error("server exploded"), { status: 500 }),
+    );
+    renderSection();
+
+    await confirmSaveDeleteAndFlushUndoWindow();
+
+    expect(screen.getByTestId("save-delete-error")).toHaveTextContent("server exploded");
+    // Self-heal: the lists must refresh even though the delete failed.
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["DatasetsMySaves"] });
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["UserDatasets"] });
+    expect(mocks.onDatasetsRemoved).not.toHaveBeenCalled();
   });
 });
 

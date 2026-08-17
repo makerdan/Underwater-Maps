@@ -498,10 +498,31 @@ describe("DELETE /api/user/datasets/:id — delete dataset", () => {
     expect(res.status).toBe(401);
   });
 
+  it("returns 400 invalid_param for a malformed (non-UUID) dataset id", async () => {
+    // Regression guard: malformed ids used to reach the DB and blow up with a
+    // uuid-cast 500; they must be rejected at the route boundary instead.
+    state.deleteRow = { id: "ds-1" }; // would "succeed" if validation were skipped
+    const res = await request(app)
+      .delete("/api/user/datasets/not-a-uuid")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_param");
+  });
+
+  it("returns 400 for a path-traversal-style dataset id", async () => {
+    const res = await request(app)
+      .delete("/api/user/datasets/..%2F..%2Fetc%2Fpasswd")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_param");
+  });
+
   it("returns 404 when the dataset does not exist", async () => {
     state.deleteRow = null;
     const res = await request(app)
-      .delete("/api/user/datasets/nonexistent")
+      .delete("/api/user/datasets/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(404);
@@ -509,9 +530,9 @@ describe("DELETE /api/user/datasets/:id — delete dataset", () => {
   });
 
   it("returns 204 when the dataset is deleted successfully", async () => {
-    state.deleteRow = { id: "ds-1" };
+    state.deleteRow = { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
     const res = await request(app)
-      .delete("/api/user/datasets/ds-1")
+      .delete("/api/user/datasets/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(204);

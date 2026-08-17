@@ -462,6 +462,15 @@ export const SaveIdParamSchema = z
   .uuid("save id must be a valid UUID");
 
 /**
+ * Validates the :id path param for user dataset rows (DB UUID primary keys).
+ * Mirrors SaveIdParamSchema so malformed ids get a clean 400 `invalid_param`
+ * at the route boundary instead of a DB uuid-cast 500.
+ */
+export const DatasetIdParamSchema = z
+  .string({ invalid_type_error: "dataset id must be a string" })
+  .uuid("dataset id must be a valid UUID");
+
+/**
  * Validates the :uploadId path param for GET /datasets/upload/chunk/status/:uploadId.
  * Rejects array injection (z.string()) and enforces the same charset/length
  * constraints as ChunkUploadBodySchema and ChunkFinalizeBodySchema so a malformed
