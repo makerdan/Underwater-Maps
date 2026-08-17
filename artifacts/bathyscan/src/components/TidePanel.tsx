@@ -747,7 +747,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
             <div className="mt-1.5">
               <div className="flex items-center gap-2">
                 <span style={{ ...DIM, fontSize: "calc(15px * var(--bs-font-scale, 1))", minWidth: 20 }}>00</span>
-                <div style={{ flex: 1, position: "relative", height: 18 }}>
+                <div style={{ flex: 1, position: "relative", height: 18, touchAction: "none" }}>
                   {/* Slack window band overlay (purple shading) */}
                   <div
                     style={{
@@ -791,6 +791,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                       height: 18,
                       background: "transparent",
                       zIndex: 1,
+                      touchAction: "none",
                     }}
                   />
                   {/* Slack center ticks (hoverable). Rendered AFTER the
@@ -810,7 +811,6 @@ export const TidePanel: React.FC<TidePanelProps> = ({
                         }
                         onPointerDown={(e) => {
                           e.preventDefault();
-                          e.stopPropagation();
                           setHour(tickHour);
                         }}
                         style={{
