@@ -1,41 +1,21 @@
 ---
-name: Unit/e2e baseline failures, Aug 2026
-description: Known pre-existing failures blocking test-standard/heavy and palette e2e as of 2026-08-15; not caused by test-only tasks.
+name: Aug-2026 baseline failures — mostly resolved
+description: Status of the 2026-08 documented baseline failures after the 2026-08-17 bug audit; only the puzzle e2e toSatisfy failure and the plan-archive lint gates remain live.
 ---
 
-# Baseline failures as of 2026-08-15
+# Aug-2026 baseline failures — audit-verified status (2026-08-17)
 
-Confirmed by solo re-runs on a clean tree (not concurrency artifacts):
+Full detail in `docs/audits/bug-audit-preexisting-2026-08.md`.
 
-1. **`api-server src/__tests__/routes-documented.test.ts`** — FIXED 2026-08-16:
-   `POST /trails/{id}/soft-delete` added to `UNDOCUMENTED_ALLOWLIST` with
-   rationale (beacon fallback, intentionally internal). No longer a baseline.
+**RESOLVED (all fixed 2026-08-16, verified green on a clean tree):**
+- ThrottlePanel unit-sync test — test-isolation fix (seed driveBoatStore in renderWithState, reset in beforeEach). 3/3 solo passes.
+- api-server routes-documented.test.ts — trails soft-delete route documented in openapi.yaml.
+- check:audit 5 unexempted highs — dep bumps + documented undici exception (GHSA-4cwx-7wf7-3272, fixDate 2026-10-17).
+- check:fixture-freshness survey.laz — .laz now compared size-only (lazrs bytes are environment-dependent).
 
-2. **`tests/e2e/overview-puzzle-multiselect.spec.ts`** — multiple tests fail
-   with `expect.poll(...).toSatisfy is not a function` (Playwright's
-   poll matchers don't include `toSatisfy`; the spec uses an unsupported
-   matcher), plus one 60 s timeout. Fails the palette e2e suite
-   deterministically.
+**STILL LIVE:**
+- `tests/e2e/overview-puzzle-multiselect.spec.ts` — 3/6 tests fail deterministically: `expect.poll(...).toSatisfy is not a function` (Vitest matcher, unsupported by Playwright expect.poll; 5 call sites). The documented "60 s timeout" did NOT reproduce solo — load artifact of the full palette suite.
+- Plan-archive lint gates block every tier per environment — see plan-file-lint-backlog.md.
+- Raw `pnpm audit --audit-level=moderate` — 6 dev-only vulns (5 moderate + 1 exempted high via jsdom→undici; 1 postcss). Registered check:audit gate is green.
 
-3. **`pnpm audit --audit-level=moderate`** — 10 vulns (5 moderate, 5 high),
-   mostly `undici` via `jsdom` in bathyscan devDeps. Pre-existing.
-
-# Baseline failures as of 2026-08-16 (confirmed on clean tree at main HEAD)
-
-4. **`bathyscan src/__tests__/ThrottlePanel.test.tsx`** — "re-syncs the input
-   when the units preference flips live" fails `expected '19.9' to be '15'`,
-   3/3 solo and on a clean tree. Fails test:unit in every standard+ tier run.
-
-5. **`check:fixture-freshness` survey.laz** — committed d19b443f vs generated
-   83e89bee; generated hash is STABLE across runs (not per-run nondeterminism),
-   so it stays stale until someone regens+commits per laz-fixture-nondeterminism.md.
-
-6. **`check:audit`** — 5 NEW unexempted high advisories (undici degenerate
-   cache directives, js-yaml !!omap, pdf.js JS execution, nanoid ×2) now exit 1;
-   they are NOT in the EXCEPTIONS list, so the full tier fails at check:audit
-   even when everything else is green.
-
-**How to apply:** if a completion-validation run fails only on these, verify
-your own diff is unrelated, then finalize with a skip reason rather than
-fixing the baseline (that is its own task). Remove this file once the
-baselines are repaired.
+**How to apply:** don't cite the resolved items as pre-existing failures in new plans; a red in one of them is a NEW regression. Skip-reason completions citing this baseline should reference only the still-live items.
