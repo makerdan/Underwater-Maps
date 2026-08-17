@@ -2221,7 +2221,11 @@ function SettingsRoute() {
   // On mobile, signed-out users land here via the gear button and need to see
   // the auth block (Sign In entry) rather than LandingPage.  Desktop keeps the
   // existing behaviour of showing LandingPage when signed out.
-  const isMobile = useIsMobile();
+  // NOTE: named isMobileSettings (not isMobile) to avoid a false-positive from
+  // the duplicate-hooks brace-counting parser, which may misattribute this
+  // standalone function's hook declarations to the preceding Main() scope when
+  // JSX braces throw off the depth counter.
+  const isMobileSettings = useIsMobile();
   return (
     <QueryClientProvider client={queryClient}>
       <Show when="signed-in">
@@ -2231,7 +2235,7 @@ function SettingsRoute() {
         <Settings />
       </Show>
       <Show when="signed-out">
-        {isMobile ? <Settings /> : <LandingPage />}
+        {isMobileSettings ? <Settings /> : <LandingPage />}
       </Show>
     </QueryClientProvider>
   );

@@ -23,6 +23,7 @@ import {
   SKY_VERT,
   SKY_FRAG,
   deriveHarmonizedFogColor,
+  FRESHWATER_DEFAULT_FOG_COLOR,
 } from "@/pages/TourScene";
 
 // Minimum user-configurable render distance (camera far plane) from settingsStore.ts.
@@ -136,29 +137,50 @@ describe("SKY_SPHERE_RADIUS", () => {
 // ---------------------------------------------------------------------------
 
 describe("deriveHarmonizedFogColor", () => {
-  it("replaces the default dark fog color with the sky horizon color", () => {
-    const result = deriveHarmonizedFogColor(DEFAULT_FOG_COLOR, DEFAULT_FOG_COLOR);
-    // Must not be the original dark navy
+  it("replaces the saltwater default dark fog color with the sky horizon color", () => {
+    const result = deriveHarmonizedFogColor(DEFAULT_FOG_COLOR, DEFAULT_FOG_COLOR, false);
     expect(result).not.toBe(DEFAULT_FOG_COLOR);
-    // Must match the sky horizon
     expect(result).toBe(SKY_GRADIENT_STOPS[0].color);
   });
 
-  it("passes the freshwater teal through unchanged (not the factory default)", () => {
-    // FRESHWATER_FOG_COLOR !== DEFAULT_FOG_COLOR, so harmonization must not fire
-    const result = deriveHarmonizedFogColor(FRESHWATER_FOG_COLOR, DEFAULT_FOG_COLOR);
+  it("harmonises freshwater-default teal to the sky horizon when isFreshwater=true", () => {
+    // The freshwater teal is auto-applied (not user-chosen), so it should blend
+    // into the sky just like the saltwater dark-navy default.
+    const result = deriveHarmonizedFogColor(FRESHWATER_FOG_COLOR, DEFAULT_FOG_COLOR, true);
+    expect(result).not.toBe(FRESHWATER_FOG_COLOR);
+    expect(result).toBe(SKY_GRADIENT_STOPS[0].color);
+  });
+
+  it("passes user-chosen teal through unchanged when isFreshwater=false (saltwater)", () => {
+    // A user who explicitly picks #0b3a35 as their fog color in saltwater mode
+    // must not have it silently replaced by the sky horizon color.
+    const result = deriveHarmonizedFogColor(FRESHWATER_FOG_COLOR, DEFAULT_FOG_COLOR, false);
     expect(result).toBe(FRESHWATER_FOG_COLOR);
   });
 
-  it("passes any user-customised fog color through unchanged", () => {
+  it("harmonises using the exported constant (canonical reference, freshwater path)", () => {
+    // FRESHWATER_DEFAULT_FOG_COLOR and the local FRESHWATER_FOG_COLOR must be
+    // the same value — any mismatch would mean the constant is stale.
+    expect(FRESHWATER_DEFAULT_FOG_COLOR).toBe(FRESHWATER_FOG_COLOR);
+    const result = deriveHarmonizedFogColor(FRESHWATER_DEFAULT_FOG_COLOR, DEFAULT_FOG_COLOR, true);
+    expect(result).toBe(SKY_GRADIENT_STOPS[0].color);
+  });
+
+  it("passes any user-customised fog color through unchanged (saltwater)", () => {
     const custom = "#1a3a5c";
-    const result = deriveHarmonizedFogColor(custom, DEFAULT_FOG_COLOR);
+    const result = deriveHarmonizedFogColor(custom, DEFAULT_FOG_COLOR, false);
     expect(result).toBe(custom);
   });
 
-  it("also harmonises when the effective color exactly equals the default (edge case)", () => {
-    // This case covers saltwater + no customisation — the most common path
-    expect(deriveHarmonizedFogColor(DEFAULT_FOG_COLOR, DEFAULT_FOG_COLOR)).toBe(
+  it("passes any user-customised fog color through unchanged (freshwater)", () => {
+    // Even in freshwater mode, an explicitly chosen non-default colour must be kept.
+    const custom = "#1a3a5c";
+    const result = deriveHarmonizedFogColor(custom, DEFAULT_FOG_COLOR, true);
+    expect(result).toBe(custom);
+  });
+
+  it("also harmonises when the effective color exactly equals the default (saltwater edge case)", () => {
+    expect(deriveHarmonizedFogColor(DEFAULT_FOG_COLOR, DEFAULT_FOG_COLOR, false)).toBe(
       SKY_GRADIENT_STOPS[0].color,
     );
   });

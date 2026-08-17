@@ -117,6 +117,8 @@ const DensityStepper: React.FC = () => {
 const MobileBottomSheet: React.FC<{
   mode: SidebarMode;
   onClose: () => void;
+  /** MOBILE-ONLY: Plan-tab content assembled by App (needs tide fetch state). */
+  planContent?: React.ReactNode;
   /**
    * MOBILE-ONLY: when provided (Live tab), renders a minimize button that
    * hides the sheet WITHOUT leaving the tab — so the Live chart-plotter view
@@ -125,13 +127,7 @@ const MobileBottomSheet: React.FC<{
    * tab entirely (existing behaviour).
    */
   onCollapse?: () => void;
-  /**
-   * MOBILE-ONLY: optional override for the Plan tab content. App.tsx
-   * assembles MobilePlanTab (which needs tide data from Main()) and passes it
-   * down so the sheet doesn't need to own those dependencies.
-   */
-  planContent?: React.ReactNode;
-}> = ({ mode, onClose, onCollapse, planContent }) => {
+}> = ({ mode, onClose, planContent, onCollapse }) => {
   // Real mobile-tailored tab content is owned by follow-up tasks; for now the
   // sheet simply hosts the existing prop-light desktop panels.
   let content: React.ReactNode = null;
@@ -242,14 +238,19 @@ const MobileBottomSheet: React.FC<{
   );
 };
 
-export const MobileChartShell: React.FC<{
-  /** Pre-assembled Plan tab content from App.tsx (needs tide data from Main). */
+interface MobileChartShellProps {
+  /** MOBILE-ONLY: Plan-tab content assembled by App (needs tide fetch state). */
   planContent?: React.ReactNode;
-  /** When true, show an activity dot on the Chart/Explore tab (mirrors desktop tidal-overlay indicator). */
+  /** MOBILE-ONLY: show activity dot on the Chart/Explore tab (e.g. tidal overlay on). */
   exploreIndicator?: boolean;
-  /** When true, show an activity dot on the Live tab (mirrors desktop realistic-mode indicator). */
+  /** MOBILE-ONLY: show activity dot on the Live tab (e.g. realistic mode on). */
   liveIndicator?: boolean;
-}> = ({ planContent, exploreIndicator, liveIndicator }) => {
+}
+export const MobileChartShell: React.FC<MobileChartShellProps> = ({
+  planContent,
+  exploreIndicator,
+  liveIndicator,
+}) => {
   const [, setLocation] = useLocation();
   const sidebarMode = useUiStore((s) => s.sidebarMode);
   const setSidebarMode = useUiStore((s) => s.setSidebarMode);

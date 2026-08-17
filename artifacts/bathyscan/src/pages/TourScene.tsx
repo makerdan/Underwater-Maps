@@ -538,12 +538,19 @@ const TestCameraBridge: React.FC = () => {
 };
 
 /**
+ * The fog/background colour applied automatically in freshwater mode when
+ * the user has not chosen a custom fog colour.  Exported so tests and
+ * deriveHarmonizedFogColor can reference the same canonical value.
+ */
+export const FRESHWATER_DEFAULT_FOG_COLOR = "#0b3a35";
+
+/**
  * Derive the effective fog/background colour for the scene.
  *
- * Freshwater mode shifts the hue toward green-teal ("#0b3a35") to evoke
- * clear lake water, but ONLY when the user has not explicitly chosen a
- * custom fog colour. If the user has overridden the factory default, their
- * choice is respected in all water-type modes.
+ * Freshwater mode shifts the hue toward green-teal to evoke clear lake
+ * water, but ONLY when the user has not explicitly chosen a custom fog
+ * colour. If the user has overridden the factory default, their choice is
+ * respected in all water-type modes.
  *
  * @param isFreshwater    - True when waterType === "freshwater"
  * @param fogColor        - The user's current fogColor setting
@@ -554,7 +561,9 @@ export function deriveEffectiveFogColor(
   fogColor: string,
   defaultFogColor: string,
 ): string {
-  return isFreshwater && fogColor === defaultFogColor ? "#0b3a35" : fogColor;
+  return isFreshwater && fogColor === defaultFogColor
+    ? FRESHWATER_DEFAULT_FOG_COLOR
+    : fogColor;
 }
 
 /**
@@ -572,17 +581,33 @@ export const SKY_GRADIENT_STOPS = [
 const SKY_GRADIENT_HORIZON_COLOR = SKY_GRADIENT_STOPS[0].color;
 
 /**
- * When the scene uses the default (un-customised) fog colour, harmonise the
- * exponential fog so distant objects fade toward the sky horizon rather than
- * toward the original dark-navy `#020818`.  User-customised colours (including
- * the freshwater green-teal, which replaces the default at runtime) are passed
- * through unchanged.
+ * When the scene uses an un-customised fog colour, harmonise the exponential
+ * fog so distant objects fade toward the sky horizon rather than toward a dark
+ * or mismatched hue.  User-customised colours are always passed through
+ * unchanged.
+ *
+ * Two colours are considered "un-customised":
+ *  - The saltwater default (`defaultFogColor`, typically `#020818`): the
+ *    factory default when no water type or custom colour has been applied.
+ *  - The freshwater automatic teal (`FRESHWATER_DEFAULT_FOG_COLOR`): only when
+ *    `isFreshwater` is true, because that teal was applied automatically by
+ *    `deriveEffectiveFogColor`, not chosen by the user.  A user who explicitly
+ *    sets their fog to the same teal hex in saltwater mode must see it kept.
+ *
+ * @param effectiveFogColor - Output of deriveEffectiveFogColor (may be the
+ *                            auto-applied freshwater teal or a user colour)
+ * @param defaultFogColor   - The factory-default fogColor (DEFAULT_SETTINGS)
+ * @param isFreshwater      - True when waterType === "freshwater"
  */
 export function deriveHarmonizedFogColor(
   effectiveFogColor: string,
   defaultFogColor: string,
+  isFreshwater: boolean,
 ): string {
-  return effectiveFogColor === defaultFogColor ? SKY_GRADIENT_HORIZON_COLOR : effectiveFogColor;
+  const isUnCustomised =
+    effectiveFogColor === defaultFogColor ||
+    (isFreshwater && effectiveFogColor === FRESHWATER_DEFAULT_FOG_COLOR);
+  return isUnCustomised ? SKY_GRADIENT_HORIZON_COLOR : effectiveFogColor;
 }
 
 // ---------------------------------------------------------------------------
@@ -708,7 +733,7 @@ const SceneContents: React.FC<SceneContentsProps> = ({
     ? Math.max(directionalIntensity, 0.75)
     : directionalIntensity;
 
-  const harmonizedFogColor = deriveHarmonizedFogColor(effectiveFogColor, DEFAULT_SETTINGS.fogColor);
+  const harmonizedFogColor = deriveHarmonizedFogColor(effectiveFogColor, DEFAULT_SETTINGS.fogColor, isFresh);
 
   return (
     <>
