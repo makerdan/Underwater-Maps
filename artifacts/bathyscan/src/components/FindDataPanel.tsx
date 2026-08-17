@@ -14,6 +14,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { formatFreshness } from "@/lib/freshnessUtils";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
@@ -1037,6 +1038,16 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   // Offline state — drives the "Saved Offline Packs" branch in the Search tab.
   const isOnline = useOfflineStore((s) => s.isOnline);
   const [savedPacks, setSavedPacks] = useState<OfflinePack[]>([]);
+  const isMobile = useIsMobile();
+
+  // Keyboard dismiss — Escape closes the panel (parity with QueryPanel)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler, true);
+    return () => document.removeEventListener("keydown", handler, true);
+  }, [onClose]);
 
   // Load saved packs on mount and whenever the device goes offline so the list
   // is ready the moment the offline branch becomes visible. We skip loading while
@@ -1588,8 +1599,31 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
     [setDatasetId, setCatalogSourcedAt, searchResults, onClose],
   );
 
+  const panelStyle: React.CSSProperties = isMobile
+    ? {
+        ...PANEL,
+        width: "100%",
+        left: 0,
+        right: 0,
+      }
+    : PANEL;
+
   return (
-    <div style={PANEL} role="dialog" aria-label="Find Data panel">
+    <>
+      {/* Backdrop — mobile only; tap anywhere outside the panel to dismiss */}
+      {isMobile && (
+        <div
+          aria-hidden="true"
+          onClick={onClose}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 99,
+            background: "rgba(0,0,0,0.55)",
+          }}
+        />
+      )}
+      <div style={panelStyle} role="dialog" aria-modal="true" aria-label="Find Data panel">
       {/* Header */}
       <div style={HEADER}>
         <span style={{ ...TITLE, display: "inline-flex", alignItems: "center", gap: 8 }}>
@@ -1607,6 +1641,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               cursor: "pointer",
               fontSize: "calc(21px * var(--bs-font-scale, 1))",
               lineHeight: 1,
+              // ≥44px touch target on mobile
+              minWidth: 44,
+              minHeight: 44,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 8px",
             }}
           >
             ✕
@@ -2019,5 +2060,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
         Sources: NOAA/NCEI · GEBCO · Alaska ADF&G · USGS CoNED
       </div>
     </div>
+    </>
   );
 };
