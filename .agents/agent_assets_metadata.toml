@@ -76,7 +76,8 @@ title = "Port Authority Skills (both)"
 id = "DvSBBEXtcuVYH8C1FNK9F"
 uri = "file://task-triage-skill.zip"
 type = "unspecified"
-title = "Task Triage Skill (both copies)"
+title = "Task Triage SKILL.md"
+description = "Zipped SKILL.md for the Task Triage skill."
 
 [[outputs]]
 id = "59L0NvQ1Aw5Kgz5LmyS5r"
