@@ -65,7 +65,12 @@ export interface OfflinePack {
   id: string;
   datasetId: string;
   datasetName: string;
-  bbox: { minLon: number; maxLon: number; minLat: number; maxLat: number };
+  /**
+   * Bounding box of the dataset, or `null` when the dataset has no known
+   * survey area.  Null-bbox packs carry stub tide/weather data (no location
+   * to fetch for) and are excluded from `getPackForLocation` matching.
+   */
+  bbox: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
   centerLat: number;
   centerLon: number;
   savedAt: string;
@@ -212,6 +217,11 @@ export async function saveOfflinePack(
   days: number,
   onProgress: (p: PackProgress) => void,
 ): Promise<OfflinePack> {
+  // A dataset without a bbox has no known location. There is nothing sensible
+  // to fetch tide/weather for — the old 0/0 fallback silently downloaded Gulf
+  // of Guinea data and saved it as the user's pack. Instead we skip both
+  // remote fetches entirely and store null-station stubs (see below).
+  const hasBbox = dataset.bbox != null;
   const centerLat = dataset.bbox
     ? (dataset.bbox.minLat + dataset.bbox.maxLat) / 2
     : 0;
@@ -237,55 +247,77 @@ export async function saveOfflinePack(
   // triggers best-effort cleanup of the orphaned Cache Storage entries.
   try {
     // Step 2: fetch tide pack
-    onProgress({ step: "tide", label: "Fetching tide predictions…", done: false });
     let tidePack: TidePack;
-    try {
-      const tideRes = await fetch(
-        `${API_BASE}/api/tidal/pack?lat=${centerLat}&lon=${centerLon}&days=${days}`,
-      );
-      if (!tideRes.ok) throw new Error(`HTTP ${tideRes.status}`);
-      tidePack = (await tideRes.json()) as TidePack;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to fetch tide predictions";
-      onProgress({ step: "tide", label: msg, done: true, error: msg });
-      throw err;
+    if (!hasBbox) {
+      // No location — skip the remote fetch and store a null-station stub.
+      // expiresAt is set to now so the stub never counts as fresh tide data.
+      const tideMsg = "No location — tide unavailable";
+      const nowIso = new Date().toISOString();
+      tidePack = {
+        station: null,
+        heightPredictions: [],
+        currentPredictions: [],
+        tidalExpiresAt: nowIso,
+        generatedAt: nowIso,
+      };
+      onProgress({ step: "tide", label: tideMsg, done: true, error: tideMsg });
+    } else {
+      onProgress({ step: "tide", label: "Fetching tide predictions…", done: false });
+      try {
+        const tideRes = await fetch(
+          `${API_BASE}/api/tidal/pack?lat=${centerLat}&lon=${centerLon}&days=${days}`,
+        );
+        if (!tideRes.ok) throw new Error(`HTTP ${tideRes.status}`);
+        tidePack = (await tideRes.json()) as TidePack;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to fetch tide predictions";
+        onProgress({ step: "tide", label: msg, done: true, error: msg });
+        throw err;
+      }
+      onProgress({ step: "tide", label: "Tide predictions saved", done: true });
     }
-    onProgress({ step: "tide", label: "Tide predictions saved", done: true });
 
     // Step 3: fetch weather pack (best-effort — does not throw)
-    onProgress({ step: "weather", label: "Fetching weather snapshot…", done: false });
     let weatherPack: WeatherPack;
-    let weatherDone = false;
-    try {
-      const weatherRes = await fetch(
-        `${API_BASE}/api/weather/pack?lat=${centerLat}&lon=${centerLon}`,
-      );
-      if (!weatherRes.ok) throw new Error(`HTTP ${weatherRes.status}`);
-      weatherPack = (await weatherRes.json()) as WeatherPack;
-    } catch {
-      // Weather is best-effort — create a minimal pack if it fails, but tell
-      // the caller so the UI can surface the omission rather than showing a
-      // silent success followed by an empty weather panel when offline.
+    if (!hasBbox) {
+      // No location — skip the remote fetch and store a null-station stub.
+      const weatherMsg = "No location — weather unavailable";
       weatherPack = { station: null, observation: null, snapshotAt: new Date().toISOString() };
-      onProgress({
-        step: "weather",
-        label: "Weather unavailable — pack saved without weather data",
-        done: true,
-      });
-      weatherDone = true;
-    }
-    if (!weatherDone) {
-      if (weatherPack.station !== null || weatherPack.observation !== null) {
-        onProgress({ step: "weather", label: "Weather snapshot saved", done: true });
-      } else {
-        // A 200 response with both fields null means no station is nearby or NOAA
-        // is temporarily unavailable.  Always emit a terminal done event so the
-        // progress row never stays frozen on "Fetching weather snapshot…".
+      onProgress({ step: "weather", label: weatherMsg, done: true, error: weatherMsg });
+    } else {
+      onProgress({ step: "weather", label: "Fetching weather snapshot…", done: false });
+      let weatherDone = false;
+      try {
+        const weatherRes = await fetch(
+          `${API_BASE}/api/weather/pack?lat=${centerLat}&lon=${centerLon}`,
+        );
+        if (!weatherRes.ok) throw new Error(`HTTP ${weatherRes.status}`);
+        weatherPack = (await weatherRes.json()) as WeatherPack;
+      } catch {
+        // Weather is best-effort — create a minimal pack if it fails, but tell
+        // the caller so the UI can surface the omission rather than showing a
+        // silent success followed by an empty weather panel when offline.
+        weatherPack = { station: null, observation: null, snapshotAt: new Date().toISOString() };
         onProgress({
           step: "weather",
-          label: "Weather unavailable — no station nearby",
+          label: "Weather unavailable — pack saved without weather data",
           done: true,
         });
+        weatherDone = true;
+      }
+      if (!weatherDone) {
+        if (weatherPack.station !== null || weatherPack.observation !== null) {
+          onProgress({ step: "weather", label: "Weather snapshot saved", done: true });
+        } else {
+          // A 200 response with both fields null means no station is nearby or NOAA
+          // is temporarily unavailable.  Always emit a terminal done event so the
+          // progress row never stays frozen on "Fetching weather snapshot…".
+          onProgress({
+            step: "weather",
+            label: "Weather unavailable — no station nearby",
+            done: true,
+          });
+        }
       }
     }
 
@@ -348,7 +380,9 @@ export async function saveOfflinePack(
       id,
       datasetId: dataset.id,
       datasetName: dataset.name,
-      bbox: dataset.bbox ?? { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 },
+      // Store the actual null (never a {0,0,0,0} fallback) so callers can
+      // distinguish "no bbox" from "bbox at the equator".
+      bbox: dataset.bbox ?? null,
       centerLat,
       centerLon,
       savedAt: new Date().toISOString(),
@@ -523,7 +557,10 @@ export async function getPackForLocation(
   const packs = await listOfflinePacks();
   // Exclude expired packs — an expired pack at 50 km must not win over a fresh
   // pack at 150 km because the expired pack's tide data is stale.
-  const freshPacks = packs.filter((p) => !isPackExpired(p));
+  // Also exclude null-bbox packs: they have no real location (centerLat/Lon
+  // are meaningless) and carry stub tide/weather data, so they must never
+  // match any coordinates.
+  const freshPacks = packs.filter((p) => p.bbox != null && !isPackExpired(p));
   let nearest: OfflinePack | null = null;
   let nearestDist = 200; // km threshold
   for (const p of freshPacks) {

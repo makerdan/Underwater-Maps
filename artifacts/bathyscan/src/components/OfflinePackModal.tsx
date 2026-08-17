@@ -328,6 +328,24 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
               SURVEY AREA
             </div>
             <div style={{ padding: "10px 12px" }}>
+              {/* No-bbox warning — tide/weather need a known survey area */}
+              {!dataset.bbox && (
+                <div
+                  role="note"
+                  style={{
+                    background: "rgba(251,191,36,0.08)",
+                    border: "1px solid rgba(251,191,36,0.35)",
+                    borderRadius: 4,
+                    padding: "7px 10px",
+                    marginBottom: 10,
+                    fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                    color: "#fbbf24",
+                  }}
+                >
+                  ⚠ Tide and weather predictions require a known survey area — they will be
+                  unavailable in this pack.
+                </div>
+              )}
               {/* Already-saved state */}
               {alreadySaved && existingPack && (
                 <div style={{

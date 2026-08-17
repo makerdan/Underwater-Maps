@@ -337,7 +337,11 @@ describe("saveOfflinePack — SW { ok: false } surface to caller", () => {
 
     const events: PackProgress[] = [];
     const pack = await saveOfflinePack(
-      { id: "ds-sw-ok", name: "SW OK Dataset" },
+      {
+        id: "ds-sw-ok",
+        name: "SW OK Dataset",
+        bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+      },
       3,
       (p) => events.push(p),
     );
@@ -442,8 +446,10 @@ describe("saveOfflinePack — storageBytesEstimate uses bbox when available", ()
       3,
       () => { /* noop */ },
     );
-    // No bbox → must use tide entry count formula (50 height + 50 current × 40 + 2 MiB).
-    const expectedFallback = (50 + 50) * 40 + 2 * 1024 * 1024;
+    // No bbox → tide/weather fetches are skipped and a stub tide pack with
+    // zero predictions is stored, so the tide-entry-count formula reduces to
+    // the 2 MiB base (0 predictions × 40 bytes).
+    const expectedFallback = 0 * 40 + 2 * 1024 * 1024;
     expect(pack.storageBytesEstimate).toBe(expectedFallback);
   });
 
@@ -536,8 +542,14 @@ describe("saveOfflinePack — weather fetch failure emits warning progress event
 
     const events: PackProgress[] = [];
     // The call should still resolve (weather is best-effort).
-    await saveOfflinePack({ id: "ds-weather-fail", name: "Weather Fail Dataset" }, 3, (p) =>
-      events.push(p),
+    await saveOfflinePack(
+      {
+        id: "ds-weather-fail",
+        name: "Weather Fail Dataset",
+        bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+      },
+      3,
+      (p) => events.push(p),
     );
 
     const weatherWarning = events.find((p) => p.step === "weather" && p.done);
@@ -588,8 +600,14 @@ describe("saveOfflinePack — weather fetch failure emits warning progress event
     );
 
     const events: PackProgress[] = [];
-    await saveOfflinePack({ id: "ds-weather-fail2", name: "Weather Fail Dataset 2" }, 3, (p) =>
-      events.push(p),
+    await saveOfflinePack(
+      {
+        id: "ds-weather-fail2",
+        name: "Weather Fail Dataset 2",
+        bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+      },
+      3,
+      (p) => events.push(p),
     );
 
     const successWeatherEvent = events.find(
@@ -672,8 +690,14 @@ describe("saveOfflinePack — weather 200 with null station+observation emits te
   it("emits a terminal done:true weather event when the API returns 200 { station: null, observation: null }", async () => {
     stubSwAndFetchNullWeather();
     const events: PackProgress[] = [];
-    await saveOfflinePack({ id: "ds-weather-null", name: "No Station Dataset" }, 3, (p) =>
-      events.push(p),
+    await saveOfflinePack(
+      {
+        id: "ds-weather-null",
+        name: "No Station Dataset",
+        bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+      },
+      3,
+      (p) => events.push(p),
     );
     const weatherDone = events.find((p) => p.step === "weather" && p.done);
     expect(weatherDone).toBeDefined();
@@ -684,8 +708,14 @@ describe("saveOfflinePack — weather 200 with null station+observation emits te
   it("does not leave the weather step in a non-terminal state when API returns null payload", async () => {
     stubSwAndFetchNullWeather();
     const events: PackProgress[] = [];
-    await saveOfflinePack({ id: "ds-weather-null2", name: "No Station Dataset 2" }, 3, (p) =>
-      events.push(p),
+    await saveOfflinePack(
+      {
+        id: "ds-weather-null2",
+        name: "No Station Dataset 2",
+        bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+      },
+      3,
+      (p) => events.push(p),
     );
     const weatherEvents = events.filter((p) => p.step === "weather");
     // Every weather event must eventually reach done:true — none may be left open.
@@ -786,5 +816,152 @@ describe("saveOfflinePack — SW timeout without ack rejects", () => {
 
     const packs = await listOfflinePacks();
     expect(packs).toHaveLength(0);
+  });
+});
+
+// ── bbox-null dataset (F-001 regression guard) ────────────────────────────
+//
+// A dataset with no bounding box has no known location. The old code silently
+// fell back to centerLat=0/centerLon=0 (Gulf of Guinea), fetched tide and
+// weather for those coordinates, and stored bbox {0,0,0,0} — indistinguishable
+// from an equatorial pack. These tests fail if the 0/0 fallback or the remote
+// fetch calls are ever re-introduced.
+
+describe("saveOfflinePack — bbox-null dataset stores stubs and skips fetches", () => {
+  const origNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (origNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", origNavigatorDescriptor);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThis as any).navigator;
+    }
+  });
+
+  function stubSwOk(): ReturnType<typeof vi.fn> {
+    let capturedPort1: { onmessage: ((e: MessageEvent) => void) | null } | null = null;
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      capturedPort1 = { onmessage: null };
+      return { port1: capturedPort1, port2: {} };
+    });
+    const postMessageSpy = vi.fn().mockImplementation(() => {
+      Promise.resolve().then(() => {
+        capturedPort1?.onmessage?.({ data: { ok: true } } as MessageEvent);
+      });
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: { postMessage: postMessageSpy } }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+    // Generic fetch stub: any call resolves, but we assert below that no
+    // tide/weather URL is ever requested. Markers (best-effort) may still hit it.
+    const fetchSpy = vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({}),
+        text: async () => "[]",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    return fetchSpy;
+  }
+
+  it("never calls the tide or weather endpoints when bbox is null", async () => {
+    const fetchSpy = stubSwOk();
+    await saveOfflinePack(
+      { id: "ds-null-bbox", name: "No Bbox Dataset", bbox: null },
+      3,
+      () => { /* noop */ },
+    );
+    const requestedUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
+    expect(requestedUrls.some((u) => u.includes("/tidal/"))).toBe(false);
+    expect(requestedUrls.some((u) => u.includes("/weather/"))).toBe(false);
+  });
+
+  it("emits tide and weather progress events with error labels", async () => {
+    stubSwOk();
+    const events: PackProgress[] = [];
+    await saveOfflinePack(
+      { id: "ds-null-bbox2", name: "No Bbox Dataset 2", bbox: null },
+      3,
+      (p) => events.push(p),
+    );
+    const tideEvent = events.find((p) => p.step === "tide");
+    expect(tideEvent?.done).toBe(true);
+    expect(tideEvent?.error).toMatch(/tide unavailable/i);
+    expect(tideEvent?.label).toMatch(/no location/i);
+    const weatherEvent = events.find((p) => p.step === "weather");
+    expect(weatherEvent?.done).toBe(true);
+    expect(weatherEvent?.error).toMatch(/weather unavailable/i);
+    expect(weatherEvent?.label).toMatch(/no location/i);
+  });
+
+  it("stores null-station stubs and bbox: null (not {0,0,0,0})", async () => {
+    stubSwOk();
+    const pack = await saveOfflinePack(
+      { id: "ds-null-bbox3", name: "No Bbox Dataset 3", bbox: null },
+      3,
+      () => { /* noop */ },
+    );
+    expect(pack.bbox).toBeNull();
+    expect(pack.tidePack.station).toBeNull();
+    expect(pack.tidePack.heightPredictions).toEqual([]);
+    expect(pack.tidePack.currentPredictions).toEqual([]);
+    // expiresAt set to now → the stub never counts as fresh tide data.
+    expect(new Date(pack.tidePack.tidalExpiresAt).getTime()).toBeLessThanOrEqual(Date.now());
+    expect(pack.weatherPack.station).toBeNull();
+    expect(pack.weatherPack.observation).toBeNull();
+
+    // The persisted IDB record must match too.
+    const [saved] = await listOfflinePacks();
+    expect(saved?.bbox).toBeNull();
+  });
+
+  it("still completes the save and emits a terminal saving event", async () => {
+    stubSwOk();
+    const events: PackProgress[] = [];
+    const pack = await saveOfflinePack(
+      { id: "ds-null-bbox4", name: "No Bbox Dataset 4", bbox: null },
+      3,
+      (p) => events.push(p),
+    );
+    expect(pack.datasetId).toBe("ds-null-bbox4");
+    const savingDone = events.find((p) => p.step === "saving" && p.done && !p.error);
+    expect(savingDone).toBeDefined();
+  });
+});
+
+describe("getPackForLocation — null-bbox packs never match", () => {
+  it("does not match a null-bbox pack even at its stored center coordinates", async () => {
+    const { set } = await import("idb-keyval");
+    const nullBboxPack: OfflinePack = {
+      ...makePack("nullbbox", { centerLat: 42.5, centerLon: -69.5 }),
+      bbox: null,
+    };
+    await set("offline-pack-nullbbox", nullBboxPack);
+
+    // Query exactly the stored center — must still not match.
+    expect(await getPackForLocation(42.5, -69.5)).toBeNull();
+    // And not at 0/0 (the old Gulf-of-Guinea fallback) either.
+    expect(await getPackForLocation(0, 0)).toBeNull();
+  });
+
+  it("still matches a normal bbox-present pack alongside a null-bbox pack", async () => {
+    const { set } = await import("idb-keyval");
+    await set("offline-pack-nullbbox", {
+      ...makePack("nullbbox", { centerLat: 42.5, centerLon: -69.5 }),
+      bbox: null,
+    } satisfies OfflinePack);
+    await set("offline-pack-real", makePack("real", { centerLat: 42.5, centerLon: -69.5 }));
+
+    const result = await getPackForLocation(42.5, -69.5);
+    expect(result?.id).toBe("real");
   });
 });

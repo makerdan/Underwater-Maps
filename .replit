@@ -68,6 +68,10 @@ args = "audit-marker-bbox"
 task = "workflow.run"
 args = "test-standard-skip-dup-hooks"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-standard-task3999"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -210,6 +214,17 @@ isValidation = true
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "node scripts/validation-lock.mjs -- node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --allow-no-plan --skip check:duplicate-hooks-registry"
+
+[[workflows.workflow]]
+name = "test-standard-task3999"
+author = "agent"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/validation-lock.mjs -- bash -c 'TASK_PLAN_FILE=.local/tasks/task-3999.md node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --skip check:failure-gate'"
 
 [agent]
 stack = "PNPM_WORKSPACE"
