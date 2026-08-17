@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { db, customDatasetsTable, datasetFoldersTable, userCatalogSavesTable, type StoredTerrainJson, type GeorefControlPoint, type StoredTideStation } from "@workspace/db";
+import { db, customDatasetsTable, datasetFoldersTable, userCatalogSavesTable, markersTable, type StoredTerrainJson, type GeorefControlPoint, type StoredTideStation } from "@workspace/db";
 import { MAX_TERRAIN_JSON_BYTES } from "../lib/constants.js";
 import {
   GetUserDatasetsResponse,
@@ -645,6 +645,13 @@ router.delete("/user/datasets/:id", requireAuth, dataMutationRateLimit, asyncHan
     res.status(404).json({ error: "not_found", details: `User dataset '${id}' not found` });
     return;
   }
+
+  // Unassign any markers that referenced this dataset so they remain usable.
+  // markers.dataset_id has no DB-level FK, so we handle the cascade here.
+  await db
+    .update(markersTable)
+    .set({ datasetId: null })
+    .where(eq(markersTable.datasetId, id));
 
   res.status(204).send();
 }));

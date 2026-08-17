@@ -30,7 +30,7 @@ import { eq, and, lt, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { CatalogSearchQuerySchema, CatalogIdParamSchema, SaveIdParamSchema, DatasetsQuerySchema } from "./schemas.js";
-import { db, userCatalogSavesTable, customDatasetsTable, datasetFoldersTable, type StoredTerrainJson } from "@workspace/db";
+import { db, userCatalogSavesTable, customDatasetsTable, datasetFoldersTable, markersTable, type StoredTerrainJson } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
@@ -1476,6 +1476,13 @@ router.delete("/datasets/my-saves/:id", requireAuth, asyncHandler(async (req, re
           eq(customDatasetsTable.userId, userId),
         ),
       );
+
+    // Unassign any markers that referenced this dataset so they remain usable.
+    // markers.dataset_id has no DB-level FK, so we handle the cascade here.
+    await db
+      .update(markersTable)
+      .set({ datasetId: null })
+      .where(eq(markersTable.datasetId, save.datasetId));
   }
 
   res.status(204).send();

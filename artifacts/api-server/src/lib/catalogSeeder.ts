@@ -16,7 +16,7 @@
 
 import MiniSearch from "minisearch";
 import { z } from "zod";
-import { db, datasetCatalogTable, disabledPresetsTable } from "@workspace/db";
+import { db, datasetCatalogTable, disabledPresetsTable, markersTable } from "@workspace/db";
 import { inArray, notInArray, sql } from "drizzle-orm";
 import type { CatalogSearchQuery } from "../routes/schemas.js";
 import { ALL_PRESET_DATASETS, NCEI_DATASET_COVERAGES } from "./terrain.js";
@@ -1825,30 +1825,41 @@ export async function seedDatasetCatalog(opts: { force?: boolean } = {}): Promis
     });
     const desiredPresetIds = presetEntries.map((e) => e.id);
 
-    const purged = await db
+    const purgedRows = await db
       .delete(datasetCatalogTable)
       .where(
         desiredPresetIds.length > 0
           ? sql`${datasetCatalogTable.id} LIKE 'preset-%' AND ${notInArray(datasetCatalogTable.id, desiredPresetIds)}`
           : sql`${datasetCatalogTable.id} LIKE 'preset-%'`,
-      );
-    const purgedCount = Number(
-      (purged as { rowCount?: number | null }).rowCount ?? 0,
-    );
+      )
+      .returning({ id: datasetCatalogTable.id });
+    const purgedCount = purgedRows.length;
     if (purgedCount > 0) {
       logger.info({ purgedCount }, `[catalog] Purged ${purgedCount} stale preset-* rows no longer in registry.`);
+      // Unassign markers that still reference deleted catalog dataset IDs so
+      // they remain usable rather than becoming permanently orphaned.
+      const purgedIds = purgedRows.map((r) => r.id);
+      await db
+        .update(markersTable)
+        .set({ datasetId: null })
+        .where(inArray(markersTable.datasetId, purgedIds));
     }
 
     let retiredCount = 0;
     if (RETIRED_CATALOG_IDS.length > 0) {
-      const retired = await db
+      const retiredRows = await db
         .delete(datasetCatalogTable)
-        .where(inArray(datasetCatalogTable.id, RETIRED_CATALOG_IDS));
-      retiredCount = Number(
-        (retired as unknown as { rowCount?: number | null }).rowCount ?? 0,
-      );
+        .where(inArray(datasetCatalogTable.id, RETIRED_CATALOG_IDS))
+        .returning({ id: datasetCatalogTable.id });
+      retiredCount = retiredRows.length;
       if (retiredCount > 0) {
         logger.info({ retiredCount }, `[catalog] Purged ${retiredCount} retired non-preset row(s).`);
+        // Unassign markers referencing the retired catalog IDs.
+        const retiredIds = retiredRows.map((r) => r.id);
+        await db
+          .update(markersTable)
+          .set({ datasetId: null })
+          .where(inArray(markersTable.datasetId, retiredIds));
       }
     }
 
