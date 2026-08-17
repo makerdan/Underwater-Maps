@@ -5,26 +5,25 @@
  *  - GPS status (acquiring / active / error) and horizontal accuracy.
  *  - Seafloor depth directly below the current GPS position (when in bounds
  *    of the loaded dataset).
- *  - Trail recording card with Start/Stop button, point count, and sampling
- *    interval selector. Entering Live mode auto-starts (or resumes) trail
- *    recording via lib/liveMode.ts; exiting Live pauses recordings that Live
- *    started. The Start/Stop button lets the user override either way.
+ *  - Full GPS trail recorder (name, colour, interval, start/stop, draft
+ *    recovery, overflow/offline notices) via the TrailRecorder component.
+ *    Entering Live mode auto-starts (or resumes) recording; exiting pauses
+ *    it. The Start/Stop button lets the user override either way.
  *  - Two big touch-friendly action buttons: Follow Me (camera follow toggle)
  *    and Dive to GPS (drop the first-person camera at the GPS location).
  *
- * GPS watch and Follow Me orchestration lives in lib/liveMode.ts. This
- * component drives trail recording directly via useTrailStore.
+ * GPS watch and Follow Me orchestration lives in lib/liveMode.ts.
  */
 import React from "react";
 import { useAppState } from "@/lib/context";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useGpsStore } from "@/lib/gpsStore";
-import { useTrailStore } from "@/lib/trailStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useLiveModeStore } from "@/lib/liveMode";
+import { TrailRecorder } from "@/components/TrailRecorder";
 import {
   lonLatToWorldXZ,
   getTerrainSurfaceY,
@@ -33,14 +32,6 @@ import {
 import { formatDepth } from "@/lib/units";
 
 const MONO = "'JetBrains Mono', 'Fira Code', monospace";
-
-/** Sampling interval options — mirrors TrailRecorder's selector. */
-const INTERVALS = [
-  { label: "5 s", ms: 5_000 },
-  { label: "10 s", ms: 10_000 },
-  { label: "30 s", ms: 30_000 },
-  { label: "60 s", ms: 60_000 },
-];
 
 const cardStyle: React.CSSProperties = {
   minWidth: 230,
@@ -72,11 +63,6 @@ export const LivePanel: React.FC = () => {
   const gpsWatchId = useGpsStore((s) => s.watchId);
   const startWatching = useGpsStore((s) => s.startWatching);
 
-  const recording = useTrailStore((s) => s.recording);
-  const pointCount = useTrailStore((s) => s.currentPoints.length);
-  const startRecording = useTrailStore((s) => s.startRecording);
-  const stopRecording = useTrailStore((s) => s.stopRecording);
-
   const gpsRetryAttempt = useLiveModeStore((s) => s.gpsRetryAttempt);
   const gpsMaxRetries = useLiveModeStore((s) => s.gpsMaxRetries);
   const gpsRecoveryFailed = useLiveModeStore((s) => s.gpsRecoveryFailed);
@@ -89,7 +75,6 @@ export const LivePanel: React.FC = () => {
 
   const overviewGrid = useTerrainStore((s) => s.overviewGrid);
   const units = useSettingsStore((s) => s.units);
-  const gpsRecordingInterval = useSettingsStore((s) => s.gpsRecordingInterval);
 
   const gpsInBounds = Boolean(
     gpsActive && gpsPosition && overviewGrid &&
@@ -126,17 +111,6 @@ export const LivePanel: React.FC = () => {
     (statusText === "ERROR" || statusText === "OFF") &&
     gpsRetryAttempt === 0 &&
     !gpsRecoveryFailed;
-
-  const setGpsRecordingInterval = useSettingsStore((s) => s.setGpsRecordingInterval);
-
-  /**
-   * Persist the new sampling interval and, when a recording session is
-   * active, retime it in place so the change takes effect immediately.
-   */
-  const handleSetInterval = (ms: number) => {
-    setGpsRecordingInterval(ms);
-    useTrailStore.getState().setSamplingInterval(ms);
-  };
 
   const handleDiveToGps = () => {
     if (!gpsPosition || !overviewGrid) return;
@@ -344,124 +318,10 @@ export const LivePanel: React.FC = () => {
         )}
       </div>
 
-      {/* ── Trail recording indicator ── */}
-      <div data-testid="live-trail-indicator" style={cardStyle}>
-        <div style={labelStyle}>Trail Recording</div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span
-            aria-hidden="true"
-            style={{
-              display: "inline-block",
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: recording ? "#ef4444" : "#475569",
-              boxShadow: recording ? "0 0 6px rgba(239,68,68,0.7)" : "none",
-            }}
-          />
-          <span
-            data-testid="live-trail-status-text"
-            style={{
-              fontSize: "calc(15px * var(--bs-font-scale, 1))",
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              color: recording ? "#ef4444" : "#64748b",
-            }}
-          >
-            {recording ? "RECORDING" : "STOPPED"}
-          </span>
-          {recording && !gpsActive && (
-            <span
-              data-testid="live-trail-gps-lost"
-              style={{
-                fontSize: "calc(11px * var(--bs-font-scale, 1))",
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                color: "#fbbf24",
-                background: "rgba(251,191,36,0.12)",
-                border: "1px solid rgba(251,191,36,0.35)",
-                borderRadius: 3,
-                padding: "1px 5px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              ⚠ NO GPS
-            </span>
-          )}
-          <span
-            data-testid="live-trail-point-count"
-            style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", letterSpacing: "0.1em" }}
-          >
-            {pointCount} pts
-          </span>
-        </div>
-        {/* Start / Stop button */}
-        <button
-          type="button"
-          data-testid="live-trail-toggle"
-          onClick={() => {
-            if (recording) {
-              stopRecording();
-            } else {
-              startRecording(gpsRecordingInterval);
-            }
-          }}
-          style={{
-            width: "100%",
-            padding: "11px 12px",
-            borderRadius: 5,
-            border: `1px solid ${recording ? "rgba(239,68,68,0.5)" : "rgba(52,211,153,0.45)"}`,
-            background: recording ? "rgba(239,68,68,0.12)" : "rgba(52,211,153,0.10)",
-            color: recording ? "#ef4444" : "#34d399",
-            fontFamily: MONO,
-            fontSize: "calc(15px * var(--bs-font-scale, 1))",
-            fontWeight: 700,
-            letterSpacing: "0.16em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-            textShadow: recording ? "0 0 6px rgba(239,68,68,0.45)" : "0 0 6px rgba(52,211,153,0.4)",
-            transition: "background 0.15s, color 0.15s, border-color 0.15s",
-          }}
-        >
-          {recording ? "■ Stop Recording" : "● Start GPS Trail"}
-        </button>
-        {/* Sampling interval control */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-          <span style={{ fontSize: "calc(12.5px * var(--bs-font-scale, 1))", color: "#64748b", letterSpacing: "0.1em" }}>
-            Interval
-          </span>
-          <div
-            data-testid="live-interval-control"
-            style={{ display: "flex", gap: 3, marginLeft: 4 }}
-          >
-            {INTERVALS.map((iv) => {
-              const selected = gpsRecordingInterval === iv.ms;
-              return (
-                <button
-                  key={iv.ms}
-                  type="button"
-                  data-testid={`live-interval-${iv.ms}`}
-                  aria-pressed={selected}
-                  onClick={() => handleSetInterval(iv.ms)}
-                  style={{
-                    background: selected ? "rgba(0,229,255,0.15)" : "none",
-                    border: `1px solid ${selected ? "rgba(0,229,255,0.5)" : "rgba(0,229,255,0.1)"}`,
-                    borderRadius: 3,
-                    color: selected ? "#00e5ff" : "#94a3b8",
-                    fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                    padding: "10px 12px",
-                    minHeight: 44,
-                    minWidth: 48,
-                    cursor: "pointer",
-                    fontFamily: MONO,
-                  }}
-                >
-                  {iv.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {/* ── Trail recorder — full UI (name, colour, interval, start/stop,
+             draft recovery, overflow/offline notices) ── */}
+      <div data-testid="live-trail-section">
+        <TrailRecorder inLivePanel />
       </div>
 
       {/* ── Big action buttons ── */}

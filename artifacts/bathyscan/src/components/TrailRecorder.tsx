@@ -90,9 +90,14 @@ function bufferTrailOffline(
 
 interface Props {
   onTrailSaved?: () => void;
+  /**
+   * When true, the component renders even when GPS is not yet active (used
+   * inside LivePanel where GPS status is already displayed separately).
+   */
+  inLivePanel?: boolean;
 }
 
-export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
+export const TrailRecorder: React.FC<Props> = ({ onTrailSaved, inLivePanel }) => {
   const gpsActive = useGpsStore((s) => s.active);
   const recording = useTrailStore((s) => s.recording);
   const currentPoints = useTrailStore((s) => s.currentPoints);
@@ -149,7 +154,7 @@ export const TrailRecorder: React.FC<Props> = ({ onTrailSaved }) => {
     return () => clearInterval(id);
   }, [recording, startedAt]);
 
-  if (!gpsActive) return null;
+  if (!gpsActive && !inLivePanel) return null;
 
   const fmtElapsed = (ms: number) => {
     const s = Math.floor(ms / 1000);

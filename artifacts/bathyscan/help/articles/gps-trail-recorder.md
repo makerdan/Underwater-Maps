@@ -10,23 +10,34 @@ showQA: true
 
 The GPS Trail Recorder uses your device's location to lock the 3D camera to your real-world position and record a breadcrumb trail of where you have been. It is designed for use on the water — mount a tablet or laptop on the helm, enable Follow Me, and BathyScan tracks along with you.
 
+## Opening the trail recorder
+
+The trail recorder lives inside the **Live tab** of the left sidebar. Tap **Live** in the sidebar header to open it. From there you can:
+
+- Name your trail before you start recording.
+- Pick a colour from the palette.
+- Set the sampling interval.
+- Start, stop, resume, or discard a recording.
+
+If a recording is running and you switch to another sidebar tab (Explore, Plan, etc.), a small **⏺ REC** chip appears in the bottom-right of the viewport. Tapping the chip takes you straight back to the Live tab so you can stop or review the recording.
+
 ## Enabling Follow Me GPS lock
 
-1. Click the **Dive to GPS** button in the top-left HUD (visible when a GPS fix is available).
+1. Open the **Live** tab in the left sidebar.
 2. Your browser will ask for location permission — click **Allow**.
-3. The camera immediately moves to your GPS coordinates and the mode badge changes to **◉ GPS**.
+3. The camera immediately moves to your GPS coordinates and the **Follow Me** button activates.
 4. As your device moves, the 3D camera follows, keeping you centred in the view.
 
 While Follow Me is active you can still adjust altitude (Space / Shift) and camera heading, but lateral position is locked to GPS.
 
-To exit Follow Me, press **Esc** or click the **Unlink GPS** button that replaces the Dive to GPS button.
+To exit Follow Me, click the **◉ Following You** button in the Live tab to toggle it off.
 
 ## Breadcrumb trail
 
-When Follow Me is active, BathyScan automatically records your track as a **breadcrumb trail** — a polyline drawn on both the 3D terrain and the [Overview Map](#article:overview-map).
+When you start recording in the Live tab, BathyScan logs your track as a **breadcrumb trail** — a polyline drawn on both the 3D terrain and the [Overview Map](#article:overview-map).
 
-- Points are sampled at the interval you configure (see GPS & Trail settings below).
-- The trail colour is configurable in Settings → GPS & Trail.
+- Points are sampled at the interval you choose in the Live tab (5 s / 10 s / 30 s / 60 s).
+- The trail colour is set in the Live tab before you start recording, or in Settings → GPS & Trail for your default.
 - Recorded trails are uploaded to the server in the background. When offline, points are buffered locally and sent when you reconnect.
 
 ## GPS & Trail settings
@@ -35,9 +46,9 @@ All GPS trail settings are under **Settings → GPS & Trail**:
 
 | Setting | Options | What it does |
 | --- | --- | --- |
-| Auto-Start Trail Recording | On / Off | Automatically begins recording when a dataset loads |
-| Recording Interval | 1 Hz (1 s), 0.5 Hz (2 s), 0.1 Hz (10 s) | How often a new trail point is sampled. Default: 0.1 Hz (every 10 s) |
-| Trail Colour | Colour picker | Colour of the breadcrumb trail line |
+| Auto-Start Trail Recording | On / Off | Automatically begins recording when entering Live mode |
+| Recording Interval | 5 s / 10 s / 30 s / 60 s | How often a new trail point is sampled. Default: 10 s |
+| Trail Colour | Colour picker | Default colour for new trails |
 | Trail Retention | 7 days / 30 days / 90 days / Forever | How long recorded trails are kept before automatic purge |
 
 ## Exporting markers, routes, and trails (GPS Export)
@@ -56,7 +67,7 @@ The **▼ IMPORT GPS…** button in the Datasets panel accepts `.gpx`, `.kml`, `
 ## Tips
 
 - For the most accurate GPS lock, use a device with a dedicated GPS chip (tablets with LTE, or a laptop with an external USB GPS receiver). Browser geolocation on a Wi-Fi-only device falls back to IP-based positioning, which is too inaccurate for on-water use.
-- Use a faster recording interval (1 Hz) when trolling slowly past structure to get a detailed track; use 0.1 Hz for long open-water transits to keep data volume down.
+- Use a faster recording interval (5 s) when trolling slowly past structure to get a detailed track; use 60 s for long open-water transits to keep data volume down.
 - Pair the trail recorder with the **Depth Profile** tool after a run — draw a profile along the route you covered to review the terrain under your transect.
 - If the GPS arrow jumps erratically, your device may be using a Wi-Fi or cell-tower fix. Check your device's location settings and make sure high-accuracy GPS mode is enabled.
 - The trail is tied to the active dataset. Switching datasets pauses trail recording.

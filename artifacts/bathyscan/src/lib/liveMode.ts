@@ -20,9 +20,9 @@
  *     re-entering Live resumes the same trail.
  *   - Keeps the GPS watch running so the position marker / HUD stay live.
  *
- * The standalone TrailRecorder popup (shown outside Live mode when GPS is
- * active) remains the explicit user-driven recording surface; the Live panel
- * shows its own recording card, so the popup is hidden while in Live mode.
+ * The full TrailRecorder UI now lives exclusively inside the Live panel.
+ * When a recording is running on another tab, only a compact ⏺ REC chip is
+ * visible in the viewport — clicking it navigates back to the Live tab.
  *
  * Wiring: uiStore.setSidebarMode calls onSidebarModeChange on every explicit
  * transition, and applySettingsToUiStore calls it on hydration so a persisted

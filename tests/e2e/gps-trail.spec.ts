@@ -171,10 +171,23 @@ test.describe("BathyScan — trail recording flow", () => {
       return;
     }
 
-    const trailRecorder = page.locator("[data-testid='trail-recorder']");
-    await expect(trailRecorder).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator("[data-testid='trail-start-btn']")).toBeVisible();
-    await expect(page.locator("[data-testid='trail-name-input']")).toBeVisible();
+    // After activating GPS from the Overview Map, the user is NOT on the Live
+    // tab, so the floating trail-recorder popup must NOT appear. The full
+    // recorder now lives inside the Live tab panel only.
+    const floatingRecorder = page.locator("[data-testid='trail-recorder']");
+    await expect(floatingRecorder).not.toBeVisible({ timeout: 3_000 });
+
+    // Navigate to the Live tab and verify the recorder is rendered there.
+    const liveTab = page.locator("[data-testid='sidebar-tab-live'], button:has-text('Live')").first();
+    const liveTabVisible = await liveTab.isVisible({ timeout: 5_000 }).catch(() => false);
+    if (liveTabVisible) {
+      await liveTab.click();
+      await page.waitForTimeout(500);
+      await expect(page.locator("[data-testid='live-panel']")).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator("[data-testid='trail-recorder']")).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator("[data-testid='trail-start-btn']")).toBeVisible();
+      await expect(page.locator("[data-testid='trail-name-input']")).toBeVisible();
+    }
   });
 
   test("start recording captures GPS points, stop returns to idle (signed-in, GPS active)", async ({ page }) => {
@@ -213,10 +226,27 @@ test.describe("BathyScan — trail recording flow", () => {
       return;
     }
 
-    const trailRecorder = page.locator("[data-testid='trail-recorder']");
-    const recorderVisible = await trailRecorder.isVisible({ timeout: 5_000 }).catch(() => false);
+    // The floating trail recorder must NOT appear outside the Live tab.
+    const floatingRecorder = page.locator("[data-testid='trail-recorder']");
+    const floatingVisible = await floatingRecorder.isVisible({ timeout: 3_000 }).catch(() => false);
+    if (floatingVisible) {
+      // Fail explicitly — the popup should have been removed.
+      throw new Error("Floating trail-recorder popup appeared outside Live tab — regression detected");
+    }
+
+    // Navigate to the Live tab where the recorder lives.
+    const liveTab = page.locator("[data-testid='sidebar-tab-live'], button:has-text('Live')").first();
+    const liveTabVisible = await liveTab.isVisible({ timeout: 5_000 }).catch(() => false);
+    if (!liveTabVisible) {
+      test.skip(true, "Live tab not found — cannot locate trail recorder");
+      return;
+    }
+    await liveTab.click();
+    await page.waitForTimeout(500);
+
+    const recorderVisible = await page.locator("[data-testid='trail-recorder']").isVisible({ timeout: 5_000 }).catch(() => false);
     if (!recorderVisible) {
-      test.skip(true, "Trail recorder not visible");
+      test.skip(true, "Trail recorder not visible in Live panel");
       return;
     }
 
