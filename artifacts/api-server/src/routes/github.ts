@@ -1,10 +1,12 @@
-import { Router, type Response } from "express";
+import { Router, type Response, type Request, type NextFunction } from "express";
 import { z } from "zod";
-import { requireAuth } from "../middlewares/requireAuth.js";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { getGithubClient } from "../lib/github.js";
 import { logger } from "../lib/logger.js";
+import { isAdmin } from "../lib/adminAccess.js";
+import { githubMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const GithubReposListResponseSchema = z.array(z.record(z.unknown()));
 const GithubContentsResponseSchema = z.union([
@@ -36,6 +38,22 @@ const PostGithubDispatchBody = z.object({
 });
 
 const router = Router();
+
+/**
+ * Middleware that enforces admin-only access for all /api/github/* routes.
+ *
+ * Must be placed after `requireAuth` so `clerkUserId` is already populated.
+ * Returns 403 for any authenticated non-admin caller, matching the pattern
+ * used by routes/admin.ts.
+ */
+function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  if (!isAdmin(userId)) {
+    res.status(403).json({ error: "forbidden", details: "Admin access required" });
+    return;
+  }
+  next();
+}
 
 /**
  * Maps an Octokit (or token-missing) error to a structured JSON response so
@@ -83,10 +101,12 @@ function extractSafePath(
 /**
  * GET /api/github/repos
  * Lists repositories accessible to the PAT.
+ * Admin-only: proxies with the server-wide GITHUB_TOKEN PAT.
  */
 router.get(
   "/repos",
   requireAuth,
+  requireAdmin,
   asyncHandler(async (_req, res): Promise<void> => {
     let octokit;
     try {
@@ -109,10 +129,12 @@ router.get(
 /**
  * GET /api/github/repos/:owner/:repo/contents/*path
  * Reads a file or lists a directory from the repository.
+ * Admin-only: proxies with the server-wide GITHUB_TOKEN PAT.
  */
 router.get(
   "/repos/:owner/:repo/contents/*path",
   requireAuth,
+  requireAdmin,
   asyncHandler(async (req, res): Promise<void> => {
     const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
     if (!paramsParsed.success) {
@@ -152,10 +174,13 @@ router.get(
  * PUT /api/github/repos/:owner/:repo/contents/*path
  * Creates or updates a file in the repository.
  * Body: { message: string, content: string (base64), sha?: string, branch?: string }
+ * Admin-only + rate-limited (10/min per user).
  */
 router.put(
   "/repos/:owner/:repo/contents/*path",
   requireAuth,
+  requireAdmin,
+  githubMutationRateLimit,
   validateBody(PutGithubContentsBody, "PUT /api/github/repos/:owner/:repo/contents/*path"),
   asyncHandler(async (req, res): Promise<void> => {
     const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
@@ -199,10 +224,13 @@ router.put(
  * DELETE /api/github/repos/:owner/:repo/contents/*path
  * Deletes a file from the repository.
  * Body: { message: string, sha: string, branch?: string }
+ * Admin-only + rate-limited (10/min per user).
  */
 router.delete(
   "/repos/:owner/:repo/contents/*path",
   requireAuth,
+  requireAdmin,
+  githubMutationRateLimit,
   validateBody(DeleteGithubContentsBody, "DELETE /api/github/repos/:owner/:repo/contents/*path"),
   asyncHandler(async (req, res): Promise<void> => {
     const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
@@ -245,10 +273,13 @@ router.delete(
  * POST /api/github/repos/:owner/:repo/actions/workflows/:workflow_id/dispatches
  * Triggers a workflow_dispatch event for the given workflow.
  * Body: { ref: string, inputs?: Record<string, string> }
+ * Admin-only + rate-limited (10/min per user).
  */
 router.post(
   "/repos/:owner/:repo/actions/workflows/:workflow_id/dispatches",
   requireAuth,
+  requireAdmin,
+  githubMutationRateLimit,
   validateBody(PostGithubDispatchBody, "POST /api/github/repos/:owner/:repo/actions/workflows/:workflow_id/dispatches"),
   asyncHandler(async (req, res): Promise<void> => {
     const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
@@ -288,10 +319,12 @@ router.post(
  * GET /api/github/repos/:owner/:repo/actions/runs
  * Lists workflow runs for a repository.
  * Optional query params: workflow_id, status, per_page, page.
+ * Admin-only: proxies with the server-wide GITHUB_TOKEN PAT.
  */
 router.get(
   "/repos/:owner/:repo/actions/runs",
   requireAuth,
+  requireAdmin,
   asyncHandler(async (req, res): Promise<void> => {
     const params = req.params as Record<string, string>;
     const owner = params["owner"] as string;
@@ -344,10 +377,12 @@ router.get(
 /**
  * GET /api/github/repos/:owner/:repo/actions/runs/:run_id
  * Returns a single workflow run by ID.
+ * Admin-only: proxies with the server-wide GITHUB_TOKEN PAT.
  */
 router.get(
   "/repos/:owner/:repo/actions/runs/:run_id",
   requireAuth,
+  requireAdmin,
   asyncHandler(async (req, res): Promise<void> => {
     const params = req.params as Record<string, string>;
     const owner = params["owner"] as string;

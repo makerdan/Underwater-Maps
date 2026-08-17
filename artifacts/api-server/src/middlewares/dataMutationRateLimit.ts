@@ -1,7 +1,7 @@
 /**
  * Shared per-user rate-limit middleware instances for data mutation routes.
  *
- * Three tiers:
+ * Four tiers:
  *  - dataMutationRateLimit     — 120 writes/min per user; applied to markers,
  *    catches, routes, folders, catalog-saves, GPS trails, and trolling-preset
  *    mutations.
@@ -10,6 +10,10 @@
  *  - bulkDeleteMarkersRateLimit — 5 calls/min per user; much lower ceiling for
  *    DELETE /markers/mine so a single bulk-delete cannot exhaust the general
  *    quota or be weaponised for accidental mass data loss.
+ *  - githubMutationRateLimit   — 10 writes/min per user; tight ceiling for
+ *    PUT/DELETE /github/…/contents and POST /github/…/dispatches since all
+ *    three operate through a single server-wide PAT that can affect every
+ *    repository the PAT can access.
  *
  * All tiers use the existing `createRateLimit` Postgres-backed sliding window.
  * The key includes the route name so buckets never collide across tiers.
@@ -74,5 +78,26 @@ export const bulkDeleteMarkersRateLimit = createRateLimit({
   route: BULK_DELETE_MARKERS_ROUTE,
   windowMs: BULK_DELETE_MARKERS_WINDOW_MS,
   max: BULK_DELETE_MARKERS_MAX,
+  mode: "user",
+});
+
+export const GITHUB_MUTATION_ROUTE = "github-mutations";
+export const GITHUB_MUTATION_WINDOW_MS = 60_000;
+/** 10 writes/min — tight because all three mutating GitHub routes share a single
+ *  server-wide PAT that can modify every repository the PAT can access. */
+export const GITHUB_MUTATION_MAX = 10;
+
+/**
+ * Per-user rate limit for the three mutating /api/github/* routes:
+ *   PUT  /repos/:owner/:repo/contents/*path   (create/update file)
+ *   DELETE /repos/:owner/:repo/contents/*path (delete file)
+ *   POST /repos/:owner/:repo/actions/workflows/:wf/dispatches (trigger workflow)
+ *
+ * 10 writes per minute per user.  Must be placed after `requireAuth`.
+ */
+export const githubMutationRateLimit = createRateLimit({
+  route: GITHUB_MUTATION_ROUTE,
+  windowMs: GITHUB_MUTATION_WINDOW_MS,
+  max: GITHUB_MUTATION_MAX,
   mode: "user",
 });

@@ -8,11 +8,24 @@
  *   DELETE /repos/:owner/:repo/contents/* — delete file
  *   POST /repos/:owner/:repo/actions/workflows/:wf/dispatches — trigger workflow
  *   GET  /repos/:owner/:repo/actions/runs — list runs
+ *   GET  /repos/:owner/:repo/actions/runs/:run_id — single run
+ *
+ * Security:
+ *   - All routes require admin access (403 for non-admins)
+ *   - Mutating routes (PUT, DELETE, POST dispatch) are rate-limited (429)
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import http from "http";
 import express from "express";
 import request from "supertest";
+
+// Mock @workspace/db so the rate-limit middleware's pool import resolves
+// without a live Postgres connection. The memory rate-limit backend is used
+// in all tests (RATE_LIMIT_BACKEND=memory), so pool.query is never called.
+vi.mock("@workspace/db", () => ({
+  pool: { query: vi.fn().mockResolvedValue({ rows: [] }) },
+  db: {},
+}));
 
 const octokitMock = {
   repos: {
@@ -39,16 +52,32 @@ vi.mock("@clerk/express", () => ({
 
 import githubRouter, { isPathSafe } from "../github.js";
 import { getGithubClient } from "../../lib/github.js";
+import {
+  __resetRateLimitMemory,
+  __prefillRateLimitMemory,
+} from "../../middlewares/rateLimit.js";
+import {
+  GITHUB_MUTATION_ROUTE,
+  GITHUB_MUTATION_WINDOW_MS,
+  GITHUB_MUTATION_MAX,
+} from "../../middlewares/dataMutationRateLimit.js";
 
 const getGithubClientMock = getGithubClient as ReturnType<typeof vi.fn>;
 
 const E2E_USER = "user_e2e_github_test";
+/** A user ID that is never in ADMIN_USER_IDS — used to verify 403 responses. */
+const NON_ADMIN_USER = "user_e2e_non_admin";
 
 function makeApp() {
   const app = express();
   app.use(express.json());
   app.use(githubRouter);
   return app;
+}
+
+/** Bucket key for the GitHub mutation rate-limit, keyed to a given user. */
+function githubMutationKey(userId: string): string {
+  return `u:${GITHUB_MUTATION_ROUTE}:${userId}`;
 }
 
 /**
@@ -96,6 +125,12 @@ function rawRequest(
 
 beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
+  // Grant E2E_USER admin access so happy-path tests pass admin gate.
+  vi.stubEnv("ADMIN_USER_IDS", E2E_USER);
+  // Use the in-memory rate-limit backend — no Postgres needed.
+  vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
+  __resetRateLimitMemory();
+
   octokitMock.repos.listForAuthenticatedUser.mockReset();
   octokitMock.repos.getContent.mockReset();
   octokitMock.repos.createOrUpdateFileContents.mockReset();
@@ -104,6 +139,10 @@ beforeEach(() => {
   octokitMock.actions.listWorkflowRunsForRepo.mockReset();
   octokitMock.actions.getWorkflowRun.mockReset();
   getGithubClientMock.mockReturnValue(octokitMock);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("GET /repos — list repositories", () => {
@@ -528,4 +567,188 @@ describe("PAT expiry / GitHub 401 — proxy returns safe error with no credentia
     expect(res.body.details).not.toMatch(/ghp_/i);
   });
 
+});
+
+// ── Admin gate — 403 for non-admin users ─────────────────────────────────────
+
+describe("Admin gate — all routes return 403 for non-admin users", () => {
+  // NON_ADMIN_USER is not listed in ADMIN_USER_IDS (E2E_USER is the only admin).
+  function nonAdminHeaders() {
+    return {
+      "x-e2e-bypass-secret": "vitest-test-secret",
+      "x-e2e-user-id": NON_ADMIN_USER,
+    };
+  }
+
+  it("GET /repos → 403", async () => {
+    const res = await request(makeApp()).get("/repos").set(nonAdminHeaders());
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+    expect(octokitMock.repos.listForAuthenticatedUser).not.toHaveBeenCalled();
+  });
+
+  it("GET /repos/:owner/:repo/contents/README.md → 403", async () => {
+    const res = await request(makeApp())
+      .get("/repos/owner/repo/contents/README.md")
+      .set(nonAdminHeaders());
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+    expect(octokitMock.repos.getContent).not.toHaveBeenCalled();
+  });
+
+  it("PUT /repos/:owner/:repo/contents/file.txt → 403", async () => {
+    const res = await request(makeApp())
+      .put("/repos/owner/repo/contents/file.txt")
+      .set(nonAdminHeaders())
+      .send({ message: "add file", content: "aGVsbG8=" });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+    expect(octokitMock.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+  });
+
+  it("DELETE /repos/:owner/:repo/contents/file.txt → 403", async () => {
+    const res = await request(makeApp())
+      .delete("/repos/owner/repo/contents/file.txt")
+      .set(nonAdminHeaders())
+      .send({ message: "remove file", sha: "abc123" });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+    expect(octokitMock.repos.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it("POST .../dispatches → 403", async () => {
+    const res = await request(makeApp())
+      .post("/repos/owner/repo/actions/workflows/deploy.yml/dispatches")
+      .set(nonAdminHeaders())
+      .send({ ref: "main" });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+    expect(octokitMock.actions.createWorkflowDispatch).not.toHaveBeenCalled();
+  });
+
+  it("GET /repos/:owner/:repo/actions/runs → 403", async () => {
+    const res = await request(makeApp())
+      .get("/repos/owner/repo/actions/runs")
+      .set(nonAdminHeaders());
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+    expect(octokitMock.actions.listWorkflowRunsForRepo).not.toHaveBeenCalled();
+  });
+
+  it("GET /repos/:owner/:repo/actions/runs/:run_id → 403", async () => {
+    const res = await request(makeApp())
+      .get("/repos/owner/repo/actions/runs/42")
+      .set(nonAdminHeaders());
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+    expect(octokitMock.actions.getWorkflowRun).not.toHaveBeenCalled();
+  });
+
+  it("403 response body never leaks ADMIN_USER_IDS value", async () => {
+    const sentinel = "sentinel_admin_id_12345";
+    vi.stubEnv("ADMIN_USER_IDS", sentinel);
+    const res = await request(makeApp()).get("/repos").set(nonAdminHeaders());
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(res.body)).not.toContain(sentinel);
+  });
+});
+
+// ── GitHub mutation rate limit — 10/min per user ─────────────────────────────
+
+describe("GitHub mutation rate limit — 10/min per user", () => {
+  function adminHeaders() {
+    return {
+      "x-e2e-bypass-secret": "vitest-test-secret",
+      "x-e2e-user-id": E2E_USER,
+    };
+  }
+
+  it("PUT /repos/.../contents returns 429 when admin user exhausts the mutation bucket", async () => {
+    __prefillRateLimitMemory(
+      githubMutationKey(E2E_USER),
+      GITHUB_MUTATION_MAX,
+      GITHUB_MUTATION_WINDOW_MS,
+    );
+    const res = await request(makeApp())
+      .put("/repos/owner/repo/contents/file.txt")
+      .set(adminHeaders())
+      .send({ message: "add file", content: "aGVsbG8=" });
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(res.headers["retry-after"]).toBeDefined();
+    expect(res.headers["x-ratelimit-remaining"]).toBe("0");
+    expect(octokitMock.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+  });
+
+  it("DELETE /repos/.../contents returns 429 when admin user exhausts the mutation bucket", async () => {
+    __prefillRateLimitMemory(
+      githubMutationKey(E2E_USER),
+      GITHUB_MUTATION_MAX,
+      GITHUB_MUTATION_WINDOW_MS,
+    );
+    const res = await request(makeApp())
+      .delete("/repos/owner/repo/contents/file.txt")
+      .set(adminHeaders())
+      .send({ message: "remove file", sha: "abc123" });
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(octokitMock.repos.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it("POST .../dispatches returns 429 when admin user exhausts the mutation bucket", async () => {
+    __prefillRateLimitMemory(
+      githubMutationKey(E2E_USER),
+      GITHUB_MUTATION_MAX,
+      GITHUB_MUTATION_WINDOW_MS,
+    );
+    const res = await request(makeApp())
+      .post("/repos/owner/repo/actions/workflows/deploy.yml/dispatches")
+      .set(adminHeaders())
+      .send({ ref: "main" });
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(octokitMock.actions.createWorkflowDispatch).not.toHaveBeenCalled();
+  });
+
+  it("rate limit tracks per user — a different admin is unaffected", async () => {
+    const OTHER_ADMIN = "user_other_admin";
+    vi.stubEnv("ADMIN_USER_IDS", `${E2E_USER},${OTHER_ADMIN}`);
+
+    __prefillRateLimitMemory(
+      githubMutationKey(E2E_USER),
+      GITHUB_MUTATION_MAX,
+      GITHUB_MUTATION_WINDOW_MS,
+    );
+    octokitMock.repos.createOrUpdateFileContents.mockResolvedValue({
+      data: { commit: { sha: "abc123" }, content: { name: "file.txt" } },
+    });
+
+    // First user is throttled.
+    const throttled = await request(makeApp())
+      .put("/repos/owner/repo/contents/file.txt")
+      .set({ "x-e2e-bypass-secret": "vitest-test-secret", "x-e2e-user-id": E2E_USER })
+      .send({ message: "add file", content: "aGVsbG8=" });
+    expect(throttled.status).toBe(429);
+
+    // Second admin still gets through.
+    const allowed = await request(makeApp())
+      .put("/repos/owner/repo/contents/file.txt")
+      .set({ "x-e2e-bypass-secret": "vitest-test-secret", "x-e2e-user-id": OTHER_ADMIN })
+      .send({ message: "add file", content: "aGVsbG8=" });
+    expect(allowed.status).toBe(200);
+  });
+
+  it("rate-limit headers are present on a successful mutation", async () => {
+    octokitMock.repos.createOrUpdateFileContents.mockResolvedValue({
+      data: { commit: { sha: "abc123" }, content: { name: "file.txt" } },
+    });
+    const res = await request(makeApp())
+      .put("/repos/owner/repo/contents/file.txt")
+      .set(adminHeaders())
+      .send({ message: "add file", content: "aGVsbG8=" });
+    expect(res.status).toBe(200);
+    expect(res.headers["x-ratelimit-limit"]).toBe(String(GITHUB_MUTATION_MAX));
+    expect(res.headers["x-ratelimit-remaining"]).toBeDefined();
+    expect(res.headers["x-ratelimit-reset"]).toBeDefined();
+  });
 });
