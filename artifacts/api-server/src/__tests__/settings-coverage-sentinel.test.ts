@@ -255,6 +255,11 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   // Boolean; controls whether all datasets are auto-registered in the
   // proximity pool on startup. Validation tested in settings-validation.test.ts.
   "proximityMode",
+
+  // ── mobile 2D map tilt (settings-validation.test.ts) ─────────────────────
+  // Boolean; toggles the CSS perspective tilt effect on the mobile 2D chart.
+  // Validation tested in settings-validation.test.ts.
+  "mobileMapTiltEnabled",
 ]);
 
 describe("PutSettingsBody field-coverage sentinel", () => {

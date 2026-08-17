@@ -517,3 +517,33 @@ describe("PUT /api/settings — proximityMode Zod validation", () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ─── mobileMapTiltEnabled Zod validation ──────────────────────────────────────
+
+describe("PUT /api/settings — mobileMapTiltEnabled Zod validation", () => {
+  it("accepts true", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ mobileMapTiltEnabled: true });
+    expect(res.status).toBe(200);
+    expect(res.body.mobileMapTiltEnabled).toBe(true);
+  });
+
+  it("accepts false", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ mobileMapTiltEnabled: false });
+    expect(res.status).toBe(200);
+    expect(res.body.mobileMapTiltEnabled).toBe(false);
+  });
+
+  it("rejects non-boolean values", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ mobileMapTiltEnabled: "yes" });
+    expect(res.status).toBe(400);
+  });
+});

@@ -51,6 +51,7 @@ export function createTerrainMock(
     NYSDEC_BATHY_FEATURE_SERVICE: "https://mock.invalid/nysdec",
     MN_DNR_BATHY_FEATURE_SERVICE: "https://mock.invalid/mndnr",
     BUNDLED_TERRAIN: {},
+    BUNDLED_COVERAGE_BBOXES: {},
     ALL_PRESET_DATASETS: [],
     PRESET_DATASETS: [],
     FRESHWATER_PRESET_DATASETS: [],

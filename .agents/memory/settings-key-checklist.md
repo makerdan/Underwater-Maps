@@ -17,3 +17,12 @@ The rule: a new key in the settings OpenAPI spec/PutSettingsBody must be added i
 
 **How to apply / gotcha:** the `test-settings-validation` workflow (api-server `test:validation`, ~160 tests) does NOT include `me.test.ts` or `settings-schema-sync.test.ts` — it can be green while the full unit suite fails on a missing DEFAULT_SETTINGS entry. Only the full unit run (test-heavy `test:unit`) catches it. Verify solo with:
 `cd artifacts/api-server && npx vitest run src/__tests__/me.test.ts src/__tests__/settings-schema-sync.test.ts src/__tests__/settings-coverage-sentinel.test.ts`
+
+## Addendum (2026-08-17)
+A new PutSettingsBody key also needs, in artifacts/api-server:
+1. a Zod-validation test (settings-validation.test.ts boolean pattern or
+   equivalent), and
+2. an entry in SETTINGS_TESTED_FIELDS in settings-coverage-sentinel.test.ts —
+   otherwise the sentinel fails in BOTH test:validation and unit shard 1.
+Client-side tests (bathyscan) do NOT satisfy the sentinel; it only scans
+api-server test files.

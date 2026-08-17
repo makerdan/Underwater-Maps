@@ -1,0 +1,131 @@
+name: CI — Typecheck, Lint & Unit Suites
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    name: Static checks + unit suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared libs (emit .d.ts for workspace packages)
+        run: pnpm run typecheck:libs
+
+      # ── Fast-tier static checks ─────────────────────────────────────────────
+      # Order mirrors the FAST tier in scripts/validation-steps.mjs.
+      # Excluded because they depend on the gitignored .local/ directory, which
+      # never exists in a CI checkout:
+      #   • check:skill-mirror-sync      (reads .local/custom_skills/)
+      #   • fix:failure-gate-stubs       (writes to .local/tasks/)
+      #   • fix:regression-guard-stubs   (writes to .local/tasks/)
+      # check:failure-gate and check:regression-guard stay included: with
+      # --skip-if-no-task they self-skip when TASK_PLAN_FILE is unset (as in CI).
+
+      - name: typecheck
+        run: pnpm run typecheck
+
+      - name: lint
+        run: pnpm run lint
+
+      - name: 'check:lock-skill-sync'
+        run: pnpm run check:lock-skill-sync
+
+      - name: 'check:failure-gate-zip'
+        run: pnpm run check:failure-gate-zip
+
+      - name: 'check:poe-setup-zip'
+        run: pnpm run check:poe-setup-zip
+
+      - name: 'check:port-authority-zip'
+        run: pnpm run check:port-authority-zip
+
+      - name: 'check:port-authority-heavy-zip'
+        run: pnpm run check:port-authority-heavy-zip
+
+      - name: 'check:tier-lock'
+        run: pnpm run check:tier-lock
+
+      - name: 'check:root-relative-api'
+        run: pnpm run check:root-relative-api
+
+      - name: 'check:deps-suppression'
+        run: pnpm run check:deps-suppression
+
+      - name: 'check:duplicate-hooks-registry'
+        run: pnpm run check:duplicate-hooks-registry
+
+      - name: 'check:runner-step-sync'
+        run: pnpm run check:runner-step-sync
+
+      - name: 'check:failure-gate'
+        run: node scripts/check-failure-gate.mjs --skip-if-no-task
+
+      - name: 'check:failure-gate-self-test'
+        run: pnpm run check:failure-gate-self-test
+
+      - name: 'check:regression-guard'
+        run: node scripts/check-regression-guard.mjs --stubs-only --skip-if-no-task
+
+      - name: 'check:skip-count'
+        run: pnpm run check:skip-count
+
+      - name: 'check:testdb-schema-drift'
+        run: pnpm run check:testdb-schema-drift
+
+      - name: 'check:docs-stale'
+        run: pnpm run check:docs-stale
+
+      - name: 'check:catalog-coverage'
+        run: pnpm run check:catalog-coverage
+
+      - name: 'check:schema-stale'
+        run: pnpm run check:schema-stale
+
+      - name: 'check:font-scale'
+        run: pnpm run check:font-scale
+
+      # ── Unit suites ─────────────────────────────────────────────────────────
+      # api-server is sharded exactly like the local test:unit script (two
+      # sequential vitest shards with an 8 GB heap). No run-with-timeout.mjs
+      # wrapper is used for the shards — the job's timeout-minutes is the budget.
+
+      - name: 'test:unit — api-server (shard 1/2)'
+        working-directory: artifacts/api-server
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm exec vitest run --shard=1/2
+
+      - name: 'test:unit — api-server (shard 2/2)'
+        working-directory: artifacts/api-server
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm exec vitest run --shard=2/2
+
+      - name: 'test:unit — api-zod'
+        run: pnpm --filter @workspace/api-zod run test:unit
+
+      - name: 'test:unit — lib/db'
+        run: pnpm --filter @workspace/db run test:unit
+
+      - name: 'test:unit — lib/poe'
+        run: pnpm --filter @workspace/poe run test:unit

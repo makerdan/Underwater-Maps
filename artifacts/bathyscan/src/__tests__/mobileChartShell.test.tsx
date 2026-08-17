@@ -61,8 +61,18 @@ vi.mock("@workspace/api-client-react", () => makeApiClientMock());
 
 vi.mock("@/lib/clerkCompat", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    useAuth: () => ({ isLoaded: true, isSignedIn: false }),
+  };
+});
 
-  const EMPTY = new Map();
+import { useIsMobileImmediate } from "@/hooks/use-mobile";
+import { MobileChartShell } from "@/components/mobile/MobileChartShell";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { useUiStore } from "@/lib/uiStore";
+import { useTerrainStore } from "@/lib/terrainStore";
+
 /** Install a matchMedia stub whose max-width query matches (or not). */
 function stubMatchMedia(matches: boolean) {
   Object.defineProperty(window, "matchMedia", {

@@ -9,7 +9,7 @@
  *      is correctly wired).
  */
 import React from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, act, fireEvent } from "@testing-library/react";
 
 // ── Mocks (declared before component import) ──────────────────────────────────
