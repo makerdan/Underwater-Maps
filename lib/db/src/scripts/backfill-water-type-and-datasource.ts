@@ -5,9 +5,14 @@
  * feature was added (before 2026-07-19):
  *
  *   1. `waterType` was not yet emitted by gridPoints(), so pre-freshwater
- *      terrainJson / overviewJson blobs lack the field entirely.  We default
- *      these rows to "saltwater" because every dataset that predates the
- *      freshwater feature is a saltwater/ocean dataset.
+ *      terrainJson / overviewJson blobs lack the field entirely.  The correct
+ *      value is resolved per row from the linked catalog save
+ *      (user_catalog_saves.dataset_id → catalog_id → dataset_catalog row),
+ *      with the mirrored preset registry as fallback when the catalog row is
+ *      absent (see backfill-water-type-helpers.ts).  Only genuinely unlinked
+ *      legacy rows default to "saltwater" — every *upload* that predates the
+ *      freshwater feature is a saltwater/ocean dataset, but catalog saves may
+ *      be freshwater (e.g. Lake Ray Roberts).
  *
  *   2. Some rows carry `dataSource: "synthetic"` — the fbm procedural fallback
  *      was removed and "synthetic" is no longer a valid enum value.  We delete
@@ -20,40 +25,51 @@
  */
 
 import { sql } from "drizzle-orm";
-import { db, pool, customDatasetsTable } from "../index.js";
-
-const VALID_WATER_TYPES = new Set(["saltwater", "freshwater"]);
-
-function needsBackfill(blob: unknown): boolean {
-  const obj = (blob ?? {}) as Record<string, unknown>;
-  if (!VALID_WATER_TYPES.has(obj["waterType"] as string)) return true;
-  if (obj["dataSource"] === "synthetic") return true;
-  return false;
-}
-
-function patchBlob(blob: unknown): Record<string, unknown> {
-  const obj = (blob ?? {}) as Record<string, unknown>;
-  const patched: Record<string, unknown> = { ...obj };
-
-  if (!VALID_WATER_TYPES.has(patched["waterType"] as string)) {
-    patched["waterType"] = "saltwater";
-  }
-
-  if (patched["dataSource"] === "synthetic") {
-    delete patched["dataSource"];
-  }
-
-  return patched;
-}
+import {
+  db,
+  pool,
+  customDatasetsTable,
+  userCatalogSavesTable,
+  datasetCatalogTable,
+} from "../index.js";
+import {
+  needsBackfill,
+  patchBlob,
+  resolveLegacyWaterType,
+} from "./backfill-water-type-helpers.js";
 
 async function main() {
-  const rows = await db
-    .select({
-      id: customDatasetsTable.id,
-      terrainJson: customDatasetsTable.terrainJson,
-      overviewJson: customDatasetsTable.overviewJson,
-    })
-    .from(customDatasetsTable);
+  const [rows, saves, catalogRows] = await Promise.all([
+    db
+      .select({
+        id: customDatasetsTable.id,
+        terrainJson: customDatasetsTable.terrainJson,
+        overviewJson: customDatasetsTable.overviewJson,
+      })
+      .from(customDatasetsTable),
+    db
+      .select({
+        datasetId: userCatalogSavesTable.datasetId,
+        catalogId: userCatalogSavesTable.catalogId,
+      })
+      .from(userCatalogSavesTable),
+    db
+      .select({
+        id: datasetCatalogTable.id,
+        waterType: datasetCatalogTable.waterType,
+      })
+      .from(datasetCatalogTable),
+  ]);
+
+  const catalogIdByDatasetId = new Map<string, string>();
+  for (const save of saves) {
+    if (typeof save.datasetId === "string" && save.datasetId && typeof save.catalogId === "string" && save.catalogId) {
+      catalogIdByDatasetId.set(save.datasetId, save.catalogId);
+    }
+  }
+  const catalogWaterTypeById = new Map<string, string>(
+    catalogRows.map((r) => [r.id, r.waterType]),
+  );
 
   let scanned = 0;
   let updated = 0;
@@ -66,11 +82,14 @@ async function main() {
 
     if (!terrainNeedsFix && !overviewNeedsFix) continue;
 
+    const catalogId = catalogIdByDatasetId.get(row.id);
+    const waterType = resolveLegacyWaterType(catalogId, catalogWaterTypeById);
+
     const newTerrain = terrainNeedsFix
-      ? patchBlob(row.terrainJson)
+      ? patchBlob(row.terrainJson, waterType)
       : (row.terrainJson as unknown as Record<string, unknown>);
     const newOverview = overviewNeedsFix
-      ? patchBlob(row.overviewJson)
+      ? patchBlob(row.overviewJson, waterType)
       : (row.overviewJson as unknown as Record<string, unknown>);
 
     await db
@@ -83,7 +102,9 @@ async function main() {
 
     updated++;
     console.log(
-      `[backfill] ${row.id}: terrain=${terrainNeedsFix ? "fixed" : "ok"} overview=${overviewNeedsFix ? "fixed" : "ok"}`,
+      `[backfill] ${row.id}: terrain=${terrainNeedsFix ? "fixed" : "ok"} ` +
+        `overview=${overviewNeedsFix ? "fixed" : "ok"} ` +
+        `waterType=${waterType} (${catalogId ? `linked to ${catalogId}` : "no linked catalog save"})`,
     );
   }
 

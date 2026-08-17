@@ -66,34 +66,59 @@ function hasValidWaterType(raw: unknown): boolean {
 }
 
 /**
+ * Water type from the in-code preset registry. Preset catalog ids have the
+ * form `preset-<datasetId>` (see catalogSeeder.buildPresetCatalogEntries);
+ * strip the prefix and look the dataset up in ALL_PRESET_DATASETS. Returns
+ * null for ids that are not preset-backed (uploads, fw-* entries, unknown
+ * ids).
+ */
+function presetRegistryWaterType(catalogId: string): WaterType | null {
+  const presetId = catalogId.startsWith("preset-")
+    ? catalogId.slice("preset-".length)
+    : catalogId;
+  const wt = ALL_PRESET_DATASETS.find((d) => d.id === presetId)?.waterType;
+  return wt === "saltwater" || wt === "freshwater" ? wt : null;
+}
+
+/**
  * Legacy read-path fix: for a custom_datasets row whose stored JSON predates
  * the freshwater feature (no `waterType`), resolve the correct water type
  * from the linked catalog save (user_catalog_saves.dataset_id → catalogId →
- * catalog entry). Returns null when the dataset has no linked save, the
- * catalog entry is gone, or anything about the lookup is off — callers then
- * fall back to the legacy "saltwater" default.
+ * catalog entry). When the catalog DB row is missing (the seeder reconcile
+ * purges and re-creates preset-* rows on boot) or the catalog lookup fails,
+ * fall back to the in-code preset registry, which is authoritative for
+ * preset-backed ids (e.g. Lake Ray Roberts is always freshwater). Returns
+ * null only when the dataset has no linked save or nothing can resolve the
+ * id — callers then fall back to the legacy "saltwater" default.
  */
 async function resolveCatalogWaterType(datasetId: string): Promise<WaterType | null> {
+  let catalogId: string | null = null;
   try {
     const [save] = await db
       .select({ catalogId: userCatalogSavesTable.catalogId })
       .from(userCatalogSavesTable)
       .where(eq(userCatalogSavesTable.datasetId, datasetId));
     if (!save || typeof save.catalogId !== "string" || !save.catalogId) return null;
+    catalogId = save.catalogId;
 
     const entries = await getCatalogEntries();
-    const entry = entries.find((e) => e.id === save.catalogId);
+    const entry = entries.find((e) => e.id === catalogId);
     const wt = entry?.waterType;
-    return wt === "saltwater" || wt === "freshwater" ? wt : null;
+    if (wt === "saltwater" || wt === "freshwater") return wt;
+
+    // Catalog DB row absent or carrying an invalid value — consult the
+    // in-code preset registry before giving up.
+    return presetRegistryWaterType(catalogId);
   } catch (err) {
     logger.warn(
       { datasetId, err },
-      "[user-datasets] catalog waterType lookup failed — falling back to saltwater",
+      "[user-datasets] catalog waterType lookup failed — trying preset registry fallback",
     );
-    return null;
+    return catalogId !== null ? presetRegistryWaterType(catalogId) : null;
   }
 }
 import { getCatalogEntries } from "../lib/catalogSeeder.js";
+import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";

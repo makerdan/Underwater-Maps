@@ -110,6 +110,7 @@ vi.mock("../lib/catalogSeeder.js", () => ({
 import app from "../app.js";
 import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 import { sanitizeLegacyStoredJson } from "../routes/user-datasets.js";
+import { getCatalogEntries } from "../lib/catalogSeeder.js";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -317,6 +318,41 @@ describe("legacy waterType override from linked catalog save", () => {
     expect(res.body).toHaveProperty("waterType", "freshwater");
   });
 
+  it("terrain: Ray Roberts-linked legacy blob returns freshwater even when the catalog DB entry is absent", async () => {
+    // The seeder reconcile purges & re-creates preset-* rows on boot, so the
+    // catalog DB row can be momentarily missing. The in-code preset registry
+    // (ALL_PRESET_DATASETS) must win — Lake Ray Roberts is always freshwater.
+    catalogState.entries = []; // catalog table empty
+    dbState.terrainSelectQueue.push(
+      [{ size: SAFE_SIZE }],
+      [{ terrainJson: minimalTerrainBlob() }],
+      [{ catalogId: "preset-lake-ray-roberts" }],
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/terrain`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "freshwater");
+  });
+
+  it("terrain: Ray Roberts-linked legacy blob returns freshwater when the catalog lookup throws", async () => {
+    vi.mocked(getCatalogEntries).mockRejectedValueOnce(new Error("catalog lookup failed"));
+    dbState.terrainSelectQueue.push(
+      [{ size: SAFE_SIZE }],
+      [{ terrainJson: minimalTerrainBlob() }],
+      [{ catalogId: "preset-lake-ray-roberts" }],
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/terrain`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "freshwater");
+  });
+
   it("terrain: legacy blob whose linked save points at a deleted catalog entry falls back to saltwater", async () => {
     catalogState.entries = [FRESH_ENTRY];
     dbState.terrainSelectQueue.push(
@@ -351,6 +387,21 @@ describe("legacy waterType override from linked catalog save", () => {
 
   it("overview: legacy blob linked to a freshwater catalog save returns waterType=freshwater", async () => {
     catalogState.entries = [FRESH_ENTRY];
+    dbState.terrainSelectQueue.push(
+      [{ overviewJson: minimalTerrainBlob() }],       // overview fetch
+      [{ catalogId: "preset-lake-ray-roberts" }],     // linked save lookup
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/overview`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "freshwater");
+  });
+
+  it("overview: Ray Roberts-linked legacy blob returns freshwater even when the catalog DB entry is absent", async () => {
+    catalogState.entries = []; // catalog table empty — preset registry must win
     dbState.terrainSelectQueue.push(
       [{ overviewJson: minimalTerrainBlob() }],       // overview fetch
       [{ catalogId: "preset-lake-ray-roberts" }],     // linked save lookup
