@@ -46,7 +46,7 @@ import {
 } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useAuth } from "@/lib/clerkCompat";
-import { useSettingsStore } from "@/lib/settingsStore";
+import { useSettingsStore, type WaterType } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { CoordinateSearchForm } from "@/components/CoordinateSearchForm";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
@@ -724,6 +724,16 @@ const OfflinePackCard: React.FC<OfflinePackCardProps> = ({ pack, onView }) => (
 // ---------------------------------------------------------------------------
 
 /**
+ * Known water-type affinity per federated source.
+ * Sources not listed here have unknown affinity — no badge is shown.
+ * Keep in sync with the source registry in search-federated.ts.
+ */
+export const FEDERATED_SOURCE_WATER_TYPE: Record<string, WaterType> = {
+  "ncei-geoportal": "saltwater",   // NOAA NCEI Bathymetry Geoportal — ocean surveys
+  "portal-mndnr": "freshwater",    // Minnesota DNR — inland lake bathymetry
+};
+
+/**
  * Mirror of the server-side `sanitizeFederatedId` / `sanitizeNceiId`
  * functions (both identical). Converts any string into a URL/DB-safe slug.
  *
@@ -789,17 +799,31 @@ const FederatedResultCard: React.FC<{
   inView?: boolean;
   /** True when the terrain store has reached MAX_ACTIVE_DATASETS. */
   atViewCap?: boolean;
-}> = ({ item, canSave, saving, onSaveNcei, onSaveFederated, onAddToView, addDsId, inView = false, atViewCap = false }) => {
+  /** The user's active water-type mode — used to flag mismatched results. */
+  userWaterType?: WaterType;
+}> = ({ item, canSave, saving, onSaveNcei, onSaveFederated, onAddToView, addDsId, inView = false, atViewCap = false, userWaterType }) => {
   const nceiResult = item.importable ? federatedToNceiResult(item) : null;
   // Every importable result gets a save action: NCEI results reuse the
   // existing /ncei/save flow; all other sources go through the generic
   // /search/federated/save endpoint (same catalog-save pipeline).
   const canImport = item.importable && !!item.coverageBbox;
+
+  // Water-type affinity: infer from source, then flag mismatches against the
+  // user's active mode so freshwater users know when a result is ocean-only
+  // (and vice-versa).
+  const resultWaterType = FEDERATED_SOURCE_WATER_TYPE[item.sourceId] ?? null;
+  const isMismatch =
+    userWaterType != null &&
+    resultWaterType != null &&
+    resultWaterType !== userWaterType;
+
   return (
     <div
       data-testid={`federated-result-${item.id}`}
       style={{
-        border: "1px solid rgba(255,255,255,0.08)",
+        border: isMismatch
+          ? "1px solid rgba(251,191,36,0.25)"
+          : "1px solid rgba(255,255,255,0.08)",
         borderRadius: 6,
         padding: "10px 12px",
         marginTop: 8,
@@ -835,7 +859,46 @@ const FederatedResultCard: React.FC<{
         >
           {item.importable ? "Importable" : "Link-only"}
         </span>
+        {resultWaterType && (
+          <span
+            data-testid="federated-water-type-badge"
+            style={{
+              fontSize: "calc(10px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              borderRadius: 3,
+              padding: "1px 6px",
+              color: isMismatch
+                ? "#fbbf24"
+                : resultWaterType === "saltwater"
+                  ? "#7dd3fc"
+                  : "#86efac",
+              border: isMismatch
+                ? "1px solid rgba(251,191,36,0.4)"
+                : resultWaterType === "saltwater"
+                  ? "1px solid rgba(125,211,252,0.3)"
+                  : "1px solid rgba(134,239,172,0.3)",
+            }}
+          >
+            {resultWaterType === "saltwater" ? "🌊 saltwater" : "🏞 freshwater"}
+          </span>
+        )}
       </div>
+      {isMismatch && (
+        <div
+          data-testid="federated-water-type-mismatch-notice"
+          style={{
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+            color: "#fbbf24",
+            marginTop: 5,
+            letterSpacing: "0.04em",
+          }}
+        >
+          ⚠ This source serves{" "}
+          {resultWaterType === "saltwater" ? "ocean/saltwater" : "freshwater"} data
+          — may not match your {userWaterType === "freshwater" ? "Fresh Water" : "Salt Water"} mode.
+        </div>
+      )}
       <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#e2e8f0", marginTop: 5, fontWeight: 600 }}>
         {item.name}
       </div>
@@ -1910,6 +1973,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                           addDsId={addDsId}
                           inView={itemInView}
                           atViewCap={atCatalogCap}
+                          userWaterType={waterType}
                         />
                       );
                     })}
@@ -1954,6 +2018,25 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               </a>
               . Datasets with WCS coverage can be saved to your library.
             </div>
+            {waterType === "freshwater" && (
+              <div
+                data-testid="ncei-freshwater-notice"
+                style={{
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  color: "#fbbf24",
+                  background: "rgba(251,191,36,0.07)",
+                  border: "1px solid rgba(251,191,36,0.25)",
+                  borderRadius: 4,
+                  padding: "6px 10px",
+                  marginTop: 8,
+                  lineHeight: 1.5,
+                  letterSpacing: "0.03em",
+                }}
+              >
+                ⚠ NCEI Geoportal serves ocean/saltwater surveys. Results are not
+                filtered by your <strong>Fresh Water</strong> mode.
+              </div>
+            )}
             {isOnline && isNceiSearching && (
               <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 4 }}>Searching…</div>
             )}
