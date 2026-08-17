@@ -12,6 +12,7 @@ import {
   saveOfflinePack,
   listOfflinePacks,
   estimatePackStorageBytes,
+  fetchDatasetBbox,
   type OfflinePack,
   type PackProgress,
 } from "@/lib/offlinePackStore";
@@ -85,8 +86,24 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   const [estimatedBytes, setEstimatedBytes] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [idbError, setIdbError] = useState(false);
+  /**
+   * Bbox derived from the server when `dataset.bbox` is null.
+   * `undefined` = derivation in progress; `null` = derivation failed (no location available).
+   */
+  const [derivedBbox, setDerivedBbox] = useState<
+    { minLon: number; maxLon: number; minLat: number; maxLat: number } | null | undefined
+  >(dataset.bbox != null ? null : undefined);
 
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  // When the dataset has no recorded bbox, attempt a silent server derivation
+  // so the amber "unavailable" warning is only shown when we truly have no location.
+  useEffect(() => {
+    if (dataset.bbox != null) return; // already have a bbox, no derivation needed
+    void fetchDatasetBbox(dataset.id).then((bbox) => {
+      setDerivedBbox(bbox); // null = derivation failed; bbox object = derived successfully
+    });
+  }, [dataset.id, dataset.bbox]);
 
   // Load existing pack state and help status on mount
   useEffect(() => {
@@ -328,8 +345,8 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
               SURVEY AREA
             </div>
             <div style={{ padding: "10px 12px" }}>
-              {/* No-bbox warning — tide/weather need a known survey area */}
-              {!dataset.bbox && (
+              {/* No-bbox warning — only shown after server derivation also finds nothing */}
+              {!dataset.bbox && derivedBbox === null && (
                 <div
                   role="note"
                   style={{

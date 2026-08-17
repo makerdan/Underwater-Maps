@@ -25,6 +25,7 @@ import {
   deleteOfflinePack,
   getExpiringPacks,
   saveOfflinePack,
+  fetchDatasetBbox,
   estimatePackStorageBytesFromBbox,
   type OfflinePack,
   type PackProgress,
@@ -963,5 +964,274 @@ describe("getPackForLocation — null-bbox packs never match", () => {
 
     const result = await getPackForLocation(42.5, -69.5);
     expect(result?.id).toBe("real");
+  });
+});
+
+// ── fetchDatasetBbox ──────────────────────────────────────────────────────────
+//
+// fetchDatasetBbox calls GET /api/datasets/:id/preview and extracts the bbox.
+// It returns null on any failure — network error, non-200, missing bbox field,
+// or the null-island sentinel {0,0,0,0}.
+
+describe("fetchDatasetBbox", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns the bbox from a successful preview response", async () => {
+    const expectedBbox = { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          datasetId: "ds-test",
+          name: "Test",
+          bbox: expectedBbox,
+          dataSource: "ncei",
+        }),
+      }),
+    );
+
+    const result = await fetchDatasetBbox("ds-test");
+    expect(result).toEqual(expectedBbox);
+  });
+
+  it("returns null when the preview response has no bbox field", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ datasetId: "ds-test", name: "Test", dataSource: "ncei" }),
+      }),
+    );
+
+    const result = await fetchDatasetBbox("ds-test");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the preview response bbox is null", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ datasetId: "ds-test", name: "Test", bbox: null, dataSource: "ncei" }),
+      }),
+    );
+
+    const result = await fetchDatasetBbox("ds-test");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the server responds with HTTP 404", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 404 }),
+    );
+
+    const result = await fetchDatasetBbox("ds-missing");
+    expect(result).toBeNull();
+  });
+
+  it("returns null on network error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("ECONNREFUSED")),
+    );
+
+    const result = await fetchDatasetBbox("ds-offline");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when bbox is the null-island sentinel {0,0,0,0}", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          datasetId: "ds-test",
+          name: "Test",
+          bbox: { minLon: 0, maxLon: 0, minLat: 0, maxLat: 0 },
+          dataSource: "unknown",
+        }),
+      }),
+    );
+
+    const result = await fetchDatasetBbox("ds-test");
+    expect(result).toBeNull();
+  });
+});
+
+// ── saveOfflinePack — bbox derived from server (F-001 extension) ──────────────
+//
+// When a dataset has no recorded bbox, saveOfflinePack derives one by calling
+// fetchDatasetBbox (GET /api/datasets/:id/preview).  If derivation succeeds,
+// the pack uses real tide and weather data and stores the derived bbox.
+// If derivation fails, the original stub behaviour applies (null-station, no
+// tide/weather fetches).
+
+describe("saveOfflinePack — derives bbox from server when dataset.bbox is null", () => {
+  const origNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (origNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", origNavigatorDescriptor);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThis as any).navigator;
+    }
+  });
+
+  const DERIVED_BBOX = { minLon: -71, maxLon: -70, minLat: 43, maxLat: 44 };
+
+  function stubSwOkAndFetchWithDerivation(previewBbox: typeof DERIVED_BBOX | null): void {
+    let capturedPort1: { onmessage: ((e: MessageEvent) => void) | null } | null = null;
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      capturedPort1 = { onmessage: null };
+      return { port1: capturedPort1, port2: {} };
+    });
+    const postMessageSpy = vi.fn().mockImplementation(() => {
+      Promise.resolve().then(() => {
+        capturedPort1?.onmessage?.({ data: { ok: true } } as MessageEvent);
+      });
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: { postMessage: postMessageSpy } }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (String(url).includes("/preview")) {
+          if (!previewBbox) {
+            return Promise.resolve({ ok: false, status: 404 });
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              datasetId: "ds-derived",
+              name: "Derived",
+              bbox: previewBbox,
+              dataSource: "ncei",
+            }),
+          });
+        }
+        if (String(url).includes("/tidal/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              station: "DERIVED-STATION",
+              heightPredictions: [{ t: new Date().toISOString(), v: 1.5 }],
+              currentPredictions: [],
+              tidalExpiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(),
+              generatedAt: new Date().toISOString(),
+            }),
+          });
+        }
+        if (String(url).includes("/weather/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              station: "DERIVED-WX",
+              observation: null,
+              snapshotAt: new Date().toISOString(),
+            }),
+          });
+        }
+        // Markers
+        return Promise.resolve({
+          ok: true,
+          json: async () => [],
+          text: async () => "[]",
+        });
+      }),
+    );
+  }
+
+  it("fetches real tide data when bbox is derived from the server", async () => {
+    stubSwOkAndFetchWithDerivation(DERIVED_BBOX);
+    const pack = await saveOfflinePack(
+      { id: "ds-derived", name: "Derived Bbox Dataset", bbox: null },
+      3,
+      () => { /* noop */ },
+    );
+    expect(pack.tidePack.station).toBe("DERIVED-STATION");
+    expect(pack.tidePack.heightPredictions).toHaveLength(1);
+  });
+
+  it("stores the derived bbox in the pack — not null", async () => {
+    stubSwOkAndFetchWithDerivation(DERIVED_BBOX);
+    const pack = await saveOfflinePack(
+      { id: "ds-derived2", name: "Derived Bbox Dataset 2", bbox: null },
+      3,
+      () => { /* noop */ },
+    );
+    expect(pack.bbox).toEqual(DERIVED_BBOX);
+  });
+
+  it("uses the derived bbox center for tide/weather API coordinates", async () => {
+    stubSwOkAndFetchWithDerivation(DERIVED_BBOX);
+    await saveOfflinePack(
+      { id: "ds-derived3", name: "Derived Bbox Dataset 3", bbox: null },
+      3,
+      () => { /* noop */ },
+    );
+    const expectedLat = (DERIVED_BBOX.minLat + DERIVED_BBOX.maxLat) / 2; // 43.5
+    const expectedLon = (DERIVED_BBOX.minLon + DERIVED_BBOX.maxLon) / 2; // -70.5
+    // Inspect the fetch mock that was registered by stubSwOkAndFetchWithDerivation.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fetchMock = (globalThis as any).fetch as ReturnType<typeof vi.fn>;
+    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => String(c[0]));
+    const tidalUrl = urls.find((u) => u.includes("/tidal/"));
+    expect(tidalUrl).toContain(`lat=${expectedLat}`);
+    expect(tidalUrl).toContain(`lon=${expectedLon}`);
+  });
+
+  it("getPackForLocation matches a pack whose bbox was derived", async () => {
+    stubSwOkAndFetchWithDerivation(DERIVED_BBOX);
+    await saveOfflinePack(
+      { id: "ds-derived4", name: "Derived Bbox Dataset 4", bbox: null },
+      3,
+      () => { /* noop */ },
+    );
+    const centerLat = (DERIVED_BBOX.minLat + DERIVED_BBOX.maxLat) / 2;
+    const centerLon = (DERIVED_BBOX.minLon + DERIVED_BBOX.maxLon) / 2;
+    const found = await getPackForLocation(centerLat, centerLon);
+    expect(found?.datasetId).toBe("ds-derived4");
+  });
+
+  it("falls back to stub behaviour when preview returns 404", async () => {
+    stubSwOkAndFetchWithDerivation(null); // preview 404 → derivation fails
+    const events: PackProgress[] = [];
+    const pack = await saveOfflinePack(
+      { id: "ds-no-preview", name: "No Preview Dataset", bbox: null },
+      3,
+      (p) => events.push(p),
+    );
+    // Stub behaviour: null station, null bbox, no real tide data.
+    expect(pack.bbox).toBeNull();
+    expect(pack.tidePack.station).toBeNull();
+    expect(pack.tidePack.heightPredictions).toEqual([]);
+    const tideEvent = events.find((p) => p.step === "tide");
+    expect(tideEvent?.error).toMatch(/tide unavailable/i);
+  });
+
+  it("emits tide progress events showing real tide data when bbox is derived", async () => {
+    stubSwOkAndFetchWithDerivation(DERIVED_BBOX);
+    const events: PackProgress[] = [];
+    await saveOfflinePack(
+      { id: "ds-derived5", name: "Derived Bbox Dataset 5", bbox: null },
+      3,
+      (p) => events.push(p),
+    );
+    const tideEvent = events.find((p) => p.step === "tide" && p.done);
+    expect(tideEvent?.error).toBeUndefined();
+    expect(tideEvent?.label).toMatch(/tide predictions saved/i);
   });
 });

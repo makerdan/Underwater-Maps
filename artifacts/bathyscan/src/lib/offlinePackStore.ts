@@ -206,6 +206,45 @@ async function deletePackCache(
 
 // ─── saveOfflinePack ──────────────────────────────────────────────────────────
 
+// ─── fetchDatasetBbox ─────────────────────────────────────────────────────────
+
+/**
+ * Try to derive a bounding box for a dataset from the server.
+ *
+ * Calls GET /api/datasets/:id/preview, which for user-uploaded custom datasets
+ * extracts the bbox from the stored terrain JSON.  Returns `null` when the
+ * dataset has no server-side bbox, the request fails, or the response carries
+ * the sentinel null-island bbox `{0,0,0,0}` (the server's error fallback).
+ *
+ * Best-effort and silent — callers should treat a `null` return as "still no
+ * location", not as an error.
+ */
+export async function fetchDatasetBbox(
+  datasetId: string,
+): Promise<{ minLon: number; maxLon: number; minLat: number; maxLat: number } | null> {
+  try {
+    const res = await authorizedFetch(`${API_BASE}/api/datasets/${datasetId}/preview`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
+    };
+    const bbox = data?.bbox;
+    if (!bbox) return null;
+    // Reject the server's null-island error fallback {0,0,0,0}.
+    if (
+      bbox.minLon === 0 &&
+      bbox.maxLon === 0 &&
+      bbox.minLat === 0 &&
+      bbox.maxLat === 0
+    ) {
+      return null;
+    }
+    return bbox;
+  } catch {
+    return null;
+  }
+}
+
 export async function saveOfflinePack(
   dataset: {
     id: string;
@@ -217,16 +256,19 @@ export async function saveOfflinePack(
   days: number,
   onProgress: (p: PackProgress) => void,
 ): Promise<OfflinePack> {
-  // A dataset without a bbox has no known location. There is nothing sensible
-  // to fetch tide/weather for — the old 0/0 fallback silently downloaded Gulf
-  // of Guinea data and saved it as the user's pack. Instead we skip both
-  // remote fetches entirely and store null-station stubs (see below).
-  const hasBbox = dataset.bbox != null;
-  const centerLat = dataset.bbox
-    ? (dataset.bbox.minLat + dataset.bbox.maxLat) / 2
+  // When no bbox was supplied (or it was explicitly null), attempt to derive one
+  // from the server — the /preview endpoint extracts it from stored terrain JSON
+  // for user-uploaded datasets.  If derivation also fails the old "no location"
+  // stub behaviour applies: tide/weather fetches are skipped and the pack stores
+  // null-station stubs with a visible warning.
+  const resolvedBbox =
+    dataset.bbox != null ? dataset.bbox : await fetchDatasetBbox(dataset.id);
+  const hasBbox = resolvedBbox != null;
+  const centerLat = resolvedBbox
+    ? (resolvedBbox.minLat + resolvedBbox.maxLat) / 2
     : 0;
-  const centerLon = dataset.bbox
-    ? (dataset.bbox.minLon + dataset.bbox.maxLon) / 2
+  const centerLon = resolvedBbox
+    ? (resolvedBbox.minLon + resolvedBbox.maxLon) / 2
     : 0;
 
   const terrainUrl = `${API_BASE}/api/datasets/${dataset.id}/terrain`;
@@ -380,9 +422,9 @@ export async function saveOfflinePack(
       id,
       datasetId: dataset.id,
       datasetName: dataset.name,
-      // Store the actual null (never a {0,0,0,0} fallback) so callers can
-      // distinguish "no bbox" from "bbox at the equator".
-      bbox: dataset.bbox ?? null,
+      // Store the resolved bbox — which may have been derived from the server
+      // when none was supplied by the caller — or null when neither is available.
+      bbox: resolvedBbox ?? null,
       centerLat,
       centerLon,
       savedAt: new Date().toISOString(),
@@ -392,9 +434,9 @@ export async function saveOfflinePack(
       weatherPack,
       markersPack,
       storageBytesEstimate:
-        (dataset.bbox
+        (resolvedBbox
           ? estimatePackStorageBytesFromBbox({
-              bbox: dataset.bbox,
+              bbox: resolvedBbox,
               resolutionM: dataset.resolutionM ?? undefined,
             })
           : estimateFromPredictions(tidePack)) + markersBytes,
