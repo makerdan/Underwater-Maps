@@ -2107,22 +2107,22 @@ function LandingPage() {
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#040810] px-4 text-center">
       <div className="absolute inset-0 bg-gradient-to-b from-[#040810] via-[#061220] to-[#040810] pointer-events-none" />
       <div className="relative z-10">
-        <p className="text-[#94a3b8] font-mono text-[18px] tracking-[0.3em] uppercase mb-4">Deep Sea Explorer</p>
-        <h1 className="text-[72px] font-mono font-bold text-[#e2e8f0] tracking-wider mb-2">BATHYSCAN</h1>
+        <p className="text-[#94a3b8] font-mono text-[14px] sm:text-[18px] tracking-[0.3em] uppercase mb-4">Deep Sea Explorer</p>
+        <h1 className="text-[42px] sm:text-[72px] font-mono font-bold text-[#e2e8f0] tracking-wider mb-2">BATHYSCAN</h1>
         <div className="h-px bg-gradient-to-r from-transparent via-[#38bdf8]/40 to-transparent mb-8" />
-        <p className="text-[#cbd5e1] font-mono text-[21px] mb-10 max-w-sm mx-auto leading-relaxed">
+        <p className="text-[#cbd5e1] font-mono text-[16px] sm:text-[21px] mb-10 w-full max-w-sm mx-auto leading-relaxed">
           Explore 3D bathymetric seafloor maps. Upload sonar data, drop markers, and dive in.
         </p>
         <button
           onClick={() => setLocation("/sign-in")}
-          className="px-8 py-3 bg-[#0369a1] hover:bg-[#0284c7] text-white font-mono text-[21px] tracking-widest uppercase rounded transition-colors"
+          className="px-8 py-3 bg-[#0369a1] hover:bg-[#0284c7] text-white font-mono text-[16px] sm:text-[21px] tracking-widest uppercase rounded transition-colors"
         >
           Sign In to Explore
         </button>
         <div className="mt-4">
           <button
             onClick={() => setLocation("/sign-up")}
-            className="text-[#38bdf8] font-mono text-[18px] hover:text-[#7dd3fc] transition-colors"
+            className="text-[#38bdf8] font-mono text-[14px] sm:text-[18px] hover:text-[#7dd3fc] transition-colors"
           >
             Create account
           </button>
