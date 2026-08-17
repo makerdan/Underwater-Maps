@@ -166,6 +166,22 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
   /** Step 1 secondary CTA: load the demo dataset and dismiss the tour. */
   const handleLoadDemo = useCallback(() => {
     dismiss();
+    // The demo is a freshwater lake. If the app is still in saltwater mode
+    // (the default for new users), align the exploration mode FIRST and let
+    // useWaterTypeSideEffects drive the load: it clears saltwater-derived
+    // state, swaps the colormap default, and auto-loads the first freshwater
+    // preset (Lake Ray Roberts itself — directly when the freshwater dataset
+    // list is already cached, or via the startup auto-select once the list
+    // arrives). Calling requestDatasetSwitch here as well would race that
+    // machinery (a second in-flight switch request is dropped), so this
+    // branch delegates fully. Without this, the demo used to load underneath
+    // a fully saltwater UI: SALT toggle active, ocean colormap, saltwater
+    // zone mapping, and a My Saves / dataset list that excluded the demo.
+    const settings = useSettingsStore.getState();
+    if (settings.waterType !== "freshwater") {
+      settings.setWaterType("freshwater");
+      return;
+    }
     void requestDatasetSwitch({
       datasetId: DEMO_DATASET_ID,
       datasetName: DEMO_DATASET_NAME,

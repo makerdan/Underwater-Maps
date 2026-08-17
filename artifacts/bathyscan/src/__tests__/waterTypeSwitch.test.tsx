@@ -51,7 +51,7 @@ vi.mock("@tanstack/react-query", () => ({
 // (which assert the switch happens) keep exercising the post-confirm path.
 // Individual tests can override via requestDatasetSwitchMock.
 const requestDatasetSwitchMock = vi.fn(
-  async (args: { onConfirm: () => void; onCancel?: () => void }) => {
+  async (args: { onConfirm: () => void; onCancel?: () => void }): Promise<boolean | void> => {
     args.onConfirm();
   },
 );
@@ -435,6 +435,32 @@ describe("water-type switch (end-to-end)", () => {
     expect(useTerrainStore.getState().visibleDatasets[0]!.datasetId).toBe(RAY);
     expect(useTerrainStore.getState().activeGrid).toBe(rayGrid);
     expect(screen.getByTestId("active-dataset").textContent).toBe(RAY);
+  });
+
+  it("reverts the water type when the switch request is dropped by the in-flight guard (WT-002)", async () => {
+    // Simulate requestDatasetSwitch's in-flight guard: another dataset switch
+    // is already resolving, so this request is dropped — it resolves `false`
+    // and NEITHER callback ever fires. The hook must revert the mode like a
+    // cancel; otherwise the toggle/badges/My Saves filter flip to the new
+    // mode while the scene stays in the previous environment.
+    requestDatasetSwitchMock.mockImplementation(async () => false);
+
+    const seededGrid = { fakeGrid: true } as never;
+    useTerrainStore.setState({ activeGrid: seededGrid, overviewGrid: null });
+
+    const onDatasetChange = vi.fn();
+    render(<Harness onDatasetChange={onDatasetChange} />);
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByTestId("water-type-freshwater"));
+    });
+
+    // Dropped request: water type reverted, no dataset change, no teardown.
+    expect(useSettingsStore.getState().waterType).toBe("saltwater");
+    expect(onDatasetChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId("active-dataset").textContent).toBe("salt-1");
+    expect(useTerrainStore.getState().activeGrid).toBe(seededGrid);
   });
 
   it("preserves a user-chosen non-default colormap across a water-type switch", async () => {

@@ -83,6 +83,7 @@ const SCANNED_FILES: string[] = [
   "components/LivePanel.tsx",
   "components/MarkerForm.tsx",
   "components/MySavesSection.tsx",
+  "components/OnboardingOverlay.tsx",
   "components/Minimap.tsx",
   "components/OverlaysToolsPanel.tsx",
   "components/OverviewMap.tsx",

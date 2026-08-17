@@ -4,7 +4,7 @@
  */
 import React from "react";
 import { useSettingsStore, type WaterType } from "@/lib/settingsStore";
-import { usePutSettings } from "@workspace/api-client-react";
+import { clearStaleDefaultMapLoad } from "@/lib/clearStaleDefaultMapLoad";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 
 interface WaterTypeToggleProps {
@@ -19,21 +19,21 @@ const OPTIONS: { value: WaterType; label: string; icon: string; color: string }[
 export const WaterTypeToggle: React.FC<WaterTypeToggleProps> = ({ onChange }) => {
   const waterType = useSettingsStore((s) => s.waterType);
   const setWaterType = useSettingsStore((s) => s.setWaterType);
-  const putSettings = usePutSettings();
 
   const handleSelect = (v: WaterType) => {
     if (v === waterType) return;
     // Store update triggers App.tsx subscription which clears derived
     // state (terrain/classification/habitat) and auto-loads the first
-    // preset of the new water type.
+    // preset of the new water type. Server persistence rides the debounced
+    // settings sync (useServerSettingsSync) — the same path the Settings
+    // "Exploration Mode" radios use. Do NOT add a direct PUT here: an
+    // immediate out-of-band PUT races the serialized sync chain when the
+    // switch is cancelled and the mode reverts, and can leave the server
+    // holding the wrong water type.
     setWaterType(v);
-    // Persist immediately so the choice survives a reload even if the
-    // user never visits the Settings page (which also persists on save).
-    try {
-      putSettings.mutate({ data: { waterType: v } as never });
-    } catch {
-      /* best-effort; settings store still has the value locally */
-    }
+    // A preset Default Map Load is water-type specific — reconcile it the
+    // same way the Settings "Exploration Mode" radios do.
+    void clearStaleDefaultMapLoad(v);
     onChange?.(v);
   };
 

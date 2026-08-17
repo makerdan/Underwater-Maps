@@ -455,3 +455,73 @@
 ---
 
 *Report ends here. Original audit (2026-08-12) modified no code. Closure pass (2026-08-16): 28 of 30 original findings verified Closed; SEED F-001 and NEW-001 Fixed; SEED F-008 Deferred (architectural, tracked as its own task).*
+
+---
+
+# Water-type scoped audit (2026-08-17)
+
+**Scope:** Water-type (freshwater/saltwater) user journeys only — Task-scoped follow-up to the 2026-08-12/16 full audit above, which had no still-open water-type items at closure (SEED F-008 deferral is upload-persistence, unrelated).
+**Mode:** Audit-and-fix. Gated phases applied: backend ✓, auth ✓, multi-tool ✓, interactions ✓.
+
+## Journey map
+
+| ID | Journey |
+|---|---|
+| J-A | Fresh/Salt switch via compact HUD toggle (WaterTypeToggle) |
+| J-B | Fresh/Salt switch via Settings "Exploration Mode" radios (GeneralSection) |
+| J-C | My Saves badges + filtering under each mode |
+| J-D | Find Data catalog search results and labels across a mode switch |
+| J-E | Lake Ray Roberts demo load from onboarding |
+| J-F | Legacy uploads / orphan saves with missing water type |
+
+## Summary
+
+| Severity | Found | Fixed | Deferred | Manual QA |
+|---|---|---|---|---|
+| Critical | 0 | 0 | 0 | 0 |
+| High | 1 | 1 | 0 | 0 |
+| Medium | 4 | 3 | 1 (WT-006 → Task #4004) | 0 |
+| Low | 2 | 1 | 0 | 1 (WT-007) |
+| **Total** | **7** | **5** | **1** | **1** |
+
+J-C and the J-F UI layer were walked and found healthy: my-saves is server-filtered with `catalog: null` orphans returned in both modes, badges are null-safe, and missing-water-type uploads stay visible in both modes (covered by existing `MySavesSection.test.tsx` and `my-saves-routes.test.ts`). No finding.
+
+## Findings
+
+### WT-001 — Demo load leaves the app in saltwater mode (J-E, Phase 1, **High**) — FIXED
+**Failure:** `OnboardingOverlay.handleLoadDemo` requested the Lake Ray Roberts switch without aligning `waterType`. A new user (saltwater default) got the freshwater demo underneath a fully saltwater UI: SALT toggle active, ocean colormap, saltwater zone slots, and the demo absent from the dataset picker / My Saves lists.
+**Fix:** When the mode is not freshwater, the CTA now flips only `waterType` and delegates the load to `useWaterTypeSideEffects` (which owns teardown, colormap swap, and auto-load of the first freshwater preset — Ray Roberts itself). A direct `requestDatasetSwitch` alongside would race that machinery (second in-flight request is dropped), so the branch delegates fully. Already-freshwater users keep the direct switch path.
+**Test:** `artifacts/bathyscan/src/__tests__/OnboardingOverlay.demoWaterType.test.tsx`
+
+### WT-002 — Mid-switch mode toggle leaves half-applied state (Phase 7 concurrency, **Medium**) — FIXED
+**Failure:** `requestDatasetSwitch`'s in-flight guard silently dropped a second request without invoking either callback. Toggling the mode during an active dataset switch flipped `waterType` (badges, filters, toggle) while the scene stayed in the previous environment — no teardown, no auto-load, no way to detect it.
+**Fix:** `requestDatasetSwitch` now returns `Promise<boolean>` — `false` only on the in-flight drop, `true` on every handled path. `useWaterTypeSideEffects` reverts the mode (like a cancel) when its request reports `false` and the user hasn't switched again since.
+**Tests:** `artifacts/bathyscan/src/__tests__/simulatedDataStore.inFlightDrop.test.ts` (contract), `waterTypeSwitch.test.tsx` › "reverts the water type when the switch request is dropped by the in-flight guard (WT-002)" (hook revert)
+
+### WT-003 — Find Data search ignores the active mode (J-D, Phase 1, **Medium**) — FIXED
+**Failure:** The catalog search params omitted `waterType` even though the API supports the filter, so both modes' datasets appeared regardless of the toggle; a comment claimed filtering that didn't exist, and a manual invalidation effect refetched identical unfiltered results on mode change.
+**Fix:** `waterType` is now part of the search params (and therefore the react-query key), so results are server-filtered and a mode switch while the panel is open refetches automatically; the redundant invalidation effect was removed.
+**Test:** `artifacts/bathyscan/src/__tests__/FindDataPanel.waterTypeParam.test.tsx`
+**Observation (no finding):** the NCEI/federated tabs intentionally query external sources and are not mode-filtered.
+
+### WT-004 — Toggle and Settings radios diverge on stale default cleanup (J-A/J-B, Phase 4, **Medium**) — FIXED
+**Failure:** Switching modes via the Settings radios reconciled a now-invalid preset Default Map Load (clearing it if absent from the new mode's list); the compact HUD toggle did not. A stale preset default left a blank Settings picker and a silent `datasets[0]` substitution at startup.
+**Fix:** Extracted the reconcile logic into a shared helper `src/lib/clearStaleDefaultMapLoad.ts` used by BOTH entry points — this shared utility is also the class-level guard for the "switch entry-point drift" failure class (WT-004 + WT-005 both stem from the two paths diverging).
+**Tests:** `artifacts/bathyscan/src/__tests__/clearStaleDefaultMapLoad.test.ts` (helper), `WaterTypeToggle.test.tsx` (toggle wiring)
+
+### WT-005 — Toggle fires a redundant direct settings PUT (J-A, Phase 8, **Low, XS**) — FIXED
+**Failure:** `WaterTypeToggle` fired an immediate `putSettings.mutate({waterType})` on click, racing the serialized debounced sync (`useServerSettingsSync`) — on a cancelled switch the out-of-band PUT could land after the revert's flush and leave the server holding the wrong mode. The Settings radios never did this.
+**Fix:** Removed the direct PUT; persistence rides the debounced sync, same as the radios.
+**Test:** `artifacts/bathyscan/src/__tests__/WaterTypeToggle.test.tsx` › "does NOT fire a direct settings PUT…(WT-005)"
+
+### WT-006 — Legacy saves default to "saltwater" server-side (J-F, Phase 4, Medium) — **Deferred — covered by Task #4004**
+`user-datasets.ts` legacy-row sanitization (`sanitizeLegacyStoredJson` / metaJson paths) defaults missing water type to `"saltwater"`, which is what mislabels Lake Ray Roberts saves. This is exactly the server-side classification fallback + backfill scoped to Task #4004; not fixed here. **Next step:** Task #4004 implements the classification fallback and the backfill script for never-re-opened lake saves (see also Task #3997).
+
+### WT-007 — Second-tab live sync of mode ([MANUAL QA NEEDED], Phase 12, Low)
+No `storage`-event listener mirrors a mode switch into an already-open second tab of the same browser; the other tab updates only on reload (server sync covers cross-device and reload cases). Matches full-audit finding F-010 (storage event listeners, "Do soon") — fold water type into that work. **Next step:** verify in manual QA whether two-tab use is common enough to prioritize F-010.
+
+## Regression hardening
+- Every fixed finding has a named test (listed per finding above); all colocated in `artifacts/bathyscan/src/__tests__/` per repo convention (flat test dir, not per-component `__tests__/`).
+- Class-level guard: `clearStaleDefaultMapLoad.ts` is the single shared implementation both switch entry points call, eliminating the drift class behind WT-004/WT-005.
+
+*Water-type scoped audit ends here.*

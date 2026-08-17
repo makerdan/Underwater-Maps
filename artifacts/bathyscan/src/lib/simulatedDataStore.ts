@@ -168,8 +168,14 @@ export function __resetInFlightForTest(): void {
  * If a switch is already in flight the call returns immediately without
  * invoking either callback, preventing concurrent requests from overwriting
  * each other's `onConfirm`/`onCancel` closures.
+ *
+ * @returns `true` when the request was handled (onConfirm/onCancel has fired
+ *   or the confirmation dialog is now pending and will fire one of them);
+ *   `false` when the request was DROPPED by the in-flight guard — neither
+ *   callback will ever fire, so callers that flipped state in anticipation
+ *   of the switch must revert it themselves.
  */
-export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<void> {
+export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<boolean> {
   const { datasetId, onConfirm, silent = false } = args;
   const onCancel = args.onCancel ?? (() => {});
 
@@ -182,7 +188,7 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
     // (and any UI cleanup in onConfirm, e.g. closing the Find Data panel)
     // happens immediately instead of after seconds of preflight retries.
     onConfirm();
-    return;
+    return true;
   }
 
   // In-flight guard: if a switch is already being resolved (awaiting the
@@ -190,7 +196,7 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
   // letting two concurrent resolutions race to write `pending`. The caller
   // can re-try once the first switch settles.
   if (_inFlight) {
-    return;
+    return false;
   }
 
   _inFlight = true;
@@ -204,7 +210,7 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
         // treated as "proceed" — the in-scene HUD badge communicates synthetic
         // data once the scene loads.
         onConfirm();
-        return;
+        return true;
       }
       // All retry attempts exhausted — treat as worst-case (do not silently load).
       preview = {
@@ -221,13 +227,13 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
     if (silent) {
       // Silent mode: never open the dialog regardless of dataSource.
       onConfirm();
-      return;
+      return true;
     }
 
     const needsWarning = preview.dataSource === "unknown";
     if (!needsWarning || suppressed) {
       onConfirm();
-      return;
+      return true;
     }
 
     setPending({
@@ -244,6 +250,7 @@ export async function requestDatasetSwitch(args: RequestSwitchArgs): Promise<voi
         onCancel();
       },
     });
+    return true;
   } finally {
     _inFlight = false;
   }

@@ -88,6 +88,19 @@ export function useWaterTypeSideEffects(
           prevWaterTypeRef.current = prev;
           try { useSettingsStore.getState().setWaterType?.(prev); } catch { /* noop */ }
         },
+      }).then((accepted) => {
+        // Only an explicit `false` means the request was dropped — treat
+        // anything else (true, or undefined from legacy stubs) as handled.
+        if (accepted !== false) return;
+        // Dropped by the in-flight guard: another dataset switch was already
+        // resolving, so neither callback will ever fire — no teardown, no
+        // auto-load. Revert the mode like a cancel; otherwise badges, My
+        // Saves filtering, and the toggle would flip to the new mode while
+        // the scene stayed in the previous environment (half-applied state).
+        const st = useSettingsStore.getState();
+        if (st.waterType !== waterType) return; // user already switched again
+        prevWaterTypeRef.current = prev;
+        try { st.setWaterType?.(prev); } catch { /* noop */ }
       });
     } else {
       applySwitch(null);

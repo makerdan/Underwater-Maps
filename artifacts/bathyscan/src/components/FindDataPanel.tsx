@@ -1140,9 +1140,15 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   // Catalog search
   // "intertidal" is a client-side-only filter (not a real dataType on the API),
   // so we don't forward it to the server — we filter results locally instead.
+  // The active exploration mode (Fresh/Salt) narrows results server-side:
+  // waterType is part of the params — and therefore the query key — so
+  // switching modes while the panel is open refetches automatically and the
+  // results always reflect the current mode.
+  const waterType = useSettingsStore((s) => s.waterType);
   const searchParams = {
     q: debouncedQuery || undefined,
     dataType: (dataTypeFilter && dataTypeFilter !== "intertidal" ? dataTypeFilter : undefined) as GetDatasetsCatalogSearchDataType | undefined,
+    waterType,
   };
   const { data: rawSearchResults = [], isFetching: isSearching, dataUpdatedAt: catalogDataUpdatedAt } = useGetDatasetsCatalogSearch(
     searchParams,
@@ -1178,14 +1184,6 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const searchResults = dataTypeFilter === "intertidal"
     ? rawSearchResults.filter((e) => INTERTIDAL_CATALOG_IDS.has(e.id))
     : rawSearchResults;
-
-  // Invalidate catalog search when the user changes water type so freshwater /
-  // saltwater datasets are filtered correctly on the next fetch.
-  const waterType = useSettingsStore((s) => s.waterType);
-  useEffect(() => {
-    void qc.invalidateQueries({ queryKey: getGetDatasetsCatalogSearchQueryKey(searchParams) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- qc is a stable QueryClient ref; waterType is the sole invalidation trigger (searchParams changes self-refetch via react-query)
-  }, [waterType]);
 
   // My Saves — polled to keep savedCatalogIds current and to feed handleSaveFolderResponse
   const {
