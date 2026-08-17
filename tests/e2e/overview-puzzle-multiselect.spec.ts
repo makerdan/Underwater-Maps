@@ -264,13 +264,17 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
 
     // Exactly one group must now exist, and it must contain both IDs.
     await expect
-      .poll(() => getPuzzleGroups(page), { timeout: 3_000 })
-      .toSatisfy((groups: Record<string, string[]>) => {
-        const entries = Object.values(groups);
-        if (entries.length !== 1) return false;
-        const members = entries[0]!;
-        return members.includes(primaryId) && members.includes(PHANTOM_ID);
-      });
+      .poll(
+        async () => {
+          const groups = await getPuzzleGroups(page);
+          const entries = Object.values(groups);
+          if (entries.length !== 1) return false;
+          const members = entries[0]!;
+          return members.includes(primaryId) && members.includes(PHANTOM_ID);
+        },
+        { timeout: 3_000 },
+      )
+      .toBe(true);
   });
 
   // ---------------------------------------------------------------------------
@@ -379,23 +383,30 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
 
     // Transform for "e2e-synthetic" must be hydrated from sessionStorage.
     await expect
-      .poll(() => getPuzzleTransform(page, "e2e-synthetic"), { timeout: 3_000 })
-      .toSatisfy(
-        (xf: { tx: number; ty: number; angleDeg: number } | null) =>
-          xf !== null && xf.tx === 42 && xf.ty === -17 && xf.angleDeg === 90,
-      );
+      .poll(
+        async () => {
+          const xf = await getPuzzleTransform(page, "e2e-synthetic");
+          return xf !== null && xf.tx === 42 && xf.ty === -17 && xf.angleDeg === 90;
+        },
+        { timeout: 3_000 },
+      )
+      .toBe(true);
 
     // Group "group-1" must also be hydrated.
     await expect
-      .poll(() => getPuzzleGroups(page), { timeout: 3_000 })
-      .toSatisfy((groups: Record<string, string[]>) => {
-        const members = groups["group-1"];
-        return (
-          Array.isArray(members) &&
-          members.includes("e2e-synthetic") &&
-          members.includes(PHANTOM_ID)
-        );
-      });
+      .poll(
+        async () => {
+          const groups = await getPuzzleGroups(page);
+          const members = groups["group-1"];
+          return (
+            Array.isArray(members) &&
+            members.includes("e2e-synthetic") &&
+            members.includes(PHANTOM_ID)
+          );
+        },
+        { timeout: 3_000 },
+      )
+      .toBe(true);
   });
 
   // ---------------------------------------------------------------------------
@@ -432,8 +443,8 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
 
     // Confirm the group exists before resetting.
     await expect
-      .poll(() => getPuzzleGroups(page), { timeout: 3_000 })
-      .toSatisfy((g: Record<string, string[]>) => Object.keys(g).length === 1);
+      .poll(async () => Object.keys(await getPuzzleGroups(page)).length === 1, { timeout: 3_000 })
+      .toBe(true);
 
     // Click the Reset button.
     const resetBtn = page.getByTestId("overview-puzzle-reset");
@@ -442,8 +453,8 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
 
     // All groups must be gone.
     await expect
-      .poll(() => getPuzzleGroups(page), { timeout: 3_000 })
-      .toSatisfy((g: Record<string, string[]>) => Object.keys(g).length === 0);
+      .poll(async () => Object.keys(await getPuzzleGroups(page)).length === 0, { timeout: 3_000 })
+      .toBe(true);
 
     // sessionStorage keys must be absent after reset.
     const storageCleared = await page.evaluate(() => {
