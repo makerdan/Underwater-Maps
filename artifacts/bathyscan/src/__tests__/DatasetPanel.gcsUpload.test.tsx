@@ -270,9 +270,6 @@ vi.mock("@/components/ProvenancePanel", () => ({
   ProvenancePanel: () => null,
 }));
 
-vi.mock("@/components/DatasetFolderTree", () => ({
-  DatasetFolderTree: () => null,
-}));
 
 vi.mock("@/components/ErrorBoundary", () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) =>

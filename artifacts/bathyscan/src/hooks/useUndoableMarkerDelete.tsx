@@ -1,7 +1,7 @@
 /**
  * useUndoableMarkerDelete — deferred-DELETE wrapper around
  * `useDeleteMarkersId` that mirrors the dataset/folder undo pattern in
- * DatasetFolderTree and FindDataPanel.
+ * MySavesSection and FindDataPanel.
  *
  * Calling `requestDelete(marker, datasetId)`:
  *   1. Snapshots the current marker-list cache for that dataset.

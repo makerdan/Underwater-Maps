@@ -215,7 +215,7 @@ test.describe("dataset folders API (auth-bypass)", () => {
 // These tests drive the real browser UI with route-mocked API responses so no
 // database seed is required. Each test:
 //   1. Intercepts GET /api/user/folders + GET /api/user/datasets to inject
-//      fixture data into the DatasetFolderTree.
+//      fixture data into the dataset library tree.
 //   2. Seeds synthetic terrain via __bathyTest.seedTerrain so the Explore
 //      sidebar renders the MY LIBRARY section (same pattern used by the
 //      upload-autosave spec).
@@ -326,7 +326,7 @@ test.describe("dataset folders — UI action bar (route-mocked)", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await ensureExploreAndLibrary(page);
 
-    // Wait for the DatasetFolderTree to render the anchor dataset row.
+    // Wait for the library tree to render the anchor dataset row.
     const anchorRow = page.getByTestId(`btn-user-dataset-${ANCHOR.id}`);
     await anchorRow.waitFor({ state: "visible", timeout: 10_000 });
 

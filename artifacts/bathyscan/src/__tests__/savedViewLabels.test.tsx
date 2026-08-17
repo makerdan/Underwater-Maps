@@ -237,9 +237,6 @@ vi.mock("@/lib/units", () => ({
     `${min} ${units} to ${max} ${units}`,
 }));
 
-vi.mock("@/components/DatasetFolderTree", () => ({
-  DatasetFolderTree: () => null,
-}));
 
 vi.mock("@/components/help/HelpButton", () => ({
   HelpIcon: () => null,

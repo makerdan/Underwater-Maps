@@ -1298,7 +1298,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   };
 
   // ─── Delete user dataset — clean up active state when the row goes away ──
-  // DatasetFolderTree owns the delete mutation (single-row and recursive
+  // MySavesSection owns the delete mutation (single-row and recursive
   // folder delete). When it finishes, it tells us which dataset ids were
   // removed so we can drop active-dataset state and clear the scene if the
   // user just deleted the dataset they were looking at.

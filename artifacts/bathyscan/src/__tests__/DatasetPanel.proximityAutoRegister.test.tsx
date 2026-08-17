@@ -228,7 +228,6 @@ vi.mock("@/lib/fetchWithProgress", () => ({ fetchJsonWithProgress: vi.fn() }));
 vi.mock("@/components/GpsImportDialog", () => ({ GpsImportDialog: () => null }));
 vi.mock("@/components/GpsExportDialog", () => ({ GpsExportDialog: () => null }));
 vi.mock("@/components/ProvenancePanel", () => ({ ProvenancePanel: () => null }));
-vi.mock("@/components/DatasetFolderTree", () => ({ DatasetFolderTree: () => null }));
 vi.mock("@/components/ErrorBoundary", () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),

@@ -18,10 +18,10 @@ async function waitForTestApi(page: Page): Promise<void> {
 
 test.describe("BathyScan — Depth profile flow", () => {
   test.beforeEach(async ({ page }) => {
-    // Stub /api/folders → [] so DatasetFolderTree doesn't crash on
+    // Stub /api/folders → [] so the dataset library UI doesn’t crash on
     // malformed folder data (pre-existing bug unrelated to this test).
     // Stub library-loading endpoints with empty arrays so DatasetPanel /
-    // DatasetFolderTree don't crash on pre-existing malformed responses
+    // the dataset library UI don’t crash on pre-existing malformed responses
     // (unrelated to the depth-profile feature under test).
     const emptyJson = (route: import("@playwright/test").Route) =>
       route.fulfill({

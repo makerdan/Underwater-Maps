@@ -3,7 +3,7 @@
  *
  * Tracks the one dataset whose terrain payload is currently downloading
  * (matches today's single-load behaviour) so the row in DatasetPanel /
- * DatasetFolderTree can render an accurate circular progress dial.
+ * the dataset library UI can render an accurate circular progress dial.
  *
  * Two progress signals are supported:
  *

@@ -19,3 +19,9 @@ Full detail in `docs/audits/bug-audit-preexisting-2026-08.md`.
 - Raw `pnpm audit --audit-level=moderate` — 6 dev-only vulns (5 moderate + 1 exempted high via jsdom→undici; 1 postcss). Registered check:audit gate is green.
 
 **How to apply:** don't cite the resolved items as pre-existing failures in new plans; a red in one of them is a NEW regression. Skip-reason completions citing this baseline should reference only the still-live items.
+
+Update 2026-08-17 (later): new pre-existing baseline breakage from mobile-task merges, verified on clean HEAD:
+- typecheck: bathyscan src/App.tsx TS2322 — `planContent` prop not on MobileChartShell
+- unit: appTsxDuplicateHooks.test.ts corrupted (undefined absPath/relPath, duplicated test bodies — concurrent-merge damage; 7 failures) + MobileChrome.test.tsx 3 gear-button failures
+- lint: no-duplicate-imports in App.tsx and useMobileChartOverlays.ts; no-unused-vars in the corrupted test file
+- check:failure-gate-self-test fails on branches predating the #4090-era fix; check:regression-guard self-test has the same TASK_PLAN_FILE env-leak (fix still pending) — same-tier --skip both.

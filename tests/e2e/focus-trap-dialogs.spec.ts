@@ -3,7 +3,7 @@ import { test, expect, type Page } from "./fixtures";
 /**
  * Focus-trap e2e tests for the two custom confirm dialogs:
  *   - RemoveDatasetConfirmDialog (DatasetPanel.tsx)
- *   - ConfirmDialog (DatasetFolderTree.tsx)
+ *   - ConfirmDialog (MySavesSection delete confirm)
  *
  * Strategy:
  *   Both dialogs are custom overlays (not Radix/Shadcn) that previously had
