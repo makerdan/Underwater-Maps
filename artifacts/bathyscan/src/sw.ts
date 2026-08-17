@@ -4,6 +4,7 @@ import { registerRoute } from "workbox-routing";
 import { StaleWhileRevalidate, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 import { handleSwMessage, PACK_TERRAIN_CACHE_NAME } from "./lib/swMessageHandler";
+import { createPackFirstHandler } from "./lib/swPackFirstHandler";
 
 declare const self: ServiceWorkerGlobalScope;
 declare const __BUILD_HASH__: string;
@@ -55,42 +56,40 @@ registerRoute(
   }),
 );
 
-// Terrain and overview: serve from persistent pack cache first (CacheFirst)
-// when offline; online requests still go through StaleWhileRevalidate so the
-// versioned cache stays fresh. The persistent pack cache is populated by the
-// CACHE_PACK message handler below.
-registerRoute(
-  ({ url, request }: { url: URL; request: Request }) =>
-    /\/api\/datasets\/[^/]+\/terrain/.test(url.pathname) &&
-    request.headers.get("x-serve-from-pack") === "1",
-  new CacheFirst({ cacheName: PACK_TERRAIN_CACHE }),
-);
+// Terrain and overview: single route per path — persistent pack cache first,
+// then the versioned StaleWhileRevalidate runtime cache. The pack cache
+// (populated by the CACHE_PACK message handler below) intentionally survives
+// SW upgrades, so saved offline packs keep working after an app update wipes
+// the versioned caches. The pack check applies to ALL terrain/overview
+// requests: the old `x-serve-from-pack: 1` header gate meant no normal
+// terrain load ever reached the persistent cache, silently breaking saved
+// packs on every update. Registered as one route per path because Workbox
+// matches first-registered routes — a pack fallback registered after the SWR
+// route would never run (same reasoning as the /api/markers route below).
+// useBulkOfflinePack's integrity probe still sends the header; the handler
+// ignores it and checks the pack cache regardless.
+const terrainRuntimeStrategy = new StaleWhileRevalidate({
+  cacheName: `${CACHE_VERSION}-api-terrain`,
+  plugins: [
+    new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }),
+  ],
+});
 
 registerRoute(
   ({ url }: { url: URL }) => /\/api\/datasets\/[^/]+\/terrain/.test(url.pathname),
-  new StaleWhileRevalidate({
-    cacheName: `${CACHE_VERSION}-api-terrain`,
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }),
-    ],
-  }),
+  createPackFirstHandler(terrainRuntimeStrategy),
 );
 
-registerRoute(
-  ({ url, request }: { url: URL; request: Request }) =>
-    /\/api\/datasets\/[^/]+\/overview/.test(url.pathname) &&
-    request.headers.get("x-serve-from-pack") === "1",
-  new CacheFirst({ cacheName: PACK_TERRAIN_CACHE }),
-);
+const overviewRuntimeStrategy = new StaleWhileRevalidate({
+  cacheName: `${CACHE_VERSION}-api-overview`,
+  plugins: [
+    new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }),
+  ],
+});
 
 registerRoute(
   ({ url }: { url: URL }) => /\/api\/datasets\/[^/]+\/overview/.test(url.pathname),
-  new StaleWhileRevalidate({
-    cacheName: `${CACHE_VERSION}-api-overview`,
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }),
-    ],
-  }),
+  createPackFirstHandler(overviewRuntimeStrategy),
 );
 
 // Markers: the persistent pack cache (populated at pack-save time by the
