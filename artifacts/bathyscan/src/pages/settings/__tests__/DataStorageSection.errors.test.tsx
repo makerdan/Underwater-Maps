@@ -37,7 +37,7 @@ const h = vi.hoisted(() => ({
   clearUpscaleCache: vi.fn(),
   listOfflinePacks: vi.fn(),
   deleteOfflinePack: vi.fn(),
-  getHelpPackStatus: vi.fn(),
+  getHelpPackRecord: vi.fn(),
   deleteHelpPack: vi.fn(),
   toast: vi.fn(),
 }));
@@ -85,7 +85,7 @@ vi.mock("@/lib/offlinePackStore", () => ({
 }));
 
 vi.mock("@/lib/helpPackStore", () => ({
-  getHelpPackStatus: h.getHelpPackStatus,
+  getHelpPackRecord: h.getHelpPackRecord,
   deleteHelpPack: h.deleteHelpPack,
 }));
 
@@ -139,7 +139,7 @@ beforeEach(() => {
   h.clearUpscaleCache.mockResolvedValue(undefined);
   h.listOfflinePacks.mockResolvedValue([]);
   h.deleteOfflinePack.mockResolvedValue(undefined);
-  h.getHelpPackStatus.mockResolvedValue({ saved: false });
+  h.getHelpPackRecord.mockResolvedValue(null);
   h.deleteHelpPack.mockResolvedValue(undefined);
 });
 
@@ -204,7 +204,12 @@ describe("mutation error handling", () => {
   });
 
   it("failed help pack delete shows an error and re-enables the button", async () => {
-    h.getHelpPackStatus.mockResolvedValue({ saved: true, savedAt: "2026-08-01T00:00:00.000Z", totalBytes: 1024 });
+    h.getHelpPackRecord.mockResolvedValue({
+      savedAt: "2026-08-01T00:00:00.000Z",
+      totalBytes: 1024,
+      assets: [{ url: "/bathyscan/help/img/a.gif", sizeBytes: 1024 }],
+      fingerprint: "abc12345",
+    });
     h.deleteHelpPack.mockRejectedValueOnce(new Error("boom"));
     render(<DataStorageSection />);
 

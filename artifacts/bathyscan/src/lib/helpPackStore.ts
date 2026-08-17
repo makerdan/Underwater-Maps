@@ -132,8 +132,16 @@ export interface HelpPackProgress {
   error?: string;
 }
 
-// ── Status API ────────────────────────────────────────────────────────────────
+// ── Record API ────────────────────────────────────────────────────────────────
 
+/**
+ * Returns the persisted HelpPackRecord from IndexedDB, or null if no help
+ * pack has been saved on this device.
+ */
+export async function getHelpPackRecord(): Promise<HelpPackRecord | null> {
+  const record = await get<HelpPackRecord>(HELP_PACK_KEY);
+  return record ?? null;
+}
 /**
  * Returns the current offline-download status for help media.
  * Pass `articles` + `basePath` from outside so the function is pure and

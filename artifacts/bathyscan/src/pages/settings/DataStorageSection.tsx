@@ -9,9 +9,9 @@ import {
   type OfflinePack,
 } from "@/lib/offlinePackStore";
 import {
-  getHelpPackStatus,
+  getHelpPackRecord,
   deleteHelpPack,
-  type HelpPackStatus,
+  type HelpPackRecord,
 } from "@/lib/helpPackStore";
 import { useToast } from "@/hooks/use-toast";
 import { S } from "./styles";
@@ -56,7 +56,7 @@ export function DataStorageSection() {
   const [upscaleClearMsg, setUpscaleClearMsg] = useState(false);
   const [upscaleInfo, setUpscaleInfo] = useState<{ count: number; bytes: number } | null>(null);
   const [offlinePacks, setOfflinePacks] = useState<OfflinePack[]>([]);
-  const [helpStatus, setHelpStatus] = useState<HelpPackStatus | null>(null);
+  const [helpRecord, setHelpRecord] = useState<HelpPackRecord | null | undefined>(undefined);
   const [packsDeleting, setPacksDeleting] = useState<ReadonlySet<string>>(new Set());
   const [helpClearing, setHelpClearing] = useState(false);
   // Loader error slots — rendered as "Failed to load — Retry" instead of an
@@ -153,10 +153,10 @@ export function DataStorageSection() {
     try {
       do {
         packsRefreshQueuedRef.current = false;
-        const [packs, help] = await Promise.all([listOfflinePacks(), getHelpPackStatus()]);
+        const [packs, help] = await Promise.all([listOfflinePacks(), getHelpPackRecord()]);
         if (!isMountedRef.current) return;
         setOfflinePacks(packs);
-        setHelpStatus(help);
+        setHelpRecord(help);
         setPacksLoadError(false);
       } while (packsRefreshQueuedRef.current);
     } catch {
@@ -515,51 +515,46 @@ export function DataStorageSection() {
         centerLat={cameraPosition.known ? cameraPosition.lat : undefined}
         centerLon={cameraPosition.known ? cameraPosition.lon : undefined}
       />
-      {/* Help content pack */}
-      <div style={S.card}>
-        <div style={S.cardHeader}>HELP CONTENT</div>
-        <div style={{ padding: "12px 16px" }}>
-          <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 10 }}>
-            Tutorial GIFs and images are cached for offline viewing. Download once to access
-            help articles without a network connection.
-          </div>
-          {packsLoadError ? (
-            <div data-testid="help-load-error" style={errorTextStyle}>
-              Failed to load help pack status.
-              <button data-testid="retry-help-load" onClick={() => void refreshPacks()} style={retryBtnStyle}>
-                Retry
-              </button>
-            </div>
-          ) : helpStatus === null ? (
-            <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#64748b" }}>◌ Loading…</div>
-          ) : helpStatus.saved ? (
-            <div>
-              <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#4ade80", marginBottom: 8 }}>
-                ✓ Help content saved ·{" "}
-                {helpStatus.savedAt && new Date(helpStatus.savedAt).toLocaleDateString(undefined, {
-                  month: "short", day: "numeric", year: "numeric",
-                })}
-                {helpStatus.totalBytes != null && ` · ${(helpStatus.totalBytes / 1024).toFixed(0)} KB`}
+      {/* Help media pack — shown when a pack is saved OR when a load error needs surfacing */}
+      {(packsLoadError || helpRecord != null) && (
+        <div style={S.card}>
+          <div style={S.cardHeader}>HELP MEDIA</div>
+          <div style={{ padding: "12px 16px" }}>
+            {packsLoadError ? (
+              <div data-testid="help-load-error" style={errorTextStyle}>
+                Failed to load help pack status.
+                <button data-testid="retry-help-load" onClick={() => void refreshPacks()} style={retryBtnStyle}>
+                  Retry
+                </button>
               </div>
-              <button
-                data-testid="delete-help-pack-btn"
-                onClick={() => void handleDeleteHelp()}
-                disabled={helpClearing}
-                style={{ ...S.dangerBtn, fontSize: "calc(8px * var(--bs-font-scale, 1))", padding: "3px 8px" }}
-              >
-                {helpClearing ? "…" : "DELETE HELP PACK"}
-              </button>
-              {helpDeleteError && (
-                <div data-testid="help-delete-error" style={{ ...errorTextStyle, marginTop: 8 }}>{helpDeleteError}</div>
-              )}
-            </div>
-          ) : (
-            <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#64748b" }}>
-              No help content saved. Use the Help panel (? button) when online to cache it.
-            </div>
-          )}
+            ) : helpRecord != null ? (
+              <div data-testid="help-media-row">
+                <div style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#94a3b8", marginBottom: 8 }}>
+                  {helpRecord.assets.length} asset{helpRecord.assets.length !== 1 ? "s" : ""} cached ·{" "}
+                  {helpRecord.totalBytes >= 1024 * 1024
+                    ? `${(helpRecord.totalBytes / (1024 * 1024)).toFixed(1)} MB`
+                    : `${Math.round(helpRecord.totalBytes / 1024)} KB`}
+                  {" · saved "}
+                  {new Date(helpRecord.savedAt).toLocaleDateString(undefined, {
+                    month: "short", day: "numeric", year: "numeric",
+                  })}
+                </div>
+                <button
+                  data-testid="delete-help-pack-btn"
+                  onClick={() => void handleDeleteHelp()}
+                  disabled={helpClearing}
+                  style={{ ...S.dangerBtn, fontSize: "calc(8px * var(--bs-font-scale, 1))", padding: "3px 8px" }}
+                >
+                  {helpClearing ? "…" : "REMOVE"}
+                </button>
+                {helpDeleteError && (
+                  <div data-testid="help-delete-error" style={{ ...errorTextStyle, marginTop: 8 }}>{helpDeleteError}</div>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }

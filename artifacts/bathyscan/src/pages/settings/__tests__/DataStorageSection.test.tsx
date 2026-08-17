@@ -7,10 +7,13 @@
  *   - Save and reset buttons (SectionActionsRow section="data") are present
  *   - Clicking reset calls resetSection("data")
  *   - Empty cache state shows the no-cache message
+ *   - Help media row hidden when no pack saved
+ *   - Help media row shows asset count and size when pack is saved
+ *   - Clicking REMOVE calls deleteHelpPack
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const h = vi.hoisted(() => {
   const resetSection = vi.fn();
@@ -57,7 +60,7 @@ vi.mock("@/lib/offlinePackStore", () => ({
 }));
 
 vi.mock("@/lib/helpPackStore", () => ({
-  getHelpPackStatus: vi.fn().mockResolvedValue({ saved: false }),
+  getHelpPackRecord: vi.fn().mockResolvedValue(null),
   deleteHelpPack: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -80,10 +83,23 @@ vi.mock("@/pages/settings/constants", async (importOriginal) => {
 });
 
 import { DataStorageSection } from "../DataStorageSection";
+import * as helpPackStore from "@/lib/helpPackStore";
+
+const MOCK_HELP_RECORD: helpPackStore.HelpPackRecord = {
+  savedAt: "2026-01-15T12:00:00.000Z",
+  assets: [
+    { url: "/bathyscan/help/img/a.gif", sizeBytes: 102400 },
+    { url: "/bathyscan/help/img/b.gif", sizeBytes: 204800 },
+  ],
+  totalBytes: 307200,
+  fingerprint: "abc12345",
+};
 
 describe("DataStorageSection", () => {
   beforeEach(() => {
     h.resetSection.mockClear();
+    vi.mocked(helpPackStore.getHelpPackRecord).mockResolvedValue(null);
+    vi.mocked(helpPackStore.deleteHelpPack).mockResolvedValue(undefined);
   });
 
   it("renders without crashing", () => {
@@ -146,5 +162,48 @@ describe("DataStorageSection", () => {
     render(<DataStorageSection />);
     const msg = await screen.findByTestId("no-cache-msg");
     expect(msg).toBeInTheDocument();
+  });
+
+  it("hides the help media row when no pack is saved", async () => {
+    render(<DataStorageSection />);
+    // wait for async loads to settle
+    await screen.findByTestId("no-cache-msg");
+    expect(screen.queryByTestId("help-media-row")).not.toBeInTheDocument();
+  });
+
+  it("shows HELP MEDIA card with asset count and size when pack is saved", async () => {
+    vi.mocked(helpPackStore.getHelpPackRecord).mockResolvedValue(MOCK_HELP_RECORD);
+    render(<DataStorageSection />);
+    const row = await screen.findByTestId("help-media-row");
+    expect(row).toBeInTheDocument();
+    // asset count
+    expect(row).toHaveTextContent("2 assets cached");
+    // size — 307200 bytes = 300 KB
+    expect(row).toHaveTextContent("300 KB");
+  });
+
+  it("shows HELP MEDIA card header when pack is saved", async () => {
+    vi.mocked(helpPackStore.getHelpPackRecord).mockResolvedValue(MOCK_HELP_RECORD);
+    render(<DataStorageSection />);
+    await screen.findByTestId("help-media-row");
+    expect(screen.getByText("HELP MEDIA")).toBeInTheDocument();
+  });
+
+  it("calls deleteHelpPack when REMOVE is clicked", async () => {
+    vi.mocked(helpPackStore.getHelpPackRecord).mockResolvedValue(MOCK_HELP_RECORD);
+    render(<DataStorageSection />);
+    const btn = await screen.findByTestId("delete-help-pack-btn");
+    fireEvent.click(btn);
+    await waitFor(() => expect(helpPackStore.deleteHelpPack).toHaveBeenCalledTimes(1));
+  });
+
+  it("hides the help media row after REMOVE completes", async () => {
+    vi.mocked(helpPackStore.getHelpPackRecord)
+      .mockResolvedValueOnce(MOCK_HELP_RECORD) // initial load
+      .mockResolvedValue(null);                // after delete + refresh
+    render(<DataStorageSection />);
+    const btn = await screen.findByTestId("delete-help-pack-btn");
+    fireEvent.click(btn);
+    await waitFor(() => expect(screen.queryByTestId("help-media-row")).not.toBeInTheDocument());
   });
 });
