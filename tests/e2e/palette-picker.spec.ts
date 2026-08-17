@@ -54,6 +54,9 @@ test.describe("Depth palette picker — end-to-end", () => {
     //    transition back to `/`.
     await page.locator('button[aria-label="Settings"], button:has-text("Settings")').first().dispatchEvent("click");
     await page.waitForURL((url) => url.pathname.endsWith("/settings"), { timeout: 5_000 });
+
+    // Palette controls live in the "Depth Banding: Color Palettes" tab (not Visuals).
+    await page.locator('button:has-text("DEPTH BANDING")').first().dispatchEvent("click");
     await expect(page.locator("text=◈ DEPTH COLOR PALETTE")).toBeVisible({ timeout: 10_000 });
 
     // The depth-scale bar paints whichever colormap theme is active, and the
@@ -149,6 +152,8 @@ test.describe("Depth palette picker — end-to-end", () => {
     // 6. Clean up so a re-run of the suite starts from defaults.
     await page.locator('button[aria-label="Settings"], button:has-text("Settings")').first().dispatchEvent("click");
     await page.waitForURL((url) => url.pathname.endsWith("/settings"), { timeout: 5_000 });
+    await page.locator('button:has-text("DEPTH BANDING")').first().dispatchEvent("click");
+    await expect(page.locator("text=◈ DEPTH COLOR PALETTE")).toBeVisible({ timeout: 5_000 });
     await page.locator('[data-testid="palette-reset-btn"]').dispatchEvent("click");
   });
 });

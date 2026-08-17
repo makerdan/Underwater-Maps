@@ -109,14 +109,6 @@ vi.mock("@/components/AdvancedDisclosure", () => ({
   ),
 }));
 
-vi.mock("@/components/PaletteSuggestionBanner", () => ({
-  PaletteSuggestionBanner: () => <div data-testid="palette-suggestion-banner" />,
-}));
-
-vi.mock("@/pages/settings/components/PalettePickerCard", () => ({
-  PalettePickerCard: () => <div data-testid="palette-picker-card" />,
-}));
-
 vi.mock("@/pages/settings/components/SectionTitle", () => ({
   SectionTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
@@ -161,16 +153,6 @@ describe("VisualsSection", () => {
   it("renders Caustics Effect label", () => {
     render(<VisualsSection />);
     expect(screen.getByText("Caustics Effect")).toBeInTheDocument();
-  });
-
-  it("renders Depth Colormap label", () => {
-    render(<VisualsSection />);
-    expect(screen.getByText("Depth Colormap")).toBeInTheDocument();
-  });
-
-  it("renders Show Contour Lines label", () => {
-    render(<VisualsSection />);
-    expect(screen.getByText("Show Contour Lines")).toBeInTheDocument();
   });
 
   it("does NOT render the Zone Colours card (it lives in Display & Overlays)", () => {
@@ -353,29 +335,6 @@ describe("VisualsSection", () => {
       h.stateOverrides.proximityMode = false;
       render(<VisualsSection />);
       expect(h.setProximityMode).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("Bright Daylight grayscale override note", () => {
-    it("is hidden when brightDaylight is off", () => {
-      render(<VisualsSection />);
-      expect(screen.queryByTestId("bright-daylight-grayscale-note")).toBeNull();
-    });
-
-    it("is shown when brightDaylight is on and the user has not set a palette", () => {
-      h.stateOverrides.brightDaylight = true;
-      h.stateOverrides.colormapUserSet = false;
-      render(<VisualsSection />);
-      const note = screen.getByTestId("bright-daylight-grayscale-note");
-      expect(note.textContent).toMatch(/grayscale/i);
-      expect(note.textContent).toMatch(/Bright Daylight/i);
-    });
-
-    it("is hidden when brightDaylight is on but the user has explicitly chosen a palette", () => {
-      h.stateOverrides.brightDaylight = true;
-      h.stateOverrides.colormapUserSet = true;
-      render(<VisualsSection />);
-      expect(screen.queryByTestId("bright-daylight-grayscale-note")).toBeNull();
     });
   });
 

@@ -79,6 +79,12 @@ import {
   MAX_BANDS,
 } from "@/lib/paletteStore";
 
+// Navigate to the Depth Banding: Color Palettes tab so DepthColorsCard is rendered.
+function renderAndOpenPaletteTab() {
+  render(<Settings />);
+  fireEvent.click(screen.getByText("DEPTH BANDING: COLOR PALETTES"));
+}
+
 beforeEach(() => {
   try { localStorage.clear(); } catch { /* ignore */ }
   useSettingsStore.setState({
@@ -90,7 +96,7 @@ beforeEach(() => {
 
 describe("DepthColorsCard — merged card structure", () => {
   it("renders the merged card with presets, preview, and the band editor", () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     expect(screen.getByTestId("depth-colors-card")).toBeInTheDocument();
     expect(screen.getByTestId("palette-presets")).toBeInTheDocument();
     expect(screen.getByTestId("palette-preview")).toBeInTheDocument();
@@ -98,7 +104,7 @@ describe("DepthColorsCard — merged card structure", () => {
   });
 
   it("no separate PalettePickerCard shallow/deep hex inputs exist any more", () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     expect(screen.queryByTestId("palette-shallow-hex")).not.toBeInTheDocument();
     expect(screen.queryByTestId("palette-deep-hex")).not.toBeInTheDocument();
     expect(screen.queryByTestId("palette-custom-editor")).not.toBeInTheDocument();
@@ -106,20 +112,20 @@ describe("DepthColorsCard — merged card structure", () => {
 
   it("band editor renders for the custom theme too", () => {
     useSettingsStore.getState().setColormapTheme("custom");
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     expect(screen.getByTestId("depth-band-color-editor")).toBeInTheDocument();
   });
 
   it("band editor is hidden for fixed themes (viridis)", () => {
     useSettingsStore.getState().setColormapTheme("viridis");
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     expect(screen.queryByTestId("depth-band-color-editor")).not.toBeInTheDocument();
   });
 });
 
 describe("DepthBandEditor — variable-length rows", () => {
   it("renders one row per band (default 10)", () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const n = usePaletteStore.getState().bandColors.length;
     expect(n).toBe(DEFAULT_BAND_COLORS.length);
     for (let i = 0; i < n; i++) {
@@ -129,7 +135,7 @@ describe("DepthBandEditor — variable-length rows", () => {
   });
 
   it("add band button appends a band and renders a new row", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const before = usePaletteStore.getState().bandColors.length;
     fireEvent.click(screen.getByTestId("band-add-btn"));
     await waitFor(() => {
@@ -139,7 +145,7 @@ describe("DepthBandEditor — variable-length rows", () => {
   });
 
   it("remove band button removes a band and its row", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const before = usePaletteStore.getState().bandColors.length;
     fireEvent.click(screen.getByTestId("band-remove-btn-0"));
     await waitFor(() => {
@@ -149,7 +155,7 @@ describe("DepthBandEditor — variable-length rows", () => {
   });
 
   it("add button is disabled at MAX_BANDS", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     act(() => {
       const st = usePaletteStore.getState();
       while (usePaletteStore.getState().bandColors.length < MAX_BANDS) st.addBand();
@@ -161,7 +167,7 @@ describe("DepthBandEditor — variable-length rows", () => {
   });
 
   it("remove buttons are disabled at MIN_BANDS", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     act(() => {
       const st = usePaletteStore.getState();
       while (usePaletteStore.getState().bandColors.length > MIN_BANDS) st.removeBand(0);
@@ -175,7 +181,7 @@ describe("DepthBandEditor — variable-length rows", () => {
 
 describe("DepthBandEditor — colour editing", () => {
   it("each band row shows a colour picker bound to bandColors[i]", () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const bc = usePaletteStore.getState().bandColors;
     for (let i = 0; i < bc.length; i++) {
       const picker = screen.getByTestId(`band-color-picker-${i}`) as HTMLInputElement;
@@ -184,7 +190,7 @@ describe("DepthBandEditor — colour editing", () => {
   });
 
   it("clicking the native colour picker updates bandColors in the store", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const picker = screen.getByTestId("band-color-picker-3") as HTMLInputElement;
     fireEvent.change(picker, { target: { value: "#123456" } });
     await waitFor(() => {
@@ -193,7 +199,7 @@ describe("DepthBandEditor — colour editing", () => {
   });
 
   it("hex input commits to the store after a valid 6-char hex is typed", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const hexInput = screen.getByTestId("band-color-hex-5") as HTMLInputElement;
     fireEvent.change(hexInput, { target: { value: "#abcdef" } });
     await waitFor(() => {
@@ -203,7 +209,7 @@ describe("DepthBandEditor — colour editing", () => {
 
   it("Reset colours button restores DEFAULT_BAND_COLORS", async () => {
     act(() => { usePaletteStore.getState().setBandColor(2, "#ff0000"); });
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     fireEvent.click(screen.getByTestId("band-colors-reset-btn"));
     await waitFor(() => {
       const bc = usePaletteStore.getState().bandColors;
@@ -217,7 +223,7 @@ describe("DepthBandEditor — colour editing", () => {
 describe("DepthBandEditor — boundary editing", () => {
   it("dragging band-boundary-slider-3 (imperial) updates bandBoundaries[3]", async () => {
     useSettingsStore.setState({ ...useSettingsStore.getState(), units: "imperial" });
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const slider = screen.getByTestId("band-boundary-slider-3") as HTMLInputElement;
     fireEvent.change(slider, { target: { value: "180" } });
     await waitFor(() => {
@@ -227,7 +233,7 @@ describe("DepthBandEditor — boundary editing", () => {
 
   it("the LAST boundary is editable via its typed input (no 2000 ft cap)", async () => {
     useSettingsStore.setState({ ...useSettingsStore.getState(), units: "imperial" });
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const lastIdx = usePaletteStore.getState().bandBoundaries.length - 1;
     const input = screen.getByTestId(`band-boundary-input-${lastIdx}`) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "3500" } });
@@ -238,7 +244,7 @@ describe("DepthBandEditor — boundary editing", () => {
 
   it("reset boundaries button restores DEFAULT_BAND_BOUNDARIES", async () => {
     act(() => { usePaletteStore.getState().setBandBoundary(4, 220); });
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     fireEvent.click(screen.getByTestId("band-boundaries-reset-btn"));
     await waitFor(() => {
       const bb = usePaletteStore.getState().bandBoundaries;
@@ -251,7 +257,7 @@ describe("DepthBandEditor — boundary editing", () => {
 
 describe("DepthBandEditor — blend toggle", () => {
   it("renders the blend toggle and it reflects/updates blendBands", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const wrap = screen.getByTestId("blend-bands-toggle");
     expect(wrap).toBeInTheDocument();
     expect(usePaletteStore.getState().blendBands).toBe(true);
@@ -266,7 +272,7 @@ describe("DepthBandEditor — blend toggle", () => {
 
 describe("DepthColorsCard — presets and preview", () => {
   it("clicking a preset chip seeds bandColors with interpolated values", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const warmPreset = PALETTE_PRESETS.find((p) => p.id === "warm")!;
     fireEvent.click(screen.getByTestId(`palette-preset-${warmPreset.id}`));
     const expected = bandColorsFromPreset(warmPreset);
@@ -280,7 +286,7 @@ describe("DepthColorsCard — presets and preview", () => {
   });
 
   it("preset chips preserve the current band count", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     act(() => { usePaletteStore.getState().addBand(); });
     const count = usePaletteStore.getState().bandColors.length;
     const highContrast = PALETTE_PRESETS.find((p) => p.id === "high-contrast")!;
@@ -291,7 +297,7 @@ describe("DepthColorsCard — presets and preview", () => {
   });
 
   it("preview image's src is re-assigned after a band colour changes", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const preview = screen.getByTestId("palette-preview") as HTMLImageElement;
     const setSrc = vi.fn();
     Object.defineProperty(preview, "src", {
@@ -309,7 +315,7 @@ describe("DepthColorsCard — presets and preview", () => {
   });
 
   it("preview image's src is re-assigned after a band boundary changes", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const preview = screen.getByTestId("palette-preview") as HTMLImageElement;
     const setSrc = vi.fn();
     Object.defineProperty(preview, "src", {
@@ -327,7 +333,7 @@ describe("DepthColorsCard — presets and preview", () => {
   });
 
   it("preview image's src is re-assigned when blendBands toggles", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const preview = screen.getByTestId("palette-preview") as HTMLImageElement;
     const setSrc = vi.fn();
     Object.defineProperty(preview, "src", {
@@ -345,7 +351,7 @@ describe("DepthColorsCard — presets and preview", () => {
   });
 
   it("Reset to defaults restores DEFAULT_BAND_COLORS", async () => {
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     act(() => {
       usePaletteStore.getState().setBandColor(3, "#abcdef");
     });
@@ -362,7 +368,7 @@ describe("DepthColorsCard — presets and preview", () => {
 describe("DepthBandEditor — unit label sync", () => {
   it("shows 'ft' in all band labels when units are imperial", () => {
     useSettingsStore.setState({ ...useSettingsStore.getState(), units: "imperial" });
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const n = usePaletteStore.getState().bandColors.length;
     for (let i = 0; i < n; i++) {
       const row = screen.getByTestId(`band-color-row-${i}`);
@@ -372,7 +378,7 @@ describe("DepthBandEditor — unit label sync", () => {
 
   it("shows 'm' in all band labels when units are metric", () => {
     useSettingsStore.setState({ ...useSettingsStore.getState(), units: "metric" });
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const n = usePaletteStore.getState().bandColors.length;
     for (let i = 0; i < n; i++) {
       const row = screen.getByTestId(`band-color-row-${i}`);
@@ -382,7 +388,7 @@ describe("DepthBandEditor — unit label sync", () => {
 
   it("updates all band labels when units switch from imperial to metric", async () => {
     useSettingsStore.setState({ ...useSettingsStore.getState(), units: "imperial" });
-    render(<Settings />);
+    renderAndOpenPaletteTab();
     const n = usePaletteStore.getState().bandColors.length;
     for (let i = 0; i < n; i++) {
       expect(screen.getByTestId(`band-color-row-${i}`).textContent).toMatch(/ft/);

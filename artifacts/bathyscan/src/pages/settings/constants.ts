@@ -22,12 +22,13 @@ export const FIXED_SHORTCUTS: { keys: string; desc: string }[] = [
 ];
 
 export type Tab =
-  | "general" | "visuals" | "navigation" | "display-overlays"
+  | "general" | "visuals" | "palette" | "navigation" | "display-overlays"
   | "map-layers" | "marker-symbols" | "data-storage" | "accessibility" | "account";
 
 export const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "general", label: "GENERAL" },
   { id: "visuals", label: "VISUALS & PERF" },
+  { id: "palette", label: "DEPTH BANDING: COLOR PALETTES" },
   { id: "navigation", label: "NAVIGATION" },
   { id: "display-overlays", label: "DISPLAY & OVERLAYS" },
   { id: "map-layers", label: "MAP LAYERS" },

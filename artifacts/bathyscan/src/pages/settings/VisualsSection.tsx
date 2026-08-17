@@ -4,13 +4,11 @@ import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useIntertidal } from "@/lib/useIntertidal";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
-import { PaletteSuggestionBanner } from "@/components/PaletteSuggestionBanner";
 import { S } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
 import { SliderRow, ToggleRow, SelectRow, ColorRow, clampSlider } from "./components/RowWidgets";
 import { Select } from "./components/Toggle";
-import { DepthColorsCard } from "./components/DepthColorsCard";
 
 function formatFt(v: number): string {
   return v % 1 === 0 ? v.toFixed(0) : v.toFixed(2);
@@ -264,8 +262,6 @@ export function VisualsSection() {
         />
       </div>
 
-      <PaletteSuggestionBanner />
-      <DepthColorsCard />
       <IntertidalDatumsCard />
       <AdvancedDisclosure testId="visuals-advanced">
         {/* Terrain shading — water surface, landmass, and exaggeration controls */}

@@ -277,6 +277,45 @@ describe("settingsStore", () => {
     expect(SECTION_KEYS["data"]).toContain("defaultMapLoad");
   });
 
+  // ── Palette section key ownership ──────────────────────────────────────
+  it("colormapTheme belongs to SECTION_KEYS['palette'] and not 'visuals'", () => {
+    expect(SECTION_KEYS["palette"]).toContain("colormapTheme");
+    expect(SECTION_KEYS["visuals"]).not.toContain("colormapTheme");
+  });
+
+  it("nodataColor belongs to SECTION_KEYS['palette'] and not 'visuals'", () => {
+    expect(SECTION_KEYS["palette"]).toContain("nodataColor");
+    expect(SECTION_KEYS["visuals"]).not.toContain("nodataColor");
+  });
+
+  it("contoursEnabled belongs to SECTION_KEYS['palette'] and not 'visuals'", () => {
+    expect(SECTION_KEYS["palette"]).toContain("contoursEnabled");
+    expect(SECTION_KEYS["visuals"]).not.toContain("contoursEnabled");
+  });
+
+  it("contourInterval belongs to SECTION_KEYS['palette'] and not 'visuals'", () => {
+    expect(SECTION_KEYS["palette"]).toContain("contourInterval");
+    expect(SECTION_KEYS["visuals"]).not.toContain("contourInterval");
+  });
+
+  it("resetSection('palette') restores colormapTheme without touching fogDensity", () => {
+    const s = useSettingsStore.getState();
+    s.setColormapTheme("thermal");
+    s.setFogDensity(0.025);
+    s.resetSection("palette");
+    expect(useSettingsStore.getState().colormapTheme).toBe(DEFAULT_SETTINGS.colormapTheme);
+    expect(useSettingsStore.getState().fogDensity).toBe(0.025);
+  });
+
+  it("resetSection('visuals') restores fogDensity without touching colormapTheme", () => {
+    const s = useSettingsStore.getState();
+    s.setColormapTheme("viridis");
+    s.setFogDensity(0.028);
+    s.resetSection("visuals");
+    expect(useSettingsStore.getState().fogDensity).toBe(DEFAULT_SETTINGS.fogDensity);
+    expect(useSettingsStore.getState().colormapTheme).toBe("viridis");
+  });
+
   it("defaultMapLoad defaults to null in DEFAULT_SETTINGS", () => {
     expect(DEFAULT_SETTINGS.defaultMapLoad).toBeNull();
     expect(useSettingsStore.getState().defaultMapLoad).toBeNull();

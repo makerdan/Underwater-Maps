@@ -215,6 +215,7 @@ export type CurrentOverlayStyle = ConditionsOverlayStyle;
 export type SettingsSection =
   | "camera"
   | "visuals"
+  | "palette"
   | "hud"
   | "markers"
   | "tidal"
@@ -1174,12 +1175,15 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   visuals: [
     "qualityPreset", "terrainExaggeration", "enableMarineSnow", "particleDensity",
-    "enableCaustics", "fogDensity", "fogColor", "nodataColor", "ambientLightIntensity",
+    "enableCaustics", "fogDensity", "fogColor", "ambientLightIntensity",
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
-    "textureQuality", "colormapTheme", "smoothTerrainSpikes",
-    "showWaterSurface", "showWaterTempLayer", "showLandmass", "landmassStyle", "satelliteImagery", "colormapUserSet",
-    "contoursEnabled", "contourInterval", "contourDensity", "showNodataBoundary",
-    "maxActiveDatasets",
+    "textureQuality", "smoothTerrainSpikes",
+    "showWaterSurface", "showWaterTempLayer", "showLandmass", "landmassStyle", "satelliteImagery",
+    "showNodataBoundary", "maxActiveDatasets",
+  ],
+  palette: [
+    "colormapTheme", "colormapUserSet", "nodataColor",
+    "contoursEnabled", "contourInterval", "contourDensity",
   ],
   hud: [
     "hudOpacity", "showCrosshairGps", "showCameraPosition",

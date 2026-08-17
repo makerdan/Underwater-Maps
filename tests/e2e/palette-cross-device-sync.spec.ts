@@ -87,6 +87,8 @@ test.describe("Depth palette cross-device sync", () => {
     // re-hydrates from the server and the deep hex input shows the new value.
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
+    // Palette controls are in the "Depth Banding: Color Palettes" tab.
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
 
     const deepHex = page.locator(`[data-testid="band-color-hex-${DEEP_INDEX}"]`);
     await expect(deepHex).toBeVisible({ timeout: 10_000 });
@@ -104,6 +106,8 @@ test.describe("Depth palette cross-device sync", () => {
     });
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
+    // Palette controls are in the "Depth Banding: Color Palettes" tab.
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
 
     const deepHexAfter = page.locator(`[data-testid="band-color-hex-${DEEP_INDEX}"]`);
     await expect(deepHexAfter).toBeVisible({ timeout: 10_000 });
@@ -166,6 +170,8 @@ test.describe("Depth palette cross-device sync", () => {
     // ── Device A: navigate to /settings, verify Custom editor is visible ─
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
+    // Palette controls are in the "Depth Banding: Color Palettes" tab.
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
 
     // The Custom band-colour editor renders only when colormapTheme === "custom".
     const customEditor = page.locator('[data-testid="depth-band-color-editor"]');
@@ -258,6 +264,8 @@ test.describe("Depth palette cross-device sync", () => {
     });
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
+    // Palette controls are in the "Depth Banding: Color Palettes" tab.
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
 
     // The Custom editor must still be visible — the theme rehydrated from
     // the server, not from localStorage.
@@ -400,6 +408,8 @@ test.describe("Depth palette cross-device sync", () => {
     });
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
+    // Palette controls are in the "Depth Banding: Color Palettes" tab.
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
 
     // The Custom editor must be visible (colormapTheme survived the round-trip).
     const customEditorAfter = page.locator('[data-testid="depth-band-color-editor"]');

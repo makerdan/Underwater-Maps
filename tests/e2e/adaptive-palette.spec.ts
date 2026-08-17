@@ -40,6 +40,10 @@ test.describe("Adaptive colour palette — regression hardening", () => {
       return;
     }
 
+    // Palette controls (including the suggestion banner) are in the
+    // "Depth Banding: Color Palettes" tab.
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
+
     await page.evaluate(() => {
       window.__bathyTest!.setColormapUserSet(true);
     });
@@ -85,6 +89,10 @@ test.describe("Adaptive colour palette — regression hardening", () => {
       test.skip(true, "__bathyTest bridge not available in this environment");
       return;
     }
+
+    // Palette controls (including the suggestion banner) are in the
+    // "Depth Banding: Color Palettes" tab.
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
 
     await page.evaluate(() => {
       window.__bathyTest!.setColormapUserSet(true);

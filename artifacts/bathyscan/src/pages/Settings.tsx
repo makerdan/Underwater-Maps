@@ -29,6 +29,7 @@ import { GlobalResetFooter } from "./settings/components/GlobalResetFooter";
 
 import { GeneralSection } from "./settings/GeneralSection";
 import { VisualsSection } from "./settings/VisualsSection";
+import { PaletteSection } from "./settings/PaletteSection";
 import { NavigationSection } from "./settings/NavigationSection";
 import { DisplayOverlaysSection } from "./settings/DisplayOverlaysSection";
 import { MapLayersSection } from "./settings/MapLayersSection";
@@ -336,6 +337,7 @@ export function Settings() {
           <div style={S.content} className="bs-settings-content">
             {tab === "general" && <GeneralSection />}
             {tab === "visuals" && <VisualsSection />}
+            {tab === "palette" && <PaletteSection />}
             {tab === "navigation" && <NavigationSection />}
             {tab === "display-overlays" && <DisplayOverlaysSection />}
             {tab === "map-layers" && <MapLayersSection />}

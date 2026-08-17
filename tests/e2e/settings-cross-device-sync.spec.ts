@@ -39,6 +39,8 @@ test.describe("Settings cross-device sync", () => {
     // open (terrain warm-up, /api/me poll, etc.) so networkidle would time
     // out before this page is interactive.
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    // Colormap picker lives in the "Depth Banding: Color Palettes" tab.
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
 
     // The Depth Colormap picker is a custom (button + listbox) dropdown,
     // not a native <select>. Drive it via its testid and the listbox
@@ -73,7 +75,8 @@ test.describe("Settings cross-device sync", () => {
 
     // Force-flush the pending debounced sync via the section Save button so
     // we have a deterministic "saved" signal to await.
-    const saveBtn = page.locator('[data-testid="save-section-visuals-btn"]');
+    // Colormap is in the palette section, so use the palette save button.
+    const saveBtn = page.locator('[data-testid="save-section-palette-btn"]');
     await expect(saveBtn).toHaveAttribute("data-dirty", "true", { timeout: 5_000 });
     await saveBtn.click();
     await expect(saveBtn).toHaveAttribute("data-state", "saved", { timeout: 10_000 });
@@ -97,6 +100,8 @@ test.describe("Settings cross-device sync", () => {
       window.sessionStorage.clear();
     });
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    // Colormap picker lives in the "Depth Banding: Color Palettes" tab.
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
 
     const colormapAfter = page.getByTestId("depth-colormap-select");
     // hydrateFromServer applies the server-side viridis value because

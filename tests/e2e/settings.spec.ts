@@ -38,6 +38,7 @@ test.describe("Settings page", () => {
     const expectedTabs = [
       "GENERAL",
       "VISUALS",            // "VISUALS & PERF"
+      "DEPTH BANDING",      // "DEPTH BANDING: COLOR PALETTES"
       "NAVIGATION",
       "DISPLAY & OVERLAYS",
       "MAP LAYERS",
@@ -87,11 +88,19 @@ test.describe("Settings page", () => {
     expect(after).not.toBe(initial);
   });
 
-  test("Visuals tab is active by default and shows colormap selector", async ({ page }) => {
+  test("Visuals tab is active by default", async ({ page }) => {
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
 
     await expect(page.locator("text=◈ VISUALS").first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Depth Banding tab shows the colormap selector", async ({ page }) => {
+    await page.goto("/settings");
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
+    await expect(page.locator("text=◈ DEPTH COLOR PALETTE").first()).toBeVisible({ timeout: 5_000 });
     await expect(page.locator("text=Depth Colormap").first()).toBeVisible();
   });
 
@@ -149,7 +158,9 @@ test.describe("Settings page", () => {
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
 
-    // Visuals tab is active by default. Find the Depth Colormap picker.
+    // Colormap picker lives in the Depth Banding tab (moved from Visuals).
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
+    await expect(page.locator("text=◈ DEPTH COLOR PALETTE").first()).toBeVisible({ timeout: 5_000 });
     const colormapSelect = page.locator('[data-testid="depth-colormap-select"]');
     await expect(colormapSelect).toBeVisible({ timeout: 5_000 });
 
@@ -173,6 +184,9 @@ test.describe("Settings page", () => {
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
 
+    // Colormap picker lives in the Depth Banding tab.
+    await page.locator('button:has-text("DEPTH BANDING")').first().click();
+    await expect(page.locator("text=◈ DEPTH COLOR PALETTE").first()).toBeVisible({ timeout: 5_000 });
     const colormapSelect = page.locator('[data-testid="depth-colormap-select"]');
     await expect(colormapSelect).toBeVisible({ timeout: 5_000 });
     await expect(colormapSelect).toHaveAttribute("data-value", "ocean");
