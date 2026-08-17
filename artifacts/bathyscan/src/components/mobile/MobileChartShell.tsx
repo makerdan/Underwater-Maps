@@ -13,7 +13,7 @@
  *
  * The desktop layout renders none of this — see the mobile gate in App.tsx.
  */
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import {
   useGetDatasets,
@@ -35,6 +35,8 @@ import { useProximityStreamingWiring } from "@/hooks/useProximityStreamingWiring
 import { MobileChartView } from "./MobileChartView";
 import { MobileDatasetPicker } from "./MobileDatasetPicker";
 import { MobileLiveOverlay } from "./MobileLiveOverlay";
+import { BulkOfflinePanel } from "@/components/BulkOfflinePanel";
+import type { BulkDataset } from "@/hooks/useBulkOfflinePack";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LivePanel } from "@/components/LivePanel";
 import { CurrentsPanel } from "@/components/CurrentsPanel";
@@ -242,6 +244,16 @@ export const MobileChartShell: React.FC = () => {
   const waterType = useSettingsStore((s) => s.waterType);
   const { isLoaded, isSignedIn } = useAuth();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // MOBILE-ONLY: pending offline download — set by the dataset picker's per-dataset
+  // or section-level download buttons; cleared when the panel is closed.
+  const [offlinePanel, setOfflinePanel] = useState<{
+    datasets: BulkDataset[];
+    label: string;
+  } | null>(null);
+  const handleDownloadOffline = useCallback((datasets: BulkDataset[], label: string) => {
+    setPickerOpen(false);
+    setOfflinePanel({ datasets, label });
+  }, []);
   // MOBILE-ONLY: Live-tab bottom sheet minimized state — lets the chart go
   // full-screen while GPS/trail/follow keep running. Reset on tab change so
   // re-entering Live always shows the controls first.
@@ -418,7 +430,33 @@ export const MobileChartShell: React.FC = () => {
           </button>
         )}
 
-        {pickerOpen && <MobileDatasetPicker onClose={() => setPickerOpen(false)} />}
+        {pickerOpen && (
+          <MobileDatasetPicker
+            onClose={() => setPickerOpen(false)}
+            onDownloadOffline={handleDownloadOffline}
+          />
+        )}
+
+        {/* MOBILE-ONLY: BulkOfflinePanel overlay — opened by the dataset picker's
+            per-dataset "⬇" or section-level "⬇ All" buttons. */}
+        {offlinePanel && (
+          <div
+            data-testid="mobile-offline-panel-overlay"
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 70,
+              background: "rgba(2,8,18,0.97)",
+              overflowY: "auto",
+            }}
+          >
+            <BulkOfflinePanel
+              datasets={offlinePanel.datasets}
+              scopeLabel={offlinePanel.label}
+              onClose={() => setOfflinePanel(null)}
+            />
+          </div>
+        )}
       </div>
 
       {/* MOBILE-ONLY: thumb-reachable bottom tab bar (Chart/Plan/Analyze/Live).
