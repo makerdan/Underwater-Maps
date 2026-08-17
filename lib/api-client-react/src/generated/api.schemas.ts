@@ -666,6 +666,14 @@ export const UserSettingsTemperatureUnit = {
  * MOBILE-ONLY key: contour-density multiplier for the mobile 2D Chart View's 1x/2x/3x stepper. Divides the effective contour interval (2 = twice as many lines). The desktop Overview Map ignores this key.
  */
 export type UserSettingsContourDensity = typeof UserSettingsContourDensity[keyof typeof UserSettingsContourDensity];
+
+
+export const UserSettingsContourDensity = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
 /**
  * Depth layer pre-selected in the tidal overlay controls.
  */
@@ -4902,9 +4910,3 @@ export type GetTerrainBundlesPresetId202 = {
   message?: string;
 };
 
-
-export const UserSettingsContourDensity = {
-  NUMBER_1: 1,
-  NUMBER_2: 2,
-  NUMBER_3: 3,
-} as const;
