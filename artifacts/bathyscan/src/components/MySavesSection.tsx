@@ -913,7 +913,7 @@ const SaveFolderSection: React.FC<{
             style={{ flex: 1, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", fontWeight: 600, color: "#e2e8f0", background: "rgba(0,229,255,0.07)", border: "1px solid rgba(0,229,255,0.4)", borderRadius: 3, padding: "1px 5px", outline: "none", fontFamily: "inherit", minWidth: 0 }}
           />
         ) : (
-          <span style={{ flex: 1, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", fontWeight: 600, color: "#cbd5e1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ flex: 1, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", fontWeight: 600, color: "#cbd5e1", overflowWrap: "anywhere" }}>
             {node.folder.name}
           </span>
         )}

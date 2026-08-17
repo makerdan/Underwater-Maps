@@ -259,7 +259,7 @@ const CollectionRow: React.FC<{
               style={{ flex: 1, minWidth: 0, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 2, color: "#e2e8f0", padding: "0px 4px", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", outline: "none", fontFamily: "inherit" }}
             />
           ) : (
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ overflowWrap: "anywhere" }}>
               {collection.name} <span style={{ color: "#64748b" }}>({collection.members.length})</span>
             </span>
           )}
@@ -328,7 +328,7 @@ const CollectionRow: React.FC<{
                 <span style={{ flexShrink: 0, fontSize: "calc(11px * var(--bs-font-scale, 1))" }} title={m.kind === "dataset" ? "Uploaded dataset" : "Saved catalog entry"}>
                   {MEMBER_KIND_ICONS[m.kind] ?? "•"}
                 </span>
-                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#94a3b8", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>
+                <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", color: "#94a3b8", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>
                   {m.name}
                 </span>
                 <button
