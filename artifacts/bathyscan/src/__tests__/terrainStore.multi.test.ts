@@ -90,19 +90,6 @@ describe("terrainStore multi-dataset", () => {
     ).toBe("user");
   });
 
-  it("hideAllOthers keeps only the primary visible", () => {
-    useTerrainStore.getState().setGrids({ activeGrid: makeGrid("alpha") });
-    for (const id of ["b", "c", "d"]) {
-      useTerrainStore
-        .getState()
-        .toggleVisible({ datasetId: id, source: "preset" });
-    }
-    useTerrainStore.getState().hideAllOthers();
-    const s = useTerrainStore.getState();
-    expect(s.visibleDatasets.map((v) => v.datasetId)).toEqual(["alpha"]);
-    expect(s.primaryDatasetId).toBe("alpha");
-  });
-
   it("toggleVisible queues datasets beyond MAX_ACTIVE_DATASETS in selectedIds", () => {
     // With the streaming model, toggleVisible activates immediately only while
     // visibleDatasets.length < MAX_ACTIVE_DATASETS (3). Beyond that, datasets are

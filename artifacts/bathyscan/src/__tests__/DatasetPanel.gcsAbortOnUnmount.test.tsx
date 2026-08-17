@@ -107,7 +107,7 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("@/lib/terrainStore", () => {
   const state = {
     setGrids: vi.fn(), visibleDatasets: [] as Array<{ datasetId: string }>,
-    primaryDatasetId: null as string | null, hideAllOthers: vi.fn(),
+    primaryDatasetId: null as string | null,
     toggleVisible: vi.fn(), addSelected: vi.fn(), removeSelected: vi.fn(),
     autoActivate: vi.fn(), autoEvict: vi.fn(), clearAutoEviction: vi.fn(),
     selectedIds: [] as string[], selectedSources: {} as Record<string, string>,

@@ -81,7 +81,6 @@ const terrainState = vi.hoisted(() => ({
   setGrids: vi.fn(),
   primaryDatasetId: null as string | null,
   activeGrid: null,
-  hideAllOthers: vi.fn(),
 }));
 
 // Persistent mock handles for asserting on DatasetPanel callback wiring.

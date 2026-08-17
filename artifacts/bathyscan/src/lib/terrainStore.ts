@@ -214,7 +214,6 @@ interface TerrainStore {
 
   /** Remove every visible dataset except the first one (legacy alias).
    *  Also removes non-first selected IDs so streaming doesn't re-add them. */
-  hideAllOthers: () => void;
 
   /**
    * Single-dataset sequential-load entry point. Replaces ALL currently visible
@@ -600,27 +599,6 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         ...prev,
         visibleDatasets: nextVisible,
         autoEvictedId: datasetId,
-        ...syncPrimaryGrids(nextVisible),
-      };
-    }),
-
-  hideAllOthers: () =>
-    set((prev) => {
-      // Keep only the first entry (legacy alias).
-      const first = prev.visibleDatasets[0];
-      if (!first) return prev;
-      const nextVisible = [first];
-      // Also remove non-first entries from selectedIds so streaming doesn't re-add them.
-      const nextSelectedIds = prev.selectedIds.filter((id) => id === first.datasetId);
-      const nextSelectedSources: Record<string, DatasetSource> = {};
-      if (prev.selectedSources[first.datasetId]) {
-        nextSelectedSources[first.datasetId] = prev.selectedSources[first.datasetId]!;
-      }
-      return {
-        ...prev,
-        visibleDatasets: nextVisible,
-        selectedIds: nextSelectedIds,
-        selectedSources: nextSelectedSources,
         ...syncPrimaryGrids(nextVisible),
       };
     }),

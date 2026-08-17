@@ -200,9 +200,7 @@ function formatEta(seconds: number | null): string | null {
 }
 
 // ─── Visible-datasets summary header ─────────────────────────────────────────
-const VisibleDatasetsHeader: React.FC<{
-  onHideAllOthers: () => void;
-}> = ({ onHideAllOthers }) => {
+const VisibleDatasetsHeader: React.FC = () => {
   const activeCount = useTerrainStore((s) => s.visibleDatasets.length);
   const selectedCount = useTerrainStore((s) => s.selectedIds.length);
   const maxActiveDatasets = useSettingsStore((s) => s.maxActiveDatasets ?? 3);
@@ -237,22 +235,6 @@ const VisibleDatasetsHeader: React.FC<{
             : `VISIBLE DATASETS (${activeCount})${atCap ? " · CAP" : ""}`}
         </span>
       </ViewscreenTooltip>
-      <button
-        data-testid="btn-hide-all-others"
-        onClick={onHideAllOthers}
-        style={{
-          fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-          color: "#00e5ff",
-          background: "transparent",
-          border: "1px solid rgba(0,229,255,0.35)",
-          borderRadius: 3,
-          padding: "1px 6px",
-          cursor: "pointer",
-          letterSpacing: "0.08em",
-        }}
-      >
-        HIDE ALL OTHERS
-      </button>
     </div>
   );
 };
@@ -788,7 +770,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
 
   // ─── Multi-dataset store selectors (placed early; callbacks added after datasets are fetched)
 
-  const hideAllOthers = useTerrainStore((s) => s.hideAllOthers);
   const evictedId = useTerrainStore((s) => s.evictedId);
   const clearEviction = useTerrainStore((s) => s.clearEviction);
   const visibleDatasetsForToast = useTerrainStore((s) => s.visibleDatasets);
@@ -975,25 +956,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     toast({ title: `${name} unloaded — streaming another dataset into view.`, duration: 4000 });
     clearEviction();
   }, [evictedId, datasets, userDatasets, toast, clearEviction]);
-
-  // Hide all non-primary datasets and show a toast with the count removed.
-  const handleHideAllOthers = useCallback(() => {
-    const countBefore = visibleDatasetsForToast.length;
-    const primaryId = useTerrainStore.getState().primaryDatasetId;
-    const allDs: Array<{ id: string; name: string }> = [
-      ...(datasets ?? []).map((d) => ({ id: d.id, name: d.name })),
-      ...(userDatasets ?? []).map((d) => ({ id: d.id, name: d.name })),
-    ];
-    hideAllOthers();
-    const removed = countBefore - 1;
-    if (removed > 0) {
-      const primaryName = allDs.find((d) => d.id === primaryId)?.name ?? "primary";
-      toast({
-        title: `${removed} dataset${removed > 1 ? "s" : ""} hidden. Only ${primaryName} remains visible.`,
-        duration: 4000,
-      });
-    }
-  }, [hideAllOthers, visibleDatasetsForToast, datasets, userDatasets, toast]);
 
   // ─── Multi-dataset: "Add to View" handler ────────────────────────────────
   // Adds a user dataset alongside the primary (or removes it if already in view).
@@ -3056,7 +3018,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   </div>
                 )}
 
-                <VisibleDatasetsHeader onHideAllOthers={handleHideAllOthers} />
+                <VisibleDatasetsHeader />
                 <VisibleDatasetRows
                   allDatasets={[
                     ...(datasets ?? []).map((d) => ({ id: d.id, name: d.name })),

@@ -81,7 +81,6 @@ const terrainState = vi.hoisted(() => ({
   removeSelected: vi.fn(),
   setGrids: vi.fn(),
   primaryDatasetId: null as string | null,
-  hideAllOthers: vi.fn(),
   evictedId: null as string | null,
   clearEviction: vi.fn(),
   activeGrid: null as null | object,
@@ -411,7 +410,6 @@ describe("DatasetPanel — handleAddToView multi-dataset entry point", () => {
     terrainState.toggleVisible.mockReset();
     terrainState.addSelected.mockReset();
     terrainState.removeSelected.mockReset();
-    terrainState.hideAllOthers.mockReset();
     fetchQueryMock.mockReset();
     mySavesHasReady.value = false;
   });

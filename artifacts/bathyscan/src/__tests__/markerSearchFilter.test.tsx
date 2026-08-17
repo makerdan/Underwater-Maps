@@ -106,7 +106,6 @@ vi.mock("@/lib/terrainStore", () => {
     setGrids: vi.fn(),
     visibleDatasets: [] as Array<{ datasetId: string }>,
     primaryDatasetId: null as string | null,
-    hideAllOthers: vi.fn(),
     toggleVisible: vi.fn(),
     addSelected: vi.fn(),
     addSelectedToPool: vi.fn(),

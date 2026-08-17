@@ -58,7 +58,6 @@ const terrainStoreMock = vi.hoisted(() => {
     selectedSources: {} as Record<string, string>,
     evictedId: null as string | null,
     autoEvictedId: null as string | null,
-    hideAllOthers: vi.fn(),
     toggleVisible: vi.fn(),
     addSelected: vi.fn(),
     addSelectedToPool: vi.fn((id: string, source: string) => {
