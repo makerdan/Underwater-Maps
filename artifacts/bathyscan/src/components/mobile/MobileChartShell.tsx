@@ -13,7 +13,7 @@
  *
  * The desktop layout renders none of this — see the mobile gate in App.tsx.
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   useGetDatasets,
   getGetDatasetsQueryKey,
@@ -29,14 +29,18 @@ import {
   toValidContourDensity,
   type ContourDensity,
 } from "@/lib/contourDensity";
+import { startMobileGpsCameraMirror } from "@/lib/mobileMapFollow";
+import { useProximityStreamingWiring } from "@/hooks/useProximityStreamingWiring";
 import { MobileChartView } from "./MobileChartView";
 import { MobileDatasetPicker } from "./MobileDatasetPicker";
+import { MobileLiveOverlay } from "./MobileLiveOverlay";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LivePanel } from "@/components/LivePanel";
 import { CurrentsPanel } from "@/components/CurrentsPanel";
 import { RoutesPanel } from "@/components/RoutesPanel";
 import { HabitatPanel } from "@/components/HabitatPanel";
 import { SeafloorClassificationPanel } from "@/components/SeafloorClassificationPanel";
+import { ProximityHudChip } from "@/components/ProximityHudChip";
 
 // MOBILE-ONLY: shared monospace font stack used across the shell chrome.
 const MONO = "'JetBrains Mono', monospace";
@@ -104,10 +108,18 @@ const DensityStepper: React.FC = () => {
 };
 
 /** MOBILE-ONLY: bottom sheet hosting existing panels per sidebar mode. */
-const MobileBottomSheet: React.FC<{ mode: SidebarMode; onClose: () => void }> = ({
-  mode,
-  onClose,
-}) => {
+const MobileBottomSheet: React.FC<{
+  mode: SidebarMode;
+  onClose: () => void;
+  /**
+   * MOBILE-ONLY: when provided (Live tab), renders a minimize button that
+   * hides the sheet WITHOUT leaving the tab — so the Live chart-plotter view
+   * (chart + GPS dot + depth readout) can go full-screen while GPS, trail
+   * recording, and follow keep running. The × close button still exits the
+   * tab entirely (existing behaviour).
+   */
+  onCollapse?: () => void;
+}> = ({ mode, onClose, onCollapse }) => {
   // Real mobile-tailored tab content is owned by follow-up tasks; for now the
   // sheet simply hosts the existing prop-light desktop panels.
   let content: React.ReactNode = null;
@@ -172,6 +184,26 @@ const MobileBottomSheet: React.FC<{ mode: SidebarMode; onClose: () => void }> = 
         >
           {title}
         </span>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          {onCollapse && (
+            <button
+              type="button"
+              aria-label="Minimize panel"
+              data-testid="mobile-sheet-collapse"
+              onClick={onCollapse}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#94a3b8",
+                fontSize: "calc(18px * var(--bs-font-scale, 1))",
+                minWidth: 44,
+                minHeight: 44,
+                cursor: "pointer",
+              }}
+            >
+              ▾
+            </button>
+          )}
         <button
           type="button"
           aria-label="Close panel"
@@ -189,6 +221,7 @@ const MobileBottomSheet: React.FC<{ mode: SidebarMode; onClose: () => void }> = 
         >
           ×
         </button>
+        </div>
       </div>
       <div style={{ overflowY: "auto", padding: 12, flex: "1 1 auto" }}>
         <ErrorBoundary label="mobile panel">{content}</ErrorBoundary>
@@ -204,6 +237,18 @@ export const MobileChartShell: React.FC = () => {
   const waterType = useSettingsStore((s) => s.waterType);
   const { isLoaded, isSignedIn } = useAuth();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // MOBILE-ONLY: Live-tab bottom sheet minimized state — lets the chart go
+  // full-screen while GPS/trail/follow keep running. Reset on tab change so
+  // re-entering Live always shows the controls first.
+  const [liveSheetCollapsed, setLiveSheetCollapsed] = useState(false);
+  useEffect(() => {
+    setLiveSheetCollapsed(false);
+  }, [sidebarMode]);
+
+  // MOBILE-ONLY: mirror GPS fixes into cameraStore.cameraPosition. Proximity
+  // streaming and the follow bounds check read the CAMERA position; with no
+  // 3D camera mounted on mobile, the GPS fix is the camera.
+  useEffect(() => startMobileGpsCameraMirror(), []);
 
   // Dataset name lookup for the chip (React Query dedupes these against the
   // picker's identical queries).
@@ -223,6 +268,12 @@ export const MobileChartShell: React.FC = () => {
         ?.name ??
         primaryDatasetId)) ||
     "Choose dataset";
+
+  // MOBILE-ONLY host for the SAME proximity-streaming machinery DatasetPanel
+  // runs on desktop (bbox map, pool auto-registration, activation fetches,
+  // 500 ms sampling). DatasetPanel never mounts on mobile, so without this the
+  // Live tab's dataset auto-switching would silently go dead.
+  useProximityStreamingWiring({ datasets, userDatasets });
 
   return (
     <div
@@ -270,8 +321,68 @@ export const MobileChartShell: React.FC = () => {
 
         <DensityStepper />
 
-        {sidebarMode !== "explore" && (
-          <MobileBottomSheet mode={sidebarMode} onClose={() => setSidebarMode("explore")} />
+        {/* MOBILE-ONLY: left overlay column under the dataset chip — Live
+            readout (depth/heading/speed) when the Live tab is active, plus
+            the proximity-streaming HUD chip (same feedback as the desktop
+            HUD's bottom-left chip; renders null when proximityMode is off). */}
+        <div
+          style={{
+            position: "absolute",
+            left: 10,
+            top: 64,
+            zIndex: 40,
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            maxWidth: "70%",
+            pointerEvents: "none",
+          }}
+        >
+          {sidebarMode === "live" && <MobileLiveOverlay />}
+          <div style={{ pointerEvents: "auto", width: "fit-content" }}>
+            <ProximityHudChip />
+          </div>
+        </div>
+
+        {sidebarMode !== "explore" && !(sidebarMode === "live" && liveSheetCollapsed) && (
+          <MobileBottomSheet
+            mode={sidebarMode}
+            onClose={() => setSidebarMode("explore")}
+            // MOBILE-ONLY: only the Live sheet can be minimized — Plan/Analyze
+            // have no full-screen chart interaction to get back to.
+            onCollapse={
+              sidebarMode === "live" ? () => setLiveSheetCollapsed(true) : undefined
+            }
+          />
+        )}
+
+        {/* MOBILE-ONLY: floating pill to restore the minimized Live sheet. */}
+        {sidebarMode === "live" && liveSheetCollapsed && (
+          <button
+            type="button"
+            data-testid="mobile-live-sheet-restore"
+            onClick={() => setLiveSheetCollapsed(false)}
+            style={{
+              position: "absolute",
+              bottom: 10,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 45,
+              background: "rgba(2,8,18,0.92)",
+              border: "1px solid rgba(0,229,255,0.35)",
+              borderRadius: 999,
+              color: "#00e5ff",
+              fontFamily: MONO,
+              fontSize: "calc(11.5px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.1em",
+              padding: "0 18px",
+              minHeight: 44, // MOBILE-ONLY: thumb-sized touch target
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            ▴ LIVE CONTROLS
+          </button>
         )}
 
         {pickerOpen && <MobileDatasetPicker onClose={() => setPickerOpen(false)} />}

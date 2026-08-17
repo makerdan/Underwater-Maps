@@ -688,3 +688,73 @@ describe("useDatasetProximityStreaming — multiple ticks", () => {
     expect(realAutoEvictSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// MOBILE-ONLY regression guard (task: Mobile Live tab on 2D chart):
+// proximity streaming must work with NO 3D scene mounted. On desktop the R3F
+// useFlyControls publishes cameraPosition every frame; on mobile nothing does
+// unless startMobileGpsCameraMirror() feeds it from GPS fixes. These tests
+// fail if the proximity/activation path ever becomes 3D-scene-dependent again.
+// ---------------------------------------------------------------------------
+import { useGpsStore } from "@/lib/gpsStore";
+import { startMobileGpsCameraMirror } from "@/lib/mobileMapFollow";
+
+describe("useDatasetProximityStreaming — no 3D scene (mobile GPS mirror)", () => {
+  const FIX_ORIGIN = {
+    longitude: CAM_INSIDE_ORIGIN.lon,
+    latitude: CAM_INSIDE_ORIGIN.lat,
+    accuracy: 8,
+    speed: null,
+    heading: null,
+    timestamp: 0,
+  };
+
+  afterEach(() => {
+    useGpsStore.setState({ active: false, position: null } as never);
+  });
+
+  it("activates a nearby dataset fed only by the GPS→camera mirror", () => {
+    // NO setCameraAt(): cameraPosition starts unknown, exactly as on mobile
+    // where no 3D camera ever publishes. The mirror must seed it from GPS.
+    useGpsStore.setState({ active: true, position: FIX_ORIGIN } as never);
+    const unsub = startMobileGpsCameraMirror();
+    try {
+      addSelectedOnly("ds-a");
+      const onActivate = vi.fn();
+      renderStreamingHook({ "ds-a": BBOX_ORIGIN }, onActivate);
+
+      act(() => { vi.advanceTimersByTime(TICK_MS); });
+
+      expect(onActivate).toHaveBeenCalledTimes(1);
+      expect(onActivate).toHaveBeenCalledWith("ds-a", "preset");
+    } finally {
+      unsub();
+    }
+  });
+
+  it("activates when a NEW GPS fix moves the user into range (simulated crossing)", () => {
+    // Start far from every bbox: no activation.
+    useGpsStore.setState({
+      active: true,
+      position: { ...FIX_ORIGIN, longitude: CAM_FAR_FROM_ALL.lon, latitude: CAM_FAR_FROM_ALL.lat },
+    } as never);
+    const unsub = startMobileGpsCameraMirror();
+    try {
+      addSelectedOnly("ds-a");
+      const onActivate = vi.fn();
+      renderStreamingHook({ "ds-a": BBOX_ORIGIN }, onActivate);
+
+      act(() => { vi.advanceTimersByTime(TICK_MS); });
+      expect(onActivate).not.toHaveBeenCalled();
+
+      // The user moves inside the bbox — only a gpsStore update, no camera.
+      useGpsStore.setState({ position: FIX_ORIGIN } as never);
+      act(() => { vi.advanceTimersByTime(TICK_MS); });
+
+      expect(onActivate).toHaveBeenCalledTimes(1);
+      expect(onActivate).toHaveBeenCalledWith("ds-a", "preset");
+    } finally {
+      unsub();
+    }
+  });
+});

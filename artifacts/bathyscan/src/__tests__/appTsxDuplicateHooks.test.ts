@@ -71,6 +71,9 @@ const SCANNED_FILES: string[] = [
   "components/CatchJournalPanel.tsx",
   "components/CurrentsPanel.tsx",
   "components/DatasetPanel.tsx",
+  // MOBILE-ONLY chart surface — crossed the size/hook threshold when GPS
+  // follow + Live overlay drawing landed (Mobile Live tab task).
+  "components/mobile/MobileChartView.tsx",
   "components/DatasetFolderTree.tsx",
   "components/DriftBoat.tsx",
   "components/TrailRecorder.tsx",

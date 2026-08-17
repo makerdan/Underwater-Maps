@@ -76,6 +76,10 @@ args = "test-standard-task3999"
 task = "workflow.run"
 args = "test-standard-task4022"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-standard-task4002"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -240,6 +244,17 @@ args = "node scripts/validation-lock.mjs -- bash -c 'TASK_PLAN_FILE=.local/tasks
 
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow]]
+name = "test-standard-task4002"
+author = "agent"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node scripts/validation-lock.mjs -- bash -c 'TASK_PLAN_FILE=.local/tasks/task-4002.md node scripts/run-with-timeout.mjs tierStandard -- node scripts/run-tier.mjs standard --skip check:failure-gate'"
 
 [agent]
 stack = "PNPM_WORKSPACE"

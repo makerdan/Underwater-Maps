@@ -492,3 +492,47 @@ describe("terrainStore — addSelectedToPool", () => {
     expect(visibleDatasets.some((v) => v.datasetId === "ds-remove")).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// MOBILE-ONLY regression guard (task: Mobile Live tab on 2D chart):
+// headless re-targeting — the mobile retarget path (GPS crosses onto another
+// visible dataset → follow handoff → setDatasetId → setPrimary) must PRESERVE
+// the grids proximity streaming already loaded. If setPrimary ever starts
+// wiping sibling entries (or the retarget path switches to setSinglePrimary,
+// which evicts the whole pool), the 2D chart would flash empty on every
+// dataset auto-switch.
+// ---------------------------------------------------------------------------
+
+describe("terrainStore — headless retarget preserves proximity-loaded grids", () => {
+  it("setPrimary on a proximity-activated dataset keeps all loaded grids", () => {
+    const gridA = { datasetId: "ds-a" } as never;
+    const gridB = { datasetId: "ds-b" } as never;
+    useTerrainStore.setState({
+      visibleDatasets: [
+        { datasetId: "ds-a", source: "preset", activeGrid: gridA, overviewGrid: gridA },
+        { datasetId: "ds-b", source: "preset", activeGrid: gridB, overviewGrid: gridB },
+      ],
+      primaryDatasetIds: ["ds-a", "ds-b"],
+      primaryDatasetId: "ds-a",
+      selectedIds: ["ds-a", "ds-b"],
+      selectedSources: { "ds-a": "preset", "ds-b": "preset" },
+      multiDatasetMode: true,
+    } as never);
+
+    // The follow-handoff consumer ends in setPrimary(targetId) — no 3D scene
+    // involvement anywhere in the path.
+    useTerrainStore.getState().setPrimary("ds-b", "preset");
+
+    const s = useTerrainStore.getState();
+    expect(s.primaryDatasetId).toBe("ds-b");
+    const a = s.visibleDatasets.find((v) => v.datasetId === "ds-a");
+    const b = s.visibleDatasets.find((v) => v.datasetId === "ds-b");
+    // Both entries survive with their grids intact — nothing reloads.
+    expect(a?.activeGrid).toBe(gridA);
+    expect(a?.overviewGrid).toBe(gridA);
+    expect(b?.activeGrid).toBe(gridB);
+    expect(b?.overviewGrid).toBe(gridB);
+    // The pool itself is untouched (selection is not eviction).
+    expect(s.selectedIds).toEqual(expect.arrayContaining(["ds-a", "ds-b"]));
+  });
+});

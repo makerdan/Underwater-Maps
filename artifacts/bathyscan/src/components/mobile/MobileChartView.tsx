@@ -24,6 +24,14 @@ import React, { useCallback, useEffect, useRef } from "react";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
+import { useGpsStore } from "@/lib/gpsStore";
+import { useTrailStore } from "@/lib/trailStore";
+import { useCameraStore } from "@/lib/cameraStore";
+import type { FollowCheckState } from "@/lib/followBoundsCheck";
+import {
+  runMobileMapFollowTick,
+  type MobileFollowTransformPort,
+} from "@/lib/mobileMapFollow";
 import {
   buildHeatmapBitmap,
   buildContourLines,
@@ -32,6 +40,8 @@ import {
   renderScaleBar,
   computeInitialTransform,
   clampTransform,
+  lonLatToCanvas,
+  lonRangeOf,
   type OverviewTransform,
   type ContourSegment,
 } from "@/lib/overviewRenderer";
@@ -40,6 +50,7 @@ import {
   contourIntervalToMetres,
   toValidContourDensity,
 } from "@/lib/contourDensity";
+import type { TerrainData } from "@workspace/api-client-react";
 
 // MOBILE-ONLY: cap the canvas backing-store resolution. High-end phones have
 // DPR 3–4; rendering the heatmap at full DPR costs 4–16× the fill rate for
@@ -49,6 +60,118 @@ const MAX_DPR = 2;
 // MOBILE-ONLY: pinch/wheel zoom limits (same spirit as the desktop overview).
 const MIN_SCALE = 1;
 const MAX_SCALE = 64;
+
+// MOBILE-ONLY: GPS overlay colours — match the desktop Overview Map's SVG
+// styling (cyan fix dot, orange trail) so Live looks consistent across form
+// factors.
+const GPS_COLOR = "#00e5ff";
+/** Approx. metres per degree of longitude at the equator (matches OverviewMap). */
+const M_PER_DEG = 111_320;
+
+/**
+ * MOBILE-ONLY: draw the live GPS overlay onto the 2D chart canvas — trail
+ * polyline, accuracy ring, pulse animation, fix dot (with heading tick), and
+ * an edge arrow when the fix is off-screen. Canvas-2D port of the SVG overlay
+ * the desktop Overview Map renders; drawn in CSS-pixel space after the base
+ * layers so it always sits on top.
+ */
+function drawGpsOverlay(
+  ctx: CanvasRenderingContext2D,
+  grid: TerrainData,
+  t: OverviewTransform,
+  w: number,
+  h: number,
+  nowMs: number,
+): void {
+  // Trail polyline (renders while recording, like the desktop Overview Map).
+  const trail = useTrailStore.getState();
+  if (trail.recording && trail.currentPoints.length >= 2) {
+    ctx.beginPath();
+    for (let i = 0; i < trail.currentPoints.length; i++) {
+      const p = trail.currentPoints[i]!;
+      const [x, y] = lonLatToCanvas(p.lon, p.lat, grid, t);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = "rgba(249,115,22,0.85)"; // TRAIL_COLOR @ 85%
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+
+  const gps = useGpsStore.getState();
+  if (!gps.active || !gps.position) return;
+  const pos = gps.position;
+  const [cx, cy] = lonLatToCanvas(pos.longitude, pos.latitude, grid, t);
+
+  const inView = cx >= 0 && cx <= w && cy >= 0 && cy <= h;
+  if (!inView) {
+    // Off-screen: draw an edge arrow pointing toward the fix (desktop parity).
+    const margin = 18;
+    const ex = Math.max(margin, Math.min(w - margin, cx));
+    const ey = Math.max(margin, Math.min(h - margin, cy));
+    const angle = Math.atan2(cy - ey, cx - ex);
+    ctx.save();
+    ctx.translate(ex, ey);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(9, 0);
+    ctx.lineTo(-6, -6);
+    ctx.lineTo(-6, 6);
+    ctx.closePath();
+    ctx.fillStyle = GPS_COLOR;
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  // Accuracy ring — metres → CSS px via the rendered chart width.
+  const lonRange = lonRangeOf(grid);
+  const terrainW = t.pxPerDeg * lonRange * t.scale;
+  if (lonRange > 0 && terrainW > 0) {
+    const mPerPx = (lonRange * M_PER_DEG) / terrainW;
+    const accPx = pos.accuracy / mPerPx;
+    if (accPx > 8 && accPx < Math.max(w, h)) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, accPx, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,229,255,0.08)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,229,255,0.25)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
+  // Pulse animation (1.5 s cycle, expanding + fading — desktop parity).
+  const phase = (nowMs % 1500) / 1500;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6 + phase * 14, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(0,229,255,${(0.5 * (1 - phase)).toFixed(3)})`;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Heading tick — short bearing line when the fix provides a heading.
+  if (pos.heading !== null) {
+    const rad = ((pos.heading - 90) * Math.PI) / 180; // 0° = north (up)
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(rad) * 7, cy + Math.sin(rad) * 7);
+    ctx.lineTo(cx + Math.cos(rad) * 16, cy + Math.sin(rad) * 16);
+    ctx.strokeStyle = GPS_COLOR;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+
+  // Fix dot: cyan fill + white ring.
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fillStyle = GPS_COLOR;
+  ctx.fill();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
 
 interface MobileChartViewProps {
   /** MOBILE-ONLY: opens the compact dataset picker (rendered by the shell). */
@@ -112,6 +235,29 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
   const requestRender = useCallback(() => {
     needsRenderRef.current = true;
   }, []);
+
+  // ── MOBILE-ONLY: GPS follow (Live mode) ──────────────────────────────────
+  // The SAME GpsFollowState machine that drives the desktop 3D camera drives
+  // this 2D chart's transform. The tick (runMobileMapFollowTick) runs inside
+  // the rAF loop below; interaction pauses are fed from the pan/pinch/wheel
+  // handlers via cameraStore.pauseFollowForInteraction() — no parallel state.
+  const followCheckRef = useRef<FollowCheckState>({ toastFired: false });
+  const followPortRef = useRef<MobileFollowTransformPort>({
+    getTransform: () => transformRef.current,
+    setTransform: (t) => {
+      transformRef.current = t;
+    },
+    getSize: () => cssSizeRef.current,
+  });
+
+  // MOBILE-ONLY: mirror useGpsFollowCamera's dataset-switch rule — changing
+  // the primary dataset clears follow mode (the App.tsx follow-handoff
+  // consumer re-enables it once the handed-off dataset's terrain commits).
+  const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
+  useEffect(() => {
+    useCameraStore.getState().setGpsFollowMode(false);
+    followCheckRef.current.toastFired = false;
+  }, [primaryDatasetId]);
 
   // ── Canvas sizing (DPR-capped) ───────────────────────────────────────────
   useEffect(() => {
@@ -208,6 +354,20 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
     let raf = 0;
     const draw = () => {
       raf = requestAnimationFrame(draw);
+
+      // MOBILE-ONLY: per-frame GPS follow step (shared GpsFollowState machine;
+      // recenters the chart transform instead of the 3D camera).
+      if (runMobileMapFollowTick(followCheckRef.current, followPortRef.current)) {
+        needsRenderRef.current = true;
+      }
+      // MOBILE-ONLY: while a GPS fix is shown, redraw continuously so the
+      // pulse animation runs (same continuous-redraw rule as the desktop
+      // Overview Map when GPS is active).
+      const gpsState = useGpsStore.getState();
+      if (gpsState.active && gpsState.position) {
+        needsRenderRef.current = true;
+      }
+
       if (!needsRenderRef.current) return;
       needsRenderRef.current = false;
 
@@ -245,6 +405,9 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
         );
       }
       renderScaleBar(ctx, grid, t, h, unitsRef.current);
+      // MOBILE-ONLY: live GPS overlay (trail, accuracy ring, pulse, fix dot,
+      // off-screen edge arrow) on top of the base layers.
+      drawGpsOverlay(ctx, grid, t, w, h, performance.now());
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
@@ -263,6 +426,9 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
     const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, t.scale * factor));
     const applied = newScale / t.scale;
     if (applied === 1) return;
+    // MOBILE-ONLY: zooming is a user interaction — pause GPS follow via the
+    // shared state machine (auto-resumes after followResumeDelaySec).
+    useCameraStore.getState().pauseFollowForInteraction();
     const { w, h } = cssSizeRef.current;
     transformRef.current = clampTransform(
       {
@@ -294,6 +460,9 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
         const t = transformRef.current;
         const grid = gridRef.current;
         if (t && grid) {
+          // MOBILE-ONLY: panning is a user interaction — pause GPS follow via
+          // the shared state machine (auto-resumes after followResumeDelaySec).
+          useCameraStore.getState().pauseFollowForInteraction();
           const { w, h } = cssSizeRef.current;
           transformRef.current = clampTransform(
             {
