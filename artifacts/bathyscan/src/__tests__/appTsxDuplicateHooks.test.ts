@@ -291,8 +291,8 @@ describe("parseScopes wrapper patterns (forwardRef / memo)", () => {
 
 describe("App.tsx lint suppressors", () => {
   it("App.tsx has no eslint-disable-next-line react-hooks/exhaustive-deps suppressors", () => {
-      const filePath = path.join(SRC_DIR, relPath);
-      const src = fs.readFileSync(absPath, "utf-8");
+      const appPath = path.join(SRC_DIR, "App.tsx");
+      const src = fs.readFileSync(appPath, "utf-8");
     const lines = src.split("\n");
     const offenders: string[] = [];
     for (let i = 0; i < lines.length; i++) {
@@ -314,7 +314,7 @@ describe("duplicate hook-variable declarations", () => {
 
     for (const relPath of SCANNED_FILES) {
       const filePath = path.join(SRC_DIR, relPath);
-      const src = fs.readFileSync(absPath, "utf-8");
+      const src = fs.readFileSync(filePath, "utf-8");
       const scopes = parseScopes(src);
 
       for (const scope of scopes) {
@@ -351,7 +351,7 @@ describe("duplicate hook-variable declarations", () => {
     // sanity floor only guards against the parser silently finding nothing.
     for (const relPath of SCANNED_FILES) {
       const filePath = path.join(SRC_DIR, relPath);
-      const src = fs.readFileSync(absPath, "utf-8");
+      const src = fs.readFileSync(filePath, "utf-8");
       const scopes = parseScopes(src);
       const total = scopes.reduce((sum, s) => sum + s.decls.length, 0);
       expect(

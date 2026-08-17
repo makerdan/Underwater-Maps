@@ -40,8 +40,7 @@ import {
 } from "@/lib/overviewRenderer";
 // MOBILE-ONLY Plan-tab data sources:
 import { useDepthProfileStore } from "@/lib/depthProfileStore";
-import { useDriftStore } from "@/lib/driftStore";
-import type { DriftWaypoint, TrollWaypoint } from "@/lib/driftStore";
+import { useDriftStore, type DriftWaypoint, type TrollWaypoint } from "@/lib/driftStore";
 
 export interface MobileChartOverlays {
   /** Habitat score array for the active species, or null when inactive. */

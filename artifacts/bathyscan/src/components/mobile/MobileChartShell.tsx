@@ -125,14 +125,20 @@ const MobileBottomSheet: React.FC<{
    * tab entirely (existing behaviour).
    */
   onCollapse?: () => void;
-}> = ({ mode, onClose, onCollapse }) => {
+  /**
+   * MOBILE-ONLY: optional override for the Plan tab content. App.tsx
+   * assembles MobilePlanTab (which needs tide data from Main()) and passes it
+   * down so the sheet doesn't need to own those dependencies.
+   */
+  planContent?: React.ReactNode;
+}> = ({ mode, onClose, onCollapse, planContent }) => {
   // Real mobile-tailored tab content is owned by follow-up tasks; for now the
   // sheet simply hosts the existing prop-light desktop panels.
   let content: React.ReactNode = null;
   let title = "";
   if (mode === "plan") {
     title = "PLAN";
-    content = (
+    content = planContent ?? (
       <>
         <CurrentsPanel embedded />
         <RoutesPanel />
@@ -236,7 +242,14 @@ const MobileBottomSheet: React.FC<{
   );
 };
 
-export const MobileChartShell: React.FC = () => {
+export const MobileChartShell: React.FC<{
+  /** Pre-assembled Plan tab content from App.tsx (needs tide data from Main). */
+  planContent?: React.ReactNode;
+  /** When true, show an activity dot on the Chart/Explore tab (mirrors desktop tidal-overlay indicator). */
+  exploreIndicator?: boolean;
+  /** When true, show an activity dot on the Live tab (mirrors desktop realistic-mode indicator). */
+  liveIndicator?: boolean;
+}> = ({ planContent, exploreIndicator, liveIndicator }) => {
   const [, setLocation] = useLocation();
   const sidebarMode = useUiStore((s) => s.sidebarMode);
   const setSidebarMode = useUiStore((s) => s.setSidebarMode);
@@ -398,6 +411,7 @@ export const MobileChartShell: React.FC = () => {
             onCollapse={
               sidebarMode === "live" ? () => setLiveSheetCollapsed(true) : undefined
             }
+            planContent={planContent}
           />
         )}
 
@@ -476,6 +490,9 @@ export const MobileChartShell: React.FC = () => {
       >
         {TABS.map(({ mode, label }) => {
           const active = sidebarMode === mode;
+          const hasIndicator =
+            (mode === "explore" && exploreIndicator) ||
+            (mode === "live" && liveIndicator);
           return (
             <button
               key={mode}
@@ -495,9 +512,25 @@ export const MobileChartShell: React.FC = () => {
                 textTransform: "uppercase",
                 minHeight: 52, // MOBILE-ONLY: thumb-sized touch target
                 cursor: "pointer",
+                position: "relative",
               }}
             >
               {label}
+              {hasIndicator && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    top: 6,
+                    right: "calc(50% - 14px)",
+                    width: 5,
+                    height: 5,
+                    borderRadius: "50%",
+                    background: "#00e5ff",
+                    opacity: 0.75,
+                  }}
+                />
+              )}
             </button>
           );
         })}

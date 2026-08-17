@@ -121,9 +121,9 @@ import { useWhatsHere } from "@/hooks/useWhatsHere";
 import { OfflineReadOnlyBanner, persistOfflineIdentity } from "@/components/OfflineReadOnlyBanner";
 // MOBILE-ONLY imports: synchronous mobile gate + the 2D Chart View shell that
 // replaces the 3D scene on phones.
-import { useIsMobileImmediate } from "@/hooks/use-mobile";
+
 import { MobileChartShell } from "@/components/mobile/MobileChartShell";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile, useIsMobileImmediate } from "@/hooks/use-mobile";
 import { MobilePlanTab } from "@/components/mobile/MobilePlanTab";
 
 
