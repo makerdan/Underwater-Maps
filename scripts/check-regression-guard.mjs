@@ -148,6 +148,10 @@ function extractSection(allLines) {
 // ---------------------------------------------------------------------------
 const fixStub = process.argv.includes("--fix-stub");
 const stubsOnly = process.argv.includes("--stubs-only");
+// --skip-if-no-task: exit 0 immediately when TASK_PLAN_FILE is not set.
+// Used by the fast-tier validation steps so that ad-hoc / developer runs do
+// not scan the full .local/tasks/ archive of 900+ pre-existing stubs.
+const skipIfNoTask = process.argv.includes("--skip-if-no-task");
 
 // ---------------------------------------------------------------------------
 // Read plan files
@@ -192,6 +196,14 @@ if (TASK_PLAN_FILE) {
   resolveFilePath = (f) => f;
   scanDescription = `single file "${TASK_PLAN_FILE}"`;
 } else {
+  // No TASK_PLAN_FILE set.
+  if (skipIfNoTask) {
+    console.log(
+      "check-regression-guard — no TASK_PLAN_FILE set (--skip-if-no-task). Skipping. ✓",
+    );
+    process.exit(0);
+  }
+
   // Archive mode — scan the full .local/tasks/ directory ——————————————————
   if (!existsSync(TASKS_DIR)) {
     console.log(

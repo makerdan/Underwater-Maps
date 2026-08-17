@@ -100,10 +100,10 @@ export function getValidationSteps(logPrefix) {
     // no resource: self-test for check-failure-gate.mjs — catches regressions in the linter itself, sub-second
     { name: "check:failure-gate-self-test", resource: null, cmd: "pnpm run check:failure-gate-self-test", tiers: FAST },
     // no resource: auto-remediates missing Regression Guard sections (inserts predates-mandate N/A stub), sub-second.
-    { name: "fix:regression-guard-stubs", resource: null, cmd: "node scripts/check-regression-guard.mjs --fix-stub", tiers: FAST },
+    { name: "fix:regression-guard-stubs", resource: null, cmd: "node scripts/check-regression-guard.mjs --fix-stub --skip-if-no-task", tiers: FAST },
     // no resource: regression-guard full lint (plan files in .local/tasks/), sub-second.
     // --stubs-only grandfathers pre-mandate plans; only flags unfilled placeholder text in existing sections.
-    { name: "check:regression-guard", resource: null, cmd: "pnpm run check:regression-guard --stubs-only", tiers: FAST },
+    { name: "check:regression-guard", resource: null, cmd: "node scripts/check-regression-guard.mjs --stubs-only --skip-if-no-task", tiers: FAST },
     // no resource: skip-count ratchet guard (static file scan), sub-second
     { name: "check:skip-count", resource: null, cmd: "pnpm run check:skip-count", tiers: FAST },
     // no resource: static regex scan of schema/*.ts vs test-db.ts DDL string, sub-second
