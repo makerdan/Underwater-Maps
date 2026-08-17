@@ -10,6 +10,13 @@ import { Markdown } from "./Markdown";
 import { HelpQA } from "./HelpQA";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { flushServerSync } from "@/hooks/useServerSettingsSync";
+import {
+  type HelpOfflineStatus,
+  type HelpPackProgress,
+  getHelpOfflineStatus,
+  saveHelpPack,
+  isCacheStorageAvailable,
+} from "@/lib/helpPackStore";
 
 const WINDOW_W = 880;
 const WINDOW_H = 600;
@@ -33,6 +40,203 @@ function clampPosition(x: number, y: number, w: number, h: number): { x: number;
     x: Math.max(0, Math.min(x, vw - Math.min(w, vw))),
     y: Math.max(0, Math.min(y, vh - Math.min(h, vh))),
   };
+}
+
+// ── Offline download control ──────────────────────────────────────────────────
+
+function HelpOfflineControl() {
+  const [status, setStatus] = useState<HelpOfflineStatus | null>(null);
+  const [progress, setProgress] = useState<HelpPackProgress | null>(null);
+  const [hasError, setHasError] = useState(false);
+
+  // Load initial status
+  useEffect(() => {
+    if (!isCacheStorageAvailable()) {
+      setStatus("unavailable");
+      return;
+    }
+    void getHelpOfflineStatus(HELP_ARTICLES).then(setStatus);
+  }, []);
+
+  const handleDownload = useCallback(async () => {
+    setStatus("downloading");
+    setProgress(null);
+    setHasError(false);
+    try {
+      await saveHelpPack(HELP_ARTICLES, (p) => {
+        setProgress(p);
+        if (p.error) setHasError(true);
+      });
+      setStatus("downloaded");
+    } catch {
+      setHasError(true);
+      // Reload real status — may still be not-downloaded or update-available
+      const s = await getHelpOfflineStatus(HELP_ARTICLES);
+      setStatus(s);
+    }
+  }, []);
+
+  if (status === null) return null;
+
+  const borderTop: React.CSSProperties = {
+    borderTop: "1px solid rgba(0,229,255,0.1)",
+    marginTop: 12,
+    paddingTop: 12,
+  };
+
+  if (status === "unavailable") {
+    return (
+      <div style={borderTop}>
+        <div
+          data-testid="help-offline-unavailable"
+          style={{
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+            color: "rgba(255,255,255,0.35)",
+            lineHeight: 1.4,
+          }}
+        >
+          ⬇ Offline download unavailable
+          <br />
+          <span style={{ fontSize: "calc(10px * var(--bs-font-scale, 1))" }}>
+            Requires a secure (https) context.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "downloading") {
+    const label = progress
+      ? `Downloading… (${progress.index} of ${progress.total})`
+      : "Downloading…";
+    return (
+      <div style={borderTop}>
+        <div
+          data-testid="help-offline-downloading"
+          style={{
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+            color: "rgba(255,255,255,0.6)",
+          }}
+        >
+          {label}
+        </div>
+        {hasError && (
+          <div
+            style={{
+              fontSize: "calc(10px * var(--bs-font-scale, 1))",
+              color: "#ff8a80",
+              marginTop: 2,
+            }}
+          >
+            Some files could not be downloaded.
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (status === "downloaded") {
+    return (
+      <div style={borderTop}>
+        <div
+          data-testid="help-offline-downloaded"
+          style={{
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+            color: "#69f0ae",
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+          }}
+        >
+          <span>✓ Help available offline</span>
+          <button
+            type="button"
+            onClick={() => void handleDownload()}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              color: "rgba(0,229,255,0.65)",
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+              textAlign: "left",
+            }}
+            data-testid="help-offline-redownload"
+          >
+            Re-download
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "update-available") {
+    return (
+      <div style={borderTop}>
+        <div
+          data-testid="help-offline-update"
+          style={{
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+            color: "#ffd740",
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+          }}
+        >
+          <span>⬆ Help update available</span>
+          <button
+            type="button"
+            onClick={() => void handleDownload()}
+            className="help-toc-item"
+            style={{
+              color: "#00e5ff",
+              fontWeight: 600,
+              textAlign: "left",
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+            }}
+            data-testid="help-offline-update-btn"
+          >
+            Update offline help
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // not-downloaded (or error recovery)
+  return (
+    <div style={borderTop}>
+      {hasError && (
+        <div
+          style={{
+            fontSize: "calc(10px * var(--bs-font-scale, 1))",
+            color: "#ff8a80",
+            marginBottom: 4,
+          }}
+        >
+          Download failed — check your connection.
+        </div>
+      )}
+      <button
+        type="button"
+        className="help-toc-item"
+        data-testid="help-offline-download-btn"
+        onClick={() => void handleDownload()}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          color: "rgba(0,229,255,0.8)",
+          width: "100%",
+          textAlign: "left",
+          fontSize: "calc(12px * var(--bs-font-scale, 1))",
+        }}
+      >
+        <span style={{ fontSize: "calc(14px * var(--bs-font-scale, 1))" }}>⬇</span>
+        Download for offline
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -330,6 +534,7 @@ export const HelpWindow: React.FC = () => {
                   </div>
                 ))}
                 <TakeTourLink onClose={closeHelp} />
+                <HelpOfflineControl />
               </nav>
             )}
           </aside>
