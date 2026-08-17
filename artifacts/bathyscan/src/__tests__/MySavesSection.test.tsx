@@ -841,3 +841,61 @@ describe("MySavesSection — water type badges & mode filtering", () => {
     expect(screen.queryByTestId("watertype-upload-upload-a")).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression guard: long names wrap instead of ellipsis-truncating
+// ---------------------------------------------------------------------------
+describe("MySavesSection — long name wrapping", () => {
+  beforeEach(resetState);
+
+  const LONG_NAME =
+    "Extremely-Long-Dataset-Name-That-Would-Previously-Be-Truncated-WithAnEllipsisInsideANestedFolder-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  it("save card name element uses overflowWrap and not whiteSpace:nowrap", () => {
+    const LONG_SAVE: Record<string, unknown> = {
+      id: "save-long",
+      catalogId: "cat-long",
+      status: "ready",
+      datasetId: null,
+      folderId: null,
+      displayLabel: true,
+      catalog: {
+        name: LONG_NAME,
+        sourceAgency: "TEST",
+        dataType: "bathymetry",
+      },
+      errorMessage: null,
+    };
+    currentMySaves = [LONG_SAVE];
+    renderSection();
+
+    const nameEl = screen.getByTestId("text-save-name-save-long");
+    const style = nameEl.getAttribute("style") ?? "";
+
+    // Must NOT truncate with nowrap
+    expect(style).not.toMatch(/white-space\s*:\s*nowrap/);
+    // Must apply a wrapping strategy
+    expect(style).toMatch(/overflow-wrap/);
+  });
+
+  it("upload card name element uses overflowWrap and not whiteSpace:nowrap", () => {
+    const LONG_UPLOAD: Record<string, unknown> = {
+      id: "upload-long",
+      name: LONG_NAME,
+      minDepth: 0,
+      maxDepth: 100,
+      folderId: null,
+      createdAt: "2024-01-01T00:00:00.000Z",
+    };
+    currentUserDatasets = [LONG_UPLOAD];
+    renderSection();
+
+    const nameEl = screen.getByTestId("text-upload-name-upload-long");
+    const style = nameEl.getAttribute("style") ?? "";
+
+    // Must NOT truncate with nowrap
+    expect(style).not.toMatch(/white-space\s*:\s*nowrap/);
+    // Must apply a wrapping strategy
+    expect(style).toMatch(/overflow-wrap/);
+  });
+});

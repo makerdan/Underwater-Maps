@@ -276,7 +276,7 @@ const SaveCard: React.FC<{
               data-testid={`text-save-name-${save.id}`}
               style={{
                 fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", fontWeight: 600,
-                marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                marginBottom: 1, overflowWrap: "anywhere",
               }}
             >
               {displayName}
@@ -499,7 +499,7 @@ const UploadCard: React.FC<{
             <div
               title={dataset.name}
               data-testid={`text-upload-name-${dataset.id}`}
-              style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", fontWeight: 600, marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", fontWeight: 600, marginBottom: 1, overflowWrap: "anywhere" }}
             >
               {dataset.name}
             </div>

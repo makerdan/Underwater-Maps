@@ -250,9 +250,7 @@ function UserDatasetRow({
       >
         <span
           style={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            overflowWrap: "anywhere",
             flex: 1,
           }}
         >
