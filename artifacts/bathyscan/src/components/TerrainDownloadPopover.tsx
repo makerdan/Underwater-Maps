@@ -197,7 +197,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           width: 400,
-          maxWidth: "92vw",
+          maxWidth: "calc(100vw - 32px)",
           background: "rgba(2,8,24,0.97)",
           border: "1px solid rgba(0,229,255,0.3)",
           borderRadius: 8,

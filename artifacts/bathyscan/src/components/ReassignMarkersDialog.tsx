@@ -177,7 +177,7 @@ export const ReassignMarkersDialog: React.FC<Props> = ({ onClose }) => {
         ref={panelRef}
         style={{
           width: 480,
-          maxWidth: "92vw",
+          maxWidth: "calc(100vw - 32px)",
           maxHeight: "82vh",
           overflow: "auto",
           background: "rgba(2,8,24,0.96)",

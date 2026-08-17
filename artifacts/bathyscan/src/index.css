@@ -351,8 +351,9 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
    Mobile responsive overrides (< 768px)
    --------------------------------------------------------------------------- */
 @media (max-width: 768px) {
-  /* Larger tap targets for all HUD buttons */
-  button {
+  /* Larger tap targets for all HUD buttons and switch toggles */
+  button,
+  [role="switch"] {
     min-height: 44px;
     min-width: 44px;
   }
@@ -399,6 +400,44 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
   /* Overview map footer hint: hide verbose text */
   .overview-map-hint {
     display: none;
+  }
+
+  /* ── Settings page: stack sidebar above content ─────────────────────────── */
+
+  /* Topbar: allow wrapping so BACK / SETTINGS / actions don't collide */
+  .bs-settings-topbar {
+    flex-wrap: wrap;
+    gap: 8px !important;
+    padding: 8px 12px !important;
+  }
+
+  /* Hide schema version number — saves space on narrow topbar */
+  .bs-settings-version {
+    display: none;
+  }
+
+  /* Stack sidebar on top of content instead of beside it */
+  .bs-settings-layout {
+    flex-direction: column !important;
+  }
+
+  /* Sidebar becomes a horizontal scrollable tab strip */
+  .bs-settings-sidebar {
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.1);
+    padding: 6px 0 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    overflow-x: auto;
+  }
+
+  /* Content area: no fixed height cap on mobile — page itself scrolls */
+  .bs-settings-content {
+    padding: 16px !important;
+    max-height: none !important;
+    overflow-y: visible !important;
   }
 }
 

@@ -734,7 +734,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         ref={panelRef}
         style={{
           width: 520,
-          maxWidth: "92vw",
+          maxWidth: "calc(100vw - 32px)",
           maxHeight: "86vh",
           overflow: "auto",
           background: "rgba(2,8,24,0.96)",

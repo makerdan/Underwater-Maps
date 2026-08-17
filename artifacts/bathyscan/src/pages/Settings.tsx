@@ -185,7 +185,7 @@ export function Settings() {
     <SyncContext.Provider value={syncCtx}>
       <div style={S.page} className="bs-settings-page">
         {/* Top bar */}
-        <div style={S.topbar}>
+        <div style={S.topbar} className="bs-settings-topbar">
           <button
             onClick={() => void handleBack()}
             title={shouldGuard ? "Saving unsaved changes before leaving…" : undefined}
@@ -227,7 +227,7 @@ export function Settings() {
           >
             SETTINGS
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: "calc(9px * var(--bs-font-scale, 1))" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: "calc(9px * var(--bs-font-scale, 1))" }} className="bs-settings-topbar-actions">
             <label
               style={{
                 display: "flex",
@@ -308,6 +308,7 @@ export function Settings() {
             <span
               style={{ color: "#64748b", letterSpacing: "0.1em" }}
               title={`schema v${SETTINGS_SCHEMA_VERSION}`}
+              className="bs-settings-version"
             >
               v{SETTINGS_SCHEMA_VERSION}
             </span>
@@ -315,9 +316,9 @@ export function Settings() {
         </div>
 
         {/* Two-column layout */}
-        <div style={S.layout}>
+        <div style={S.layout} className="bs-settings-layout">
           {/* Sidebar */}
-          <nav style={S.sidebar} aria-label="Settings sections">
+          <nav style={S.sidebar} className="bs-settings-sidebar" aria-label="Settings sections">
             {NAV_TABS.map((t) => (
               <button
                 key={t.id}
@@ -332,7 +333,7 @@ export function Settings() {
           </nav>
 
           {/* Content */}
-          <div style={S.content}>
+          <div style={S.content} className="bs-settings-content">
             {tab === "general" && <GeneralSection />}
             {tab === "visuals" && <VisualsSection />}
             {tab === "navigation" && <NavigationSection />}

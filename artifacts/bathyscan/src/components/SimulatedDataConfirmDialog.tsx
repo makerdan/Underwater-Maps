@@ -115,7 +115,7 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
         aria-describedby="simdata-dialog-desc"
         style={{
           width: 480,
-          maxWidth: "92vw",
+          maxWidth: "calc(100vw - 32px)",
           maxHeight: "86vh",
           overflow: "auto",
           background: "rgba(2,8,24,0.96)",
