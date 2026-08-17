@@ -58,11 +58,15 @@ function writePlan(dir, filename, content) {
 
 /** Run the script with the given cwd, optional extra args, and optional env overrides. */
 function run(cwd, args = [], env = {}) {
+  // Scrub TASK_PLAN_FILE from the inherited environment so fixture-directory
+  // tests are never forced into single-file mode by the parent task-agent
+  // environment. Tests that need single-file mode pass the var via env.
+  const { TASK_PLAN_FILE: _scrubbed, ...baseEnv } = process.env;
   const res = spawnSync("node", [scriptPath, ...args], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     cwd,
-    env: { ...process.env, ...env },
+    env: { ...baseEnv, ...env },
   });
   return {
     status: res.status,

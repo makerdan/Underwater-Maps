@@ -34,11 +34,16 @@ const scriptPath = resolve(__dirname, "..", "check-failure-gate.mjs");
 // process.env so the script can still resolve modules).
 // ---------------------------------------------------------------------------
 function runScript(args, cwd, extraEnv = {}) {
+  // Scrub TASK_PLAN_FILE (and any other scoping env vars) from the inherited
+  // environment so tests that scan fixture directories are never forced into
+  // single-file mode by the parent task-agent environment. Tests that need
+  // single-file mode pass the var explicitly via extraEnv.
+  const { TASK_PLAN_FILE: _scrubbed, ...baseEnv } = process.env;
   const res = spawnSync(process.execPath, [scriptPath, ...args], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     cwd,
-    env: { ...process.env, ...extraEnv },
+    env: { ...baseEnv, ...extraEnv },
   });
   return {
     status: res.status ?? 1,

@@ -20,7 +20,7 @@ description: check:failure-gate/-regression-guard lint the gitignored .local/tas
 
 **Also note:** stale `.local/custom_skills` mirrors may fail `check:skill-mirror-sync` first — run the post-merge sync block (gitignored-only) if so.
 
-**check:failure-gate-self-test env leak (2026-08-17):** since check-failure-gate.mjs gained TASK_PLAN_FILE single-file scoping, its node:test self-test fails whenever `TASK_PLAN_FILE` is set — the test spawns the script with the parent env inherited, forcing single-file mode so fixture assertions fail (exit 0 without the var, exit 1 with it). Until the self-test scrubs the env var when spawning, task-scoped tier runs need `--skip check:failure-gate-self-test`. Regression-guard scoping merged later the same day (task "scope regression-guard to TASK_PLAN_FILE") — re-verify whether the fix:regression-guard-stubs backlog skips are still needed before adding them.
+**check:failure-gate-self-test env leak — FIXED (2026-08-17):** both `check-failure-gate.test.mjs` and `check-regression-guard.test.mjs` now destructure `TASK_PLAN_FILE` out of `process.env` before spreading into spawnSync, so fixture-directory tests are never forced into single-file mode. The `--skip check:failure-gate-self-test` workaround is no longer needed.
 ## 2026-08-17 recurrence
 Gate hardening re-broke the archive: fix-stub steps insert placeholder text
 ("**Why:** <replace...>") that the checker itself then rejects, so the backlog
