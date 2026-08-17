@@ -33,7 +33,7 @@ import {
 import { startMobileGpsCameraMirror } from "@/lib/mobileMapFollow";
 import { useProximityStreamingWiring } from "@/hooks/useProximityStreamingWiring";
 import { MobileChartView } from "./MobileChartView";
-import { MobileDatasetPicker } from "./MobileDatasetPicker";
+import { MobileDatasetPicker, type MobilePickerMode } from "./MobileDatasetPicker";
 import { MobileLiveOverlay } from "./MobileLiveOverlay";
 import { BulkOfflinePanel } from "@/components/BulkOfflinePanel";
 import type { BulkDataset } from "@/hooks/useBulkOfflinePack";
@@ -258,6 +258,14 @@ export const MobileChartShell: React.FC<MobileChartShellProps> = ({
   const waterType = useSettingsStore((s) => s.waterType);
   const { isLoaded, isSignedIn } = useAuth();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // MOBILE-ONLY: dataset-picker tap semantics — "replace" (default) evicts,
+  // "add" stacks alongside what's loaded. Reset to "replace" whenever the
+  // picker closes so re-opening always starts in the familiar Replace mode.
+  const [pickerMode, setPickerMode] = useState<MobilePickerMode>("replace");
+  const closePicker = useCallback(() => {
+    setPickerOpen(false);
+    setPickerMode("replace");
+  }, []);
   // MOBILE-ONLY: pending offline download — set by the dataset picker's per-dataset
   // or section-level download buttons; cleared when the panel is closed.
   const [offlinePanel, setOfflinePanel] = useState<{
@@ -266,6 +274,7 @@ export const MobileChartShell: React.FC<MobileChartShellProps> = ({
   } | null>(null);
   const handleDownloadOffline = useCallback((datasets: BulkDataset[], label: string) => {
     setPickerOpen(false);
+    setPickerMode("replace");
     setOfflinePanel({ datasets, label });
   }, []);
   // MOBILE-ONLY: Live-tab bottom sheet minimized state — lets the chart go
@@ -447,8 +456,10 @@ export const MobileChartShell: React.FC<MobileChartShellProps> = ({
 
         {pickerOpen && (
           <MobileDatasetPicker
-            onClose={() => setPickerOpen(false)}
+            onClose={closePicker}
             onDownloadOffline={handleDownloadOffline}
+            mode={pickerMode}
+            onModeChange={setPickerMode}
           />
         )}
 

@@ -61,17 +61,8 @@ vi.mock("@workspace/api-client-react", () => makeApiClientMock());
 
 vi.mock("@/lib/clerkCompat", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    useAuth: () => ({ isLoaded: true, isSignedIn: false }),
-  };
-});
 
-import { useIsMobileImmediate } from "@/hooks/use-mobile";
-import { MobileChartShell } from "@/components/mobile/MobileChartShell";
-import { useSettingsStore } from "@/lib/settingsStore";
-import { useUiStore } from "@/lib/uiStore";
-
+  const EMPTY = new Map();
 /** Install a matchMedia stub whose max-width query matches (or not). */
 function stubMatchMedia(matches: boolean) {
   Object.defineProperty(window, "matchMedia", {
@@ -128,6 +119,7 @@ describe("MobileChartShell — mobile scene replacement", () => {
     stubMatchMedia(true);
     useSettingsStore.getState().resetAll();
     useUiStore.setState({ sidebarMode: "explore" });
+    useTerrainStore.getState().clear();
   });
 
   it("renders the 2D chart shell and NEVER creates a WebGL context", () => {

@@ -10,10 +10,12 @@
  * Tapping either calls the `onDownloadOffline` prop with a ready-to-run
  * `BulkDataset[]` array — the shell host renders `BulkOfflinePanel` from there.
  *
- * Loading plumbing is entirely reused: selecting an entry calls
- * terrainStore.setSinglePrimary(), and the always-mounted
- * VisibleDatasetsLoader fetches the terrain + overview grids exactly as it
- * does for desktop flows.
+ * Loading plumbing is entirely reused: in Replace mode (default) selecting an
+ * entry calls terrainStore.setSinglePrimary(); in Add mode (available once at
+ * least one dataset is loaded) it calls addSelected() to stack datasets up to
+ * the active cap, mirroring the desktop DatasetPanel multi-dataset flow. The
+ * always-mounted VisibleDatasetsLoader fetches the terrain + overview grids
+ * exactly as it does for desktop flows.
  */
 import React from "react";
 import {
@@ -26,7 +28,7 @@ import {
   type DatasetMeta,
   type UserDatasetMeta,
 } from "@workspace/api-client-react";
-import { useTerrainStore, type DatasetSource } from "@/lib/terrainStore";
+import { useTerrainStore, MAX_ACTIVE_DATASETS, type DatasetSource } from "@/lib/terrainStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useAuth } from "@/lib/clerkCompat";
 import { useOfflinePackStatuses, type PackStatus } from "@/hooks/useOfflinePackStatus";
@@ -46,6 +48,79 @@ function userToBulkDataset(d: UserDatasetMeta): BulkDataset {
     bbox: d.bbox ?? undefined,
     ...(d.resolutionM != null ? { resolutionM: d.resolutionM } : {}),
   };
+}
+
+// ── Picker mode ────────────────────────────────────────────────────────────
+
+/** MOBILE-ONLY: picker tap semantics — "replace" evicts, "add" stacks. */
+export type MobilePickerMode = "replace" | "add";
+
+/** Tooltip shown on rows that cannot be added because the active cap is hit. */
+const CAP_REACHED_TITLE = "Cap reached — remove a dataset to add another";
+
+// ── Loaded badge ───────────────────────────────────────────────────────────
+
+/** MOBILE-ONLY: inline "● Loaded" indicator for currently-visible datasets. */
+function LoadedBadge() {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        fontSize: "calc(10.5px * var(--bs-font-scale, 1))",
+        color: "#00e5ff",
+        background: "rgba(0,229,255,0.12)",
+        border: "1px solid rgba(0,229,255,0.3)",
+        borderRadius: 4,
+        padding: "1px 5px",
+        marginLeft: 8,
+        flexShrink: 0,
+        fontFamily: "'JetBrains Mono', monospace",
+      }}
+      title="Currently loaded in the chart"
+    >
+      ● Loaded
+    </span>
+  );
+}
+
+// ── Remove (unload) button ─────────────────────────────────────────────────
+
+/** MOBILE-ONLY: 44×44 touch-target "×" that unloads a visible dataset. */
+function RemoveLoadedBtn({
+  datasetId,
+  name,
+  onClick,
+}: {
+  datasetId: string;
+  name: string;
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`Unload ${name}`}
+      data-testid={`mobile-dataset-remove-${datasetId}`}
+      onClick={onClick}
+      style={{
+        background: "none",
+        border: "none",
+        color: "#f87171",
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: "calc(18px * var(--bs-font-scale, 1))",
+        minWidth: 44,
+        minHeight: 44,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        flexShrink: 0,
+      }}
+    >
+      ×
+    </button>
+  );
 }
 
 // ── Offline status badge ───────────────────────────────────────────────────
@@ -122,6 +197,9 @@ function UserDatasetRow({
   onSelect,
   onDownload,
   depth,
+  isLoadedVisible,
+  dimmed,
+  onRemove,
 }: {
   dataset: UserDatasetMeta;
   isActive: boolean;
@@ -129,6 +207,12 @@ function UserDatasetRow({
   onSelect: () => void;
   onDownload: () => void;
   depth: number;
+  /** True when this dataset is currently in terrainStore.visibleDatasets. */
+  isLoadedVisible: boolean;
+  /** True when Add mode is at the active cap and this row cannot be added. */
+  dimmed: boolean;
+  /** Unload handler — shown as a "×" button when the dataset is loaded. */
+  onRemove: () => void;
 }) {
   const paddingLeft = 16 + depth * 24;
   return (
@@ -145,6 +229,8 @@ function UserDatasetRow({
         type="button"
         data-testid={`mobile-dataset-option-${d.id}`}
         onClick={onSelect}
+        aria-disabled={dimmed || undefined}
+        title={dimmed ? CAP_REACHED_TITLE : undefined}
         style={{
           flex: 1,
           textAlign: "left",
@@ -155,7 +241,8 @@ function UserDatasetRow({
           fontSize: "calc(14px * var(--bs-font-scale, 1))",
           padding: `14px 16px 14px ${paddingLeft}px`,
           minHeight: 48,
-          cursor: "pointer",
+          cursor: dimmed ? "default" : "pointer",
+          opacity: dimmed ? 0.4 : 1,
           display: "flex",
           alignItems: "center",
           minWidth: 0,
@@ -171,8 +258,20 @@ function UserDatasetRow({
         >
           {d.name}
         </span>
+        {isLoadedVisible && <LoadedBadge />}
         <OfflineStatusBadge status={status} />
       </button>
+      {/* Unload button for currently-loaded datasets */}
+      {isLoadedVisible && (
+        <RemoveLoadedBtn
+          datasetId={d.id}
+          name={d.name}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+        />
+      )}
       {/* Per-dataset download */}
       <DownloadBtn
         label={`Download ${d.name} offline`}
@@ -195,6 +294,14 @@ interface MobileDatasetPickerProps {
    * The shell host is responsible for rendering BulkOfflinePanel.
    */
   onDownloadOffline: (datasets: BulkDataset[], scopeLabel: string) => void;
+  /**
+   * Picker tap semantics — "replace" (default) evicts everything and loads
+   * the tapped dataset; "add" stacks datasets up to the active cap. Owned by
+   * the shell host so it can reset to "replace" whenever the picker closes.
+   */
+  mode: MobilePickerMode;
+  /** Fired when the user switches the Replace/Add segmented control. */
+  onModeChange: (mode: MobilePickerMode) => void;
 }
 
 // ── Subtree dataset collector ─────────────────────────────────────────────
@@ -217,6 +324,12 @@ interface FolderSectionProps {
   onSelect: (datasetId: string) => void;
   onDownloadOffline: (datasets: BulkDataset[], scopeLabel: string) => void;
   sectionDownloadBtnStyle: React.CSSProperties;
+  /** IDs of datasets currently in terrainStore.visibleDatasets. */
+  visibleIds: ReadonlySet<string>;
+  /** True when Add mode is at the active cap (un-loaded rows get dimmed). */
+  dimUnloaded: boolean;
+  /** Unload a currently-visible dataset (toggleVisible remove path). */
+  onRemove: (datasetId: string) => void;
 }
 
 /**
@@ -231,6 +344,9 @@ function FolderSection({
   onSelect,
   onDownloadOffline,
   sectionDownloadBtnStyle,
+  visibleIds,
+  dimUnloaded,
+  onRemove,
 }: FolderSectionProps) {
   const subtreeDatasets = collectSubtreeDatasets(node);
   // Folder header indentation: 16 px base + 16 px per depth level.
@@ -290,6 +406,9 @@ function FolderSection({
           onSelect={() => onSelect(d.id)}
           onDownload={() => onDownloadOffline([userToBulkDataset(d)], d.name)}
           depth={datasetDepth}
+          isLoadedVisible={visibleIds.has(d.id)}
+          dimmed={dimUnloaded && !visibleIds.has(d.id)}
+          onRemove={() => onRemove(d.id)}
         />
       ))}
 
@@ -303,6 +422,9 @@ function FolderSection({
           onSelect={onSelect}
           onDownloadOffline={onDownloadOffline}
           sectionDownloadBtnStyle={sectionDownloadBtnStyle}
+          visibleIds={visibleIds}
+          dimUnloaded={dimUnloaded}
+          onRemove={onRemove}
         />
       ))}
     </React.Fragment>
@@ -312,11 +434,25 @@ function FolderSection({
 export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
   onClose,
   onDownloadOffline,
+  mode,
+  onModeChange,
 }) => {
   const waterType = useSettingsStore((s) => s.waterType);
+  const maxActiveDatasets = useSettingsStore((s) => s.maxActiveDatasets);
   const { isLoaded, isSignedIn } = useAuth();
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
+  const visibleDatasets = useTerrainStore((s) => s.visibleDatasets);
   const packStatuses = useOfflinePackStatuses();
+
+  // Which datasets are currently loaded (all visible datasets are primary).
+  const visibleIds = React.useMemo(
+    () => new Set(visibleDatasets.map((v) => v.datasetId)),
+    [visibleDatasets],
+  );
+  const activeCap = maxActiveDatasets ?? MAX_ACTIVE_DATASETS;
+  const atCap = visibleDatasets.length >= activeCap;
+  // Un-loaded rows are dimmed (and taps no-op) only in Add mode at the cap.
+  const dimUnloaded = mode === "add" && atCap;
 
   const { data: datasets, isLoading: datasetsLoading } = useGetDatasets(
     { waterType },
@@ -341,11 +477,23 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
   );
 
   const select = (datasetId: string, source: DatasetSource) => {
-    // Replace ALL visible datasets with the chosen one and let
-    // VisibleDatasetsLoader stream its grids in — the mobile chart is
-    // single-dataset by design ("the chosen dataset").
+    if (mode === "add") {
+      // Add mode: stack the tapped dataset alongside what's loaded and keep
+      // the picker open so several datasets can be added in one session.
+      if (visibleIds.has(datasetId)) return; // already loaded — no-op
+      if (atCap) return; // cap guard — row is dimmed; tap is a no-op
+      useTerrainStore.getState().addSelected(datasetId, source);
+      return;
+    }
+    // Replace mode (default): replace ALL visible datasets with the chosen
+    // one and let VisibleDatasetsLoader stream its grids in.
     useTerrainStore.getState().setSinglePrimary(datasetId, source);
     onClose();
+  };
+
+  // Unload a currently-visible dataset without closing the picker.
+  const removeLoaded = (datasetId: string, source: DatasetSource) => {
+    useTerrainStore.getState().toggleVisible({ datasetId, source });
   };
 
   // ── Styles ───────────────────────────────────────────────────────────────
@@ -431,22 +579,71 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
           </span>
           <button
             type="button"
-            aria-label="Close dataset picker"
+            aria-label={mode === "add" ? "Done adding datasets" : "Close dataset picker"}
             data-testid="mobile-dataset-picker-close"
             onClick={onClose}
             style={{
               background: "none",
-              border: "none",
-              color: "#94a3b8",
-              fontSize: "calc(22px * var(--bs-font-scale, 1))",
+              border: mode === "add" ? "1px solid rgba(0,229,255,0.4)" : "none",
+              borderRadius: mode === "add" ? 8 : 0,
+              color: mode === "add" ? "#00e5ff" : "#94a3b8",
+              fontFamily: mode === "add" ? "'JetBrains Mono', monospace" : undefined,
+              fontSize:
+                mode === "add"
+                  ? "calc(12px * var(--bs-font-scale, 1))"
+                  : "calc(22px * var(--bs-font-scale, 1))",
+              letterSpacing: mode === "add" ? "0.1em" : undefined,
               minWidth: 44,
               minHeight: 44,
+              padding: mode === "add" ? "0 14px" : undefined,
               cursor: "pointer",
             }}
           >
-            ×
+            {mode === "add" ? "DONE" : "×"}
           </button>
         </div>
+
+        {/* ── Replace / Add segmented control — only when something is loaded ── */}
+        {visibleDatasets.length > 0 && (
+          <div
+            role="group"
+            aria-label="Picker mode"
+            data-testid="mobile-picker-mode-toggle"
+            style={{
+              display: "flex",
+              margin: "10px 16px",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 8,
+              overflow: "hidden",
+            }}
+          >
+            {(["replace", "add"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                data-testid={`mobile-picker-mode-${m}`}
+                aria-pressed={mode === m}
+                onClick={() => onModeChange(m)}
+                style={{
+                  flex: "1 1 0",
+                  minHeight: 44, // MOBILE-ONLY: thumb-sized touch target
+                  background: mode === m ? "rgba(0,229,255,0.18)" : "transparent",
+                  border: "none",
+                  borderRight:
+                    m === "replace" ? "1px solid rgba(0,229,255,0.12)" : "none",
+                  color: mode === m ? "#00e5ff" : "#94a3b8",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
 
         {datasetsLoading && (
           <div
@@ -491,6 +688,9 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
                 onSelect={() => select(d.id, "user")}
                 onDownload={() => onDownloadOffline([userToBulkDataset(d)], d.name)}
                 depth={0}
+                isLoadedVisible={visibleIds.has(d.id)}
+                dimmed={dimUnloaded && !visibleIds.has(d.id)}
+                onRemove={() => removeLoaded(d.id, "user")}
               />
             ))}
 
@@ -504,6 +704,9 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
                 onSelect={(datasetId) => select(datasetId, "user")}
                 onDownloadOffline={onDownloadOffline}
                 sectionDownloadBtnStyle={sectionDownloadBtnStyle}
+                visibleIds={visibleIds}
+                dimUnloaded={dimUnloaded}
+                onRemove={(datasetId) => removeLoaded(datasetId, "user")}
               />
             ))}
           </>
@@ -531,6 +734,8 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
             {datasets!.map((d) => {
               const status = packStatuses.get(d.id) ?? "none";
               const isActive = d.id === primaryDatasetId;
+              const isLoadedVisible = visibleIds.has(d.id);
+              const dimmed = dimUnloaded && !isLoadedVisible;
               return (
                 <div
                   key={d.id}
@@ -546,6 +751,8 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
                     type="button"
                     data-testid={`mobile-dataset-option-${d.id}`}
                     onClick={() => select(d.id, "preset")}
+                    aria-disabled={dimmed || undefined}
+                    title={dimmed ? CAP_REACHED_TITLE : undefined}
                     style={{
                       flex: 1,
                       textAlign: "left",
@@ -556,7 +763,8 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
                       fontSize: "calc(14px * var(--bs-font-scale, 1))",
                       padding: "14px 16px",
                       minHeight: 48,
-                      cursor: "pointer",
+                      cursor: dimmed ? "default" : "pointer",
+                      opacity: dimmed ? 0.4 : 1,
                       display: "flex",
                       alignItems: "center",
                       minWidth: 0,
@@ -572,8 +780,20 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
                     >
                       {d.name}
                     </span>
+                    {isLoadedVisible && <LoadedBadge />}
                     <OfflineStatusBadge status={status} />
                   </button>
+                  {/* Unload button for currently-loaded datasets */}
+                  {isLoadedVisible && (
+                    <RemoveLoadedBtn
+                      datasetId={d.id}
+                      name={d.name}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeLoaded(d.id, "preset");
+                      }}
+                    />
+                  )}
                   {/* Per-dataset download */}
                   <DownloadBtn
                     label={`Download ${d.name} offline`}
