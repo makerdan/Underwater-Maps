@@ -14,7 +14,7 @@
  * The two hosts never mount simultaneously (App.tsx mobile gate), so the
  * 500 ms sampling interval is never doubled.
  */
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   getGetDatasetsIdTerrainQueryKey,
   getGetDatasetsIdTerrainUrl,
@@ -35,6 +35,33 @@ import {
   useDatasetProximityStreaming,
   type DatasetBbox,
 } from "@/hooks/useDatasetProximityStreaming";
+
+/**
+ * Module-level set of dataset IDs that have been auto-registered in the
+ * proximity pool by this hook.  Declared at module scope (not inside the hook
+ * as a useRef) so that it survives DatasetPanel / MobileChartShell remounts.
+ * It is naturally reset on a full page reload, at which point the catalog data
+ * also reloads from scratch — so the reset is always correct.
+ *
+ * This is the fix for the remount re-enrollment bug: a useRef resets to an
+ * empty Set every time the host component unmounts and remounts, causing every
+ * dataset to be re-enrolled even when it is already in selectedIds.
+ */
+const autoRegisteredIds = new Set<string>();
+
+/**
+ * Test-only reset — clears the module-level autoRegisteredIds set so that
+ * each unit/integration test begins from a clean slate.
+ *
+ * Import and call in beforeEach:
+ *   import { __resetAutoRegisteredIds } from "@/hooks/useProximityStreamingWiring";
+ *   beforeEach(() => { __resetAutoRegisteredIds(); });
+ *
+ * Do not call this from production code.
+ */
+export function __resetAutoRegisteredIds(): void {
+  autoRegisteredIds.clear();
+}
 
 /**
  * Minimal structural shape of a catalog / user dataset entry as consumed by
@@ -125,9 +152,11 @@ export function useProximityStreamingWiring({
   //
   // Preset catalog entries always have bbox from the catalog; all are enrolled.
   //
-  // autoRegisteredRef tracks ONLY IDs we actually registered, so toggle-off
-  // cannot evict datasets the user manually selected before enabling the mode.
-  const autoRegisteredRef = useRef<Set<string>>(new Set());
+  // autoRegisteredIds (module-level) tracks ONLY IDs we actually registered, so
+  // toggle-off cannot evict datasets the user manually selected before enabling
+  // the mode.  Being module-level (not a useRef) it also survives DatasetPanel
+  // remounts — preventing the bug where every dataset was re-enrolled from
+  // scratch on every navigation-triggered unmount/remount cycle.
 
   useEffect(() => {
     const { addSelectedToPool, removeSelected, selectedIds } = useTerrainStore.getState();
@@ -135,10 +164,10 @@ export function useProximityStreamingWiring({
     if (!proximityMode) {
       // Remove every auto-registered ID from the pool (and evict if active).
       // removeSelected handles both selectedIds and visibleDatasets atomically.
-      for (const id of autoRegisteredRef.current) {
+      for (const id of autoRegisteredIds) {
         removeSelected(id);
       }
-      autoRegisteredRef.current.clear();
+      autoRegisteredIds.clear();
       return;
     }
 
@@ -146,9 +175,9 @@ export function useProximityStreamingWiring({
 
     // Register preset catalog entries (all carry bbox from catalog metadata).
     for (const d of datasets ?? []) {
-      if (!autoRegisteredRef.current.has(d.id) && !alreadySelected.has(d.id)) {
+      if (!autoRegisteredIds.has(d.id) && !alreadySelected.has(d.id)) {
         addSelectedToPool(d.id, "preset");
-        autoRegisteredRef.current.add(d.id);
+        autoRegisteredIds.add(d.id);
       }
     }
 
@@ -158,11 +187,11 @@ export function useProximityStreamingWiring({
     for (const d of userDatasets ?? []) {
       if (
         d.bbox &&
-        !autoRegisteredRef.current.has(d.id) &&
+        !autoRegisteredIds.has(d.id) &&
         !alreadySelected.has(d.id)
       ) {
         addSelectedToPool(d.id, "user");
-        autoRegisteredRef.current.add(d.id);
+        autoRegisteredIds.add(d.id);
       }
     }
   }, [proximityMode, datasets, userDatasets]);

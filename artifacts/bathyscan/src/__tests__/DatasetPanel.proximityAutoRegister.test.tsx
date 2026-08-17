@@ -14,6 +14,7 @@ import React from "react";
 import { render, act } from "@testing-library/react";
 import { DatasetPanel } from "@/components/DatasetPanel";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { __resetAutoRegisteredIds } from "@/hooks/useProximityStreamingWiring";
 
 // ── Hoisted state ──────────────────────────────────────────────────────────────
 
@@ -271,6 +272,9 @@ beforeEach(() => {
   terrainStoreMock.addSelectedToPool.mockClear();
   terrainStoreMock.addSelected.mockClear();
   terrainStoreMock.removeSelected.mockClear();
+
+  // Reset the module-level autoRegisteredIds set so each test starts clean.
+  __resetAutoRegisteredIds();
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -415,5 +419,44 @@ describe("DatasetPanel — proximity auto-registration: proximityMode disabled",
     });
 
     expect(terrainStoreMock.addSelectedToPool).not.toHaveBeenCalled();
+  });
+});
+
+describe("DatasetPanel — proximity auto-registration: remount does not re-enroll", () => {
+  it("does not call addSelectedToPool again for already-selected datasets when the panel remounts", async () => {
+    apiState.presets = [
+      { id: "preset-ocean", name: "Ocean Survey", minDepth: 0, maxDepth: 200, bbox: BBOX },
+    ];
+    apiState.userDatasets = [
+      { id: "user-with-bbox", name: "User Survey", minDepth: 0, maxDepth: 100, createdAt: "2024-01-01T00:00:00Z", bbox: BBOX },
+    ];
+
+    // First mount — datasets enroll once.
+    let unmount!: () => void;
+    await act(async () => {
+      ({ unmount } = render(React.createElement(DatasetPanel, {})));
+    });
+
+    expect(terrainStoreMock.addSelectedToPool).toHaveBeenCalledWith("preset-ocean", "preset");
+    expect(terrainStoreMock.addSelectedToPool).toHaveBeenCalledWith("user-with-bbox", "user");
+    const callCountAfterFirstMount = terrainStoreMock.addSelectedToPool.mock.calls.length;
+
+    // Unmount (simulates navigation away).
+    await act(async () => { unmount(); });
+
+    // The terrainStore selectedIds now reflect what was enrolled (the mock's
+    // addSelectedToPool implementation pushes IDs into selectedIds).
+    terrainStoreMock.addSelectedToPool.mockClear();
+
+    // Remount — datasets are already in selectedIds AND in autoRegisteredIds.
+    // Neither re-enrollment path should fire.
+    await act(async () => {
+      render(React.createElement(DatasetPanel, {}));
+    });
+
+    // No new addSelectedToPool calls — the module-level autoRegisteredIds set
+    // prevents re-enrollment on remount (the core bug fix).
+    expect(terrainStoreMock.addSelectedToPool).not.toHaveBeenCalled();
+    void callCountAfterFirstMount; // used above for assertion ordering
   });
 });
