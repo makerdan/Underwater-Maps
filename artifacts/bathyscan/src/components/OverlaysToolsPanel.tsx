@@ -36,7 +36,6 @@ import {
 import { usePanelCollapseStore } from "@/lib/panelCollapseStore";
 import { AdvancedSection } from "@/components/AdvancedSection";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
-import { HelpIcon } from "@/components/help/HelpButton";
 import { Spinner } from "@/components/ui/spinner";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
@@ -465,11 +464,8 @@ export const OverlaysToolsPanel: React.FC = () => {
             Overlays &amp; Tools
           </span>
         </ViewscreenTooltip>
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <HelpIcon articleId="hud-overlays" label="HUD overlay toggles" />
-          <span style={{ color: "#cbd5e1", fontSize: "calc(36px * var(--bs-font-scale, 1))", lineHeight: 1 }}>
-            {collapsed ? "▸" : "▾"}
-          </span>
+        <span style={{ color: "#cbd5e1", fontSize: "calc(36px * var(--bs-font-scale, 1))", lineHeight: 1 }}>
+          {collapsed ? "▸" : "▾"}
         </span>
       </div>
 
