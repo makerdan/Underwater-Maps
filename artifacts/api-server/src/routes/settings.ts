@@ -153,6 +153,8 @@ export const DEFAULT_SETTINGS = {
   contourInterval: 10,
   // MOBILE-ONLY key: mobile 2D Chart View contour-density stepper (1x/2x/3x).
   contourDensity: 1,
+  // MOBILE-ONLY key: subtle CSS perspective tilt on the mobile 2D chart canvas.
+  mobileMapTiltEnabled: false,
   defaultDepthPoleColor: "#22d3ee",
   markerClusterThreshold: 25,
   autoLoadTidal: false,

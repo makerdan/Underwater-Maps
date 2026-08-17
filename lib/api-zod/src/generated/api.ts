@@ -1652,6 +1652,7 @@ export const getSettingsResponseContourIntervalMin = 0.5;
 export const getSettingsResponseContourIntervalMax = 1000;
 
 export const getSettingsResponseContourDensityDefault = 1;
+export const getSettingsResponseMobileMapTiltEnabledDefault = false;
 export const getSettingsResponseDefaultDepthPoleColorDefault = `#22d3ee`;
 export const getSettingsResponseDefaultDepthPoleColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const getSettingsResponseMarkerClusterThresholdDefault = 25;
@@ -1884,6 +1885,7 @@ export const GetSettingsResponse = zod.object({
   "contoursEnabled": zod.boolean().default(getSettingsResponseContoursEnabledDefault).describe('Draw iso-depth contour lines on the 2D overview map.'),
   "contourInterval": zod.number().min(getSettingsResponseContourIntervalMin).max(getSettingsResponseContourIntervalMax).default(getSettingsResponseContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
   "contourDensity": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]).default(getSettingsResponseContourDensityDefault).describe('MOBILE-ONLY key: contour-density multiplier for the mobile 2D Chart View\'s 1x\/2x\/3x stepper. Divides the effective contour interval (2 = twice as many lines). The desktop Overview Map ignores this key.'),
+  "mobileMapTiltEnabled": zod.boolean().default(getSettingsResponseMobileMapTiltEnabledDefault).describe('MOBILE-ONLY key: when true, the mobile 2D chart canvas is rendered with a subtle CSS perspective tilt (~4\u00b0) to give it a tactile sense of physical scale. Off by default. The desktop 3D view ignores this key.'),
   "defaultDepthPoleColor": zod.string().regex(getSettingsResponseDefaultDepthPoleColorRegExp).default(getSettingsResponseDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
   "markerClusterThreshold": zod.number().min(getSettingsResponseMarkerClusterThresholdMin).max(getSettingsResponseMarkerClusterThresholdMax).default(getSettingsResponseMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(getSettingsResponseAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
@@ -2184,6 +2186,7 @@ export const putSettingsBodyContourIntervalMin = 0.5;
 export const putSettingsBodyContourIntervalMax = 1000;
 
 export const putSettingsBodyContourDensityDefault = 1;
+export const putSettingsBodyMobileMapTiltEnabledDefault = false;
 export const putSettingsBodyDefaultDepthPoleColorDefault = `#22d3ee`;
 export const putSettingsBodyDefaultDepthPoleColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const putSettingsBodyMarkerClusterThresholdDefault = 25;
@@ -2416,6 +2419,7 @@ export const PutSettingsBody = zod.object({
   "contoursEnabled": zod.boolean().default(putSettingsBodyContoursEnabledDefault).describe('Draw iso-depth contour lines on the 2D overview map.'),
   "contourInterval": zod.number().min(putSettingsBodyContourIntervalMin).max(putSettingsBodyContourIntervalMax).default(putSettingsBodyContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
   "contourDensity": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]).default(putSettingsBodyContourDensityDefault).describe('MOBILE-ONLY key: contour-density multiplier for the mobile 2D Chart View\'s 1x\/2x\/3x stepper. Divides the effective contour interval (2 = twice as many lines). The desktop Overview Map ignores this key.'),
+  "mobileMapTiltEnabled": zod.boolean().default(putSettingsBodyMobileMapTiltEnabledDefault).describe('MOBILE-ONLY key: when true, the mobile 2D chart canvas is rendered with a subtle CSS perspective tilt (~4\u00b0) to give it a tactile sense of physical scale. Off by default. The desktop 3D view ignores this key.'),
   "defaultDepthPoleColor": zod.string().regex(putSettingsBodyDefaultDepthPoleColorRegExp).default(putSettingsBodyDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
   "markerClusterThreshold": zod.number().min(putSettingsBodyMarkerClusterThresholdMin).max(putSettingsBodyMarkerClusterThresholdMax).default(putSettingsBodyMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(putSettingsBodyAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),
@@ -2711,6 +2715,7 @@ export const putSettingsResponseContourIntervalMin = 0.5;
 export const putSettingsResponseContourIntervalMax = 1000;
 
 export const putSettingsResponseContourDensityDefault = 1;
+export const putSettingsResponseMobileMapTiltEnabledDefault = false;
 export const putSettingsResponseDefaultDepthPoleColorDefault = `#22d3ee`;
 export const putSettingsResponseDefaultDepthPoleColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
 export const putSettingsResponseMarkerClusterThresholdDefault = 25;
@@ -2943,6 +2948,7 @@ export const PutSettingsResponse = zod.object({
   "contoursEnabled": zod.boolean().default(putSettingsResponseContoursEnabledDefault).describe('Draw iso-depth contour lines on the 2D overview map.'),
   "contourInterval": zod.number().min(putSettingsResponseContourIntervalMin).max(putSettingsResponseContourIntervalMax).default(putSettingsResponseContourIntervalDefault).describe('Spacing between contour lines in the user\'s active unit system (metres for metric, feet for imperial\/nautical).'),
   "contourDensity": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]).default(putSettingsResponseContourDensityDefault).describe('MOBILE-ONLY key: contour-density multiplier for the mobile 2D Chart View\'s 1x\/2x\/3x stepper. Divides the effective contour interval (2 = twice as many lines). The desktop Overview Map ignores this key.'),
+  "mobileMapTiltEnabled": zod.boolean().default(putSettingsResponseMobileMapTiltEnabledDefault).describe('MOBILE-ONLY key: when true, the mobile 2D chart canvas is rendered with a subtle CSS perspective tilt (~4\u00b0) to give it a tactile sense of physical scale. Off by default. The desktop 3D view ignores this key.'),
   "defaultDepthPoleColor": zod.string().regex(putSettingsResponseDefaultDepthPoleColorRegExp).default(putSettingsResponseDefaultDepthPoleColorDefault).describe('Default hex colour applied to new depth-pole markers.'),
   "markerClusterThreshold": zod.number().min(putSettingsResponseMarkerClusterThresholdMin).max(putSettingsResponseMarkerClusterThresholdMax).default(putSettingsResponseMarkerClusterThresholdDefault).describe('Maximum number of visible markers before clustering is activated. Set to 0 to disable clustering.'),
   "autoLoadTidal": zod.boolean().default(putSettingsResponseAutoLoadTidalDefault).describe('Automatically load tidal current data when a dataset is opened.'),

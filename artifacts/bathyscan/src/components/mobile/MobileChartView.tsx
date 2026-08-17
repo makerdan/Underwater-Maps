@@ -721,6 +721,10 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
   // ── Empty / loading states ───────────────────────────────────────────────
   const showEmptyState = !overviewGrid;
 
+  // MOBILE-ONLY: subtle tilt effect — reads from settings store so it stays
+  // off by default and persists cross-device when the user enables it.
+  const mobileMapTiltEnabled = useSettingsStore((s) => s.mobileMapTiltEnabled);
+
   return (
     <div
       ref={containerRef}
@@ -729,20 +733,52 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
       // the browser never hijacks pan/pinch for page scroll/zoom.
       style={{ position: "absolute", inset: 0, background: "#020817" }}
     >
-      <canvas
-        ref={canvasRef}
-        data-testid="mobile-chart-canvas"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerEnd}
-        onPointerCancel={onPointerEnd}
-        style={{
+      {/* MOBILE-ONLY: optional "tile tilt" wrapper — CSS perspective + rotateX gives the
+          flat heatmap a subtle physical depth. cos(4°) ≈ 0.9976, so touch targets shift
+          by <0.25% of canvas height, well within finger-accuracy margins. */}
+      <div
+        style={mobileMapTiltEnabled ? {
           width: "100%",
           height: "100%",
-          display: "block",
-          touchAction: "none", // MOBILE-ONLY: keep pan/pinch on the chart
-        }}
-      />
+          transform: "perspective(900px) rotateX(4deg)",
+          transformOrigin: "50% 100%",
+          transformStyle: "preserve-3d",
+        } : { width: "100%", height: "100%" }}
+      >
+        <canvas
+          ref={canvasRef}
+          data-testid="mobile-chart-canvas"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerEnd}
+          onPointerCancel={onPointerEnd}
+          style={{
+            width: "100%",
+            height: "100%",
+            display: "block",
+            touchAction: "none", // MOBILE-ONLY: keep pan/pinch on the chart
+          }}
+        />
+      </div>
+      {/* MOBILE-ONLY: simulated tile-thickness edge strip — visible only when the
+          tilt is engaged. The 12px dark gradient reads as the physical side wall of
+          the depth tile when combined with the rotateX tilt above. */}
+      {mobileMapTiltEnabled && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 12,
+            pointerEvents: "none",
+            borderRadius: "0 0 3px 3px",
+            background: "linear-gradient(to bottom, rgba(10,18,32,0.9) 0%, rgba(2,8,18,0.4) 100%)",
+            marginTop: -12,
+          }}
+        />
+      )}
       {/* MOBILE-ONLY: compact legend pills for active Analyze overlays. */}
       <MobileAnalyzeLegend overlays={overlays} />
 

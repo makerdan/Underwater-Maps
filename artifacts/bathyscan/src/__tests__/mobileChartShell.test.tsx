@@ -177,6 +177,31 @@ describe("MobileChartShell — mobile scene replacement", () => {
   });
 });
 
+describe("mobileMapTiltEnabled — settings key regression guard", () => {
+  it("DEFAULT_SETTINGS contains mobileMapTiltEnabled: false", async () => {
+    const { DEFAULT_SETTINGS } = await import("@/lib/settingsStore");
+    expect(DEFAULT_SETTINGS).toHaveProperty("mobileMapTiltEnabled", false);
+  });
+
+  it("PutSettingsBody parses { mobileMapTiltEnabled: true } without error", async () => {
+    const { PutSettingsBody } = await import("@workspace/api-zod");
+    const result = PutSettingsBody.safeParse({ mobileMapTiltEnabled: true });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.mobileMapTiltEnabled).toBe(true);
+    }
+  });
+
+  it("MobileChartShell renders without throwing when mobileMapTiltEnabled is true", () => {
+    stubMatchMedia(true);
+    useSettingsStore.getState().resetAll();
+    useSettingsStore.getState().setMobileMapTiltEnabled(true);
+    expect(() => render(<MobileChartShell />)).not.toThrow();
+    expect(screen.getByTestId("mobile-chart-view")).toBeInTheDocument();
+    cleanup();
+  });
+});
+
 describe("App.tsx wiring — source-integrity guard for the mobile gate", () => {
   // Full-App renders are not this repo's test pattern (App requires the whole
   // provider/AppState stack), so the gate wiring is asserted on the source

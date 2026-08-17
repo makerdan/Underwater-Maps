@@ -69,7 +69,7 @@ import {
 // mobile Chart View (contourDensity settings key).
 import { toValidContourDensity, type ContourDensity } from "./contourDensity";
 
-export const SETTINGS_SCHEMA_VERSION = 37;
+export const SETTINGS_SCHEMA_VERSION = 38;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -346,6 +346,12 @@ export interface SettingsState {
    * many lines). The desktop Overview Map ignores this key entirely.
    */
   contourDensity: ContourDensity;
+  /**
+   * MOBILE-ONLY: when true, the mobile 2D chart canvas is rendered with a
+   * subtle CSS perspective tilt (~4°) to give it a tactile sense of physical
+   * scale. Off by default. The desktop 3D view ignores this key entirely.
+   */
+  mobileMapTiltEnabled: boolean;
 
   // ── Markers ──────────────────────────────────────────────────────────
   defaultMarkerType: MarkerType;
@@ -736,6 +742,8 @@ interface SettingsActions {
   setContourInterval: (v: number) => void;
   /** MOBILE-ONLY: set the mobile Chart View's contour-density stepper value. */
   setContourDensity: (v: ContourDensity) => void;
+  /** MOBILE-ONLY: toggle the subtle CSS perspective tilt on the mobile 2D chart canvas. */
+  setMobileMapTiltEnabled: (v: boolean) => void;
 
   // Markers
   setDefaultMarkerType: (v: MarkerType) => void;
@@ -1045,6 +1053,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   contourInterval: 10,
   // MOBILE-ONLY: mobile Chart View contour-density stepper (1× default).
   contourDensity: 1,
+  // MOBILE-ONLY: subtle CSS perspective tilt on the mobile 2D chart (off by default).
+  mobileMapTiltEnabled: false,
 
   // Markers
   defaultMarkerType: "fish",
@@ -1183,7 +1193,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
   ],
   palette: [
     "colormapTheme", "colormapUserSet", "nodataColor",
-    "contoursEnabled", "contourInterval", "contourDensity",
+    "contoursEnabled", "contourInterval", "contourDensity", "mobileMapTiltEnabled",
   ],
   hud: [
     "hudOpacity", "showCrosshairGps", "showCameraPosition",
@@ -1391,6 +1401,8 @@ export const useSettingsStore = create<SettingsStore>()(
         setContourInterval: setter("contourInterval"),
         // MOBILE-ONLY: mobile Chart View density stepper.
         setContourDensity: setter("contourDensity"),
+        // MOBILE-ONLY: subtle CSS perspective tilt on the mobile 2D chart.
+        setMobileMapTiltEnabled: setter("mobileMapTiltEnabled"),
 
         // Markers
         setDefaultMarkerType: setter("defaultMarkerType"),
@@ -1996,6 +2008,12 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).contourDensity === undefined) {
             migratedContourDensity.contourDensity = DEFAULT_SETTINGS.contourDensity;
           }
+          // v37 → v38: inject mobileMapTiltEnabled default (false) for existing users.
+          // MOBILE-ONLY key: subtle CSS perspective tilt on the mobile 2D chart.
+          const migratedMobileMapTilt: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).mobileMapTiltEnabled === undefined) {
+            migratedMobileMapTilt.mobileMapTiltEnabled = DEFAULT_SETTINGS.mobileMapTiltEnabled;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -2022,6 +2040,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedPuzzleLayouts,
             ...migratedProximityMode,
             ...migratedContourDensity,
+            ...migratedMobileMapTilt,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,

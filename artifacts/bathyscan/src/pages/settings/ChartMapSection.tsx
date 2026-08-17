@@ -76,6 +76,10 @@ export function ChartMapSection() {
   const contourDensity = useSettingsStore((s) => s.contourDensity);
   const setContourDensity = useSettingsStore((s) => s.setContourDensity);
 
+  // MOBILE-ONLY: subtle CSS perspective tilt (introduced by task #4106)
+  const mobileMapTiltEnabled = useSettingsStore((s) => s.mobileMapTiltEnabled);
+  const setMobileMapTiltEnabled = useSettingsStore((s) => s.setMobileMapTiltEnabled);
+
   // MOBILE-ONLY: overview map grid / markers (same fields as DisplayOverlaysSection)
   const overviewShowGrid = useSettingsStore((s) => s.overviewShowGrid);
   const setOverviewShowGrid = useSettingsStore((s) => s.setOverviewShowGrid);
@@ -117,7 +121,7 @@ export function ChartMapSection() {
         />
       </div>
 
-      {/* MOBILE-ONLY: chart display card — grid and marker toggles */}
+      {/* MOBILE-ONLY: chart display card — grid, markers, and depth-tilt toggles */}
       <div style={S.card} data-testid="chart-map-display-card">
         <div style={S.cardHeader}>CHART DISPLAY</div>
         {/* MOBILE-ONLY: grid lines and markers — same store fields as DisplayOverlaysSection */}
@@ -130,6 +134,14 @@ export function ChartMapSection() {
           label="Show Markers"
           value={overviewShowMarkers}
           onChange={setOverviewShowMarkers}
+        />
+        {/* MOBILE-ONLY: subtle CSS perspective tilt — gives the flat chart a sense of
+            physical scale. Desktop settings page never renders this section. */}
+        <ToggleRow
+          label="Map depth tilt"
+          sublabel="Subtle perspective gives the chart a sense of physical scale."
+          value={mobileMapTiltEnabled}
+          onChange={setMobileMapTiltEnabled}
         />
       </div>
     </>

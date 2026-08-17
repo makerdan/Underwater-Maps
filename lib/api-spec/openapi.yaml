@@ -6382,6 +6382,10 @@ components:
           enum: [1, 2, 3]
           default: 1
           description: "MOBILE-ONLY key: contour-density multiplier for the mobile 2D Chart View's 1x/2x/3x stepper. Divides the effective contour interval (2 = twice as many lines). The desktop Overview Map ignores this key."
+        mobileMapTiltEnabled:
+          type: boolean
+          default: false
+          description: "MOBILE-ONLY key: when true, the mobile 2D chart canvas is rendered with a subtle CSS perspective tilt (~4°) to give it a tactile sense of physical scale. Off by default. The desktop 3D view ignores this key."
         defaultDepthPoleColor:
           type: string
           pattern: '^#[0-9a-fA-F]{6}$'
