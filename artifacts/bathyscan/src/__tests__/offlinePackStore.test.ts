@@ -768,15 +768,15 @@ describe("saveOfflinePack — SW timeout without ack rejects", () => {
 
     const events: PackProgress[] = [];
     // Attach .catch() immediately so the rejection is never "unhandled" while
-    // fake timers advance past the 10-second SW ack timeout.
+    // fake timers advance past the 120-second SW ack timeout.
     const promise = saveOfflinePack(
       { id: "ds-sw-timeout", name: "SW Timeout Dataset" },
       3,
       (p) => events.push(p),
     ).catch((e: unknown) => e);   // capture, not suppress — we inspect it below
 
-    // Advance past the 10-second SW timeout.
-    await vi.advanceTimersByTimeAsync(11000);
+    // Advance past the 120-second SW timeout.
+    await vi.advanceTimersByTimeAsync(121_000);
 
     const result = await promise;
     expect(result).toBeInstanceOf(Error);
@@ -812,11 +812,82 @@ describe("saveOfflinePack — SW timeout without ack rejects", () => {
       () => { /* noop */ },
     ).catch(() => { /* expected rejection */ });
 
-    await vi.advanceTimersByTimeAsync(11000);
+    await vi.advanceTimersByTimeAsync(121_000);
     await promise;
 
     const packs = await listOfflinePacks();
     expect(packs).toHaveLength(0);
+  });
+
+  it("does NOT reject when SW acks after >10 s but <120 s (slow mobile connection)", async () => {
+    vi.useFakeTimers();
+
+    // Port1 is captured so we can fire the delayed ack manually.
+    let capturedPort1: { onmessage: ((e: MessageEvent) => void) | null } | null = null;
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      capturedPort1 = { onmessage: null };
+      return { port1: capturedPort1, port2: {} };
+    });
+
+    const postMessageSpy = vi.fn().mockImplementation(() => {
+      // Reply after 30 s — well past the old 10 s budget but within the new 120 s budget.
+      setTimeout(() => {
+        capturedPort1?.onmessage?.({ data: { ok: true } } as MessageEvent);
+      }, 30_000);
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: { postMessage: postMessageSpy } }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    // Also stub fetch so the rest of the flow can complete without a real network.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() =>
+        Promise.resolve({
+          ok: true,
+          json: async () => ({
+            station: "TEST",
+            heightPredictions: [],
+            currentPredictions: [],
+            tidalExpiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(),
+            generatedAt: new Date().toISOString(),
+          }),
+          text: async () => "[]",
+        }),
+      ),
+    );
+
+    const events: PackProgress[] = [];
+    const promise = saveOfflinePack(
+      {
+        id: "ds-slow-mobile",
+        name: "Slow Mobile Dataset",
+        bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+      },
+      3,
+      (p) => events.push(p),
+    );
+
+    // Advance 30 s so the delayed SW ack fires (well within the 120 s budget).
+    await vi.advanceTimersByTimeAsync(30_000);
+    // After terrain resolves, cachePackMarkers fires its own 5 s timer for the SW
+    // ack before timing out.  Advance past that so the markers step also settles.
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    const pack = await promise;
+    expect(pack.datasetId).toBe("ds-slow-mobile");
+
+    const successTerrainEvent = events.find(
+      (p) => p.step === "terrain" && p.done && p.error === undefined,
+    );
+    expect(successTerrainEvent).toBeDefined();
+    expect(successTerrainEvent?.label).toBe("Terrain cached");
   });
 });
 
@@ -1233,5 +1304,91 @@ describe("saveOfflinePack — derives bbox from server when dataset.bbox is null
     const tideEvent = events.find((p) => p.step === "tide" && p.done);
     expect(tideEvent?.error).toBeUndefined();
     expect(tideEvent?.label).toMatch(/tide predictions saved/i);
+  });
+});
+
+// ── reg.active null guard ──────────────────────────────────────────────────
+//
+// When navigator.serviceWorker.ready resolves with a registration whose
+// .active property is null (can happen if the SW is still installing), the
+// cacheTerrain function must throw a descriptive error instead of silently
+// resolving — a silent resolve would leave the terrain un-cached and produce
+// a false "success" in the UI followed by offline failure.
+
+describe("cacheTerrain — reg.active null rejects with descriptive error", () => {
+  const origNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (origNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", origNavigatorDescriptor);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThis as any).navigator;
+    }
+  });
+
+  it("throws a descriptive error when reg.active is null", async () => {
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          // ready resolves with active: null (SW still installing / not yet activated)
+          ready: Promise.resolve({ active: null }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const events: PackProgress[] = [];
+    await expect(
+      saveOfflinePack({ id: "ds-sw-null-active", name: "SW Null Active Dataset" }, 3, (p) =>
+        events.push(p),
+      ),
+    ).rejects.toThrow("Service worker not active");
+  });
+
+  it("surfaces the descriptive error through onProgress when reg.active is null", async () => {
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: null }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const events: PackProgress[] = [];
+    await saveOfflinePack(
+      { id: "ds-sw-null-active2", name: "SW Null Active Dataset 2" },
+      3,
+      (p) => events.push(p),
+    ).catch(() => { /* expected */ });
+
+    const terrainErrorEvent = events.find((p) => p.step === "terrain" && p.error !== undefined);
+    expect(terrainErrorEvent).toBeDefined();
+    expect(terrainErrorEvent?.error).toMatch(/service worker not active/i);
+  });
+
+  it("does not write a pack to IndexedDB when reg.active is null", async () => {
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({ active: null }),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    await saveOfflinePack(
+      { id: "ds-sw-null-active3", name: "SW Null Active Dataset 3" },
+      3,
+      () => { /* noop */ },
+    ).catch(() => { /* expected */ });
+
+    const packs = await listOfflinePacks();
+    expect(packs).toHaveLength(0);
   });
 });

@@ -148,7 +148,9 @@ function newId(): string {
 async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<void> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
   const reg = await navigator.serviceWorker.ready;
-  if (!reg.active) return;
+  if (!reg.active) {
+    throw new Error("Service worker not active — cannot cache terrain for offline use");
+  }
   return new Promise<void>((resolve, reject) => {
     // Track whether the SW sent a successful ack before the timeout fires.
     // If the SW is absent (dev build, update race, browser restriction) the
@@ -168,11 +170,14 @@ async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<vo
       { type: "CACHE_PACK", terrainUrl, overviewUrl },
       [channel.port2],
     );
+    // 2-minute timeout: mobile networks can take well over 10 s to download a
+    // multi-MB terrain JSON.  The previous 10 s budget caused spurious
+    // "timed out" rejections on first downloads over slow connections.
     setTimeout(() => {
       if (!ackReceived) {
         reject(new Error("SW CACHE_PACK timed out — terrain may not be cached for offline use"));
       }
-    }, 10000);
+    }, 120_000);
   });
 }
 
@@ -301,7 +306,7 @@ export async function saveOfflinePack(
   const overviewUrl = `${API_BASE}/api/datasets/${dataset.id}/overview`;
 
   // Step 1: cache terrain
-  onProgress({ step: "terrain", label: "Fetching terrain…", done: false });
+  onProgress({ step: "terrain", label: "Downloading terrain — may take a minute on slow connections…", done: false });
   try {
     await cacheTerrain(terrainUrl, overviewUrl);
   } catch (err) {
