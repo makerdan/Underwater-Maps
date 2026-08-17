@@ -38,6 +38,10 @@ import {
   buildIntertidalHotspotDescriptors,
   type IntertidalHotspotPin,
 } from "@/lib/overviewRenderer";
+// MOBILE-ONLY Plan-tab data sources:
+import { useDepthProfileStore } from "@/lib/depthProfileStore";
+import { useDriftStore } from "@/lib/driftStore";
+import type { DriftWaypoint, TrollWaypoint } from "@/lib/driftStore";
 
 export interface MobileChartOverlays {
   /** Habitat score array for the active species, or null when inactive. */
@@ -60,6 +64,21 @@ export interface MobileChartOverlays {
   mhhwFt: number | null;
   /** True when anything above will draw — drives the mobile legend pill. */
   anyActive: boolean;
+  // ── MOBILE-ONLY: Plan-tab overlays ──────────────────────────────────────
+  /** Ordered lon/lat waypoints of the currently loaded saved route, or null. */
+  routeWaypoints: ReadonlyArray<{ lon: number; lat: number }> | null;
+  /** True when the drift planner toggle is on. */
+  driftPlannerActive: boolean;
+  /** Forward drift prediction path (null when not yet computed). */
+  driftPath: DriftWaypoint[] | null;
+  /** Boat start position latitude (null when not placed). */
+  driftStartLat: number | null;
+  /** Boat start position longitude (null when not placed). */
+  driftStartLon: number | null;
+  /** Backwards drift path from the catch point (null when reverse mode is off). */
+  reverseDriftPath: DriftWaypoint[] | null;
+  /** User-placed trolling turn points (empty when none). */
+  trollWaypoints: TrollWaypoint[];
 }
 
 export function useMobileChartOverlays(): MobileChartOverlays {
@@ -158,12 +177,27 @@ export function useMobileChartOverlays(): MobileChartOverlays {
     return buildIntertidalHotspotDescriptors(features, intertidalScoreMode, "", "").pins;
   }, [intertidalHotspotsEnabled, intertidalSpotsData, intertidalScoreMode]);
 
+  // ── MOBILE-ONLY: Plan-tab — active route waypoints ───────────────────────
+  // Read from the depth profile store so any route loaded via RoutesPanel
+  // is immediately visible on the 2D chart without an extra fetch.
+  const routeWaypoints = useDepthProfileStore((s) => s.profile?.waypoints ?? null);
+
+  // ── MOBILE-ONLY: Plan-tab — drift planner state ───────────────────────────
+  const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
+  const driftPath = useDriftStore((s) => s.driftPath);
+  const driftStartLat = useDriftStore((s) => s.driftStartLat);
+  const driftStartLon = useDriftStore((s) => s.driftStartLon);
+  const reverseDriftPath = useDriftStore((s) => s.reverseDriftPath);
+  const trollWaypoints = useDriftStore((s) => s.driftWaypoints);
+
   const anyActive =
     habitatScores !== null ||
     (efhOverlayEnabled && efhFeatures.length > 0) ||
     (substrateColorMode && substrateFeatures.length > 0) ||
     intertidalHotspotsEnabled ||
-    mhwFt !== null;
+    mhwFt !== null ||
+    routeWaypoints !== null ||
+    (driftPlannerActive && (driftPath !== null || driftStartLat !== null));
 
   return {
     habitatScores,
@@ -178,5 +212,12 @@ export function useMobileChartOverlays(): MobileChartOverlays {
     mhwFt,
     mhhwFt,
     anyActive,
+    routeWaypoints,
+    driftPlannerActive,
+    driftPath,
+    driftStartLat,
+    driftStartLon,
+    reverseDriftPath,
+    trollWaypoints,
   };
 }

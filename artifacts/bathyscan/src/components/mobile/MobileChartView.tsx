@@ -43,6 +43,9 @@ import {
   renderHabitatOverlay,
   renderEfhOverlay,
   renderSubstrateOverlay,
+  // MOBILE-ONLY: Plan-tab polyline renderers (no 3D scene equivalent here).
+  renderRoutePath,
+  renderDriftPath,
   shouldDrawOverlayAtScale,
   computeInitialTransform,
   clampTransform,
@@ -489,6 +492,28 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
           ctx.strokeStyle = "rgba(255,255,255,0.6)";
           ctx.stroke();
         }
+      }
+
+      // MOBILE-ONLY: Plan-tab overlays — drawn above the Analyze layers so
+      // planning visuals always read clearly, but below GPS and the tap marker.
+      const ov2 = overlaysRef.current;
+      if (ov2.routeWaypoints && ov2.routeWaypoints.length >= 1) {
+        renderRoutePath(ctx, ov2.routeWaypoints, grid, t);
+      }
+      if (
+        ov2.driftPlannerActive &&
+        (ov2.driftPath !== null || ov2.driftStartLat !== null || ov2.trollWaypoints.length > 0)
+      ) {
+        renderDriftPath(
+          ctx,
+          ov2.driftPath,
+          ov2.driftStartLat,
+          ov2.driftStartLon,
+          ov2.reverseDriftPath,
+          ov2.trollWaypoints,
+          grid,
+          t,
+        );
       }
 
       // MOBILE-ONLY: tap-to-query crosshair marker, glued to the geo point.
