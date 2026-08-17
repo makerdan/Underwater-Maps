@@ -113,3 +113,10 @@ uri = "file://harden-bug-fixes-skill.zip"
 type = "unspecified"
 title = "Harden Bug Fixes (Regression Guard) SKILL.md"
 description = "Zipped SKILL.md for the Harden Bug Fixes / Regression Guard skill."
+
+[[outputs]]
+id = "KVEN8qh7Eeo8qIUZrzQpP"
+uri = "file://task-sorting-skill.zip"
+type = "unspecified"
+title = "Task Sorting SKILL.md"
+description = "Zipped SKILL.md for the Task Sorting skill."
