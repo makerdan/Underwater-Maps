@@ -288,7 +288,7 @@ router.get("/user/datasets", requireAuth, asyncHandler(async (req, res): Promise
 }));
 
 // ── PATCH /user/datasets/:id/move ──────────────────────────────────────────
-router.patch("/user/datasets/:id/move", requireAuth, validateBody(PatchUserDatasetsIdMoveBody, "PATCH /api/user/datasets/:id/move"), asyncHandler(async (req, res): Promise<void> => {
+router.patch("/user/datasets/:id/move", requireAuth, dataMutationRateLimit, validateBody(PatchUserDatasetsIdMoveBody, "PATCH /api/user/datasets/:id/move"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
   const { folderId: rawFolderId } = res.locals.parsedBody;
@@ -318,7 +318,7 @@ router.patch("/user/datasets/:id/move", requireAuth, validateBody(PatchUserDatas
 }));
 
 // ── PATCH /user/datasets/:id/rename ────────────────────────────────────────
-router.patch("/user/datasets/:id/rename", requireAuth, validateBody(PatchUserDatasetsIdRenameBody, "PATCH /api/user/datasets/:id/rename"), asyncHandler(async (req, res): Promise<void> => {
+router.patch("/user/datasets/:id/rename", requireAuth, dataMutationRateLimit, validateBody(PatchUserDatasetsIdRenameBody, "PATCH /api/user/datasets/:id/rename"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const id = String(req.params["id"] ?? "");
   const { name: rawName } = res.locals.parsedBody;

@@ -287,7 +287,7 @@ router.delete("/catches/:id", requireAuth, dataMutationRateLimit, validateParams
 }));
 
 // ─── Signed upload URL for one catch photo ────────────────────────────────────
-router.post("/catch-photos/upload-url", requireAuth, asyncHandler(async (_req, res): Promise<void> => {
+router.post("/catch-photos/upload-url", requireAuth, dataMutationRateLimit, asyncHandler(async (_req, res): Promise<void> => {
   const service = new ObjectStorageService();
   const uploadURL = await service.getObjectEntityUploadURL();
   const objectPath = service.normalizeObjectEntityPath(uploadURL);

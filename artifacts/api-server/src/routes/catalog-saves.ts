@@ -1444,7 +1444,7 @@ router.get("/datasets/my-saves/:id/status", requireAuth, asyncHandler(async (req
 // delete another user's save or the dataset it points to.
 // ---------------------------------------------------------------------------
 
-router.delete("/datasets/my-saves/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+router.delete("/datasets/my-saves/:id", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const saveIdParsed = SaveIdParamSchema.safeParse(req.params["id"]);
   if (!saveIdParsed.success) {
@@ -1549,7 +1549,7 @@ const RenameSaveBodySchema = z.object({
   displayLabel: z.string().nullable(),
 });
 
-router.patch("/datasets/my-saves/:id/rename", requireAuth, validateBody(RenameSaveBodySchema, "PATCH /api/datasets/my-saves/:id/rename"), asyncHandler(async (req, res): Promise<void> => {
+router.patch("/datasets/my-saves/:id/rename", requireAuth, dataMutationRateLimit, validateBody(RenameSaveBodySchema, "PATCH /api/datasets/my-saves/:id/rename"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const saveIdParsed = SaveIdParamSchema.safeParse(req.params["id"]);
   if (!saveIdParsed.success) {
@@ -1598,7 +1598,7 @@ const MoveSaveBodySchema = z.object({
   folderId: z.string().uuid().nullable(),
 });
 
-router.patch("/datasets/my-saves/:id/move", requireAuth, validateBody(MoveSaveBodySchema, "PATCH /api/datasets/my-saves/:id/move"), asyncHandler(async (req, res): Promise<void> => {
+router.patch("/datasets/my-saves/:id/move", requireAuth, dataMutationRateLimit, validateBody(MoveSaveBodySchema, "PATCH /api/datasets/my-saves/:id/move"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
   const saveIdParsed = SaveIdParamSchema.safeParse(req.params["id"]);
   if (!saveIdParsed.success) {
