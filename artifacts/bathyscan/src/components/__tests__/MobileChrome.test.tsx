@@ -97,6 +97,26 @@ vi.mock("@/components/SeafloorClassificationPanel", () => ({
   SeafloorClassificationPanel: () => <div />,
 }));
 
+vi.mock("@/components/ProximityHudChip", () => ({
+  ProximityHudChip: () => null,
+}));
+
+vi.mock("@/components/mobile/MobileLiveOverlay", () => ({
+  MobileLiveOverlay: () => null,
+}));
+
+vi.mock("@/components/BulkOfflinePanel", () => ({
+  BulkOfflinePanel: () => null,
+}));
+
+vi.mock("@/lib/mobileMapFollow", () => ({
+  startMobileGpsCameraMirror: vi.fn(() => () => undefined),
+}));
+
+vi.mock("@/hooks/useProximityStreamingWiring", () => ({
+  useProximityStreamingWiring: vi.fn(),
+}));
+
 // ─── imports (after mocks) ────────────────────────────────────────────────────
 
 import { useIsMobile } from "@/hooks/use-mobile";
