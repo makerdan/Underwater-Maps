@@ -18,13 +18,18 @@
  *     in .local/custom_skills/:
  *       • Reads .local/custom_skills/<name>/.fingerprint
  *       • Computes the md5 of .agents/skills/<name>/SKILL.md
- *       • Exits 1 with a remediation hint if the hashes differ.
- *   - Exits 0 when all fingerprints match.
+ *       • If the hashes differ (or the fingerprint is missing), AUTO-REPAIRS
+ *         by re-copying the canonical SKILL.md and re-writing the fingerprint,
+ *         then logs a warning. This is safe because the mirrors are gitignored
+ *         derived copies — the canonical file is the source of truth.
+ *       • Exits 1 only for genuinely unfixable states (e.g. the canonical
+ *         SKILL.md cannot be read, or the repair write fails).
+ *   - Exits 0 when all fingerprints match (or were successfully repaired).
  *
  * Usage:
  *   node scripts/check-skill-mirror-sync.mjs
  */
-import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -82,8 +87,29 @@ for (const localName of (subdirs(LOCAL_DIR) ?? [])) {
   localNameMap.set(localName.toLowerCase(), localName);
 }
 
-const failures = [];
+// ---------------------------------------------------------------------------
+// Repair helper — mirrors are gitignored derived copies; re-copying is safe.
+// Returns true on success, false if the repair could not be completed.
+// ---------------------------------------------------------------------------
+
+function repairMirror(canonicalSkillMd, localSkillMd, fingerprintPath) {
+  try {
+    copyFileSync(canonicalSkillMd, localSkillMd);
+    const actualMd5 = md5OfFile(canonicalSkillMd);
+    writeFileSync(fingerprintPath, actualMd5 + "\n", "utf8");
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main check + auto-repair loop
+// ---------------------------------------------------------------------------
+
 let checked = 0;
+let repaired = 0;
+const hardFailures = []; // genuinely unfixable (canonical unreadable / write failed)
 
 for (const canonicalName of canonicalSkills) {
   const localName = localNameMap.get(canonicalName.toLowerCase());
@@ -94,85 +120,70 @@ for (const canonicalName of canonicalSkills) {
 
   const canonicalSkillMd = join(CANONICAL_DIR, canonicalName, "SKILL.md");
   const fingerprintPath = join(LOCAL_DIR, localName, ".fingerprint");
+  const localSkillMd = join(LOCAL_DIR, localName, "SKILL.md");
 
   if (!existsSync(canonicalSkillMd)) {
     // Canonical skill dir exists but has no SKILL.md — skip silently.
     continue;
   }
 
+  checked++;
+
+  // Determine whether a repair is needed.
+  let needsRepair = false;
+  let repairReason = "";
+
   if (!existsSync(fingerprintPath)) {
-    failures.push({
-      name: canonicalName,
-      kind: "missing-fingerprint",
-      canonicalSkillMd,
-      fingerprintPath,
-    });
-    checked++;
+    needsRepair = true;
+    repairReason = "missing .fingerprint";
+  } else {
+    const storedFingerprint = readFileSync(fingerprintPath, "utf8").trim();
+    const actualMd5 = md5OfFile(canonicalSkillMd);
+    if (storedFingerprint !== actualMd5) {
+      needsRepair = true;
+      repairReason = `fingerprint mismatch (stored=${storedFingerprint.slice(0, 8)}… actual=${actualMd5.slice(0, 8)}…)`;
+    }
+  }
+
+  if (!needsRepair) {
     continue;
   }
 
-  const storedFingerprint = readFileSync(fingerprintPath, "utf8").trim();
-  const actualMd5 = md5OfFile(canonicalSkillMd);
-  checked++;
-
-  if (storedFingerprint !== actualMd5) {
-    failures.push({
-      name: canonicalName,
-      kind: "stale",
-      stored: storedFingerprint,
-      actual: actualMd5,
-      canonicalSkillMd,
-      localSkillMd: join(LOCAL_DIR, localName, "SKILL.md"),
-      fingerprintPath,
-    });
-  }
-}
-
-if (failures.length === 0) {
-  console.log(
-    `[check-skill-mirror-sync] OK — all ${checked} skill mirror fingerprint(s) match.`,
-  );
-  process.exit(0);
-}
-
-console.error(
-  `[check-skill-mirror-sync] FAIL — ${failures.length} skill mirror(s) are stale:\n`,
-);
-
-for (const f of failures) {
-  if (f.kind === "missing-fingerprint") {
-    console.error(`  Skill: ${f.name}`);
-    console.error(`    Problem:  .fingerprint file missing`);
-    console.error(`    Expected: ${f.fingerprintPath}`);
-    console.error(
-      `    Fix:      Run the post-merge sync step to re-copy and re-fingerprint this skill,`,
+  // Attempt auto-repair: re-copy canonical → mirror and re-write fingerprint.
+  const ok = repairMirror(canonicalSkillMd, localSkillMd, fingerprintPath);
+  if (ok) {
+    console.warn(
+      `[check-skill-mirror-sync] WARN — repaired stale mirror for skill "${canonicalName}" (${repairReason}).`,
     );
-    console.error(
-      `              or manually copy ${f.canonicalSkillMd}`,
-    );
-    console.error(
-      `              to the local directory and write its md5 to .fingerprint.\n`,
-    );
+    repaired++;
   } else {
-    console.error(`  Skill: ${f.name}`);
-    console.error(`    Stored fingerprint:  ${f.stored}`);
-    console.error(`    Canonical md5:       ${f.actual}`);
-    console.error(`    Canonical source:    ${f.canonicalSkillMd}`);
-    console.error(`    Stale local copy:    ${f.localSkillMd}`);
+    // Repair failed — this is a hard failure (e.g. unreadable canonical or
+    // read-only local dir). Report it so the operator knows.
     console.error(
-      `    Fix:      Run the post-merge sync step to re-copy and re-fingerprint this skill.`,
+      `[check-skill-mirror-sync] ERROR — could not repair mirror for skill "${canonicalName}" (${repairReason}).`,
     );
     console.error(
-      `              The canonical source is .agents/skills/${f.name}/SKILL.md — edit it there,`,
+      `  Canonical source: ${canonicalSkillMd}`,
     );
     console.error(
-      `              never in .local/custom_skills/ (those copies are overwritten on sync).\n`,
+      `  Local mirror:     ${localSkillMd}`,
     );
+    hardFailures.push(canonicalName);
   }
 }
 
-console.error(
-  "To repair all stale mirrors at once, run the post-merge sync step\n" +
-  "(or trigger a merge, which runs it automatically).",
+if (hardFailures.length > 0) {
+  console.error(
+    `\n[check-skill-mirror-sync] FAIL — ${hardFailures.length} skill mirror(s) could not be repaired: ${hardFailures.join(", ")}`,
+  );
+  console.error(
+    "Check that the canonical SKILL.md files are readable and .local/custom_skills/ is writable.",
+  );
+  process.exit(1);
+}
+
+const repairedNote = repaired > 0 ? `, auto-repaired ${repaired}` : "";
+console.log(
+  `[check-skill-mirror-sync] OK — all ${checked} skill mirror fingerprint(s) match${repairedNote}.`,
 );
-process.exit(1);
+process.exit(0);
