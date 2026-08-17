@@ -96,11 +96,16 @@ vi.mock("@clerk/shared/keys", () => ({
 }));
 
 // Catalog seeder — the legacy waterType read-path fix looks up the linked
-// catalog entry's waterType via getCatalogEntries().
+// catalog entry's waterType via getCatalogEntries(), and EXTRA_CATALOG_ENTRIES
+// is used as a static fallback for fw-* ids when the catalog DB row is absent.
 vi.mock("../lib/catalogSeeder.js", () => ({
   seedDatasetCatalog: vi.fn(async () => {}),
   getCatalogEntries: vi.fn(async () => catalogState.entries),
   searchCatalog: vi.fn(async () => []),
+  EXTRA_CATALOG_ENTRIES: [
+    { id: "fw-lake-tahoe-ca-nv", waterType: "freshwater" },
+    { id: "fw-lake-of-the-woods-mn", waterType: "freshwater" },
+  ],
 }));
 
 // ---------------------------------------------------------------------------
@@ -405,6 +410,78 @@ describe("legacy waterType override from linked catalog save", () => {
     dbState.terrainSelectQueue.push(
       [{ overviewJson: minimalTerrainBlob() }],       // overview fetch
       [{ catalogId: "preset-lake-ray-roberts" }],     // linked save lookup
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/overview`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "freshwater");
+  });
+});
+
+// ===========================================================================
+// Legacy waterType override — fw-* ids fall back to freshwater even when the
+// catalog DB entry is absent (seeder reconcile window / transient failure)
+// ===========================================================================
+
+describe("legacy waterType override — fw-* catalog ids resolve freshwater without DB row", () => {
+  const FW_CATALOG_ID = "fw-lake-tahoe-ca-nv";
+
+  it("terrain: fw-*-linked legacy blob returns freshwater when the catalog DB entry is absent", async () => {
+    catalogState.entries = []; // catalog table empty during seeder reconcile window
+    dbState.terrainSelectQueue.push(
+      [{ size: SAFE_SIZE }],
+      [{ terrainJson: minimalTerrainBlob() }],
+      [{ catalogId: FW_CATALOG_ID }],
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/terrain`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "freshwater");
+  });
+
+  it("terrain: fw-*-linked legacy blob returns freshwater when the catalog lookup throws", async () => {
+    vi.mocked(getCatalogEntries).mockRejectedValueOnce(new Error("catalog lookup failed"));
+    dbState.terrainSelectQueue.push(
+      [{ size: SAFE_SIZE }],
+      [{ terrainJson: minimalTerrainBlob() }],
+      [{ catalogId: FW_CATALOG_ID }],
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/terrain`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "freshwater");
+  });
+
+  it("terrain: fw-*-linked legacy blob returns freshwater when catalog DB has the row too", async () => {
+    catalogState.entries = [{ id: FW_CATALOG_ID, waterType: "freshwater" }];
+    dbState.terrainSelectQueue.push(
+      [{ size: SAFE_SIZE }],
+      [{ terrainJson: minimalTerrainBlob() }],
+      [{ catalogId: FW_CATALOG_ID }],
+    );
+
+    const res = await request(app)
+      .get(`/api/user/datasets/${DATASET_ID}/terrain`)
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("waterType", "freshwater");
+  });
+
+  it("overview: fw-*-linked legacy blob returns freshwater when the catalog DB entry is absent", async () => {
+    catalogState.entries = []; // catalog table empty
+    dbState.terrainSelectQueue.push(
+      [{ overviewJson: minimalTerrainBlob() }],
+      [{ catalogId: FW_CATALOG_ID }],
     );
 
     const res = await request(app)

@@ -39,6 +39,20 @@ export function presetRegistryWaterType(catalogId: string): WaterType | null {
 }
 
 /**
+ * Water type for in-code freshwater catalog entries (`fw-*` ids seeded from
+ * `EXTRA_CATALOG_ENTRIES` in catalogSeeder.ts).  All entries whose id begins
+ * with `fw-` are freshwater by definition — the prefix is a hard convention
+ * enforced by the drift-guard test in backfill-preset-registry-sync.test.ts.
+ *
+ * @workspace/db cannot import api-server code (circular workspace dependency),
+ * so we use the prefix convention rather than mirroring the full list.
+ * Returns null for ids that are not `fw-`-prefixed.
+ */
+export function fwCatalogWaterType(catalogId: string): WaterType | null {
+  return catalogId.startsWith("fw-") ? "freshwater" : null;
+}
+
+/**
  * Resolve the water type to write into a legacy row's stored JSON:
  *
  *   1. The linked catalog entry's water type wins when the row is linked via
@@ -57,7 +71,9 @@ export function resolveLegacyWaterType(
   if (!catalogId) return "saltwater";
   const fromCatalog = catalogWaterTypeById.get(catalogId);
   if (fromCatalog === "saltwater" || fromCatalog === "freshwater") return fromCatalog;
-  return presetRegistryWaterType(catalogId) ?? "saltwater";
+  // Catalog DB row absent: consult preset registry (preset-* ids) then the
+  // fw-* prefix convention before defaulting to saltwater.
+  return presetRegistryWaterType(catalogId) ?? fwCatalogWaterType(catalogId) ?? "saltwater";
 }
 
 /** True when a stored blob still needs the backfill (missing/invalid waterType or removed "synthetic" dataSource). */

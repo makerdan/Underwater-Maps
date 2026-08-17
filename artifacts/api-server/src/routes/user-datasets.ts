@@ -81,15 +81,30 @@ function presetRegistryWaterType(catalogId: string): WaterType | null {
 }
 
 /**
+ * Water type from the in-code freshwater catalog (EXTRA_CATALOG_ENTRIES in
+ * catalogSeeder.ts). Used as a last-resort fallback for fw-* ids when the
+ * catalog DB row is absent (seeder reconcile window / lookup failure). Returns
+ * null for ids not present in the extra catalog.
+ */
+function extraCatalogWaterType(catalogId: string): WaterType | null {
+  const entry = EXTRA_CATALOG_ENTRIES.find((e) => e.id === catalogId);
+  const wt = entry?.waterType;
+  return wt === "saltwater" || wt === "freshwater" ? wt : null;
+}
+
+/**
  * Legacy read-path fix: for a custom_datasets row whose stored JSON predates
  * the freshwater feature (no `waterType`), resolve the correct water type
  * from the linked catalog save (user_catalog_saves.dataset_id → catalogId →
  * catalog entry). When the catalog DB row is missing (the seeder reconcile
- * purges and re-creates preset-* rows on boot) or the catalog lookup fails,
- * fall back to the in-code preset registry, which is authoritative for
- * preset-backed ids (e.g. Lake Ray Roberts is always freshwater). Returns
- * null only when the dataset has no linked save or nothing can resolve the
- * id — callers then fall back to the legacy "saltwater" default.
+ * purges and re-creates rows on boot) or the catalog lookup fails, falls back
+ * in order to:
+ *   1. The in-code preset registry (authoritative for preset-* ids, e.g. Lake
+ *      Ray Roberts is always freshwater).
+ *   2. EXTRA_CATALOG_ENTRIES (authoritative for fw-* ids — all freshwater lake
+ *      entries whose waterType is fixed in code, independent of the DB).
+ * Returns null only when the dataset has no linked save or nothing can resolve
+ * the id — callers then fall back to the legacy "saltwater" default.
  */
 async function resolveCatalogWaterType(datasetId: string): Promise<WaterType | null> {
   let catalogId: string | null = null;
@@ -107,17 +122,20 @@ async function resolveCatalogWaterType(datasetId: string): Promise<WaterType | n
     if (wt === "saltwater" || wt === "freshwater") return wt;
 
     // Catalog DB row absent or carrying an invalid value — consult the
-    // in-code preset registry before giving up.
-    return presetRegistryWaterType(catalogId);
+    // in-code preset registry (preset-* ids) and the in-code extra catalog
+    // (fw-* ids) before giving up.
+    return presetRegistryWaterType(catalogId) ?? extraCatalogWaterType(catalogId);
   } catch (err) {
     logger.warn(
       { datasetId, err },
-      "[user-datasets] catalog waterType lookup failed — trying preset registry fallback",
+      "[user-datasets] catalog waterType lookup failed — trying preset registry / extra catalog fallback",
     );
-    return catalogId !== null ? presetRegistryWaterType(catalogId) : null;
+    return catalogId !== null
+      ? (presetRegistryWaterType(catalogId) ?? extraCatalogWaterType(catalogId))
+      : null;
   }
 }
-import { getCatalogEntries } from "../lib/catalogSeeder.js";
+import { getCatalogEntries, EXTRA_CATALOG_ENTRIES } from "../lib/catalogSeeder.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
