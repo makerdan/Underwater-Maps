@@ -687,31 +687,62 @@ const DraggableSaveCard: React.FC<{
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
   onAddToCollection?: (save: UserCatalogSave) => void;
   offlineStatus?: PackStatus;
-}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo, onAddToView, atViewCap, visibleDatasetIds, onOfflineDownload, onAddToCollection, offlineStatus }) => {
+  /** Multi-select: true when this card is checked. */
+  isSelected?: boolean;
+  /** Multi-select: called with the save id when the checkbox is toggled. */
+  onToggleSelect?: (id: string) => void;
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo, onAddToView, atViewCap, visibleDatasetIds, onOfflineDownload, onAddToCollection, offlineStatus, isSelected = false, onToggleSelect }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `save-${save.id}`,
     data: { kind: "save", saveId: save.id },
   });
   const displayName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
   return (
-    <div ref={setNodeRef} style={{ opacity: isDragging ? 0.4 : 1, position: "relative" }}>
-      <button {...attributes} {...listeners} aria-label={`Drag ${displayName} to a folder`} title="Drag to a folder"
-        style={{ position: "absolute", top: 6, right: 88, background: "transparent", border: "none", color: "#475569", cursor: "grab", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
-      >⠿</button>
-      <button aria-label={`Move "${displayName}" to folder`} title="Move to folder" onClick={() => onMoveTo(save)}
-        style={{ position: "absolute", top: 6, right: 63, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
-      >📁</button>
-      {onAddToCollection && (
-        <button aria-label={`Add "${displayName}" to collection`} title="Add to collection" data-testid={`btn-add-to-collection-save-${save.id}`} onClick={() => onAddToCollection(save)}
-          style={{ position: "absolute", top: 6, right: 113, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
-        >🗂</button>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+      {onToggleSelect && (
+        <button
+          data-testid={`select-save-${save.id}`}
+          onClick={() => onToggleSelect(save.id)}
+          aria-label={isSelected ? `Deselect ${displayName}` : `Select ${displayName}`}
+          aria-pressed={isSelected}
+          title={isSelected ? "Deselect" : "Select for bulk action"}
+          style={{
+            flexShrink: 0,
+            marginTop: 10,
+            width: 18, height: 18,
+            background: isSelected ? "rgba(0,229,255,0.15)" : "rgba(0,0,0,0.2)",
+            border: `1px solid ${isSelected ? "#00e5ff" : "rgba(0,229,255,0.3)"}`,
+            borderRadius: 2,
+            color: "#00e5ff",
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+            cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            lineHeight: 1,
+            padding: 0,
+          }}
+        >
+          {isSelected ? "✓" : ""}
+        </button>
       )}
-      <SaveCard
-        save={save} onLoadUserDataset={onLoadUserDataset} onRetry={onRetry}
-        retrying={retrying} onDelete={onDelete} deleting={deleting} onRename={onRename}
-        onAddToView={onAddToView} atViewCap={atViewCap} visibleDatasetIds={visibleDatasetIds}
-        onOfflineDownload={onOfflineDownload} offlineStatus={offlineStatus}
-      />
+      <div ref={setNodeRef} style={{ flex: 1, opacity: isDragging ? 0.4 : 1, position: "relative" }}>
+        <button {...attributes} {...listeners} aria-label={`Drag ${displayName} to a folder`} title="Drag to a folder"
+          style={{ position: "absolute", top: 6, right: 88, background: "transparent", border: "none", color: "#475569", cursor: "grab", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
+        >⠿</button>
+        <button aria-label={`Move "${displayName}" to folder`} title="Move to folder" onClick={() => onMoveTo(save)}
+          style={{ position: "absolute", top: 6, right: 63, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
+        >📁</button>
+        {onAddToCollection && (
+          <button aria-label={`Add "${displayName}" to collection`} title="Add to collection" data-testid={`btn-add-to-collection-save-${save.id}`} onClick={() => onAddToCollection(save)}
+            style={{ position: "absolute", top: 6, right: 113, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
+          >🗂</button>
+        )}
+        <SaveCard
+          save={save} onLoadUserDataset={onLoadUserDataset} onRetry={onRetry}
+          retrying={retrying} onDelete={onDelete} deleting={deleting} onRename={onRename}
+          onAddToView={onAddToView} atViewCap={atViewCap} visibleDatasetIds={visibleDatasetIds}
+          onOfflineDownload={onOfflineDownload} offlineStatus={offlineStatus}
+        />
+      </div>
     </div>
   );
 };
@@ -733,30 +764,61 @@ const DraggableUploadCard: React.FC<{
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
   onAddToCollection?: (dataset: UserDatasetMeta) => void;
   offlineStatus?: PackStatus;
-}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload, onAddToCollection, offlineStatus }) => {
+  /** Multi-select: true when this card is checked. */
+  isSelected?: boolean;
+  /** Multi-select: called with the dataset id when the checkbox is toggled. */
+  onToggleSelect?: (id: string) => void;
+}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload, onAddToCollection, offlineStatus, isSelected = false, onToggleSelect }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `upload-${dataset.id}`,
     data: { kind: "upload", datasetId: dataset.id },
   });
   return (
-    <div ref={setNodeRef} style={{ opacity: isDragging ? 0.4 : 1, position: "relative" }}>
-      <button {...attributes} {...listeners} aria-label={`Drag ${dataset.name} to a folder`} title="Drag to a folder"
-        style={{ position: "absolute", top: 6, right: 88, background: "transparent", border: "none", color: "#475569", cursor: "grab", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
-      >⠿</button>
-      <button aria-label={`Move "${dataset.name}" to folder`} title="Move to folder" data-testid={`btn-move-upload-${dataset.id}`} onClick={() => onMoveTo(dataset)}
-        style={{ position: "absolute", top: 6, right: 63, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
-      >📁</button>
-      {onAddToCollection && (
-        <button aria-label={`Add "${dataset.name}" to collection`} title="Add to collection" data-testid={`btn-add-to-collection-upload-${dataset.id}`} onClick={() => onAddToCollection(dataset)}
-          style={{ position: "absolute", top: 6, right: 113, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
-        >🗂</button>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+      {onToggleSelect && (
+        <button
+          data-testid={`select-upload-${dataset.id}`}
+          onClick={() => onToggleSelect(dataset.id)}
+          aria-label={isSelected ? `Deselect ${dataset.name}` : `Select ${dataset.name}`}
+          aria-pressed={isSelected}
+          title={isSelected ? "Deselect" : "Select for bulk action"}
+          style={{
+            flexShrink: 0,
+            marginTop: 10,
+            width: 18, height: 18,
+            background: isSelected ? "rgba(0,229,255,0.15)" : "rgba(0,0,0,0.2)",
+            border: `1px solid ${isSelected ? "#00e5ff" : "rgba(0,229,255,0.3)"}`,
+            borderRadius: 2,
+            color: "#00e5ff",
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+            cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            lineHeight: 1,
+            padding: 0,
+          }}
+        >
+          {isSelected ? "✓" : ""}
+        </button>
       )}
-      <UploadCard
-        dataset={dataset} onLoad={(id) => onLoad(id, dataset.createdAt)}
-        onDelete={onDelete} onRename={onRename} deleting={deleting}
-        onAddToView={onAddToView} isAlreadyInView={isAlreadyInView} atViewCap={atViewCap}
-        onOfflineDownload={onOfflineDownload} offlineStatus={offlineStatus}
-      />
+      <div ref={setNodeRef} style={{ flex: 1, opacity: isDragging ? 0.4 : 1, position: "relative" }}>
+        <button {...attributes} {...listeners} aria-label={`Drag ${dataset.name} to a folder`} title="Drag to a folder"
+          style={{ position: "absolute", top: 6, right: 88, background: "transparent", border: "none", color: "#475569", cursor: "grab", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
+        >⠿</button>
+        <button aria-label={`Move "${dataset.name}" to folder`} title="Move to folder" data-testid={`btn-move-upload-${dataset.id}`} onClick={() => onMoveTo(dataset)}
+          style={{ position: "absolute", top: 6, right: 63, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
+        >📁</button>
+        {onAddToCollection && (
+          <button aria-label={`Add "${dataset.name}" to collection`} title="Add to collection" data-testid={`btn-add-to-collection-upload-${dataset.id}`} onClick={() => onAddToCollection(dataset)}
+            style={{ position: "absolute", top: 6, right: 113, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
+          >🗂</button>
+        )}
+        <UploadCard
+          dataset={dataset} onLoad={(id) => onLoad(id, dataset.createdAt)}
+          onDelete={onDelete} onRename={onRename} deleting={deleting}
+          onAddToView={onAddToView} isAlreadyInView={isAlreadyInView} atViewCap={atViewCap}
+          onOfflineDownload={onOfflineDownload} offlineStatus={offlineStatus}
+        />
+      </div>
     </div>
   );
 };
@@ -784,7 +846,11 @@ const SaveFolderSection: React.FC<{
   onDownloadOffline?: () => void;
   /** Rollup offline status across the folder subtree ("none" hides the badge). */
   offlineRollup?: PackRollupStatus;
-}> = ({ node, isExpanded, onToggle, renderItem, renderSubFolder, onShowMenu, onNewFolder, onRenameStart, onDelete, isRenaming = false, renameValue = "", onRenameChange, onRenameCommit, onRenameCancel, onDownloadOffline, offlineRollup = "none" }) => {
+  /** Multi-select: true when this folder is checked. */
+  isSelected?: boolean;
+  /** Multi-select: called with the folder id when the checkbox is toggled. */
+  onToggleSelect?: (id: string) => void;
+}> = ({ node, isExpanded, onToggle, renderItem, renderSubFolder, onShowMenu, onNewFolder, onRenameStart, onDelete, isRenaming = false, renameValue = "", onRenameChange, onRenameCommit, onRenameCancel, onDownloadOffline, offlineRollup = "none", isSelected = false, onToggleSelect }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `folder-${node.folder.id}`,
     data: { kind: "folder", folderId: node.folder.id },
@@ -806,6 +872,30 @@ const SaveFolderSection: React.FC<{
         aria-expanded={isExpanded}
         aria-label={`Folder: ${node.folder.name}`}
       >
+        {onToggleSelect && (
+          <button
+            data-testid={`select-folder-${node.folder.id}`}
+            onClick={(e) => { e.stopPropagation(); onToggleSelect(node.folder.id); }}
+            aria-label={isSelected ? `Deselect folder ${node.folder.name}` : `Select folder ${node.folder.name}`}
+            aria-pressed={isSelected}
+            title={isSelected ? "Deselect folder" : "Select folder for bulk action"}
+            style={{
+              flexShrink: 0,
+              width: 15, height: 15,
+              background: isSelected ? "rgba(0,229,255,0.15)" : "rgba(0,0,0,0.2)",
+              border: `1px solid ${isSelected ? "#00e5ff" : "rgba(0,229,255,0.3)"}`,
+              borderRadius: 2,
+              color: "#00e5ff",
+              fontSize: "calc(10px * var(--bs-font-scale, 1))",
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              lineHeight: 1,
+              padding: 0,
+            }}
+          >
+            {isSelected ? "✓" : ""}
+          </button>
+        )}
         <span style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>{isExpanded ? "▾" : "▸"}</span>
         <span style={{ fontSize: "calc(14px * var(--bs-font-scale, 1))" }}>📁</span>
         {isRenaming ? (
@@ -1008,6 +1098,22 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       ),
     [userDatasets, catalogSaveDatasetIds, waterType],
   );
+
+  // ── Multi-select ──────────────────────────────────────────────────────────
+  // selectedIds holds a mix of: save IDs, dataset (upload) IDs, and folder IDs.
+  // resolveOfflineScope handles all three when kind === "selection".
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   // ── Add to collection ─────────────────────────────────────────────────────
   // Dialog state for adding a single card (save or upload) to a collection.
@@ -1307,6 +1413,8 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
           targets: [{ catalogSaveId: s.id }],
         })}
         offlineStatus={item.save.datasetId ? (packStatuses.get(item.save.datasetId) ?? "none") : "none"}
+        isSelected={selectedIds.has(item.save.id)}
+        onToggleSelect={toggleSelection}
       />
     ) : (
       <DraggableUploadCard
@@ -1326,6 +1434,8 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
           targets: [{ datasetId: d.id }],
         })}
         offlineStatus={packStatuses.get(item.dataset.id) ?? "none"}
+        isSelected={selectedIds.has(item.dataset.id)}
+        onToggleSelect={toggleSelection}
       />
     );
 
@@ -1357,6 +1467,8 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       onRenameCancel={() => setRenamingSaveFolder(null)}
       onDownloadOffline={() => useOfflineScopeStore.getState().requestScopeDownload({ kind: "folder", folderId: node.folder.id })}
       offlineRollup={rollupPackStatus(subtreeStatuses(node))}
+      isSelected={selectedIds.has(node.folder.id)}
+      onToggleSelect={toggleSelection}
     />
   );
 
@@ -1412,6 +1524,62 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
               {browseLabel}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Multi-select action bar — shown whenever at least one item is checked */}
+      {selectedIds.size > 0 && (
+        <div
+          data-testid="multiselect-action-bar"
+          style={{
+            display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
+            padding: "5px 4px 7px",
+            borderBottom: "1px solid rgba(0,229,255,0.12)",
+            marginBottom: 6,
+          }}
+        >
+          <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8", flexShrink: 0 }}>
+            {selectedIds.size} selected
+          </span>
+          <button
+            data-testid="btn-download-selected-offline"
+            onClick={() => {
+              useOfflineScopeStore.getState().requestScopeDownload({ kind: "selection", ids: [...selectedIds] });
+              clearSelection();
+            }}
+            title="Download selected datasets for offline use"
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(0,229,255,0.3)",
+              color: "#67e8f9",
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              padding: "1px 7px",
+              borderRadius: 2,
+              cursor: "pointer",
+              lineHeight: 1.6,
+              letterSpacing: "0.05em",
+              flexShrink: 0,
+            }}
+          >
+            ⬇ Download offline
+          </button>
+          <button
+            data-testid="btn-cancel-selection"
+            onClick={clearSelection}
+            title="Clear selection"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#94a3b8",
+              fontSize: "calc(12px * var(--bs-font-scale, 1))",
+              padding: "1px 4px",
+              cursor: "pointer",
+              lineHeight: 1.6,
+              flexShrink: 0,
+            }}
+          >
+            ✕ Cancel
+          </button>
         </div>
       )}
 
