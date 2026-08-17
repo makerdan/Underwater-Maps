@@ -21,8 +21,11 @@ import {
   getGetDatasetsQueryKey,
   useGetUserDatasets,
   getGetUserDatasetsQueryKey,
+  useGetUserFolders,
+  getGetUserFoldersQueryKey,
   type DatasetMeta,
   type UserDatasetMeta,
+  type DatasetFolder,
 } from "@workspace/api-client-react";
 import { useTerrainStore, type DatasetSource } from "@/lib/terrainStore";
 import { useSettingsStore } from "@/lib/settingsStore";
@@ -109,7 +112,79 @@ function DownloadBtn({
   );
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────
+// ── Dataset row ───────────────────────────────────────────────────────────
+
+/** MOBILE-ONLY: a single user-dataset row, optionally indented for folder nesting. */
+function UserDatasetRow({
+  dataset: d,
+  isActive,
+  status,
+  onSelect,
+  onDownload,
+  indent,
+}: {
+  dataset: UserDatasetMeta;
+  isActive: boolean;
+  status: PackStatus;
+  onSelect: () => void;
+  onDownload: () => void;
+  indent: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        borderBottom: "1px solid rgba(0,229,255,0.08)",
+        background: isActive ? "rgba(0,229,255,0.12)" : "transparent",
+      }}
+    >
+      {/* Selection target */}
+      <button
+        type="button"
+        data-testid={`mobile-dataset-option-${d.id}`}
+        onClick={onSelect}
+        style={{
+          flex: 1,
+          textAlign: "left",
+          background: "transparent",
+          border: "none",
+          color: isActive ? "#00e5ff" : "#cbd5e1",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: "calc(14px * var(--bs-font-scale, 1))",
+          padding: indent ? "14px 16px 14px 40px" : "14px 16px",
+          minHeight: 48,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          minWidth: 0,
+        }}
+      >
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            flex: 1,
+          }}
+        >
+          {d.name}
+        </span>
+        <OfflineStatusBadge status={status} />
+      </button>
+      {/* Per-dataset download */}
+      <DownloadBtn
+        label={`Download ${d.name} offline`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDownload();
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Folder grouping ───────────────────────────────────────────────────────
 
 interface MobileDatasetPickerProps {
   onClose: () => void;
@@ -119,6 +194,48 @@ interface MobileDatasetPickerProps {
    * The shell host is responsible for rendering BulkOfflinePanel.
    */
   onDownloadOffline: (datasets: BulkDataset[], scopeLabel: string) => void;
+}
+
+// ── Folder grouping ───────────────────────────────────────────────────────
+
+interface FolderGroup {
+  folder: DatasetFolder;
+  datasets: UserDatasetMeta[];
+}
+
+/**
+ * Group user datasets by their folderId.
+ * Returns { ungrouped, folderGroups } where ungrouped contains datasets with
+ * no folderId and folderGroups maps known folders to their datasets (in folder
+ * name order). Datasets referencing an unknown folderId fall into ungrouped.
+ */
+function groupByFolder(
+  datasets: UserDatasetMeta[],
+  folders: DatasetFolder[],
+): { ungrouped: UserDatasetMeta[]; folderGroups: FolderGroup[] } {
+  const folderById = new Map(folders.map((f) => [f.id, f]));
+  const groupMap = new Map<string, UserDatasetMeta[]>();
+  const ungrouped: UserDatasetMeta[] = [];
+
+  for (const d of datasets) {
+    if (!d.folderId || !folderById.has(d.folderId)) {
+      ungrouped.push(d);
+    } else {
+      const existing = groupMap.get(d.folderId);
+      if (existing) {
+        existing.push(d);
+      } else {
+        groupMap.set(d.folderId, [d]);
+      }
+    }
+  }
+
+  // Sort folder groups by folder name (stable, case-insensitive).
+  const folderGroups: FolderGroup[] = [...groupMap.entries()]
+    .map(([folderId, ds]) => ({ folder: folderById.get(folderId)!, datasets: ds }))
+    .sort((a, b) => a.folder.name.localeCompare(b.folder.name));
+
+  return { ungrouped, folderGroups };
 }
 
 export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
@@ -140,6 +257,17 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
       queryKey: getGetUserDatasetsQueryKey(),
     },
   });
+  const { data: folders = [] } = useGetUserFolders({
+    query: {
+      enabled: isLoaded && isSignedIn === true,
+      queryKey: getGetUserFoldersQueryKey(),
+    },
+  });
+
+  const { ungrouped: ungroupedDatasets, folderGroups } = React.useMemo(
+    () => groupByFolder(userDatasets ?? [], folders),
+    [userDatasets, folders],
+  );
 
   const select = (datasetId: string, source: DatasetSource) => {
     // Replace ALL visible datasets with the chosen one and let
@@ -265,6 +393,7 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
         {/* ── My datasets section ─────────────────────────────────────── */}
         {(userDatasets?.length ?? 0) > 0 && (
           <>
+            {/* Root-level header + "⬇ All" downloads EVERYTHING in My datasets */}
             <div style={headerRowStyle}>
               <div style={headerStyle}>My datasets</div>
               <button
@@ -281,63 +410,76 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
               </button>
             </div>
 
-            {userDatasets!.map((d) => {
-              const status = packStatuses.get(d.id) ?? "none";
-              const isActive = d.id === primaryDatasetId;
-              return (
+            {/* ── Ungrouped datasets (no folder) ──────────────────────── */}
+            {ungroupedDatasets.map((d) => (
+              <UserDatasetRow
+                key={d.id}
+                dataset={d}
+                isActive={d.id === primaryDatasetId}
+                status={packStatuses.get(d.id) ?? "none"}
+                onSelect={() => select(d.id, "user")}
+                onDownload={() => onDownloadOffline([userToBulkDataset(d)], d.name)}
+                indent={false}
+              />
+            ))}
+
+            {/* ── Folder groups ────────────────────────────────────────── */}
+            {folderGroups.map(({ folder, datasets: folderDatasets }) => (
+              <React.Fragment key={folder.id}>
+                {/* Folder sub-header with its own ⬇ All */}
                 <div
-                  key={d.id}
                   style={{
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingRight: 4,
                     borderBottom: "1px solid rgba(0,229,255,0.08)",
-                    background: isActive ? "rgba(0,229,255,0.12)" : "transparent",
                   }}
                 >
-                  {/* Selection target */}
-                  <button
-                    type="button"
-                    data-testid={`mobile-dataset-option-${d.id}`}
-                    onClick={() => select(d.id, "user")}
+                  <div
                     style={{
-                      flex: 1,
-                      textAlign: "left",
-                      background: "transparent",
-                      border: "none",
-                      color: isActive ? "#00e5ff" : "#cbd5e1",
+                      padding: "8px 16px 6px 28px",
+                      color: "#475569",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: "calc(14px * var(--bs-font-scale, 1))",
-                      padding: "14px 16px",
-                      minHeight: 48,
-                      cursor: "pointer",
+                      fontSize: "calc(10px * var(--bs-font-scale, 1))",
+                      letterSpacing: "0.15em",
+                      textTransform: "uppercase",
+                      flex: 1,
                       display: "flex",
                       alignItems: "center",
-                      minWidth: 0,
+                      gap: 6,
                     }}
                   >
-                    <span
-                      style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        flex: 1,
-                      }}
-                    >
-                      {d.name}
-                    </span>
-                    <OfflineStatusBadge status={status} />
-                  </button>
-                  {/* Per-dataset download */}
-                  <DownloadBtn
-                    label={`Download ${d.name} offline`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDownloadOffline([userToBulkDataset(d)], d.name);
+                    <span style={{ opacity: 0.6 }}>📁</span>
+                    {folder.name}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Download all datasets in ${folder.name} offline`}
+                    data-testid={`mobile-picker-download-folder-${folder.id}`}
+                    style={sectionDownloadBtnStyle}
+                    onClick={() => {
+                      const bulk = folderDatasets.map(userToBulkDataset);
+                      onDownloadOffline(bulk, folder.name);
                     }}
-                  />
+                  >
+                    ⬇ All
+                  </button>
                 </div>
-              );
-            })}
+                {/* Datasets inside the folder (indented) */}
+                {folderDatasets.map((d) => (
+                  <UserDatasetRow
+                    key={d.id}
+                    dataset={d}
+                    isActive={d.id === primaryDatasetId}
+                    status={packStatuses.get(d.id) ?? "none"}
+                    onSelect={() => select(d.id, "user")}
+                    onDownload={() => onDownloadOffline([userToBulkDataset(d)], d.name)}
+                    indent={true}
+                  />
+                ))}
+              </React.Fragment>
+            ))}
           </>
         )}
 
