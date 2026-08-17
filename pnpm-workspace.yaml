@@ -106,9 +106,9 @@ overrides:
   linkify-it: '>=5.0.1'
   # markdown-it <=14.1.1: quadratic DoS in smartquotes via orval->typedoc; build-only exposure
   markdown-it: '>=14.2.0'
-  # undici: cannot override to >=7.28.0 — jsdom 29.1.1 hard-requires internal
-  # paths removed in 7.28.0 (lib/handler/wrap-handler.js), breaking all Vitest tests.
-  # Documented as exception in check-audit.mjs + security-audit-exceptions.md.
+  # postcss <=8.5.22: attacker-controlled sourceMappingURL reads arbitrary .map files
+  # when `from` is unset (GHSA-fxqj-rqcc-2cmp); patched in >=8.5.23.
+  postcss: '>=8.5.23'
   # vite <=7.3.4: server.fs.deny bypass + NTLMv2 hash disclosure on Windows;
   # bumped to ^7.3.5 in catalog above for bathyscan; override also covers api-server->vitest->vite path
   vite: '>=7.3.5'

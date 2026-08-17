@@ -3,7 +3,7 @@
 Findings that cannot be patched in-place and have been reviewed as acceptable.
 Run `pnpm check:audit` (audit-level=high) to confirm no new high/critical issues.
 
-Last reviewed: 2026-08-16
+Last reviewed: 2026-08-17
 
 ---
 
@@ -22,48 +22,10 @@ upgrades `markdown-it` to pull `linkify-it >=5.0.1`. Track via `pnpm update --re
 
 ---
 
-## High — `undici` SOCKS5/WebSocket advisories via jsdom (GHSA-vmh5-mc38-953g, GHSA-vxpw-j846-p89q, GHSA-hm92-r4w5-c3mj)
-
-**Path affected**
-- `artifacts/bathyscan > jsdom > undici` (versions `>=7.23.0 <7.28.0` or `>=7.0.0 <7.28.0`)
-
-**Risk assessment**: All three advisories require either SOCKS5 proxy usage or WebSocket client
-usage. jsdom uses undici only for HTTP fetch in test environments; neither SOCKS5 proxy nor WebSocket
-is configured or used in any Vitest tests. These code paths are completely unreachable.
-
-**Why not overridden**: Applying `undici: '>=7.28.0'` as a workspace override breaks all Vitest
-tests — jsdom 29.1.1 hard-requires internal paths (e.g. `undici/lib/handler/wrap-handler.js`) that
-were reorganized in undici 7.28.0, causing `MODULE_NOT_FOUND` errors across the entire test suite.
-
-**Planned fix date**: 2026-10-17 — reassess when jsdom releases a version that ships undici >=7.28.0
-natively (without internal-path breakage). Track via `pnpm update --filter @workspace/bathyscan jsdom`.
-
----
-
-## High — `undici` degenerate private cache directives (GHSA-4cwx-7wf7-3272)
-
-**Path affected**
-- `artifacts/bathyscan > jsdom > undici` (version `7.28.0`)
-
-**Risk assessment**: Patched in undici >=7.29.0, but upgrading is blocked — jsdom 29.1.1
-hard-requires internal paths (e.g. `undici/lib/handler/wrap-handler.js`) removed in undici
-7.28.0; 7.28.0 is therefore the highest installable version. The vulnerable code path (parsing
-degenerate `private` cache directives) is never reachable through jsdom's HTTP fetch usage in
-test environments.
-
-**Why not overridden**: Same jsdom 29.1.1 constraint as the other undici exceptions above.
-
-**Planned fix date**: 2026-10-17 — reassess when jsdom releases a version that ships undici
->=7.29.0 natively. Track via `pnpm update --filter @workspace/bathyscan jsdom`.
-
----
-
 ## Moderate and Low findings
 
 Documented for visibility but not blocking per task scope:
 
 | Severity | Package | Advisory | Path | Notes |
 |---|---|---|---|---|
-| moderate | `undici` | GHSA-g8m3-5g58-fq7m, GHSA-35p6-xmwp-9g52 | `jsdom` | Test devDep only; see High section above for full reasoning |
-| low | `undici` | Multiple | `jsdom` | Test devDep only; same reasoning |
 | low | `@babel/core` | GHSA-4x5r-pxfx-6jf8 | `eslint-plugin-react-hooks` | **Overridden** via `pnpm-workspace.yaml` (`'@babel/core': '>=7.29.6'`); remove override once eslint-plugin-react-hooks bumps its own peer |
