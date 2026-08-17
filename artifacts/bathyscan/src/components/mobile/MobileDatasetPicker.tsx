@@ -25,13 +25,13 @@ import {
   getGetUserFoldersQueryKey,
   type DatasetMeta,
   type UserDatasetMeta,
-  type DatasetFolder,
 } from "@workspace/api-client-react";
 import { useTerrainStore, type DatasetSource } from "@/lib/terrainStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useAuth } from "@/lib/clerkCompat";
 import { useOfflinePackStatuses, type PackStatus } from "@/hooks/useOfflinePackStatus";
 import type { BulkDataset } from "@/hooks/useBulkOfflinePack";
+import { buildLibraryTree, type FolderNode } from "@/lib/datasetLibrary";
 
 // ── Helpers to build BulkDataset from catalog/user items ──────────────────
 
@@ -114,22 +114,23 @@ function DownloadBtn({
 
 // ── Dataset row ───────────────────────────────────────────────────────────
 
-/** MOBILE-ONLY: a single user-dataset row, optionally indented for folder nesting. */
+/** MOBILE-ONLY: a single user-dataset row, indented to `depth` levels. */
 function UserDatasetRow({
   dataset: d,
   isActive,
   status,
   onSelect,
   onDownload,
-  indent,
+  depth,
 }: {
   dataset: UserDatasetMeta;
   isActive: boolean;
   status: PackStatus;
   onSelect: () => void;
   onDownload: () => void;
-  indent: boolean;
+  depth: number;
 }) {
+  const paddingLeft = 16 + depth * 24;
   return (
     <div
       style={{
@@ -152,7 +153,7 @@ function UserDatasetRow({
           color: isActive ? "#00e5ff" : "#cbd5e1",
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: "calc(14px * var(--bs-font-scale, 1))",
-          padding: indent ? "14px 16px 14px 40px" : "14px 16px",
+          padding: `14px 16px 14px ${paddingLeft}px`,
           minHeight: 48,
           cursor: "pointer",
           display: "flex",
@@ -196,46 +197,116 @@ interface MobileDatasetPickerProps {
   onDownloadOffline: (datasets: BulkDataset[], scopeLabel: string) => void;
 }
 
-// ── Folder grouping ───────────────────────────────────────────────────────
+// ── Subtree dataset collector ─────────────────────────────────────────────
 
-interface FolderGroup {
-  folder: DatasetFolder;
-  datasets: UserDatasetMeta[];
+/** Collect all datasets in a folder subtree (depth-first, folder order). */
+function collectSubtreeDatasets(node: FolderNode): UserDatasetMeta[] {
+  const out: UserDatasetMeta[] = [...node.datasets];
+  for (const child of node.children) {
+    out.push(...collectSubtreeDatasets(child));
+  }
+  return out;
+}
+
+// ── Recursive folder section ──────────────────────────────────────────────
+
+interface FolderSectionProps {
+  node: FolderNode;
+  packStatuses: Map<string, PackStatus>;
+  primaryDatasetId: string | null | undefined;
+  onSelect: (datasetId: string) => void;
+  onDownloadOffline: (datasets: BulkDataset[], scopeLabel: string) => void;
+  sectionDownloadBtnStyle: React.CSSProperties;
 }
 
 /**
- * Group user datasets by their folderId.
- * Returns { ungrouped, folderGroups } where ungrouped contains datasets with
- * no folderId and folderGroups maps known folders to their datasets (in folder
- * name order). Datasets referencing an unknown folderId fall into ungrouped.
+ * MOBILE-ONLY: renders one folder level plus its datasets and sub-folders,
+ * recursively. Each level is indented by `node.depth` so deeply nested
+ * hierarchies remain legible on a phone-sized display.
  */
-function groupByFolder(
-  datasets: UserDatasetMeta[],
-  folders: DatasetFolder[],
-): { ungrouped: UserDatasetMeta[]; folderGroups: FolderGroup[] } {
-  const folderById = new Map(folders.map((f) => [f.id, f]));
-  const groupMap = new Map<string, UserDatasetMeta[]>();
-  const ungrouped: UserDatasetMeta[] = [];
+function FolderSection({
+  node,
+  packStatuses,
+  primaryDatasetId,
+  onSelect,
+  onDownloadOffline,
+  sectionDownloadBtnStyle,
+}: FolderSectionProps) {
+  const subtreeDatasets = collectSubtreeDatasets(node);
+  // Folder header indentation: 16 px base + 16 px per depth level.
+  const headerIndentPx = 16 + node.depth * 16;
+  // Dataset rows sit one level deeper than the folder header.
+  const datasetDepth = node.depth + 1;
 
-  for (const d of datasets) {
-    if (!d.folderId || !folderById.has(d.folderId)) {
-      ungrouped.push(d);
-    } else {
-      const existing = groupMap.get(d.folderId);
-      if (existing) {
-        existing.push(d);
-      } else {
-        groupMap.set(d.folderId, [d]);
-      }
-    }
-  }
+  return (
+    <React.Fragment>
+      {/* Folder sub-header with its own ⬇ All (scoped to full subtree) */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingRight: 4,
+          borderBottom: "1px solid rgba(0,229,255,0.08)",
+        }}
+      >
+        <div
+          style={{
+            padding: `8px 16px 6px ${headerIndentPx}px`,
+            color: "#475569",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: "calc(10px * var(--bs-font-scale, 1))",
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span style={{ opacity: 0.6 }}>📁</span>
+          {node.folder.name}
+        </div>
+        <button
+          type="button"
+          aria-label={`Download all datasets in ${node.folder.name} offline`}
+          data-testid={`mobile-picker-download-folder-${node.folder.id}`}
+          style={sectionDownloadBtnStyle}
+          onClick={() => {
+            onDownloadOffline(subtreeDatasets.map(userToBulkDataset), node.folder.name);
+          }}
+        >
+          ⬇ All
+        </button>
+      </div>
 
-  // Sort folder groups by folder name (stable, case-insensitive).
-  const folderGroups: FolderGroup[] = [...groupMap.entries()]
-    .map(([folderId, ds]) => ({ folder: folderById.get(folderId)!, datasets: ds }))
-    .sort((a, b) => a.folder.name.localeCompare(b.folder.name));
+      {/* Datasets directly in this folder */}
+      {node.datasets.map((d) => (
+        <UserDatasetRow
+          key={d.id}
+          dataset={d}
+          isActive={d.id === primaryDatasetId}
+          status={packStatuses.get(d.id) ?? "none"}
+          onSelect={() => onSelect(d.id)}
+          onDownload={() => onDownloadOffline([userToBulkDataset(d)], d.name)}
+          depth={datasetDepth}
+        />
+      ))}
 
-  return { ungrouped, folderGroups };
+      {/* Sub-folders (recursive) */}
+      {node.children.map((child) => (
+        <FolderSection
+          key={child.folder.id}
+          node={child}
+          packStatuses={packStatuses}
+          primaryDatasetId={primaryDatasetId}
+          onSelect={onSelect}
+          onDownloadOffline={onDownloadOffline}
+          sectionDownloadBtnStyle={sectionDownloadBtnStyle}
+        />
+      ))}
+    </React.Fragment>
+  );
 }
 
 export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
@@ -264,8 +335,8 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
     },
   });
 
-  const { ungrouped: ungroupedDatasets, folderGroups } = React.useMemo(
-    () => groupByFolder(userDatasets ?? [], folders),
+  const libraryTree = React.useMemo(
+    () => buildLibraryTree(folders, userDatasets ?? []),
     [userDatasets, folders],
   );
 
@@ -410,8 +481,8 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
               </button>
             </div>
 
-            {/* ── Ungrouped datasets (no folder) ──────────────────────── */}
-            {ungroupedDatasets.map((d) => (
+            {/* ── Root-level datasets (no folder) ─────────────────────── */}
+            {libraryTree.rootDatasets.map((d) => (
               <UserDatasetRow
                 key={d.id}
                 dataset={d}
@@ -419,66 +490,21 @@ export const MobileDatasetPicker: React.FC<MobileDatasetPickerProps> = ({
                 status={packStatuses.get(d.id) ?? "none"}
                 onSelect={() => select(d.id, "user")}
                 onDownload={() => onDownloadOffline([userToBulkDataset(d)], d.name)}
-                indent={false}
+                depth={0}
               />
             ))}
 
-            {/* ── Folder groups ────────────────────────────────────────── */}
-            {folderGroups.map(({ folder, datasets: folderDatasets }) => (
-              <React.Fragment key={folder.id}>
-                {/* Folder sub-header with its own ⬇ All */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingRight: 4,
-                    borderBottom: "1px solid rgba(0,229,255,0.08)",
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: "8px 16px 6px 28px",
-                      color: "#475569",
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: "calc(10px * var(--bs-font-scale, 1))",
-                      letterSpacing: "0.15em",
-                      textTransform: "uppercase",
-                      flex: 1,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <span style={{ opacity: 0.6 }}>📁</span>
-                    {folder.name}
-                  </div>
-                  <button
-                    type="button"
-                    aria-label={`Download all datasets in ${folder.name} offline`}
-                    data-testid={`mobile-picker-download-folder-${folder.id}`}
-                    style={sectionDownloadBtnStyle}
-                    onClick={() => {
-                      const bulk = folderDatasets.map(userToBulkDataset);
-                      onDownloadOffline(bulk, folder.name);
-                    }}
-                  >
-                    ⬇ All
-                  </button>
-                </div>
-                {/* Datasets inside the folder (indented) */}
-                {folderDatasets.map((d) => (
-                  <UserDatasetRow
-                    key={d.id}
-                    dataset={d}
-                    isActive={d.id === primaryDatasetId}
-                    status={packStatuses.get(d.id) ?? "none"}
-                    onSelect={() => select(d.id, "user")}
-                    onDownload={() => onDownloadOffline([userToBulkDataset(d)], d.name)}
-                    indent={true}
-                  />
-                ))}
-              </React.Fragment>
+            {/* ── Folder tree (recursive, supports nested sub-folders) ── */}
+            {libraryTree.roots.map((node) => (
+              <FolderSection
+                key={node.folder.id}
+                node={node}
+                packStatuses={packStatuses}
+                primaryDatasetId={primaryDatasetId}
+                onSelect={(datasetId) => select(datasetId, "user")}
+                onDownloadOffline={onDownloadOffline}
+                sectionDownloadBtnStyle={sectionDownloadBtnStyle}
+              />
             ))}
           </>
         )}
