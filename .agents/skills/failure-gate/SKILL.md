@@ -59,6 +59,20 @@ The project's plan-file lint guard should support three operating modes:
   plan files that predate the required-sections mandate, without permanently
   breaking CI on every run.
 
+The three modes above control *strictness*. There is a fourth, orthogonal axis
+that controls *scope*:
+
+- **Single-file mode** — When the `TASK_PLAN_FILE` environment variable is set,
+  the guard operates on the single file it names rather than scanning the entire
+  plan archive. This prevents the archive-wide scan from failing on pre-mandate
+  files that live in gitignored directories and never propagate between
+  environments. Two hard-error conditions apply in this mode: (a) if the path
+  named by `TASK_PLAN_FILE` does not end in `.md`, exit 1 with a clear
+  diagnostic; (b) if the path does not exist, exit 1 with a clear diagnostic.
+  Both the failure-gate guard and the regression-guard script in a project must
+  honour this variable consistently, so the agent always receives a predictable,
+  uniform contract regardless of which guard script runs first.
+
 ---
 
 ## Part 1 — Plan-time (Planner)
@@ -461,6 +475,11 @@ validation tier of the project's validation runner. The sequence is:
 
 Because `--fix-stub` is a no-op when all files are already compliant, this
 wiring is safe to run unconditionally on every tier without side effects.
+
+When `TASK_PLAN_FILE` is set, scope the `--fix-stub` pass to the single file
+it names rather than the full archive. This prevents the auto-remediate step
+from needlessly rewriting pre-mandate files on every task run — the fix-stub
+pass only touches the file the current task actually owns.
 
 **Bulk remediation:** If a backlog of stub-less plan files is blocking CI (e.g.
 after adopting the lint guard on an existing archive of plans), run `--fix-stub`

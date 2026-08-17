@@ -267,6 +267,19 @@ mirroring the Failure Gate lint guard:
   this to grandfather an archive of older plan files that predate the
   mandate without permanently breaking CI.
 
+The three modes above control *strictness*. The following is an orthogonal
+*scope* requirement that every implementation of this guard must also satisfy:
+
+**Single-file scoping** — When the `TASK_PLAN_FILE` environment variable is
+set, the guard must operate on the single file it names rather than scanning
+the full plan archive. Two hard errors apply: (a) if the named path does not
+end in `.md`, exit 1 with a clear diagnostic; (b) if the named path does not
+exist, exit 1 with a clear diagnostic. This prevents the archive-wide scan
+from breaking on pre-mandate files that are gitignored and do not propagate
+between environments. Both guard scripts in a project (the failure-gate guard
+and this regression-guard script) must honour `TASK_PLAN_FILE` consistently,
+so the agent receives a uniform contract regardless of which script runs first.
+
 Wire the script into the project's validation runner as an
 **auto-remediate + strict-check pair**, exactly matching how
 `scripts/check-failure-gate.mjs` is wired: run `--fix-stub` unconditionally
@@ -274,7 +287,10 @@ first (always exits 0, inserts missing stubs), then run strict mode, which
 now only fires on genuinely unfixable issues — unfilled placeholders and
 malformed declarations that need a human. This ordering means a missing
 section is repaired rather than merely reported, and CI red always means
-"a decision is needed", never "a stub is needed".
+"a decision is needed", never "a stub is needed". When `TASK_PLAN_FILE` is
+set, scope the `--fix-stub` pass to that single file as well — this prevents
+a needless archive-wide rewrite on every task run and keeps the fix-stub step
+touching only the file the current task actually owns.
 
 (Writing `scripts/check-regression-guard.mjs` is a separate implementation
 task; this skill defines the contract it must satisfy.)
