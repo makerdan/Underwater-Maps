@@ -69,6 +69,7 @@ import { useTidalData } from "@/hooks/useTidalData";
 import { useUiStore } from "@/lib/uiStore";
 import { useHighlightStore } from "@/lib/highlightStore";
 import { useTrailStore } from "@/lib/trailStore";
+import { RecChip } from "@/components/RecChip";
 import { useOfflineStore } from "@/lib/offlineStore";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { toValidDepthLayer } from "@/lib/depthLayerGuard";
@@ -327,6 +328,7 @@ function Main() {
   const driftPlannerActive = useDriftStore((s) => s.driftPlannerActive);
   const setDriftPlannerActive = useDriftStore((s) => s.setDriftPlannerActive);
   const trailRecording = useTrailStore((s) => s.recording);
+  const trailStartedAt = useTrailStore((s) => s.startedAt);
   const defaultMapLoad = useSettingsStore((st) => st.defaultMapLoad);
   const { isSignedIn, isLoaded } = useUser();
   // Always-mounted sync: debounce-flush lastSession to server when signed in,
@@ -1915,45 +1917,7 @@ function Main() {
             recording, avoiding the old "floating popup on every other tab"
             problem. */}
         {trailRecording && sidebarMode !== "live" && (
-          <button
-            data-testid="rec-chip"
-            onClick={() => setSidebarMode("live")}
-            aria-label="Recording in progress — click to open Live tab"
-            style={{
-              position: "absolute",
-              bottom: 60,
-              right: 16,
-              zIndex: 20,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "5px 10px",
-              background: "rgba(2,8,24,0.90)",
-              border: "1px solid rgba(239,68,68,0.55)",
-              borderRadius: 4,
-              color: "#ef4444",
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              cursor: "pointer",
-              backdropFilter: "blur(6px)",
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                display: "inline-block",
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: "#ef4444",
-                boxShadow: "0 0 5px rgba(239,68,68,0.8)",
-                animation: "pulse 1.2s ease-in-out infinite",
-              }}
-            />
-            REC
-          </button>
+          <RecChip startedAt={trailStartedAt} onClick={() => setSidebarMode("live")} />
         )}
 
         {/* Minimap + controls legend — bottom-right and bottom-left */}

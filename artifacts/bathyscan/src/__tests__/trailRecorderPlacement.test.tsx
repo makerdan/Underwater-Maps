@@ -8,14 +8,16 @@
  *  (b) The Live panel renders the full recorder UI (name input, start button).
  *  (c) With an active recording and the sidebar on a non-Live tab, only the
  *      compact ⏺ REC chip is rendered — not the full floating recorder.
+ *  (d) The REC chip shows a live mm:ss elapsed timer that ticks every second.
  *
  * These tests fail if the floating-popup gating ever reverts.
  */
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, screen, act } from "@testing-library/react";
 import { TrailRecorder } from "@/components/TrailRecorder";
 import { LivePanel } from "@/components/LivePanel";
+import { RecChip, formatElapsed } from "@/components/RecChip";
 import { useTrailStore } from "@/lib/trailStore";
 
 // ── shared mock state ────────────────────────────────────────────────────────
@@ -190,6 +192,101 @@ describe("Trail recorder placement — regression guard", () => {
 
       const { container } = render(<TrailRecorder />);
       expect(container.querySelector("[data-testid='trail-recorder']")).toBeNull();
+    });
+  });
+
+  describe("(d) REC chip elapsed timer", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    describe("formatElapsed utility", () => {
+      it("formats 0 seconds as 00:00", () => {
+        expect(formatElapsed(0)).toBe("00:00");
+      });
+
+      it("formats 59 seconds as 00:59", () => {
+        expect(formatElapsed(59)).toBe("00:59");
+      });
+
+      it("formats 60 seconds as 01:00", () => {
+        expect(formatElapsed(60)).toBe("01:00");
+      });
+
+      it("formats 2 minutes 47 seconds as 02:47", () => {
+        expect(formatElapsed(167)).toBe("02:47");
+      });
+
+      it("formats 1 hour+ correctly (70:00 for 4200 s)", () => {
+        expect(formatElapsed(4200)).toBe("70:00");
+      });
+
+      it("clamps negative values to 00:00", () => {
+        expect(formatElapsed(-5)).toBe("00:00");
+      });
+    });
+
+    describe("RecChip timer display", () => {
+      it("shows REC 00:00 immediately when startedAt is Date.now()", () => {
+        vi.useFakeTimers();
+        const startedAt = Date.now();
+
+        render(<RecChip startedAt={startedAt} onClick={vi.fn()} />);
+
+        expect(screen.getByTestId("rec-chip-elapsed").textContent).toBe("REC 00:00");
+      });
+
+      it("shows the elapsed time based on startedAt offset", () => {
+        vi.useFakeTimers();
+        // Simulate a recording that started 2 min 47 s ago.
+        const startedAt = Date.now() - 167_000;
+
+        render(<RecChip startedAt={startedAt} onClick={vi.fn()} />);
+
+        expect(screen.getByTestId("rec-chip-elapsed").textContent).toBe("REC 02:47");
+      });
+
+      it("ticks forward every second", () => {
+        vi.useFakeTimers();
+        const startedAt = Date.now();
+
+        render(<RecChip startedAt={startedAt} onClick={vi.fn()} />);
+
+        expect(screen.getByTestId("rec-chip-elapsed").textContent).toBe("REC 00:00");
+
+        act(() => { vi.advanceTimersByTime(1000); });
+        expect(screen.getByTestId("rec-chip-elapsed").textContent).toBe("REC 00:01");
+
+        act(() => { vi.advanceTimersByTime(59_000); });
+        expect(screen.getByTestId("rec-chip-elapsed").textContent).toBe("REC 01:00");
+      });
+
+      it("resets to 00:00 when a new recording starts (startedAt changes)", () => {
+        vi.useFakeTimers();
+        const startedAt = Date.now() - 90_000; // 1:30 into a recording
+
+        const { rerender } = render(<RecChip startedAt={startedAt} onClick={vi.fn()} />);
+        expect(screen.getByTestId("rec-chip-elapsed").textContent).toBe("REC 01:30");
+
+        // New recording started right now
+        const newStartedAt = Date.now();
+        rerender(<RecChip startedAt={newStartedAt} onClick={vi.fn()} />);
+        expect(screen.getByTestId("rec-chip-elapsed").textContent).toBe("REC 00:00");
+      });
+
+      it("chip has data-testid rec-chip", () => {
+        vi.useFakeTimers();
+        render(<RecChip startedAt={Date.now()} onClick={vi.fn()} />);
+        expect(screen.getByTestId("rec-chip")).toBeInTheDocument();
+      });
+
+      it("clicking the chip calls the onClick handler", () => {
+        vi.useFakeTimers();
+        const onClick = vi.fn();
+        render(<RecChip startedAt={Date.now()} onClick={onClick} />);
+        screen.getByTestId("rec-chip").click();
+        expect(onClick).toHaveBeenCalledOnce();
+      });
     });
   });
 });
