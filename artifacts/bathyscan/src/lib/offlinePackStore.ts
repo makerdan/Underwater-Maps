@@ -94,6 +94,32 @@ export interface PackProgress {
   error?: string;
 }
 
+// ─── Pack change listeners ────────────────────────────────────────────────────
+//
+// Lightweight registry so UI (offline-status badges) can refresh immediately
+// after a pack is saved or deleted, without polling IndexedDB.
+
+type PackListener = () => void;
+const packListeners = new Set<PackListener>();
+
+/** Subscribe to pack save/delete events. Returns an unsubscribe function. */
+export function subscribeOfflinePacks(listener: PackListener): () => void {
+  packListeners.add(listener);
+  return () => {
+    packListeners.delete(listener);
+  };
+}
+
+function notifyPackListeners(): void {
+  for (const listener of Array.from(packListeners)) {
+    try {
+      listener();
+    } catch {
+      // A broken listener must never fail the save/delete that triggered it.
+    }
+  }
+}
+
 // ─── Haversine distance ───────────────────────────────────────────────────────
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -452,6 +478,7 @@ export async function saveOfflinePack(
     }
 
     onProgress({ step: "saving", label: "Saved to device", done: true });
+    notifyPackListeners();
     return pack;
   } catch (err) {
     // Any failure after terrain was successfully cached — remove the orphaned
@@ -588,6 +615,7 @@ export async function deleteOfflinePack(id: string): Promise<void> {
     // Best-effort cleanup only.
   }
   await del(`${PACK_KEY_PREFIX}${id}`);
+  notifyPackListeners();
 }
 
 // ─── Location lookup ──────────────────────────────────────────────────────────

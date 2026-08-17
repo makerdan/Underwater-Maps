@@ -383,9 +383,25 @@ function QuotaBar({ used, total }: { used: number; total: number }) {
 interface Props {
   datasets: BulkDataset[];
   onClose: () => void;
+  /** Optional header title override (defaults to the legacy "⬇ SAVE ALL OFFLINE"). */
+  title?: string;
+  /** Human label of the scope being downloaded (e.g. folder or collection name). */
+  scopeLabel?: string;
+  /**
+   * Items in the requested scope that cannot be downloaded (catalog saves
+   * still processing / never materialized). Shown as per-item notices so the
+   * run reports them visibly instead of failing.
+   */
+  skippedItems?: { id: string; name: string; reason: string }[];
 }
 
-export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
+export const BulkOfflinePanel: React.FC<Props> = ({
+  datasets,
+  onClose,
+  title,
+  scopeLabel,
+  skippedItems,
+}) => {
   useReturnFocus();
   const overlayRef = useRef<HTMLDivElement>(null);
   const [packsOpen, setPacksOpen] = useState(false);
@@ -546,7 +562,7 @@ export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
                 marginBottom: 2,
               }}
             >
-              ⬇ SAVE ALL OFFLINE
+              {title ?? "⬇ SAVE ALL OFFLINE"}
             </div>
             <div
               style={{
@@ -554,6 +570,7 @@ export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
                 color: "#94a3b8",
               }}
             >
+              {scopeLabel ? `${scopeLabel} — ` : ""}
               {datasets.length} dataset{datasets.length !== 1 ? "s" : ""}
             </div>
           </div>
@@ -878,6 +895,48 @@ export const BulkOfflinePanel: React.FC<Props> = ({ datasets, onClose }) => {
                   }}
                 >
                   {ds.name}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Skipped scope items (not downloadable) ── */}
+          {skippedItems && skippedItems.length > 0 && (
+            <div
+              data-testid="bulk-offline-skipped"
+              style={{
+                border: "1px solid rgba(251,191,36,0.25)",
+                background: "rgba(251,191,36,0.05)",
+                borderRadius: 6,
+                marginBottom: 10,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  padding: "6px 10px",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  letterSpacing: "0.15em",
+                  color: "#fbbf24",
+                  textTransform: "uppercase",
+                  borderBottom: "1px solid rgba(251,191,36,0.15)",
+                }}
+              >
+                SKIPPED — NOT DOWNLOADABLE ({skippedItems.length})
+              </div>
+              {skippedItems.map((item) => (
+                <div
+                  key={item.id}
+                  data-testid={`bulk-offline-skipped-${item.id}`}
+                  style={{
+                    padding: "7px 10px",
+                    borderBottom: "1px solid rgba(251,191,36,0.08)",
+                    fontSize: "calc(13px * var(--bs-font-scale, 1))",
+                    color: "#94a3b8",
+                  }}
+                >
+                  <span style={{ color: "#cbd5e1" }}>{item.name}</span>
+                  <span style={{ color: "#fbbf24" }}> — {item.reason}</span>
                 </div>
               ))}
             </div>

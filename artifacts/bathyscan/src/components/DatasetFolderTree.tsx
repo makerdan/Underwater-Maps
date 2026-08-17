@@ -108,6 +108,13 @@ interface Props {
    * collection-picker dialog. When undefined neither entry point renders.
    */
   onAddToCollection?: (datasetIds: string[]) => void;
+  /**
+   * Called with dataset ids when the user picks "Download offline" in the
+   * multi-select header (fires with every selected dataset id). The parent
+   * owns the bulk-download flow. When undefined the entry point doesn't
+   * render.
+   */
+  onDownloadOffline?: (datasetIds: string[]) => void;
 }
 
 type DragKind = "folder" | "dataset";
@@ -144,6 +151,7 @@ export const DatasetFolderTree: React.FC<Props> = ({
   visibleDatasetIds,
   atViewCap = false,
   onAddToCollection,
+  onDownloadOffline,
 }) => {
   const qc = useQueryClient();
   const expanded = useSettingsStore((s) => s.datasetFolderExpanded);
@@ -1400,6 +1408,31 @@ export const DatasetFolderTree: React.FC<Props> = ({
                   }}
                 >
                   🗂 Add to collection
+                </button>
+              ) : null;
+            })()}
+            {onDownloadOffline && (() => {
+              // Offline packs cover datasets only — folder ids in the
+              // selection are ignored by this action.
+              const selectedDatasetIds = datasets.filter((d) => selectedIds.has(d.id)).map((d) => d.id);
+              return selectedDatasetIds.length > 0 ? (
+                <button
+                  data-testid="btn-download-selected-offline"
+                  onClick={() => onDownloadOffline(selectedDatasetIds)}
+                  title="Download selected datasets for offline use"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid rgba(0,229,255,0.3)",
+                    color: "#67e8f9",
+                    fontSize: "calc(15px * var(--bs-font-scale, 1))",
+                    padding: "0 6px",
+                    borderRadius: 2,
+                    cursor: "pointer",
+                    lineHeight: 1.6,
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  ⬇ Download offline
                 </button>
               ) : null;
             })()}

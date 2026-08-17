@@ -24,10 +24,20 @@ import {
   useDeleteUserCollectionsId,
   usePostUserCollectionsIdMembers,
   useDeleteUserCollectionsIdMembersMemberId,
+  useGetDatasetsMySaves,
   getGetUserCollectionsQueryKey,
+  getGetDatasetsMySavesQueryKey,
   type DatasetCollection,
+  type DatasetCollectionMember,
+  type UserCatalogSave,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/clerkCompat";
+import {
+  useOfflinePackStatuses,
+  rollupPackStatus,
+  type PackRollupStatus,
+} from "@/hooks/useOfflinePackStatus";
+import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -194,7 +204,11 @@ const CollectionRow: React.FC<{
   onDelete: (collection: DatasetCollection) => void;
   onRemoveMember: (collectionId: string, memberId: string) => void;
   removingMemberIds: Set<string>;
-}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds }) => {
+  /** Download this collection's datasets for offline use. */
+  onDownloadOffline?: () => void;
+  /** Rollup offline status across the collection's members ("none" hides the badge). */
+  offlineRollup?: PackRollupStatus;
+}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none" }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -249,9 +263,39 @@ const CollectionRow: React.FC<{
               {collection.name} <span style={{ color: "#64748b" }}>({collection.members.length})</span>
             </span>
           )}
+          {!editing && offlineRollup !== "none" && (
+            <span
+              data-testid={`offline-rollup-collection-${collection.id}`}
+              title={
+                offlineRollup === "downloaded"
+                  ? "All datasets in this collection are saved offline"
+                  : offlineRollup === "stale"
+                    ? "All datasets are saved offline, but some tide data has expired"
+                    : "Some datasets in this collection are saved offline"
+              }
+              style={{
+                fontSize: "calc(9.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em",
+                textTransform: "uppercase", flexShrink: 0, lineHeight: 1.6,
+                borderRadius: 3, padding: "0px 5px",
+                color: offlineRollup === "downloaded" ? "#4ade80" : offlineRollup === "stale" ? "#fbbf24" : "#94a3b8",
+                border: `1px solid ${offlineRollup === "downloaded" ? "rgba(74,222,128,0.4)" : offlineRollup === "stale" ? "rgba(251,191,36,0.4)" : "rgba(148,163,184,0.4)"}`,
+              }}
+            >
+              {offlineRollup === "downloaded" ? "✓ Offline" : offlineRollup === "stale" ? "⟳ Stale" : "◐ Partial"}
+            </span>
+          )}
         </button>
         {!editing && (
           <>
+            {onDownloadOffline && (
+              <button
+                data-testid={`btn-download-collection-${collection.id}`}
+                aria-label={`Download collection "${collection.name}" for offline use`}
+                title="Download this collection for offline use"
+                onClick={onDownloadOffline}
+                style={{ background: "transparent", border: "none", color: "#67e8f9", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", flexShrink: 0 }}
+              >⬇</button>
+            )}
             <button
               data-testid={`btn-rename-collection-${collection.id}`}
               aria-label={`Rename collection "${collection.name}"`}
@@ -315,6 +359,32 @@ export const CollectionsSection: React.FC = () => {
   const { data: collections = [], isPending } = useGetUserCollections({
     query: { queryKey: getGetUserCollectionsQueryKey(), enabled: isLoaded && isSignedIn === true },
   });
+
+  // Saves list (unfiltered) so catalogSave members can be mapped to their
+  // materialized dataset ids for offline-status rollups.
+  const { data: allSaves = [] } = useGetDatasetsMySaves(undefined, {
+    query: { queryKey: getGetDatasetsMySavesQueryKey(), enabled: isLoaded && isSignedIn === true },
+  });
+  const packStatuses = useOfflinePackStatuses();
+
+  const savesById = useMemo(() => {
+    const map = new Map<string, UserCatalogSave>();
+    for (const s of allSaves) map.set(s.id, s);
+    return map;
+  }, [allSaves]);
+
+  const memberDatasetId = useCallback((m: DatasetCollectionMember): string | null => {
+    if (m.kind === "dataset") return m.refId;
+    return savesById.get(m.refId)?.datasetId ?? null;
+  }, [savesById]);
+
+  const collectionRollup = useCallback((c: DatasetCollection): PackRollupStatus => {
+    const statuses = c.members
+      .map(memberDatasetId)
+      .filter((id): id is string => id !== null)
+      .map((id) => packStatuses.get(id) ?? "none");
+    return rollupPackStatus(statuses);
+  }, [memberDatasetId, packStatuses]);
 
   const createMutation = usePostUserCollections();
   const renameMutation = usePatchUserCollectionsIdRename();
@@ -464,6 +534,8 @@ export const CollectionsSection: React.FC = () => {
               onDelete={setConfirmDelete}
               onRemoveMember={(collectionId, memberId) => void handleRemoveMember(collectionId, memberId)}
               removingMemberIds={removingMemberIds}
+              onDownloadOffline={() => useOfflineScopeStore.getState().requestScopeDownload({ kind: "collection", collectionId: c.id })}
+              offlineRollup={collectionRollup(c)}
             />
           ))}
         </div>

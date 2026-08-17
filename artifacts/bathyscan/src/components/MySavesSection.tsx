@@ -54,6 +54,13 @@ import { ToastAction } from "@/components/ui/toast";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { buildMergedTree, type MergedFolderNode, type MergedEntry } from "@/lib/datasetLibrary";
 import { AddToCollectionDialog, type AddToCollectionTarget } from "@/components/CollectionsSection";
+import {
+  useOfflinePackStatuses,
+  rollupPackStatus,
+  type PackStatus,
+  type PackRollupStatus,
+} from "@/hooks/useOfflinePackStatus";
+import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -113,6 +120,73 @@ const WaterTypeBadge: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
+// OfflineStatusBadge — per-dataset pack indicator (downloaded / stale)
+// ---------------------------------------------------------------------------
+
+const OfflineStatusBadge: React.FC<{
+  status: PackStatus;
+  datasetId: string;
+}> = ({ status, datasetId }) => {
+  if (status === "none") return null;
+  const stale = status === "stale";
+  return (
+    <span
+      data-testid={`offline-status-${datasetId}`}
+      title={stale ? "Offline copy saved, but its tide data has expired — re-download to refresh" : "Saved for offline use"}
+      style={{
+        fontSize: "calc(9.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        color: stale ? "#fbbf24" : "#4ade80",
+        border: `1px solid ${stale ? "rgba(251,191,36,0.4)" : "rgba(74,222,128,0.4)"}`,
+        borderRadius: 3,
+        padding: "0px 5px", flexShrink: 0, lineHeight: 1.6,
+      }}
+    >
+      {stale ? "⟳ Stale" : "✓ Offline"}
+    </span>
+  );
+};
+
+// Rollup variant for folder / collection rows.
+const OfflineRollupBadge: React.FC<{
+  rollup: PackRollupStatus;
+  testId: string;
+}> = ({ rollup, testId }) => {
+  if (rollup === "none") return null;
+  const color =
+    rollup === "downloaded" ? "#4ade80" : rollup === "stale" ? "#fbbf24" : "#94a3b8";
+  const border =
+    rollup === "downloaded"
+      ? "rgba(74,222,128,0.4)"
+      : rollup === "stale"
+        ? "rgba(251,191,36,0.4)"
+        : "rgba(148,163,184,0.4)";
+  const label = rollup === "downloaded" ? "✓ Offline" : rollup === "stale" ? "⟳ Stale" : "◐ Partial";
+  const title =
+    rollup === "downloaded"
+      ? "All datasets in here are saved offline"
+      : rollup === "stale"
+        ? "All datasets in here are saved offline, but some tide data has expired"
+        : "Some datasets in here are saved offline";
+  return (
+    <span
+      data-testid={testId}
+      title={title}
+      style={{
+        fontSize: "calc(9.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        color,
+        border: `1px solid ${border}`,
+        borderRadius: 3,
+        padding: "0px 5px", flexShrink: 0, lineHeight: 1.6,
+      }}
+    >
+      {label}
+    </span>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // SaveCard
 // ---------------------------------------------------------------------------
 
@@ -128,7 +202,9 @@ const SaveCard: React.FC<{
   atViewCap?: boolean;
   visibleDatasetIds?: Set<string>;
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
-}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onAddToView, atViewCap = false, visibleDatasetIds, onOfflineDownload }) => {
+  /** Offline pack status for the materialized dataset ("none" hides the badge). */
+  offlineStatus?: PackStatus;
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onAddToView, atViewCap = false, visibleDatasetIds, onOfflineDownload, offlineStatus = "none" }) => {
   const statusColor = STATUS_COLORS[save.status] ?? "#e2e8f0";
   const icon = save.catalog ? (DATA_TYPE_ICONS[save.catalog.dataType] ?? "📦") : "📦";
   const displayName = save.displayLabel ?? save.catalog?.name ?? save.catalogId;
@@ -222,6 +298,9 @@ const SaveCard: React.FC<{
               waterType={save.catalog?.waterType}
               testId={`watertype-save-${save.id}`}
             />
+            {save.datasetId && (
+              <OfflineStatusBadge status={offlineStatus} datasetId={save.datasetId} />
+            )}
             <span style={{
               fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -364,7 +443,9 @@ const UploadCard: React.FC<{
   isAlreadyInView?: boolean;
   atViewCap?: boolean;
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
-}> = ({ dataset, onLoad, onDelete, onRename, deleting, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload }) => {
+  /** Offline pack status for this upload ("none" hides the badge). */
+  offlineStatus?: PackStatus;
+}> = ({ dataset, onLoad, onDelete, onRename, deleting, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload, offlineStatus = "none" }) => {
   const createdDate = useMemo(() => {
     const d = new Date(dataset.createdAt);
     if (Number.isNaN(d.getTime())) return dataset.createdAt.slice(0, 10);
@@ -432,6 +513,7 @@ const UploadCard: React.FC<{
               waterType={dataset.waterType}
               testId={`watertype-upload-${dataset.id}`}
             />
+            <OfflineStatusBadge status={offlineStatus} datasetId={dataset.id} />
             <span style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>{createdDate}</span>
           </div>
         </div>
@@ -604,7 +686,8 @@ const DraggableSaveCard: React.FC<{
   visibleDatasetIds?: Set<string>;
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
   onAddToCollection?: (save: UserCatalogSave) => void;
-}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo, onAddToView, atViewCap, visibleDatasetIds, onOfflineDownload, onAddToCollection }) => {
+  offlineStatus?: PackStatus;
+}> = ({ save, onLoadUserDataset, onRetry, retrying, onDelete, deleting, onRename, onMoveTo, onAddToView, atViewCap, visibleDatasetIds, onOfflineDownload, onAddToCollection, offlineStatus }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `save-${save.id}`,
     data: { kind: "save", saveId: save.id },
@@ -627,7 +710,7 @@ const DraggableSaveCard: React.FC<{
         save={save} onLoadUserDataset={onLoadUserDataset} onRetry={onRetry}
         retrying={retrying} onDelete={onDelete} deleting={deleting} onRename={onRename}
         onAddToView={onAddToView} atViewCap={atViewCap} visibleDatasetIds={visibleDatasetIds}
-        onOfflineDownload={onOfflineDownload}
+        onOfflineDownload={onOfflineDownload} offlineStatus={offlineStatus}
       />
     </div>
   );
@@ -649,7 +732,8 @@ const DraggableUploadCard: React.FC<{
   atViewCap?: boolean;
   onOfflineDownload?: (dataset: { id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null; resolutionM?: number | null }) => void;
   onAddToCollection?: (dataset: UserDatasetMeta) => void;
-}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload, onAddToCollection }) => {
+  offlineStatus?: PackStatus;
+}> = ({ dataset, onLoad, onDelete, onRename, deleting, onMoveTo, onAddToView, isAlreadyInView = false, atViewCap = false, onOfflineDownload, onAddToCollection, offlineStatus }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `upload-${dataset.id}`,
     data: { kind: "upload", datasetId: dataset.id },
@@ -671,7 +755,7 @@ const DraggableUploadCard: React.FC<{
         dataset={dataset} onLoad={(id) => onLoad(id, dataset.createdAt)}
         onDelete={onDelete} onRename={onRename} deleting={deleting}
         onAddToView={onAddToView} isAlreadyInView={isAlreadyInView} atViewCap={atViewCap}
-        onOfflineDownload={onOfflineDownload}
+        onOfflineDownload={onOfflineDownload} offlineStatus={offlineStatus}
       />
     </div>
   );
@@ -696,7 +780,11 @@ const SaveFolderSection: React.FC<{
   onRenameChange?: (v: string) => void;
   onRenameCommit?: () => void;
   onRenameCancel?: () => void;
-}> = ({ node, isExpanded, onToggle, renderItem, renderSubFolder, onShowMenu, onNewFolder, onRenameStart, onDelete, isRenaming = false, renameValue = "", onRenameChange, onRenameCommit, onRenameCancel }) => {
+  /** Download this folder's datasets (including subfolders) for offline use. */
+  onDownloadOffline?: () => void;
+  /** Rollup offline status across the folder subtree ("none" hides the badge). */
+  offlineRollup?: PackRollupStatus;
+}> = ({ node, isExpanded, onToggle, renderItem, renderSubFolder, onShowMenu, onNewFolder, onRenameStart, onDelete, isRenaming = false, renameValue = "", onRenameChange, onRenameCommit, onRenameCancel, onDownloadOffline, offlineRollup = "none" }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `folder-${node.folder.id}`,
     data: { kind: "folder", folderId: node.folder.id },
@@ -739,11 +827,23 @@ const SaveFolderSection: React.FC<{
             {node.folder.name}
           </span>
         )}
+        {!isRenaming && (
+          <OfflineRollupBadge rollup={offlineRollup} testId={`offline-rollup-folder-${node.folder.id}`} />
+        )}
         {!isRenaming && totalCount > 0 && (
           <span style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b" }}>{totalCount}</span>
         )}
         {!isRenaming && (
           <>
+            {onDownloadOffline && (
+              <button
+                data-testid={`save-folder-download-${node.folder.id}`}
+                onClick={(e) => { e.stopPropagation(); onDownloadOffline(); }}
+                title="Download this folder for offline use (includes subfolders)"
+                aria-label={`Download folder ${node.folder.name} for offline use`}
+                style={{ background: "transparent", border: "none", color: "#67e8f9", cursor: "pointer", fontSize: "calc(14px * var(--bs-font-scale, 1))", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+              >⬇</button>
+            )}
             {onNewFolder && (
               <button
                 data-testid={`save-folder-new-subfolder-${node.folder.id}`}
@@ -842,6 +942,9 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   const qc = useQueryClient();
   const { toast } = useToast();
   const waterType = useSettingsStore((s) => s.waterType);
+  // Live offline-pack statuses (per materialized dataset id); refreshes on
+  // pack save/delete via the offlinePackStore listener registry.
+  const packStatuses = useOfflinePackStatuses();
 
   // ── Queries ──────────────────────────────────────────────────────────────
   // The active SALT/FRESH mode is passed to the server so only matching saves
@@ -1069,6 +1172,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
     const hasSaves = node.items.length > 0 || node.children.length > 0;
     useContextMenuStore.getState().show(e.clientX, e.clientY, [
       { label: "Rename", icon: "✎", onClick: () => setRenamingSaveFolder({ id: node.folder.id, value: node.folder.name }) },
+      { label: "Download offline", icon: "⬇", onClick: () => useOfflineScopeStore.getState().requestScopeDownload({ kind: "folder", folderId: node.folder.id }) },
       { label: "", separator: true, onClick: () => {} },
       { label: "Delete folder…", icon: "✕", onClick: () => { setSaveFolderDeleteError(null); setConfirmDeleteSaveFolder({ id: node.folder.id, name: node.folder.name, hasSaves }); } },
     ]);
@@ -1167,6 +1271,21 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
 
   const mergedTree = buildMergedTree(userFolders, visibleSaves, uploadOnlyDatasets);
 
+  // Rollup offline status per folder subtree: gather every materialized
+  // dataset id under the node, then map through the live pack statuses.
+  const subtreeStatuses = (node: MergedFolderNode): PackStatus[] => {
+    const out: PackStatus[] = [];
+    const visit = (n: MergedFolderNode) => {
+      for (const item of n.items) {
+        const dsId = item.kind === "save" ? item.save.datasetId : item.dataset.id;
+        if (dsId) out.push(packStatuses.get(dsId) ?? "none");
+      }
+      for (const child of n.children) visit(child);
+    };
+    visit(node);
+    return out;
+  };
+
   const renderItem = (item: MergedEntry): React.ReactNode =>
     item.kind === "save" ? (
       <DraggableSaveCard
@@ -1187,6 +1306,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
           label: s.displayLabel ?? s.catalog?.name ?? s.catalogId,
           targets: [{ catalogSaveId: s.id }],
         })}
+        offlineStatus={item.save.datasetId ? (packStatuses.get(item.save.datasetId) ?? "none") : "none"}
       />
     ) : (
       <DraggableUploadCard
@@ -1205,6 +1325,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
           label: d.name,
           targets: [{ datasetId: d.id }],
         })}
+        offlineStatus={packStatuses.get(item.dataset.id) ?? "none"}
       />
     );
 
@@ -1234,6 +1355,8 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       onRenameChange={(v) => setRenamingSaveFolder((prev) => prev ? { ...prev, value: v } : null)}
       onRenameCommit={() => void handleSaveFolderRenameCommit()}
       onRenameCancel={() => setRenamingSaveFolder(null)}
+      onDownloadOffline={() => useOfflineScopeStore.getState().requestScopeDownload({ kind: "folder", folderId: node.folder.id })}
+      offlineRollup={rollupPackStatus(subtreeStatuses(node))}
     />
   );
 

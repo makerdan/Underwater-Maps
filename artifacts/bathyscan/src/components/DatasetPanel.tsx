@@ -14,6 +14,7 @@ import {
   useGetUserFolders,
   useGetMarkers,
   useGetDatasetsMySaves,
+  useGetUserCollections,
   getGetDatasetsIdTerrainQueryKey,
   getGetDatasetsIdOverviewQueryKey,
   getGetUserDatasetsQueryKey,
@@ -23,6 +24,7 @@ import {
   getGetUserDatasetsIdOverviewQueryKey,
   getGetMarkersQueryKey,
   getGetSettingsQueryKey,
+  getGetUserCollectionsQueryKey,
   usePostDatasetsUpload,
   getGetSubstrateQueryKey,
   getAuthToken,
@@ -76,6 +78,8 @@ import { BulkOfflinePanel } from "@/components/BulkOfflinePanel";
 import { GeoreferenceModal } from "@/components/GeoreferenceModal";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { resolveOfflineScope } from "@/lib/offlineScopeResolver";
+import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -941,8 +945,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   const { data: userDatasets, isLoading: userDatasetsLoading } = useGetUserDatasets({
     query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserDatasetsQueryKey() },
   });
-  // Pre-warm folder cache for MySavesSection (deduped by React Query).
-  useGetUserFolders({
+  // Folder cache — pre-warms MySavesSection (deduped by React Query) and
+  // feeds offline scope resolution (folder-subtree downloads).
+  const { data: userFolders = [] } = useGetUserFolders({
     query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserFoldersQueryKey() },
   });
   // Catalog saves — needed for "⬇ All" visibility and combined bulk-offline list.
@@ -953,6 +958,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     () => mySaves.filter((s) => s.status === "ready" && !!s.datasetId),
     [mySaves],
   );
+  // Collections — needed to resolve collection-scope offline downloads
+  // (shares the React Query cache with CollectionsSection).
+  const { data: userCollections = [] } = useGetUserCollections({
+    query: { enabled: isLoaded && isSignedIn === true, queryKey: getGetUserCollectionsQueryKey() },
+  });
 
   // ─── Eviction toast: fires when terrainStore silently evicts a dataset ─────
   useEffect(() => {
@@ -2862,7 +2872,23 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   } | null>(null);
 
   // ─── Bulk Offline Panel ───────────────────────────────────────────────────
-  const [bulkOfflineOpen, setBulkOfflineOpen] = useState(false);
+  // Opened by any library entry point (⬇ All, folder row, collection row,
+  // folder-tree multi-select) writing a scope into the shared scope store;
+  // this panel is the single host that resolves and renders it.
+  const pendingOfflineScope = useOfflineScopeStore((s) => s.pendingScope);
+  const clearOfflineScope = useOfflineScopeStore((s) => s.clearScope);
+  const resolvedOfflineScope = useMemo(
+    () =>
+      pendingOfflineScope
+        ? resolveOfflineScope(pendingOfflineScope, {
+            folders: userFolders,
+            datasets: userDatasets ?? [],
+            saves: mySaves,
+            collections: userCollections,
+          })
+        : null,
+    [pendingOfflineScope, userFolders, userDatasets, mySaves, userCollections],
+  );
 
   // ─── Georeferencing wizard modal ──────────────────────────────────────────
   const [georefDataset, setGeorefDataset] = useState<UserDatasetMeta | null>(null);
@@ -2942,7 +2968,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                   type="button"
                   title="Save all library datasets for offline use"
                   data-testid="btn-bulk-offline"
-                  onClick={() => setBulkOfflineOpen(true)}
+                  onClick={() =>
+                    useOfflineScopeStore.getState().requestScopeDownload({ kind: "library" })
+                  }
                   style={{
                     background: "none",
                     border: "none",
@@ -4339,35 +4367,12 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         />
       )}
 
-      {bulkOfflineOpen && (
+      {resolvedOfflineScope && (
         <BulkOfflinePanel
-          datasets={(() => {
-            const seen = new Set<string>();
-            const combined: Array<{ id: string; name: string; bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number }; resolutionM?: number }> = [];
-            for (const d of userDatasets ?? []) {
-              if (!seen.has(d.id)) {
-                seen.add(d.id);
-                combined.push({
-                  id: d.id,
-                  name: d.name,
-                  bbox: d.bbox ?? undefined,
-                  ...(d.resolutionM != null ? { resolutionM: d.resolutionM } : {}),
-                });
-              }
-            }
-            for (const s of readyCatalogSaves) {
-              if (s.datasetId && !seen.has(s.datasetId)) {
-                seen.add(s.datasetId);
-                combined.push({
-                  id: s.datasetId,
-                  name: s.displayLabel ?? s.catalog?.name ?? s.catalogId,
-                  bbox: s.catalog?.coverageBbox ?? undefined,
-                });
-              }
-            }
-            return combined;
-          })()}
-          onClose={() => setBulkOfflineOpen(false)}
+          datasets={resolvedOfflineScope.datasets}
+          scopeLabel={resolvedOfflineScope.label}
+          skippedItems={resolvedOfflineScope.skipped}
+          onClose={clearOfflineScope}
         />
       )}
 

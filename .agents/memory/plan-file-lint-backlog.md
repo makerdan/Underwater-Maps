@@ -18,3 +18,15 @@ description: check:failure-gate/-regression-guard lint the gitignored .local/tas
 **Lint false positive:** the placeholder detector treats any `<...>` in a field as an unfilled stub — literal JSX like `<color attach="background">` inside a **Covers:** line fails the check. Reword to avoid angle brackets in plan-file field text.
 
 **Also note:** stale `.local/custom_skills` mirrors may fail `check:skill-mirror-sync` first — run the post-merge sync block (gitignored-only) if so.
+
+## 2026-08-17 recurrence
+Gate hardening re-broke the archive: fix-stub steps insert placeholder text
+("**Why:** <replace...>") that the checker itself then rejects, so the backlog
+cannot self-heal — ~900 files failed check:failure-gate and 3 legacy files with
+existing-but-unfilled Regression Guard sections made fix:regression-guard-stubs
+itself exit 1. Manual fill of the handful of existing-section files + same-tier
+`--skip` of both archive lints (with TASK_PLAN_FILE set) was the sanctioned path.
+Note: a real `<...>` code snippet inside a **Covers:** field trips the
+placeholder detector — strip angle brackets from JSX in plan prose.
+Scoping fixes: failure-gate scoped to TASK_PLAN_FILE (merged 2026-08-17);
+regression-guard scoping proposed. Once both land, retire the --skip workaround.

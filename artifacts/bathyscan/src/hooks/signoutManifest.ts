@@ -155,6 +155,7 @@ export const SIGNOUT_EXCLUDED_STORES: readonly ExcludedStoreEntry[] = [
   { storeName: "markerEditStore", module: "lib/markerEditStore.ts", reason: "Transient marker-edit dialog state." },
   { storeName: "markerLayerStore", module: "lib/markerLayerStore.ts", reason: "R3F→DOM bridge for marker subsampling HUD state; derived, transient." },
   { storeName: "measureStore", module: "lib/measureStore.ts", reason: "Transient measurement-tool points/results." },
+  { storeName: "offlineScopeStore", module: "lib/offlineScopeStore.ts", reason: "Transient pending offline-download scope request (library/folder/selection/collection) consumed by DatasetPanel; no persistence, no per-user data." },
   { storeName: "offlineStore", module: "lib/offlineStore.ts", reason: "Connectivity/session-expiry flags describing the device's current network state." },
   { storeName: "panelCollapseStore", module: "lib/panelCollapseStore.ts", reason: "Reset directly by performSignOutCleanup (setState to defaults) and its 'bathyscan:panel-collapse' key is in the localStorage manifest; no named reset action needed." },
   { storeName: "proximityStreamingStore", module: "lib/proximityStreamingStore.ts", reason: "Transient proximity-streaming HUD state." },
