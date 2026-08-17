@@ -124,6 +124,7 @@ import { OfflineReadOnlyBanner, persistOfflineIdentity } from "@/components/Offl
 import { useIsMobileImmediate } from "@/hooks/use-mobile";
 import { MobileChartShell } from "@/components/mobile/MobileChartShell";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { MobilePlanTab } from "@/components/mobile/MobilePlanTab";
 
 
 function TestBridge(): null {
@@ -1313,7 +1314,28 @@ function Main() {
             — that is the product decision this branch enforces. Desktop JSX
             in the else-branch is untouched. */}
         {isMobileChart ? (
-          <MobileChartShell />
+          <MobileChartShell
+            // MOBILE-ONLY: the full Plan-tab stack needs Main()'s tide fetch
+            // state and scrub times, so App assembles it and hands it down.
+            planContent={
+              <MobilePlanTab
+                tidalOverlay={tidalOverlay}
+                tidalData={effectiveTidalData}
+                tidalLoading={tidalLoading}
+                depthLayer={depthLayer}
+                onDepthLayerChange={setDepthLayer}
+                tidePlanTime={tidePlanTime}
+                onTidePlanTimeChange={setTidePlanTime}
+                tideNowMs={tideNowMs}
+                centerLat={centerLat}
+                centerLon={centerLon}
+              />
+            }
+            // MOBILE-ONLY: explore/live tab dots mirror the desktop
+            // SidebarModeTabs indicators (these two flags live in AppState).
+            exploreIndicator={tidalOverlay}
+            liveIndicator={realisticMode}
+          />
         ) : (
           <>
         {/* 3D Scene — fills everything. Wrapped in an ErrorBoundary so a

@@ -20,13 +20,14 @@
  *   - The canvas backing store is capped at devicePixelRatio ≤ 2 to bound
  *     fill cost on high-DPR phones.
  */
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { useGpsStore } from "@/lib/gpsStore";
 import { useTrailStore } from "@/lib/trailStore";
 import { useCameraStore } from "@/lib/cameraStore";
+import { useUiStore } from "@/lib/uiStore";
 import type { FollowCheckState } from "@/lib/followBoundsCheck";
 import {
   runMobileMapFollowTick,
@@ -38,6 +39,11 @@ import {
   renderContourLines,
   renderHeatmap,
   renderScaleBar,
+  renderIntertidalBand,
+  renderHabitatOverlay,
+  renderEfhOverlay,
+  renderSubstrateOverlay,
+  shouldDrawOverlayAtScale,
   computeInitialTransform,
   clampTransform,
   lonLatToCanvas,
@@ -50,6 +56,10 @@ import {
   contourIntervalToMetres,
   toValidContourDensity,
 } from "@/lib/contourDensity";
+import { formatDepth } from "@/lib/units";
+import { useMobileChartOverlays, type MobileChartOverlays } from "./useMobileChartOverlays";
+import { MobileAnalyzeLegend } from "./MobileAnalyzeLegend";
+import { queryGridAtCanvasPoint, type TapQueryResult } from "./mobileTapQuery";
 import type { TerrainData } from "@workspace/api-client-react";
 
 // MOBILE-ONLY: cap the canvas backing-store resolution. High-end phones have
@@ -236,6 +246,40 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
     needsRenderRef.current = true;
   }, []);
 
+  // MOBILE-ONLY: Analyze-tab overlays (habitat / EFH / substrate / intertidal)
+  // rendered onto this 2D chart with NO 3D scene mounted. The hook mirrors the
+  // desktop OverviewMap's data gating; drawing happens in the rAF loop below.
+  const overlays = useMobileChartOverlays();
+  const overlaysRef = useRef<MobileChartOverlays>(overlays);
+  overlaysRef.current = overlays;
+  useEffect(() => {
+    // Any overlay data/gating change must repaint the chart.
+    requestRender();
+  }, [overlays, requestRender]);
+
+  // MOBILE-ONLY: current tab, needed by the tap-to-query gesture (Analyze only).
+  const sidebarMode = useUiStore((s) => s.sidebarMode);
+  const sidebarModeRef = useRef(sidebarMode);
+  sidebarModeRef.current = sidebarMode;
+
+  // MOBILE-ONLY: tap-to-query state — the readout chip (React state) and the
+  // tapped geo-point marker (ref, drawn by the rAF loop so it stays glued to
+  // the chart under pan/zoom).
+  const [tapQuery, setTapQuery] = useState<TapQueryResult | null>(null);
+  const tapMarkerRef = useRef<{ lon: number; lat: number } | null>(null);
+  const clearTapQuery = useCallback(() => {
+    tapMarkerRef.current = null;
+    setTapQuery(null);
+    needsRenderRef.current = true;
+  }, []);
+
+  // MOBILE-ONLY: a dataset switch invalidates the tapped point (it may lie
+  // outside the new grid entirely).
+  const tapDatasetId = overviewGrid?.datasetId ?? null;
+  useEffect(() => {
+    clearTapQuery();
+  }, [tapDatasetId, clearTapQuery]);
+
   // ── MOBILE-ONLY: GPS follow (Live mode) ──────────────────────────────────
   // The SAME GpsFollowState machine that drives the desktop 3D camera drives
   // this 2D chart's transform. The tick (runMobileMapFollowTick) runs inside
@@ -391,6 +435,16 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
       if (bitmapRef.current) {
         renderHeatmap(ctx, bitmapRef.current, grid, t);
       }
+
+      // MOBILE-ONLY: Analyze overlays on the 2D chart, drawn in the same
+      // order as the desktop OverviewMap (band UNDER the contours; habitat/
+      // EFH/substrate above them) so both surfaces read identically.
+      const ov = overlaysRef.current;
+      if (ov.mhwFt !== null) {
+        // Single-dataset mode: the grid is its own coordinate frame.
+        renderIntertidalBand(ctx, grid, grid, t, ov.mhwFt, ov.mhhwFt);
+      }
+
       if (segmentsRef.current.length > 0) {
         renderContourLines(
           ctx,
@@ -404,9 +458,60 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
           { indexIntervalMetres: effectiveIntervalRef.current },
         );
       }
+
+      // MOBILE-ONLY: overlay layers above the contours (desktop order).
+      if (ov.habitatScores) {
+        renderHabitatOverlay(ctx, ov.habitatScores, grid, t);
+      }
+      // Same zoom LOD gate the desktop map applies to polygon overlays.
+      if (shouldDrawOverlayAtScale(t.scale)) {
+        if (ov.efhEnabled && ov.efhFeatures.length > 0) {
+          renderEfhOverlay(ctx, ov.efhFeatures, grid, t);
+        }
+        if (ov.substrateEnabled && ov.substrateFeatures.length > 0) {
+          renderSubstrateOverlay(ctx, ov.substrateFeatures, grid, t, null, ov.hiddenSubstrateClasses);
+        }
+      }
+      // MOBILE-ONLY: intertidal hotspots as plain canvas dots (the desktop
+      // map's interactive DOM pins are a desktop affordance).
+      if (ov.intertidalEnabled && ov.intertidalPins.length > 0) {
+        for (const pin of ov.intertidalPins) {
+          const [px, py] = lonLatToCanvas(pin.lon, pin.lat, grid, t);
+          if (px < -8 || py < -8 || px > w + 8 || py > h + 8) continue;
+          const r = 3 + (pin.score / 100) * 4;
+          ctx.beginPath();
+          ctx.arc(px, py, r, 0, Math.PI * 2);
+          ctx.fillStyle = pin.color;
+          ctx.globalAlpha = 0.45 + (pin.score / 100) * 0.45;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = "rgba(255,255,255,0.6)";
+          ctx.stroke();
+        }
+      }
+
+      // MOBILE-ONLY: tap-to-query crosshair marker, glued to the geo point.
+      const marker = tapMarkerRef.current;
+      if (marker) {
+        const [mx, my] = lonLatToCanvas(marker.lon, marker.lat, grid, t);
+        ctx.beginPath();
+        ctx.arc(mx, my, 7, 0, Math.PI * 2);
+        ctx.strokeStyle = "#00e5ff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(mx - 11, my); ctx.lineTo(mx - 4, my);
+        ctx.moveTo(mx + 4, my);  ctx.lineTo(mx + 11, my);
+        ctx.moveTo(mx, my - 11); ctx.lineTo(mx, my - 4);
+        ctx.moveTo(mx, my + 4);  ctx.lineTo(mx, my + 11);
+        ctx.stroke();
+      }
+
       renderScaleBar(ctx, grid, t, h, unitsRef.current);
+
       // MOBILE-ONLY: live GPS overlay (trail, accuracy ring, pulse, fix dot,
-      // off-screen edge arrow) on top of the base layers.
+      // off-screen edge arrow) on top of all base + overlay layers.
       drawGpsOverlay(ctx, grid, t, w, h, performance.now());
     };
     raf = requestAnimationFrame(draw);
@@ -418,6 +523,38 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
   // pointers. Gestures only mutate transformRef + set the dirty flag — no
   // React state, no contour rebuilds — so panning stays jank-free.
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+
+  // MOBILE-ONLY: tap-candidate tracking for Analyze tap-to-query. A tap is a
+  // single pointer that moves < TAP_SLOP_PX and lifts within TAP_MAX_MS —
+  // anything else is a pan/pinch and never queries.
+  const TAP_SLOP_PX = 8;
+  const TAP_MAX_MS = 600;
+  const tapCandidateRef = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    startedAt: number;
+  } | null>(null);
+
+  /** MOBILE-ONLY: resolve a completed tap into the depth/slope readout. */
+  const handleChartTap = useCallback((clientX: number, clientY: number) => {
+    // Tap-to-query is an Analyze-tab interaction only.
+    if (sidebarModeRef.current !== "analyze") return;
+    const grid = gridRef.current;
+    const t = transformRef.current;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!grid || !t || !rect) return;
+    const result = queryGridAtCanvasPoint(clientX - rect.left, clientY - rect.top, grid, t);
+    if (!result) {
+      // Outside the grid bbox — dismiss any existing readout, non-blocking.
+      tapMarkerRef.current = null;
+      setTapQuery(null);
+    } else {
+      tapMarkerRef.current = { lon: result.lon, lat: result.lat };
+      setTapQuery(result);
+    }
+    needsRenderRef.current = true;
+  }, []);
 
   const zoomAt = useCallback((cx: number, cy: number, factor: number) => {
     const t = transformRef.current;
@@ -446,6 +583,18 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     (e.target as HTMLCanvasElement).setPointerCapture?.(e.pointerId);
+    // MOBILE-ONLY: only the FIRST pointer down can begin a tap; a second
+    // pointer means pinch, which cancels the candidate.
+    if (pointersRef.current.size === 0) {
+      tapCandidateRef.current = {
+        pointerId: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        startedAt: performance.now(),
+      };
+    } else {
+      tapCandidateRef.current = null;
+    }
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
   }, []);
 
@@ -454,6 +603,16 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
       const pointers = pointersRef.current;
       const prev = pointers.get(e.pointerId);
       if (!prev) return;
+
+      // MOBILE-ONLY: moving beyond the slop radius turns the tap into a pan.
+      const cand = tapCandidateRef.current;
+      if (
+        cand &&
+        cand.pointerId === e.pointerId &&
+        Math.hypot(e.clientX - cand.x, e.clientY - cand.y) > TAP_SLOP_PX
+      ) {
+        tapCandidateRef.current = null;
+      }
 
       if (pointers.size === 1) {
         // Pan
@@ -499,9 +658,21 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
     [zoomAt],
   );
 
-  const onPointerEnd = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    pointersRef.current.delete(e.pointerId);
-  }, []);
+  const onPointerEnd = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      pointersRef.current.delete(e.pointerId);
+      // MOBILE-ONLY: resolve the tap candidate on lift (pointerup only —
+      // pointercancel never queries).
+      const cand = tapCandidateRef.current;
+      if (cand && cand.pointerId === e.pointerId) {
+        tapCandidateRef.current = null;
+        if (e.type === "pointerup" && performance.now() - cand.startedAt <= TAP_MAX_MS) {
+          handleChartTap(e.clientX, e.clientY);
+        }
+      }
+    },
+    [handleChartTap],
+  );
 
   // Wheel zoom — keeps the chart usable in narrow desktop windows / dev tools
   // device emulation. Registered natively so preventDefault works (React's
@@ -547,6 +718,80 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
           touchAction: "none", // MOBILE-ONLY: keep pan/pinch on the chart
         }}
       />
+      {/* MOBILE-ONLY: compact legend pills for active Analyze overlays. */}
+      <MobileAnalyzeLegend overlays={overlays} />
+
+      {/* MOBILE-ONLY: tap-to-query readout chip — dismissible, non-blocking
+          (chart gestures keep working underneath it).
+          top:100 / zIndex:60 keeps it above the open Analyze bottom sheet
+          (zIndex:50, covering bottom 62%) so it is always visible. */}
+      {tapQuery && (
+        <div
+          data-testid="mobile-tap-query"
+          style={{
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
+            top: 100,
+            zIndex: 60,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            background: "rgba(2,8,18,0.92)",
+            border: "1px solid rgba(0,229,255,0.35)",
+            borderRadius: 999,
+            padding: "6px 6px 6px 14px",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+            letterSpacing: "0.06em",
+            color: "#e2e8f0",
+            maxWidth: "calc(100% - 20px)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {tapQuery.depthM === null ? (
+            <span data-testid="mobile-tap-query-depth" style={{ color: "#94a3b8" }}>
+              NO DATA HERE
+            </span>
+          ) : (
+            <>
+              <span data-testid="mobile-tap-query-depth">
+                <span style={{ color: "#64748b", marginRight: 5 }}>DEPTH</span>
+                <span style={{ color: "#00e5ff" }}>
+                  {formatDepth(tapQuery.depthM, { units }).toUpperCase()}
+                </span>
+              </span>
+              {tapQuery.slopeDeg !== null && (
+                <span data-testid="mobile-tap-query-slope">
+                  <span style={{ color: "#64748b", marginRight: 5 }}>SLOPE</span>
+                  <span style={{ color: "#34d399" }}>{tapQuery.slopeDeg.toFixed(1)}°</span>
+                </span>
+              )}
+            </>
+          )}
+          <button
+            type="button"
+            aria-label="Dismiss point readout"
+            data-testid="mobile-tap-query-close"
+            onClick={clearTapQuery}
+            style={{
+              background: "rgba(148,163,184,0.12)",
+              border: "none",
+              borderRadius: 999,
+              color: "#94a3b8",
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
+              width: 32,
+              height: 32,
+              lineHeight: 1,
+              cursor: "pointer",
+              flex: "0 0 auto",
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {showEmptyState && (
         <div
           data-testid="mobile-chart-empty"

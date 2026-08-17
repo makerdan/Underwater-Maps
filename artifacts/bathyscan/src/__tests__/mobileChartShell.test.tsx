@@ -196,7 +196,8 @@ describe("App.tsx wiring — source-integrity guard for the mobile gate", () => 
 
   it("mounts MobileChartShell in the mobile branch BEFORE the 3D scene in the desktop branch", () => {
     const gateIdx = appSource.indexOf("{isMobileChart ? (");
-    const shellIdx = appSource.indexOf("<MobileChartShell />");
+    // Task 4003 added props to the shell usage, so match the opening tag only.
+    const shellIdx = appSource.indexOf("<MobileChartShell");
     const tourIdx = appSource.indexOf("<TourScene");
     expect(gateIdx).toBeGreaterThan(-1);
     expect(shellIdx).toBeGreaterThan(gateIdx);

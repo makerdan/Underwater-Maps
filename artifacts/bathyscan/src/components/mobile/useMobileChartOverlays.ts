@@ -1,0 +1,182 @@
+/**
+ * useMobileChartOverlays — MOBILE-ONLY: gathers every Analyze-tab overlay's
+ * data + gating for the 2D mobile chart, mirroring the desktop OverviewMap's
+ * wiring so the same settings toggles drive the same 2D layers with NO 3D
+ * scene mounted:
+ *
+ *   - habitat scores      — habitatStore (activeSpecies + computed scores)
+ *   - EFH polygons        — embedded grid polygons preferred, else /efh fetch
+ *                           (hasEfh datasets only), bbox-clipped + species-
+ *                           visibility-filtered exactly like the desktop map
+ *   - substrate polygons  — /substrate fetch, gated on substrateColorMode
+ *   - intertidal          — band datums from useIntertidal + hotspot pins
+ *                           gated on intertidalHotspotsEnabled
+ *
+ * The hook only returns plain data; drawing happens in MobileChartView's rAF
+ * loop with the shared desktop renderers from overviewRenderer.ts.
+ */
+import { useMemo } from "react";
+import {
+  useGetDatasets,
+  getGetDatasetsQueryKey,
+  useGetEfh,
+  getGetEfhQueryKey,
+  useGetSubstrate,
+  getGetSubstrateQueryKey,
+  useGetIntertidalSpots,
+  getGetIntertidalSpotsQueryKey,
+  type EfhFeature,
+  type SubstrateFeature,
+} from "@workspace/api-client-react";
+import { useTerrainStore } from "@/lib/terrainStore";
+import { useUiStore } from "@/lib/uiStore";
+import { useSettingsStore } from "@/lib/settingsStore";
+import { useHabitatStore } from "@/lib/habitatStore";
+import { useIntertidal } from "@/lib/useIntertidal";
+import { getVisibleEfhFeatures } from "@/lib/efhBboxFilter";
+import {
+  buildIntertidalHotspotDescriptors,
+  type IntertidalHotspotPin,
+} from "@/lib/overviewRenderer";
+
+export interface MobileChartOverlays {
+  /** Habitat score array for the active species, or null when inactive. */
+  habitatScores: Float32Array | null;
+  /** Active species id (for the legend pill label), or null. */
+  habitatSpecies: string | null;
+  /** True when the EFH overlay toggle is on. */
+  efhEnabled: boolean;
+  /** Bbox-clipped, visibility-filtered EFH features ([] when off/empty). */
+  efhFeatures: EfhFeature[];
+  /** True when substrate colour mode is on. */
+  substrateEnabled: boolean;
+  substrateFeatures: SubstrateFeature[];
+  hiddenSubstrateClasses: Set<string>;
+  /** True when the intertidal hotspots toggle is on. */
+  intertidalEnabled: boolean;
+  intertidalPins: IntertidalHotspotPin[];
+  /** Effective tidal datums (ft above MLLW) for the intertidal band. */
+  mhwFt: number | null;
+  mhhwFt: number | null;
+  /** True when anything above will draw — drives the mobile legend pill. */
+  anyActive: boolean;
+}
+
+export function useMobileChartOverlays(): MobileChartOverlays {
+  const overviewGrid = useTerrainStore((s) => s.overviewGrid);
+  const datasetId = useTerrainStore((s) => s.primaryDatasetId);
+  const waterType = useSettingsStore((s) => s.waterType);
+
+  // Same overlay flags the desktop OverviewMap reads.
+  const efhOverlayEnabled = useUiStore((s) => s.efhOverlayEnabled);
+  const hiddenEfhSpecies = useUiStore((s) => s.hiddenEfhSpecies);
+  const substrateColorMode = useUiStore((s) => s.substrateColorMode);
+  const hiddenSubstrateClasses = useUiStore((s) => s.hiddenSubstrateClasses);
+  const intertidalHotspotsEnabled = useUiStore((s) => s.intertidalHotspotsEnabled);
+  const intertidalScoreMode = useUiStore((s) => s.intertidalScoreMode);
+
+  // Habitat — store-driven, no fetch (scores are computed client-side).
+  const activeSpecies = useHabitatStore((s) => s.activeSpecies);
+  const scores = useHabitatStore((s) => s.scores);
+  const habitatScores = activeSpecies !== null && scores.status === "done" ? scores.data : null;
+
+  // ── EFH ──────────────────────────────────────────────────────────────────
+  // Embedded polygons (user-saved EFH datasets) are preferred; preset
+  // datasets with the hasEfh flag fetch from /efh — same rule as desktop.
+  const embeddedEfhPolygons = overviewGrid?.habitatPolygons ?? null;
+  const { data: datasets } = useGetDatasets(
+    { waterType },
+    { query: { queryKey: getGetDatasetsQueryKey({ waterType }) } },
+  );
+  const hasEfh = !!(
+    datasetId &&
+    // Only preset dataset metadata carries hasEfh; user datasets embed their
+    // polygons in overviewGrid.habitatPolygons instead (handled above).
+    (datasets ?? []).find((d) => d.id === datasetId)?.hasEfh
+  );
+  const { data: efhData } = useGetEfh(
+    { datasetId: datasetId ?? "" },
+    {
+      query: {
+        // MOBILE-ONLY gating difference: also require the toggle, so phones
+        // don't pay for EFH payloads the user never switched on.
+        enabled: efhOverlayEnabled && hasEfh && !embeddedEfhPolygons,
+        staleTime: 60_000,
+        queryKey: getGetEfhQueryKey({ datasetId: datasetId ?? "" }),
+      },
+    },
+  );
+  const efhFeatures = useMemo<EfhFeature[]>(() => {
+    if (!efhOverlayEnabled || !overviewGrid) return [];
+    const raw = (embeddedEfhPolygons?.features ?? efhData?.features ?? []) as EfhFeature[];
+    if (raw.length === 0) return [];
+    return getVisibleEfhFeatures(
+      raw,
+      {
+        minLon: overviewGrid.minLon,
+        maxLon: overviewGrid.maxLon,
+        minLat: overviewGrid.minLat,
+        maxLat: overviewGrid.maxLat,
+      },
+      hiddenEfhSpecies,
+    );
+  }, [efhOverlayEnabled, overviewGrid, embeddedEfhPolygons, efhData, hiddenEfhSpecies]);
+
+  // ── Substrate ────────────────────────────────────────────────────────────
+  const { data: substrateCollection } = useGetSubstrate(datasetId ?? "", {
+    query: {
+      enabled: !!datasetId && substrateColorMode,
+      staleTime: 60_000,
+      queryKey: getGetSubstrateQueryKey(datasetId ?? ""),
+    },
+  });
+  const substrateFeatures = useMemo<SubstrateFeature[]>(
+    () => (substrateColorMode ? ((substrateCollection?.features ?? []) as SubstrateFeature[]) : []),
+    [substrateColorMode, substrateCollection],
+  );
+
+  // ── Intertidal ───────────────────────────────────────────────────────────
+  const { mhwFt, mhhwFt } = useIntertidal();
+  const intertidalSpotsParams = { type: "both" as const, minScore: 10 };
+  const { data: intertidalSpotsData } = useGetIntertidalSpots(
+    datasetId ?? "",
+    intertidalSpotsParams,
+    {
+      query: {
+        enabled: !!datasetId && intertidalHotspotsEnabled,
+        staleTime: 5 * 60 * 1000,
+        queryKey: getGetIntertidalSpotsQueryKey(datasetId ?? "", intertidalSpotsParams),
+      },
+    },
+  );
+  const intertidalPins = useMemo<IntertidalHotspotPin[]>(() => {
+    if (!intertidalHotspotsEnabled) return [];
+    const features = intertidalSpotsData?.features ?? [];
+    if (features.length === 0) return [];
+    // Desktop renders interactive DOM pins; the mobile chart draws plain
+    // canvas dots, so only the pin descriptors are needed here.
+    return buildIntertidalHotspotDescriptors(features, intertidalScoreMode, "", "").pins;
+  }, [intertidalHotspotsEnabled, intertidalSpotsData, intertidalScoreMode]);
+
+  const anyActive =
+    habitatScores !== null ||
+    (efhOverlayEnabled && efhFeatures.length > 0) ||
+    (substrateColorMode && substrateFeatures.length > 0) ||
+    intertidalHotspotsEnabled ||
+    mhwFt !== null;
+
+  return {
+    habitatScores,
+    habitatSpecies: activeSpecies,
+    efhEnabled: efhOverlayEnabled,
+    efhFeatures,
+    substrateEnabled: substrateColorMode,
+    substrateFeatures,
+    hiddenSubstrateClasses,
+    intertidalEnabled: intertidalHotspotsEnabled,
+    intertidalPins,
+    mhwFt,
+    mhhwFt,
+    anyActive,
+  };
+}
