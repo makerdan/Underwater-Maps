@@ -467,9 +467,18 @@ function Main() {
     }
   }, [currentsSource, setTidalOverlay]);
 
+  // Fetch tidal data whenever the 3D overlay is active OR the NOAA currents
+  // source is selected. `tidalOverlay` controls only the 3D visual; the
+  // Conditions panel needs the data independently of whether the visual is on.
+  // Decoupling fixes the case where `currentsSource` is persisted as "noaa"
+  // (the default) and `tidalOverlay` never gets set because no transition
+  // fires on a fresh page load — without this, `tidalStatus` stays "idle"
+  // and the panel shows "Connecting to NOAA…" forever.
+  const noaaCurrentsActive = currentsSource === "noaa";
+  const tidalFetchActive = tidalOverlay || noaaCurrentsActive;
   const { data: tidalData, loading: tidalLoading, retry: retryTidal } = useTidalData(
-    tidalOverlay ? centerLat : null,
-    tidalOverlay ? centerLon : null,
+    tidalFetchActive ? centerLat : null,
+    tidalFetchActive ? centerLon : null,
     tidalOverlay ? timelineCurrentTime : null,
     waterTypeForDatasets,
   );

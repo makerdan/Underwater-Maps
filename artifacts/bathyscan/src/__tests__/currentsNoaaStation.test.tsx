@@ -19,8 +19,14 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { CurrentsPanel } from "@/components/CurrentsPanel";
 import { MPH_TO_KNOTS, MPH_TO_KPH } from "@/lib/units";
 
+// Mutable ref so individual tests can control whether a map is loaded.
+// vi.hoisted() is required because vi.mock factories are hoisted before
+// variable declarations — a plain `let` would be in the TDZ when the
+// factory runs (see project memory: vi-hoisted-mock-vars).
+const mockTerrainRef = vi.hoisted(() => ({ current: null as object | null }));
+
 vi.mock("@/lib/context", () => ({
-  useAppState: () => ({ terrain: null }),
+  useAppState: () => ({ terrain: mockTerrainRef.current }),
 }));
 
 function resetStores(tidalStatus: TidalStatus = "ok") {
@@ -48,6 +54,7 @@ function resetStores(tidalStatus: TidalStatus = "ok") {
 
 describe("CurrentsPanel — NOAA station readout (Task #167)", () => {
   beforeEach(() => {
+    mockTerrainRef.current = null;
     resetStores();
   });
 
@@ -113,12 +120,30 @@ describe("CurrentsPanel — NOAA station readout (Task #167)", () => {
     expect(screen.getByTestId("currents-noaa-switch-manual")).toBeDefined();
   });
 
-  it("shows connecting indicator when tidalStatus is 'idle'", () => {
+  it("shows connecting indicator when tidalStatus is 'idle' and a map is loaded", () => {
+    // Regression guard (Task #4013): when NOAA is the persisted source and a
+    // map is loaded, the panel must show the "Connecting" transient state
+    // rather than the "no-map" hint — the tidal fetch is in flight.
+    mockTerrainRef.current = { datasetId: "test-lake" };
     resetStores("idle");
     render(<CurrentsPanel />);
     const readout = screen.getByTestId("currents-noaa-readout");
     expect(readout.textContent).toContain("Connecting to NOAA");
     expect(screen.getByTestId("currents-noaa-idle")).toBeDefined();
+    expect(screen.queryByTestId("currents-noaa-no-map")).toBeNull();
+  });
+
+  it("shows 'load a map' hint when tidalStatus is 'idle' and no map is loaded", () => {
+    // Regression guard (Task #4013): with NOAA selected but no terrain loaded,
+    // the panel must show an actionable hint instead of "Connecting to NOAA…"
+    // (which implies a fetch is in progress when actually coords are null).
+    mockTerrainRef.current = null;
+    resetStores("idle");
+    render(<CurrentsPanel />);
+    const readout = screen.getByTestId("currents-noaa-readout");
+    expect(readout.textContent).toContain("Load a map");
+    expect(screen.getByTestId("currents-noaa-no-map")).toBeDefined();
+    expect(screen.queryByTestId("currents-noaa-idle")).toBeNull();
   });
 });
 

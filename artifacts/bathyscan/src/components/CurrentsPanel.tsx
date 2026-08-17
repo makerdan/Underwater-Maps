@@ -309,6 +309,7 @@ export const CurrentsPanel: React.FC<CurrentsPanelProps> = ({ embedded = false }
           datasetId={datasetId}
           manualActiveSource={manualActiveSource}
           onManualSourceChange={(src) => setManualConditionsActiveSource(datasetId, src)}
+          hasMap={!!terrain}
         />
       )}
 
@@ -419,6 +420,8 @@ interface NoaaReadoutProps {
   datasetId?: string;
   manualActiveSource?: "real" | "manual";
   onManualSourceChange?: (src: "real" | "manual") => void;
+  /** True when a terrain/map is currently loaded — used to show the right idle message. */
+  hasMap?: boolean;
 }
 
 /** True when the source string represents a real measured data feed (not synthetic). */
@@ -434,7 +437,7 @@ function sourceLabel(src?: string): string {
   return "Estimated";
 }
 
-function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManual, waterType, datasetId = "", manualActiveSource = "manual", onManualSourceChange }: NoaaReadoutProps): React.ReactElement {
+function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManual, waterType, datasetId = "", manualActiveSource = "manual", onManualSourceChange, hasMap = false }: NoaaReadoutProps): React.ReactElement {
   const actionBtn: React.CSSProperties = {
     background: "none",
     border: "1px solid rgba(0,229,255,0.3)",
@@ -595,7 +598,18 @@ function NoaaReadout({ tidalStatus, noaaAmbient, units, onRetry, onSwitchToManua
     );
   }
 
-  // tidalStatus === "idle": source just switched to NOAA, fetch not yet started.
+  // tidalStatus === "idle" with no map loaded: the fetch can't run without
+  // coordinates. Show an actionable hint instead of a misleading spinner.
+  if (!hasMap) {
+    return (
+      <div style={{ marginBottom: 8, fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#94a3b8" }} data-testid="currents-noaa-readout">
+        <span data-testid="currents-noaa-no-map">Load a map to fetch NOAA conditions.</span>
+      </div>
+    );
+  }
+
+  // tidalStatus === "idle": NOAA source selected and a map is loaded but the
+  // first fetch hasn't returned yet (normal transient state on source switch).
   // Render a visible standby message so e2e tests can assert the element is
   // present and visible immediately after the source toggle (currents.spec.ts).
   return (
