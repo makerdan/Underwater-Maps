@@ -232,6 +232,9 @@ const VisibleDatasetsHeader: React.FC<{
   if (activeCount <= 1 && selectedCount <= 1) return null;
   const atCap = activeCount >= maxActiveDatasets;
   const streamingMode = selectedCount > activeCount;
+  const proximityTooltip = streamingMode
+    ? `Proximity streaming — datasets you've added to the view load into the 3D scene automatically when the camera moves near their area. ${activeCount} of ${selectedCount} are currently loaded.`
+    : undefined;
   return (
     <div
       data-testid="visible-datasets-header"
@@ -247,11 +250,16 @@ const VisibleDatasetsHeader: React.FC<{
         borderBottom: "1px solid rgba(0,229,255,0.08)",
       }}
     >
-      <span data-testid="visible-datasets-count">
-        {streamingMode
-          ? `STREAMING · ${activeCount}/${selectedCount} ACTIVE`
-          : `VISIBLE DATASETS (${activeCount})${atCap ? " · CAP" : ""}`}
-      </span>
+      <ViewscreenTooltip
+        label={proximityTooltip ?? ""}
+        side="right"
+      >
+        <span data-testid="visible-datasets-count">
+          {streamingMode
+            ? `AUTO-LOAD NEARBY · ${activeCount}/${selectedCount} LOADED`
+            : `VISIBLE DATASETS (${activeCount})${atCap ? " · CAP" : ""}`}
+        </span>
+      </ViewscreenTooltip>
       <button
         data-testid="btn-hide-all-others"
         onClick={onHideAllOthers}
@@ -403,6 +411,8 @@ const VisibleDatasetRows: React.FC<{
   const removeSelected = useTerrainStore((s) => s.removeSelected);
   const selectedIds = useTerrainStore((s) => s.selectedIds);
   const selectedSources = useTerrainStore((s) => s.selectedSources);
+  const queueCollapsed = usePanelCollapseStore((s) => s.collapsed.streamingQueue);
+  const toggleQueueCollapsed = usePanelCollapseStore((s) => s.toggle);
 
   const count = visibleDatasets.length;
   const [pending, setPending] = useState<{
@@ -633,19 +643,46 @@ const VisibleDatasetRows: React.FC<{
       {/* ── Selected-but-not-active datasets (queued for proximity streaming) ── */}
       {selectedButNotActive.length > 0 && (
         <>
-          {count > 0 && (
-            <div style={{
-              padding: "2px 8px",
-              fontSize: "calc(12px * var(--bs-font-scale, 1))",
-              letterSpacing: "0.1em",
-              color: "#475569",
-              background: "rgba(0,229,255,0.02)",
-              borderTop: "1px solid rgba(0,229,255,0.06)",
-            }}>
-              SELECTED · WILL LOAD WHEN NEARBY
-            </div>
-          )}
-          {[...queuedMain, ...(queuedEfh.length > 0 ? [null as null, ...queuedEfh] : [])].map(
+          {/* Toggle row — always visible when queued datasets exist */}
+          <ViewscreenTooltip
+            label={`Proximity streaming — datasets you've added to the view load into the 3D scene automatically when the camera moves near their area. ${count} of ${selectedIds.length} are currently loaded.`}
+            side="right"
+          >
+            <button
+              type="button"
+              data-testid="streaming-queue-toggle"
+              aria-expanded={!queueCollapsed}
+              onClick={() => toggleQueueCollapsed("streamingQueue")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                width: "100%",
+                padding: "2px 8px",
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                letterSpacing: "0.1em",
+                color: "#475569",
+                background: "rgba(0,229,255,0.02)",
+                borderTop: "1px solid rgba(0,229,255,0.06)",
+                border: "none",
+                borderTopStyle: "solid",
+                borderTopWidth: 1,
+                borderTopColor: "rgba(0,229,255,0.06)",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <span style={{ flexShrink: 0 }}>{queueCollapsed ? "▾" : "▲"}</span>
+              <span data-testid="streaming-queue-label">
+                {`WILL AUTO-LOAD WHEN NEARBY (${selectedButNotActive.length})`}
+              </span>
+            </button>
+          </ViewscreenTooltip>
+          {/* Queued rows — hidden when collapsed */}
+          {!queueCollapsed && [
+            ...queuedMain,
+            ...(queuedEfh.length > 0 ? [null as null, ...queuedEfh] : []),
+          ].map(
             (idOrNull) => {
               if (idOrNull === null) {
                 return <React.Fragment key={EFH_DIVIDER_KEY_QUEUED}>{efhDivider}</React.Fragment>;
@@ -671,7 +708,7 @@ const VisibleDatasetRows: React.FC<{
                 {/* Selected-only: dimmed open-circle indicator */}
                 <span
                   data-testid={`circle-selected-${id}`}
-                  title="Selected — will activate when camera approaches"
+                  title="Selected — will auto-load when camera approaches area"
                   style={{
                     flexShrink: 0,
                     width: 18,

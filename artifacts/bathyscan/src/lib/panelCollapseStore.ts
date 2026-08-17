@@ -21,6 +21,8 @@ export type PanelId =
   | "myLibrary"
   // ── Zone legend chip (below Help button, default: collapsed) ───────────────
   | "zoneLegendChip"
+  // ── Streaming queue sub-list (default: collapsed) ─────────────────────────
+  | "streamingQueue"
   // ── Per-panel Advanced section collapse keys (default: collapsed) ──────────
   | "overlaysToolsAdvanced"
   | "tidePanelAdvanced"
@@ -53,6 +55,8 @@ export const DEFAULTS: Record<PanelId, boolean> = {
   uploadTerrainAccordion: true,
   routes: false,
   myLibrary: false,
+  // Streaming queue sub-list — collapsed by default (queued rows hidden until expanded)
+  streamingQueue: true,
   // Zone legend chip — collapsed by default (user expands on demand)
   zoneLegendChip: true,
   // Advanced sub-sections — collapsed by default on first use

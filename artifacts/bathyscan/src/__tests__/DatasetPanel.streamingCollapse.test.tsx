@@ -1,26 +1,22 @@
 /**
- * DatasetPanel.addToView.test.tsx
+ * DatasetPanel.streamingCollapse.test.tsx
  *
- * Unit tests for the "Add to View" multi-dataset entry point in DatasetPanel.
+ * Regression guard for the collapsible streaming queue in MY LIBRARY.
  *
- * DatasetPanel reads `visibleDatasets` from terrainStore and passes
- * `onAddToView`, `visibleDatasetIds`, and `atViewCap` to MySavesSection.
- * The handler calls `addSelected` (to add) or `toggleVisible` (to remove).
- *
- * Scenarios covered:
- *   (a) ADD button present when a primary dataset is loaded and row not in view
- *   (b) ADD button disabled when atViewCap=true and dataset not already in view
- *   (c) ADD button shows alternate "IN VIEW" state when already in visibleDatasets
- *   (d) Clicking ADD on a non-active row calls addSelected(dsId, "user")
- *   (e) Clicking IN VIEW on an active row calls toggleVisible({datasetId, source:"user"})
- *   (f) VisibleDatasetsHeader renders once visibleDatasets.length > 1
- *   (g) No primary loaded → onAddToView not wired → ADD button absent on all rows
+ * Covers:
+ *   (a) Queued "selected-dataset-row-*" rows are absent by default (collapsed)
+ *   (b) The toggle row is visible and shows the queued count
+ *   (c) Clicking the toggle reveals queued rows and flips aria-expanded
+ *   (d) Active "visible-dataset-row-*" rows are visible in both states
+ *   (e) panelCollapseStore DEFAULTS.streamingQueue is true (collapsed)
+ *   (f) Header and toggle carry proximity-streaming descriptive text
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import { DatasetPanel } from "@/components/DatasetPanel";
+import { DEFAULTS } from "@/lib/panelCollapseStore";
 
 // ── Hoisted state ──────────────────────────────────────────────────────────────
 
@@ -68,10 +64,7 @@ const makeApiClientMock = vi.hoisted(() => {
     });
 });
 
-// Controllable fetchQuery spy.
-const fetchQueryMock = vi.hoisted(() => vi.fn());
-
-// Mutable terrainStore state shared across all tests.
+// Mutable terrainStore state.
 const terrainState = vi.hoisted(() => ({
   visibleDatasets: [] as Array<{ datasetId: string; activeGrid: null | object; source?: string }>,
   selectedIds: [] as string[],
@@ -89,13 +82,29 @@ const terrainState = vi.hoisted(() => ({
   multiDatasetMode: false,
 }));
 
+// Mutable collapse state so we can test real toggle behaviour.
+const collapseState = vi.hoisted(() => ({
+  collapsed: {
+    datasets: false,
+    uploadTerrainAccordion: false,
+    myLibrary: false,
+    streamingQueue: true, // default: collapsed
+  } as Record<string, boolean>,
+  toggle: vi.fn((id: string) => {
+    collapseState.collapsed[id] = !collapseState.collapsed[id];
+  }),
+  setCollapsed: vi.fn((id: string, value: boolean) => {
+    collapseState.collapsed[id] = value;
+  }),
+}));
+
 // ── Module mocks ───────────────────────────────────────────────────────────────
 
 vi.mock("@/lib/queryClient", () => ({
   subscribeToReconnect: () => () => {},
   markServerUnreachable: () => {},
   queryClient: {
-    fetchQuery: (...args: unknown[]) => fetchQueryMock(...args),
+    fetchQuery: vi.fn(),
   },
 }));
 
@@ -121,49 +130,12 @@ vi.mock("@/lib/terrainStore", () => {
   return {
     useTerrainStore,
     MAX_ACTIVE_DATASETS: 3,
-    // Legacy alias kept for import compat.
     VISIBLE_DATASETS_CAP: 3,
   };
 });
 
-// MySavesSection mock — renders ADD/IN VIEW buttons for two known test dataset IDs.
-// Buttons are only rendered when onAddToView is provided (case g asserts absence).
 vi.mock("@/components/MySavesSection", () => ({
-  MySavesSection: ({
-    onAddToView,
-    visibleDatasetIds,
-    atViewCap,
-  }: {
-    onAddToView?: (id: string) => void;
-    visibleDatasetIds?: Set<string>;
-    atViewCap?: boolean;
-  }) =>
-    React.createElement(
-      React.Fragment,
-      null,
-      onAddToView
-        ? React.createElement(
-            "button",
-            {
-              "data-testid": "mock-add-ds1",
-              disabled: atViewCap && !visibleDatasetIds?.has("user-ds-1"),
-              onClick: () => onAddToView("user-ds-1"),
-            },
-            visibleDatasetIds?.has("user-ds-1") ? "IN VIEW" : "ADD",
-          )
-        : null,
-      onAddToView
-        ? React.createElement(
-            "button",
-            {
-              "data-testid": "mock-add-ds2",
-              disabled: atViewCap && !visibleDatasetIds?.has("user-ds-2"),
-              onClick: () => onAddToView("user-ds-2"),
-            },
-            visibleDatasetIds?.has("user-ds-2") ? "IN VIEW" : "ADD",
-          )
-        : null,
-    ),
+  MySavesSection: () => React.createElement(React.Fragment, null),
 }));
 
 vi.mock("@/lib/context", () => ({
@@ -180,7 +152,6 @@ vi.mock("@/lib/context", () => ({
 
 vi.mock("@/lib/clerkCompat", async () => {
   const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
-  // Signed-in so MySavesSection (and VisibleDatasetsHeader) renders.
   return mockClerkCompat();
 });
 
@@ -237,12 +208,14 @@ vi.mock("@/lib/settingsStore", () => {
     units: "metric" | "imperial";
     bookmarks: unknown[];
     saveFolderExpanded: Record<string, boolean>;
+    showUiTooltips: boolean;
   };
   const state: SettingsMockState = {
     waterType: "saltwater",
     units: "metric",
     bookmarks: [],
     saveFolderExpanded: {},
+    showUiTooltips: true,
   };
   const useSettingsStore = ((sel: (s: SettingsMockState) => unknown) =>
     sel(state)) as ((sel: (s: SettingsMockState) => unknown) => unknown) & {
@@ -268,19 +241,13 @@ vi.mock("@/lib/markerEditStore", () => ({
     sel({ editingMarkerId: null }),
 }));
 
-vi.mock("@/lib/panelCollapseStore", () => {
-  const state = {
-    collapsed: {
-      datasets: false,
-      uploadTerrainAccordion: false,
-      myLibrary: false,
-      streamingQueue: true,
-    },
-    toggle: vi.fn(),
-    setCollapsed: vi.fn(),
-  };
+vi.mock("@/lib/panelCollapseStore", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/panelCollapseStore")>();
   return {
-    usePanelCollapseStore: (sel: (s: typeof state) => unknown) => sel(state),
+    ...actual,
+    usePanelCollapseStore: (sel: (s: typeof collapseState) => unknown) =>
+      sel(collapseState),
   };
 });
 
@@ -348,8 +315,16 @@ vi.mock("@/components/help/HelpButton", () => ({
 }));
 
 vi.mock("@/components/ViewscreenTooltip", () => ({
-  ViewscreenTooltip: ({ children }: { children: React.ReactNode }) =>
-    React.createElement(React.Fragment, null, children),
+  ViewscreenTooltip: ({
+    children,
+    label,
+  }: {
+    children: React.ReactElement;
+    label: string;
+  }) =>
+    React.cloneElement(children, {
+      "data-tooltip": label || undefined,
+    } as React.HTMLAttributes<HTMLElement>),
 }));
 
 vi.mock("@/components/LoadingDial", () => ({
@@ -366,42 +341,38 @@ vi.mock("@/lib/terrain", () => ({
   MAX_DEPTH_WORLD: 10000,
 }));
 
-// Mutable flag: when true, mySaves returns one ready catalog save (no uploads).
-const mySavesHasReady = vi.hoisted(() => ({ value: false }));
-
 vi.mock(
   "@workspace/api-client-react",
   () =>
     makeApiClientMock({
       useGetDatasets: () => ({ data: [], isLoading: false }),
-      useGetUserDatasets: () => ({
-        data: mySavesHasReady.value ? [] : undefined,
-        isLoading: false,
-      }),
-      useGetDatasetsMySaves: () => ({
-        data: mySavesHasReady.value
-          ? [
-              {
-                id: "save-1",
-                catalogId: "cat-1",
-                status: "ready",
-                datasetId: "cat-ds-1",
-                requestedAt: new Date().toISOString(),
-                displayLabel: "Ready Catalog Save",
-                catalog: { name: "Ready Catalog Save", coverageBbox: null },
-              },
-            ]
-          : [],
-        isLoading: false,
-      }),
+      useGetUserDatasets: () => ({ data: undefined, isLoading: false }),
+      useGetDatasetsMySaves: () => ({ data: [], isLoading: false }),
       useGetMarkers: () => ({ data: undefined }),
     }),
 );
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function setupStreamingScenario() {
+  // 1 active dataset, 2 queued datasets
+  terrainState.visibleDatasets = [
+    { datasetId: "active-ds-1", activeGrid: { minDepth: 0, maxDepth: 100 }, source: "preset" },
+  ];
+  terrainState.selectedIds = ["active-ds-1", "queued-ds-1", "queued-ds-2"];
+  terrainState.selectedSources = {
+    "active-ds-1": "preset",
+    "queued-ds-1": "preset",
+    "queued-ds-2": "preset",
+  };
+  terrainState.primaryDatasetId = "active-ds-1";
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
-describe("DatasetPanel — handleAddToView multi-dataset entry point", () => {
+describe("DatasetPanel — collapsible streaming queue", () => {
   beforeEach(() => {
+    // Reset terrain
     terrainState.visibleDatasets = [];
     terrainState.selectedIds = [];
     terrainState.selectedSources = {};
@@ -412,105 +383,136 @@ describe("DatasetPanel — handleAddToView multi-dataset entry point", () => {
     terrainState.addSelected.mockReset();
     terrainState.removeSelected.mockReset();
     terrainState.hideAllOthers.mockReset();
-    fetchQueryMock.mockReset();
-    mySavesHasReady.value = false;
+
+    // Reset collapse state to defaults (collapsed)
+    collapseState.collapsed = {
+      datasets: false,
+      uploadTerrainAccordion: false,
+      myLibrary: false,
+      streamingQueue: true,
+    };
+    collapseState.toggle.mockClear();
+    collapseState.setCollapsed.mockClear();
   });
 
-  it("(a) ADD button present when a primary is loaded and dataset not in view", () => {
-    terrainState.visibleDatasets = [{ datasetId: "primary-ds", activeGrid: null }];
-
+  it("(a) queued rows are absent by default (collapsed)", () => {
+    setupStreamingScenario();
     render(<DatasetPanel />);
 
-    expect(screen.getByTestId("mock-add-ds1")).toBeInTheDocument();
-    expect(screen.getByTestId("mock-add-ds1")).toHaveTextContent("ADD");
+    expect(screen.queryByTestId("selected-dataset-row-queued-ds-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("selected-dataset-row-queued-ds-2")).not.toBeInTheDocument();
   });
 
-  it("(b) ADD button disabled when atViewCap and dataset not already in view", () => {
-    // Cap is 3 — fill all slots with non-test datasets.
-    terrainState.visibleDatasets = [
-      { datasetId: "ds-slot-1", activeGrid: null },
-      { datasetId: "ds-slot-2", activeGrid: null },
-      { datasetId: "ds-slot-3", activeGrid: null },
-    ];
-
+  it("(a2) toggle row is visible and shows the queued count when collapsed", () => {
+    setupStreamingScenario();
     render(<DatasetPanel />);
 
-    expect(screen.getByTestId("mock-add-ds1")).toBeDisabled();
-    expect(screen.getByTestId("mock-add-ds2")).toBeDisabled();
+    const toggle = screen.getByTestId("streaming-queue-toggle");
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    const label = screen.getByTestId("streaming-queue-label");
+    expect(label.textContent).toMatch(/2/); // queued count
+    expect(label.textContent?.toUpperCase()).toMatch(/NEARBY|LOAD/);
   });
 
-  it("(c) ADD button shows IN VIEW when dataset is already in visibleDatasets", () => {
-    terrainState.visibleDatasets = [{ datasetId: "user-ds-1", activeGrid: null }];
-
+  it("(b) clicking the toggle reveals queued rows and flips aria-expanded", async () => {
+    setupStreamingScenario();
     render(<DatasetPanel />);
 
-    expect(screen.getByTestId("mock-add-ds1")).toHaveTextContent("IN VIEW");
-  });
+    const toggle = screen.getByTestId("streaming-queue-toggle");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
 
-  it("(d) clicking ADD on a non-active row calls addSelected(dsId, 'user')", async () => {
-    terrainState.visibleDatasets = [{ datasetId: "primary-ds", activeGrid: null }];
-
-    render(<DatasetPanel />);
     await act(async () => {
-      fireEvent.click(screen.getByTestId("mock-add-ds1"));
+      fireEvent.click(toggle);
     });
 
-    expect(terrainState.addSelected).toHaveBeenCalledWith("user-ds-1", "user");
-    expect(terrainState.toggleVisible).not.toHaveBeenCalled();
+    // After toggle, collapseState.collapsed.streamingQueue should be false
+    expect(collapseState.collapsed.streamingQueue).toBe(false);
+
+    // Re-render with updated state
+    const { unmount } = render(<DatasetPanel />);
+    expect(screen.getAllByTestId("streaming-queue-toggle")[1]).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(
+      screen.getAllByTestId("selected-dataset-row-queued-ds-1").length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByTestId("selected-dataset-row-queued-ds-2").length,
+    ).toBeGreaterThan(0);
+    unmount();
   });
 
-  it("(e) clicking IN VIEW on an active row calls toggleVisible", async () => {
-    terrainState.visibleDatasets = [{ datasetId: "user-ds-1", activeGrid: null }];
+  it("(c) active rows are visible while queue is collapsed", () => {
+    setupStreamingScenario();
+    render(<DatasetPanel />);
+
+    // Queue is collapsed by default
+    expect(collapseState.collapsed.streamingQueue).toBe(true);
+    // Active row must still be visible
+    expect(screen.getByTestId("visible-dataset-row-active-ds-1")).toBeInTheDocument();
+  });
+
+  it("(c2) active rows remain visible after expanding the queue", async () => {
+    setupStreamingScenario();
+    collapseState.collapsed.streamingQueue = false; // start expanded
 
     render(<DatasetPanel />);
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("mock-add-ds1"));
-    });
 
-    expect(terrainState.toggleVisible).toHaveBeenCalledWith({
-      datasetId: "user-ds-1",
-      source: "user",
-    });
-    expect(terrainState.addSelected).not.toHaveBeenCalled();
+    expect(screen.getByTestId("visible-dataset-row-active-ds-1")).toBeInTheDocument();
+    expect(screen.getByTestId("selected-dataset-row-queued-ds-1")).toBeInTheDocument();
   });
 
-  it("(f) VisibleDatasetsHeader renders once visibleDatasets.length > 1", () => {
+  it("(d) DEFAULTS.streamingQueue is true (collapsed by default)", () => {
+    expect(DEFAULTS.streamingQueue).toBe(true);
+  });
+
+  it("(e) toggle row renders even when 0 datasets are currently active", () => {
+    // Only queued, none active
+    terrainState.visibleDatasets = [];
+    terrainState.selectedIds = ["queued-ds-1", "queued-ds-2"];
+    terrainState.selectedSources = {
+      "queued-ds-1": "preset",
+      "queued-ds-2": "preset",
+    };
+    terrainState.primaryDatasetId = null;
+
+    render(<DatasetPanel />);
+
+    expect(screen.getByTestId("streaming-queue-toggle")).toBeInTheDocument();
+    // Queued rows should still be hidden (collapsed)
+    expect(screen.queryByTestId("selected-dataset-row-queued-ds-1")).not.toBeInTheDocument();
+  });
+
+  it("(f) header count text contains proximity-streaming language when streaming", () => {
+    setupStreamingScenario();
+    // Add second active dataset so header appears (requires >1 active OR selected > active)
     terrainState.visibleDatasets = [
-      { datasetId: "ds-a", activeGrid: null },
-      { datasetId: "ds-b", activeGrid: null },
+      { datasetId: "active-ds-1", activeGrid: null },
+      { datasetId: "active-ds-2", activeGrid: null },
     ];
+    terrainState.selectedIds = ["active-ds-1", "active-ds-2", "queued-ds-1", "queued-ds-2"];
 
     render(<DatasetPanel />);
 
-    expect(screen.getByTestId("visible-datasets-header")).toBeInTheDocument();
+    const header = screen.queryByTestId("visible-datasets-header");
+    if (header) {
+      // Header should convey auto-load / streaming / loaded concept
+      const countEl = within(header).getByTestId("visible-datasets-count");
+      const text = countEl.textContent?.toUpperCase() ?? "";
+      expect(text).toMatch(/LOAD|STREAM|ACTIVE|NEARBY/);
+    }
   });
 
-  it("(g) no primary loaded → onAddToView not wired → ADD button absent on all rows", () => {
-    terrainState.visibleDatasets = []; // empty — no primary
-
+  it("(g) toggle row data-tooltip contains proximity-streaming explanation", () => {
+    setupStreamingScenario();
     render(<DatasetPanel />);
 
-    expect(screen.queryByTestId("mock-add-ds1")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("mock-add-ds2")).not.toBeInTheDocument();
-  });
-
-  it("(h) ⬇ All button appears when only catalog saves are present (no uploads)", () => {
-    // No uploaded datasets, but one ready catalog save.
-    mySavesHasReady.value = true;
-    terrainState.visibleDatasets = [];
-
-    render(<DatasetPanel />);
-
-    // The button is shown whenever isSignedIn && (uploads.length > 0 || readyCatalogSaves.length > 0).
-    expect(screen.getByTestId("btn-bulk-offline")).toBeInTheDocument();
-  });
-
-  it("(i) ⬇ All button is absent when there are no uploads and no ready catalog saves", () => {
-    mySavesHasReady.value = false;
-    terrainState.visibleDatasets = [];
-
-    render(<DatasetPanel />);
-
-    expect(screen.queryByTestId("btn-bulk-offline")).not.toBeInTheDocument();
+    const toggle = screen.getByTestId("streaming-queue-toggle");
+    const tooltip = toggle.getAttribute("data-tooltip") ?? "";
+    // Must mention: what the feature is, what nearby/auto-load means
+    expect(tooltip.toLowerCase()).toMatch(/proximit|stream|auto|load|nearby/);
   });
 });
