@@ -260,23 +260,9 @@ function countBraces(line: string): number {
 
 describe("parseScopes wrapper patterns (forwardRef / memo)", () => {
   it("opens a scope for a multi-line React.forwardRef component and finds its hooks", () => {
-    // Inline fixture: a single forwardRef component with one hook declaration.
-      const src = fs.readFileSync(absPath, "utf-8");
-      const scopes = parseScopes(src);
-
     const absPath = path.join(SRC_DIR, "components/TerrainMesh.tsx");
-      const src = fs.readFileSync(absPath, "utf-8");
-      const scopes = parseScopes(src);
-
-    const absPath = path.join(SRC_DIR, "components/TerrainMesh.tsx");
-      const src = fs.readFileSync(absPath, "utf-8");
-      const scopes = parseScopes(src);
-
-    const absPath = path.join(SRC_DIR, "components/TerrainMesh.tsx");
-      const src = fs.readFileSync(absPath, "utf-8");
-      const scopes = parseScopes(src);
-
-    const absPath = path.join(SRC_DIR, "components/TerrainMesh.tsx");
+    const src = fs.readFileSync(absPath, "utf-8");
+    const scopes = parseScopes(src);
     const terrainScope = scopes.find((s) => s.name === "TerrainMesh");
     expect(terrainScope, "expected a TerrainMesh scope").toBeDefined();
     expect(terrainScope!.decls.length).toBeGreaterThanOrEqual(10);
@@ -286,7 +272,7 @@ describe("parseScopes wrapper patterns (forwardRef / memo)", () => {
 describe("App.tsx lint suppressors", () => {
   it("App.tsx has no eslint-disable-next-line react-hooks/exhaustive-deps suppressors", () => {
       const appPath = path.join(SRC_DIR, "App.tsx");
-      const src = fs.readFileSync(absPath, "utf-8");
+      const src = fs.readFileSync(appPath, "utf-8");
     const lines = src.split("\n");
     const offenders: string[] = [];
     for (let i = 0; i < lines.length; i++) {
@@ -308,10 +294,8 @@ describe("duplicate hook-variable declarations", () => {
 
     for (const relPath of SCANNED_FILES) {
       const filePath = path.join(SRC_DIR, relPath);
-      const src = fs.readFileSync(absPath, "utf-8");
+      const src = fs.readFileSync(filePath, "utf-8");
       const scopes = parseScopes(src);
-
-    const absPath = path.join(SRC_DIR, "components/TerrainMesh.tsx");
 
       for (const scope of scopes) {
         // Build a map: name → list of line numbers where it appears
@@ -347,10 +331,8 @@ describe("duplicate hook-variable declarations", () => {
     // sanity floor only guards against the parser silently finding nothing.
     for (const relPath of SCANNED_FILES) {
       const filePath = path.join(SRC_DIR, relPath);
-      const src = fs.readFileSync(absPath, "utf-8");
+      const src = fs.readFileSync(filePath, "utf-8");
       const scopes = parseScopes(src);
-
-    const absPath = path.join(SRC_DIR, "components/TerrainMesh.tsx");
       const total = scopes.reduce((sum, s) => sum + s.decls.length, 0);
       expect(
         total,
