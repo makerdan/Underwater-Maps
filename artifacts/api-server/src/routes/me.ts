@@ -94,21 +94,25 @@ router.delete("/me", requireAuth, asyncHandler(async (req, res): Promise<void> =
   }
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
-  // Order matters: trail points cascade via FK; explicit deletes for safety.
-  const userTrails = await db
-    .select({ id: gpsTrailsTable.id })
-    .from(gpsTrailsTable)
-    .where(eq(gpsTrailsTable.userId, userId));
+  // All deletes run inside one transaction so a mid-sequence failure leaves
+  // no partial state: either every table is cleared or none is.
+  await db.transaction(async (tx) => {
+    // Order matters: trail points cascade via FK; explicit deletes for safety.
+    const userTrails = await tx
+      .select({ id: gpsTrailsTable.id })
+      .from(gpsTrailsTable)
+      .where(eq(gpsTrailsTable.userId, userId));
 
-  if (userTrails.length > 0) {
-    await db
-      .delete(gpsTrailPointsTable)
-      .where(inArray(gpsTrailPointsTable.trailId, userTrails.map((t) => t.id)));
-  }
-  await db.delete(gpsTrailsTable).where(eq(gpsTrailsTable.userId, userId));
-  await db.delete(markersTable).where(eq(markersTable.userId, userId));
-  await db.delete(customDatasetsTable).where(eq(customDatasetsTable.userId, userId));
-  await db.delete(userSettingsTable).where(eq(userSettingsTable.userId, userId));
+    if (userTrails.length > 0) {
+      await tx
+        .delete(gpsTrailPointsTable)
+        .where(inArray(gpsTrailPointsTable.trailId, userTrails.map((t) => t.id)));
+    }
+    await tx.delete(gpsTrailsTable).where(eq(gpsTrailsTable.userId, userId));
+    await tx.delete(markersTable).where(eq(markersTable.userId, userId));
+    await tx.delete(customDatasetsTable).where(eq(customDatasetsTable.userId, userId));
+    await tx.delete(userSettingsTable).where(eq(userSettingsTable.userId, userId));
+  });
 
   res.json(validateResponse(DeleteAccountResponse, { ok: true, deletedAt: new Date().toISOString() }, "DELETE /api/me"));
 }));

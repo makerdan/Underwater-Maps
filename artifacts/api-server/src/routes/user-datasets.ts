@@ -645,22 +645,31 @@ router.delete("/user/datasets/:id", requireAuth, dataMutationRateLimit, asyncHan
   }
   const id = idParsed.data;
 
-  const deleted = await db
-    .delete(customDatasetsTable)
-    .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, userId)))
-    .returning({ id: customDatasetsTable.id });
+  // Both operations run inside one transaction: if the marker-unassign update
+  // fails after the dataset row is deleted, the whole operation rolls back so
+  // the dataset row is restored and markers stay consistent (no orphan refs).
+  const deleted = await db.transaction(async (tx) => {
+    const rows = await tx
+      .delete(customDatasetsTable)
+      .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, userId)))
+      .returning({ id: customDatasetsTable.id });
+
+    if (!rows.length) return rows;
+
+    // Unassign any markers that referenced this dataset so they remain usable.
+    // markers.dataset_id has no DB-level FK, so we handle the cascade here.
+    await tx
+      .update(markersTable)
+      .set({ datasetId: null })
+      .where(eq(markersTable.datasetId, id));
+
+    return rows;
+  });
 
   if (!deleted.length) {
     res.status(404).json({ error: "not_found", details: `User dataset '${id}' not found` });
     return;
   }
-
-  // Unassign any markers that referenced this dataset so they remain usable.
-  // markers.dataset_id has no DB-level FK, so we handle the cascade here.
-  await db
-    .update(markersTable)
-    .set({ datasetId: null })
-    .where(eq(markersTable.datasetId, id));
 
   res.status(204).send();
 }));

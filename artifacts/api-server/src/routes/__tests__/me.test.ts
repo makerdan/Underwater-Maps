@@ -19,6 +19,8 @@ const state: {
   gpsTrailPoints: Row[];
   lastInsertedSettings: Row | null;
   deletes: string[];
+  /** If set, the delete for this table name will throw to simulate a mid-sequence DB error. */
+  shouldThrowOn: string | null;
 } = {
   userSettings: [],
   markers: [],
@@ -27,6 +29,7 @@ const state: {
   gpsTrailPoints: [],
   lastInsertedSettings: null,
   deletes: [],
+  shouldThrowOn: null,
 };
 
 vi.mock("@workspace/db", () => {
@@ -77,6 +80,9 @@ vi.mock("@workspace/db", () => {
 
   const del = (table: { __tableName: TableName }) => ({
     where: () => {
+      if (state.shouldThrowOn === table.__tableName) {
+        return Promise.reject(new Error(`Simulated DB failure on delete(${table.__tableName})`));
+      }
       state.deletes.push(table.__tableName);
       if (table.__tableName === "userSettings") state.userSettings = [];
       if (table.__tableName === "markers") state.markers = [];
@@ -87,8 +93,34 @@ vi.mock("@workspace/db", () => {
     },
   });
 
+  // Simulate transactional rollback: snapshot state before running the callback;
+  // restore it if the callback throws, then re-throw so the route sees the error.
+  const transaction = async <T>(cb: (tx: ReturnType<typeof makeTx>) => Promise<T>): Promise<T> => {
+    const snapshot = {
+      userSettings: [...state.userSettings],
+      markers: [...state.markers],
+      customDatasets: [...state.customDatasets],
+      gpsTrails: [...state.gpsTrails],
+      gpsTrailPoints: [...state.gpsTrailPoints],
+      deletes: [...state.deletes],
+    };
+    const tx = makeTx();
+    try {
+      return await cb(tx);
+    } catch (err) {
+      // Rollback: restore every array to its pre-transaction state.
+      Object.assign(state, snapshot);
+      throw err;
+    }
+  };
+
+  // Build a transaction-scoped "tx" object that shares the same mock internals.
+  function makeTx() {
+    return { select, insert, delete: del };
+  }
+
   return {
-    db: { select, insert, delete: del },
+    db: { select, insert, delete: del, transaction },
     userSettingsTable,
     markersTable,
     customDatasetsTable,
@@ -169,6 +201,7 @@ beforeEach(() => {
   state.gpsTrailPoints = [];
   state.lastInsertedSettings = null;
   state.deletes = [];
+  state.shouldThrowOn = null;
   vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
   __resetRateLimitMemory();
 });
@@ -212,6 +245,32 @@ describe("DELETE /api/me", () => {
         "userSettings",
       ]),
     );
+  });
+
+  it("rolls back all deletes when a mid-sequence DB failure occurs", async () => {
+    // Seed data in every table so we can verify nothing was lost.
+    state.gpsTrails = [{ id: "trail-1", userId: "user-test" }];
+    state.markers = [{ id: "m-1", userId: "user-test" }];
+    state.customDatasets = [{ id: "ds-1", userId: "user-test" }];
+    state.userSettings = [{ userId: "user-test", settings: {} }];
+
+    // Inject a failure on the markers delete (mid-sequence: after trails, before datasets/settings).
+    state.shouldThrowOn = "markers";
+
+    const res = await request(app).delete("/api/me");
+
+    // Route must surface a server error — not silently succeed.
+    expect(res.status).toBe(500);
+
+    // Rollback: every table must be intact because the transaction was aborted.
+    expect(state.gpsTrails).toHaveLength(1);
+    expect(state.markers).toHaveLength(1);
+    expect(state.customDatasets).toHaveLength(1);
+    expect(state.userSettings).toHaveLength(1);
+
+    // gpsTrails delete ran before the failure, but rollback must have restored it.
+    expect(state.deletes).not.toContain("userSettings");
+    expect(state.deletes).not.toContain("customDatasets");
   });
 });
 

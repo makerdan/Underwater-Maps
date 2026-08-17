@@ -38,6 +38,10 @@ const state: {
   } | null;
   // what DELETE returns
   deleteRow: { id: string } | null;
+  /** Whether the marker-unassign update was called (for rollback assertions). */
+  markerUpdateCalled: boolean;
+  /** If true, the marker-unassign update throws to simulate a mid-transaction DB failure. */
+  shouldThrowOnMarkerUpdate: boolean;
 } = {
   selectCalls: 0,
   sizeBytes: 1000,
@@ -45,6 +49,8 @@ const state: {
   folders: [],
   updateRow: null,
   deleteRow: null,
+  markerUpdateCalled: false,
+  shouldThrowOnMarkerUpdate: false,
 };
 
 vi.mock("@workspace/db", () => ({
@@ -112,7 +118,35 @@ vi.mock("@workspace/db", () => ({
             : Promise.resolve([]),
       }),
     }),
-    transaction: async <T>(cb: (tx: unknown) => Promise<T>) => cb({}),
+    // Pass real mock methods as tx so the DELETE transaction body can call
+    // tx.delete() and tx.update(). Failure injection only lives here — the
+    // top-level db.update() is used by PATCH routes which don't need it.
+    transaction: async <T>(cb: (tx: Record<string, unknown>) => Promise<T>): Promise<T> => {
+      const txDelete = () => ({
+        where: () => ({
+          returning: () =>
+            state.deleteRow != null
+              ? Promise.resolve([state.deleteRow])
+              : Promise.resolve([]),
+        }),
+      });
+      const txUpdate = () => ({
+        set: () => ({
+          where: () => {
+            state.markerUpdateCalled = true;
+            if (state.shouldThrowOnMarkerUpdate) {
+              return Promise.reject(new Error("Simulated DB failure on marker update"));
+            }
+            return Promise.resolve([]);
+          },
+        }),
+      });
+      const txSelect = () => ({
+        from: () => ({ where: () => Promise.resolve([]) }),
+      });
+      const tx = { delete: txDelete, update: txUpdate, select: txSelect };
+      return cb(tx as unknown as Record<string, unknown>);
+    },
   },
   customDatasetsTable: { _tableName: "customDatasets" },
   datasetFoldersTable: { _tableName: "datasetFolders" },
@@ -264,6 +298,8 @@ beforeEach(() => {
   state.folders = [];
   state.updateRow = null;
   state.deleteRow = null;
+  state.markerUpdateCalled = false;
+  state.shouldThrowOnMarkerUpdate = false;
 });
 
 // ─── Terrain size pre-check ────────────────────────────────────────────────────
@@ -536,5 +572,24 @@ describe("DELETE /api/user/datasets/:id — delete dataset", () => {
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER);
     expect(res.status).toBe(204);
+  });
+
+  it("rolls back the dataset delete when the marker-unassign update fails mid-transaction", async () => {
+    // Dataset exists — delete would succeed on its own.
+    state.deleteRow = { id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" };
+    // Inject a failure in the marker-unassign step (runs after the dataset delete).
+    state.shouldThrowOnMarkerUpdate = true;
+
+    const res = await request(app)
+      .delete("/api/user/datasets/cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+
+    // The route must surface a server error — not silently report success while
+    // leaving markers pointing at a nonexistent dataset.
+    expect(res.status).toBe(500);
+
+    // The marker-unassign update was attempted (proving both ops run in the same tx).
+    expect(state.markerUpdateCalled).toBe(true);
   });
 });
