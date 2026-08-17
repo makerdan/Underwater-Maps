@@ -86,6 +86,7 @@ vi.mock("@workspace/db", () => {
     customDatasetsTable,
     userSettingsTable: {},
     datasetFoldersTable: {},
+    markersTable: {},
   };
 });
 
