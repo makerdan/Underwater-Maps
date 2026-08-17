@@ -380,18 +380,22 @@ export const TideStationPanel: React.FC<TideStationPanelProps> = ({
                 </div>
               )}
 
-              {/* Time scrubber */}
-              <input
-                data-testid="tide-time-scrubber"
-                type="range"
-                min={0}
-                max={1439}
-                step={6}
-                value={minuteOfDay}
-                onChange={(e) => setMinute(Number(e.target.value))}
-                style={{ width: "100%", marginTop: 4, accentColor: "#00e5ff" }}
-                aria-label="Scrub tide prediction time"
-              />
+              {/* Time scrubber — touchAction:"none" prevents the MobileChartShell
+                  overflowY:"auto" scroll container from hijacking the touch stream
+                  when the user drags the thumb on mobile. */}
+              <div style={{ position: "relative", marginTop: 4, touchAction: "none" }}>
+                <input
+                  data-testid="tide-time-scrubber"
+                  type="range"
+                  min={0}
+                  max={1439}
+                  step={6}
+                  value={minuteOfDay}
+                  onChange={(e) => setMinute(Number(e.target.value))}
+                  style={{ width: "100%", accentColor: "#00e5ff", touchAction: "none" }}
+                  aria-label="Scrub tide prediction time"
+                />
+              </div>
             </div>
           )}
         </>
