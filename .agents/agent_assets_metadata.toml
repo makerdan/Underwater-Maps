@@ -98,3 +98,10 @@ uri = "file://exports/task-sorting.zip"
 type = "unspecified"
 title = "Task Sorting Skill"
 description = "The Task Sorting SKILL.md packaged as a zip — drop the task-sorting/ folder into .agents/skills/ in any Replit project to install it."
+
+[[outputs]]
+id = "r4pwEWWAsQSkUgmd0rOlV"
+uri = "file://skill-mirror-sync.zip"
+type = "unspecified"
+title = "skill-mirror-sync SKILL.md"
+description = "Zipped skill file for the skill-mirror-sync skill."
