@@ -123,6 +123,7 @@ import { OfflineReadOnlyBanner, persistOfflineIdentity } from "@/components/Offl
 // replaces the 3D scene on phones.
 import { useIsMobileImmediate } from "@/hooks/use-mobile";
 import { MobileChartShell } from "@/components/mobile/MobileChartShell";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 
 function TestBridge(): null {
@@ -331,6 +332,7 @@ function Main() {
   const trailStartedAt = useTrailStore((s) => s.startedAt);
   const defaultMapLoad = useSettingsStore((st) => st.defaultMapLoad);
   const { isSignedIn, isLoaded } = useUser();
+  const isMobile = useIsMobile();
   // Always-mounted sync: debounce-flush lastSession to server when signed in,
   // independent of whether the Settings page is currently open.
   useLastSessionServerSync();
@@ -1302,7 +1304,7 @@ function Main() {
         </div>
       )}
 
-      <AppHeader />
+      {!isMobile && <AppHeader />}
 
       <div className="relative flex-1 overflow-hidden">
         {/* MOBILE-ONLY gate: on phones, the ENTIRE scene area (3D TourScene
@@ -1338,7 +1340,7 @@ function Main() {
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
-            padding: "80px 16px 16px 16px",
+            padding: isMobile ? "16px 16px 16px 16px" : "80px 16px 16px 16px",
           }}
         >
           <div className="flex-1 relative">
@@ -1364,15 +1366,15 @@ function Main() {
             in the user's active units. Renders nothing until datums resolve. */}
         <IntertidalBandLegend />
 
-        {/* Help launch button — upper-left of main interactive area */}
-        <HelpButton />
+        {/* Help launch button — upper-left of main interactive area (desktop only) */}
+        {!isMobile && <HelpButton />}
 
         {/* Zone color legend chip — anchored below the Help button.
             Renders only when the zone overlay is active. */}
         <ZoneLegendChip />
 
-        {/* Help floating window (renders only when open) */}
-        <HelpWindow />
+        {/* Help floating window — desktop only; on mobile the help store trigger
+            is in Settings; see MobileChartShell for the gear-button entry point */}
 
         {/* Combined side pane — Datasets, Camera Position, Keyboard, and
             Tidal Overlay all live inside one vertically-scrollable container
@@ -1990,6 +1992,10 @@ function Main() {
         {/* MOBILE-ONLY: end of the desktop-only scene-area branch. */}
       </div>
 
+      {/* Help floating window — mounted outside the isMobileChart branch so the
+          help store trigger in Settings (mobile) can open it on both platforms. */}
+      <HelpWindow />
+
       {/* What's Here card — floating summary of crosshair data */}
       {whatsHereOpen && (
         <WhatsHereCard data={whatsHereData} />
@@ -2190,6 +2196,10 @@ function HomeRoute() {
 }
 
 function SettingsRoute() {
+  // On mobile, signed-out users land here via the gear button and need to see
+  // the auth block (Sign In entry) rather than LandingPage.  Desktop keeps the
+  // existing behaviour of showing LandingPage when signed out.
+  const isMobile = useIsMobile();
   return (
     <QueryClientProvider client={queryClient}>
       <Show when="signed-in">
@@ -2199,7 +2209,7 @@ function SettingsRoute() {
         <Settings />
       </Show>
       <Show when="signed-out">
-        <LandingPage />
+        {isMobile ? <Settings /> : <LandingPage />}
       </Show>
     </QueryClientProvider>
   );

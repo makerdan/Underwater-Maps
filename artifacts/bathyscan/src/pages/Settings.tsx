@@ -9,7 +9,9 @@
  */
 import React, { useEffect, useRef, useState, useCallback, useSyncExternalStore } from "react";
 import { useLocation } from "wouter";
-import { useUser } from "@/lib/clerkCompat";
+import { useUser, useClerk } from "@/lib/clerkCompat";
+import { useHelpStore } from "@/lib/helpStore";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   flushServerSync,
   subscribeSettingsSyncStatus,
@@ -71,7 +73,10 @@ function writeTabToUrl(next: Tab): void {
 
 export function Settings() {
   const [, setLocation] = useLocation();
-  const { isSignedIn } = useUser();
+  const { isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
+  const openHelp = useHelpStore((s) => s.openHelp);
+  const isMobile = useIsMobile();
   const [tab, setTab] = useState<Tab>(readTabFromUrl);
   const [savedMsg, setSavedMsg] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -315,6 +320,103 @@ export function Settings() {
             </span>
           </div>
         </div>
+
+        {/* Mobile auth + help block — shown above the tab strip on phones.
+            Signed-out users see Sign In; signed-in users see their email + Sign Out.
+            A Help shortcut is always shown. Desktop keeps its own header controls. */}
+        {isMobile && (
+          <div
+            data-testid="mobile-auth-block"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 16px",
+              borderBottom: "1px solid rgba(0,229,255,0.1)",
+              background: "rgba(4,8,16,0.6)",
+              fontFamily: FONT,
+            }}
+          >
+            {isSignedIn && user ? (
+              <div
+                data-testid="mobile-auth-signed-in"
+                style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}
+              >
+                <span
+                  data-testid="mobile-auth-email"
+                  style={{
+                    fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                    color: "#94a3b8",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  {(user as { primaryEmailAddress?: { emailAddress: string } })
+                    .primaryEmailAddress?.emailAddress ?? ""}
+                </span>
+                <button
+                  data-testid="mobile-settings-sign-out-btn"
+                  onClick={() => void signOut()}
+                  style={{
+                    background: "rgba(0,229,255,0.04)",
+                    border: "1px solid rgba(0,229,255,0.2)",
+                    borderRadius: 3,
+                    color: "#94a3b8",
+                    fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                    letterSpacing: "0.15em",
+                    padding: "4px 10px",
+                    cursor: "pointer",
+                    fontFamily: FONT,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  SIGN OUT
+                </button>
+              </div>
+            ) : (
+              <button
+                data-testid="mobile-settings-sign-in-btn"
+                onClick={() => setLocation(basePath + "/sign-in")}
+                style={{
+                  background: "rgba(0,229,255,0.08)",
+                  border: "1px solid rgba(0,229,255,0.35)",
+                  borderRadius: 4,
+                  color: "#00e5ff",
+                  fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                  letterSpacing: "0.15em",
+                  padding: "6px 14px",
+                  cursor: "pointer",
+                  fontFamily: FONT,
+                  flex: 1,
+                }}
+              >
+                SIGN IN
+              </button>
+            )}
+            <button
+              data-testid="mobile-settings-help-btn"
+              onClick={() => openHelp()}
+              style={{
+                background: "rgba(0,229,255,0.04)",
+                border: "1px solid rgba(0,229,255,0.2)",
+                borderRadius: 3,
+                color: "#00e5ff",
+                fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                letterSpacing: "0.15em",
+                padding: "4px 10px",
+                cursor: "pointer",
+                fontFamily: FONT,
+                whiteSpace: "nowrap",
+              }}
+            >
+              ? HELP
+            </button>
+          </div>
+        )}
 
         {/* Two-column layout */}
         <div style={S.layout} className="bs-settings-layout">

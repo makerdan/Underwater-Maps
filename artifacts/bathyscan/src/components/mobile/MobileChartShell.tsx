@@ -14,6 +14,7 @@
  * The desktop layout renders none of this — see the mobile gate in App.tsx.
  */
 import React, { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import {
   useGetDatasets,
   getGetDatasetsQueryKey,
@@ -41,6 +42,9 @@ import { RoutesPanel } from "@/components/RoutesPanel";
 import { HabitatPanel } from "@/components/HabitatPanel";
 import { SeafloorClassificationPanel } from "@/components/SeafloorClassificationPanel";
 import { ProximityHudChip } from "@/components/ProximityHudChip";
+
+// Base path matches App.tsx — used for gear-button navigation.
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // MOBILE-ONLY: shared monospace font stack used across the shell chrome.
 const MONO = "'JetBrains Mono', monospace";
@@ -231,6 +235,7 @@ const MobileBottomSheet: React.FC<{
 };
 
 export const MobileChartShell: React.FC = () => {
+  const [, setLocation] = useLocation();
   const sidebarMode = useUiStore((s) => s.sidebarMode);
   const setSidebarMode = useUiStore((s) => s.setSidebarMode);
   const primaryDatasetId = useTerrainStore((s) => s.primaryDatasetId);
@@ -289,6 +294,34 @@ export const MobileChartShell: React.FC = () => {
     >
       <div style={{ position: "relative", flex: "1 1 auto", overflow: "hidden" }}>
         <MobileChartView onOpenPicker={() => setPickerOpen(true)} />
+
+        {/* MOBILE-ONLY: floating gear icon → Settings (top-right, above dataset chip) */}
+        <button
+          type="button"
+          data-testid="mobile-settings-gear"
+          aria-label="Open Settings"
+          onClick={() => setLocation(basePath + "/settings")}
+          style={{
+            position: "absolute",
+            top: "calc(env(safe-area-inset-top, 0px) + 8px)",
+            right: 10,
+            zIndex: 40,
+            width: 40,
+            height: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,10,20,0.85)",
+            border: "1px solid rgba(0,229,255,0.4)",
+            borderRadius: 8,
+            color: "#94a3b8",
+            fontSize: "calc(22px * var(--bs-font-scale, 1))",
+            backdropFilter: "blur(6px)",
+            cursor: "pointer",
+          }}
+        >
+          ⚙
+        </button>
 
         {/* MOBILE-ONLY: current-dataset chip → compact picker */}
         <button
@@ -434,3 +467,5 @@ export const MobileChartShell: React.FC = () => {
     </div>
   );
 };
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
