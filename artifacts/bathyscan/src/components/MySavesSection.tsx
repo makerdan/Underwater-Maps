@@ -375,8 +375,9 @@ const SaveCard: React.FC<{
                   bbox: save.catalog?.coverageBbox ?? null,
                   resolutionM: save.catalog?.resolutionMMin ?? null,
                 })}
-                style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 10px", background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#67e8f9", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
-              >⬇ Offline</button>
+                aria-label="Save this dataset for offline use"
+                style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 6px", background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#67e8f9", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
+              >⬇</button>
             </ViewscreenTooltip>
           )}
           {onAddToView && (() => {
@@ -570,8 +571,9 @@ const UploadCard: React.FC<{
             <button
               data-testid={`btn-offline-upload-${dataset.id}`}
               onClick={() => onOfflineDownload({ id: dataset.id, name: dataset.name, bbox: dataset.bbox ?? null, resolutionM: null })}
-              style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 10px", background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#67e8f9", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
-            >⬇ Offline</button>
+              aria-label="Save this dataset for offline use"
+              style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 6px", background: "rgba(0,229,255,0.06)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#67e8f9", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
+            >⬇</button>
           </ViewscreenTooltip>
         )}
         {onAddToView && (
