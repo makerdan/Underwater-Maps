@@ -467,5 +467,3 @@ export const MobileChartShell: React.FC = () => {
     </div>
   );
 };
-
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
