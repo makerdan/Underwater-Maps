@@ -206,15 +206,39 @@ every new plan file is born compliant:
   failures to ignore` and `## Validation`) with valid stubs before writing the
   file to disk. No plan file is ever created without the required structure.
 
+  **This project ships `scripts/new-plan.mjs`.** Always use it instead of
+  creating plan files by hand:
+
+  ```sh
+  node scripts/new-plan.mjs <task-ref> \
+    --title "Short descriptive title" \
+    --why  "One-line justification for the validation tier" \
+    [--tier test-standard]          # default: test-standard
+    [--pre-existing "Suite › test — reason"]  # repeat for each known failure
+    [--dry-run]                     # print without writing
+  ```
+
+  The `--why` argument is **required and must contain real text** — the script
+  refuses to write the file if `--why` is absent or still contains a placeholder
+  string. Every file produced by this script passes `check:failure-gate` (strict
+  mode) immediately, with no manual backfill step required.
+
+  Verify after creation:
+  ```sh
+  node scripts/check-failure-gate.mjs
+  ```
+
 - **Post-write hook** — Immediately after writing any plan file, the agent (or
   a commit hook) runs the lint guard in `--fix-stub` mode on that file. Any
   missing sections or incomplete `## Validation` inner lines are repaired in the
-  same operation before the file is committed.
+  same operation before the file is committed. The validation pipeline already
+  wires this automatically (`fix:failure-gate-stubs` before `check:failure-gate`
+  on every tier run).
 
 Both patterns reduce the surface for stub-less files to accumulate between
 sessions. They are most valuable in projects where many plan files are created
-per session. Use whichever fits the project's workflow; using both provides
-defense in depth.
+per session. Use both for defense in depth: `scripts/new-plan.mjs` prevents
+stub-less creation; the pipeline auto-remediates any that slip through.
 
 ---
 
