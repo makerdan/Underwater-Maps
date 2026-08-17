@@ -1,0 +1,43 @@
+#4004 - Lake Ray Roberts always freshwater
+What & Why
+Lake Ray Roberts is correctly registered as freshwater in the preset catalog (FRESHWATER_PRESET_DATASETS in terrain.ts) and the seeded catalog entry preset-lake-ray-roberts, but two runtime paths can still classify a Ray Roberts save as saltwater:
+
+DB backfill script — lib/db/src/scripts/backfill-water-type-and-datasource.ts blanket-writes waterType: "saltwater" to every legacy row lacking a water type, including catalog saves linked to Lake Ray Roberts that were saved before the freshwater feature and never re-opened. (This absorbs the scope of draft Task #3997.)
+Legacy read-path fallback — resolveCatalogWaterType in artifacts/api-server/src/routes/user-datasets.ts resolves waterType only via the catalog DB row. When the preset-lake-ray-roberts DB row is momentarily absent (seeder reconcile purges/re-creates preset rows on boot) or the lookup errors, the route falls back to saltwater — even though the in-code preset registry (ALL_PRESET_DATASETS) authoritatively says freshwater. Catalog ids map to preset ids by stripping the preset- prefix (see catalogSeeder.ts).
+A full repo audit found no other production code, catalog data, or generated bundle that pairs Lake Ray Roberts with saltwater — all remaining "saltwater" mentions near Ray Roberts are fixtures for other datasets (e.g. no-strategy-preset, preset-ocean, generic test grids) or comments, and need no change.
+
+Done looks like
+A legacy Lake Ray Roberts save always returns waterType: "freshwater" from the terrain and overview routes, even when the linked catalog DB row is missing or the lookup fails.
+Running the backfill script assigns freshwater to legacy rows whose linked catalog save resolves to a freshwater entry (Ray Roberts included); only genuinely unlinked legacy uploads default to saltwater.
+The legacy-compat test that previously locked in the saltwater fallback for a Ray Roberts-linked save now asserts freshwater; a generic unknown catalog id still falls back to saltwater.
+Out of scope
+Removing the read-path shim entirely (draft #3997 suggested this after a production backfill run; keep the shim as defense in depth).
+Changing the saltwater default for legacy uploads with no linked catalog save — that default is correct.
+The freshwater tidal-model work (Task #3770) and freshwater data-pipeline consolidation (Task #2767).
+Any UI changes — the frontend already renders whatever waterType the API returns.
+Steps
+Preset-registry fallback in the read path — In resolveCatalogWaterType (user-datasets.ts), when the linked save's catalogId has no matching catalog DB entry (or the lookup throws), strip the preset- prefix and consult the in-code preset registry (ALL_PRESET_DATASETS from terrain.ts) before returning null. Ray Roberts then always resolves freshwater; unknown ids keep the saltwater default.
+Fix the backfill script — Update backfill-water-type-and-datasource.ts to join userCatalogSavesTable and resolve waterType from the linked catalog entry (with the same preset-registry fallback) instead of blanket-defaulting every row to saltwater; keep saltwater only for rows with no resolvable link.
+Update and extend tests — In user-datasets-legacy-compat.test.ts, add cases: legacy blob linked to preset-lake-ray-roberts with the catalog DB entry absent must return freshwater (terrain and overview); keep/adjust the generic gone-entry → saltwater case. Add a unit test for the backfill script's resolution logic (mock the db pool with the shared createDbPoolMock() helper; requireAuth test apps need the x-e2e-user-id bypass header).
+Pre-existing failures to ignore
+These failures exist on main before this task starts. Do not investigate or fix them.
+
+routes-documented — trails soft-delete route undocumented; known Aug-2026 baseline failure (memory: unit-tier-baseline-2026-08).
+overview-puzzle-multiselect — toSatisfy failure; known Aug-2026 baseline failure (memory: unit-tier-baseline-2026-08).
+Flaky-test rule: If a test not listed above fails, retry it 3× in isolation before concluding it is a regression you caused. Only treat a consistent 3/3 failure as your responsibility.
+
+If the only remaining failures are those listed above (plus any self-classified failures — see the Failure Gate skill), you are cleared to mark this task complete. Do not attempt further validation fixes.
+
+Validation
+Command: test-standard Why: Bug fix confined to api-server route logic, a lib/db maintenance script, and their unit tests — no schema change, no new endpoint, no auth/rate-limit change; test:unit plus the standard static guards cover the touched surface. Do not escalate: Run exactly this command. Pre-existing failures are handled above — they are never a reason to run a heavier tier.
+
+Regression Guard
+Covers: A legacy Lake Ray Roberts save (custom_datasets row linked via user_catalog_saves to preset-lake-ray-roberts) being served or backfilled as saltwater when the catalog DB row is missing, the lookup fails, or the blanket backfill default runs. Test location: artifacts/api-server/src/__tests__/user-datasets-legacy-compat.test.ts (read path) plus a new unit test beside lib/db/src/scripts/backfill-water-type-and-datasource.ts (backfill resolution). What it checks: Terrain and overview responses for a legacy blob linked to preset-lake-ray-roberts assert waterType: "freshwater" even with an empty catalog table; the backfill test asserts a row with a linked Ray Roberts save is written freshwater while an unlinked legacy upload stays saltwater — either assertion fails if the saltwater fallback ever reclaims Ray Roberts.
+
+Relevant files
+artifacts/api-server/src/routes/user-datasets.ts
+artifacts/api-server/src/lib/terrain.ts:190-220
+artifacts/api-server/src/lib/catalogSeeder.ts:1715-1840
+lib/db/src/scripts/backfill-water-type-and-datasource.ts
+artifacts/api-server/src/__tests__/user-datasets-legacy-compat.test.ts
+artifacts/api-server/src/routes/__tests__/my-saves-routes.test.ts
