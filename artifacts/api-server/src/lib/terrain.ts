@@ -1075,6 +1075,99 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
 };
 
 /**
+ * Coverage bounding boxes for every built-in dataset registered in
+ * `DATASET_SOURCE_PRIORITY`. Used by `resolveDatasetBbox` (markers route)
+ * so the marker guard can reject out-of-area drops without a DB lookup.
+ *
+ * Boxes are intentionally conservative — they cover the real survey footprint
+ * plus a small buffer — so they reject drops in clearly wrong oceans while
+ * still accepting pins anywhere a NCEI/GEBCO/3DEP tile could legitimately be
+ * served for the named area.
+ *
+ * Coordinates are WGS-84 decimal degrees (west = negative lon).
+ */
+export const BUNDLED_COVERAGE_BBOXES: Record<
+  string,
+  { minLon: number; minLat: number; maxLon: number; maxLat: number }
+> = {
+  // ── Saltwater / coastal ──────────────────────────────────────────────────
+  // Thorne Bay: east coast of Prince of Wales Island, SE Alaska Inside Passage
+  "thorne-bay":        { minLon: -133.5, minLat: 55.0, maxLon: -131.5, maxLat: 56.3 },
+  // Kodiak Island + surrounding Gulf of Alaska shelf
+  "kodiak-island":     { minLon: -154.5, minLat: 56.0, maxLon: -151.5, maxLat: 58.5 },
+  // Kachemak Bay (Homer, AK) — lower Cook Inlet
+  "kachemak-bay":      { minLon: -152.6, minLat: 59.2, maxLon: -150.4, maxLat: 60.3 },
+  // Resurrection Bay (Seward, AK)
+  "resurrection-bay":  { minLon: -149.9, minLat: 59.7, maxLon: -149.0, maxLat: 60.3 },
+  // Prince William Sound — entire sound incl. Valdez Arm
+  "prince-william-sound": { minLon: -148.5, minLat: 59.5, maxLon: -145.5, maxLat: 61.5 },
+
+  // ── Great Lakes (bounds match NOAA per-lake WCS coverages above) ─────────
+  "fw-lake-superior":  { minLon: -92.2, minLat: 46.3, maxLon: -84.3, maxLat: 49.0 },
+  "fw-lake-michigan":  { minLon: -88.1, minLat: 41.6, maxLon: -84.7, maxLat: 46.1 },
+  "fw-lake-huron":     { minLon: -84.6, minLat: 43.0, maxLon: -79.6, maxLat: 46.6 },
+  "fw-lake-erie":      { minLon: -83.5, minLat: 41.4, maxLon: -78.8, maxLat: 43.0 },
+  "fw-lake-ontario":   { minLon: -79.9, minLat: 43.1, maxLon: -75.9, maxLat: 44.3 },
+
+  // ── Northeast freshwater ──────────────────────────────────────────────────
+  "fw-lake-george-ny":          { minLon: -73.80, minLat: 43.35, maxLon: -73.40, maxLat: 43.90 },
+  "fw-lake-champlain":          { minLon: -73.55, minLat: 43.80, maxLon: -72.95, maxLat: 45.25 },
+  "fw-seneca-lake-ny":          { minLon: -77.10, minLat: 42.50, maxLon: -76.65, maxLat: 43.10 },
+  "fw-cayuga-lake-ny":          { minLon: -76.90, minLat: 42.50, maxLon: -76.45, maxLat: 43.05 },
+  "fw-oneida-lake-ny":          { minLon: -76.15, minLat: 43.10, maxLon: -75.65, maxLat: 43.35 },
+  "fw-lake-placid-ny":          { minLon: -74.15, minLat: 44.20, maxLon: -73.90, maxLat: 44.40 },
+  "fw-saranac-lake-ny":         { minLon: -74.25, minLat: 44.28, maxLon: -74.00, maxLat: 44.48 },
+  "fw-lake-winnipesaukee-nh":   { minLon: -71.60, minLat: 43.50, maxLon: -71.10, maxLat: 43.90 },
+  "fw-sebago-lake-me":          { minLon: -70.70, minLat: 43.78, maxLon: -70.30, maxLat: 44.10 },
+  "fw-moosehead-lake-me":       { minLon: -69.90, minLat: 45.38, maxLon: -69.30, maxLat: 45.98 },
+  "fw-quabbin-reservoir-ma":    { minLon: -72.50, minLat: 42.18, maxLon: -71.98, maxLat: 42.60 },
+  "fw-lake-memphremagog-vt":    { minLon: -72.40, minLat: 44.82, maxLon: -71.95, maxLat: 45.22 },
+
+  // ── Midwest freshwater ────────────────────────────────────────────────────
+  "fw-lake-minnetonka-mn":      { minLon: -93.80, minLat: 44.82, maxLon: -93.42, maxLat: 45.02 },
+  "fw-mille-lacs-lake-mn":      { minLon: -93.90, minLat: 45.95, maxLon: -93.32, maxLat: 46.48 },
+  "fw-leech-lake-mn":           { minLon: -94.60, minLat: 47.05, maxLon: -93.98, maxLat: 47.50 },
+  "fw-red-lake-mn":             { minLon: -95.50, minLat: 47.72, maxLon: -94.58, maxLat: 48.18 },
+  "fw-lake-of-the-woods-mn":    { minLon: -95.30, minLat: 48.62, maxLon: -94.52, maxLat: 49.42 },
+  "fw-lake-winnebago-wi":       { minLon: -88.58, minLat: 43.72, maxLon: -87.98, maxLat: 44.28 },
+  "fw-gull-lake-mi":            { minLon: -85.55, minLat: 42.30, maxLon: -85.30, maxLat: 42.55 },
+
+  // ── Western freshwater ────────────────────────────────────────────────────
+  "fw-lake-tahoe-ca-nv":        { minLon: -120.25, minLat: 38.82, maxLon: -119.88, maxLat: 39.30 },
+  "fw-lake-powell-az-ut":       { minLon: -111.90, minLat: 36.58, maxLon: -110.30, maxLat: 37.98 },
+  "fw-lake-mead-nv-az":         { minLon: -114.90, minLat: 35.82, maxLon: -114.08, maxLat: 36.68 },
+  "fw-crater-lake-or":          { minLon: -122.28, minLat: 42.82, maxLon: -121.90, maxLat: 43.08 },
+  "fw-flathead-lake-mt":        { minLon: -114.30, minLat: 47.58, maxLon: -113.78, maxLat: 48.12 },
+  "fw-shasta-lake-ca":          { minLon: -122.60, minLat: 40.58, maxLon: -122.02, maxLat: 40.98 },
+  "fw-lake-chelan-wa":          { minLon: -120.42, minLat: 47.72, maxLon: -119.78, maxLat: 48.22 },
+  "fw-upper-klamath-lake-or":   { minLon: -122.18, minLat: 42.10, maxLon: -121.58, maxLat: 42.70 },
+  "fw-flaming-gorge-ut-wy":     { minLon: -109.92, minLat: 40.70, maxLon: -109.18, maxLat: 41.58 },
+  "fw-lake-havasu-az-ca":       { minLon: -114.78, minLat: 34.18, maxLon: -114.08, maxLat: 34.90 },
+
+  // ── Southeast / TVA freshwater ────────────────────────────────────────────
+  "fw-lake-okeechobee-fl":      { minLon: -81.22, minLat: 26.62, maxLon: -80.52, maxLat: 27.22 },
+  "fw-lake-lanier-ga":          { minLon: -84.18, minLat: 34.08, maxLon: -83.52, maxLat: 34.58 },
+  "fw-lake-of-the-ozarks-mo":   { minLon: -93.08, minLat: 37.82, maxLon: -92.18, maxLat: 38.48 },
+  "fw-table-rock-lake-mo":      { minLon: -93.70, minLat: 36.32, maxLon: -92.78, maxLat: 36.88 },
+  "fw-kentucky-lake-ky-tn":     { minLon: -88.38, minLat: 36.22, maxLon: -87.78, maxLat: 37.08 },
+  "fw-lake-barkley-ky-tn":      { minLon: -88.18, minLat: 36.48, maxLon: -87.72, maxLat: 37.18 },
+  "fw-norris-lake-tn":          { minLon: -84.28, minLat: 36.12, maxLon: -83.62, maxLat: 36.68 },
+  "fw-fontana-lake-nc":         { minLon: -84.00, minLat: 35.28, maxLon: -83.40, maxLat: 35.68 },
+  "fw-smith-mountain-lake-va":  { minLon: -79.90, minLat: 36.82, maxLon: -79.18, maxLat: 37.38 },
+  "fw-clarks-hill-lake-sc-ga":  { minLon: -82.50, minLat: 33.48, maxLon: -81.88, maxLat: 34.08 },
+
+  // ── Southwest / Texas Highland Lakes ──────────────────────────────────────
+  "fw-lake-travis-tx":          { minLon: -98.32, minLat: 30.18, maxLon: -97.62, maxLat: 30.68 },
+  "fw-canyon-lake-tx":          { minLon: -98.38, minLat: 29.78, maxLon: -97.88, maxLat: 30.08 },
+  "fw-lake-lbj-tx":             { minLon: -98.68, minLat: 30.38, maxLon: -98.10, maxLat: 30.72 },
+  "fw-inks-lake-tx":            { minLon: -98.48, minLat: 30.62, maxLon: -98.28, maxLat: 30.78 },
+  "fw-lake-buchanan-tx":        { minLon: -98.68, minLat: 30.62, maxLon: -98.02, maxLat: 31.08 },
+  "fw-elephant-butte-nm":       { minLon: -107.38, minLat: 32.88, maxLon: -106.90, maxLat: 33.78 },
+  "fw-cochiti-lake-nm":         { minLon: -106.48, minLat: 35.48, maxLon: -106.10, maxLat: 35.78 },
+  "fw-navajo-lake-nm-co":       { minLon: -107.95, minLat: 36.52, maxLon: -107.18, maxLat: 36.98 },
+};
+
+/**
  * Default ranked list for AOIs without an explicit entry.
  *
  * Order rationale (highest specificity first):

@@ -51,8 +51,8 @@ async function createMarker(
 ): Promise<Marker> {
   const body = {
     datasetId: overrides.datasetId ?? DATASET_ID,
-    lon: overrides.lon ?? 142.5,
-    lat: overrides.lat ?? 11.35,
+    lon: overrides.lon ?? -132.5,
+    lat: overrides.lat ?? 55.67,
     depth: overrides.depth ?? -10500,
     label: overrides.label ?? `e2e-marker-${Date.now()}`,
     type: "custom",
@@ -156,8 +156,8 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
     const res = await page.request.post(`${API_BASE}/api/markers`, {
       data: {
         datasetId: DATASET_ID,
-        lon: 142.5,
-        lat: 11.35,
+        lon: -132.5,
+        lat: 55.67,
         depth: -10500,
         label: `e2e-marker-noauth-${Date.now()}`,
         type: "custom",

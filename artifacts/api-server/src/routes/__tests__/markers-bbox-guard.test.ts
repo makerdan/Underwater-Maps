@@ -275,17 +275,24 @@ describe("POST /api/markers — bbox guard", () => {
     expect(dbState.selectSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("201: bundled preset slug without in-code bbox (thorne-bay) bypasses the bbox check and never touches the DB resolver", async () => {
-    // thorne-bay is code-defined (DATASET_SOURCE_PRIORITY) but has no
-    // DatasetMeta bbox — the guard must allow the create unbounded, with no
-    // catalog / custom_datasets selects at all.
-    const res = await request(app)
+  it("201/422: thorne-bay has an in-code coverage bbox — in-bounds markers accepted, out-of-bounds rejected, no DB lookups", async () => {
+    // thorne-bay is code-defined (BUNDLED_COVERAGE_BBOXES): lon -133.5..-131.5, lat 55.0..56.3.
+    // In-bounds (inside SE Alaska / Prince of Wales Island area).
+    const inRes = await request(app)
+      .post("/api/markers")
+      .set(AUTH_HEADERS)
+      .send({ ...VALID_POST_BODY, datasetId: "thorne-bay", lon: -132.5, lat: 55.67 });
+    expect(inRes.status).toBe(201);
+    expect(inRes.body).toHaveProperty("id");
+    expect(dbState.selectSpy).not.toHaveBeenCalled();
+
+    // Out-of-bounds (Pacific near Guam) → 422, still no DB lookups.
+    const outRes = await request(app)
       .post("/api/markers")
       .set(AUTH_HEADERS)
       .send({ ...VALID_POST_BODY, datasetId: "thorne-bay", lon: 142.5, lat: 11.35 });
-
-    expect(res.status).toBe(201);
-    expect(res.body).toHaveProperty("id");
+    expect(outRes.status).toBe(422);
+    expect(outRes.body).toMatchObject({ error: "validation_error" });
     expect(dbState.selectSpy).not.toHaveBeenCalled();
   });
 

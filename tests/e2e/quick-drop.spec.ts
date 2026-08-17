@@ -79,8 +79,8 @@ async function quickDrop(
     headers: { "x-e2e-user-id": userId, "x-e2e-bypass-secret": "e2e-playwright-secret" },
     data: {
       datasetId: DATASET_ID,
-      lon: 142.5,
-      lat: 11.35,
+      lon: -132.5,
+      lat: 55.67,
       depth: 42,
       type: "custom",
       label: "Catch",
@@ -175,8 +175,8 @@ test.describe("Quick drop — server contract", () => {
       headers: { "x-e2e-user-id": userId, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: {
         datasetId: DATASET_ID,
-        lon: 142.5,
-        lat: 11.35,
+        lon: -132.5,
+        lat: 55.67,
         depth: 42,
         type: "custom",
         label: "Manual marker",
@@ -222,8 +222,8 @@ test.describe("Quick drop — server contract", () => {
       headers: { "x-e2e-user-id": userId, "x-e2e-bypass-secret": "e2e-playwright-secret" },
       data: {
         datasetId: DATASET_ID,
-        lon: 142.5,
-        lat: 11.35,
+        lon: -132.5,
+        lat: 55.67,
         depth: 42,
         type: "custom",
         label: "Catch",
@@ -238,8 +238,8 @@ test.describe("Quick drop — server contract", () => {
     const res = await page.request.post(`${API_BASE}/api/markers`, {
       data: {
         datasetId: DATASET_ID,
-        lon: 142.5,
-        lat: 11.35,
+        lon: -132.5,
+        lat: 55.67,
         depth: 42,
         type: "custom",
         label: "Catch",

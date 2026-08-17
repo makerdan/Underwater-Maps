@@ -10,7 +10,7 @@ import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
 import { dataMutationRateLimit, bulkDeleteMarkersRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { isValidBbox, isInsideBbox, type NormalisedBbox } from "../lib/bbox.js";
-import { ALL_PRESET_DATASETS, DATASET_SOURCE_PRIORITY } from "../lib/terrain.js";
+import { ALL_PRESET_DATASETS, BUNDLED_COVERAGE_BBOXES } from "../lib/terrain.js";
 
 const LABEL_MAX = 200;
 const NOTES_MAX = 2000;
@@ -25,9 +25,9 @@ const CUSTOM_DATASET_UUID_RE =
  * Resolves the coverage bbox for a given datasetId. Ids come in three
  * families and each is resolved differently:
  *  1. Bundled preset slugs (code-defined in lib/terrain.ts, e.g.
- *     "lake-ray-roberts", "thorne-bay") — resolved from the in-code registry;
- *     slugs with a ranked-source entry but no DatasetMeta bbox are allowed
- *     unbounded.
+ *     "lake-ray-roberts", "thorne-bay") — resolved first from ALL_PRESET_DATASETS
+ *     (DatasetMeta entries with full bbox), then from BUNDLED_COVERAGE_BBOXES
+ *     (lightweight bbox-only entries for the remaining DATASET_SOURCE_PRIORITY ids).
  *  2. Catalog ids — `dataset_catalog.coverageBbox` (JSONB).
  *  3. Custom dataset UUIDs — `custom_datasets.terrainJson`; only queried when
  *     the id is UUID-shaped (the column is typed uuid).
@@ -45,13 +45,11 @@ export async function resolveDatasetBbox(datasetId: string): Promise<DatasetBbox
   if (preset) {
     return { kind: "bbox", bbox: preset.bbox };
   }
-  // Known bundled slug without a DatasetMeta entry (e.g. "thorne-bay"): its
-  // presence in the ranked bathymetry-source registry proves it is a
-  // code-defined dataset, but no authoritative coverage bbox exists, so the
-  // bounds check is explicitly bypassed. hasOwnProperty guards against
-  // prototype keys like "__proto__" resolving as known datasets.
-  if (Object.prototype.hasOwnProperty.call(DATASET_SOURCE_PRIORITY, datasetId)) {
-    return { kind: "unbounded" };
+  // Bundled datasets registered only in DATASET_SOURCE_PRIORITY (no
+  // DatasetMeta entry) — resolve via the lightweight coverage-bbox registry.
+  // hasOwnProperty guards against "__proto__" and similar prototype keys.
+  if (Object.prototype.hasOwnProperty.call(BUNDLED_COVERAGE_BBOXES, datasetId)) {
+    return { kind: "bbox", bbox: BUNDLED_COVERAGE_BBOXES[datasetId]! };
   }
 
   // 2. Check catalog datasets (coverageBbox is a JSONB blob).
@@ -180,8 +178,6 @@ router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMar
       res.status(422).json({ error: "validation_error", message: "Marker coordinates are outside the dataset's coverage area" });
       return;
     }
-    // kind === "unbounded": known bundled dataset with no authoritative bbox —
-    // bounds check intentionally bypassed.
   }
 
   let finalLabel = trimmedLabel;
@@ -284,7 +280,6 @@ router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(
         return;
       }
     }
-    // kind === "unbounded": known bundled dataset — bounds check bypassed.
   }
 
   const [updated] = await db
@@ -350,11 +345,8 @@ export default router;
 /**
  * Result of resolving a datasetId's coverage:
  *  - "bbox"      — dataset found, coverage bbox available → enforce the guard.
- *  - "unbounded" — dataset is a known code-defined (bundled preset) id with no
- *                  coverage bbox available → allow without a bounds check.
  *  - "not_found" — datasetId is unknown everywhere → 404.
  */
 export type DatasetBboxResolution =
   | { kind: "bbox"; bbox: NormalisedBbox }
-  | { kind: "unbounded" }
   | { kind: "not_found" };
