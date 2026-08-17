@@ -162,7 +162,11 @@ export const TimelineScrubBar: React.FC = () => {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "0 16px",
+    paddingTop: 0,
+    paddingRight: "16px",
+    /* Push above iPhone home-indicator gesture zone */
+    paddingBottom: "env(safe-area-inset-bottom)",
+    paddingLeft: "16px",
     background: "rgba(2,8,18,0.90)",
     borderTop: "1px solid rgba(0,229,255,0.18)",
     backdropFilter: "blur(8px)",

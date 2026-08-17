@@ -1191,6 +1191,7 @@ function Main() {
           aria-live="polite"
           aria-label="You are offline"
           className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-red-950/90 backdrop-blur-sm border-b border-red-800/40 text-red-400 text-[16.5px] font-mono tracking-wide select-none pointer-events-none"
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
         >
           ● You're offline
         </div>
@@ -1210,6 +1211,7 @@ function Main() {
           aria-live="polite"
           aria-label="Connecting to server"
           className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-sky-950/90 backdrop-blur-sm border-b border-sky-800/40 text-sky-400 text-[16.5px] font-mono tracking-wide select-none pointer-events-none"
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
         >
           <svg
             aria-hidden="true"
@@ -1234,6 +1236,7 @@ function Main() {
           aria-label="Service unavailable"
           data-testid="service-unavailable-banner"
           className="absolute inset-x-0 top-0 z-[200] flex items-center justify-between gap-2 px-3 h-9 bg-amber-950/90 backdrop-blur-sm border-b border-amber-700/40 text-amber-400 text-[13.5px] font-mono tracking-wide select-none"
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
         >
           {/* spacer so the message stays centred when buttons are present */}
           <span className="w-16 shrink-0" aria-hidden="true" />
@@ -2356,6 +2359,7 @@ function SessionExpiredBanner() {
       role="alert"
       aria-live="assertive"
       className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-3 h-9 bg-amber-950/95 backdrop-blur-sm border-b border-amber-800/50 text-amber-300 text-[18px] font-medium select-none"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       Session expired — please reload to continue
       <button

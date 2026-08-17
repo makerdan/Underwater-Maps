@@ -369,6 +369,8 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
     overflow-y: auto;
     border-radius: 12px 12px 0 0 !important;
     z-index: 25;
+    /* Push content above iPhone home bar */
+    padding-bottom: env(safe-area-inset-bottom) !important;
   }
 
   /* HUD elements: stack vertically, larger font */
@@ -390,6 +392,8 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
     width: 100% !important;
     left: 0 !important;
     border-radius: 12px 12px 0 0 !important;
+    /* Push content above iPhone home bar */
+    padding-bottom: env(safe-area-inset-bottom) !important;
   }
 
   /* Hide controls legend on mobile — replaced by joystick */
