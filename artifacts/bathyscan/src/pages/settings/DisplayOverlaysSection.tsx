@@ -1,6 +1,7 @@
 import React from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { S, FONT } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
@@ -10,6 +11,10 @@ import { ZoneColourSwatches } from "./components/ZoneColourSwatches";
 
 export function DisplayOverlaysSection() {
   const s = useSettingsStore(useShallow((s) => s));
+  // MOBILE-ONLY: Show Grid Lines and Show Markers are relocated to the
+  // dedicated "2D Chart" section on phones — hide them here to avoid
+  // duplicating the controls. Desktop renders them here unchanged.
+  const isMobile = useIsMobile();
   return (
     <>
       <SectionTitle helpId="interface-tour" helpLabel="Display & Overlays">◈ DISPLAY &amp; OVERLAYS</SectionTitle>
@@ -86,8 +91,13 @@ export function DisplayOverlaysSection() {
       <div style={{ ...S.card, marginTop: 16 }}>
         <h3 style={S.cardGroupHeader}>MAP &amp; OVERLAYS</h3>
         <h3 style={S.cardHeader}>OVERVIEW MAP</h3>
-        <ToggleRow label="Show Grid Lines" value={s.overviewShowGrid} onChange={s.setOverviewShowGrid} />
-        <ToggleRow label="Show Markers" value={s.overviewShowMarkers} onChange={s.setOverviewShowMarkers} />
+        {/* MOBILE-ONLY: these toggles move to ChartMapSection on phones */}
+        {!isMobile && (
+          <>
+            <ToggleRow label="Show Grid Lines" value={s.overviewShowGrid} onChange={s.setOverviewShowGrid} />
+            <ToggleRow label="Show Markers" value={s.overviewShowMarkers} onChange={s.setOverviewShowMarkers} />
+          </>
+        )}
         <ToggleRow label="Open on Load" value={s.overviewOpenOnLoad} onChange={s.setOverviewOpenOnLoad} sublabel="Auto-expand when a dataset loads" />
         <SliderRow
           label="Default Zoom"

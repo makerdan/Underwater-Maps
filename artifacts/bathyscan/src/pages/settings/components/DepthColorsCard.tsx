@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   usePaletteStore,
   PALETTE_PRESETS,
@@ -564,6 +565,9 @@ function SavedThemeChip({
  * editor (shown for the Ocean and Custom themes).
  */
 export function DepthColorsCard() {
+  // MOBILE-ONLY: contour rows are relocated to the dedicated 2D Chart section
+  // on phones, so we hide them here to avoid showing the same controls twice.
+  const isMobile = useIsMobile();
   const shallow = usePaletteStore((s) => s.shallow);
   const deep = usePaletteStore((s) => s.deep);
   const reset = usePaletteStore((s) => s.reset);
@@ -720,15 +724,22 @@ export function DepthColorsCard() {
         onChange={setNodataColor}
         sublabel="Color for land and survey gaps — match your basemap background"
       />
-      <ToggleRow
-        label="Show Contour Lines"
-        value={contoursEnabled}
-        onChange={setContoursEnabled}
-        sublabel="Iso-depth lines on the 2D overview map"
-      />
-      <div style={{ opacity: contoursEnabled ? 1 : 0.4, pointerEvents: contoursEnabled ? "auto" : "none" }}>
-        <ContourIntervalRow disabled={!contoursEnabled} />
-      </div>
+      {/* MOBILE-ONLY: contour rows are hidden on phones — they appear in the
+          dedicated "2D Chart" settings section instead (ChartMapSection.tsx).
+          Desktop always renders them here as before. */}
+      {!isMobile && (
+        <>
+          <ToggleRow
+            label="Show Contour Lines"
+            value={contoursEnabled}
+            onChange={setContoursEnabled}
+            sublabel="Iso-depth lines on the 2D overview map"
+          />
+          <div style={{ opacity: contoursEnabled ? 1 : 0.4, pointerEvents: contoursEnabled ? "auto" : "none" }}>
+            <ContourIntervalRow disabled={!contoursEnabled} />
+          </div>
+        </>
+      )}
 
       {/* Preset palettes */}
       <div style={{ padding: "12px 16px 4px" }}>

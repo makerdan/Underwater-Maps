@@ -23,10 +23,34 @@ export const FIXED_SHORTCUTS: { keys: string; desc: string }[] = [
 
 export type Tab =
   | "general" | "visuals" | "palette" | "navigation" | "display-overlays"
-  | "map-layers" | "marker-symbols" | "data-storage" | "accessibility" | "account";
+  | "map-layers" | "marker-symbols" | "data-storage" | "accessibility" | "account"
+  // MOBILE-ONLY: dedicated 2D Chart section (absent from the desktop tab strip).
+  | "chart-map";
 
+/** Desktop tab list — exactly 10 tabs, unchanged from before. */
 export const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "general", label: "GENERAL" },
+  { id: "visuals", label: "VISUALS & PERF" },
+  { id: "palette", label: "DEPTH BANDING: COLOR PALETTES" },
+  { id: "navigation", label: "NAVIGATION" },
+  { id: "display-overlays", label: "DISPLAY & OVERLAYS" },
+  { id: "map-layers", label: "MAP LAYERS" },
+  { id: "marker-symbols", label: "MARKER SYMBOLS" },
+  { id: "data-storage", label: "DATA & STORAGE" },
+  { id: "accessibility", label: "ACCESSIBILITY" },
+  { id: "account", label: "ACCOUNT & PRIVACY" },
+];
+
+/**
+ * MOBILE-ONLY: tab list shown in the sidebar on phones. Includes the
+ * "2D Chart" tab positioned near the top (after General), which gathers all
+ * contour-map options that are scattered across the desktop layout.
+ * Desktop renders NAV_TABS only — this array must never appear there.
+ */
+export const MOBILE_NAV_TABS: { id: Tab; label: string }[] = [
+  { id: "general", label: "GENERAL" },
+  // MOBILE-ONLY: 2D Chart section — gathers contour + chart display options
+  { id: "chart-map", label: "2D CHART" },
   { id: "visuals", label: "VISUALS & PERF" },
   { id: "palette", label: "DEPTH BANDING: COLOR PALETTES" },
   { id: "navigation", label: "NAVIGATION" },

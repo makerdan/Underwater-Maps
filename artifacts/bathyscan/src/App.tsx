@@ -125,6 +125,7 @@ import { OfflineReadOnlyBanner, persistOfflineIdentity } from "@/components/Offl
 import { MobileChartShell } from "@/components/mobile/MobileChartShell";
 import { useIsMobile, useIsMobileImmediate } from "@/hooks/use-mobile";
 import { MobilePlanTab } from "@/components/mobile/MobilePlanTab";
+import { useIsMobileImmediate, useIsMobile } from "@/hooks/use-mobile";
 
 
 function TestBridge(): null {

@@ -24,7 +24,7 @@ import {
 } from "@/lib/settingsStore";
 
 import { S, FONT } from "./settings/styles";
-import { NAV_TABS, type Tab, basePath } from "./settings/constants";
+import { NAV_TABS, MOBILE_NAV_TABS, type Tab, basePath } from "./settings/constants";
 import { SyncContext } from "./settings/components/SyncContext";
 import { Toggle } from "./settings/components/Toggle";
 import { GlobalResetFooter } from "./settings/components/GlobalResetFooter";
@@ -39,6 +39,8 @@ import { MarkerSymbolsSection } from "./settings/MarkerSymbolsSection";
 import { DataStorageSection } from "./settings/DataStorageSection";
 import { AccessibilitySection } from "./settings/AccessibilitySection";
 import { AccountSection } from "./settings/AccountSection";
+// MOBILE-ONLY: dedicated 2D Chart section (never rendered on desktop)
+import { ChartMapSection } from "./settings/ChartMapSection";
 
 // ─── Tab ↔ URL search-param helpers ──────────────────────────────────────────
 // The active tab is mirrored to `?tab=<id>` so specific sections are linkable
@@ -47,7 +49,9 @@ import { AccountSection } from "./settings/AccountSection";
 const DEFAULT_TAB: Tab = "visuals";
 
 function isKnownTab(v: string | null): v is Tab {
-  return v !== null && NAV_TABS.some((t) => t.id === v);
+  // MOBILE-ONLY: "chart-map" is a valid tab on mobile; accept it for URL
+  // restore so a reload on mobile doesn't fall back to the default tab.
+  return v !== null && (NAV_TABS.some((t) => t.id === v) || v === "chart-map");
 }
 
 function readTabFromUrl(): Tab {
@@ -422,7 +426,9 @@ export function Settings() {
         <div style={S.layout} className="bs-settings-layout">
           {/* Sidebar */}
           <nav style={S.sidebar} className="bs-settings-sidebar" aria-label="Settings sections">
-            {NAV_TABS.map((t) => (
+            {/* MOBILE-ONLY: phone tab strip includes the "2D Chart" tab;
+                desktop always renders the original NAV_TABS unchanged. */}
+            {(isMobile ? MOBILE_NAV_TABS : NAV_TABS).map((t) => (
               <button
                 key={t.id}
                 onClick={() => handleTabSelect(t.id)}
@@ -447,6 +453,8 @@ export function Settings() {
             {tab === "data-storage" && <DataStorageSection />}
             {tab === "accessibility" && <AccessibilitySection />}
             {tab === "account" && <AccountSection />}
+            {/* MOBILE-ONLY: 2D Chart section — only reachable via the mobile tab strip */}
+            {tab === "chart-map" && <ChartMapSection />}
 
             {/* Footer: global reset */}
             <GlobalResetFooter />
