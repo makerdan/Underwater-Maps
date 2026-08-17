@@ -171,38 +171,38 @@ describe("isInsideBbox", () => {
 describe("resolveDatasetBbox — catalog datasets", () => {
   it("returns the bbox when the stored coverageBbox is fully valid", async () => {
     state.catalogRows = [{ coverageBbox: { ...VALID_BBOX } }];
-    await expect(resolveDatasetBbox("thorne-bay")).resolves.toEqual(VALID_BBOX);
+    await expect(resolveDatasetBbox("test-catalog-ds")).resolves.toEqual({ kind: "bbox", bbox: VALID_BBOX });
   });
 
   it("returns null when a coverageBbox field is missing", async () => {
     const { maxLat: _dropped, ...partial } = VALID_BBOX;
     state.catalogRows = [{ coverageBbox: partial }];
-    await expect(resolveDatasetBbox("thorne-bay")).resolves.toBeNull();
+    await expect(resolveDatasetBbox("test-catalog-ds")).resolves.toEqual({ kind: "not_found" });
   });
 
   it("returns null when a coverageBbox field is null", async () => {
     state.catalogRows = [{ coverageBbox: { ...VALID_BBOX, maxLat: null } }];
-    await expect(resolveDatasetBbox("thorne-bay")).resolves.toBeNull();
+    await expect(resolveDatasetBbox("test-catalog-ds")).resolves.toEqual({ kind: "not_found" });
   });
 
   it("returns null when a coverageBbox field is NaN", async () => {
     state.catalogRows = [{ coverageBbox: { ...VALID_BBOX, minLat: Number.NaN } }];
-    await expect(resolveDatasetBbox("thorne-bay")).resolves.toBeNull();
+    await expect(resolveDatasetBbox("test-catalog-ds")).resolves.toEqual({ kind: "not_found" });
   });
 
   it("returns null when a coverageBbox field is Infinity", async () => {
     state.catalogRows = [{ coverageBbox: { ...VALID_BBOX, maxLon: Infinity } }];
-    await expect(resolveDatasetBbox("thorne-bay")).resolves.toBeNull();
+    await expect(resolveDatasetBbox("test-catalog-ds")).resolves.toEqual({ kind: "not_found" });
   });
 
   it("returns null when longitude bounds are inverted", async () => {
     state.catalogRows = [{ coverageBbox: { minLon: -132, minLat: 55, maxLon: -133, maxLat: 56 } }];
-    await expect(resolveDatasetBbox("thorne-bay")).resolves.toBeNull();
+    await expect(resolveDatasetBbox("test-catalog-ds")).resolves.toEqual({ kind: "not_found" });
   });
 
   it("does NOT fall through to custom_datasets when a catalog row exists with an invalid bbox (slug ids would crash a uuid-typed query)", async () => {
     state.catalogRows = [{ coverageBbox: { ...VALID_BBOX, maxLat: null } }];
-    await resolveDatasetBbox("thorne-bay");
+    await resolveDatasetBbox("test-catalog-ds");
     expect(state.customQueried).toBe(false);
   });
 });
@@ -210,36 +210,37 @@ describe("resolveDatasetBbox — catalog datasets", () => {
 describe("resolveDatasetBbox — custom (user-uploaded) datasets", () => {
   it("returns the bbox from terrainJson when valid and the id is uuid-shaped", async () => {
     state.customRows = [{ terrainJson: { ...VALID_BBOX, depths: [] } }];
-    await expect(resolveDatasetBbox(CUSTOM_UUID)).resolves.toEqual(VALID_BBOX);
+    await expect(resolveDatasetBbox(CUSTOM_UUID)).resolves.toEqual({ kind: "bbox", bbox: VALID_BBOX });
   });
 
   it("returns null when terrainJson has a missing bbox field", async () => {
     state.customRows = [{ terrainJson: { minLon: -133, minLat: 55, maxLon: -132 } }];
-    await expect(resolveDatasetBbox(CUSTOM_UUID)).resolves.toBeNull();
+    await expect(resolveDatasetBbox(CUSTOM_UUID)).resolves.toEqual({ kind: "not_found" });
   });
 
   it("returns null when terrainJson has inverted latitude bounds", async () => {
     state.customRows = [{ terrainJson: { minLon: -133, minLat: 56, maxLon: -132, maxLat: 55 } }];
-    await expect(resolveDatasetBbox(CUSTOM_UUID)).resolves.toBeNull();
+    await expect(resolveDatasetBbox(CUSTOM_UUID)).resolves.toEqual({ kind: "not_found" });
   });
 
   it("returns null when the dataset is in neither table", async () => {
-    await expect(resolveDatasetBbox(CUSTOM_UUID)).resolves.toBeNull();
+    await expect(resolveDatasetBbox(CUSTOM_UUID)).resolves.toEqual({ kind: "not_found" });
   });
 
-  it("returns null when the id is unknown to both tables", async () => {
-    await expect(resolveDatasetBbox("not-a-real-slug")).resolves.toBeNull();
+  it("returns not_found when the id is unknown everywhere; non-UUID slugs never touch the uuid-typed custom_datasets query", async () => {
+    await expect(resolveDatasetBbox("not-a-real-slug")).resolves.toEqual({ kind: "not_found" });
     expect(state.catalogQueried).toBe(true);
-    expect(state.customQueried).toBe(true);
+    expect(state.customQueried).toBe(false);
   });
 
-  it("maps a Postgres invalid-uuid error (22P02) from custom_datasets to null (→ 404, not 500)", async () => {
+  it("never issues a custom_datasets query for a catalog-style slug (the old 22P02 invalid-uuid crash path)", async () => {
     state.customError = Object.assign(new Error("invalid input syntax for type uuid"), { code: "22P02" });
-    await expect(resolveDatasetBbox("catalog-style-slug")).resolves.toBeNull();
+    await expect(resolveDatasetBbox("catalog-style-slug")).resolves.toEqual({ kind: "not_found" });
+    expect(state.customQueried).toBe(false);
   });
 
-  it("re-throws non-uuid database errors from the custom_datasets query", async () => {
+  it("re-throws database errors from the custom_datasets query for UUID-shaped ids", async () => {
     state.customError = Object.assign(new Error("connection refused"), { code: "ECONNREFUSED" });
-    await expect(resolveDatasetBbox("catalog-style-slug")).rejects.toThrow("connection refused");
+    await expect(resolveDatasetBbox(CUSTOM_UUID)).rejects.toThrow("connection refused");
   });
 });

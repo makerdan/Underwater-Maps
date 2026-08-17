@@ -31,3 +31,5 @@ Common wrong-variable patterns seen:
 Also check test files: `select: plainFn` in a `createDbMock` override fails `MockInstance` type — wrap in `vi.fn()`.
 
 - Damage can also appear as hunks transplanted into the WRONG handler (e.g. an `.set({...})` payload swapped between routes, a where-clause borrowed from a different endpoint) — not just dropped wrappers. Repair by restoring the file from the merge baseline (`git show <baseline>:path > path`) and re-applying only your deliberate edits; do not patch the scrambled file in place.
+
+**Update (rebase auto-merge, markers.ts):** the task-rebase structural merger (S+F conflict hints) can silently corrupt handlers OUTSIDE the marked conflict region — duplicated `const` lines, swapped query bodies between routes (GET standard-mode got the bounds-mode where-clause), and dropped guard blocks. After resolving marked conflicts, always diff the whole file against main's version and run the route's unit suite before finishing; the committed squash can contain corruption even when `continueMergeResolution` reports success.

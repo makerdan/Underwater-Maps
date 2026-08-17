@@ -218,7 +218,7 @@ describe("POST /api/markers — bbox guard", () => {
     const res = await request(app)
       .post("/api/markers")
       .set(AUTH_HEADERS)
-      .send({ ...VALID_POST_BODY, datasetId: "user-ds-uuid-1" });
+      .send({ ...VALID_POST_BODY, datasetId: "bbbbbbbb-1111-2222-3333-444444444444" });
 
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("id");
@@ -238,7 +238,7 @@ describe("POST /api/markers — bbox guard", () => {
     const res = await request(app)
       .post("/api/markers")
       .set(AUTH_HEADERS)
-      .send({ ...VALID_POST_BODY, datasetId: "user-ds-uuid-1" });
+      .send({ ...VALID_POST_BODY, datasetId: "bbbbbbbb-1111-2222-3333-444444444444" });
 
     expect(res.status).toBe(422);
     expect(res.body).toMatchObject({ error: "validation_error" });
@@ -257,6 +257,65 @@ describe("POST /api/markers — bbox guard", () => {
 
     expect(res.status).toBe(404);
     expect(res.body).toMatchObject({ error: "not_found" });
+  });
+
+  it("404 for a non-UUID unknown id issues only the catalog select — custom_datasets (uuid PK) is never queried", async () => {
+    // Catalog select returns empty; the custom_datasets select must be
+    // skipped entirely because "nonexistent-dataset" is not UUID-shaped and
+    // would make Postgres throw `invalid input syntax for type uuid`.
+    dbState.selectSpy.mockReturnValueOnce(dbState.selectChain([]));
+
+    const res = await request(app)
+      .post("/api/markers")
+      .set(AUTH_HEADERS)
+      .send({ ...VALID_POST_BODY, datasetId: "nonexistent-dataset" });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+    expect(dbState.selectSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("201: bundled preset slug without in-code bbox (thorne-bay) bypasses the bbox check and never touches the DB resolver", async () => {
+    // thorne-bay is code-defined (DATASET_SOURCE_PRIORITY) but has no
+    // DatasetMeta bbox — the guard must allow the create unbounded, with no
+    // catalog / custom_datasets selects at all.
+    const res = await request(app)
+      .post("/api/markers")
+      .set(AUTH_HEADERS)
+      .send({ ...VALID_POST_BODY, datasetId: "thorne-bay", lon: 142.5, lat: 11.35 });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty("id");
+    expect(dbState.selectSpy).not.toHaveBeenCalled();
+  });
+
+  it("201/422: bundled preset with an in-code DatasetMeta bbox (lake-ray-roberts) is enforced against that bbox without DB lookups", async () => {
+    // In-bounds (inside the lake-ray-roberts bbox: lon -97.15..-96.92, lat 33.3..33.52).
+    const inRes = await request(app)
+      .post("/api/markers")
+      .set(AUTH_HEADERS)
+      .send({ ...VALID_POST_BODY, datasetId: "lake-ray-roberts", lon: -97.0, lat: 33.4 });
+    expect(inRes.status).toBe(201);
+
+    // Out-of-bounds → 422 from the in-code bbox, still no resolver selects.
+    const outRes = await request(app)
+      .post("/api/markers")
+      .set(AUTH_HEADERS)
+      .send({ ...VALID_POST_BODY, datasetId: "lake-ray-roberts", lon: 142.5, lat: 11.35 });
+    expect(outRes.status).toBe(422);
+    expect(outRes.body).toMatchObject({ error: "validation_error" });
+    expect(dbState.selectSpy).not.toHaveBeenCalled();
+  });
+
+  it("404: '__proto__' as datasetId is not treated as a known bundled dataset", async () => {
+    dbState.selectSpy.mockReturnValueOnce(dbState.selectChain([]));
+
+    const res = await request(app)
+      .post("/api/markers")
+      .set(AUTH_HEADERS)
+      .send({ ...VALID_POST_BODY, datasetId: "__proto__" });
+
+    expect(res.status).toBe(404);
   });
 
   it("201: null datasetId skips the bbox guard entirely", async () => {
@@ -337,7 +396,7 @@ describe("PATCH /api/markers/:id — bbox guard", () => {
     const res = await request(app)
       .patch(`/api/markers/${MARKER_ID}`)
       .set(AUTH_HEADERS)
-      .send({ datasetId: "user-ds-uuid-1" });
+      .send({ datasetId: "bbbbbbbb-1111-2222-3333-444444444444" });
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("id");
@@ -360,7 +419,7 @@ describe("PATCH /api/markers/:id — bbox guard", () => {
     const res = await request(app)
       .patch(`/api/markers/${MARKER_ID}`)
       .set(AUTH_HEADERS)
-      .send({ datasetId: "user-ds-uuid-1" });
+      .send({ datasetId: "bbbbbbbb-1111-2222-3333-444444444444" });
 
     expect(res.status).toBe(422);
     expect(res.body).toMatchObject({ error: "validation_error" });

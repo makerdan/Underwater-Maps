@@ -266,7 +266,7 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
       .toBe(false);
   });
 
-  test("production marker menu click fires the real DELETE and invalidates ONLY the captured dataset's marker cache", async ({
+  test("production marker menu click fires the real DELETE and invalidates every marker cache without refetching inactive ones", async ({
     page,
   }) => {
     // Seed a real marker through the real auth-gated POST.
@@ -353,13 +353,17 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
       )
       .toBe(true);
 
-    // The OTHER dataset's marker-list cache is untouched: not invalidated,
-    // same dataUpdatedAt, same cached payload.
+    // The OTHER dataset's marker-list cache is ALSO flagged invalidated —
+    // runMarkerDelete invalidates every marker query (no dataset filter) so
+    // the minimap stays in sync across all loaded datasets (see
+    // "Prevent stale markers on minimap in multi-dataset mode"). With no
+    // active observer it is not refetched: dataUpdatedAt and the cached
+    // payload stay untouched.
     const otherInvalidated = await page.evaluate(
       (id) => window.__bathyTest!.isMarkerCacheInvalidated(id),
       OTHER_DATASET_ID,
     );
-    expect(otherInvalidated).toBe(false);
+    expect(otherInvalidated).toBe(true);
 
     const afterOther = await page.evaluate(
       (id) => window.__bathyTest!.getMarkerCacheUpdatedAt(id),
@@ -375,7 +379,7 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
     expect(otherCache!.map((x) => x.id)).toEqual(["untouched-marker"]);
   });
 
-  test("a mid-flight dataset switch invalidates the dataset captured at click time, not the current one", async ({
+  test("a mid-flight dataset switch still flags all marker caches invalidated without refetching inactive ones", async ({
     page,
   }) => {
     // Seed two real markers: one in DATASET_ID (the user's view at click time)
@@ -462,12 +466,15 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
       )
       .toBe(true);
 
-    // The post-switch dataset cache is untouched.
+    // The post-switch dataset cache is also flagged invalidated —
+    // runMarkerDelete invalidates every marker query (no dataset filter) so
+    // the minimap stays in sync across all loaded datasets — but with no
+    // active observer it is not refetched (dataUpdatedAt unchanged below).
     const switchedInvalidated = await page.evaluate(
       (id) => window.__bathyTest!.isMarkerCacheInvalidated(id),
       SWITCHED_DATASET_ID,
     );
-    expect(switchedInvalidated).toBe(false);
+    expect(switchedInvalidated).toBe(true);
 
     const afterSwitched = await page.evaluate(
       (id) => window.__bathyTest!.getMarkerCacheUpdatedAt(id),

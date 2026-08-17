@@ -240,7 +240,7 @@ describe("POST /api/markers — malformed dataset bbox is rejected (404)", () =>
     return request(app)
       .post("/api/markers")
       .set(AUTHED_HEADER)
-      .send({ datasetId: "thorne-bay", lon: -132.53, lat: 55.69, depth: 100, label: "Test" });
+      .send({ datasetId: "test-catalog-ds", lon: -132.53, lat: 55.69, depth: 100, label: "Test" });
   }
 
   function mockCatalogBboxOnce(coverageBbox: Record<string, unknown>) {

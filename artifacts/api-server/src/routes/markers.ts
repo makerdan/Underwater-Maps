@@ -10,23 +10,51 @@ import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
 import { dataMutationRateLimit, bulkDeleteMarkersRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { isValidBbox, isInsideBbox, type NormalisedBbox } from "../lib/bbox.js";
+import { ALL_PRESET_DATASETS, DATASET_SOURCE_PRIORITY } from "../lib/terrain.js";
 
 const LABEL_MAX = 200;
 const NOTES_MAX = 2000;
 
+/** UUID shape of the custom_datasets primary key. Non-UUID ids must never be
+ *  queried against that column — Postgres throws
+ *  `invalid input syntax for type uuid` (→ 500) instead of returning no rows. */
+const CUSTOM_DATASET_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * Resolves the coverage bbox for a given datasetId by checking the catalog
- * table first, then the user-uploaded custom datasets table. Returns a
- * normalised bbox or null when the dataset is not found in either table
- * OR when the stored bbox is malformed (missing / non-finite fields,
- * inverted bounds) — a garbage bbox is treated the same as a missing one
- * so the route rejects the request with 404 instead of running NaN
- * comparisons in isInsideBbox.
+ * Resolves the coverage bbox for a given datasetId. Ids come in three
+ * families and each is resolved differently:
+ *  1. Bundled preset slugs (code-defined in lib/terrain.ts, e.g.
+ *     "lake-ray-roberts", "thorne-bay") — resolved from the in-code registry;
+ *     slugs with a ranked-source entry but no DatasetMeta bbox are allowed
+ *     unbounded.
+ *  2. Catalog ids — `dataset_catalog.coverageBbox` (JSONB).
+ *  3. Custom dataset UUIDs — `custom_datasets.terrainJson`; only queried when
+ *     the id is UUID-shaped (the column is typed uuid).
+ *
+ * A stored bbox that is malformed (missing / non-finite fields, inverted
+ * bounds — see isValidBbox) is treated the same as a missing one: the
+ * resolution is "not_found" so the route rejects with 404 instead of running
+ * NaN comparisons in isInsideBbox.
  *
  * Exported for unit tests.
  */
-export async function resolveDatasetBbox(datasetId: string): Promise<NormalisedBbox | null> {
-  // 1. Check catalog datasets (coverageBbox is a JSONB blob).
+export async function resolveDatasetBbox(datasetId: string): Promise<DatasetBboxResolution> {
+  // 1. Bundled preset datasets defined in code.
+  const preset = ALL_PRESET_DATASETS.find((d) => d.id === datasetId);
+  if (preset) {
+    return { kind: "bbox", bbox: preset.bbox };
+  }
+  // Known bundled slug without a DatasetMeta entry (e.g. "thorne-bay"): its
+  // presence in the ranked bathymetry-source registry proves it is a
+  // code-defined dataset, but no authoritative coverage bbox exists, so the
+  // bounds check is explicitly bypassed. hasOwnProperty guards against
+  // prototype keys like "__proto__" resolving as known datasets.
+  if (Object.prototype.hasOwnProperty.call(DATASET_SOURCE_PRIORITY, datasetId)) {
+    return { kind: "unbounded" };
+  }
+
+  // 2. Check catalog datasets (coverageBbox is a JSONB blob).
   const catalogRows = await db
     .select({ coverageBbox: datasetCatalogTable.coverageBbox })
     .from(datasetCatalogTable)
@@ -35,43 +63,35 @@ export async function resolveDatasetBbox(datasetId: string): Promise<NormalisedB
   if (catalogRows.length > 0) {
     const bbox = catalogRows[0]!.coverageBbox;
     if (isValidBbox(bbox)) {
-      return { minLon: bbox.minLon, minLat: bbox.minLat, maxLon: bbox.maxLon, maxLat: bbox.maxLat };
+      return { kind: "bbox", bbox: { minLon: bbox.minLon, minLat: bbox.minLat, maxLon: bbox.maxLon, maxLat: bbox.maxLat } };
     }
     // The dataset exists in the catalog but its stored bbox is unusable.
     // Do NOT fall through to the custom-datasets table: catalog IDs are
     // human-readable slugs that never appear in custom_datasets.
-    return null;
+    return { kind: "not_found" };
   }
 
-  // 2. Check user-uploaded datasets (bbox fields live inside terrainJson).
-  // custom_datasets.id is uuid-typed in Postgres; a catalog-style slug that
-  // reaches this query throws "invalid input syntax for type uuid" (22P02).
-  // Treat that as "dataset not found" (→ 404) rather than letting it become
-  // a 500.
-  let userRows: Array<{ terrainJson: { minLon?: unknown; minLat?: unknown; maxLon?: unknown; maxLat?: unknown } | null }>;
-  try {
-    userRows = await db
+  // 3. Check user-uploaded datasets (bbox fields live inside terrainJson) —
+  //    only for UUID-shaped ids; anything else can never match the uuid PK
+  //    (Postgres would throw `invalid input syntax for type uuid`, 22P02).
+  if (CUSTOM_DATASET_UUID_RE.test(datasetId)) {
+    const userRows = await db
       .select({ terrainJson: customDatasetsTable.terrainJson })
       .from(customDatasetsTable)
       .where(eq(customDatasetsTable.id, datasetId));
-  } catch (err) {
-    if ((err as { code?: string }).code === "22P02") {
-      return null;
-    }
-    throw err;
-  }
 
-  if (userRows.length > 0) {
-    const tj = userRows[0]!.terrainJson;
-    if (tj) {
-      const candidate = { minLon: tj.minLon, minLat: tj.minLat, maxLon: tj.maxLon, maxLat: tj.maxLat };
-      if (isValidBbox(candidate)) {
-        return candidate;
+    if (userRows.length > 0) {
+      const tj = userRows[0]!.terrainJson;
+      if (tj) {
+        const candidate = { minLon: tj.minLon, minLat: tj.minLat, maxLon: tj.maxLon, maxLat: tj.maxLat };
+        if (isValidBbox(candidate)) {
+          return { kind: "bbox", bbox: candidate };
+        }
       }
     }
   }
 
-  return null;
+  return { kind: "not_found" };
 }
 
 const router = Router();
@@ -151,15 +171,17 @@ router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMar
 
   // Dataset bbox guard — only when a datasetId is provided.
   if (datasetId != null) {
-    const bbox = await resolveDatasetBbox(datasetId);
-    if (bbox === null) {
+    const resolution = await resolveDatasetBbox(datasetId);
+    if (resolution.kind === "not_found") {
       res.status(404).json({ error: "not_found", message: "Dataset not found" });
       return;
     }
-    if (!isInsideBbox(lon, lat, bbox)) {
+    if (resolution.kind === "bbox" && !isInsideBbox(lon, lat, resolution.bbox)) {
       res.status(422).json({ error: "validation_error", message: "Marker coordinates are outside the dataset's coverage area" });
       return;
     }
+    // kind === "unbounded": known bundled dataset with no authoritative bbox —
+    // bounds check intentionally bypassed.
   }
 
   let finalLabel = trimmedLabel;
@@ -239,27 +261,30 @@ router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(
   // absent entirely, so the check is skipped. Passing datasetId: null is
   // valid (un-assignment) and also skips the check.
   if ("datasetId" in updateData && updateData.datasetId != null) {
-    const bbox = await resolveDatasetBbox(updateData.datasetId);
-    if (bbox === null) {
+    const resolution = await resolveDatasetBbox(updateData.datasetId);
+    if (resolution.kind === "not_found") {
       res.status(404).json({ error: "not_found", message: "Dataset not found" });
       return;
     }
-    // We need the marker's current lon/lat to check against the new dataset's bbox.
-    // Fetch the marker first (ownership-scoped) so we always check the real coords.
-    const [existing] = await db
-      .select({ lon: markersTable.lon, lat: markersTable.lat })
-      .from(markersTable)
-      .where(and(eq(markersTable.id, id), eq(markersTable.userId, userId)));
-    if (!existing) {
-      res.status(404).json({ error: "not_found", details: `Marker '${id}' not found` });
-      return;
+    if (resolution.kind === "bbox") {
+      // We need the marker's current lon/lat to check against the new dataset's bbox.
+      // Fetch the marker first (ownership-scoped) so we always check the real coords.
+      const [existing] = await db
+        .select({ lon: markersTable.lon, lat: markersTable.lat })
+        .from(markersTable)
+        .where(and(eq(markersTable.id, id), eq(markersTable.userId, userId)));
+      if (!existing) {
+        res.status(404).json({ error: "not_found", details: `Marker '${id}' not found` });
+        return;
+      }
+      const lon = (updateData as { lon?: number }).lon ?? existing.lon;
+      const lat = (updateData as { lat?: number }).lat ?? existing.lat;
+      if (!isInsideBbox(lon, lat, resolution.bbox)) {
+        res.status(422).json({ error: "validation_error", message: "Marker coordinates are outside the dataset's coverage area" });
+        return;
+      }
     }
-    const lon = (updateData as { lon?: number }).lon ?? existing.lon;
-    const lat = (updateData as { lat?: number }).lat ?? existing.lat;
-    if (!isInsideBbox(lon, lat, bbox)) {
-      res.status(422).json({ error: "validation_error", message: "Marker coordinates are outside the dataset's coverage area" });
-      return;
-    }
+    // kind === "unbounded": known bundled dataset — bounds check bypassed.
   }
 
   const [updated] = await db
@@ -321,3 +346,15 @@ router.delete("/markers/:id", requireAuth, dataMutationRateLimit, validateParams
 }));
 
 export default router;
+
+/**
+ * Result of resolving a datasetId's coverage:
+ *  - "bbox"      — dataset found, coverage bbox available → enforce the guard.
+ *  - "unbounded" — dataset is a known code-defined (bundled preset) id with no
+ *                  coverage bbox available → allow without a bounds check.
+ *  - "not_found" — datasetId is unknown everywhere → 404.
+ */
+export type DatasetBboxResolution =
+  | { kind: "bbox"; bbox: NormalisedBbox }
+  | { kind: "unbounded" }
+  | { kind: "not_found" };
