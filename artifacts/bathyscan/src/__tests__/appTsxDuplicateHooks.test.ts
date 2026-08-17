@@ -74,14 +74,10 @@ const SCANNED_FILES: string[] = [
   "components/CatchJournalPanel.tsx",
   "components/CurrentsPanel.tsx",
   "components/DatasetPanel.tsx",
-  // MOBILE-ONLY chart surface — crossed the size/hook threshold when GPS
-  // follow + Live overlay drawing landed (Mobile Live tab task).
-  "components/mobile/MobileChartView.tsx",
   "components/DriftBoat.tsx",
   "components/TrailRecorder.tsx",
   "components/DriftPath.tsx",
   "components/FindDataPanel.tsx",
-  "components/TrailRecorder.tsx",
   "components/GpsImportDialog.tsx",
   "components/HabitatPanel.tsx",
   "components/HUD.tsx",
@@ -96,11 +92,8 @@ const SCANNED_FILES: string[] = [
   "components/DepthProfilePanel.tsx",
   "components/SubstrateLayer.tsx",
   "components/TerrainMesh.tsx",
-  "components/TrailRecorder.tsx",
   "components/ThrottlePanel.tsx",
-  "components/TrailRecorder.tsx",
   "components/TidePanel.tsx",
-  "components/TrailRecorder.tsx",
   "components/WeatherPanel.tsx",
   "components/ZoneOverlay.tsx",
 ];
@@ -259,8 +252,54 @@ function countBraces(line: string): number {
 
 describe("parseScopes wrapper patterns (forwardRef / memo)", () => {
   it("opens a scope for a multi-line React.forwardRef component and finds its hooks", () => {
-    const absPath = path.join(SRC_DIR, "components/TerrainMesh.tsx");
-    const src = fs.readFileSync(absPath, "utf-8");
+    const src = [
+      "export const Comp = React.forwardRef<HTMLDivElement, Props>(",
+      "  ({ value }, ref) => {",
+      "    const a = useStore((s) => s.a);",
+      "    const b = useRef(null);",
+      "    const a = useStore((s) => s.a);",
+      "    return null;",
+      "  },",
+      ");",
+    ].join("\n");
+    const scopes = parseScopes(src);
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0].name).toBe("Comp");
+    expect(scopes[0].decls.map((d) => d.name)).toEqual(["a", "b", "a"]);
+  });
+
+  it("opens a scope for a single-line React.memo(function …) component", () => {
+    const src = [
+      "export const Memoed = React.memo(function Memoed({ x }: Props) {",
+      "  const foo = useCallback(() => {}, []);",
+      "  const bar = useState(0);",
+      "  return null;",
+      "});",
+    ].join("\n");
+    const scopes = parseScopes(src);
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0].decls.map((d) => d.name)).toEqual(["foo", "bar"]);
+  });
+
+  it("opens a scope for a multi-line memo(forwardRef(…)) component", () => {
+    const src = [
+      "const Wrapped = memo(",
+      "  forwardRef<HTMLSpanElement, Props>(({ y }, ref) => {",
+      "    const z = useMemo(() => y * 2, [y]);",
+      "    return null;",
+      "  }),",
+      ");",
+    ].join("\n");
+    const scopes = parseScopes(src);
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0].decls.map((d) => d.name)).toEqual(["z"]);
+  });
+
+  it("attributes TerrainMesh.tsx hooks to a component scope (forwardRef real file)", () => {
+    const src = fs.readFileSync(
+      path.join(SRC_DIR, "components/TerrainMesh.tsx"),
+      "utf-8",
+    );
     const scopes = parseScopes(src);
     const terrainScope = scopes.find((s) => s.name === "TerrainMesh");
     expect(terrainScope, "expected a TerrainMesh scope").toBeDefined();
