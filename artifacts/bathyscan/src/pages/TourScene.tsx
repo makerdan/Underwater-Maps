@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { useCameraStore } from "@/lib/cameraStore";
 import * as THREE from "three";
 import { useGetDatasetsIdTerrain, getGetDatasetsIdTerrainQueryKey, type TerrainData } from "@workspace/api-client-react";
@@ -557,6 +557,110 @@ export function deriveEffectiveFogColor(
   return isFreshwater && fogColor === defaultFogColor ? "#0b3a35" : fogColor;
 }
 
+/**
+ * Sky gradient color stops for the 3D backdrop — exported so unit tests can
+ * assert on the exact palette without rendering any Three.js geometry.
+ *
+ * stop=0 is the horizon (lightest), stop=1 is the zenith (deepest sky blue).
+ */
+export const SKY_GRADIENT_STOPS = [
+  { stop: 0.0, color: "#a8d8f5" }, // horizon: pale sky blue
+  { stop: 1.0, color: "#2878c8" }, // zenith: deep sky blue
+] as const;
+
+/** Horizon color — used to blend fog seamlessly into the sky backdrop. */
+const SKY_GRADIENT_HORIZON_COLOR = SKY_GRADIENT_STOPS[0].color;
+
+/**
+ * When the scene uses the default (un-customised) fog colour, harmonise the
+ * exponential fog so distant objects fade toward the sky horizon rather than
+ * toward the original dark-navy `#020818`.  User-customised colours (including
+ * the freshwater green-teal, which replaces the default at runtime) are passed
+ * through unchanged.
+ */
+export function deriveHarmonizedFogColor(
+  effectiveFogColor: string,
+  defaultFogColor: string,
+): string {
+  return effectiveFogColor === defaultFogColor ? SKY_GRADIENT_HORIZON_COLOR : effectiveFogColor;
+}
+
+// ---------------------------------------------------------------------------
+// Sky gradient backdrop — a large inside-out sphere rendered before everything
+// else so it reads as the environment "sky" from any camera angle.
+// ---------------------------------------------------------------------------
+
+// Use local object-space position (not world-space) so the gradient direction
+// is always relative to the sphere centre — unaffected by camera translation.
+// normalize(position).y == 0 at the equator, 1 at the north pole, regardless
+// of where the sphere is located in the scene.
+export const SKY_VERT = /* glsl */ `
+  varying vec3 vLocalPos;
+  void main() {
+    vLocalPos = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+export const SKY_FRAG = /* glsl */ `
+  uniform vec3 horizonColor;
+  uniform vec3 zenithColor;
+  varying vec3 vLocalPos;
+  void main() {
+    // Normalise the LOCAL position so the gradient is relative to the sphere
+    // centre, not the world origin. Clamp Y to [0,1] so the lower hemisphere
+    // mirrors the horizon colour.
+    float t = clamp(normalize(vLocalPos).y, 0.0, 1.0);
+    gl_FragColor = vec4(mix(horizonColor, zenithColor, t), 1.0);
+  }
+`;
+
+/**
+ * Radius of the sky sphere in world units.
+ *
+ * Must be strictly less than the minimum user-configurable renderDistance
+ * (200 units) so the sphere is never clipped by the camera far plane.
+ * The sphere tracks the camera each frame, so any camera position is fine.
+ */
+export const SKY_SPHERE_RADIUS = 190;
+
+const SkyGradientBackdrop: React.FC = () => {
+  const horizonColor = useMemo(() => new THREE.Color(SKY_GRADIENT_STOPS[0].color), []);
+  const zenithColor = useMemo(() => new THREE.Color(SKY_GRADIENT_STOPS[1].color), []);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const { camera } = useThree();
+
+  // Keep the sky sphere centred on the camera every frame so it stays within
+  // the camera frustum regardless of the user's renderDistance setting.
+  useFrame(() => {
+    if (meshRef.current) {
+      meshRef.current.position.copy(camera.position);
+    }
+  });
+
+  return (
+    // renderOrder=-1 ensures the sky sphere is drawn first; depthWrite=false
+    // prevents it from occluding any scene geometry.
+    <mesh ref={meshRef} renderOrder={-1}>
+      <sphereGeometry args={[SKY_SPHERE_RADIUS, 32, 16]} />
+      <shaderMaterial
+        args={[
+          {
+            vertexShader: SKY_VERT,
+            fragmentShader: SKY_FRAG,
+            uniforms: {
+              horizonColor: { value: horizonColor },
+              zenithColor: { value: zenithColor },
+            },
+            side: THREE.BackSide,
+            depthWrite: false,
+          },
+        ]}
+      />
+    </mesh>
+  );
+};
+
 const SceneContents: React.FC<SceneContentsProps> = ({
   terrainMeshRef,
   tidalData,
@@ -604,10 +708,12 @@ const SceneContents: React.FC<SceneContentsProps> = ({
     ? Math.max(directionalIntensity, 0.75)
     : directionalIntensity;
 
+  const harmonizedFogColor = deriveHarmonizedFogColor(effectiveFogColor, DEFAULT_SETTINGS.fogColor);
+
   return (
     <>
-      <color attach="background" args={[effectiveFogColor]} />
-      <fogExp2 args={[effectiveFogColor, effectiveFogDensity]} />
+      <SkyGradientBackdrop />
+      <fogExp2 args={[harmonizedFogColor, effectiveFogDensity]} />
 
       {/* Ambient fill — hue tracks water type; boosted in Bright Daylight */}
       <ambientLight intensity={effectiveAmbientIntensity} color={ambientHue} />
