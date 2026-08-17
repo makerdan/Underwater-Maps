@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { pool } from "@workspace/db";
+import { pool, db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 import { startBucketMonitor } from "./lib/bucketMonitor.js";
 import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
@@ -289,6 +290,31 @@ function startServer(port: number): void {
       logger.error({ err }, "[startup] startRateLimitPruneJob failed");
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// Startup migration guard
+// ---------------------------------------------------------------------------
+// Check that the most recently added tables exist in the running database.
+// If not, the migration has not been applied and the server would silently
+// serve 404 / 500 errors on routes that touch those tables.  Fail loudly
+// instead so the problem is immediately visible in logs.
+// ---------------------------------------------------------------------------
+
+try {
+  await db.execute(sql`SELECT 1 FROM dataset_collections LIMIT 1`);
+  logger.info("[startup] migration check: OK (dataset_collections table found)");
+} catch (err) {
+  logger.error(
+    { err },
+    "[startup] FATAL: migration check failed — table 'dataset_collections' does not exist. " +
+      "Apply pending migrations with: pnpm --filter @workspace/db migrate",
+  );
+  logger.flush(() => {
+    process.exit(1);
+  });
+  // Pause until flush + exit fire (flush callback is async).
+  await new Promise<never>(() => {});
 }
 
 startServer(basePort);
