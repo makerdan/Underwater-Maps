@@ -621,6 +621,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
         {presetId && (
           <ViewscreenTooltip label="Save this area for offline field use" side="top">
             <button
+              aria-label="Save offline"
               onClick={() => setOfflineModalOpen(true)}
               style={{
                 fontSize: "calc(12px * var(--bs-font-scale, 1))",
@@ -634,7 +635,7 @@ const CatalogCard: React.FC<CatalogCardProps> = ({ entry, onSave, saving, saved,
                 textTransform: "uppercase",
               }}
             >
-              ⬇ Offline
+              ⬇
             </button>
           </ViewscreenTooltip>
         )}
