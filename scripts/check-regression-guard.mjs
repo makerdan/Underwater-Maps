@@ -28,7 +28,7 @@
 
 import { readdir, readFile, appendFile } from "fs/promises";
 import { existsSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 
 const TASKS_DIR = ".local/tasks";
 
@@ -51,9 +51,9 @@ function isPlaceholder(text) {
   if (!text || text.trim() === "") return true;
   const t = text.trim();
   const lower = t.toLowerCase();
-  // Angle-bracket template markers: <anything>
+  // Angle-bracket template markers: whole-value token like <anything>
+  // Mixed content like "renders <MyComponent /> correctly" is NOT a placeholder.
   if (t.startsWith("<") && t.endsWith(">")) return true;
-  if (t.includes("<") && t.includes(">")) return true;
   // Explicit placeholder keywords
   if (lower === "tbd") return true;
   if (lower.includes("fill in")) return true;
@@ -151,30 +151,74 @@ const stubsOnly = process.argv.includes("--stubs-only");
 
 // ---------------------------------------------------------------------------
 // Read plan files
+//
+// When TASK_PLAN_FILE is set (task-agent and CI environments always set it),
+// restrict the check to that single file rather than scanning the full
+// .local/tasks/ archive. This prevents hundreds of gitignored pre-existing
+// plan files from blocking the fast tier in every fresh environment.
+//
+// When TASK_PLAN_FILE is not set (developer / manual run), the full archive
+// scan proceeds as before.
 // ---------------------------------------------------------------------------
-if (!existsSync(TASKS_DIR)) {
-  console.log(
-    `check-regression-guard — tasks directory "${TASKS_DIR}" does not exist. Nothing to check. ✓`,
-  );
-  process.exit(0);
-}
+
+const TASK_PLAN_FILE = process.env.TASK_PLAN_FILE;
 
 let files;
-try {
-  const entries = await readdir(TASKS_DIR);
-  files = entries.filter((f) => f.endsWith(".md")).sort();
-} catch (err) {
-  console.error(
-    `check-regression-guard — failed to read "${TASKS_DIR}": ${err.message}`,
-  );
-  process.exit(1);
-}
+/** Given an entry from `files`, return the filesystem path to read. */
+let resolveFilePath;
+/** Human-readable description of what was scanned, for the summary line. */
+let scanDescription;
 
-if (files.length === 0) {
-  console.log(
-    `check-regression-guard — no .md files found in "${TASKS_DIR}". Nothing to check. ✓`,
-  );
-  process.exit(0);
+if (TASK_PLAN_FILE) {
+  // Single-file mode ————————————————————————————————————————————————————
+  console.log(`check-regression-guard — single-file mode: ${TASK_PLAN_FILE}`);
+
+  if (!TASK_PLAN_FILE.endsWith(".md")) {
+    console.error(
+      `check-regression-guard — TASK_PLAN_FILE "${TASK_PLAN_FILE}" is not a .md file. Aborting.`,
+    );
+    process.exit(1);
+  }
+
+  if (!existsSync(TASK_PLAN_FILE)) {
+    console.error(
+      `check-regression-guard — TASK_PLAN_FILE "${TASK_PLAN_FILE}" does not exist. Aborting.`,
+    );
+    process.exit(1);
+  }
+
+  // Use the full/relative path as the sole entry; resolveFilePath is the identity.
+  files = [TASK_PLAN_FILE];
+  resolveFilePath = (f) => f;
+  scanDescription = `single file "${TASK_PLAN_FILE}"`;
+} else {
+  // Archive mode — scan the full .local/tasks/ directory ——————————————————
+  if (!existsSync(TASKS_DIR)) {
+    console.log(
+      `check-regression-guard — tasks directory "${TASKS_DIR}" does not exist. Nothing to check. ✓`,
+    );
+    process.exit(0);
+  }
+
+  try {
+    const entries = await readdir(TASKS_DIR);
+    files = entries.filter((f) => f.endsWith(".md")).sort();
+  } catch (err) {
+    console.error(
+      `check-regression-guard — failed to read "${TASKS_DIR}": ${err.message}`,
+    );
+    process.exit(1);
+  }
+
+  if (files.length === 0) {
+    console.log(
+      `check-regression-guard — no .md files found in "${TASKS_DIR}". Nothing to check. ✓`,
+    );
+    process.exit(0);
+  }
+
+  resolveFilePath = (f) => join(TASKS_DIR, f);
+  scanDescription = `"${TASKS_DIR}"`;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +228,7 @@ const compliant = []; // file names
 const nonCompliant = []; // { file, reason, patched? }
 
 for (const file of files) {
-  const filePath = join(TASKS_DIR, file);
+  const filePath = resolveFilePath(file);
   let content;
   try {
     content = await readFile(filePath, "utf8");
@@ -239,7 +283,7 @@ for (const file of files) {
 // Summary
 // ---------------------------------------------------------------------------
 console.log(
-  `\ncheck-regression-guard — scanned ${files.length} plan file(s) in "${TASKS_DIR}":\n`,
+  `\ncheck-regression-guard — scanned ${files.length} plan file(s) in ${scanDescription}:\n`,
 );
 
 // Only print per-file lines for non-compliant files (compliant list can be

@@ -56,12 +56,13 @@ function writePlan(dir, filename, content) {
   writeFileSync(join(dir, ".local", "tasks", filename), content);
 }
 
-/** Run the script with the given cwd and optional extra args. */
-function run(cwd, args = []) {
+/** Run the script with the given cwd, optional extra args, and optional env overrides. */
+function run(cwd, args = [], env = {}) {
   const res = spawnSync("node", [scriptPath, ...args], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     cwd,
+    env: { ...process.env, ...env },
   });
   return {
     status: res.status,
@@ -395,6 +396,138 @@ describe("empty tasks directory", () => {
     assert.ok(
       result.stdout.includes("Nothing to check") || result.stdout.includes("nothing to check"),
       `stdout should say nothing to check\nstdout: ${result.stdout}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK_PLAN_FILE scoping
+// ---------------------------------------------------------------------------
+
+describe("TASK_PLAN_FILE scoping", () => {
+  it("exits 0 when TASK_PLAN_FILE is compliant, even if archive has non-compliant files", () => {
+    const dir = makeTasksDir("scope-compliant");
+    // Compliant target file — write it into a separate location so we can
+    // point TASK_PLAN_FILE at it directly.
+    const targetPath = join(dir, ".local", "tasks", "task-target.md");
+    writePlan(dir, "task-target.md", planWith("**Self-satisfying** — this task adds the tests.\n"));
+    // Non-compliant archive file.
+    writePlan(dir, "task-bad.md", planWith("**N/A**\n")); // missing Why N/A
+
+    const result = run(dir, [], { TASK_PLAN_FILE: targetPath });
+    assert.equal(
+      result.status,
+      0,
+      `expected exit 0 (archive ignored in single-file mode)\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("exits 1 when TASK_PLAN_FILE is non-compliant (archive is empty)", () => {
+    const dir = makeTasksDir("scope-noncompliant");
+    const targetPath = join(dir, ".local", "tasks", "task-bad.md");
+    writePlan(dir, "task-bad.md", planWith("**N/A**\n")); // missing Why N/A
+
+    const result = run(dir, [], { TASK_PLAN_FILE: targetPath });
+    assert.equal(
+      result.status,
+      1,
+      `expected exit 1 for non-compliant TASK_PLAN_FILE\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("exits 1 when TASK_PLAN_FILE does not end in .md", () => {
+    const dir = makeTasksDir("scope-not-md");
+    const targetPath = join(dir, ".local", "tasks", "task-plan.txt");
+
+    const result = run(dir, [], { TASK_PLAN_FILE: targetPath });
+    assert.equal(
+      result.status,
+      1,
+      `expected exit 1 for non-.md TASK_PLAN_FILE\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+    assert.ok(
+      result.stderr.includes("not a .md file"),
+      `stderr should mention the .md requirement\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("exits 1 when TASK_PLAN_FILE path does not exist", () => {
+    const dir = makeTasksDir("scope-missing-file");
+    const targetPath = join(dir, ".local", "tasks", "nonexistent.md");
+
+    const result = run(dir, [], { TASK_PLAN_FILE: targetPath });
+    assert.equal(
+      result.status,
+      1,
+      `expected exit 1 for missing TASK_PLAN_FILE\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+    assert.ok(
+      result.stderr.includes("does not exist"),
+      `stderr should mention the missing file\nstderr: ${result.stderr}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Angle-bracket in mixed content — placeholder tightening
+// ---------------------------------------------------------------------------
+
+describe("angle-bracket in mixed content", () => {
+  it("passes when **What it checks:** contains JSX-like content alongside real text", () => {
+    const dir = makeTasksDir("mixed-angle-pass");
+    writePlan(
+      dir,
+      "task-mixed-pass.md",
+      planWith(
+        "**Covers:** the render path in TerrainMesh.tsx\n" +
+          "**Test location:** artifacts/bathyscan/src/__tests__/TerrainMesh.test.tsx\n" +
+          "**What it checks:** renders <MyComponent /> without crashing\n",
+      ),
+    );
+
+    const result = run(dir);
+    assert.equal(
+      result.status,
+      0,
+      `expected exit 0 for mixed angle-bracket content\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("passes when **Why N/A:** contains an angle-bracket in a sentence", () => {
+    const dir = makeTasksDir("mixed-angle-na-pass");
+    writePlan(
+      dir,
+      "task-mixed-na-pass.md",
+      planWith(
+        "**N/A**\n**Why N/A:** No code path uses <color attach=\"background\"> in this task.\n",
+      ),
+    );
+
+    const result = run(dir);
+    assert.equal(
+      result.status,
+      0,
+      `expected exit 0 for angle-bracket embedded in sentence\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("fails when **What it checks:** is purely a placeholder token like <describe this>", () => {
+    const dir = makeTasksDir("mixed-angle-fail");
+    writePlan(
+      dir,
+      "task-mixed-fail.md",
+      planWith(
+        "**Covers:** the render path in TerrainMesh.tsx\n" +
+          "**Test location:** artifacts/bathyscan/src/__tests__/TerrainMesh.test.tsx\n" +
+          "**What it checks:** <describe this>\n",
+      ),
+    );
+
+    const result = run(dir);
+    assert.equal(
+      result.status,
+      1,
+      `expected exit 1 for whole-token angle-bracket placeholder\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
   });
 });
