@@ -663,6 +663,10 @@ export const UserSettingsTemperatureUnit = {
 } as const;
 
 /**
+ * MOBILE-ONLY key: contour-density multiplier for the mobile 2D Chart View's 1x/2x/3x stepper. Divides the effective contour interval (2 = twice as many lines). The desktop Overview Map ignores this key.
+ */
+export type UserSettingsContourDensity = typeof UserSettingsContourDensity[keyof typeof UserSettingsContourDensity];
+/**
  * Depth layer pre-selected in the tidal overlay controls.
  */
 export type UserSettingsDefaultTidalDepthLayer = typeof UserSettingsDefaultTidalDepthLayer[keyof typeof UserSettingsDefaultTidalDepthLayer];
@@ -1164,6 +1168,8 @@ export interface UserSettings {
      * @maximum 1000
      */
   contourInterval?: number;
+  /** MOBILE-ONLY key: contour-density multiplier for the mobile 2D Chart View's 1x/2x/3x stepper. Divides the effective contour interval (2 = twice as many lines). The desktop Overview Map ignores this key. */
+  contourDensity?: UserSettingsContourDensity;
   /**
      * Default hex colour applied to new depth-pole markers.
      * @pattern ^#[0-9a-fA-F]{6}$
@@ -4896,3 +4902,9 @@ export type GetTerrainBundlesPresetId202 = {
   message?: string;
 };
 
+
+export const UserSettingsContourDensity = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;

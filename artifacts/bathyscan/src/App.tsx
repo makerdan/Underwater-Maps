@@ -118,6 +118,10 @@ import { TimelineScrubBar } from "@/components/TimelineScrubBar";
 import { WhatsHereCard } from "@/components/WhatsHereCard";
 import { useWhatsHere } from "@/hooks/useWhatsHere";
 import { OfflineReadOnlyBanner, persistOfflineIdentity } from "@/components/OfflineReadOnlyBanner";
+// MOBILE-ONLY imports: synchronous mobile gate + the 2D Chart View shell that
+// replaces the 3D scene on phones.
+import { useIsMobileImmediate } from "@/hooks/use-mobile";
+import { MobileChartShell } from "@/components/mobile/MobileChartShell";
 
 
 function TestBridge(): null {
@@ -282,6 +286,11 @@ function useLastSessionServerSync() {
 
 function Main() {
   const [, setLocation] = useLocation();
+  // MOBILE-ONLY gate flag: true on phones (≤767px). Computed SYNCHRONOUSLY on
+  // the first render (useIsMobileImmediate, not useIsMobile) so the 3D
+  // TourScene — and therefore any WebGL context — is never mounted on mobile,
+  // not even for one frame. Mobile gets the 2D MobileChartShell instead.
+  const isMobileChart = useIsMobileImmediate();
   // Two-way settings sync (GET on mount, debounced PUT on change). Also
   // exposes `settingsReady` so the startup auto-select waits for the server's
   // saved defaultMapLoad before committing to a dataset.
@@ -1294,6 +1303,15 @@ function Main() {
       <AppHeader />
 
       <div className="relative flex-1 overflow-hidden">
+        {/* MOBILE-ONLY gate: on phones, the ENTIRE scene area (3D TourScene
+            plus every desktop map overlay below) is replaced by the 2D
+            MobileChartShell. The R3F/WebGL canvas must never mount on mobile
+            — that is the product decision this branch enforces. Desktop JSX
+            in the else-branch is untouched. */}
+        {isMobileChart ? (
+          <MobileChartShell />
+        ) : (
+          <>
         {/* 3D Scene — fills everything. Wrapped in an ErrorBoundary so a
             render error in the Canvas subtree (R3F components rethrow into
             the parent React tree) degrades to a contained fallback instead
@@ -2003,6 +2021,9 @@ function Main() {
           </button>
           </ViewscreenTooltip>
         )}
+          </>
+        )}
+        {/* MOBILE-ONLY: end of the desktop-only scene-area branch. */}
       </div>
 
       {/* What's Here card — floating summary of crosshair data */}
@@ -2012,8 +2033,13 @@ function Main() {
 
       {/* Onboarding overlay — shown to new users after the scene is ready.
           Suppressed while the WebGL context is lost/recovering so a recovery
-          remount doesn't re-trigger the tour mid-session. */}
-      <OnboardingGuard terrain={terrain} settingsReady={settingsReady} />
+          remount doesn't re-trigger the tour mid-session.
+          MOBILE-ONLY branch: skipped on mobile — the tour targets desktop UI
+          elements that don't exist in the mobile Chart View, and its overlay
+          would block chart gestures. */}
+      {!isMobileChart && (
+        <OnboardingGuard terrain={terrain} settingsReady={settingsReady} />
+      )}
     </div>
   );
 }

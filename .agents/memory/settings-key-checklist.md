@@ -9,8 +9,9 @@ The rule: a new key in the settings OpenAPI spec/PutSettingsBody must be added i
 1. OpenAPI spec + orval codegen (then typecheck:libs to emit .d.ts).
 2. Zod PutSettingsBody schema (via codegen patch).
 3. `DEFAULT_SETTINGS` in api-server `routes/settings.ts` — easy to miss.
-4. Client settingsStore default.
-5. Sentinel/coverage tests.
+4. Client settingsStore default (+ version bump + migration).
+5. `settingsFieldSchemas` in client `settingsResponseSchema.ts` — easy to miss; a key present in DEFAULT_SETTINGS but absent here is silently dropped into `skippedKeys` on settings-backup import, and `settingsBackup.test.ts` (`skippedKeys` toEqual []) fails.
+6. Sentinel/coverage tests.
 
 **Why:** `settings-schema-sync.test.ts` and the me.test.ts default-value test fail if the key is in the schema but missing from DEFAULT_SETTINGS (clients that omit the field would get `undefined` back instead of the documented default).
 

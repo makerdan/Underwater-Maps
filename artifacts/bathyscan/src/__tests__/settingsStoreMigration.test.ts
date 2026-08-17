@@ -165,6 +165,29 @@ describe("settingsStore migration — cameraSpawnBehaviour 'deepest' → 'last'"
 });
 
 // ---------------------------------------------------------------------------
+// v36 → v37: MOBILE-ONLY contourDensity key (mobile Chart View stepper)
+// ---------------------------------------------------------------------------
+
+describe("settingsStore migration — v36→v37 contourDensity (MOBILE-ONLY key)", () => {
+  it("absent contourDensity defaults to 1×", async () => {
+    const result = await rehydrate({ units: "metric", keyBindings: {} });
+    expect(result["contourDensity"]).toBe(1);
+  });
+
+  it("a valid stored contourDensity is preserved", async () => {
+    const result = await rehydrate({ contourDensity: 3, keyBindings: {} });
+    expect(result["contourDensity"]).toBe(3);
+  });
+
+  it("corrupted contourDensity values fall back to 1×", async () => {
+    for (const bad of [0, 4, 2.5, "2", null]) {
+      const result = await rehydrate({ contourDensity: bad, keyBindings: {} });
+      expect(result["contourDensity"]).toBe(1);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Current-version pass-through — user preferences are preserved
 // ---------------------------------------------------------------------------
 

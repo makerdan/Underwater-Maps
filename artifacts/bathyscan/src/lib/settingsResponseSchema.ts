@@ -127,6 +127,8 @@ export const settingsFieldSchemas = {
   overviewHillshading: bool,
   contoursEnabled: bool,
   contourInterval: num,
+  // MOBILE-ONLY key: mobile 2D Chart View contour-density stepper (1×/2×/3×).
+  contourDensity: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().catch(undefined),
 
   // Markers
   defaultMarkerType: str,

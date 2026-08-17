@@ -65,6 +65,8 @@
 - [Stale workflow log tails](stale-workflow-logs.md) — after restart_workflow, tailing the latest /tmp/logs file can show the PREVIOUS run; use refresh_all_logs.
 - [Playwright dispatchEvent arg order](playwright-dispatchevent-options.md) — timeout goes in the 3rd arg; `{timeout}` as 2nd arg is eventInit and the call hangs to test timeout on absent elements.
 - [Sparse-track gridder blowup](upload-event-loop-freeze.md) — minutes-long upload "freezes" were O(N⁴) IDW ring-fill on sparse tracks in the parse worker; healthz stayed fast — profile the worker, not the server.
+- [startValidationRun poll budget](validation-run-poll-budget.md) — validation runs are force-STOPPED after ~10 min; split long tiers into sub-10-min commands (static-with-skips + per-package unit) and read stopped-run logs immediately.
+- [Standalone bathyscan vite](bathyscan-standalone-vite.md) — throwaway dev server needs PORT+BASE_PATH=/bathyscan/+VITE_DEV_AUTH_BYPASS=1; playwright needs chromium.launch({channel:"chromium"}) here.
 - [Validation tiers](validation-tiers.md) — three registered commands (test-fast/standard/heavy); pick by task type using the decision table in .agents/skills/validation-tiers/SKILL.md.
 - [Disk cache filter must strip extension before regex](disk-cache-filter-extension.md) — readdir returns `<hash>.json`; filtering with a bare-hash regex silently matches nothing. Strip `.json` first or use a `.json`-aware pattern.
 - [Circuit breaker forceOpen for tests](circuit-breaker-force-open.md) — use `forceOpen()` on PoeCircuitBreaker (or `__forceOpenPoeBreaker()` test helper) instead of firing 5 failing requests to trip the breaker; saves ~15 s per run.

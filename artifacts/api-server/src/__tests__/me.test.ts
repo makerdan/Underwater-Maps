@@ -468,6 +468,40 @@ describe("PUT /api/settings — hasSeenToolbarRelocationHint (v23 field)", () =>
   });
 });
 
+// MOBILE-ONLY key: contourDensity (mobile 2D Chart View 1x/2x/3x stepper).
+describe("PUT /api/settings — contourDensity (v37 mobile chart field)", () => {
+  it("round-trips every stepper value (1, 2, 3)", async () => {
+    for (const value of [1, 2, 3]) {
+      const res = await request(app)
+        .put("/api/settings")
+        .set(AUTH)
+        .send({ contourDensity: value });
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("contourDensity", value);
+    }
+  });
+
+  it("returns 400 for out-of-range or non-integer densities", async () => {
+    for (const bad of [0, 4, 2.5, "2", true]) {
+      const res = await request(app)
+        .put("/api/settings")
+        .set(AUTH)
+        .send({ contourDensity: bad });
+      expect(res.status).toBe(400);
+      expect(res.body).toHaveProperty("error");
+    }
+  });
+
+  it("defaults to 1 when omitted from the payload", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set(AUTH)
+      .send({ fogDensity: 0.012 });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("contourDensity", 1);
+  });
+});
+
 describe("PUT /api/settings — paletteShallow", () => {
   it("accepts a valid 6-digit hex colour", async () => {
     const res = await request(app)

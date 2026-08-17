@@ -6377,6 +6377,11 @@ components:
           maximum: 1000
           default: 10
           description: Spacing between contour lines in the user's active unit system (metres for metric, feet for imperial/nautical).
+        contourDensity:
+          type: integer
+          enum: [1, 2, 3]
+          default: 1
+          description: "MOBILE-ONLY key: contour-density multiplier for the mobile 2D Chart View's 1x/2x/3x stepper. Divides the effective contour interval (2 = twice as many lines). The desktop Overview Map ignores this key."
         defaultDepthPoleColor:
           type: string
           pattern: '^#[0-9a-fA-F]{6}$'

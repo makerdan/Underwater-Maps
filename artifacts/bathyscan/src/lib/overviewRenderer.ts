@@ -15,6 +15,9 @@ import * as THREE from "three";
 import { getColormap, getColormapDepthDomain, isAbsoluteDepthTheme } from "./colormap";
 import { usePaletteStore } from "./paletteStore";
 import { formatDepth } from "./units";
+// MOBILE-ONLY import: index-contour classification for the mobile Chart View's
+// density stepper. Only used when a caller passes ContourRenderOptions.
+import { isIndexContourDepth } from "./contourDensity";
 import { NO_DATA_COLOR } from "./terrain";
 
 // Convert a linear-sRGB channel value (as used by THREE.js vertex colours and
@@ -1621,9 +1624,29 @@ export function buildContourLines(
 }
 
 /**
+ * MOBILE-ONLY consumer: optional index-contour emphasis for the mobile Chart
+ * View's 1×/2×/3× density stepper. When `indexIntervalMetres` is set, every
+ * INDEX_CONTOUR_EVERY-th contour level (a whole multiple of
+ * indexIntervalMetres × INDEX_CONTOUR_EVERY) is drawn heavier and is the ONLY
+ * level that receives depth labels, so high densities stay readable on a
+ * phone. Desktop callers omit the options bag entirely — behaviour is then
+ * byte-identical to the legacy renderer.
+ */
+export interface ContourRenderOptions {
+  /**
+   * The effective contour interval in metres (base interval ÷ density).
+   * Used solely to classify which depths are index contours.
+   */
+  indexIntervalMetres?: number;
+}
+
+/**
  * Render contour lines on the 2D overview canvas.
  * Lines are coloured by sampling the active colormap at each depth, drawn at
  * ~60% opacity. Depth labels are placed at sparse intervals when zoom ≥ 3.
+ *
+ * The trailing `opts` parameter is MOBILE-ONLY (index-contour emphasis for
+ * the mobile Chart View); desktop callers never pass it and are unaffected.
  */
 export function renderContourLines(
   ctx: CanvasRenderingContext2D,
@@ -1633,6 +1656,7 @@ export function renderContourLines(
   units: UnitsSystem,
   colormapTheme: ColormapTheme,
   worldGrid?: TerrainData,
+  opts?: ContourRenderOptions,
 ): void {
   if (!segments.length) return;
 
@@ -1656,6 +1680,15 @@ export function renderContourLines(
   const lineW = Math.max(0.5, Math.min(1.5, t.scale * 0.5));
   const showLabels = t.scale >= 2;
   const fontSize = Math.max(8, Math.min(11, 9 * t.scale * 0.35));
+
+  // MOBILE-ONLY: index-contour emphasis. When enabled (mobile Chart View),
+  // index levels are drawn heavier / more opaque and are the only labeled
+  // levels — at any zoom, since only every 5th level qualifies. Desktop
+  // callers never set opts, so indexEmphasis stays false and every value
+  // below matches the legacy renderer exactly.
+  const indexEmphasis =
+    opts?.indexIntervalMetres !== undefined && opts.indexIntervalMetres > 0;
+  const indexLineW = Math.min(3, lineW * 2);
 
   ctx.save();
   ctx.font = `${fontSize}px 'JetBrains Mono', monospace`;
@@ -1728,6 +1761,11 @@ export function renderContourLines(
       : [];
 
   for (const [depth, segs] of byDepth) {
+    // MOBILE-ONLY: classify this level as an index contour (every 5th level).
+    // Always false on desktop (indexEmphasis is false without opts).
+    const isIndex =
+      indexEmphasis && isIndexContourDepth(depth, opts!.indexIntervalMetres!);
+
     // Colour source: band colour for ocean/custom (warm, palette-consistent look
     // matching the Minimap); colormap sample at t for fixed preset themes.
     let r: number;
@@ -1757,10 +1795,13 @@ export function renderContourLines(
     }
 
     ctx.strokeStyle = `rgb(${r},${g},${b})`;
-    ctx.lineWidth = lineW;
+    // MOBILE-ONLY branch: index contours draw heavier and more opaque so the
+    // 2×/3× densities stay readable. Desktop path (no opts) is the legacy
+    // lineW / 0.65 pair, unchanged.
+    ctx.lineWidth = isIndex ? indexLineW : lineW;
     // Soft alpha matches the Minimap's contour appearance (0.65 instead of the
     // previous higher-contrast value baked into the rgba stroke string).
-    ctx.globalAlpha = 0.65;
+    ctx.globalAlpha = isIndex ? 0.85 : 0.65;
 
     // Draw all segments for this level in a single path batch
     ctx.beginPath();
@@ -1773,7 +1814,11 @@ export function renderContourLines(
     ctx.stroke();
     ctx.globalAlpha = 1.0; // reset before label drawing
 
-    if (!showLabels || segs.length === 0) continue;
+    // MOBILE-ONLY branch: with index emphasis active, ONLY index contours are
+    // labeled (at any zoom — only every 5th level qualifies, so labels stay
+    // sparse). Desktop keeps the legacy zoom-gated labels on every level.
+    if (indexEmphasis ? !isIndex : !showLabels) continue;
+    if (segs.length === 0) continue;
 
     // Contour depths are stored in metres; labels are formatted in the active unit.
     // Nautical uses fathoms for contour intervals (1 fathom = 1.8288 m).

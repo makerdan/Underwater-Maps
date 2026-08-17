@@ -151,6 +151,8 @@ export const DEFAULT_SETTINGS = {
   temperatureUnit: "auto",
   contoursEnabled: true,
   contourInterval: 10,
+  // MOBILE-ONLY key: mobile 2D Chart View contour-density stepper (1x/2x/3x).
+  contourDensity: 1,
   defaultDepthPoleColor: "#22d3ee",
   markerClusterThreshold: 25,
   autoLoadTidal: false,

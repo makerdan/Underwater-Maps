@@ -65,8 +65,11 @@ import {
   toValidWaterType,
   toValidDefaultSpeedTier,
 } from "./settingsGuards";
+// MOBILE-ONLY import: contour-density stepper value type + guard for the
+// mobile Chart View (contourDensity settings key).
+import { toValidContourDensity, type ContourDensity } from "./contourDensity";
 
-export const SETTINGS_SCHEMA_VERSION = 36;
+export const SETTINGS_SCHEMA_VERSION = 37;
 
 /** Supported vertical-exaggeration range (matches the Settings slider). */
 export const TERRAIN_EXAGGERATION_MIN = 1;
@@ -336,6 +339,12 @@ export interface SettingsState {
    * (metres for metric, feet for imperial/nautical).
    */
   contourInterval: number;
+  /**
+   * MOBILE-ONLY: contour-density multiplier for the mobile 2D Chart View's
+   * 1×/2×/3× stepper. Divides the effective contour interval (2 = twice as
+   * many lines). The desktop Overview Map ignores this key entirely.
+   */
+  contourDensity: ContourDensity;
 
   // ── Markers ──────────────────────────────────────────────────────────
   defaultMarkerType: MarkerType;
@@ -724,6 +733,8 @@ interface SettingsActions {
   setOverviewHillshading: (v: boolean) => void;
   setContoursEnabled: (v: boolean) => void;
   setContourInterval: (v: number) => void;
+  /** MOBILE-ONLY: set the mobile Chart View's contour-density stepper value. */
+  setContourDensity: (v: ContourDensity) => void;
 
   // Markers
   setDefaultMarkerType: (v: MarkerType) => void;
@@ -1031,6 +1042,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   overviewHillshading: true,
   contoursEnabled: true,
   contourInterval: 10,
+  // MOBILE-ONLY: mobile Chart View contour-density stepper (1× default).
+  contourDensity: 1,
 
   // Markers
   defaultMarkerType: "fish",
@@ -1165,7 +1178,7 @@ export const SECTION_KEYS: Record<SettingsSection, (keyof SettingsState)[]> = {
     "directionalLightIntensity", "lampIntensity", "lampRange", "antialiasing",
     "textureQuality", "colormapTheme", "smoothTerrainSpikes",
     "showWaterSurface", "showWaterTempLayer", "showLandmass", "landmassStyle", "satelliteImagery", "colormapUserSet",
-    "contoursEnabled", "contourInterval", "showNodataBoundary",
+    "contoursEnabled", "contourInterval", "contourDensity", "showNodataBoundary",
     "maxActiveDatasets",
   ],
   hud: [
@@ -1372,6 +1385,8 @@ export const useSettingsStore = create<SettingsStore>()(
         setOverviewHillshading: setter("overviewHillshading"),
         setContoursEnabled: setter("contoursEnabled"),
         setContourInterval: setter("contourInterval"),
+        // MOBILE-ONLY: mobile Chart View density stepper.
+        setContourDensity: setter("contourDensity"),
 
         // Markers
         setDefaultMarkerType: setter("defaultMarkerType"),
@@ -1971,6 +1986,12 @@ export const useSettingsStore = create<SettingsStore>()(
           if ((rest as Record<string, unknown>).proximityMode === undefined) {
             migratedProximityMode.proximityMode = DEFAULT_SETTINGS.proximityMode;
           }
+          // v36 → v37: inject contourDensity default (1×) for existing users.
+          // MOBILE-ONLY key: mobile Chart View contour-density stepper.
+          const migratedContourDensity: Partial<SettingsState> = {};
+          if ((rest as Record<string, unknown>).contourDensity === undefined) {
+            migratedContourDensity.contourDensity = DEFAULT_SETTINGS.contourDensity;
+          }
           const mergedState: SettingsState = {
             ...DEFAULT_SETTINGS,
             ...rest,
@@ -1996,6 +2017,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ...migratedMaxActiveDatasets,
             ...migratedPuzzleLayouts,
             ...migratedProximityMode,
+            ...migratedContourDensity,
             keyBindings: mergedBindings,
             cameraSpawnBehaviour: migratedSpawnBehaviour,
             schemaVersion: SETTINGS_SCHEMA_VERSION,
@@ -2004,6 +2026,9 @@ export const useSettingsStore = create<SettingsStore>()(
           // that slipped in before migration ran (e.g. from a cross-device sync
           // or a manually edited localStorage entry).
           mergedState.joystickMode = toValidJoystickMode(mergedState.joystickMode);
+          // MOBILE-ONLY key guard: corrupted / future contourDensity values
+          // fall back to 1× instead of breaking the mobile chart.
+          mergedState.contourDensity = toValidContourDensity(mergedState.contourDensity);
           // v23 → v24: terrainExaggeration is now normalized to the slider's
           // [1, 20] range (old default was 0.8, below the supported minimum).
           mergedState.terrainExaggeration = clampTerrainExaggeration(

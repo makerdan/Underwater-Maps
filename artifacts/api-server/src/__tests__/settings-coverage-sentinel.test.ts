@@ -166,6 +166,7 @@ const SETTINGS_TESTED_FIELDS = new Set<string>([
   "temperatureUnit",
   "contoursEnabled",
   "contourInterval",
+  "contourDensity",        // me.test.ts (roundtrip/400/default), settings-schema-sync.test.ts — MOBILE-ONLY key
   "defaultDepthPoleColor",
   "markerClusterThreshold",
   "autoLoadTidal",

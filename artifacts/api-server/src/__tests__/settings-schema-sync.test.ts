@@ -59,4 +59,16 @@ describe("PutSettingsBody accepts the full UI ranges for shallow-dataset polish 
     expect(shape.safeParse(0.25).success).toBe(false);
     expect(shape.safeParse(1001).success).toBe(false);
   });
+
+  // MOBILE-ONLY key: mobile 2D Chart View contour-density stepper.
+  it("contourDensity accepts exactly the stepper values 1|2|3", () => {
+    const shape = PutSettingsBody.shape.contourDensity;
+    expect(shape.safeParse(1).success).toBe(true);
+    expect(shape.safeParse(2).success).toBe(true);
+    expect(shape.safeParse(3).success).toBe(true);
+    expect(shape.safeParse(0).success).toBe(false);
+    expect(shape.safeParse(4).success).toBe(false);
+    expect(shape.safeParse(1.5).success).toBe(false);
+    expect(shape.safeParse("2").success).toBe(false);
+  });
 });
