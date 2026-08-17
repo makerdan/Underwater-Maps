@@ -28,7 +28,7 @@
  * does not provide a WebGL context. The Delete-from-DB half of the
  * "delete marker" flow is what this spec covers end-to-end.
  */
-import { test, expect, type Page, type APIResponse, API_URL, E2E_USER_ID } from "./fixtures";
+import { test, expect, type Page, type APIRequestContext, type APIResponse, API_URL, E2E_USER_ID } from "./fixtures";
 
 const DATASET_ID = "thorne-bay";
 const TEST_USER_ID = E2E_USER_ID;
@@ -91,6 +91,32 @@ async function safeText(res: APIResponse): Promise<string> {
   }
 }
 
+/**
+ * Best-effort removal of every `e2e-marker-*` labelled marker this suite's
+ * shared user owns. Shared by `beforeEach` (clears strays from prior runs)
+ * and `afterAll` (clears markers created by the final test of this run).
+ * Takes an APIRequestContext so it works both with `page.request` and the
+ * worker-level `request` fixture available in afterAll.
+ */
+async function cleanupE2eMarkers(request: APIRequestContext): Promise<void> {
+  try {
+    const res = await request.get(`${API_BASE}/api/markers?datasetId=${DATASET_ID}`, {
+      headers: authHeaders,
+    });
+    if (!res.ok()) return;
+    const markers = (await res.json()) as Marker[];
+    for (const m of markers) {
+      if (m.label.startsWith("e2e-marker-")) {
+        await request.delete(`${API_BASE}/api/markers/${m.id}`, {
+          headers: authHeaders,
+        });
+      }
+    }
+  } catch {
+    // Ignore — beforeAll surfaces real connectivity issues.
+  }
+}
+
 test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => {
   test.beforeAll(async ({ request }) => {
     // Probe: api-server must be reachable on its dedicated port. Fail fast
@@ -112,16 +138,14 @@ test.describe("real auth-gated marker flow (api-server E2E_AUTH_BYPASS)", () => 
       } catch {}
     });
     // Best-effort cleanup of stray e2e markers from prior runs.
-    try {
-      const existing = await listMarkers(page, DATASET_ID);
-      for (const m of existing) {
-        if (m.label.startsWith("e2e-marker-")) {
-          await deleteMarker(page, m.id);
-        }
-      }
-    } catch {
-      // Ignore — beforeAll will surface real connectivity issues.
-    }
+    await cleanupE2eMarkers(page.request);
+  });
+
+  test.afterAll(async ({ request }) => {
+    // The final test of a run leaves its markers behind (beforeEach only
+    // cleans up BEFORE the next test) — sweep them here so no
+    // e2e-marker-* rows accumulate across runs.
+    await cleanupE2eMarkers(request);
   });
 
   test("requireAuth rejects requests with no Clerk session and no bypass header", async ({

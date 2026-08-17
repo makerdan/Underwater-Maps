@@ -56,6 +56,20 @@ function uniqueUser(tag: string): string {
   return `e2e-quickdrop-${tag}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 }
 
+/**
+ * Marker IDs created during this run, keyed by the bypass userId that owns
+ * them. The afterAll teardown bulk-deletes every owner's markers via
+ * DELETE /api/markers/mine so no e2e-quickdrop-* rows outlive the run.
+ * Tests that were skipped collect nothing, so no deletion is attempted.
+ */
+const createdMarkersByUser = new Map<string, string[]>();
+
+function recordCreatedMarker(userId: string, markerId: string): void {
+  const ids = createdMarkersByUser.get(userId) ?? [];
+  ids.push(markerId);
+  createdMarkersByUser.set(userId, ids);
+}
+
 async function quickDrop(
   page: Page,
   userId: string,
@@ -76,10 +90,37 @@ async function quickDrop(
     },
   });
   expect(res.status(), `quickCatch POST should 201, got ${res.status()}: ${await res.text().catch(() => "")}`).toBe(201);
-  return (await res.json()) as QuickMarker;
+  const marker = (await res.json()) as QuickMarker;
+  recordCreatedMarker(userId, marker.id);
+  return marker;
 }
 
 test.describe("Quick drop — server contract", () => {
+  test.afterAll(async ({ request }) => {
+    // Bulk-remove every marker created by this run's unique users so no
+    // e2e-quickdrop-* rows accumulate in the database. One DELETE
+    // /api/markers/mine per user (well under the 5/min per-user limit —
+    // each unique user issues exactly one).
+    for (const [userId, ids] of createdMarkersByUser) {
+      if (ids.length === 0) continue;
+      try {
+        const res = await request.delete(`${API_BASE}/api/markers/mine`, {
+          headers: { "x-e2e-user-id": userId, "x-e2e-bypass-secret": "e2e-playwright-secret" },
+        });
+        if (!res.ok()) {
+          console.warn(
+            `[quick-drop teardown] DELETE /api/markers/mine for ${userId} returned ${res.status()}`,
+          );
+        }
+      } catch (err) {
+        console.warn(
+          `[quick-drop teardown] cleanup failed for ${userId}: ${(err as Error).message}`,
+        );
+      }
+    }
+    createdMarkersByUser.clear();
+  });
+
   test("first drop is auto-named 'Catch 1' with the conditions snapshot stored", async ({ page }) => {
     const userId = uniqueUser("first");
     const created = await quickDrop(page, userId);
@@ -143,6 +184,7 @@ test.describe("Quick drop — server contract", () => {
     });
     expect(res.status()).toBe(201);
     const created = (await res.json()) as QuickMarker;
+    recordCreatedMarker(userId, created.id);
     expect(created.label).toBe("Manual marker");
     expect(created.catchSeq).toBeNull();
     expect(created.conditions).toBeNull();
