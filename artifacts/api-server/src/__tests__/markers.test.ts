@@ -226,6 +226,67 @@ describe("POST /api/markers — notes length boundary (canonical NOTES_MAX = 200
 // a marker belonging to a different user produces an empty RETURNING set and
 // the route returns 404 (not 403) to avoid leaking existence to the caller.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Regression guard — malformed dataset bbox must be rejected with 404.
+//
+// A catalog coverageBbox JSONB blob with a valid minLon but a missing / null /
+// non-finite / inverted sibling was previously accepted by resolveDatasetBbox
+// and passed to isInsideBbox, where NaN comparisons always evaluate to false —
+// silently accepting or mis-rejecting marker coordinates. resolveDatasetBbox
+// must now treat a partial bbox exactly like a missing one: 404, never 201/422.
+// ---------------------------------------------------------------------------
+describe("POST /api/markers — malformed dataset bbox is rejected (404)", () => {
+  function postMarker() {
+    return request(app)
+      .post("/api/markers")
+      .set(AUTHED_HEADER)
+      .send({ datasetId: "thorne-bay", lon: -132.53, lat: 55.69, depth: 100, label: "Test" });
+  }
+
+  function mockCatalogBboxOnce(coverageBbox: Record<string, unknown>) {
+    markersMocks.fromMock.mockImplementationOnce(() => ({
+      where: vi.fn().mockResolvedValue([{ coverageBbox }]),
+    }));
+  }
+
+  it("returns 404 (not 201 or 422) when coverageBbox.maxLat is null", async () => {
+    mockCatalogBboxOnce({ minLon: -133, minLat: 55, maxLon: -132, maxLat: null });
+    const res = await postMarker();
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "not_found" });
+  });
+
+  it("returns 404 when coverageBbox.maxLat is missing entirely", async () => {
+    mockCatalogBboxOnce({ minLon: -133, minLat: 55, maxLon: -132 });
+    const res = await postMarker();
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when a coverageBbox field is NaN", async () => {
+    mockCatalogBboxOnce({ minLon: -133, minLat: Number.NaN, maxLon: -132, maxLat: 56 });
+    const res = await postMarker();
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when a coverageBbox field is Infinity", async () => {
+    mockCatalogBboxOnce({ minLon: -133, minLat: 55, maxLon: Infinity, maxLat: 56 });
+    const res = await postMarker();
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when longitude bounds are inverted (minLon > maxLon)", async () => {
+    mockCatalogBboxOnce({ minLon: -132, minLat: 55, maxLon: -133, maxLat: 56 });
+    const res = await postMarker();
+    expect(res.status).toBe(404);
+  });
+
+  it("still returns 201 for a valid bbox (control)", async () => {
+    // Default fromMock already returns a fully-valid coverageBbox.
+    const res = await postMarker();
+    expect(res.status).toBe(201);
+  });
+});
+
 describe("DELETE /api/markers/:id — cross-user ownership", () => {
   it("returns 404 (not 403) when an authenticated user tries to delete another user's marker", async () => {
     const { db } = await import("@workspace/db");

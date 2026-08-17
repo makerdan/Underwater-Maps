@@ -54,6 +54,14 @@ export function isInBbox(lon: number, lat: number, bbox: Bbox): boolean {
 // bboxMap is expected to have an entry for every unique datasetId:
 //   - Bbox object  → dataset exists; check point containment
 //   - null         → dataset was deleted / not found in either table
+//
+// A datasetId MISSING from the map entirely (Map.get → undefined) is treated
+// exactly like a null entry: the dataset is not resolvable, so the marker is
+// counted as unknownDataset. Previously undefined was silently skipped,
+// understating the scope of problems for deleted/mismatched datasets.
+//
+// Markers with datasetId == null are unassigned — there is nothing to
+// validate, so they are skipped (callers normally filter these out anyway).
 // ---------------------------------------------------------------------------
 
 export interface ClassifyResult {
@@ -69,13 +77,16 @@ export function classifyMarkers(
   const unknownDataset: MarkerRow[] = [];
 
   for (const marker of markers) {
-    const bbox = bboxMap.get(marker.datasetId as string);
-    if (bbox === null) {
+    if (marker.datasetId == null) continue; // unassigned — nothing to validate
+    const bbox = bboxMap.get(marker.datasetId);
+    if (bbox == null) {
+      // null (dataset deleted) and undefined (id never inserted into the
+      // map) are the same failure: the dataset is not resolvable.
       unknownDataset.push(marker);
-    } else if (bbox !== undefined && !isInBbox(marker.lon, marker.lat, bbox)) {
+    } else if (!isInBbox(marker.lon, marker.lat, bbox)) {
       outOfBounds.push(marker);
     }
-    // bbox is defined and point is inside → in-bounds, no action
+    // bbox resolved and point is inside → in-bounds, no action
   }
 
   return { outOfBounds, unknownDataset };

@@ -64,7 +64,10 @@ export const ReassignMarkersDialog: React.FC<Props> = ({ onClose }) => {
   const mySaves = (mySavesData ?? []).filter((s) => s.status === "ready");
 
   // Fetch unassigned markers in the selected dataset's coverage bbox.
-  const bbox = selectedSave?.catalog?.coverageBbox ?? null;
+  // Custom-dataset-backed saves may have no catalog entry (orphan saves) —
+  // fall back to the bbox derived from the dataset's own terrain metadata so
+  // unassigned markers in a custom-dataset area are still surfaced.
+  const bbox = selectedSave?.catalog?.coverageBbox ?? selectedSave?.terrainBbox ?? null;
   const bboxParams = useMemo(
     () =>
       bbox
@@ -307,7 +310,7 @@ export const ReassignMarkersDialog: React.FC<Props> = ({ onClose }) => {
                 fontSize: "calc(14px * var(--bs-font-scale, 1))",
               }}
             >
-              {!selectedSave.catalog?.coverageBbox ? (
+              {!selectedSave.catalog?.coverageBbox && !selectedSave.terrainBbox ? (
                 <span style={{ color: "#fbbf24" }}>
                   This dataset has no coverage area on record — cannot find
                   markers to reassign.

@@ -3772,7 +3772,13 @@ export const PostSearchFederatedSaveResponse = zod.object({
   "lastUpdated": zod.string().nullish(),
   "waterType": zod.enum(['saltwater', 'freshwater']),
   "createdAt": zod.coerce.date()
-}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)'),
+  "terrainBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).nullish().describe('Coverage bbox derived from the materialized custom dataset\'s terrain metadata (list endpoint only). Fallback coverage area when the catalog entry — and its coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was removed).')
 }).describe('A user\'s saved reference to a catalog dataset')
 
 
@@ -3898,7 +3904,13 @@ export const PostNceiSaveResponse = zod.object({
   "lastUpdated": zod.string().nullish(),
   "waterType": zod.enum(['saltwater', 'freshwater']),
   "createdAt": zod.coerce.date()
-}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)'),
+  "terrainBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).nullish().describe('Coverage bbox derived from the materialized custom dataset\'s terrain metadata (list endpoint only). Fallback coverage area when the catalog entry — and its coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was removed).')
 }).describe('A user\'s saved reference to a catalog dataset')
 
 
@@ -3981,7 +3993,13 @@ export const GetDatasetsMySavesResponseItem = zod.object({
   "lastUpdated": zod.string().nullish(),
   "waterType": zod.enum(['saltwater', 'freshwater']),
   "createdAt": zod.coerce.date()
-}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)'),
+  "terrainBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).nullish().describe('Coverage bbox derived from the materialized custom dataset\'s terrain metadata (list endpoint only). Fallback coverage area when the catalog entry — and its coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was removed).')
 }).describe('A user\'s saved reference to a catalog dataset')
 export const GetDatasetsMySavesResponse = zod.array(GetDatasetsMySavesResponseItem)
 
@@ -4037,7 +4055,13 @@ export const GetDatasetsMySavesIdStatusResponse = zod.object({
   "lastUpdated": zod.string().nullish(),
   "waterType": zod.enum(['saltwater', 'freshwater']),
   "createdAt": zod.coerce.date()
-}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)'),
+  "terrainBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).nullish().describe('Coverage bbox derived from the materialized custom dataset\'s terrain metadata (list endpoint only). Fallback coverage area when the catalog entry — and its coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was removed).')
 }).describe('A user\'s saved reference to a catalog dataset')
 
 
@@ -4088,7 +4112,13 @@ export const PatchDatasetsMySavesIdRenameResponse = zod.object({
   "lastUpdated": zod.string().nullish(),
   "waterType": zod.enum(['saltwater', 'freshwater']),
   "createdAt": zod.coerce.date()
-}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)'),
+  "terrainBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).nullish().describe('Coverage bbox derived from the materialized custom dataset\'s terrain metadata (list endpoint only). Fallback coverage area when the catalog entry — and its coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was removed).')
 }).describe('A user\'s saved reference to a catalog dataset')
 
 
@@ -4138,7 +4168,13 @@ export const PatchDatasetsMySavesIdMoveResponse = zod.object({
   "lastUpdated": zod.string().nullish(),
   "waterType": zod.enum(['saltwater', 'freshwater']),
   "createdAt": zod.coerce.date()
-}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)'),
+  "terrainBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).nullish().describe('Coverage bbox derived from the materialized custom dataset\'s terrain metadata (list endpoint only). Fallback coverage area when the catalog entry — and its coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was removed).')
 }).describe('A user\'s saved reference to a catalog dataset')
 
 
@@ -4185,7 +4221,13 @@ export const PostDatasetsMySavesIdRetryResponse = zod.object({
   "lastUpdated": zod.string().nullish(),
   "waterType": zod.enum(['saltwater', 'freshwater']),
   "createdAt": zod.coerce.date()
-}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)')
+}).describe('A known public data source in the discovery catalog').nullish().describe('Embedded catalog metadata (present when returned from list\/status endpoints)'),
+  "terrainBbox": zod.object({
+  "minLon": zod.number(),
+  "minLat": zod.number(),
+  "maxLon": zod.number(),
+  "maxLat": zod.number()
+}).nullish().describe('Coverage bbox derived from the materialized custom dataset\'s terrain metadata (list endpoint only). Fallback coverage area when the catalog entry — and its coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was removed).')
 }).describe('A user\'s saved reference to a catalog dataset')
 
 

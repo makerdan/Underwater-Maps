@@ -166,6 +166,31 @@ describe("classifyMarkers", () => {
     expect(unknownDataset).toHaveLength(0);
   });
 
+  it("treats a datasetId missing from bboxMap (undefined) the same as null — unknownDataset", () => {
+    const markers: MarkerRow[] = [
+      makeMarker({ id: "m1", datasetId: DATASET_ID_DELETED, lon: -133.0, lat: 57.5 }),
+    ];
+    // bboxMap has NO entry for the dataset — Map.get returns undefined.
+    // Previously this was silently skipped, understating problem scope.
+    const bboxMap = new Map<string, Bbox | null>();
+
+    const { outOfBounds, unknownDataset } = classifyMarkers(markers, bboxMap);
+
+    expect(unknownDataset.map((m) => m.id)).toEqual(["m1"]);
+    expect(outOfBounds).toHaveLength(0);
+  });
+
+  it("skips unassigned markers (datasetId null) — nothing to validate", () => {
+    const markers: MarkerRow[] = [
+      { id: "m1", userId: "user-1", datasetId: null, lon: -133.0, lat: 57.5 },
+    ];
+
+    const { outOfBounds, unknownDataset } = classifyMarkers(markers, new Map());
+
+    expect(outOfBounds).toHaveLength(0);
+    expect(unknownDataset).toHaveLength(0);
+  });
+
   it("counts boundary-edge markers as in-bounds (not out-of-bounds)", () => {
     // Exactly on bbox corner — should be in-bounds (inclusive)
     const markers: MarkerRow[] = [

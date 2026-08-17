@@ -2622,6 +2622,16 @@ export const UserCatalogSaveStatus = {
 } as const;
 
 /**
+ * Coverage bbox derived from the materialized custom dataset's terrain metadata (list endpoint only). Fallback coverage area when the catalog entry — and its coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was removed).
+ */
+export type UserCatalogSaveTerrainBbox = {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+} | null;
+
+/**
  * A user's saved reference to a catalog dataset
  */
 export interface UserCatalogSave {
@@ -2642,6 +2652,8 @@ export interface UserCatalogSave {
   datasetId?: string | null;
   /** Embedded catalog metadata (present when returned from list/status endpoints) */
   catalog?: DatasetCatalogEntry | null;
+  /** Coverage bbox derived from the materialized custom dataset's terrain metadata (list endpoint only). Fallback coverage area when the catalog entry — and its coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was removed). */
+  terrainBbox?: UserCatalogSaveTerrainBbox;
 }
 
 /**

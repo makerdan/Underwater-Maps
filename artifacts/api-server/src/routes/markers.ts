@@ -9,23 +9,23 @@ import { validateResponse } from "../middlewares/validateResponse.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
 import { dataMutationRateLimit, bulkDeleteMarkersRateLimit } from "../middlewares/dataMutationRateLimit.js";
+import { isValidBbox, isInsideBbox, type NormalisedBbox } from "../lib/bbox.js";
 
 const LABEL_MAX = 200;
 const NOTES_MAX = 2000;
 
-interface NormalisedBbox {
-  minLon: number;
-  minLat: number;
-  maxLon: number;
-  maxLat: number;
-}
-
 /**
  * Resolves the coverage bbox for a given datasetId by checking the catalog
  * table first, then the user-uploaded custom datasets table. Returns a
- * normalised bbox or null when the dataset is not found in either table.
+ * normalised bbox or null when the dataset is not found in either table
+ * OR when the stored bbox is malformed (missing / non-finite fields,
+ * inverted bounds) — a garbage bbox is treated the same as a missing one
+ * so the route rejects the request with 404 instead of running NaN
+ * comparisons in isInsideBbox.
+ *
+ * Exported for unit tests.
  */
-async function resolveDatasetBbox(datasetId: string): Promise<NormalisedBbox | null> {
+export async function resolveDatasetBbox(datasetId: string): Promise<NormalisedBbox | null> {
   // 1. Check catalog datasets (coverageBbox is a JSONB blob).
   const catalogRows = await db
     .select({ coverageBbox: datasetCatalogTable.coverageBbox })
@@ -33,30 +33,45 @@ async function resolveDatasetBbox(datasetId: string): Promise<NormalisedBbox | n
     .where(eq(datasetCatalogTable.id, datasetId));
 
   if (catalogRows.length > 0) {
-    const bbox = catalogRows[0]!.coverageBbox as NormalisedBbox | null | undefined;
-    if (bbox && typeof bbox.minLon === "number") {
-      return bbox;
+    const bbox = catalogRows[0]!.coverageBbox;
+    if (isValidBbox(bbox)) {
+      return { minLon: bbox.minLon, minLat: bbox.minLat, maxLon: bbox.maxLon, maxLat: bbox.maxLat };
     }
+    // The dataset exists in the catalog but its stored bbox is unusable.
+    // Do NOT fall through to the custom-datasets table: catalog IDs are
+    // human-readable slugs that never appear in custom_datasets.
+    return null;
   }
 
   // 2. Check user-uploaded datasets (bbox fields live inside terrainJson).
-  const userRows = await db
-    .select({ terrainJson: customDatasetsTable.terrainJson })
-    .from(customDatasetsTable)
-    .where(eq(customDatasetsTable.id, datasetId));
+  // custom_datasets.id is uuid-typed in Postgres; a catalog-style slug that
+  // reaches this query throws "invalid input syntax for type uuid" (22P02).
+  // Treat that as "dataset not found" (→ 404) rather than letting it become
+  // a 500.
+  let userRows: Array<{ terrainJson: { minLon?: unknown; minLat?: unknown; maxLon?: unknown; maxLat?: unknown } | null }>;
+  try {
+    userRows = await db
+      .select({ terrainJson: customDatasetsTable.terrainJson })
+      .from(customDatasetsTable)
+      .where(eq(customDatasetsTable.id, datasetId));
+  } catch (err) {
+    if ((err as { code?: string }).code === "22P02") {
+      return null;
+    }
+    throw err;
+  }
 
   if (userRows.length > 0) {
     const tj = userRows[0]!.terrainJson;
-    if (tj && typeof tj.minLon === "number") {
-      return { minLon: tj.minLon, minLat: tj.minLat, maxLon: tj.maxLon, maxLat: tj.maxLat };
+    if (tj) {
+      const candidate = { minLon: tj.minLon, minLat: tj.minLat, maxLon: tj.maxLon, maxLat: tj.maxLat };
+      if (isValidBbox(candidate)) {
+        return candidate;
+      }
     }
   }
 
   return null;
-}
-
-function isInsideBbox(lon: number, lat: number, bbox: NormalisedBbox): boolean {
-  return lon >= bbox.minLon && lon <= bbox.maxLon && lat >= bbox.minLat && lat <= bbox.maxLat;
 }
 
 const router = Router();

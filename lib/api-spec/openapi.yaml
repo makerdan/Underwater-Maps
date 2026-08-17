@@ -8168,6 +8168,16 @@ components:
           allOf:
             - $ref: "#/components/schemas/DatasetCatalogEntry"
           description: Embedded catalog metadata (present when returned from list/status endpoints)
+        terrainBbox:
+          type: object
+          nullable: true
+          description: Coverage bbox derived from the materialized custom dataset's terrain metadata (list endpoint only). Fallback coverage area when the catalog entry — and its coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was removed).
+          properties:
+            minLon: { type: number }
+            minLat: { type: number }
+            maxLon: { type: number }
+            maxLat: { type: number }
+          required: [minLon, minLat, maxLon, maxLat]
       required:
         - id
         - catalogId

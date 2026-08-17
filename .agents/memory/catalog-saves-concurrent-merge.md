@@ -29,3 +29,5 @@ Common wrong-variable patterns seen:
 - `eq(table.id, saveId)` in GET /my-saves where `saveId` is not in scope (should filter by `userId` only)
 
 Also check test files: `select: plainFn` in a `createDbMock` override fails `MockInstance` type — wrap in `vi.fn()`.
+
+- Damage can also appear as hunks transplanted into the WRONG handler (e.g. an `.set({...})` payload swapped between routes, a where-clause borrowed from a different endpoint) — not just dropped wrappers. Repair by restoring the file from the merge baseline (`git show <baseline>:path > path`) and re-applying only your deliberate edits; do not patch the scrambled file in place.

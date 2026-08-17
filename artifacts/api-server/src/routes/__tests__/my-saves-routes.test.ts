@@ -26,10 +26,12 @@ const state: {
   saves: Row[];
   lastUpdateValues: Row | null;
   insertedRows: Row[];
+  customDatasets: Row[];
 } = {
   saves: [],
   lastUpdateValues: null,
   insertedRows: [],
+  customDatasets: [],
 };
 
 let currentUserId: string | null = "user-a";
@@ -53,10 +55,16 @@ vi.mock("@workspace/db", () => {
 
   // select(): simple filter by userId, ignoring the WHERE condition detail.
   // Every route under test enforces ownership via userId in its WHERE clause,
-  // so this faithfully reproduces ownership semantics.
+  // so this faithfully reproduces ownership semantics. The customDatasets
+  // table is served from its own state bucket (the my-saves list route
+  // bulk-fetches terrainJson to build the terrainBbox fallback).
   const select = () => ({
-    from: (_table: unknown) => ({
-      where: () => Promise.resolve(userSaves()),
+    from: (table: unknown) => ({
+      where: () => {
+        const name = (table as { __tableName?: string }).__tableName;
+        if (name === "customDatasets") return Promise.resolve(state.customDatasets);
+        return Promise.resolve(userSaves());
+      },
     }),
   });
 
@@ -250,6 +258,7 @@ beforeEach(() => {
   state.saves = [];
   state.lastUpdateValues = null;
   state.insertedRows = [];
+  state.customDatasets = [];
   currentUserId = "user-a";
 });
 
@@ -320,6 +329,50 @@ describe("GET /api/datasets/my-saves", () => {
     expect(res.status).toBe(200);
     const item = res.body[0];
     expect(item.catalog).toBeNull();
+  });
+});
+
+// ===========================================================================
+// GET /api/datasets/my-saves — terrainBbox fallback for custom datasets
+// ===========================================================================
+
+describe("GET /api/datasets/my-saves — terrainBbox", () => {
+  const TERRAIN_BBOX = { minLon: -122, minLat: 37, maxLon: -121, maxLat: 38 };
+
+  it("populates terrainBbox from the custom dataset's terrainJson for orphan saves", async () => {
+    // Orphan: catalog entry gone, but the materialized dataset still exists.
+    state.saves = [makeSaveRow({ catalogId: "deleted-entry", datasetId: "ds-1" })];
+    state.customDatasets = [
+      { id: "ds-1", terrainJson: { ...TERRAIN_BBOX, depths: [] } },
+    ];
+
+    const res = await request(app).get("/api/datasets/my-saves");
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].catalog).toBeNull();
+    expect(res.body[0].terrainBbox).toEqual(TERRAIN_BBOX);
+  });
+
+  it("sets terrainBbox to null when the stored terrainJson bbox is malformed", async () => {
+    state.saves = [makeSaveRow({ catalogId: "deleted-entry", datasetId: "ds-1" })];
+    state.customDatasets = [
+      // maxLat missing → invalid, must be skipped rather than served.
+      { id: "ds-1", terrainJson: { minLon: -122, minLat: 37, maxLon: -121 } },
+    ];
+
+    const res = await request(app).get("/api/datasets/my-saves");
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].terrainBbox).toBeNull();
+  });
+
+  it("sets terrainBbox to null when the save has no materialized dataset", async () => {
+    state.saves = [makeSaveRow({ datasetId: null, status: "processing" })];
+
+    const res = await request(app).get("/api/datasets/my-saves");
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].terrainBbox).toBeNull();
   });
 });
 

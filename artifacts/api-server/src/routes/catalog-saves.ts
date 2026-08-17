@@ -26,7 +26,7 @@
  */
 
 import { Router } from "express";
-import { eq, and, lt, isNull } from "drizzle-orm";
+import { eq, and, lt, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { CatalogSearchQuerySchema, CatalogIdParamSchema, SaveIdParamSchema, DatasetsQuerySchema } from "./schemas.js";
@@ -36,6 +36,7 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
 import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
+import { isValidBbox, type NormalisedBbox } from "../lib/bbox.js";
 import {
   GetDatasetsCatalogResponse,
   GetDatasetsCatalogSearchResponse,
@@ -1365,6 +1366,28 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
   const entries = await getCatalogEntries();
   const entryMap = new Map(entries.map((e) => [e.id, e]));
 
+  // Bulk-fetch terrain bboxes for saves backed by a materialized custom
+  // dataset, so the client has a fallback when the catalog entry — and its
+  // coverageBbox — is unavailable (e.g. orphan saves whose catalog entry was
+  // removed). Malformed stored bboxes are skipped, not served.
+  const materializedIds = rows
+    .map((r) => r.datasetId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  const terrainBboxById = new Map<string, NormalisedBbox>();
+  if (materializedIds.length > 0) {
+    const customRows = await db
+      .select({ id: customDatasetsTable.id, terrainJson: customDatasetsTable.terrainJson })
+      .from(customDatasetsTable)
+      .where(inArray(customDatasetsTable.id, materializedIds));
+    for (const cr of customRows) {
+      const tj = cr.terrainJson as { minLon?: unknown; minLat?: unknown; maxLon?: unknown; maxLat?: unknown } | null;
+      if (tj) {
+        const candidate = { minLon: tj.minLon, minLat: tj.minLat, maxLon: tj.maxLon, maxLat: tj.maxLat };
+        if (isValidBbox(candidate)) terrainBboxById.set(cr.id, candidate);
+      }
+    }
+  }
+
   const result = rows
     .map((row) => {
       const entry = entryMap.get(row.catalogId);
@@ -1373,7 +1396,9 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
     // Orphan saves (no catalog entry) always pass through — never silently
     // hide a save just because its catalog entry disappeared.
     .filter(({ entry }) => !waterType || !entry || entry.waterType === waterType)
-    .map(({ row, entry }) => formatSaveRow(row, entry));
+    .map(({ row, entry }) =>
+      formatSaveRow(row, entry, row.datasetId ? terrainBboxById.get(row.datasetId) ?? null : null),
+    );
 
   res.json(validateResponse(GetDatasetsMySavesResponse, result, "GET /api/datasets/my-saves"));
 }));
@@ -1495,6 +1520,7 @@ router.delete("/datasets/my-saves/:id", requireAuth, asyncHandler(async (req, re
 export function formatSaveRow(
   row: typeof userCatalogSavesTable.$inferSelect,
   entry: CatalogSeedEntry | null,
+  terrainBbox: NormalisedBbox | null = null,
 ) {
   return {
     id: row.id,
@@ -1508,6 +1534,7 @@ export function formatSaveRow(
     folderId: row.folderId ?? null,
     datasetId: row.datasetId ?? null,
     catalog: entry ? toCatalogResponse(entry, entryCreatedAtIso(entry)) : null,
+    terrainBbox,
   };
 }
 

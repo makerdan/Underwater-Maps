@@ -464,6 +464,9 @@ vi.mock("drizzle-orm", () => ({
   asc: (col: unknown) => ({ kind: "asc", col }),
   // isNull is used in catalog-saves.ts for filtering saves where requestBboxJson IS NULL
   isNull: (col: unknown) => ({ kind: "isNull", col }),
+  // inArray is used in catalog-saves.ts to bulk-fetch custom-dataset terrain
+  // bboxes for the my-saves list (terrainBbox fallback).
+  inArray: (col: unknown, vals: unknown[]) => ({ kind: "inArray", col, vals }),
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
     __sql: strings.join("?"),
     values,
