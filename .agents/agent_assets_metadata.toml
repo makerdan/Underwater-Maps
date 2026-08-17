@@ -82,8 +82,8 @@ title = "Task Triage Skill (both copies)"
 id = "59L0NvQ1Aw5Kgz5LmyS5r"
 uri = "file://failure-gate-skill.zip"
 type = "unspecified"
-title = "Failure Gate Skill"
-description = "Zipped .agents/skills/failure-gate/ directory containing SKILL.md"
+title = "Failure Gate SKILL.md"
+description = "Zipped SKILL.md for the Failure Gate skill."
 
 [[outputs]]
 id = "iSzY6YJd8_VmiWOGIgVxd"
@@ -105,3 +105,10 @@ uri = "file://skill-mirror-sync.zip"
 type = "unspecified"
 title = "skill-mirror-sync SKILL.md"
 description = "Zipped skill file for the skill-mirror-sync skill."
+
+[[outputs]]
+id = "H-mCSWsJ1d9V5c9ls3pC1"
+uri = "file://harden-bug-fixes-skill.zip"
+type = "unspecified"
+title = "Harden Bug Fixes (Regression Guard) SKILL.md"
+description = "Zipped SKILL.md for the Harden Bug Fixes / Regression Guard skill."
