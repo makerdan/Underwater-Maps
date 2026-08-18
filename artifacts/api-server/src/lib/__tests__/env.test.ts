@@ -6,13 +6,13 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { mockWarn } = vi.hoisted(() => ({ mockWarn: vi.fn() }));
+const { mockWarn, mockError } = vi.hoisted(() => ({ mockWarn: vi.fn(), mockError: vi.fn() }));
 
 vi.mock("../logger.js", () => ({
   logger: {
     warn: mockWarn,
     info: vi.fn(),
-    error: vi.fn(),
+    error: mockError,
     debug: vi.fn(),
   },
 }));
@@ -28,6 +28,7 @@ function warnDataObjects(): Record<string, unknown>[] {
 
 beforeEach(() => {
   mockWarn.mockClear();
+  mockError.mockClear();
 });
 
 afterEach(() => {
@@ -239,14 +240,75 @@ describe("validateStartupEnv", () => {
       expect(() => validateStartupEnv()).not.toThrow();
     });
 
-    it("does NOT throw when BUCKET_MONITOR_ADMIN is unset in production", () => {
+    it("does NOT throw when BUCKET_MONITOR_ADMIN is unset in production but ADMIN_USER_IDS is set", () => {
       vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
       vi.stubEnv("REPLIT_DEPLOYMENT", "1");
       vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("ADMIN_USER_IDS", "user_abc123");
       expect(() => validateStartupEnv()).not.toThrow();
     });
 
     it("returned issue has critical:true when BUCKET_MONITOR_ADMIN is set in production", () => {
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+      vi.stubEnv("NODE_ENV", "");
+      vi.stubEnv("ADMIN_USER_IDS", "user_abc123");
+      let caught: Error | null = null;
+      try {
+        validateStartupEnv();
+      } catch (e) {
+        caught = e as Error;
+      }
+      expect(caught).not.toBeNull();
+      expect(caught!.message).toContain("BUCKET_MONITOR_ADMIN");
+    });
+  });
+
+  describe("admin lockout guard (no admin access pathway in production)", () => {
+    it("throws a critical error in production when ADMIN_USER_IDS is empty and BUCKET_MONITOR_ADMIN is unset", () => {
+      vi.stubEnv("ADMIN_USER_IDS", "");
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+      vi.stubEnv("NODE_ENV", "");
+      expect(() => validateStartupEnv()).toThrow(/ADMIN_USER_IDS/);
+    });
+
+    it("throws a critical error in production when ADMIN_USER_IDS is whitespace-only and BUCKET_MONITOR_ADMIN is unset", () => {
+      vi.stubEnv("ADMIN_USER_IDS", "   ");
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "");
+      vi.stubEnv("NODE_ENV", "production");
+      expect(() => validateStartupEnv()).toThrow(/ADMIN_USER_IDS/);
+    });
+
+    it("does NOT throw in non-production even when ADMIN_USER_IDS is empty", () => {
+      vi.stubEnv("ADMIN_USER_IDS", "");
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "");
+      vi.stubEnv("NODE_ENV", "development");
+      expect(() => validateStartupEnv()).not.toThrow();
+    });
+
+    it("does NOT throw in test environment even when ADMIN_USER_IDS is empty", () => {
+      vi.stubEnv("ADMIN_USER_IDS", "");
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "");
+      vi.stubEnv("NODE_ENV", "test");
+      expect(() => validateStartupEnv()).not.toThrow();
+    });
+
+    it("does NOT throw in production when ADMIN_USER_IDS is set to a valid id", () => {
+      vi.stubEnv("ADMIN_USER_IDS", "user_abc123");
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+      vi.stubEnv("NODE_ENV", "");
+      expect(() => validateStartupEnv()).not.toThrow();
+    });
+
+    it("does NOT throw in production when BUCKET_MONITOR_ADMIN=1 (dev flag suppresses lockout issue)", () => {
+      // BUCKET_MONITOR_ADMIN in production triggers its own critical error; the
+      // separate lockout guard must NOT double-fire when the dev flag is active.
+      vi.stubEnv("ADMIN_USER_IDS", "");
       vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
       vi.stubEnv("REPLIT_DEPLOYMENT", "1");
       vi.stubEnv("NODE_ENV", "");
@@ -256,8 +318,31 @@ describe("validateStartupEnv", () => {
       } catch (e) {
         caught = e as Error;
       }
+      // Should throw — but only for BUCKET_MONITOR_ADMIN, not the lockout guard.
       expect(caught).not.toBeNull();
       expect(caught!.message).toContain("BUCKET_MONITOR_ADMIN");
+      expect(caught!.message).not.toContain("permanent lockout");
+    });
+
+    it("emits a critical-level log entry (not just a warning) for the lockout issue", () => {
+      vi.stubEnv("ADMIN_USER_IDS", "");
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+      vi.stubEnv("NODE_ENV", "");
+      try {
+        validateStartupEnv();
+      } catch {
+        // expected
+      }
+      // The critical issue must be logged at error level, not just as a warning.
+      expect(mockError).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "ADMIN_USER_IDS" }),
+        expect.stringContaining("ADMIN_USER_IDS"),
+      );
+      expect(mockWarn).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining("permanent lockout"),
+      );
     });
   });
 });

@@ -158,6 +158,22 @@ export function validateStartupEnv(): EnvIssue[] {
     });
   }
 
+  // If no admin access pathway is configured in production, every user (including
+  // the owner) will land as pending with no way to approve anyone — a permanent
+  // lockout. This check is skipped in non-production (test/dev) environments.
+  const bucketAdminActive = bucketAdminFlag === "1" || bucketAdminFlag === "true";
+  const adminIdsPresent = (adminIdsRaw ?? "").trim() !== "";
+  if (isProduction && !adminIdsPresent && !bucketAdminActive) {
+    issues.push({
+      name: "ADMIN_USER_IDS",
+      valueLength: 0,
+      valuePreview: "…",
+      problem:
+        "is not set. Without ADMIN_USER_IDS every new user will land as pending with no admin able to approve them — a permanent lockout. Set ADMIN_USER_IDS to a comma-separated list of Clerk user IDs.",
+      critical: true,
+    });
+  }
+
   for (const issue of issues) {
     const safeMeta = { name: issue.name, valueLength: issue.valueLength, valuePreview: issue.valuePreview };
     if (issue.critical) {
