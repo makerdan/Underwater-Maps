@@ -27,6 +27,7 @@
 - [Health probe must use /api/healthz](health-probe-routing.md) — root-relative probes hit the SPA fallback 200; only /api/* reaches the API server. Dev restart button lives on the Vite server.
 - [__proto__ evades own-key checks](proto-key-own-property-evasion.md) — copying untrusted keys into a plain {} lets __proto__ vanish from Object.keys; use Object.create(null) + denylist.
 - [Drizzle schema-drift check quirks](drizzle-schema-drift-check.md) — drizzle-kit generate needs relative `out`; hand-written migrations must be journaled or drift check always fires.
+- [Drizzle journal cannot bootstrap a fresh DB](drizzle-journal-no-bootstrap.md) — 0000_baseline is empty, real baseline journaled after migrations that use its tables; migrate always exits 1 silently on empty DBs — use push-force.
 - [Headless geometry probe](headless-geometry-probe.md) — probeTerrainGeometry() builds the real render geometry CPU-only and publishes crosshairGps only when the mesh has relief; use for viewport-visibility e2e checks.
 - [Headless test-bridge fallback](headless-test-bridge-fallback.md) — Canvas-hook-registered __bathyTest callbacks never register headless; fall back to pure lib functions run on the rig camera.
 - [Playwright contextmenu dispatchEvent drops coords](playwright-contextmenu-dispatchevent.md) — dispatchEvent("contextmenu",{clientX}) builds a plain Event, coords become NaN; construct MouseEvent in-page via evaluate.

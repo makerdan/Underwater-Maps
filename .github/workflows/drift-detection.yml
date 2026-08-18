@@ -12,6 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    env:
+      # Placeholder only — lib/db/src/index.ts throws at module-init time when
+      # DATABASE_URL is unset, which breaks the mock-contract vitest suite
+      # (check:mock-drift) before vi.mock hoisting can neutralize the real DB.
+      # The tests mock the DB and never open a connection, so no service
+      # container is needed; the value just has to exist and parse.
+      DATABASE_URL: postgres://noop:noop@localhost:5432/noop
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

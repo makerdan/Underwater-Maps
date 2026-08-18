@@ -84,8 +84,18 @@ jobs:
       - name: Build shared libs (emit .d.ts for workspace packages)
         run: pnpm run typecheck:libs
 
-      - name: Run database migrations
-        run: pnpm --filter @workspace/db run migrate
+      # WHY push --force, not migrate:
+      #   The migration journal cannot bootstrap a fresh database:
+      #   0000_baseline.sql is an empty stub and the real schema baseline
+      #   lives in 0012_schema_baseline_sync, which the journal orders AFTER
+      #   migrations that reference those tables (0001 deletes from "markers"
+      #   before any migration creates it). `drizzle-kit migrate` therefore
+      #   always exits 1 against the empty CI service container. This matches
+      #   local dev, where post-merge.sh uses push for the same reason.
+      #   `push --force` derives DDL directly from the Drizzle schema, which
+      #   is exactly what a from-scratch e2e database needs.
+      - name: Create database schema (drizzle-kit push)
+        run: pnpm --filter @workspace/db run push-force
 
       # --with-deps installs the OS-level shared libraries Chromium needs on
       # ubuntu-latest (the replit.nix package list serves this purpose

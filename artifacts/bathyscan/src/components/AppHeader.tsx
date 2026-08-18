@@ -107,7 +107,7 @@ export function AppHeader() {
                     borderRadius: 7,
                     background: "#f97316",
                     color: "#fff",
-                    fontSize: 9,
+                    fontSize: "calc(9px * var(--bs-font-scale, 1))",
                     fontWeight: 700,
                     lineHeight: "14px",
                     textAlign: "center",
