@@ -6013,7 +6013,7 @@ components:
           default: 0.012
         colormapTheme:
           type: string
-          enum: [ocean, thermal, grayscale, viridis, freshwater, custom]
+          enum: [ocean, thermal, grayscale, viridis, freshwater, pastel, custom]
           default: ocean
         paletteShallow:
           type: string

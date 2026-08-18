@@ -91,7 +91,7 @@ describe("PUT /api/settings — paletteShallow / paletteDeep", () => {
 
 describe("PUT /api/settings — colormapTheme", () => {
   it("accepts each valid colormapTheme value", async () => {
-    const themes = ["ocean", "thermal", "grayscale", "viridis", "freshwater", "custom"] as const;
+    const themes = ["ocean", "thermal", "grayscale", "viridis", "freshwater", "pastel", "custom"] as const;
     for (const theme of themes) {
       const res = await request(app)
         .put("/api/settings")

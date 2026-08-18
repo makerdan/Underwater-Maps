@@ -188,6 +188,7 @@ export const UserSettingsColormapTheme = {
   grayscale: 'grayscale',
   viridis: 'viridis',
   freshwater: 'freshwater',
+  pastel: 'pastel',
   custom: 'custom',
 } as const;
 

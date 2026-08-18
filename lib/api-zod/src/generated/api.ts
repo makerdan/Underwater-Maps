@@ -2010,7 +2010,7 @@ export const GetSettingsResponse = zod.object({
   "enableCaustics": zod.boolean().default(getSettingsResponseEnableCausticsDefault),
   "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(getSettingsResponseParticleDensityDefault),
   "fogDensity": zod.number().min(getSettingsResponseFogDensityMin).max(getSettingsResponseFogDensityMax).default(getSettingsResponseFogDensityDefault),
-  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater', 'custom']).default(getSettingsResponseColormapThemeDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater', 'pastel', 'custom']).default(getSettingsResponseColormapThemeDefault),
   "paletteShallow": zod.string().regex(getSettingsResponsePaletteShallowRegExp).default(getSettingsResponsePaletteShallowDefault).describe('Shallow endpoint hex colour for the Ocean depth palette.'),
   "paletteDeep": zod.string().regex(getSettingsResponsePaletteDeepRegExp).default(getSettingsResponsePaletteDeepDefault).describe('Deep endpoint hex colour for the Ocean depth palette.'),
   "customStops": zod.array(zod.object({
@@ -2544,7 +2544,7 @@ export const PutSettingsBody = zod.object({
   "enableCaustics": zod.boolean().default(putSettingsBodyEnableCausticsDefault),
   "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(putSettingsBodyParticleDensityDefault),
   "fogDensity": zod.number().min(putSettingsBodyFogDensityMin).max(putSettingsBodyFogDensityMax).default(putSettingsBodyFogDensityDefault),
-  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater', 'custom']).default(putSettingsBodyColormapThemeDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater', 'pastel', 'custom']).default(putSettingsBodyColormapThemeDefault),
   "paletteShallow": zod.string().regex(putSettingsBodyPaletteShallowRegExp).default(putSettingsBodyPaletteShallowDefault).describe('Shallow endpoint hex colour for the Ocean depth palette.'),
   "paletteDeep": zod.string().regex(putSettingsBodyPaletteDeepRegExp).default(putSettingsBodyPaletteDeepDefault).describe('Deep endpoint hex colour for the Ocean depth palette.'),
   "customStops": zod.array(zod.object({
@@ -3073,7 +3073,7 @@ export const PutSettingsResponse = zod.object({
   "enableCaustics": zod.boolean().default(putSettingsResponseEnableCausticsDefault),
   "particleDensity": zod.enum(['off', 'sparse', 'dense']).default(putSettingsResponseParticleDensityDefault),
   "fogDensity": zod.number().min(putSettingsResponseFogDensityMin).max(putSettingsResponseFogDensityMax).default(putSettingsResponseFogDensityDefault),
-  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater', 'custom']).default(putSettingsResponseColormapThemeDefault),
+  "colormapTheme": zod.enum(['ocean', 'thermal', 'grayscale', 'viridis', 'freshwater', 'pastel', 'custom']).default(putSettingsResponseColormapThemeDefault),
   "paletteShallow": zod.string().regex(putSettingsResponsePaletteShallowRegExp).default(putSettingsResponsePaletteShallowDefault).describe('Shallow endpoint hex colour for the Ocean depth palette.'),
   "paletteDeep": zod.string().regex(putSettingsResponsePaletteDeepRegExp).default(putSettingsResponsePaletteDeepDefault).describe('Deep endpoint hex colour for the Ocean depth palette.'),
   "customStops": zod.array(zod.object({
