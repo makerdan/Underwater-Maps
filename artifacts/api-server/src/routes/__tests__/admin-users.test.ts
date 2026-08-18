@@ -31,6 +31,8 @@ const {
 } = vi.hoisted(() => {
   const state = {
     listRows: [] as Array<Record<string, unknown>>,
+    /** Resolved value when the pending-count endpoint awaits db.select().from().where() directly. */
+    pendingCountRows: [{ count: 0 }] as Array<Record<string, unknown>>,
     updateRows: [] as Array<Record<string, unknown>>,
     deleteRows: [] as Array<Record<string, unknown>>,
     clerkProfile: null as Record<string, unknown> | null,
@@ -39,7 +41,21 @@ const {
 
   const limit = vi.fn(async () => state.listRows);
   const orderBy = vi.fn(() => ({ limit }));
-  const whereSelect = vi.fn(() => ({ orderBy }));
+  // whereSelect must be BOTH:
+  //   1. An object with `.orderBy` so the paginated-list chain works:
+  //      db.select().from().where().orderBy().limit()  [awaits limit()]
+  //   2. Thenable so the pending-count chain works:
+  //      await db.select({ count: count() }).from().where()  [awaits the where result]
+  const whereSelect = vi.fn(() => {
+    const obj = {
+      orderBy,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      then(onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown): any {
+        return Promise.resolve(state.pendingCountRows).then(onFulfilled, onRejected);
+      },
+    };
+    return obj;
+  });
   const from = vi.fn(() => ({ where: whereSelect }));
   const select = vi.fn(() => ({ from }));
 
@@ -101,6 +117,9 @@ vi.mock("drizzle-orm", () => ({
   gt: vi.fn((column: unknown, value: unknown) => ({ op: "gt", column, value })),
   and: vi.fn((...conds: unknown[]) => ({ op: "and", conds })),
   asc: vi.fn((column: unknown) => ({ op: "asc", column })),
+  // count() returns a SQL expression; for mock purposes any object is fine —
+  // the mock select() ignores the selection argument entirely.
+  count: vi.fn(() => ({ __drizzleCount: true })),
 }));
 
 vi.mock("@clerk/express", () => ({
@@ -150,6 +169,7 @@ beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   vi.stubEnv("ADMIN_USER_IDS", ADMIN_USER);
   dbState.listRows = [];
+  dbState.pendingCountRows = [{ count: 0 }];
   dbState.updateRows = [];
   dbState.deleteRows = [];
   dbState.clerkProfile = null;
@@ -383,9 +403,38 @@ describe("DELETE /admin/users/:clerkUserId", () => {
   });
 });
 
+describe("GET /admin/users/pending-count", () => {
+  it("returns the count of pending users", async () => {
+    dbState.pendingCountRows = [{ count: 7 }];
+    const res = await asAdmin(request(makeApp()).get("/admin/users/pending-count"));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ count: 7 });
+    // where() was called with status === "pending"
+    expect(whereSelectMock).toHaveBeenCalledWith({
+      op: "eq",
+      column: "status",
+      value: "pending",
+    });
+  });
+
+  it("returns 0 when no pending rows exist", async () => {
+    dbState.pendingCountRows = [{ count: 0 }];
+    const res = await asAdmin(request(makeApp()).get("/admin/users/pending-count"));
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(0);
+  });
+
+  it("returns 403 for a non-admin caller", async () => {
+    const res = await asNonAdmin(request(makeApp()).get("/admin/users/pending-count"));
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+  });
+});
+
 describe("access control", () => {
   const CALLS: Array<[string, (app: express.Express) => request.Test]> = [
     ["GET /admin/users", (app) => request(app).get("/admin/users")],
+    ["GET /admin/users/pending-count", (app) => request(app).get("/admin/users/pending-count")],
     ["POST approve", (app) => request(app).post(`/admin/users/${TARGET}/approve`)],
     ["POST ban", (app) => request(app).post(`/admin/users/${TARGET}/ban`)],
     ["POST restore", (app) => request(app).post(`/admin/users/${TARGET}/restore`)],

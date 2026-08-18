@@ -17,7 +17,7 @@
  */
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, count, eq, gt } from "drizzle-orm";
 import { clerkClient } from "@clerk/express";
 import { db, userAccessTable, type UserAccessRow } from "@workspace/db";
 import {
@@ -26,6 +26,7 @@ import {
   AdminBanUserResponse,
   AdminRestoreUserResponse,
   AdminDeleteUserResponse,
+  AdminPendingCountResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { isAdmin } from "../lib/adminAccess.js";
@@ -136,6 +137,31 @@ function toUserRecord(row: UserAccessRow) {
     updatedAt: row.updatedAt.toISOString(),
   };
 }
+
+// ---------------------------------------------------------------------------
+// GET /admin/users/pending-count — lightweight count of pending users
+// ---------------------------------------------------------------------------
+
+router.get(
+  "/admin/users/pending-count",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!requireAdminCaller(req, res)) return;
+
+    const [result] = await db
+      .select({ count: count() })
+      .from(userAccessTable)
+      .where(eq(userAccessTable.status, "pending"));
+
+    res.json(
+      validateResponse(
+        AdminPendingCountResponse,
+        { count: result?.count ?? 0 },
+        "GET /api/admin/users/pending-count",
+      ),
+    );
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // GET /admin/users — paginated list

@@ -1,15 +1,17 @@
 /**
  * AdminPanel — admin-only dashboard surfacing server-side operational stats.
  *
- * Currently shows the Upscale Cache card: hit/miss counts, hit rate, and
- * estimated Poe credits saved since the last server restart.
+ * Cards:
+ *   - Pending Approvals: lists users awaiting approval with one-click approve.
+ *   - Upscale Cache: hit/miss counts, hit rate, estimated Poe credits saved.
+ *   - Skill Download: downloads the failure-gate skill zip.
  *
  * Access is gated by the server (403 when the signed-in user is not in
  * ADMIN_USER_IDS). This component renders a placeholder card while loading
  * and an error state if the fetch fails or returns 403.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 
@@ -22,6 +24,13 @@ interface UpscaleCacheStats {
   estimatedCreditsSaved: number;
   creditsPerCall: number;
   generatedAt: string;
+}
+
+interface PendingUser {
+  clerkUserId: string;
+  email: string | null;
+  displayName: string | null;
+  createdAt: string;
 }
 
 const S = {
@@ -116,6 +125,175 @@ function SkeletonCard() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Pending Approvals card
+// ---------------------------------------------------------------------------
+
+function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" | "forbidden" | "error" }) {
+  const [users, setUsers] = useState<PendingUser[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ok" | "error">("loading");
+  const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
+  const [approveErrors, setApproveErrors] = useState<Map<string, string>>(new Map());
+
+  const load = useCallback(async () => {
+    try {
+      const res = await authorizedFetch(`${basePath}/api/admin/users?status=pending&limit=50`);
+      if (!res.ok) { setLoadState("error"); return; }
+      const data = (await res.json()) as { users?: PendingUser[] };
+      setUsers(data.users ?? []);
+      setLoadState("ok");
+    } catch {
+      setLoadState("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (adminStatus === "loading" || adminStatus === "forbidden") return;
+    void load();
+  }, [adminStatus, load]);
+
+  const handleApprove = useCallback(async (clerkUserId: string) => {
+    setApprovingIds((prev) => new Set(prev).add(clerkUserId));
+    setApproveErrors((prev) => { const m = new Map(prev); m.delete(clerkUserId); return m; });
+    try {
+      const res = await authorizedFetch(
+        `${basePath}/api/admin/users/${encodeURIComponent(clerkUserId)}/approve`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      // Remove the approved user from the local list immediately.
+      setUsers((prev) => prev.filter((u) => u.clerkUserId !== clerkUserId));
+    } catch {
+      setApproveErrors((prev) => new Map(prev).set(clerkUserId, "Approval failed — try again"));
+    } finally {
+      setApprovingIds((prev) => { const s = new Set(prev); s.delete(clerkUserId); return s; });
+    }
+  }, []);
+
+  if (adminStatus === "loading") return null;
+  if (adminStatus === "forbidden") return null;
+
+  return (
+    <div style={{ ...S.card, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <div style={S.cardTitle}>Pending Approvals</div>
+        {loadState === "ok" && users.length > 0 && (
+          <span
+            data-testid="pending-approvals-count"
+            style={{
+              background: "#f97316",
+              color: "#fff",
+              borderRadius: 10,
+              fontSize: "calc(8px * var(--bs-font-scale, 1))",
+              fontWeight: 700,
+              padding: "1px 7px",
+              letterSpacing: "0.05em",
+              position: "relative",
+              top: -1,
+            }}
+          >
+            {users.length}
+          </span>
+        )}
+      </div>
+
+      {loadState === "loading" && (
+        <>
+          <div style={{ ...S.skeleton, width: "60%" }} />
+          <div style={{ ...S.skeleton, width: "45%" }} />
+        </>
+      )}
+
+      {loadState === "error" && (
+        <div style={S.error}>Failed to load pending users.</div>
+      )}
+
+      {loadState === "ok" && users.length === 0 && (
+        <div style={{ ...S.note, marginTop: 0, color: "rgba(226,232,240,0.45)" }}>
+          No users awaiting approval.
+        </div>
+      )}
+
+      {loadState === "ok" && users.length > 0 && (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {users.map((u) => (
+            <li
+              key={u.clerkUserId}
+              data-testid="pending-user-row"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+                padding: "6px 0",
+                borderBottom: "1px solid rgba(0,229,255,0.08)",
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                    color: "#e2e8f0",
+                    fontWeight: 600,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {u.displayName ?? u.email ?? u.clerkUserId}
+                </div>
+                {u.email && u.displayName && (
+                  <div
+                    style={{
+                      fontSize: "calc(8px * var(--bs-font-scale, 1))",
+                      color: "rgba(226,232,240,0.4)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {u.email}
+                  </div>
+                )}
+                {approveErrors.get(u.clerkUserId) && (
+                  <div style={{ ...S.error, fontSize: "calc(8px * var(--bs-font-scale, 1))" }}>
+                    {approveErrors.get(u.clerkUserId)}
+                  </div>
+                )}
+              </div>
+              <button
+                data-testid="approve-user-btn"
+                onClick={() => void handleApprove(u.clerkUserId)}
+                disabled={approvingIds.has(u.clerkUserId)}
+                style={{
+                  flexShrink: 0,
+                  background: "rgba(34,197,94,0.08)",
+                  border: "1px solid rgba(34,197,94,0.35)",
+                  borderRadius: 3,
+                  color: "#4ade80",
+                  fontSize: "calc(8px * var(--bs-font-scale, 1))",
+                  letterSpacing: "0.12em",
+                  padding: "3px 10px",
+                  cursor: approvingIds.has(u.clerkUserId) ? "default" : "pointer",
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  opacity: approvingIds.has(u.clerkUserId) ? 0.5 : 1,
+                  textTransform: "uppercase",
+                }}
+              >
+                {approvingIds.has(u.clerkUserId) ? "…" : "APPROVE"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Skill download card
+// ---------------------------------------------------------------------------
+
 function SkillDownloadCard({ adminStatus }: { adminStatus: "loading" | "ok" | "forbidden" | "error" }) {
   const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "error">("idle");
 
@@ -169,6 +347,10 @@ function SkillDownloadCard({ adminStatus }: { adminStatus: "loading" | "ok" | "f
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main AdminPanel
+// ---------------------------------------------------------------------------
+
 export function AdminPanel() {
   const [stats, setStats] = useState<UpscaleCacheStats | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "forbidden" | "error">("loading");
@@ -207,6 +389,9 @@ export function AdminPanel() {
   return (
     <div style={S.section}>
       <div style={S.title}>Admin</div>
+
+      {/* Pending Approvals — shown whenever admin status is known (not loading/forbidden) */}
+      <PendingApprovalsCard adminStatus={status} />
 
       {status === "loading" && <SkeletonCard />}
 

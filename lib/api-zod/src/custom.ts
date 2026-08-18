@@ -94,6 +94,16 @@ export const FederatedSearchQuerySchema = zod.object({
     }),
 });
 
+// ---------------------------------------------------------------------------
+// Admin user management — custom (non-generated) schemas
+// ---------------------------------------------------------------------------
+
+/** Response for GET /api/admin/users/pending-count */
+export const AdminPendingCountResponse = zod.object({
+  count: zod.number().int().min(0),
+});
+export type AdminPendingCountResponse = zod.infer<typeof AdminPendingCountResponse>;
+
 export const NceiSearchQuerySchema = zod.object({
   q: zod.string().max(500).optional().default(""),
   bbox: zod
