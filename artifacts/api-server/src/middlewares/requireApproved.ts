@@ -4,6 +4,7 @@ import { clerkClient } from "@clerk/express";
 import { db, userAccessTable } from "@workspace/db";
 import { isAdmin } from "../lib/adminAccess.js";
 import { logger } from "../lib/logger.js";
+import { notifyAdminsNewPendingUser } from "../lib/adminEmail.js";
 import type { AuthenticatedRequest } from "./requireAuth.js";
 
 /**
@@ -40,10 +41,15 @@ const APPROVAL_LOCALS_KEY = "__userAccessApproved";
  * store email + displayName in their user_access row so the admin approval
  * list shows human-readable identifiers rather than bare Clerk user IDs.
  *
+ * Returns the fetched profile fields so callers can use them without an extra
+ * DB round-trip. Returns null when the Clerk fetch fails or yields nothing useful.
+ *
  * All failures are caught and logged — the caller must NOT rely on this
  * succeeding; the pending row is already committed before this runs.
  */
-export async function fetchAndStoreClerkProfile(clerkUserId: string): Promise<void> {
+export async function fetchAndStoreClerkProfile(
+  clerkUserId: string,
+): Promise<{ email: string | null; displayName: string | null } | null> {
   try {
     // @clerk/express exports clerkClient as a ready-made client object
     // (not a factory) — calling it fails typecheck and would throw at runtime.
@@ -55,7 +61,7 @@ export async function fetchAndStoreClerkProfile(clerkUserId: string): Promise<vo
     const lastName = user.lastName ?? "";
     const displayName = [firstName, lastName].filter(Boolean).join(" ") || user.username || null;
 
-    if (!email && !displayName) return; // nothing useful to store
+    if (!email && !displayName) return null; // nothing useful to store
 
     await db
       .update(userAccessTable)
@@ -66,11 +72,13 @@ export async function fetchAndStoreClerkProfile(clerkUserId: string): Promise<vo
       { clerkUserId, email, displayName },
       "[requireApproved] enriched pending user_access row from Clerk profile",
     );
+    return { email, displayName };
   } catch (err) {
     logger.warn(
       { clerkUserId, err },
       "[requireApproved] failed to fetch Clerk profile for new pending user — fields will remain null",
     );
+    return null;
   }
 }
 
@@ -133,9 +141,18 @@ export async function requireApproved(
         .onConflictDoNothing();
 
       // Best-effort: populate email + displayName so the admin approval list
-      // shows human-readable identifiers. Failures are caught inside the
-      // helper and must not block the 403 response.
-      await fetchAndStoreClerkProfile(clerkUserId);
+      // shows human-readable identifiers. Returns the fetched profile fields
+      // (or null on failure) so we can pass them to the email notification
+      // without a second DB round-trip.
+      const profile = await fetchAndStoreClerkProfile(clerkUserId);
+
+      // Best-effort: notify admins by email that a new user is waiting.
+      // All failures are swallowed inside the helper — the 403 is never delayed.
+      void notifyAdminsNewPendingUser({
+        clerkUserId,
+        displayName: profile?.displayName ?? null,
+        email: profile?.email ?? null,
+      });
 
       logger.info({ clerkUserId }, "[requireApproved] first login — pending user_access row created");
       res.status(403).json({

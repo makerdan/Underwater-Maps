@@ -31,6 +31,7 @@ const {
   updateSetMock,
   updateMock,
   clerkGetUserMock,
+  notifyAdminsMock,
 } = vi.hoisted(() => {
   const state = {
     selectRows: [] as Array<Record<string, unknown>>,
@@ -68,6 +69,8 @@ const {
     };
   });
 
+  const notifyAdmins = vi.fn(async () => undefined);
+
   return {
     dbState: state,
     selectMock: select,
@@ -78,6 +81,7 @@ const {
     updateSetMock: updateSet,
     updateMock: update,
     clerkGetUserMock: clerkGetUser,
+    notifyAdminsMock: notifyAdmins,
   };
 });
 
@@ -104,6 +108,10 @@ vi.mock("@clerk/express", () => ({
   // Match the real @clerk/express shape: clerkClient is a client OBJECT,
   // not a factory function.
   clerkClient: { users: { getUser: clerkGetUserMock } },
+}));
+
+vi.mock("../../lib/adminEmail.js", () => ({
+  notifyAdminsNewPendingUser: notifyAdminsMock,
 }));
 
 import { getAuth } from "@clerk/express";
@@ -307,6 +315,66 @@ describe("requireApproved — verdicts", () => {
     expect(b.status).toHaveBeenCalledWith(403);
     expect(a.next).not.toHaveBeenCalled();
     expect(b.next).not.toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Admin email notification — triggered on first login only
+  // ---------------------------------------------------------------------------
+
+  it("first-time user → fires admin notification with profile data from Clerk", async () => {
+    dbState.selectRows = [];
+    dbState.clerkProfile = {
+      emailAddresses: [{ emailAddress: "angler@example.com" }],
+      firstName: "Test",
+      lastName: "Angler",
+      username: null,
+    };
+    const { req, res, next } = makeReqRes(USER);
+    await requireApproved(req, res, next);
+
+    expect(notifyAdminsMock).toHaveBeenCalledWith({
+      clerkUserId: USER,
+      email: "angler@example.com",
+      displayName: "Test Angler",
+    });
+  });
+
+  it("first-time user with no Clerk profile → fires admin notification with null fields", async () => {
+    dbState.selectRows = [];
+    // Clerk fetch fails — fetchAndStoreClerkProfile returns null
+    dbState.clerkError = new Error("Clerk API unavailable");
+    const { req, res, next } = makeReqRes(USER);
+    await requireApproved(req, res, next);
+
+    expect(notifyAdminsMock).toHaveBeenCalledWith({
+      clerkUserId: USER,
+      email: null,
+      displayName: null,
+    });
+  });
+
+  it("notification is NOT fired for an already-pending user (only first login)", async () => {
+    dbState.selectRows = [{ clerkUserId: USER, status: "pending" }];
+    const { req, res, next } = makeReqRes(USER);
+    await requireApproved(req, res, next);
+    expect(notifyAdminsMock).not.toHaveBeenCalled();
+  });
+
+  it("notification is NOT fired for an approved user", async () => {
+    dbState.selectRows = [{ clerkUserId: USER, status: "approved" }];
+    const { req, res, next } = makeReqRes(USER);
+    await requireApproved(req, res, next);
+    expect(notifyAdminsMock).not.toHaveBeenCalled();
+  });
+
+  it("notification failure does not block the 403 response", async () => {
+    dbState.selectRows = [];
+    notifyAdminsMock.mockRejectedValueOnce(new Error("SMTP down"));
+    const { req, res, next, status, json } = makeReqRes(USER);
+    // void-fired — await the middleware, which does not await the notification
+    await requireApproved(req, res, next);
+    expect(status).toHaveBeenCalledWith(403);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ error: "awaiting_approval" }));
   });
 });
 
