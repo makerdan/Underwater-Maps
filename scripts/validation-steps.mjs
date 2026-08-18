@@ -108,6 +108,9 @@ export function getValidationSteps(logPrefix) {
     { name: "check:skip-count", resource: null, cmd: "pnpm run check:skip-count", tiers: FAST },
     // no resource: static regex scan of schema/*.ts vs test-db.ts DDL string, sub-second
     { name: "check:testdb-schema-drift", resource: null, cmd: "pnpm run check:testdb-schema-drift", tiers: FAST },
+    // no resource: parses .replit and fails if the run-button workflow has workflow.run tasks
+    // or more than one task — prevents boot storms after environment restarts, sub-second
+    { name: "check:runbutton-noop", resource: null, cmd: "pnpm run check:runbutton-noop", tiers: FAST },
     // unit-cpu resource: prevents CPU saturation / budget breach
     { name: "test:unit", resource: "unit-cpu", cmd: "pnpm run test:unit", tiers: STANDARD },
     // all check:* steps are lightweight; no resource needed
