@@ -45,7 +45,9 @@ const APPROVAL_LOCALS_KEY = "__userAccessApproved";
  */
 export async function fetchAndStoreClerkProfile(clerkUserId: string): Promise<void> {
   try {
-    const clerk = clerkClient();
+    // @clerk/express exports clerkClient as a ready-made client object
+    // (not a factory) — calling it fails typecheck and would throw at runtime.
+    const clerk = clerkClient;
     const user = await clerk.users.getUser(clerkUserId);
 
     const email = user.emailAddresses[0]?.emailAddress ?? null;

@@ -139,13 +139,19 @@ describe("TidePanel slider — pointer drag calls onScrubChange", () => {
     expect(onScrubChange).toHaveBeenCalled();
   });
 
-  it("changing the range input to hour 5 calls onScrubChange with a Date at hour 5", () => {
+  it("changing the range input to a new hour calls onScrubChange with a Date at that hour", () => {
     const onScrubChange = vi.fn();
     const { container } = renderPanel(onScrubChange);
     const input = container.querySelector("input[type='range']") as HTMLInputElement;
 
+    // Time-of-day deflake: if the slider already sits at the target hour
+    // (e.g. running during the 05:xx hour), React's value tracker swallows a
+    // change event to the identical value and onScrubChange never fires.
+    // Pick an hour that differs from the input's current value.
+    const targetHour = input.value === "5" ? 6 : 5;
+
     act(() => {
-      fireEvent.change(input, { target: { value: "5" } });
+      fireEvent.change(input, { target: { value: String(targetHour) } });
     });
 
     expect(onScrubChange).toHaveBeenCalled();
@@ -153,7 +159,7 @@ describe("TidePanel slider — pointer drag calls onScrubChange", () => {
     // setHour returns null when hour matches "now" for today — accept both Date and null
     if (arg !== null) {
       expect(arg).toBeInstanceOf(Date);
-      expect((arg as Date).getUTCHours()).toBe(5);
+      expect((arg as Date).getUTCHours()).toBe(targetHour);
     }
   });
 });

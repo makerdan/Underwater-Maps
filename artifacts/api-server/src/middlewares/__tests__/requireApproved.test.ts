@@ -101,7 +101,9 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("@clerk/express", () => ({
   getAuth: vi.fn(() => ({ userId: null })),
-  clerkClient: vi.fn(() => ({ users: { getUser: clerkGetUserMock } })),
+  // Match the real @clerk/express shape: clerkClient is a client OBJECT,
+  // not a factory function.
+  clerkClient: { users: { getUser: clerkGetUserMock } },
 }));
 
 import { getAuth } from "@clerk/express";

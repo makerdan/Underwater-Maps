@@ -4696,6 +4696,11 @@ export type AdminListUsers200 = {
   nextCursor: string | null;
 };
 
+export type AdminPendingUsersCount200 = {
+  /** @minimum 0 */
+  count: number;
+};
+
 export type AdminApproveUser200 = {
   user: UserAccessRecord;
 };

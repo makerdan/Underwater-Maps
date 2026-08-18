@@ -5306,6 +5306,19 @@ export const AdminListUsersResponse = zod.object({
 
 
 /**
+ * Admin-only. Lightweight count of user_access rows in pending status, used for the admin notification badge.
+ * @summary Count of users awaiting approval
+ */
+export const adminPendingUsersCountResponseCountMin = 0;
+
+
+
+export const AdminPendingUsersCountResponse = zod.object({
+  "count": zod.number().min(adminPendingUsersCountResponseCountMin)
+})
+
+
+/**
  * @summary Approve a pending or banned user
  */
 export const AdminApproveUserParams = zod.object({

@@ -83,7 +83,9 @@ async function enrichMissingProfiles(
   const needsEnrichment = rows.filter((r) => !r.email || !r.displayName);
   if (needsEnrichment.length === 0) return results;
 
-  const clerk = clerkClient();
+  // @clerk/express exports clerkClient as a ready-made client object
+  // (not a factory) — calling it fails typecheck and would throw at runtime.
+  const clerk = clerkClient;
 
   await Promise.allSettled(
     needsEnrichment.map(async (row) => {

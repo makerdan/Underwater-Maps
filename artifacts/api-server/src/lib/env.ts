@@ -6,6 +6,7 @@
  * silently produce NaN-driven behaviour.
  */
 import { logger } from "./logger.js";
+import { parseAdminUserIds } from "./adminAccess.js";
 
 // Re-export from the zero-dependency production.ts so that callers can
 // import isProduction() from either env.ts or production.ts — both work.
@@ -162,14 +163,17 @@ export function validateStartupEnv(): EnvIssue[] {
   // the owner) will land as pending with no way to approve anyone — a permanent
   // lockout. This check is skipped in non-production (test/dev) environments.
   const bucketAdminActive = bucketAdminFlag === "1" || bucketAdminFlag === "true";
-  const adminIdsPresent = (adminIdsRaw ?? "").trim() !== "";
+  // Presence must be judged by the same parsing rules isAdmin() uses:
+  // delimiter-only values like "," or ",, " contain zero usable IDs and
+  // would still cause a permanent lockout if accepted here.
+  const adminIdsPresent = parseAdminUserIds(adminIdsRaw).length > 0;
   if (isProduction && !adminIdsPresent && !bucketAdminActive) {
     issues.push({
       name: "ADMIN_USER_IDS",
       valueLength: 0,
       valuePreview: "…",
       problem:
-        "is not set. Without ADMIN_USER_IDS every new user will land as pending with no admin able to approve them — a permanent lockout. Set ADMIN_USER_IDS to a comma-separated list of Clerk user IDs.",
+        "is not set (or contains no usable IDs). Without ADMIN_USER_IDS every new user will land as pending with no admin able to approve them — a permanent lockout. Set ADMIN_USER_IDS to a comma-separated list of Clerk user IDs.",
       critical: true,
     });
   }

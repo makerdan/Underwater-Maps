@@ -29,6 +29,7 @@ import type {
   AdminLargeDatasetsDiff200,
   AdminListUsers200,
   AdminListUsersParams,
+  AdminPendingUsersCount200,
   AdminRestoreUser200,
   ApiError,
   CatalogSaveBody,
@@ -8937,6 +8938,84 @@ export function useAdminListUsers<TData = Awaited<ReturnType<typeof adminListUse
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getAdminListUsersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAdminPendingUsersCountUrl = () => {
+
+
+
+
+  return `/api/admin/users/pending-count`
+}
+
+/**
+ * Admin-only. Lightweight count of user_access rows in pending status, used for the admin notification badge.
+ * @summary Count of users awaiting approval
+ */
+export const adminPendingUsersCount = async ( options?: RequestInit): Promise<AdminPendingUsersCount200> => {
+
+  return customFetch<AdminPendingUsersCount200>(getAdminPendingUsersCountUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAdminPendingUsersCountQueryKey = () => {
+    return [
+    `/api/admin/users/pending-count`
+    ] as const;
+    }
+
+
+export const getAdminPendingUsersCountQueryOptions = <TData = Awaited<ReturnType<typeof adminPendingUsersCount>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminPendingUsersCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAdminPendingUsersCountQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof adminPendingUsersCount>>> = ({ signal }) => adminPendingUsersCount({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof adminPendingUsersCount>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AdminPendingUsersCountQueryResult = NonNullable<Awaited<ReturnType<typeof adminPendingUsersCount>>>
+export type AdminPendingUsersCountQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Count of users awaiting approval
+ */
+
+export function useAdminPendingUsersCount<TData = Awaited<ReturnType<typeof adminPendingUsersCount>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminPendingUsersCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAdminPendingUsersCountQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

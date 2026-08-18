@@ -88,6 +88,7 @@ import { waterLabels } from "@/lib/waterLabels";
 import { useServerSettingsSync, requestSettingsSync } from "@/hooks/useServerSettingsSync";
 import { useCrossTabSync } from "@/hooks/useCrossTabSync";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AccessGate } from "@/components/AccessGate";
 import { useDriftStore } from "@/lib/driftStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
 import { WeatherPanel } from "@/components/WeatherPanel";
@@ -2204,16 +2205,21 @@ function HomeRoute() {
   return (
     <QueryClientProvider client={queryClient}>
       <Show when="signed-in">
-        <TooltipProvider>
-          <AppProvider>
-            <TestBridge />
-            <Main />
-            <SimulatedDataConfirmDialog />
-          </AppProvider>
-          <Toaster />
-        </TooltipProvider>
-        <PaletteSuggestionMount />
-        <ShallowDatasetBanner />
+        {/* AccessGate is the outermost wrapper inside the signed-in branch so
+            pending/banned users are intercepted BEFORE any data fetch fires
+            (settings sync, dataset queries, etc. all mount inside it). */}
+        <AccessGate>
+          <TooltipProvider>
+            <AppProvider>
+              <TestBridge />
+              <Main />
+              <SimulatedDataConfirmDialog />
+            </AppProvider>
+            <Toaster />
+          </TooltipProvider>
+          <PaletteSuggestionMount />
+          <ShallowDatasetBanner />
+        </AccessGate>
       </Show>
       <Show when="signed-out">
         <LandingPage />
@@ -2235,7 +2241,9 @@ function HomeRoute() {
   );
 }
 
-function SettingsRoute() {
+// Exported for the route-level access-gate regression test
+// (settingsRouteAccessGate.test.tsx).
+export function SettingsRoute() {
   // On mobile, signed-out users land here via the gear button and need to see
   // the auth block (Sign In entry) rather than LandingPage.  Desktop keeps the
   // existing behaviour of showing LandingPage when signed out.
@@ -2247,10 +2255,16 @@ function SettingsRoute() {
   return (
     <QueryClientProvider client={queryClient}>
       <Show when="signed-in">
-        <ServerSettingsSyncMount />
-        <PaletteSuggestionMount />
-        <ShallowDatasetBanner />
-        <Settings />
+        {/* Same access gate as HomeRoute: a pending/banned user navigating
+            straight to /settings must see the approval/suspension screen,
+            not the settings UI (and must not trigger protected requests
+            like the settings sync). */}
+        <AccessGate>
+          <ServerSettingsSyncMount />
+          <PaletteSuggestionMount />
+          <ShallowDatasetBanner />
+          <Settings />
+        </AccessGate>
       </Show>
       <Show when="signed-out">
         {isMobileSettings ? <Settings /> : <LandingPage />}

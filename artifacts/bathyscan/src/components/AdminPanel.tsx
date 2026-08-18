@@ -14,6 +14,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { triggerBlobDownload } from "@/lib/blobDownload";
+import { UserAccessSection } from "@/components/admin/UserAccessSection";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -439,6 +440,11 @@ export function AdminPanel() {
           </div>
         </div>
       )}
+
+      {/* User approval management — only mounted once the server has
+          confirmed the current user is an admin (status === "ok"), so
+          non-admins never fire the /api/admin/users request. */}
+      {status === "ok" && <UserAccessSection />}
 
       <SkillDownloadCard adminStatus={status} />
     </div>

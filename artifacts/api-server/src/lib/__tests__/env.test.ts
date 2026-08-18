@@ -297,6 +297,33 @@ describe("validateStartupEnv", () => {
       expect(() => validateStartupEnv()).not.toThrow();
     });
 
+    it("throws a critical error in production when ADMIN_USER_IDS is delimiter-only (\",\")", () => {
+      // "," passes a naive non-whitespace check but parses to zero usable
+      // IDs — exactly the lockout the guard exists to prevent. Presence must
+      // be judged by the same parsed list isAdmin() uses.
+      vi.stubEnv("ADMIN_USER_IDS", ",");
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+      vi.stubEnv("NODE_ENV", "");
+      expect(() => validateStartupEnv()).toThrow(/ADMIN_USER_IDS/);
+    });
+
+    it("throws a critical error in production when ADMIN_USER_IDS is delimiters and whitespace only (\",, \")", () => {
+      vi.stubEnv("ADMIN_USER_IDS", ",, ");
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "");
+      vi.stubEnv("NODE_ENV", "production");
+      expect(() => validateStartupEnv()).toThrow(/ADMIN_USER_IDS/);
+    });
+
+    it("does NOT throw in production when ADMIN_USER_IDS has a valid id despite stray delimiters (\",user_abc123,\")", () => {
+      vi.stubEnv("ADMIN_USER_IDS", ",user_abc123,");
+      vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+      vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+      vi.stubEnv("NODE_ENV", "");
+      expect(() => validateStartupEnv()).not.toThrow();
+    });
+
     it("does NOT throw in production when ADMIN_USER_IDS is set to a valid id", () => {
       vi.stubEnv("ADMIN_USER_IDS", "user_abc123");
       vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
