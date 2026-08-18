@@ -99,6 +99,8 @@ export function getValidationSteps(logPrefix) {
     { name: "check:failure-gate", resource: null, cmd: "node scripts/check-failure-gate.mjs --skip-if-no-task", tiers: FAST },
     // no resource: self-test for check-failure-gate.mjs — catches regressions in the linter itself, sub-second
     { name: "check:failure-gate-self-test", resource: null, cmd: "pnpm run check:failure-gate-self-test", tiers: FAST },
+    // no resource: self-test for check-regression-guard.mjs — catches regressions in the linter itself, sub-second
+    { name: "check:regression-guard-self-test", resource: null, cmd: "pnpm run check:regression-guard-self-test", tiers: FAST },
     // no resource: auto-remediates missing Regression Guard sections (inserts predates-mandate N/A stub), sub-second.
     { name: "fix:regression-guard-stubs", resource: null, cmd: "node scripts/check-regression-guard.mjs --fix-stub --skip-if-no-task", tiers: FAST },
     // no resource: regression-guard full lint (plan files in .local/tasks/), sub-second.

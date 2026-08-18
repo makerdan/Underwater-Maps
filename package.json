@@ -35,6 +35,7 @@
     "check:runner-step-sync": "node scripts/check-runner-step-sync.mjs",
     "check:failure-gate": "node scripts/check-failure-gate.mjs",
     "check:failure-gate-self-test": "node --test scripts/__tests__/check-failure-gate.test.mjs",
+    "check:regression-guard-self-test": "node --test scripts/__tests__/check-regression-guard.test.mjs",
     "check:regression-guard": "node --test scripts/__tests__/check-regression-guard.test.mjs && node scripts/check-regression-guard.mjs",
     "check:skip-count": "node --test scripts/__tests__/check-skip-count.test.mjs && node scripts/check-skip-count.mjs",
     "check:testdb-schema-drift": "node --test scripts/__tests__/check-testdb-schema-drift.test.mjs && node scripts/check-testdb-schema-drift.mjs",
