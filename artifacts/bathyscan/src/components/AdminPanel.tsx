@@ -135,6 +135,8 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
   const [loadState, setLoadState] = useState<"loading" | "ok" | "error">("loading");
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
   const [approveErrors, setApproveErrors] = useState<Map<string, string>>(new Map());
+  const [denyingIds, setDenyingIds] = useState<Set<string>>(new Set());
+  const [denyErrors, setDenyErrors] = useState<Map<string, string>>(new Map());
 
   const load = useCallback(async () => {
     try {
@@ -168,6 +170,24 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
       setApproveErrors((prev) => new Map(prev).set(clerkUserId, "Approval failed — try again"));
     } finally {
       setApprovingIds((prev) => { const s = new Set(prev); s.delete(clerkUserId); return s; });
+    }
+  }, []);
+
+  const handleDeny = useCallback(async (clerkUserId: string) => {
+    setDenyingIds((prev) => new Set(prev).add(clerkUserId));
+    setDenyErrors((prev) => { const m = new Map(prev); m.delete(clerkUserId); return m; });
+    try {
+      const res = await authorizedFetch(
+        `${basePath}/api/admin/users/${encodeURIComponent(clerkUserId)}/ban`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      // Remove the denied user from the list immediately, matching approve UX.
+      setUsers((prev) => prev.filter((u) => u.clerkUserId !== clerkUserId));
+    } catch {
+      setDenyErrors((prev) => new Map(prev).set(clerkUserId, "Deny failed — try again"));
+    } finally {
+      setDenyingIds((prev) => { const s = new Set(prev); s.delete(clerkUserId); return s; });
     }
   }, []);
 
@@ -261,28 +281,54 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
                     {approveErrors.get(u.clerkUserId)}
                   </div>
                 )}
+                {denyErrors.get(u.clerkUserId) && (
+                  <div style={{ ...S.error, fontSize: "calc(8px * var(--bs-font-scale, 1))" }}>
+                    {denyErrors.get(u.clerkUserId)}
+                  </div>
+                )}
               </div>
-              <button
-                data-testid="approve-user-btn"
-                onClick={() => void handleApprove(u.clerkUserId)}
-                disabled={approvingIds.has(u.clerkUserId)}
-                style={{
-                  flexShrink: 0,
-                  background: "rgba(34,197,94,0.08)",
-                  border: "1px solid rgba(34,197,94,0.35)",
-                  borderRadius: 3,
-                  color: "#4ade80",
-                  fontSize: "calc(8px * var(--bs-font-scale, 1))",
-                  letterSpacing: "0.12em",
-                  padding: "3px 10px",
-                  cursor: approvingIds.has(u.clerkUserId) ? "default" : "pointer",
-                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  opacity: approvingIds.has(u.clerkUserId) ? 0.5 : 1,
-                  textTransform: "uppercase",
-                }}
-              >
-                {approvingIds.has(u.clerkUserId) ? "…" : "APPROVE"}
-              </button>
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                <button
+                  data-testid="approve-user-btn"
+                  onClick={() => void handleApprove(u.clerkUserId)}
+                  disabled={approvingIds.has(u.clerkUserId) || denyingIds.has(u.clerkUserId)}
+                  style={{
+                    background: "rgba(34,197,94,0.08)",
+                    border: "1px solid rgba(34,197,94,0.35)",
+                    borderRadius: 3,
+                    color: "#4ade80",
+                    fontSize: "calc(8px * var(--bs-font-scale, 1))",
+                    letterSpacing: "0.12em",
+                    padding: "3px 10px",
+                    cursor: (approvingIds.has(u.clerkUserId) || denyingIds.has(u.clerkUserId)) ? "default" : "pointer",
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                    opacity: (approvingIds.has(u.clerkUserId) || denyingIds.has(u.clerkUserId)) ? 0.5 : 1,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {approvingIds.has(u.clerkUserId) ? "…" : "APPROVE"}
+                </button>
+                <button
+                  data-testid="deny-user-btn"
+                  onClick={() => void handleDeny(u.clerkUserId)}
+                  disabled={approvingIds.has(u.clerkUserId) || denyingIds.has(u.clerkUserId)}
+                  style={{
+                    background: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.35)",
+                    borderRadius: 3,
+                    color: "#f87171",
+                    fontSize: "calc(8px * var(--bs-font-scale, 1))",
+                    letterSpacing: "0.12em",
+                    padding: "3px 10px",
+                    cursor: (approvingIds.has(u.clerkUserId) || denyingIds.has(u.clerkUserId)) ? "default" : "pointer",
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                    opacity: (approvingIds.has(u.clerkUserId) || denyingIds.has(u.clerkUserId)) ? 0.5 : 1,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {denyingIds.has(u.clerkUserId) ? "…" : "DENY"}
+                </button>
+              </div>
             </li>
           ))}
         </ul>
