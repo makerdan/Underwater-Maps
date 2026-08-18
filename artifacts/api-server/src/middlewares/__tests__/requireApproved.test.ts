@@ -21,46 +21,77 @@ import request from "supertest";
 // at call time; vi.mock intercepts dynamic imports too.
 // ---------------------------------------------------------------------------
 
-const { dbState, selectMock, insertMock, insertValuesMock, onConflictDoNothingMock } = vi.hoisted(
-  () => {
-    const state = {
-      selectRows: [] as Array<Record<string, unknown>>,
-      selectError: null as Error | null,
-      insertError: null as Error | null,
+const {
+  dbState,
+  selectMock,
+  insertMock,
+  insertValuesMock,
+  onConflictDoNothingMock,
+  updateWhereMock,
+  updateSetMock,
+  updateMock,
+  clerkGetUserMock,
+} = vi.hoisted(() => {
+  const state = {
+    selectRows: [] as Array<Record<string, unknown>>,
+    selectError: null as Error | null,
+    insertError: null as Error | null,
+    clerkProfile: null as Record<string, unknown> | null,
+    clerkError: null as Error | null,
+  };
+
+  const selectWhere = vi.fn(async () => {
+    if (state.selectError) throw state.selectError;
+    return state.selectRows;
+  });
+  const selectFrom = vi.fn(() => ({ where: selectWhere }));
+  const select = vi.fn(() => ({ from: selectFrom }));
+
+  const onConflictDoNothing = vi.fn(async () => {
+    if (state.insertError) throw state.insertError;
+    return [];
+  });
+  const insertValues = vi.fn(() => ({ onConflictDoNothing }));
+  const insert = vi.fn(() => ({ values: insertValues }));
+
+  const updateWhere = vi.fn(async () => []);
+  const updateSet = vi.fn(() => ({ where: updateWhere }));
+  const update = vi.fn(() => ({ set: updateSet }));
+
+  const clerkGetUser = vi.fn(async () => {
+    if (state.clerkError) throw state.clerkError;
+    return state.clerkProfile ?? {
+      emailAddresses: [],
+      firstName: null,
+      lastName: null,
+      username: null,
     };
+  });
 
-    const selectWhere = vi.fn(async () => {
-      if (state.selectError) throw state.selectError;
-      return state.selectRows;
-    });
-    const selectFrom = vi.fn(() => ({ where: selectWhere }));
-    const select = vi.fn(() => ({ from: selectFrom }));
-
-    const onConflictDoNothing = vi.fn(async () => {
-      if (state.insertError) throw state.insertError;
-      return [];
-    });
-    const insertValues = vi.fn(() => ({ onConflictDoNothing }));
-    const insert = vi.fn(() => ({ values: insertValues }));
-
-    return {
-      dbState: state,
-      selectMock: select,
-      insertMock: insert,
-      insertValuesMock: insertValues,
-      onConflictDoNothingMock: onConflictDoNothing,
-    };
-  },
-);
+  return {
+    dbState: state,
+    selectMock: select,
+    insertMock: insert,
+    insertValuesMock: insertValues,
+    onConflictDoNothingMock: onConflictDoNothing,
+    updateWhereMock: updateWhere,
+    updateSetMock: updateSet,
+    updateMock: update,
+    clerkGetUserMock: clerkGetUser,
+  };
+});
 
 vi.mock("@workspace/db", () => ({
   db: {
     select: selectMock,
     insert: insertMock,
+    update: updateMock,
   },
   userAccessTable: {
     clerkUserId: "clerkUserId",
     status: "status",
+    email: "email",
+    displayName: "displayName",
   },
 }));
 
@@ -70,6 +101,7 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("@clerk/express", () => ({
   getAuth: vi.fn(() => ({ userId: null })),
+  clerkClient: vi.fn(() => ({ users: { getUser: clerkGetUserMock } })),
 }));
 
 import { getAuth } from "@clerk/express";
@@ -94,6 +126,8 @@ beforeEach(() => {
   dbState.selectRows = [];
   dbState.selectError = null;
   dbState.insertError = null;
+  dbState.clerkProfile = null;
+  dbState.clerkError = null;
 });
 
 describe("requireApproved — verdicts", () => {
@@ -157,6 +191,72 @@ describe("requireApproved — verdicts", () => {
     expect(status).toHaveBeenCalledWith(403);
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ error: "awaiting_approval" }));
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("first-time user → enriches the pending row with Clerk email + displayName", async () => {
+    dbState.selectRows = [];
+    dbState.clerkProfile = {
+      emailAddresses: [{ emailAddress: "angler@example.com" }],
+      firstName: "Test",
+      lastName: "Angler",
+      username: null,
+    };
+    const { req, res, next } = makeReqRes(USER);
+    await requireApproved(req, res, next);
+
+    expect(clerkGetUserMock).toHaveBeenCalledWith(USER);
+    expect(updateSetMock).toHaveBeenCalledWith({
+      email: "angler@example.com",
+      displayName: "Test Angler",
+    });
+    expect(updateWhereMock).toHaveBeenCalledWith({ op: "eq", column: "clerkUserId", value: USER });
+  });
+
+  it("first-time user → falls back to username when name parts are absent", async () => {
+    dbState.selectRows = [];
+    dbState.clerkProfile = {
+      emailAddresses: [],
+      firstName: null,
+      lastName: null,
+      username: "bigfish42",
+    };
+    const { req, res, next } = makeReqRes(USER);
+    await requireApproved(req, res, next);
+
+    expect(updateSetMock).toHaveBeenCalledWith({
+      email: null,
+      displayName: "bigfish42",
+    });
+  });
+
+  it("first-time user → Clerk API failure does not prevent the 403 or crash", async () => {
+    dbState.selectRows = [];
+    dbState.clerkError = new Error("Clerk API unavailable");
+    const { req, res, next, status, json } = makeReqRes(USER);
+    await requireApproved(req, res, next);
+
+    // The row is still created and the 403 is still returned.
+    expect(onConflictDoNothingMock).toHaveBeenCalledTimes(1);
+    expect(status).toHaveBeenCalledWith(403);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ error: "awaiting_approval" }));
+    // No DB update attempted after a Clerk failure.
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("first-time user → skips DB update when Clerk returns no email and no name", async () => {
+    dbState.selectRows = [];
+    dbState.clerkProfile = {
+      emailAddresses: [],
+      firstName: null,
+      lastName: null,
+      username: null,
+    };
+    const { req, res, next } = makeReqRes(USER);
+    await requireApproved(req, res, next);
+
+    expect(clerkGetUserMock).toHaveBeenCalledWith(USER);
+    // Nothing useful to store — update must NOT be called.
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it("missing clerkUserId (mis-wired chain) → 401, fail closed", async () => {

@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { eq } from "drizzle-orm";
+import { clerkClient } from "@clerk/express";
 import { db, userAccessTable } from "@workspace/db";
 import { isAdmin } from "../lib/adminAccess.js";
 import { logger } from "../lib/logger.js";
@@ -33,6 +34,43 @@ import type { AuthenticatedRequest } from "./requireAuth.js";
 
 /** res.locals key caching a positive approval verdict for this request. */
 const APPROVAL_LOCALS_KEY = "__userAccessApproved";
+
+/**
+ * Best-effort: fetch the Clerk profile for a newly-created pending user and
+ * store email + displayName in their user_access row so the admin approval
+ * list shows human-readable identifiers rather than bare Clerk user IDs.
+ *
+ * All failures are caught and logged — the caller must NOT rely on this
+ * succeeding; the pending row is already committed before this runs.
+ */
+export async function fetchAndStoreClerkProfile(clerkUserId: string): Promise<void> {
+  try {
+    const clerk = clerkClient();
+    const user = await clerk.users.getUser(clerkUserId);
+
+    const email = user.emailAddresses[0]?.emailAddress ?? null;
+    const firstName = user.firstName ?? "";
+    const lastName = user.lastName ?? "";
+    const displayName = [firstName, lastName].filter(Boolean).join(" ") || user.username || null;
+
+    if (!email && !displayName) return; // nothing useful to store
+
+    await db
+      .update(userAccessTable)
+      .set({ email, displayName })
+      .where(eq(userAccessTable.clerkUserId, clerkUserId));
+
+    logger.info(
+      { clerkUserId, email, displayName },
+      "[requireApproved] enriched pending user_access row from Clerk profile",
+    );
+  } catch (err) {
+    logger.warn(
+      { clerkUserId, err },
+      "[requireApproved] failed to fetch Clerk profile for new pending user — fields will remain null",
+    );
+  }
+}
 
 /**
  * Whether the approval gate should run for real-Clerk-authenticated
@@ -91,6 +129,12 @@ export async function requireApproved(
         .insert(userAccessTable)
         .values({ clerkUserId, status: "pending" })
         .onConflictDoNothing();
+
+      // Best-effort: populate email + displayName so the admin approval list
+      // shows human-readable identifiers. Failures are caught inside the
+      // helper and must not block the 403 response.
+      await fetchAndStoreClerkProfile(clerkUserId);
+
       logger.info({ clerkUserId }, "[requireApproved] first login — pending user_access row created");
       res.status(403).json({
         error: "awaiting_approval",

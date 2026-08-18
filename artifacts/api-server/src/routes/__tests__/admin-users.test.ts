@@ -27,11 +27,14 @@ const {
   updateMock,
   deleteWhereMock,
   deleteMock,
+  clerkGetUserMock,
 } = vi.hoisted(() => {
   const state = {
     listRows: [] as Array<Record<string, unknown>>,
     updateRows: [] as Array<Record<string, unknown>>,
     deleteRows: [] as Array<Record<string, unknown>>,
+    clerkProfile: null as Record<string, unknown> | null,
+    clerkError: null as Error | null,
   };
 
   const limit = vi.fn(async () => state.listRows);
@@ -49,6 +52,16 @@ const {
   const deleteWhere = vi.fn(() => ({ returning: deleteReturning }));
   const del = vi.fn(() => ({ where: deleteWhere }));
 
+  const clerkGetUser = vi.fn(async () => {
+    if (state.clerkError) throw state.clerkError;
+    return state.clerkProfile ?? {
+      emailAddresses: [],
+      firstName: null,
+      lastName: null,
+      username: null,
+    };
+  });
+
   return {
     dbState: state,
     limitMock: limit,
@@ -61,6 +74,7 @@ const {
     deleteReturningMock: deleteReturning,
     deleteWhereMock: deleteWhere,
     deleteMock: del,
+    clerkGetUserMock: clerkGetUser,
   };
 });
 
@@ -91,6 +105,7 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("@clerk/express", () => ({
   getAuth: vi.fn(() => ({ userId: null })),
+  clerkClient: vi.fn(() => ({ users: { getUser: clerkGetUserMock } })),
 }));
 
 import adminUsersRouter from "../admin-users.js";
@@ -137,6 +152,8 @@ beforeEach(() => {
   dbState.listRows = [];
   dbState.updateRows = [];
   dbState.deleteRows = [];
+  dbState.clerkProfile = null;
+  dbState.clerkError = null;
 });
 
 describe("GET /admin/users", () => {
@@ -203,6 +220,48 @@ describe("GET /admin/users", () => {
       op: "and",
       conds: [{ op: "gt", column: "clerkUserId", value: "user_2a" }],
     });
+  });
+
+  it("lazily enriches rows with null email/displayName from Clerk and returns updated data", async () => {
+    const bare = makeRow({ email: null, displayName: null });
+    dbState.listRows = [bare];
+    dbState.updateRows = [{ ...bare, email: "angler@example.com", displayName: "Test Angler" }];
+    dbState.clerkProfile = {
+      emailAddresses: [{ emailAddress: "angler@example.com" }],
+      firstName: "Test",
+      lastName: "Angler",
+      username: null,
+    };
+
+    const res = await asAdmin(request(makeApp()).get("/admin/users"));
+    expect(res.status).toBe(200);
+    expect(clerkGetUserMock).toHaveBeenCalledWith(TARGET);
+    // The update was persisted with the fetched profile.
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "angler@example.com", displayName: "Test Angler" }),
+    );
+    // The enriched data is reflected in the response.
+    expect(res.body.users[0].email).toBe("angler@example.com");
+    expect(res.body.users[0].displayName).toBe("Test Angler");
+  });
+
+  it("skips Clerk fetch for rows that already have email and displayName", async () => {
+    dbState.listRows = [makeRow()]; // makeRow() has email + displayName populated
+    const res = await asAdmin(request(makeApp()).get("/admin/users"));
+    expect(res.status).toBe(200);
+    expect(clerkGetUserMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the row as-is when Clerk enrichment fails", async () => {
+    const bare = makeRow({ email: null, displayName: null });
+    dbState.listRows = [bare];
+    dbState.clerkError = new Error("Clerk unavailable");
+
+    const res = await asAdmin(request(makeApp()).get("/admin/users"));
+    expect(res.status).toBe(200);
+    expect(res.body.users[0].email).toBeNull();
+    expect(res.body.users[0].displayName).toBeNull();
   });
 
   it("rejects an invalid ?status with 400 invalid_param", async () => {

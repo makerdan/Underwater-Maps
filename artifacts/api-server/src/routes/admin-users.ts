@@ -18,6 +18,7 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { and, asc, eq, gt } from "drizzle-orm";
+import { clerkClient } from "@clerk/express";
 import { db, userAccessTable, type UserAccessRow } from "@workspace/db";
 import {
   AdminListUsersResponse,
@@ -31,6 +32,7 @@ import { isAdmin } from "../lib/adminAccess.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateParams, validateQuery } from "../middlewares/validateBody.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -66,6 +68,51 @@ const AdminBanUserBodySchema = z
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Lazily enrich rows that have no email or displayName by fetching their
+ * Clerk profiles and persisting the data back to user_access. Individual
+ * failures are caught so one bad Clerk lookup never breaks the whole list.
+ * Returns a map of clerkUserId → updated row for the caller to merge in.
+ */
+async function enrichMissingProfiles(
+  rows: UserAccessRow[],
+): Promise<Map<string, UserAccessRow>> {
+  const results = new Map<string, UserAccessRow>();
+  const needsEnrichment = rows.filter((r) => !r.email || !r.displayName);
+  if (needsEnrichment.length === 0) return results;
+
+  const clerk = clerkClient();
+
+  await Promise.allSettled(
+    needsEnrichment.map(async (row) => {
+      try {
+        const user = await clerk.users.getUser(row.clerkUserId);
+
+        const email = user.emailAddresses[0]?.emailAddress ?? null;
+        const firstName = user.firstName ?? "";
+        const lastName = user.lastName ?? "";
+        const displayName =
+          [firstName, lastName].filter(Boolean).join(" ") || user.username || null;
+
+        const [updated] = await db
+          .update(userAccessTable)
+          .set({ email, displayName })
+          .where(eq(userAccessTable.clerkUserId, row.clerkUserId))
+          .returning();
+
+        if (updated) results.set(row.clerkUserId, updated);
+      } catch (err) {
+        logger.warn(
+          { clerkUserId: row.clerkUserId, err },
+          "[admin-users] failed to enrich row from Clerk profile — row returned as-is",
+        );
+      }
+    }),
+  );
+
+  return results;
+}
 
 /** 403 + null when the caller is not an admin; the caller's ID otherwise. */
 function requireAdminCaller(req: Request, res: Response): string | null {
@@ -122,10 +169,16 @@ router.get(
     const page = rows.slice(0, pageSize);
     const nextCursor = rows.length > pageSize ? page[page.length - 1]!.clerkUserId : null;
 
+    // Lazily backfill email/displayName for rows missing Clerk profile data so
+    // the admin sees human-readable identifiers immediately. Failures per row
+    // are swallowed inside enrichMissingProfiles — the list always renders.
+    const enriched = await enrichMissingProfiles(page);
+    const enrichedPage = page.map((r) => enriched.get(r.clerkUserId) ?? r);
+
     res.json(
       validateResponse(
         AdminListUsersResponse,
-        { users: page.map(toUserRecord), nextCursor },
+        { users: enrichedPage.map(toUserRecord), nextCursor },
         "GET /api/admin/users",
       ),
     );
