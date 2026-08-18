@@ -16,6 +16,8 @@ export interface PuzzleTransform {
   tx: number;
   ty: number;
   angleDeg: number;
+  flipH: boolean;
+  flipV: boolean;
 }
 
 interface PuzzleStoreState {

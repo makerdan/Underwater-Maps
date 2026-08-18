@@ -221,6 +221,28 @@ describe("PUT /api/settings — puzzleLayouts round-trip", () => {
     expect(getRes.body.puzzleLayouts).toEqual([SAMPLE_LAYOUT]);
   });
 
+  it("preserves flipH and flipV through the round-trip", async () => {
+    const layoutWithFlip = {
+      ...SAMPLE_LAYOUT,
+      id: "pl_flip_test",
+      name: "Flip test layout",
+      tiles: [
+        { datasetId: "dataset-a", tx: 0, ty: 0, angleDeg: 0, flipH: true, flipV: false },
+        { datasetId: "dataset-b", tx: 5, ty: -3, angleDeg: 45, flipH: false, flipV: true },
+      ],
+    };
+    const putRes = await request(app)
+      .put("/api/settings")
+      .send({ puzzleLayouts: [layoutWithFlip] });
+    expect(putRes.status).toBe(200);
+
+    const getRes = await request(app).get("/api/settings");
+    expect(getRes.status).toBe(200);
+    const [layout] = getRes.body.puzzleLayouts as typeof layoutWithFlip[];
+    expect(layout!.tiles[0]).toMatchObject({ datasetId: "dataset-a", flipH: true, flipV: false });
+    expect(layout!.tiles[1]).toMatchObject({ datasetId: "dataset-b", flipH: false, flipV: true });
+  });
+
   it("accepts deletion of all layouts by sending an empty array", async () => {
     await request(app)
       .put("/api/settings")

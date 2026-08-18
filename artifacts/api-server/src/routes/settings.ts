@@ -215,7 +215,8 @@ export const DEFAULT_SETTINGS = {
   puzzleLayouts: [] as Array<{
     id: string;
     name: string;
-    tiles: Array<{ datasetId: string; tx: number; ty: number; angleDeg: number }>;
+    /** flipH and flipV are optional (absent = false) for backward compat with pre-flip layouts. */
+    tiles: Array<{ datasetId: string; tx: number; ty: number; angleDeg: number; flipH?: boolean; flipV?: boolean }>;
     groups: string[][];
   }>,
 };

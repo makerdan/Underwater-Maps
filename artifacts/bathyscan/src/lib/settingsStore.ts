@@ -237,7 +237,7 @@ export interface PuzzleLayout {
   /** User-provided display name, 1–80 chars. */
   name: string;
   /** Per-dataset tile transforms captured at save time. */
-  tiles: Array<{ datasetId: string; tx: number; ty: number; angleDeg: number }>;
+  tiles: Array<{ datasetId: string; tx: number; ty: number; angleDeg: number; flipH?: boolean; flipV?: boolean }>;
   /**
    * Saved group memberships. Each inner array is a set of datasetIds that
    * move together as a unit. Entries with fewer than 2 members are ignored

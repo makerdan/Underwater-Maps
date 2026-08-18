@@ -503,9 +503,9 @@ export const OverviewMap: React.FC = () => {
   // Per-dataset spatial offsets (canvas pixels). Persists for the lifetime of
   // the session — toggling puzzle mode OFF leaves tiles where they were placed.
   const [puzzleTransforms, setPuzzleTransforms] = useState<
-    Map<string, { tx: number; ty: number; angleDeg: number }>
+    Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>
   >(new Map());
-  const puzzleTransformsRef = useRef<Map<string, { tx: number; ty: number; angleDeg: number }>>(new Map());
+  const puzzleTransformsRef = useRef<Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>>(new Map());
   useEffect(() => {
     puzzleTransformsRef.current = puzzleTransforms;
     dirtyRef.current = true;
@@ -576,7 +576,7 @@ export const OverviewMap: React.FC = () => {
   const setPuzzleStoreTransforms = usePuzzleStore((s) => s.setPuzzleTransforms);
   useEffect(() => {
     // Convert Map → plain object for the store.
-    const record: Record<string, { tx: number; ty: number; angleDeg: number }> = {};
+    const record: Record<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }> = {};
     for (const [id, xf] of puzzleTransforms) record[id] = xf;
     setPuzzleStoreTransforms(record);
   }, [puzzleTransforms, setPuzzleStoreTransforms]);
@@ -590,9 +590,13 @@ export const OverviewMap: React.FC = () => {
         sessionStorage.getItem("bathyscan:puzzleTransforms") ??
         localStorage.getItem("bathyscan:puzzleTransforms");
       if (raw) {
-        const entries = JSON.parse(raw) as Array<[string, { tx: number; ty: number; angleDeg: number }]>;
+        const entries = JSON.parse(raw) as Array<[string, { tx: number; ty: number; angleDeg: number; flipH?: boolean; flipV?: boolean }]>;
         if (Array.isArray(entries) && entries.length > 0) {
-          setPuzzleTransforms(new Map(entries));
+          // Normalise: default flipH/flipV to false for entries saved before this feature.
+          setPuzzleTransforms(new Map(entries.map(([id, xf]) => [
+            id,
+            { tx: xf.tx, ty: xf.ty, angleDeg: xf.angleDeg, flipH: xf.flipH ?? false, flipV: xf.flipV ?? false },
+          ])));
         }
       }
     } catch {
@@ -702,10 +706,13 @@ export const OverviewMap: React.FC = () => {
   const restorePuzzleLayout = useCallback((layout: PuzzleLayout) => {
     const aliveIds = new Set(visibleDatasets.map((v) => v.datasetId));
     // Restore transforms only for datasets still visible.
-    const nextTransforms = new Map<string, { tx: number; ty: number; angleDeg: number }>();
+    const nextTransforms = new Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>();
     for (const tile of layout.tiles) {
       if (aliveIds.has(tile.datasetId)) {
-        nextTransforms.set(tile.datasetId, { tx: tile.tx, ty: tile.ty, angleDeg: tile.angleDeg });
+        nextTransforms.set(tile.datasetId, {
+          tx: tile.tx, ty: tile.ty, angleDeg: tile.angleDeg,
+          flipH: tile.flipH ?? false, flipV: tile.flipV ?? false,
+        });
       }
     }
     setPuzzleTransforms(nextTransforms);
@@ -733,7 +740,7 @@ export const OverviewMap: React.FC = () => {
     if (!trimmed) return;
     const tiles: PuzzleLayout["tiles"] = [];
     for (const [datasetId, xf] of puzzleTransformsRef.current) {
-      tiles.push({ datasetId, tx: xf.tx, ty: xf.ty, angleDeg: xf.angleDeg });
+      tiles.push({ datasetId, tx: xf.tx, ty: xf.ty, angleDeg: xf.angleDeg, flipH: xf.flipH, flipV: xf.flipV });
     }
     const groups: string[][] = [];
     for (const members of puzzleGroupsRef.current.values()) {
@@ -758,7 +765,7 @@ export const OverviewMap: React.FC = () => {
     mx: number; my: number;
     tx: number; ty: number; angleDeg: number;
     cx: number; cy: number;
-    startTransforms: Map<string, { tx: number; ty: number; angleDeg: number }>;
+    startTransforms: Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>;
     collectiveCx: number; collectiveCy: number;
     startAngleDeg: number;
   }>({ mx: 0, my: 0, tx: 0, ty: 0, angleDeg: 0, cx: 0, cy: 0,
@@ -1102,7 +1109,7 @@ export const OverviewMap: React.FC = () => {
   // True when at least one tile has been moved/rotated — controls Reset button.
   const hasPuzzleTransforms = useMemo(() => {
     for (const v of puzzleTransforms.values()) {
-      if (v.tx !== 0 || v.ty !== 0 || v.angleDeg !== 0) return true;
+      if (v.tx !== 0 || v.ty !== 0 || v.angleDeg !== 0 || v.flipH || v.flipV) return true;
     }
     return false;
   }, [puzzleTransforms]);
@@ -1847,11 +1854,14 @@ export const OverviewMap: React.FC = () => {
         const ptx = pxform?.tx ?? 0;
         const pty = pxform?.ty ?? 0;
         const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
+        const pFlipH = pxform?.flipH ?? false;
+        const pFlipV = pxform?.flipV ?? false;
 
         ctx.save();
-        // Rotate around tile center, then translate.
+        // Rotate around tile center, apply flip, then translate.
         ctx.translate(tcx + ptx, tcy + pty);
         ctx.rotate(pAngleRad);
+        ctx.scale(pFlipH ? -1 : 1, pFlipV ? -1 : 1);
         ctx.translate(-tcx, -tcy);
 
         drawFn();
@@ -1933,10 +1943,13 @@ export const OverviewMap: React.FC = () => {
         const ptx = pxform?.tx ?? 0;
         const pty = pxform?.ty ?? 0;
         const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
+        const pFlipH = pxform?.flipH ?? false;
+        const pFlipV = pxform?.flipV ?? false;
 
         ctx.save();
         ctx.translate(tcx + ptx, tcy + pty);
         ctx.rotate(pAngleRad);
+        ctx.scale(pFlipH ? -1 : 1, pFlipV ? -1 : 1);
         ctx.translate(-tcx, -tcy);
 
         drawFn();
@@ -2430,9 +2443,9 @@ export const OverviewMap: React.FC = () => {
               const ccy = count > 0 ? sumCy / count : my;
 
               // Snapshot all selected transforms for multi-tile rotate.
-              const startTransforms = new Map<string, { tx: number; ty: number; angleDeg: number }>();
+              const startTransforms = new Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>();
               for (const id of selectedIds) {
-                const xf = puzzleTransformsRef.current.get(id) ?? { tx: 0, ty: 0, angleDeg: 0 };
+                const xf = puzzleTransformsRef.current.get(id) ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
                 startTransforms.set(id, { ...xf });
               }
 
@@ -2524,9 +2537,9 @@ export const OverviewMap: React.FC = () => {
         // Set translate drag submode if a tile was hit and is in the final selection.
         if (hitId !== null && newSelection.has(hitId)) {
           // Snapshot all selected transforms for multi-tile drag.
-          const startTransforms = new Map<string, { tx: number; ty: number; angleDeg: number }>();
+          const startTransforms = new Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>();
           for (const id of newSelection) {
-            const xf = puzzleTransformsRef.current.get(id) ?? { tx: 0, ty: 0, angleDeg: 0 };
+            const xf = puzzleTransformsRef.current.get(id) ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
             startTransforms.set(id, { ...xf });
           }
           const hitV = visibleNow.find((vv) => vv.datasetId === hitId);
@@ -2628,7 +2641,7 @@ export const OverviewMap: React.FC = () => {
             for (const [id, startXf] of start.startTransforms) {
               const existing = prev.get(id);
               next.set(id, {
-                ...(existing ?? { tx: 0, ty: 0, angleDeg: startXf.angleDeg }),
+                ...(existing ?? { tx: 0, ty: 0, angleDeg: startXf.angleDeg, flipH: false, flipV: false }),
                 tx: startXf.tx + dx,
                 ty: startXf.ty + dy,
               });
@@ -2680,7 +2693,7 @@ export const OverviewMap: React.FC = () => {
               }
               const existing = prev.get(id);
               next.set(id, {
-                ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }),
+                ...(existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false }),
                 angleDeg: newAngle,
                 tx: orbitTx,
                 ty: orbitTy,
@@ -2823,7 +2836,7 @@ export const OverviewMap: React.FC = () => {
               for (const nudgeId of nudgeIds) {
                 const existing = prev.get(nudgeId);
                 const current = existing?.angleDeg ?? 0;
-                next.set(nudgeId, { ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }), angleDeg: current + delta });
+                next.set(nudgeId, { ...(existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false }), angleDeg: current + delta });
               }
               return next;
             });
@@ -4336,7 +4349,7 @@ export const OverviewMap: React.FC = () => {
                 for (const id of puzzleSelectedIds) {
                   const existing = prev.get(id);
                   next.set(id, {
-                    ...(existing ?? { tx: 0, ty: 0, angleDeg: 0 }),
+                    ...(existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false }),
                     angleDeg: (existing?.angleDeg ?? 0) + delta,
                   });
                 }
@@ -4440,6 +4453,66 @@ export const OverviewMap: React.FC = () => {
                     ↺
                   </button>
                 )}
+              </div>
+            );
+          })()}
+
+          {/* Flip controls — visible in puzzle mode when any tile is selected */}
+          {puzzleMode && puzzleSelectedIds.size > 0 && (() => {
+            const flipBtnStyle: React.CSSProperties = {
+              background: "rgba(0,10,20,0.75)",
+              border: "1px solid rgba(168,85,247,0.45)",
+              borderRadius: 3,
+              color: "#c084fc",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+              padding: "2px 6px",
+              cursor: "pointer",
+              lineHeight: "18px",
+              whiteSpace: "nowrap",
+            };
+            const applyFlip = (axis: "flipH" | "flipV") => {
+              setPuzzleTransforms((prev) => {
+                const next = new Map(prev);
+                for (const id of puzzleSelectedIds) {
+                  const existing = prev.get(id);
+                  const base = existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
+                  next.set(id, { ...base, [axis]: !base[axis] });
+                }
+                return next;
+              });
+              dirtyRef.current = true;
+            };
+            return (
+              <div
+                data-testid="overview-puzzle-flip-panel"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
+                  background: "rgba(168,85,247,0.08)",
+                  border: "1px solid rgba(168,85,247,0.35)",
+                  borderRadius: 4,
+                  padding: "2px 6px",
+                }}
+              >
+                <span style={{ color: "rgba(192,132,252,0.7)", fontFamily: "'JetBrains Mono', monospace", fontSize: "calc(10px * var(--bs-font-scale,1))", letterSpacing: "0.05em", marginRight: 2 }}>⇔</span>
+                <button
+                  data-testid="overview-puzzle-flip-h"
+                  style={flipBtnStyle}
+                  title="Flip selected tile(s) horizontally"
+                  onClick={() => applyFlip("flipH")}
+                >
+                  Flip H
+                </button>
+                <button
+                  data-testid="overview-puzzle-flip-v"
+                  style={flipBtnStyle}
+                  title="Flip selected tile(s) vertically"
+                  onClick={() => applyFlip("flipV")}
+                >
+                  Flip V
+                </button>
               </div>
             );
           })()}

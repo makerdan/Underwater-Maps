@@ -1777,7 +1777,9 @@ export const GetSettingsResponse = zod.object({
   "datasetId": zod.string().max(getSettingsResponsePuzzleLayoutsItemTilesItemDatasetIdMax),
   "tx": zod.number(),
   "ty": zod.number(),
-  "angleDeg": zod.number()
+  "angleDeg": zod.number(),
+  "flipH": zod.boolean().optional(),
+  "flipV": zod.boolean().optional()
 })).max(getSettingsResponsePuzzleLayoutsItemTilesMax),
   "groups": zod.array(zod.array(zod.string().max(getSettingsResponsePuzzleLayoutsItemGroupsItemItemMax)).min(getSettingsResponsePuzzleLayoutsItemGroupsItemMin).max(getSettingsResponsePuzzleLayoutsItemGroupsItemMax)).max(getSettingsResponsePuzzleLayoutsItemGroupsMax)
 })).max(getSettingsResponsePuzzleLayoutsMax).default(getSettingsResponsePuzzleLayoutsDefault).describe('User-saved named puzzle tile arrangements. Each entry stores per-tile transforms and groupings under a user-provided name, enabling quick restoration of frequently used dataset comparisons.'),
@@ -2311,7 +2313,9 @@ export const PutSettingsBody = zod.object({
   "datasetId": zod.string().max(putSettingsBodyPuzzleLayoutsItemTilesItemDatasetIdMax),
   "tx": zod.number(),
   "ty": zod.number(),
-  "angleDeg": zod.number()
+  "angleDeg": zod.number(),
+  "flipH": zod.boolean().optional(),
+  "flipV": zod.boolean().optional()
 })).max(putSettingsBodyPuzzleLayoutsItemTilesMax),
   "groups": zod.array(zod.array(zod.string().max(putSettingsBodyPuzzleLayoutsItemGroupsItemItemMax)).min(putSettingsBodyPuzzleLayoutsItemGroupsItemMin).max(putSettingsBodyPuzzleLayoutsItemGroupsItemMax)).max(putSettingsBodyPuzzleLayoutsItemGroupsMax)
 })).max(putSettingsBodyPuzzleLayoutsMax).default(putSettingsBodyPuzzleLayoutsDefault).describe('User-saved named puzzle tile arrangements. Each entry stores per-tile transforms and groupings under a user-provided name, enabling quick restoration of frequently used dataset comparisons.'),

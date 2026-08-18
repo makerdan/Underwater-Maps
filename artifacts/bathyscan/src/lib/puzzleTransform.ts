@@ -45,17 +45,22 @@ export function applyPuzzleTransformToLonLat(
   const [tcx, tcy] = lonLatToCanvas(tileCenterLon, tileCenterLat, referenceGrid, ovTransform);
 
   const { tx, ty, angleDeg } = transform;
+  const flipH = transform.flipH ?? false;
+  const flipV = transform.flipV ?? false;
   const angleRad = (angleDeg * Math.PI) / 180;
   const cosA = Math.cos(angleRad);
   const sinA = Math.sin(angleRad);
 
   // Replicate the canvas transform sequence:
-  //   translate(tcx + tx, tcy + ty) · rotate(angleRad) · translate(-tcx, -tcy)
+  //   translate(tcx + tx, tcy + ty) · rotate(angleRad) · scale(flipH?-1:1, flipV?-1:1) · translate(-tcx, -tcy)
   // Applied to canvas point (mx, my):
   const dx = mx - tcx;
   const dy = my - tcy;
-  const finalCx = cosA * dx - sinA * dy + tcx + tx;
-  const finalCy = sinA * dx + cosA * dy + tcy + ty;
+  // Rotate first, then apply flip in the rotated frame.
+  const rotX = cosA * dx - sinA * dy;
+  const rotY = sinA * dx + cosA * dy;
+  const finalCx = (flipH ? -1 : 1) * rotX + tcx + tx;
+  const finalCy = (flipV ? -1 : 1) * rotY + tcy + ty;
 
   return canvasToLonLat(finalCx, finalCy, referenceGrid, ovTransform);
 }
