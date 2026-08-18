@@ -3140,7 +3140,81 @@ export const OverviewMap: React.FC = () => {
       );
       const depth = overviewGrid.depths[row * N + col] ?? overviewGrid.minDepth;
 
-      const items: ContextMenuItem[] = [
+      // --- Puzzle tile hit-test for flip context menu items ---
+      let puzzleHitId: string | null = null;
+      if (puzzleModeRef.current) {
+        const worldGrid = worldGridRef.current ?? overviewGrid;
+        const visibleNow = visibleDatasetsRef.current;
+        const sorted = sortByRecency(visibleNow);
+        for (let i = sorted.length - 1; i >= 0; i--) {
+          const v = sorted[i];
+          if (!v) continue;
+          const og =
+            v.datasetId === primaryDatasetIdRef.current
+              ? overviewGrid
+              : v.overviewGrid;
+          if (!og) continue;
+          const [bx0, by0] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
+          const [bx1, by1] = lonLatToCanvas(og.maxLon, og.minLat, worldGrid, t);
+          const tcx = (bx0 + bx1) / 2;
+          const tcy = (by0 + by1) / 2;
+          const pxform = puzzleTransformsRef.current.get(v.datasetId);
+          const ptx = pxform?.tx ?? 0;
+          const pty = pxform?.ty ?? 0;
+          const pAngleRad = ((pxform?.angleDeg ?? 0) * Math.PI) / 180;
+          const pdx = mx - (tcx + ptx);
+          const pdy = my - (tcy + pty);
+          const localX = tcx + pdx * Math.cos(-pAngleRad) - pdy * Math.sin(-pAngleRad);
+          const localY = tcy + pdx * Math.sin(-pAngleRad) + pdy * Math.cos(-pAngleRad);
+          if (localX >= bx0 && localX <= bx1 && localY >= by0 && localY <= by1) {
+            puzzleHitId = v.datasetId;
+            break;
+          }
+        }
+      }
+
+      const items: ContextMenuItem[] = [];
+
+      // Flip items appear at the top when a puzzle tile was right-clicked.
+      if (puzzleHitId !== null) {
+        // Collect all tiles to flip: the hit tile plus any group co-members.
+        const flipIds = new Set<string>([puzzleHitId]);
+        for (const members of puzzleGroupsRef.current.values()) {
+          if (members.has(puzzleHitId)) {
+            for (const m of members) flipIds.add(m);
+            break;
+          }
+        }
+
+        const applyContextFlip = (axis: "flipH" | "flipV") => {
+          setPuzzleTransforms((prev) => {
+            const next = new Map(prev);
+            for (const id of flipIds) {
+              const existing = prev.get(id);
+              const base = existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
+              next.set(id, { ...base, [axis]: !base[axis] });
+            }
+            return next;
+          });
+          dirtyRef.current = true;
+        };
+
+        items.push(
+          {
+            label: "Flip H",
+            icon: "⇔",
+            onClick: () => applyContextFlip("flipH"),
+          },
+          {
+            label: "Flip V",
+            icon: "⇕",
+            onClick: () => applyContextFlip("flipV"),
+          },
+          { label: "", onClick: () => {}, separator: true },
+        );
+      }
+
+      items.push(
         {
           label: "Drop in here",
           icon: "✈️",
@@ -3176,7 +3250,7 @@ export const OverviewMap: React.FC = () => {
             }
           },
         },
-      ];
+      );
 
       useContextMenuStore.getState().show(e.clientX, e.clientY, items);
     };
