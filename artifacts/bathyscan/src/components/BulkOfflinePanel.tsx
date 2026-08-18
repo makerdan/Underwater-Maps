@@ -28,6 +28,7 @@ import {
   type BulkRow,
   type RowStatus,
 } from "@/hooks/useBulkOfflinePack";
+import { Spinner } from "@/components/Spinner";
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -58,10 +59,10 @@ function expiresLabel(iso: string): { text: string; amber: boolean } {
 
 // ── Status chip ────────────────────────────────────────────────────────────
 
-const STATUS_ICON: Record<RowStatus, string> = {
+const STATUS_ICON: Record<RowStatus, React.ReactNode> = {
   pending: "○",
   skipped: "–",
-  saving: "◌",
+  saving: <Spinner />,
   done: "✓",
   "done-warning": "⚠",
   error: "✗",
@@ -129,7 +130,7 @@ function ProgressSteps({ row }: { row: BulkRow }) {
               color: isErr ? "#fca5a5" : isDone ? "#4ade80" : isActive ? "#00e5ff" : "#475569",
             }}
           >
-            {isErr ? "✗" : isDone ? "✓" : isActive ? "◌" : "○"} {STEP_LABELS[step]}
+            {isErr ? "✗" : isDone ? "✓" : isActive ? <Spinner /> : "○"} {STEP_LABELS[step]}
           </span>
         );
       })}
@@ -671,7 +672,7 @@ export const BulkOfflinePanel: React.FC<Props> = ({
                 marginBottom: 10,
               }}
             >
-              ◌ Checking storage…
+              <Spinner color="#94a3b8" /> Checking storage…
             </div>
           )}
 
@@ -939,6 +940,25 @@ export const BulkOfflinePanel: React.FC<Props> = ({
                   <span style={{ color: "#fbbf24" }}> — {item.reason}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── Batch progress counter (while a run is active) ── */}
+          {(isRunning || isPaused) && bulk.rows.length > 0 && (
+            <div
+              data-testid="bulk-progress-counter"
+              style={{
+                fontSize: "calc(13px * var(--bs-font-scale, 1))",
+                color: "#94a3b8",
+                marginBottom: 6,
+              }}
+            >
+              {
+                bulk.rows.filter((r) =>
+                  ["done", "done-warning", "error", "skipped"].includes(r.status),
+                ).length
+              }{" "}
+              / {bulk.rows.length} datasets complete
             </div>
           )}
 

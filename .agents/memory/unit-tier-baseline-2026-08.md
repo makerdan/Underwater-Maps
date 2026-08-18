@@ -28,3 +28,12 @@ Update 2026-08-17 (later): new pre-existing baseline breakage from mobile-task m
 
 ## 2026-08-17 (later) — resolved same day
 A mobile-chart merge wave briefly broke repo-wide typecheck/lint (truncated test file) plus the settings sentinel and terrain-mock guard; all repaired on main the same day. Durable lesson: mid-session foreign merges can break AND repair the shared tree while a task runs — re-verify any "baseline" failure at current HEAD before skipping steps or citing it, and re-check again before task completion; the set changes hourly on busy days.
+
+## 2026-08-18 — github.test.ts admin-gate order-dependent failure
+`artifacts/api-server/src/routes/__tests__/github.test.ts` (Admin gate → 403 tests)
+fails under the sharded run (`vitest run --shard=2/2`: 8 tests get 500 instead of
+403) but passes solo (74/74). Test-order/isolation issue — likely env-stub or
+mock leakage from an earlier file in the shard, introduced with the admin-gate
+commits (`2642def7`/`b54085ae`/`f3760f55`), not by concurrent frontend work.
+Triage rule: run the file solo before blaming your diff; if solo-green, treat as
+baseline breakage.

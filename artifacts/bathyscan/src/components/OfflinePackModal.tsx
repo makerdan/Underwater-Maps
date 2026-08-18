@@ -24,6 +24,7 @@ import {
   HELP_ASSETS,
 } from "@/lib/helpPackStore";
 import { formatBytes } from "@/lib/formatBytes";
+import { Spinner } from "@/components/Spinner";
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -408,7 +409,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
 
               {/* Success state */}
               {areaPhase === "done" && savedPack && (
-                <div style={{
+                <div data-testid="area-pack-done" style={{
                   background: "rgba(74,222,128,0.06)",
                   border: "1px solid rgba(74,222,128,0.25)",
                   borderRadius: 4,
@@ -516,7 +517,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                         fontSize: "calc(15px * var(--bs-font-scale, 1))",
                       }}>
                         <span style={{ width: 14, textAlign: "center", color: isErr ? "#ef4444" : isDone ? "#4ade80" : isActive ? "#00e5ff" : "#475569" }}>
-                          {isErr ? "✗" : isDone ? "✓" : isActive ? "◌" : "○"}
+                          {isErr ? "✗" : isDone ? "✓" : isActive ? <Spinner /> : "○"}
                         </span>
                         <span style={{ color: isPending ? "#475569" : isErr ? "#fca5a5" : isDone ? "#4ade80" : "#e2e8f0" }}>
                           {STEP_LABELS[step]}
@@ -525,6 +526,16 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       </div>
                     );
                   })}
+                  <div
+                    data-testid="area-pack-progress-counter"
+                    style={{
+                      marginTop: 4,
+                      fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    {areaProgress.filter((p) => p.done).length} / 5 steps
+                  </div>
                 </div>
               )}
             </div>
@@ -619,13 +630,26 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                       fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
                     }}>
                       <span style={{ width: 14, textAlign: "center", color: p.error ? "#ef4444" : p.done ? "#4ade80" : "#00e5ff" }}>
-                        {p.error ? "✗" : p.done ? "✓" : "◌"}
+                        {p.error ? "✗" : p.done ? "✓" : <Spinner />}
                       </span>
                       <span style={{ color: p.error ? "#fca5a5" : p.done ? "#4ade80" : "#e2e8f0" }}>
                         {p.assetName} ({p.index}/{p.total})
                       </span>
                     </div>
                   ))}
+                  {helpProgress.length > 0 && (
+                    <div
+                      data-testid="help-pack-progress-counter"
+                      style={{
+                        marginTop: 4,
+                        fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+                        color: "#94a3b8",
+                      }}
+                    >
+                      {helpProgress[helpProgress.length - 1]!.index} of{" "}
+                      {helpProgress[helpProgress.length - 1]!.total} files
+                    </div>
+                  )}
                 </div>
               )}
 

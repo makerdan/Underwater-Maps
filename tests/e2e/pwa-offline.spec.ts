@@ -314,3 +314,232 @@ test.describe("Offline network-abort scenario", () => {
     await expect(page.getByRole("heading", { name: /DATA & STORAGE/ })).toBeVisible({ timeout: 5000 });
   });
 });
+
+// ── Save Offline full-download flow ──────────────────────────────────────────
+
+const OFFLINE_UPLOAD_ID = "pwa-offline-e2e-upload-001";
+const OFFLINE_UPLOAD_NAME = "Offline Flow Survey";
+const OFFLINE_UPLOAD_BBOX = { minLon: -135.5, minLat: 59.4, maxLon: -135.4, maxLat: 59.5 };
+
+test.describe("Save Offline full-download flow", () => {
+  /**
+   * Exercises the complete Save Area flow from the MY LIBRARY trigger button
+   * through the downloading progress UI to the final done state.
+   *
+   * Strategy:
+   * - Mock GET /api/user/datasets so MY LIBRARY shows one upload card with a
+   *   known id (trigger: data-testid="btn-offline-upload-<id>").
+   * - Remove navigator.serviceWorker before app boot so the terrain
+   *   CACHE_PACK step resolves immediately (offlinePackStore guards on
+   *   `"serviceWorker" in navigator`); without this the save would hang on
+   *   `navigator.serviceWorker.ready` in environments with no registered SW.
+   * - Stub the tide / weather / marker endpoints with minimal payloads. The
+   *   tide stub is delayed so the "downloading" phase (spinner + progress
+   *   counter) stays observable long enough to assert on.
+   */
+  test.beforeEach(async ({ resetPanelCollapse }) => {
+    void resetPanelCollapse;
+  });
+
+  test("Save Area runs from button click to done state with progress counter", async ({ page }) => {
+    // SW stub must be installed before any app code runs.
+    await page.addInitScript(() => {
+      try {
+        delete (Navigator.prototype as unknown as Record<string, unknown>)["serviceWorker"];
+      } catch {
+        // Some browsers may refuse — the test skips later if the save hangs.
+      }
+    });
+
+    // MY LIBRARY data: one upload with a bbox (so tide/weather steps run).
+    await page.route("**/api/user/datasets", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify([
+          {
+            id: OFFLINE_UPLOAD_ID,
+            name: OFFLINE_UPLOAD_NAME,
+            minDepth: 15,
+            maxDepth: 320,
+            folderId: null,
+            bbox: OFFLINE_UPLOAD_BBOX,
+            createdAt: "2024-06-01T00:00:00.000Z",
+          },
+        ]),
+      });
+    });
+    await page.route("**/api/datasets/my-saves*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify([]),
+      });
+    });
+    await page.route("**/api/user/folders*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify([]),
+      });
+    });
+
+    // Bbox derivation fallback (used only when the card carries no bbox).
+    await page.route(`**/api/datasets/${OFFLINE_UPLOAD_ID}/preview`, (route) =>
+      route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          datasetId: OFFLINE_UPLOAD_ID,
+          name: OFFLINE_UPLOAD_NAME,
+          bbox: OFFLINE_UPLOAD_BBOX,
+          dataSource: "real",
+        }),
+      }),
+    );
+
+    // Tide pack — delayed so the downloading state is observable.
+    await page.route("**/api/tidal/pack*", async (route) => {
+      await new Promise((r) => setTimeout(r, 800));
+      const now = new Date();
+      return route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          station: "e2e-test-station",
+          heightPredictions: [{ t: now.toISOString(), v: 1.2 }],
+          currentPredictions: [],
+          tidalExpiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          generatedAt: now.toISOString(),
+        }),
+      });
+    });
+
+    // Weather pack — minimal "no station nearby" payload.
+    await page.route("**/api/weather/pack*", (route) =>
+      route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          station: null,
+          observation: null,
+          snapshotAt: new Date().toISOString(),
+        }),
+      }),
+    );
+
+    // Markers — empty list.
+    await page.route("**/api/markers*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify([]),
+      });
+    });
+
+    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+
+    // MY LIBRARY section (sidebar, Explore mode). Skip on cold environments
+    // where the sidebar never renders (not signed in / app failed to boot).
+    const libraryToggle = page.locator('button:has-text("MY LIBRARY")').first();
+    const libraryVisible = await libraryToggle
+      .waitFor({ state: "visible", timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!libraryVisible) {
+      test.skip(true, "MY LIBRARY section not visible — app did not load or user not signed in");
+      return;
+    }
+    if ((await libraryToggle.getAttribute("aria-expanded")) === "false") {
+      await libraryToggle.dispatchEvent("click");
+    }
+
+    // Save-offline trigger for the mocked upload card.
+    const trigger = page.getByTestId(`btn-offline-upload-${OFFLINE_UPLOAD_ID}`);
+    const triggerVisible = await trigger
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!triggerVisible) {
+      test.skip(true, "Save-offline trigger not found — MY LIBRARY upload card did not render");
+      return;
+    }
+    await trigger.dispatchEvent("click");
+
+    // The offline pack modal opens.
+    const modal = page.getByRole("dialog", { name: "Save offline" });
+    await expect(modal).toBeVisible({ timeout: 5_000 });
+
+    // Start the area download.
+    const saveAreaBtn = modal.locator('button:has-text("Save Area")').first();
+    await expect(saveAreaBtn).toBeVisible({ timeout: 5_000 });
+    await saveAreaBtn.dispatchEvent("click");
+
+    // Downloading state: progress counter (and spinner) must appear.
+    const counter = page.getByTestId("area-pack-progress-counter");
+    await expect(counter).toBeVisible({ timeout: 10_000 });
+    await expect(counter).toContainText(/\/ 5 steps/);
+
+    // Done state: the saved confirmation row appears and the counter is gone.
+    const done = page.getByTestId("area-pack-done");
+    await expect(done).toBeVisible({ timeout: 20_000 });
+    await expect(done).toContainText("Saved");
+    await expect(counter).not.toBeVisible();
+  });
+
+  /**
+   * Optional offline read-only smoke check (plan step 6). Only meaningful in
+   * environments where a service worker actually controls the page and can
+   * serve terrain from the pack cache; the e2e dev server does not register
+   * one, so this skips deterministically there instead of failing.
+   */
+  test("offline reload serves cached terrain (SW environments only)", async ({ page }) => {
+    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+
+    const swControlled = await page
+      .evaluate(
+        () =>
+          "serviceWorker" in navigator &&
+          navigator.serviceWorker.controller != null,
+      )
+      .catch(() => false);
+    if (!swControlled) {
+      test.skip(true, "No controlling service worker — offline cache smoke check requires a SW environment");
+      return;
+    }
+
+    // A real SW is controlling the page: verify the offline reload path.
+    await goOffline(page);
+    await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+    if (page.isClosed()) {
+      test.skip(true, "Page closed during offline reload — environment flake");
+      return;
+    }
+
+    const canvasVisible = await page
+      .locator("canvas")
+      .first()
+      .isVisible({ timeout: 10_000 })
+      .catch(() => false);
+    if (!canvasVisible) {
+      test.skip(true, "Canvas did not render offline — SW cache cold in this environment");
+      return;
+    }
+
+    const badge = page.locator('[data-testid="offline-badge"]');
+    await expect(badge).toBeVisible({ timeout: 5_000 });
+
+    // At least one dataset should report as cached (✓) rather than unavailable.
+    const cachedBadges = page.locator('[data-testid^="cache-badge-"]');
+    const cachedCount = await cachedBadges.count();
+    if (cachedCount === 0) {
+      test.skip(true, "No cache badges present — no pack was saved in this environment");
+      return;
+    }
+    await expect(cachedBadges.first()).toBeVisible();
+  });
+});

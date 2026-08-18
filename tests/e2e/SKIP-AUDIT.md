@@ -1,6 +1,11 @@
 # E2E conditional-skip audit
 
 Last audited: 2026-07-21 (Task: skipped-test cleanup and skip-count guard).
+Baseline updated 2026-08-18 to 233: `pwa-offline.spec.ts` added the
+"Save Offline full-download flow" describe block with 6 environment-gated
+skips (MY LIBRARY / trigger not rendered when auth bypass or app boot fails —
+category 1; controlling service worker absent, offline-reload page close,
+cold SW cache in the optional offline smoke check — categories 2 and 7).
 Baseline updated 2026-08-13 to 216: `overview-puzzle-multiselect.spec.ts`
 added 9 environment-gated skips (auth-bypass / canvas gate + test-bridge /
 terrain gate), matching categories 1 and 2 below.
