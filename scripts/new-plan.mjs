@@ -173,6 +173,25 @@ const validationSection =
   `handled above — they are never a reason to run a heavier tier.`;
 
 // ---------------------------------------------------------------------------
+// Build the regression guard section
+// ---------------------------------------------------------------------------
+// Uses **Self-satisfying** by default so the file passes check:regression-guard
+// immediately.  Replace with the appropriate classification before marking
+// the task complete:
+//
+//   Self-satisfying — the task's deliverable IS the test (describe it briefly).
+//   N/A             — **N/A** + **Why N/A:** <specific reason, no placeholders>.
+//   Covered         — **Covers:** / **Test location:** / **What it checks:**
+//                     (all three fields must contain real content).
+const regressionGuardSection =
+  `## Regression Guard\n` +
+  `**Self-satisfying**\n` +
+  `<!-- Replace before marking complete. Options:\n` +
+  `  **Self-satisfying** — the task deliverable IS the regression test (add a brief description).\n` +
+  `  **N/A** + **Why N/A:** <specific reason this change needs no separate regression test>.\n` +
+  `  **Covers:** <what> / **Test location:** <file> / **What it checks:** <behaviour> -->`;
+
+// ---------------------------------------------------------------------------
 // Assemble plan content
 // ---------------------------------------------------------------------------
 const content =
@@ -180,6 +199,7 @@ const content =
   `## Steps\n` +
   `<!-- Fill in implementation steps before starting work -->\n\n` +
   `${preExistingSection}\n\n` +
+  `${regressionGuardSection}\n\n` +
   `${validationSection}\n`;
 
 // ---------------------------------------------------------------------------
