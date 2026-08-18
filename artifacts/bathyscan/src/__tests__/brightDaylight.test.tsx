@@ -141,14 +141,14 @@ describe("deriveEffectiveColormapTheme — grayscale auto-switch logic", () => {
   });
 
   it("respects any manual colormap when colormapUserSet is true and brightDaylight is on", () => {
-    const themes: ColormapTheme[] = ["ocean", "thermal", "viridis", "freshwater", "custom"];
+    const themes: ColormapTheme[] = ["ocean", "thermal", "viridis", "freshwater", "pastel", "custom"];
     for (const theme of themes) {
       expect(deriveEffectiveColormapTheme(true, true, theme)).toBe(theme);
     }
   });
 
   it("passes through the active theme unchanged when brightDaylight is off", () => {
-    const themes: ColormapTheme[] = ["ocean", "thermal", "grayscale", "viridis", "freshwater", "custom"];
+    const themes: ColormapTheme[] = ["ocean", "thermal", "grayscale", "viridis", "freshwater", "pastel", "custom"];
     for (const theme of themes) {
       expect(deriveEffectiveColormapTheme(false, false, theme)).toBe(theme);
       expect(deriveEffectiveColormapTheme(false, true, theme)).toBe(theme);

@@ -23,6 +23,7 @@ const THEME_LABELS: Record<ColormapTheme, string> = {
   thermal: "Thermal (purple→white)",
   grayscale: "Grayscale",
   viridis: "Viridis (purple→yellow)",
+  pastel: "Pastel (soft gradient)",
   custom: "Custom",
 };
 

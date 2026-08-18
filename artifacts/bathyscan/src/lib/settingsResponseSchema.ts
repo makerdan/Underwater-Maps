@@ -90,7 +90,7 @@ export const settingsFieldSchemas = {
   lampRange: num,
   antialiasing: bool,
   textureQuality: z.enum(["off", "low", "high"]).optional().catch(undefined),
-  colormapTheme: z.enum(["ocean", "thermal", "grayscale", "viridis", "freshwater", "custom"]).optional().catch(undefined),
+  colormapTheme: z.enum(["ocean", "thermal", "grayscale", "viridis", "freshwater", "pastel", "custom"]).optional().catch(undefined),
   smoothTerrainSpikes: bool,
   showWaterSurface: bool,
   showWaterTempLayer: bool,

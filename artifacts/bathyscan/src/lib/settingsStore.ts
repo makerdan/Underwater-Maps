@@ -155,7 +155,7 @@ export interface CameraBookmark {
 export type WaterType = "saltwater" | "freshwater";
 export type ParticleDensity = "off" | "sparse" | "dense";
 export type TextureQuality = "off" | "low" | "high";
-export type ColormapTheme = "ocean" | "thermal" | "grayscale" | "viridis" | "freshwater" | "custom";
+export type ColormapTheme = "ocean" | "thermal" | "grayscale" | "viridis" | "freshwater" | "pastel" | "custom";
 export type CoordinateFormat = "decimal" | "dms";
 export type DepthUnit = "metres" | "feet";
 /**

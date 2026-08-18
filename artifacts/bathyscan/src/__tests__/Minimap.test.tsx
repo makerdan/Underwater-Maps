@@ -404,7 +404,7 @@ describe("drawHeatmap — null depths, topography cells, and fixed preset themes
 
   // ── fixed preset themes: non-flat gradient ──────────────────────────────
 
-  const FIXED_THEMES: ColormapTheme[] = ["thermal", "grayscale", "viridis", "freshwater"];
+  const FIXED_THEMES: ColormapTheme[] = ["thermal", "grayscale", "viridis", "freshwater", "pastel"];
 
   it.each(FIXED_THEMES)(
     'theme "%s" paints a non-flat gradient (shallow ≠ deep pixel)',

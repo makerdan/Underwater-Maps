@@ -157,6 +157,14 @@ function getBandStops(range?: DepthRangeM): ColorStop[] {
 }
 
 const FIXED_THEME_STOPS: Record<Exclude<ColormapTheme, "ocean" | "custom">, ColorStop[]> = {
+  pastel: [
+    { t: 0.00, color: new THREE.Color("#ffb3b3") },
+    { t: 0.20, color: new THREE.Color("#ffd5a8") },
+    { t: 0.40, color: new THREE.Color("#fff3b0") },
+    { t: 0.60, color: new THREE.Color("#b8f0d0") },
+    { t: 0.80, color: new THREE.Color("#b3d4f5") },
+    { t: 1.00, color: new THREE.Color("#c8b8e8") },
+  ],
   thermal: [
     { t: 0.00, color: new THREE.Color("#0d0221") },
     { t: 0.25, color: new THREE.Color("#7b2d8b") },

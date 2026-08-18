@@ -17,7 +17,7 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("getColormapTRange — fixed themes", () => {
-  const fixedThemes = ["thermal", "grayscale", "viridis", "freshwater"] as const;
+  const fixedThemes = ["thermal", "grayscale", "viridis", "freshwater", "pastel"] as const;
 
   for (const theme of fixedThemes) {
     it(`${theme}: always returns { tMin: 0, tMax: 1 } regardless of depth range`, () => {
@@ -114,7 +114,7 @@ describe("colormapCssGradient — CSS output format", () => {
   });
 
   it("contains at least 2 rgb(…) stops for every theme", () => {
-    const themes = ["ocean", "thermal", "grayscale", "viridis", "freshwater", "custom"] as const;
+    const themes = ["ocean", "thermal", "grayscale", "viridis", "freshwater", "pastel", "custom"] as const;
     for (const theme of themes) {
       const css = colormapCssGradient(theme);
       const matches = css.match(RGB_STOP_RE);

@@ -697,6 +697,7 @@ export function DepthColorsCard() {
         options={[
           { value: "ocean", label: "Ocean (blue)" },
           { value: "freshwater", label: "Freshwater (green)" },
+          { value: "pastel", label: "Pastel (soft gradient)" },
           { value: "thermal", label: "Thermal (purple→white)" },
           { value: "grayscale", label: "Grayscale" },
           { value: "viridis", label: "Viridis (purple→yellow)" },

@@ -72,7 +72,7 @@ describe("suggestColormap — edge case inputs", () => {
     const profile = computeDepthProfile(depths);
     expect(profile).not.toBeNull();
     const result = suggestColormap(profile!);
-    expect(result.theme).toMatch(/^(ocean|thermal|grayscale|viridis|freshwater|custom)$/);
+    expect(result.theme).toMatch(/^(ocean|thermal|grayscale|viridis|freshwater|pastel|custom)$/);
     expect(sanitizeBandBoundaries(result.bandBoundaries)).not.toBeNull();
   });
 

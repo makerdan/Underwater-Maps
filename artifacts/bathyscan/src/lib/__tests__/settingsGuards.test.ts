@@ -44,7 +44,7 @@ describe("toValidJoystickMode", () => {
 // ─── toValidColormapTheme ────────────────────────────────────────────────────
 
 describe("toValidColormapTheme", () => {
-  it.each(["ocean", "thermal", "grayscale", "viridis", "freshwater", "custom"] as const)(
+  it.each(["ocean", "thermal", "grayscale", "viridis", "freshwater", "pastel", "custom"] as const)(
     'accepts valid value "%s" unchanged',
     (v) => {
       expect(toValidColormapTheme(v)).toBe(v);

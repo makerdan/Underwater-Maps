@@ -20,6 +20,7 @@ const VALID_COLORMAP_THEMES: readonly string[] = [
   "grayscale",
   "viridis",
   "freshwater",
+  "pastel",
   "custom",
 ];
 const VALID_WATER_TYPES: readonly string[] = ["saltwater", "freshwater"];
