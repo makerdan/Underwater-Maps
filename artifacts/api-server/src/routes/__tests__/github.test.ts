@@ -892,3 +892,36 @@ describe("GitHub read rate limit — 60/min per user", () => {
     expect(writeRes.status).toBe(200);
   });
 });
+
+// ── GITHUB_READ_MAX env-var override ─────────────────────────────────────────
+
+describe("GITHUB_READ_MAX env-var override — read rate-limit ceiling is adjustable", () => {
+  afterEach(() => {
+    // Restore the module registry so subsequent static imports are unaffected.
+    vi.resetModules();
+  });
+
+  it("x-ratelimit-limit header reflects the GITHUB_READ_MAX env override", async () => {
+    vi.stubEnv("GITHUB_READ_MAX", "5");
+    vi.resetModules();
+
+    // Dynamic import picks up the freshly-set env var.
+    const { default: freshRouter } = await import("../github.js");
+    const app = express();
+    app.use(express.json());
+    app.use(freshRouter);
+
+    octokitMock.repos.listForAuthenticatedUser.mockResolvedValue({
+      data: [{ id: 1, name: "my-repo", full_name: "owner/my-repo" }],
+    });
+
+    const res = await request(app)
+      .get("/repos")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+
+    expect(res.status).toBe(200);
+    // The middleware must advertise the overridden ceiling, not the default 60.
+    expect(res.headers["x-ratelimit-limit"]).toBe("5");
+  });
+});

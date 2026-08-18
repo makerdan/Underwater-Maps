@@ -104,10 +104,18 @@ export const githubMutationRateLimit = createRateLimit({
 
 export const GITHUB_READ_ROUTE = "github-reads";
 export const GITHUB_READ_WINDOW_MS = 60_000;
+// Default 60/min per user. Overridable via env for e2e runs: a spec that polls
+// GitHub workflow run status in a tight loop can legitimately exceed 60/min
+// through the shared e2e bypass user, causing a spurious 429 mid-test.
+// Production never sets this.
+const githubReadMaxFromEnv = Number(process.env["GITHUB_READ_MAX"]);
 /** 60 reads/min — generous for interactive use but prevents tight-loop PAT exhaustion.
  *  GitHub's PAT-level quota is 5 000 req/hr; 60/min = 3 600/hr leaves room for
  *  automation running through the same PAT. */
-export const GITHUB_READ_MAX = 60;
+export const GITHUB_READ_MAX =
+  Number.isFinite(githubReadMaxFromEnv) && githubReadMaxFromEnv > 0
+    ? Math.floor(githubReadMaxFromEnv)
+    : 60;
 
 /**
  * Per-user rate limit for the read-only /api/github/* routes:
