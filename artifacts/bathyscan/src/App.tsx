@@ -125,6 +125,8 @@ import { OfflineReadOnlyBanner, persistOfflineIdentity } from "@/components/Offl
 import { MobileChartShell } from "@/components/mobile/MobileChartShell";
 import { useIsMobile, useIsMobileImmediate } from "@/hooks/use-mobile";
 import { MobilePlanTab } from "@/components/mobile/MobilePlanTab";
+import { ClosedForTestingBanner } from "@/components/ClosedForTestingBanner";
+import { isSiteClosed } from "@/lib/siteStatus";
 
 
 function TestBridge(): null {
@@ -238,7 +240,16 @@ function SignInPage() {
   );
 }
 
-function SignUpPage() {
+/** Exported for unit testing (closed-for-testing redirect). */
+export function SignUpPage() {
+  const [, setLocationSignUp] = useLocation();
+  const siteClosedSignUp = isSiteClosed();
+  // Closed-for-testing gate: direct URL entry to /sign-up must not expose the
+  // Clerk sign-up widget. Bounce to the landing page (which shows the banner).
+  useEffect(() => {
+    if (siteClosedSignUp) setLocationSignUp("/", { replace: true });
+  }, [siteClosedSignUp, setLocationSignUp]);
+  if (siteClosedSignUp) return null;
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-[#040810] px-4">
       <div className="absolute inset-0 bg-gradient-to-b from-[#040810] via-[#061220] to-[#040810] pointer-events-none" />
@@ -2129,10 +2140,13 @@ function MarkerSubsampleBadge() {
   );
 }
 
-function LandingPage() {
+/** Exported for unit testing (closed-for-testing banner + hidden sign-up). */
+export function LandingPage() {
   const [, setLocation] = useLocation();
+  const siteClosed = isSiteClosed();
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#040810] px-4 text-center">
+      {siteClosed && <ClosedForTestingBanner />}
       <div className="absolute inset-0 bg-gradient-to-b from-[#040810] via-[#061220] to-[#040810] pointer-events-none" />
       <div className="relative z-10">
         <p className="text-[#94a3b8] font-mono text-[14px] sm:text-[18px] tracking-[0.3em] uppercase mb-4">Deep Sea Explorer</p>
@@ -2147,14 +2161,18 @@ function LandingPage() {
         >
           Sign In to Explore
         </button>
-        <div className="mt-4">
-          <button
-            onClick={() => setLocation("/sign-up")}
-            className="text-[#38bdf8] font-mono text-[14px] sm:text-[18px] hover:text-[#7dd3fc] transition-colors"
-          >
-            Create account
-          </button>
-        </div>
+        {/* Closed-for-testing: the Create-account entry point is omitted
+            entirely (not just disabled) while the site is closed. */}
+        {!siteClosed && (
+          <div className="mt-4">
+            <button
+              onClick={() => setLocation("/sign-up")}
+              className="text-[#38bdf8] font-mono text-[14px] sm:text-[18px] hover:text-[#7dd3fc] transition-colors"
+            >
+              Create account
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
