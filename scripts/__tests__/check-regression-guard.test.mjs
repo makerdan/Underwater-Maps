@@ -22,7 +22,7 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -532,6 +532,140 @@ describe("angle-bracket in mixed content", () => {
       result.status,
       1,
       `expected exit 1 for whole-token angle-bracket placeholder\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// End-to-end pipeline: --fix-stub → strict
+// ---------------------------------------------------------------------------
+
+describe("end-to-end pipeline: --fix-stub then strict", () => {
+  let e2eDir;
+  let e2eTasksDir;
+
+  // File names for the three synthetic plans
+  const MISSING_SECTION = "e2e-rg-missing-section.md";
+  const PLACEHOLDER_COVERS = "e2e-rg-placeholder-covers.md";
+  const COMPLIANT = "e2e-rg-compliant.md";
+
+  before(() => {
+    e2eDir = mkdtempSync(join(tmpdir(), "crg-e2e-"));
+    e2eTasksDir = join(e2eDir, ".local", "tasks");
+    mkdirSync(e2eTasksDir, { recursive: true });
+
+    // (1) Plan with no ## Regression Guard section at all
+    writeFileSync(
+      join(e2eTasksDir, MISSING_SECTION),
+      [
+        "# Old Task Plan",
+        "",
+        "## Steps",
+        "Do the work.",
+      ].join("\n"),
+      "utf8",
+    );
+
+    // (2) Plan with ## Regression Guard but **Covers:** is a placeholder
+    //     — fix-stub must NOT touch this (section already exists); it must
+    //     remain a strict-mode violation after the pipeline runs.
+    writeFileSync(
+      join(e2eTasksDir, PLACEHOLDER_COVERS),
+      [
+        "# Task with Placeholder Covers",
+        "",
+        "## Regression Guard",
+        "**Covers:** <describe what code path this covers>",
+        "**Test location:** artifacts/api-server/src/__tests__/foo.test.ts",
+        "**What it checks:** returns 200 on valid input",
+      ].join("\n"),
+      "utf8",
+    );
+
+    // (3) Fully compliant plan
+    writeFileSync(
+      join(e2eTasksDir, COMPLIANT),
+      [
+        "# Fully Compliant Task",
+        "",
+        "## Regression Guard",
+        "**Self-satisfying** — this task adds the Regression Guard self-test coverage.",
+      ].join("\n"),
+      "utf8",
+    );
+  });
+
+  after(() => {
+    rmSync(e2eDir, { recursive: true, force: true });
+  });
+
+  it("--fix-stub exits 0", () => {
+    const result = run(e2eDir, ["--fix-stub"]);
+    assert.equal(
+      result.status,
+      0,
+      `expected --fix-stub to exit 0, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("after --fix-stub the missing-section file contains ## Regression Guard", () => {
+    // Run fix-stub (idempotent if already run in previous test)
+    run(e2eDir, ["--fix-stub"]);
+
+    const content = readFileSync(join(e2eTasksDir, MISSING_SECTION), "utf8");
+    assert.ok(
+      content.includes("## Regression Guard"),
+      `expected ${MISSING_SECTION} to contain ## Regression Guard after --fix-stub\ncontent: ${content}`,
+    );
+  });
+
+  it("strict check exits 1 (placeholder-covers violation remains after --fix-stub)", () => {
+    run(e2eDir, ["--fix-stub"]);
+    const result = run(e2eDir);
+    assert.equal(
+      result.status,
+      1,
+      `expected strict check to exit 1 after --fix-stub, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("strict check reports the placeholder-covers file as a violation", () => {
+    run(e2eDir, ["--fix-stub"]);
+    const result = run(e2eDir);
+    assert.ok(
+      result.stdout.includes(PLACEHOLDER_COVERS),
+      `expected ${PLACEHOLDER_COVERS} to appear in violations output\nstdout: ${result.stdout}`,
+    );
+    assert.ok(
+      result.stdout.includes("✗"),
+      `expected at least one ✗ violation in output\nstdout: ${result.stdout}`,
+    );
+  });
+
+  it("strict check does NOT report the patched missing-section file as a violation", () => {
+    run(e2eDir, ["--fix-stub"]);
+    const result = run(e2eDir);
+    const lines = result.stdout.split("\n");
+    const violationLine = lines.find(
+      (l) => l.includes("✗") && l.includes(MISSING_SECTION),
+    );
+    assert.ok(
+      !violationLine,
+      `expected ${MISSING_SECTION} (patched by --fix-stub) to NOT be marked ✗\nline: ${violationLine}\nstdout: ${result.stdout}`,
+    );
+  });
+
+  it("strict check does NOT report the fully compliant file as a violation", () => {
+    run(e2eDir, ["--fix-stub"]);
+    const result = run(e2eDir);
+    // The compliant file should not appear in the ✗ lines
+    const lines = result.stdout.split("\n");
+    const violationLine = lines.find(
+      (l) => l.includes("✗") && l.includes(COMPLIANT),
+    );
+    assert.ok(
+      !violationLine,
+      `expected ${COMPLIANT} to NOT be marked ✗ (violation)\nline: ${violationLine}\nstdout: ${result.stdout}`,
     );
   });
 });

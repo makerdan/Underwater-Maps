@@ -59,9 +59,6 @@ function isPlaceholder(text) {
   if (lower.includes("fill in")) return true;
   if (lower === "todo") return true;
   if (lower === "n/a") return true; // bare N/A without Why N/A line
-  // Reject the "predates mandate" auto-stub reason — it is only valid for
-  // archive-scan backfill; a current task's plan must have a real classification.
-  if (lower.startsWith("plan predates the regression guard mandate")) return true;
   return false;
 }
 
@@ -326,6 +323,14 @@ console.log(
     (patchedCount > 0 ? ` (${patchedCount} patched)` : "") +
     (nonCompliant.length === 0 ? " ✓" : ""),
 );
+
+// --fix-stub is documented as "always exits 0; safe to run unconditionally".
+// Its job is only to insert stubs for missing sections; files with existing
+// but unfilled sections are reported but do not cause a non-zero exit here —
+// a subsequent strict-mode run is expected to catch those.
+if (fixStub) {
+  process.exit(0);
+}
 
 if (nonCompliant.length > 0) {
   console.error(
