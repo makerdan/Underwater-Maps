@@ -6,7 +6,7 @@ import { validateBody } from "../middlewares/validateBody.js";
 import { getGithubClient } from "../lib/github.js";
 import { logger } from "../lib/logger.js";
 import { isAdmin } from "../lib/adminAccess.js";
-import { githubMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
+import { githubMutationRateLimit, githubReadRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const GithubReposListResponseSchema = z.array(z.record(z.unknown()));
 const GithubContentsResponseSchema = z.union([
@@ -107,6 +107,7 @@ router.get(
   "/repos",
   requireAuth,
   requireAdmin,
+  githubReadRateLimit,
   asyncHandler(async (_req, res): Promise<void> => {
     let octokit;
     try {
@@ -135,6 +136,7 @@ router.get(
   "/repos/:owner/:repo/contents/*path",
   requireAuth,
   requireAdmin,
+  githubReadRateLimit,
   asyncHandler(async (req, res): Promise<void> => {
     const paramsParsed = GithubOwnerRepoSchema.safeParse(req.params);
     if (!paramsParsed.success) {
@@ -325,6 +327,7 @@ router.get(
   "/repos/:owner/:repo/actions/runs",
   requireAuth,
   requireAdmin,
+  githubReadRateLimit,
   asyncHandler(async (req, res): Promise<void> => {
     const params = req.params as Record<string, string>;
     const owner = params["owner"] as string;
@@ -383,6 +386,7 @@ router.get(
   "/repos/:owner/:repo/actions/runs/:run_id",
   requireAuth,
   requireAdmin,
+  githubReadRateLimit,
   asyncHandler(async (req, res): Promise<void> => {
     const params = req.params as Record<string, string>;
     const owner = params["owner"] as string;

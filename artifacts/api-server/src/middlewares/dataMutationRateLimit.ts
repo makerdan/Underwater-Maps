@@ -101,3 +101,26 @@ export const githubMutationRateLimit = createRateLimit({
   max: GITHUB_MUTATION_MAX,
   mode: "user",
 });
+
+export const GITHUB_READ_ROUTE = "github-reads";
+export const GITHUB_READ_WINDOW_MS = 60_000;
+/** 60 reads/min — generous for interactive use but prevents tight-loop PAT exhaustion.
+ *  GitHub's PAT-level quota is 5 000 req/hr; 60/min = 3 600/hr leaves room for
+ *  automation running through the same PAT. */
+export const GITHUB_READ_MAX = 60;
+
+/**
+ * Per-user rate limit for the read-only /api/github/* routes:
+ *   GET /repos
+ *   GET /repos/:owner/:repo/contents/*path
+ *   GET /repos/:owner/:repo/actions/runs
+ *   GET /repos/:owner/:repo/actions/runs/:run_id
+ *
+ * 60 reads per minute per user.  Must be placed after `requireAuth`.
+ */
+export const githubReadRateLimit = createRateLimit({
+  route: GITHUB_READ_ROUTE,
+  windowMs: GITHUB_READ_WINDOW_MS,
+  max: GITHUB_READ_MAX,
+  mode: "user",
+});

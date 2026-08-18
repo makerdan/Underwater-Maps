@@ -60,6 +60,9 @@ import {
   GITHUB_MUTATION_ROUTE,
   GITHUB_MUTATION_WINDOW_MS,
   GITHUB_MUTATION_MAX,
+  GITHUB_READ_ROUTE,
+  GITHUB_READ_WINDOW_MS,
+  GITHUB_READ_MAX,
 } from "../../middlewares/dataMutationRateLimit.js";
 
 const getGithubClientMock = getGithubClient as ReturnType<typeof vi.fn>;
@@ -750,5 +753,142 @@ describe("GitHub mutation rate limit — 10/min per user", () => {
     expect(res.headers["x-ratelimit-limit"]).toBe(String(GITHUB_MUTATION_MAX));
     expect(res.headers["x-ratelimit-remaining"]).toBeDefined();
     expect(res.headers["x-ratelimit-reset"]).toBeDefined();
+  });
+});
+
+// ── GitHub read rate limit — 60/min per user ──────────────────────────────────
+
+describe("GitHub read rate limit — 60/min per user", () => {
+  function adminHeaders() {
+    return {
+      "x-e2e-bypass-secret": "vitest-test-secret",
+      "x-e2e-user-id": E2E_USER,
+    };
+  }
+
+  /** Bucket key for the GitHub read rate-limit, keyed to a given user. */
+  function githubReadKey(userId: string): string {
+    return `u:${GITHUB_READ_ROUTE}:${userId}`;
+  }
+
+  it("GET /repos returns 429 when admin user exhausts the read bucket", async () => {
+    __prefillRateLimitMemory(
+      githubReadKey(E2E_USER),
+      GITHUB_READ_MAX,
+      GITHUB_READ_WINDOW_MS,
+    );
+    const res = await request(makeApp())
+      .get("/repos")
+      .set(adminHeaders());
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(res.headers["retry-after"]).toBeDefined();
+    expect(res.headers["x-ratelimit-remaining"]).toBe("0");
+    expect(octokitMock.repos.listForAuthenticatedUser).not.toHaveBeenCalled();
+  });
+
+  it("GET /repos/.../contents returns 429 when admin user exhausts the read bucket", async () => {
+    __prefillRateLimitMemory(
+      githubReadKey(E2E_USER),
+      GITHUB_READ_MAX,
+      GITHUB_READ_WINDOW_MS,
+    );
+    const res = await request(makeApp())
+      .get("/repos/owner/repo/contents/README.md")
+      .set(adminHeaders());
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(octokitMock.repos.getContent).not.toHaveBeenCalled();
+  });
+
+  it("GET /repos/.../actions/runs returns 429 when admin user exhausts the read bucket", async () => {
+    __prefillRateLimitMemory(
+      githubReadKey(E2E_USER),
+      GITHUB_READ_MAX,
+      GITHUB_READ_WINDOW_MS,
+    );
+    const res = await request(makeApp())
+      .get("/repos/owner/repo/actions/runs")
+      .set(adminHeaders());
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(octokitMock.actions.listWorkflowRunsForRepo).not.toHaveBeenCalled();
+  });
+
+  it("GET /repos/.../actions/runs/:run_id returns 429 when admin user exhausts the read bucket", async () => {
+    __prefillRateLimitMemory(
+      githubReadKey(E2E_USER),
+      GITHUB_READ_MAX,
+      GITHUB_READ_WINDOW_MS,
+    );
+    const res = await request(makeApp())
+      .get("/repos/owner/repo/actions/runs/42")
+      .set(adminHeaders());
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+    expect(octokitMock.actions.getWorkflowRun).not.toHaveBeenCalled();
+  });
+
+  it("read rate limit tracks per user — a different admin is unaffected", async () => {
+    const OTHER_ADMIN = "user_other_admin_read";
+    vi.stubEnv("ADMIN_USER_IDS", `${E2E_USER},${OTHER_ADMIN}`);
+
+    __prefillRateLimitMemory(
+      githubReadKey(E2E_USER),
+      GITHUB_READ_MAX,
+      GITHUB_READ_WINDOW_MS,
+    );
+    octokitMock.repos.listForAuthenticatedUser.mockResolvedValue({
+      data: [{ id: 1, name: "my-repo", full_name: "owner/my-repo" }],
+    });
+
+    // First user is throttled.
+    const throttled = await request(makeApp())
+      .get("/repos")
+      .set(adminHeaders());
+    expect(throttled.status).toBe(429);
+
+    // Second admin still gets through.
+    const allowed = await request(makeApp())
+      .get("/repos")
+      .set({ "x-e2e-bypass-secret": "vitest-test-secret", "x-e2e-user-id": OTHER_ADMIN });
+    expect(allowed.status).toBe(200);
+  });
+
+  it("rate-limit headers are present on a successful read", async () => {
+    octokitMock.repos.listForAuthenticatedUser.mockResolvedValue({
+      data: [{ id: 1, name: "my-repo", full_name: "owner/my-repo" }],
+    });
+    const res = await request(makeApp())
+      .get("/repos")
+      .set(adminHeaders());
+    expect(res.status).toBe(200);
+    expect(res.headers["x-ratelimit-limit"]).toBe(String(GITHUB_READ_MAX));
+    expect(res.headers["x-ratelimit-remaining"]).toBeDefined();
+    expect(res.headers["x-ratelimit-reset"]).toBeDefined();
+  });
+
+  it("read and mutation buckets are independent — exhausting reads does not affect mutations", async () => {
+    __prefillRateLimitMemory(
+      githubReadKey(E2E_USER),
+      GITHUB_READ_MAX,
+      GITHUB_READ_WINDOW_MS,
+    );
+    octokitMock.repos.createOrUpdateFileContents.mockResolvedValue({
+      data: { commit: { sha: "abc123" }, content: { name: "file.txt" } },
+    });
+
+    // Read is throttled.
+    const readRes = await request(makeApp())
+      .get("/repos")
+      .set(adminHeaders());
+    expect(readRes.status).toBe(429);
+
+    // Mutation is still allowed.
+    const writeRes = await request(makeApp())
+      .put("/repos/owner/repo/contents/file.txt")
+      .set(adminHeaders())
+      .send({ message: "add file", content: "aGVsbG8=" });
+    expect(writeRes.status).toBe(200);
   });
 });

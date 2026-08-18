@@ -36,8 +36,20 @@ vi.mock("@workspace/db", () => {
     },
   });
 
+  interface MockTx {
+    select: typeof select;
+    delete: typeof del;
+  }
+
+  const tx: MockTx = { select, delete: del };
+
+  const transaction = async (cb: (tx: MockTx) => Promise<void>) => {
+    if (state.dbThrows) return Promise.reject(new Error("DB connection lost"));
+    return cb(tx);
+  };
+
   return {
-    db: { select, delete: del },
+    db: { select, delete: del, transaction },
     userSettingsTable: tag("userSettings"),
     markersTable: tag("markers"),
     customDatasetsTable: tag("customDatasets"),

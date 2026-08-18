@@ -87,6 +87,8 @@ vi.mock("../middlewares/dataMutationRateLimit.js", () => ({
   dataMutationRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
   bulkDeleteMarkersRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
   settingsMutationRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
+  githubMutationRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
+  githubReadRateLimit: (_req: unknown, _res: unknown, next: () => void) => next(),
   BULK_DELETE_MARKERS_ROUTE: "markers-bulk-delete",
   BULK_DELETE_MARKERS_WINDOW_MS: 60_000,
   BULK_DELETE_MARKERS_MAX: 5,
@@ -96,6 +98,12 @@ vi.mock("../middlewares/dataMutationRateLimit.js", () => ({
   SETTINGS_MUTATION_ROUTE: "settings-mutations",
   SETTINGS_MUTATION_WINDOW_MS: 60_000,
   SETTINGS_MUTATION_MAX: 30,
+  GITHUB_MUTATION_ROUTE: "github-mutations",
+  GITHUB_MUTATION_WINDOW_MS: 60_000,
+  GITHUB_MUTATION_MAX: 10,
+  GITHUB_READ_ROUTE: "github-reads",
+  GITHUB_READ_WINDOW_MS: 60_000,
+  GITHUB_READ_MAX: 60,
 }));
 
 import app from "../app.js";
