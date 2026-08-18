@@ -511,7 +511,16 @@ Authentication is handled by **Clerk** across all surfaces:
    `test-standard` when uncertain. The section is MANDATORY — a plan without it is defective.
    The named command is the **ceiling** for the Build agent. The Build agent must not run
    any heavier tier regardless of what failures it encounters.
-6. **Emit the announcement** — Before writing the plan's first heading, emit:
+6. **Verify the plan file** — immediately after writing (or editing) a plan file,
+   run both lint guards in single-file mode and confirm both exit 0:
+   ```sh
+   TASK_PLAN_FILE=.local/tasks/<name>.md node scripts/check-failure-gate.mjs
+   TASK_PLAN_FILE=.local/tasks/<name>.md node scripts/check-regression-guard.mjs
+   ```
+   Fix any violation before calling `bulkCreateProjectTasks`. Do not skip this step
+   even for small plans. The failure-gate guard covers `## Pre-existing failures to
+   ignore` and `## Validation`; the regression-guard covers `## Regression Guard`.
+7. **Emit the announcement** — Before writing the plan's first heading, emit:
    `[FAILURE-GATE] Discovery checklist complete. Pre-existing failures documented: <N>. Validation command: \`<command>\`.`
 
 > **BUILD AGENT:** The validation command in `## Validation` is your ceiling.
@@ -519,6 +528,11 @@ Authentication is handled by **Clerk** across all surfaces:
 > failures or self-classified flakes.
 
 ### Lint guard
+
+`scripts/new-plan.mjs` is the required tool for creating new plan files — use it
+instead of writing files by hand. It pre-fills all required sections and refuses to
+write the file without a `--why` argument. Creating a plan file by hand bypasses
+these safety checks and is prohibited.
 
 `node scripts/check-failure-gate.mjs` scans all `.local/tasks/*.md` plan files and
 fails if any are missing either of the two required sections (`## Pre-existing failures

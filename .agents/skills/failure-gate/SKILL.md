@@ -88,6 +88,13 @@ section is defective and must be corrected before an agent picks it up.
 
 Work through every item in order. Mark each complete before moving on.
 
+0. **Use `scripts/new-plan.mjs` to create the plan file** — do not write plan
+   files by hand. The tool pre-fills both required sections with valid stubs.
+   After the file is written (whether via the tool or when editing an existing
+   file), run both lint guards in single-file mode and confirm both exit 0
+   before writing the first heading. See step 6 of the `replit.md` Failure Gate
+   checklist for the exact commands.
+
 1. **Memory scan** — Open `.agents/memory/MEMORY.md` and scan for entries whose
    linked topic file names or hook lines mention suites, files, or patterns
    touched by this task. Project-specific known-flaky patterns live in the
@@ -210,7 +217,7 @@ invalid tier value or fill in placeholder text — those always require a human.
 
 ---
 
-### Pre-write guard (recommended hardening)
+### Pre-write guard
 
 Two complementary patterns eliminate the round-trip to CI entirely by ensuring
 every new plan file is born compliant:
@@ -220,8 +227,9 @@ every new plan file is born compliant:
   failures to ignore` and `## Validation`) with valid stubs before writing the
   file to disk. No plan file is ever created without the required structure.
 
-  **This project ships `scripts/new-plan.mjs`.** Always use it instead of
-  creating plan files by hand:
+  **This project ships `scripts/new-plan.mjs`.** It is the **required** tool
+  for creating new plan files — use it instead of creating plan files by hand.
+  Creating a plan file by hand bypasses these safety checks and is prohibited.
 
   ```sh
   node scripts/new-plan.mjs <task-ref> \

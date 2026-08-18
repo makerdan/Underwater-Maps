@@ -59,6 +59,9 @@ function isPlaceholder(text) {
   if (lower.includes("fill in")) return true;
   if (lower === "todo") return true;
   if (lower === "n/a") return true; // bare N/A without Why N/A line
+  // Reject the "predates mandate" auto-stub reason — it is only valid for
+  // archive-scan backfill; a current task's plan must have a real classification.
+  if (lower.startsWith("plan predates the regression guard mandate")) return true;
   return false;
 }
 
@@ -167,6 +170,16 @@ const skipIfNoTask = process.argv.includes("--skip-if-no-task");
 
 const TASK_PLAN_FILE = process.env.TASK_PLAN_FILE;
 
+// In single-file mode (task-agent or Planner verification run), always use
+// strict mode regardless of --stubs-only. A plan actively being worked on
+// is never "pre-mandate", so a missing section must be filled in.
+if (TASK_PLAN_FILE && stubsOnly) {
+  console.log(
+    "check-regression-guard — single-file mode: overriding --stubs-only to strict.",
+  );
+}
+const effectiveStubsOnly = stubsOnly && !TASK_PLAN_FILE;
+
 let files;
 /** Given an entry from `files`, return the filesystem path to read. */
 let resolveFilePath;
@@ -257,7 +270,7 @@ for (const file of files) {
 
   // Section is absent
   if (sectionLines === null) {
-    if (stubsOnly) {
+    if (effectiveStubsOnly) {
       // Grandfathered — skip missing-section check.
       compliant.push(file);
       continue;
