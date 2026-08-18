@@ -171,6 +171,35 @@ export function useProximityStreamingWiring({
       return;
     }
 
+    // ── Stale-ID eviction ─────────────────────────────────────────────────────
+    // When a user dataset is deleted server-side it disappears from the catalog
+    // response on the next refresh.  Without eviction the ID stays in
+    // autoRegisteredIds (and therefore in selectedIds), consuming a pool slot
+    // forever.  Compare the live catalog against autoRegisteredIds and remove
+    // anything that is no longer present.
+    //
+    // IMPORTANT: Only evict when BOTH catalog lists have resolved (neither is
+    // undefined).  During loading states the caller passes `undefined` for
+    // whichever list is still fetching.  Treating `undefined` as "empty" would
+    // incorrectly evict all enrolled datasets before the server response arrives,
+    // undoing the remount-stability guarantee.  We wait until both sources are
+    // known before reconciling.
+    if (datasets !== undefined && userDatasets !== undefined) {
+      const liveCatalogIds = new Set<string>();
+      for (const d of datasets) {
+        liveCatalogIds.add(d.id);
+      }
+      for (const d of userDatasets) {
+        liveCatalogIds.add(d.id);
+      }
+      for (const id of [...autoRegisteredIds]) {
+        if (!liveCatalogIds.has(id)) {
+          removeSelected(id);
+          autoRegisteredIds.delete(id);
+        }
+      }
+    }
+
     const alreadySelected = new Set(selectedIds);
 
     // Register preset catalog entries (all carry bbox from catalog metadata).
