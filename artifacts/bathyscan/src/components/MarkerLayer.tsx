@@ -27,7 +27,7 @@ import { useGetMarkersWithOfflineFallback } from "@/hooks/useGetMarkersWithOffli
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { MarkerSprite } from "./MarkerSprite";
-import { computeSecondaryMeshTransform } from "./NonPrimaryDatasetMeshes";
+import { computeSecondaryMeshTransform, applyGeoCorrectionToGrid } from "./NonPrimaryDatasetMeshes";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
 import { markerGroupRef } from "@/lib/markerGroupRef";
@@ -186,6 +186,12 @@ export const MarkerLayer: React.FC = () => {
   const datasetGroups = useMemo((): Map<string, DatasetMarkerGroup> => {
     const map = new Map<string, DatasetMarkerGroup>();
     if (!terrain) return map;
+    // Applied puzzle-layout corrections (Apply-to-3D) shift mesh placement in
+    // NonPrimaryDatasetMeshes — mirror them here with the same helper so
+    // markers stay co-located with their (possibly shifted) terrain tiles.
+    const primaryCorrection =
+      visibleDatasets.find((v) => v.datasetId === terrain.datasetId)?.geoCorrection ?? null;
+    const effectivePrimary = applyGeoCorrectionToGrid(terrain, primaryCorrection);
     for (const v of visibleDatasets) {
       if (!v.activeGrid) continue;
       if (v.datasetId === terrain.datasetId) {
@@ -197,7 +203,10 @@ export const MarkerLayer: React.FC = () => {
         });
       } else {
         // Secondary: use the same transform as the mesh so markers co-locate.
-        const { cx, cy, cz, xScale, yScale, zScale } = computeSecondaryMeshTransform(terrain, v.activeGrid);
+        const { cx, cy, cz, xScale, yScale, zScale } = computeSecondaryMeshTransform(
+          effectivePrimary,
+          applyGeoCorrectionToGrid(v.activeGrid, v.geoCorrection),
+        );
         map.set(v.datasetId, {
           grid: v.activeGrid,
           position: [cx, cy, cz],

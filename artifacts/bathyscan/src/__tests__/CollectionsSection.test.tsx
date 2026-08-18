@@ -227,7 +227,7 @@ beforeEach(() => {
   mocks.removeMemberMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.deleteDatasetMutateAsync.mockReset();
   mocks.invalidateQueries.mockReset().mockResolvedValue(undefined);
-  useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0 });
+  useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null });
   useUiStore.getState().setOverviewOpen(false);
 });
 
@@ -471,6 +471,68 @@ describe("CollectionsSection — special collections", () => {
       // The group round-trips too.
       expect(restored.groups.size).toBe(1);
       expect([...[...restored.groups.values()][0]!].sort()).toEqual(["ds-1", "ds-2"]);
+    });
+  });
+
+  describe("Apply-to-3D badge", () => {
+    afterEach(() => {
+      useTerrainStore.getState().clear();
+    });
+
+    it("shows the teal '3D Applied' chip when the scene reflects this collection's layout", () => {
+      useTerrainStore.setState({ primaryDatasetIds: ["ds-1", "ds-2"] });
+      useSpecialCollectionStore.setState({
+        geoLayout: { collectionId: "col-sp", datasetIds: ["ds-1", "ds-2"], status: "applied" },
+      });
+      currentCollections = [COLLECTION_SPECIAL];
+      renderWithProviders(<CollectionsSection />);
+      const badge = screen.getByTestId("geo-layout-badge-col-sp");
+      expect(badge).toHaveTextContent("3D Applied");
+    });
+
+    it("shows the amber '3D Outdated' chip with the re-apply tooltip after layout edits", () => {
+      useTerrainStore.setState({ primaryDatasetIds: ["ds-1", "ds-2"] });
+      useSpecialCollectionStore.setState({
+        geoLayout: { collectionId: "col-sp", datasetIds: ["ds-1", "ds-2"], status: "outdated" },
+      });
+      currentCollections = [COLLECTION_SPECIAL];
+      renderWithProviders(<CollectionsSection />);
+      const badge = screen.getByTestId("geo-layout-badge-col-sp");
+      expect(badge).toHaveTextContent("3D Outdated");
+      expect(badge).toHaveAttribute("title", "Re-apply the layout to sync the 3D scene.");
+    });
+
+    it("renders no badge when no layout has been applied", () => {
+      currentCollections = [COLLECTION_SPECIAL];
+      renderWithProviders(<CollectionsSection />);
+      expect(screen.queryByTestId("geo-layout-badge-col-sp")).not.toBeInTheDocument();
+    });
+
+    it("clears the badge once the corrected datasets leave the 3D scene", async () => {
+      useTerrainStore.setState({ primaryDatasetIds: ["ds-1"] }); // ds-2 no longer visible
+      useSpecialCollectionStore.setState({
+        geoLayout: { collectionId: "col-sp", datasetIds: ["ds-1", "ds-2"], status: "applied" },
+      });
+      currentCollections = [COLLECTION_SPECIAL];
+      renderWithProviders(<CollectionsSection />);
+      await waitFor(() => {
+        expect(useSpecialCollectionStore.getState().geoLayout).toBeNull();
+      });
+      expect(screen.queryByTestId("geo-layout-badge-col-sp")).not.toBeInTheDocument();
+    });
+
+    it("markGeoLayoutOutdated flips applied→outdated only; empty applies are no-ops", () => {
+      const st = useSpecialCollectionStore.getState();
+      st.markGeoLayoutOutdated(); // nothing applied — no-op
+      expect(useSpecialCollectionStore.getState().geoLayout).toBeNull();
+      st.markGeoLayoutApplied("col-sp", []); // empty dataset list — no-op
+      expect(useSpecialCollectionStore.getState().geoLayout).toBeNull();
+      st.markGeoLayoutApplied("col-sp", ["ds-1"]);
+      expect(useSpecialCollectionStore.getState().geoLayout?.status).toBe("applied");
+      st.markGeoLayoutOutdated();
+      expect(useSpecialCollectionStore.getState().geoLayout?.status).toBe("outdated");
+      st.clearGeoLayout();
+      expect(useSpecialCollectionStore.getState().geoLayout).toBeNull();
     });
   });
 });

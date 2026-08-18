@@ -46,11 +46,26 @@ export interface PendingRestore {
   requestId: number;
 }
 
+/**
+ * Tracking state for a puzzle layout that has been applied to the 3D scene
+ * (Apply-to-3D). `status` is "applied" right after a successful apply and
+ * flips to "outdated" when any puzzle transform changes afterwards.
+ * `datasetIds` records which datasets received corrections so the badge can
+ * hide (and the state clear) once those datasets leave the scene.
+ */
+export interface GeoLayoutState {
+  collectionId: string;
+  datasetIds: string[];
+  status: "applied" | "outdated";
+}
+
 interface SpecialCollectionStore {
   active: ActiveSpecialCollection | null;
   pendingRestore: PendingRestore | null;
   /** Bumped when puzzle mode should turn on even without a revision. */
   pendingPuzzleOn: number;
+  /** Non-null while a puzzle layout is applied to the 3D scene. */
+  geoLayout: GeoLayoutState | null;
 
   /** Activate a special collection for puzzle assembly. */
   activateForPuzzle: (collection: DatasetCollection) => Promise<void>;
@@ -72,6 +87,16 @@ interface SpecialCollectionStore {
    * next account never sees the previous user's puzzle assembly.
    */
   resetForSignOut: () => void;
+
+  /** Record a successful Apply-to-3D (no-op when datasetIds is empty). */
+  markGeoLayoutApplied: (collectionId: string, datasetIds: string[]) => void;
+  /**
+   * Flip an applied layout to "outdated" (puzzle transforms changed after
+   * apply). No-op when nothing is applied — safe to call unconditionally.
+   */
+  markGeoLayoutOutdated: () => void;
+  /** Drop the applied-layout tracking (scene cleared / datasets switched). */
+  clearGeoLayout: () => void;
 }
 
 /** Decode the authed background-image blob into a drawable source. */
@@ -139,6 +164,7 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
   active: null,
   pendingRestore: null,
   pendingPuzzleOn: 0,
+  geoLayout: null,
 
   activateForPuzzle: async (collection) => {
     const gen = ++activationGen;
@@ -179,13 +205,27 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
 
   deactivate: () => {
     activationGen++; // invalidate any in-flight activation
-    set({ active: null, pendingRestore: null });
+    set({ active: null, pendingRestore: null, geoLayout: null });
   },
 
   resetForSignOut: () => {
     activationGen++; // invalidate any in-flight activation (sign-out race)
-    set({ active: null, pendingRestore: null, pendingPuzzleOn: 0 });
+    set({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null });
   },
+
+  markGeoLayoutApplied: (collectionId, datasetIds) => {
+    if (datasetIds.length === 0) return;
+    set({ geoLayout: { collectionId, datasetIds: [...datasetIds], status: "applied" } });
+  },
+
+  markGeoLayoutOutdated: () =>
+    set((s) =>
+      s.geoLayout && s.geoLayout.status === "applied"
+        ? { geoLayout: { ...s.geoLayout, status: "outdated" } }
+        : {},
+    ),
+
+  clearGeoLayout: () => set((s) => (s.geoLayout ? { geoLayout: null } : {})),
 
   requestRestore: (payload) =>
     set({ pendingRestore: { payload, requestId: ++restoreCounter } }),

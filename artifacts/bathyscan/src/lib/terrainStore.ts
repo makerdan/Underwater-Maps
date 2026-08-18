@@ -5,6 +5,11 @@ import type { TerrainData } from "@workspace/api-client-react";
 // only inside zustand action bodies (not during module init), so the cycle is
 // safe — ESM live bindings ensure the reference is populated by call time.
 import { useSettingsStore } from "./settingsStore";
+// Type-only import (erased at compile time) — keeps terrainStore free of any
+// runtime dependency on the overview/puzzle rendering modules.
+import type { GeoCorrection } from "./puzzleTransform";
+
+export type { GeoCorrection } from "./puzzleTransform";
 
 /**
  * Default / fallback active-dataset cap. Kept for import compatibility in
@@ -50,6 +55,14 @@ export interface VisibleDataset {
    * user-uploaded datasets that have no catalog entry.
    */
   dataUpdatedAt?: string | null;
+  /**
+   * Optional geographic correction from an applied special-collection puzzle
+   * layout (Apply-to-3D). When present, the 3D scene shifts this dataset's
+   * effective render origin by {dLon, dLat}; `angleDeg` is retained as a
+   * heading offset only. The stored grids (activeGrid/overviewGrid bboxes)
+   * are NEVER mutated — the correction applies to scene placement only.
+   */
+  geoCorrection?: GeoCorrection | null;
 }
 
 /**
@@ -163,8 +176,27 @@ interface TerrainStore {
    * primaryDatasetId alias). If it isn't visible yet, it's added first.
    * In multi-primary mode this does not change which datasets are "primary" —
    * it only affects the first-entry alias used by legacy callers.
+   *
+   * `geoCorrection` (optional): when provided (including explicit null), the
+   * entry's geographic correction is set to it; when omitted (undefined), an
+   * existing entry's correction is preserved — promotion must never silently
+   * wipe an applied puzzle-layout correction (same preservation rule as grids).
    */
-  setPrimary: (datasetId: string, source?: DatasetSource, dataUpdatedAt?: string | null) => void;
+  setPrimary: (
+    datasetId: string,
+    source?: DatasetSource,
+    dataUpdatedAt?: string | null,
+    geoCorrection?: GeoCorrection | null,
+  ) => void;
+
+  /**
+   * Bulk-apply geographic corrections from a special-collection puzzle layout
+   * (Apply-to-3D). Every visible entry gets `geoCorrection` set from the
+   * record (or cleared when absent / when the record is null). Grids and
+   * their stored bboxes are untouched — corrections affect scene placement
+   * only. Pass null to clear all corrections.
+   */
+  setDatasetGeoCorrections: (corrections: Record<string, GeoCorrection> | null) => void;
 
   /**
    * Toggle a dataset's visibility.
@@ -382,7 +414,27 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
       };
     }),
 
-  setPrimary: (datasetId, source, dataUpdatedAt) =>
+  setDatasetGeoCorrections: (corrections) =>
+    set((prev) => {
+      let changed = false;
+      const nextVisible = prev.visibleDatasets.map((v) => {
+        const next = corrections?.[v.datasetId] ?? null;
+        const cur = v.geoCorrection ?? null;
+        if (next === cur) return v; // both null → no change for this entry
+        changed = true;
+        // Only the correction field changes — grids and their stored bboxes
+        // are deliberately untouched (corrections are scene-placement-only).
+        return { ...v, geoCorrection: next };
+      });
+      if (!changed) return prev;
+      return {
+        ...prev,
+        visibleDatasets: nextVisible,
+        ...syncPrimaryGrids(nextVisible),
+      };
+    }),
+
+  setPrimary: (datasetId, source, dataUpdatedAt, geoCorrection) =>
     set((prev) => {
       const existing = prev.visibleDatasets.find((v) => v.datasetId === datasetId);
       let nextVisible = prev.visibleDatasets;
@@ -396,6 +448,7 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
           activeGrid: null,
           overviewGrid: null,
           dataUpdatedAt: dataUpdatedAt ?? null,
+          geoCorrection: geoCorrection ?? null,
         };
         if (nextVisible.length >= getActiveCap()) {
           // Evict oldest non-first entry.
@@ -413,8 +466,12 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         nextVisible = [entry, ...nextVisible];
       } else {
         // Already visible — move it to position 0 for the legacy alias.
+        // Preserve loaded grids AND any applied geoCorrection unless the
+        // caller explicitly passes one (undefined = leave untouched).
+        const promoted: VisibleDataset =
+          geoCorrection !== undefined ? { ...existing, geoCorrection } : existing;
         nextVisible = [
-          existing,
+          promoted,
           ...nextVisible.filter((v) => v.datasetId !== datasetId),
         ];
       }

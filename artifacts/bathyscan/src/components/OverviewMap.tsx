@@ -45,6 +45,7 @@ import { useUiStore, useTimelineVisible, type SelectedHotspot } from "@/lib/uiSt
 import { useTimelineStore } from "@/lib/timelineStore";
 import { useContextMenuStore, type ContextMenuItem } from "@/lib/contextMenuStore";
 import { lonLatToWorldXZ, isSyntheticGrid } from "@/lib/terrain";
+import { puzzleLayoutToGeoCorrections, type GeoBbox } from "@/lib/puzzleTransform";
 import {
   buildHeatmapBitmap,
   buildContourLines,
@@ -1001,6 +1002,118 @@ export const OverviewMap: React.FC = () => {
     lastAppliedLayoutSigRef.current = layoutSignatureOf(restored.transforms);
     useSpecialCollectionStore.getState().consumeRestore();
   }, [spcPendingRestore, setPuzzleSelectedIds]);
+
+  // --- Apply saved puzzle layout to the 3D scene (Apply-to-3D) --------------
+  const [applyTo3DConfirmOpen, setApplyTo3DConfirmOpen] = useState(false);
+
+  /** Active saved revision of the active special collection (if any). */
+  const spcActiveRevision = useMemo(() => {
+    if (!spcActive) return null;
+    return spcActive.layoutRevisions.find((r) => r.id === spcActive.activeRevisionId) ?? null;
+  }, [spcActive]);
+
+  // The Apply-to-3D button only appears when the saved layout actually moves
+  // something — at least one tile with a non-identity transform.
+  const spcRevisionHasNonIdentityTile = useMemo(
+    () => (spcActiveRevision?.tiles ?? []).some((t) => t.tx !== 0 || t.ty !== 0 || t.angleDeg !== 0),
+    [spcActiveRevision],
+  );
+
+  // Mark an applied 3D layout as outdated whenever the puzzle transforms
+  // change afterwards (drag / rotate / reset / restore). markGeoLayoutOutdated
+  // is a no-op unless a layout is currently in "applied" state, so running it
+  // on every transforms commit (including hydration) is safe.
+  const prevPuzzleTransformsFor3DRef = useRef<Map<string, PuzzleTransform> | null>(null);
+  useEffect(() => {
+    if (
+      prevPuzzleTransformsFor3DRef.current !== null &&
+      prevPuzzleTransformsFor3DRef.current !== puzzleTransforms
+    ) {
+      useSpecialCollectionStore.getState().markGeoLayoutOutdated();
+    }
+    prevPuzzleTransformsFor3DRef.current = puzzleTransforms;
+  }, [puzzleTransforms]);
+
+  /**
+   * Confirmed Apply-to-3D: convert the saved layout revision into geographic
+   * corrections, shift each affected dataset's 3D render origin, and fly the
+   * camera to the union of the corrected bboxes. Stored grids / DB rows are
+   * never mutated — corrections live only on the terrainStore entries.
+   */
+  const handleApplyLayoutTo3D = useCallback(() => {
+    setApplyTo3DConfirmOpen(false);
+    const active = useSpecialCollectionStore.getState().active;
+    if (!active) return;
+    const rev = active.layoutRevisions.find((r) => r.id === active.activeRevisionId) ?? null;
+    if (!rev) return;
+
+    // Same reference-grid / transform resolution as the geo-transform mirror
+    // effect above: worldGrid falls back to the primary overviewGrid, and the
+    // transform falls back to a freshly computed initial transform.
+    const worldGrid = worldGridRef.current ?? overviewGrid;
+    const canvas = canvasRef.current;
+    const transform =
+      transformRef.current ??
+      (worldGrid && canvas && canvas.width > 0
+        ? computeInitialTransform(worldGrid, canvas.width, canvas.height)
+        : null);
+    if (!worldGrid || !transform) {
+      toast({
+        title: "Apply failed",
+        description: "The overview map is still initialising. Please try again.",
+        variant: "destructive",
+        duration: 4000,
+      });
+      return;
+    }
+
+    const bboxes: Record<string, GeoBbox> = {};
+    for (const v of visibleDatasetsRef.current) {
+      const g = v.overviewGrid ?? v.activeGrid;
+      if (g) {
+        bboxes[v.datasetId] = { minLon: g.minLon, maxLon: g.maxLon, minLat: g.minLat, maxLat: g.maxLat };
+      }
+    }
+    const corrections = puzzleLayoutToGeoCorrections(rev.tiles, bboxes, worldGrid, transform);
+    const correctedIds = Object.keys(corrections);
+    if (correctedIds.length === 0) return;
+
+    useTerrainStore.getState().setDatasetGeoCorrections(corrections);
+    useSpecialCollectionStore.getState().markGeoLayoutApplied(active.collectionId, correctedIds);
+
+    // Camera fly-to: frame the union of the corrected bboxes. The world frame
+    // is anchored to the primary's RAW grid while secondaries are placed
+    // relative to the corrected primary centre, so the union centre must be
+    // expressed in that anchored frame by subtracting the primary's own
+    // correction before converting to world coordinates.
+    const state = useTerrainStore.getState();
+    const primaryId = state.primaryDatasetId;
+    const primaryGrid = state.activeGrid ?? state.overviewGrid;
+    if (primaryId && primaryGrid) {
+      let minLon = Infinity;
+      let maxLon = -Infinity;
+      let minLat = Infinity;
+      let maxLat = -Infinity;
+      for (const v of state.visibleDatasets) {
+        const g = v.overviewGrid ?? v.activeGrid;
+        if (!g) continue;
+        const c = corrections[v.datasetId];
+        const dLon = c?.dLon ?? 0;
+        const dLat = c?.dLat ?? 0;
+        minLon = Math.min(minLon, g.minLon + dLon);
+        maxLon = Math.max(maxLon, g.maxLon + dLon);
+        minLat = Math.min(minLat, g.minLat + dLat);
+        maxLat = Math.max(maxLat, g.maxLat + dLat);
+      }
+      if (Number.isFinite(minLon)) {
+        const pCorr = corrections[primaryId];
+        const centerLon = (minLon + maxLon) / 2 - (pCorr?.dLon ?? 0);
+        const centerLat = (minLat + maxLat) / 2 - (pCorr?.dLat ?? 0);
+        const { x, z } = lonLatToWorldXZ(centerLon, centerLat, primaryGrid);
+        useUiStore.getState().setPendingDropIn({ worldX: x, worldZ: z });
+      }
+    }
+  }, [overviewGrid]);
 
   // Hit rect for the "Find Data" link rendered in the empty-state canvas.
   // Updated each rAF frame when no datasets are selected; used by handleClick
@@ -4541,6 +4654,32 @@ export const OverviewMap: React.FC = () => {
             </span>
           )}
 
+          {/* Apply saved layout to the 3D scene — special collections with a
+              saved (non-identity) active revision only. */}
+          {puzzleMode && spcActive && spcRevisionHasNonIdentityTile && (
+            <ViewscreenTooltip label="Load each dataset's 3D terrain at its puzzle-adjusted geographic position" side="bottom">
+              <button
+                data-testid="overview-puzzle-apply-3d"
+                onClick={() => setApplyTo3DConfirmOpen(true)}
+                style={{
+                  background: "rgba(45,212,191,0.12)",
+                  border: "1px solid rgba(45,212,191,0.5)",
+                  borderRadius: 3,
+                  color: "#2dd4bf",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  padding: "2px 8px",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  lineHeight: "18px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ⬡ APPLY TO 3D
+              </button>
+            </ViewscreenTooltip>
+          )}
+
           {/* Snap-to-neighbor toggle — visible in puzzle mode */}
           {puzzleMode && (
             <ViewscreenTooltip label="Snap tiles flush when dragged within 12 px of a neighbor's edge" side="bottom">
@@ -5820,6 +5959,46 @@ export const OverviewMap: React.FC = () => {
           />
         );
       })()}
+
+      {/* Apply-to-3D confirmation dialog */}
+      {applyTo3DConfirmOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Apply puzzle layout to 3D scene"
+          data-testid="apply-3d-confirm-dialog"
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000 }}
+          onClick={() => setApplyTo3DConfirmOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "rgba(0,10,20,0.95)", border: "1px solid rgba(45,212,191,0.4)", borderRadius: 6, padding: 18, width: 360, maxWidth: "90vw", color: "#cbd5e1", fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: "calc(14px * var(--bs-font-scale, 1))" }}
+          >
+            <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", fontWeight: 700, marginBottom: 10, letterSpacing: "0.05em", color: "#2dd4bf" }}>
+              Apply the current puzzle layout to the 3D scene?
+            </div>
+            <div style={{ color: "#94a3b8", fontSize: "calc(13px * var(--bs-font-scale, 1))", marginBottom: 12 }}>
+              Each dataset will be loaded at its adjusted geographic position.
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                data-testid="btn-apply-3d-cancel"
+                onClick={() => setApplyTo3DConfirmOpen(false)}
+                style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "4px 14px", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 3, color: "#94a3b8", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
+              >
+                Cancel
+              </button>
+              <button
+                data-testid="btn-apply-3d-confirm"
+                onClick={handleApplyLayoutTo3D}
+                style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "4px 14px", background: "rgba(45,212,191,0.12)", border: "1px solid rgba(45,212,191,0.5)", borderRadius: 3, color: "#2dd4bf", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* The shared EFH species detail panel is rendered once at the App
           root so it sits above both this overview map and the 3D scene. */}

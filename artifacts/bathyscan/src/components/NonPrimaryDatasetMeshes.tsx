@@ -44,7 +44,7 @@ import type { TidalDataResult } from "@/hooks/useTidalData";
 import type { DepthLayer } from "@/components/TidalCurrentArrows";
 import { TerrainMesh } from "@/components/TerrainMesh";
 import { LandmassMesh } from "@/components/LandmassMesh";
-import { useTerrainStore } from "@/lib/terrainStore";
+import { useTerrainStore, type GeoCorrection } from "@/lib/terrainStore";
 import {
   WORLD_SIZE,
   MAX_DEPTH_WORLD,
@@ -53,6 +53,34 @@ import {
   bboxCenterLon,
   type WaterSurface,
 } from "@/lib/terrain";
+
+// ---------------------------------------------------------------------------
+// applyGeoCorrectionToGrid
+// ---------------------------------------------------------------------------
+/**
+ * Return a copy of a terrain grid whose bbox is shifted by an applied
+ * puzzle-layout geo correction, for SCENE PLACEMENT ONLY. The input grid is
+ * never mutated, and callers must keep rendering the ORIGINAL grid's data —
+ * the shifted copy exists solely to feed computeSecondaryMeshTransform so the
+ * mesh group lands at the corrected geographic position.
+ *
+ * Identity/absent corrections return the grid object unchanged (same
+ * reference), so the presence of a zero correction can never move the render
+ * origin — {dLon: 0, dLat: 0} is exactly equivalent to no correction.
+ */
+export function applyGeoCorrectionToGrid(
+  grid: TerrainData,
+  corr: Pick<GeoCorrection, "dLon" | "dLat"> | null | undefined,
+): TerrainData {
+  if (!corr || (corr.dLon === 0 && corr.dLat === 0)) return grid;
+  return {
+    ...grid,
+    minLon: grid.minLon + corr.dLon,
+    maxLon: grid.maxLon + corr.dLon,
+    minLat: grid.minLat + corr.dLat,
+    maxLat: grid.maxLat + corr.dLat,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // computeLatCorrectedLonScale
@@ -236,6 +264,14 @@ export const NonPrimaryDatasetMeshes: React.FC<NonPrimaryDatasetMeshesProps> = (
   // keeps filter + geometry reference in sync within a single render.
   const primaryId = primary.datasetId;
 
+  // Applied puzzle-layout corrections shift each dataset's effective render
+  // origin. The world frame stays anchored to the primary's raw grid (its own
+  // mesh never moves); the primary's correction shifts the REFERENCE centre,
+  // so relative tile positions always reflect the corrected layout.
+  const primaryCorrection =
+    visible.find((v) => v.datasetId === primaryId)?.geoCorrection ?? null;
+  const effectivePrimary = applyGeoCorrectionToGrid(primary, primaryCorrection);
+
   return (
     <>
       {visible
@@ -245,8 +281,12 @@ export const NonPrimaryDatasetMeshes: React.FC<NonPrimaryDatasetMeshesProps> = (
 
           // All transform math is in the pure helper so MarkerLayer can apply
           // the exact same group transform to secondary-dataset markers,
-          // keeping them co-located with their mesh tiles.
-          const { cx, cy, cz, xScale, yScale, zScale } = computeSecondaryMeshTransform(primary, g);
+          // keeping them co-located with their mesh tiles. Placement uses the
+          // geo-corrected bboxes; the mesh itself renders the ORIGINAL grid.
+          const { cx, cy, cz, xScale, yScale, zScale } = computeSecondaryMeshTransform(
+            effectivePrimary,
+            applyGeoCorrectionToGrid(g, v.geoCorrection),
+          );
 
           // Multi-primary: tidal overlay for this secondary dataset (if data available)
           const secTidalData = tidalDataMap?.get(v.datasetId) ?? null;

@@ -87,3 +87,94 @@ export function tileCenterLonLat(og: {
   }
   return { centerLon, centerLat: (og.minLat + og.maxLat) / 2 };
 }
+
+// ---------------------------------------------------------------------------
+// Puzzle layout → geographic corrections (Apply-to-3D)
+// ---------------------------------------------------------------------------
+
+/**
+ * Geographic correction for one dataset, derived from its saved puzzle-tile
+ * transform. `dLon`/`dLat` shift the dataset's effective 3D render origin;
+ * `angleDeg` is retained as a heading offset (meshes are NOT rotated in world
+ * space — rotation rendering is a separate future task).
+ */
+export interface GeoCorrection {
+  dLon: number;
+  dLat: number;
+  angleDeg: number;
+}
+
+/** Minimal tile shape shared by saved layout revisions and restore payloads. */
+export interface LayoutTileTransform {
+  datasetId: string;
+  tx: number;
+  ty: number;
+  angleDeg: number;
+}
+
+/** Geographic bbox of one dataset tile (its overview grid extent). */
+export interface GeoBbox {
+  minLon: number;
+  maxLon: number;
+  minLat: number;
+  maxLat: number;
+}
+
+/** Fold a longitude delta into [-180, 180] (antimeridian-safe, exact at 0). */
+function normaliseLonDeltaDeg(d: number): number {
+  return ((d + 540) % 360) - 180;
+}
+
+/**
+ * Convert a saved puzzle layout (revision tiles) into per-dataset geographic
+ * corrections for the 3D scene.
+ *
+ * For each tile we run its bbox centre through `applyPuzzleTransformToLonLat`
+ * — the same canvas-space math the Overview Map uses to draw the tile — and
+ * take the lon/lat delta between the corrected and canonical centre. Because
+ * the pivot point IS the tile centre, rotation contributes nothing to the
+ * centre shift (a point rotated around itself stays put); only the pixel
+ * translation `{tx, ty}` produces a delta. `angleDeg` is carried through
+ * unchanged as a heading offset.
+ *
+ * Identity tiles (tx=0, ty=0, angleDeg=0) therefore produce deltas of ~0
+ * (floating-point round-trip noise only) — unshifted tiles must load at their
+ * original geographic positions.
+ *
+ * Pure function: never mutates the tiles, bboxes, or reference grid.
+ *
+ * @param tiles            Tiles from the active layout revision
+ * @param bboxByDatasetId  Geographic bbox per dataset (overview grid extents)
+ * @param referenceGrid    The reference grid used by the overview canvas
+ * @param ovTransform      Current pan/zoom state of the overview canvas
+ * @returns Record of datasetId → {dLon, dLat, angleDeg}. Tiles without a
+ *          known bbox are skipped.
+ */
+export function puzzleLayoutToGeoCorrections(
+  tiles: readonly LayoutTileTransform[],
+  bboxByDatasetId: Readonly<Record<string, GeoBbox>>,
+  referenceGrid: TerrainData,
+  ovTransform: OverviewTransform,
+): Record<string, GeoCorrection> {
+  const out: Record<string, GeoCorrection> = {};
+  for (const tile of tiles) {
+    const bbox = bboxByDatasetId[tile.datasetId];
+    if (!bbox) continue;
+    const { centerLon, centerLat } = tileCenterLonLat(bbox);
+    const corrected = applyPuzzleTransformToLonLat(
+      centerLon,
+      centerLat,
+      centerLon,
+      centerLat,
+      { tx: tile.tx, ty: tile.ty, angleDeg: tile.angleDeg, flipH: false, flipV: false },
+      referenceGrid,
+      ovTransform,
+    );
+    out[tile.datasetId] = {
+      dLon: normaliseLonDeltaDeg(corrected.lon - centerLon),
+      dLat: corrected.lat - centerLat,
+      angleDeg: tile.angleDeg,
+    };
+  }
+  return out;
+}

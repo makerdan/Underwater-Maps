@@ -218,7 +218,13 @@ const CollectionRow: React.FC<{
   onActivate?: () => void;
   /** True while the activate flow is loading datasets. */
   activating?: boolean;
-}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, activating = false }) => {
+  /**
+   * Apply-to-3D badge: "applied" (teal) when the 3D scene reflects this
+   * collection's saved puzzle layout, "outdated" (amber) when the layout was
+   * edited after applying. Null/undefined hides the badge.
+   */
+  geoBadge?: "applied" | "outdated" | null;
+}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, activating = false, geoBadge = null }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -292,6 +298,25 @@ const CollectionRow: React.FC<{
               }}
             >
               {offlineRollup === "downloaded" ? "✓ Offline" : offlineRollup === "stale" ? "⟳ Stale" : "◐ Partial"}
+            </span>
+          )}
+          {!editing && geoBadge && (
+            <span
+              data-testid={`geo-layout-badge-${collection.id}`}
+              title={
+                geoBadge === "applied"
+                  ? "The 3D scene reflects this collection's saved puzzle layout"
+                  : "Re-apply the layout to sync the 3D scene."
+              }
+              style={{
+                fontSize: "calc(9.5px * var(--bs-font-scale, 1))", letterSpacing: "0.1em",
+                textTransform: "uppercase", flexShrink: 0, lineHeight: 1.6,
+                borderRadius: 3, padding: "0px 5px",
+                color: geoBadge === "applied" ? "#2dd4bf" : "#fbbf24",
+                border: `1px solid ${geoBadge === "applied" ? "rgba(45,212,191,0.4)" : "rgba(251,191,36,0.4)"}`,
+              }}
+            >
+              {geoBadge === "applied" ? "◈ 3D Applied" : "◈ 3D Outdated"}
             </span>
           )}
         </button>
@@ -533,6 +558,22 @@ export const CollectionsSection: React.FC = () => {
     }
   }, [activatingId, memberDatasetId]);
 
+  // Apply-to-3D badge state: which collection's saved layout the 3D scene
+  // currently reflects (and whether it has been edited since applying).
+  const geoLayout = useSpecialCollectionStore((s) => s.geoLayout);
+  const primaryDatasetIds = useTerrainStore((s) => s.primaryDatasetIds);
+
+  // Clear the applied-layout tracking once the corrected datasets are no
+  // longer all in the 3D scene (dataset switch / scene clear) — the badge
+  // must not claim the scene reflects a layout it no longer contains.
+  useEffect(() => {
+    if (!geoLayout) return;
+    const visible = new Set(primaryDatasetIds);
+    if (!geoLayout.datasetIds.every((id) => visible.has(id))) {
+      useSpecialCollectionStore.getState().clearGeoLayout();
+    }
+  }, [geoLayout, primaryDatasetIds]);
+
   const hasSpecialCollections = sorted.some((c) => c.collectionKind === "special");
   const settingsCollection = settingsForId
     ? sorted.find((c) => c.id === settingsForId) ??
@@ -633,6 +674,7 @@ export const CollectionsSection: React.FC = () => {
               onOpenSettings={c.collectionKind === "special" ? () => setSettingsForId(c.id) : undefined}
               onActivate={c.collectionKind === "special" ? () => void handleActivate(c) : undefined}
               activating={activatingId === c.id}
+              geoBadge={geoLayout?.collectionId === c.id ? geoLayout.status : null}
             />
           ))}
         </div>
