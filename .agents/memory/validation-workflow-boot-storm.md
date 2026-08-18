@@ -5,7 +5,9 @@ description: Environment restart autostarts every configured validation workflow
 
 # Validation workflow boot storm
 
-**Rule:** After an environment restart, every configured validation workflow (typecheck, lint, test-heavy, test-standard-plus, e2e-repro, …) autostarts simultaneously and all queue on the `global` validation lock. Before running your own tier: `stopWorkflow` each extraneous validation workflow, then check `ps` for orphaned boot-time holders (detached pgids from ~boot time still holding `global`/`unit-cpu` locks) and kill their pgids. `stopWorkflow` alone does NOT reliably kill the detached process groups.
+**Status (2026-08-18): root cause FIXED.** The storm was caused by the "Project" run-button workflow listing every validation workflow as a parallel `workflow.run` task; it fired on every environment restart. The Project workflow is now a single no-op `echo` and stale task-specific workflows were deleted. If the storm recurs, check whether `workflow.run` tasks crept back into the run-button workflow in `.replit` (edit via temp file + `verifyAndReplaceDotReplit`, direct edits are blocked).
+
+**Rule (if it recurs):** After an environment restart, autostarted validation workflows all queue on the `global` validation lock. Before running your own tier: `stopWorkflow` each extraneous validation workflow, then check `ps` for orphaned boot-time holders (detached pgids from ~boot time still holding `global`/`unit-cpu` locks) and kill their pgids. `stopWorkflow` alone does NOT reliably kill the detached process groups.
 
 **Why:** A boot storm serialized hours of unneeded runs behind one lock and an orphaned boot tree kept holding `global` even after its workflows were "stopped", deadlocking the intended tier run.
 
