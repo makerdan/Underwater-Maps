@@ -124,16 +124,17 @@ describe("drawMinimapContours — ocean theme", () => {
 
   it("skips boundaries that lie outside the depth range (very shallow dataset)", () => {
     const ctx = makeCtx();
-    // maxDepth = 10 m — only boundaries below 10 m are drawn.
+    // maxDepth = 1 m — the first interior boundary is 5 ft ≈ 1.524 m > 1 m,
+    // so no boundary qualifies → 0 strokes.
     const minDepth = 0;
-    const maxDepth = 10;
+    const maxDepth = 1;
     const depths = makeDepths(8, 8, minDepth, maxDepth);
 
     drawMinimapContours(ctx, depths, 8, 8, minDepth, maxDepth, "ocean",
       DEFAULT_BAND_BOUNDARIES, DEFAULT_BAND_COLORS);
 
     const expected = expectedOceanContourCount(DEFAULT_BAND_BOUNDARIES, minDepth, maxDepth);
-    // 50 ft = 15.24 m > 10 m → no boundary qualifies → 0 strokes.
+    // 5 ft = 1.524 m > 1 m → no boundary qualifies → 0 strokes.
     expect(expected).toBe(0);
     expect(ctx.stroke).toHaveBeenCalledTimes(0);
   });

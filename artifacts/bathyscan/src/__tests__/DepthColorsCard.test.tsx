@@ -225,9 +225,10 @@ describe("DepthBandEditor — boundary editing", () => {
     useSettingsStore.setState({ ...useSettingsStore.getState(), units: "imperial" });
     renderAndOpenPaletteTab();
     const slider = screen.getByTestId("band-boundary-slider-3") as HTMLInputElement;
-    fireEvent.change(slider, { target: { value: "180" } });
+    // bandBoundaries[3] = 35 ft (new 12-band scheme); valid range (15, 70) exclusive → use 50.
+    fireEvent.change(slider, { target: { value: "50" } });
     await waitFor(() => {
-      expect(usePaletteStore.getState().bandBoundaries[3]).toBe(180);
+      expect(usePaletteStore.getState().bandBoundaries[3]).toBe(50);
     });
   });
 

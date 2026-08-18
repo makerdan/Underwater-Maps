@@ -94,10 +94,10 @@ export const MAX_BOUNDARY_FT = 36000;
 /**
  * Default depth band boundaries in feet. N+1 values define N bands. The
  * first (0) is always fixed; every other value — including the last — is
- * user-editable.
+ * user-editable. 13 values define 12 bands.
  */
 export const DEFAULT_BAND_BOUNDARIES: readonly number[] = [
-  0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000,
+  0, 5, 15, 35, 70, 110, 150, 200, 250, 310, 400, 500, 36000,
 ];
 
 /** Minimum gap in feet that must be maintained between adjacent band boundaries. */
@@ -108,16 +108,18 @@ export const MIN_BOUNDARY_GAP_FT = 1;
  * to the band between DEFAULT_BAND_BOUNDARIES[i] and [i+1].
  */
 export const DEFAULT_BAND_COLORS: readonly string[] = [
-  "#00e5ff", //    0– 50 ft — cyan (matches DEFAULT_SHALLOW)
-  "#00c8de", //   50–100 ft — cyan-teal
-  "#00a8d0", //  100–150 ft — sky blue
-  "#0288d1", //  150–200 ft — ocean blue
-  "#0277bd", //  200–250 ft — medium blue
-  "#1565c0", //  250–300 ft — cobalt blue
-  "#0d47a1", //  300–350 ft — royal blue
-  "#1a237e", //  350–450 ft — indigo navy
-  "#283593", //  450–600 ft — deep navy
-  "#1e2b6e", //  600–2000 ft — dark navy
+  "#00e5ff", //    0–   5 ft — cyan (shallowest)
+  "#00d4f0", //    5–  15 ft — cyan-teal
+  "#00c0e0", //   15–  35 ft — light teal
+  "#00a8d0", //   35–  70 ft — sky blue
+  "#0288d1", //   70– 110 ft — ocean blue
+  "#0277bd", //  110– 150 ft — medium blue
+  "#0268a8", //  150– 200 ft — blue
+  "#1565c0", //  200– 250 ft — cobalt blue
+  "#0d47a1", //  250– 310 ft — royal blue
+  "#1a237e", //  310– 400 ft — indigo navy
+  "#283593", //  400– 500 ft — deep navy
+  "#1e2b6e", //  500–36000 ft — dark navy (deepest)
 ];
 
 /**

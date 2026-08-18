@@ -412,8 +412,13 @@ describe("applyColormapToVertexColors — band-boundary live repaint", () => {
     // setBandBoundary() clamps values by their neighbours so we use setState
     // directly to install radically different configs — the same mechanism the
     // settings store uses to sync on hydration.
-    const tightBoundaries = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000];
-    const spreadBoundaries = [0, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000];
+    // 13-entry arrays (12 colors + 1 boundary) so getValidatedBands() accepts them.
+    // tightBoundaries: 100 ft lands exactly at boundary[2] → returns color[2].
+    // spreadBoundaries: 100 ft (t=0.05) is between stop[0] (0) and stop[1] (200/2000=0.1)
+    //   when the colormap normalises by maxFt=2000 (tightBoundaries last)… but spreadBoundaries
+    //   last=36000 so normalisation is by 36000 and stop[9]=1800/36000=0.05 returns color[9].
+    const tightBoundaries = [0, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 600, 2000];
+    const spreadBoundaries = [0, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2500, 36000];
 
     const depths = [100]; // 100 ft depth, maxDepth=2000 ft → t=0.05
     const before = new Float32Array(3);
@@ -426,8 +431,9 @@ describe("applyColormapToVertexColors — band-boundary live repaint", () => {
     usePaletteStore.setState({ ...usePaletteStore.getState(), bandBoundaries: spreadBoundaries });
     applyColormapToVertexColors(depths, 0, 2000, after, getColormap("ocean"));
 
-    // The g-channel must differ (r=0 in both configs since all palette colours
-    // start with #00…; g and b shift measurably between the two spans)
+    // The g-channel must differ: tight maps depth 100 ft to color[2] (#00c0e0, g=192),
+    // while spread places stop[9]=1800 ft at t=1800/36000=0.05, returning color[9]
+    // (#1a237e, g=35) — a large and deterministic g-channel difference.
     expect(before[1]).not.toBeCloseTo(after[1]!, 4);
   });
 
@@ -831,7 +837,7 @@ describe("absolute-feet depth mapping — ocean/custom vertex colouring", () => 
       (ft) => Math.max(ft, 0.01) * FT_TO_M_TEST,
     );
     const colors = new Float32Array(depthsM.length * 3);
-    applyColormapToVertexColors(depthsM, domain.min, domain.max, colors, getColormap("ocean"));
+    applyColormapToVertexColors(depthsM, domain.min, domain.max, colors, getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M }));
     for (let i = 0; i < depthsM.length; i++) {
       const expected = hexToRgb01(DEFAULT_BAND_COLORS[i]!);
       expect(colors[i * 3]).toBeCloseTo(expected.r, 2);
@@ -840,13 +846,15 @@ describe("absolute-feet depth mapping — ocean/custom vertex colouring", () => 
     }
   });
 
-  it("a shallow lake (max 12 m ≈ 40 ft) never samples the deep endpoint", () => {
-    const domain = getColormapDepthDomain("ocean", 0, 12);
+  it("a shallow lake (max 1.2 m ≈ 4 ft) never samples the deep endpoint", () => {
+    const domain = getColormapDepthDomain("ocean", 0, 1.2);
     // Depth must stay > 0: finite depth <= 0 is land and is intentionally
     // left/painted as the nodata colour, not a palette colour.
-    const depths = [0.5, 3, 6, 9, 12]; // metres
+    // All depths < 1.524 m (5 ft = band 0 upper boundary) → colours interpolate
+    // within band 0 only (between band 0 and band 1 stop colours).
+    const depths = [0.1, 0.5, 1.0, 1.2]; // metres, all < 1.524 m (band 0 upper)
     const colors = new Float32Array(depths.length * 3);
-    applyColormapToVertexColors(depths, domain.min, domain.max, colors, getColormap("ocean"));
+    applyColormapToVertexColors(depths, domain.min, domain.max, colors, getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M }));
 
     const deepEndpoint = getColormap("ocean")(1.0);
     const band0 = hexToRgb01(DEFAULT_BAND_COLORS[0]!);
@@ -857,8 +865,8 @@ describe("absolute-feet depth mapping — ocean/custom vertex colouring", () => 
       const dDeep =
         Math.abs(c.r - deepEndpoint.r) + Math.abs(c.g - deepEndpoint.g) + Math.abs(c.b - deepEndpoint.b);
       expect(dDeep).toBeGreaterThan(0.3);
-      // … and must sit within the first band span (between band 0 and band 1
-      // colours, since 12 m ≈ 40 ft < 50 ft first boundary).
+      // … and must sit within the band 0–band 1 colour span
+      // (since all depths < 1.524 m = 5 ft = band 0 upper boundary).
       const inSpan = (v: number, a: number, b: number) =>
         v >= Math.min(a, b) - 0.02 && v <= Math.max(a, b) + 0.02;
       expect(inSpan(c.r, band0.r, band1.r)).toBe(true);

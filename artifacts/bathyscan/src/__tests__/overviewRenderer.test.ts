@@ -1445,17 +1445,18 @@ describe("renderContourLines — palette staleness and edge-case robustness", ()
   });
 
   it("preset theme ('thermal') ignores populated bandColors and uses the colormap-sample path, producing a different color than the band path", () => {
-    // After reset(): DEFAULT_BAND_COLORS[0] = '#00e5ff'.
-    // For depth=10 m, the band path selects band index 0 (10 m < 15.24 m boundary) → rgb(0,229,255).
+    // After reset(): DEFAULT_BAND_COLORS[2] = '#00c0e0' (15–35 ft band = 4.57–10.67 m).
+    // For depth=10 m ≈ 32.8 ft, the band path selects band index 2 (10 m < 10.67 m boundary)
+    // → rgb(0,192,224).  (Old scheme had a single 0–50 ft band so 10 m → band 0.)
     const segments = buildContourLines(grid, 10);
     expect(segments.length).toBeGreaterThan(0);
 
     // Control — ocean theme (absolute-depth) must use the band path.
-    // Expected: '#00e5ff' = r=0x00=0, g=0xe5=229, b=0xff=255 → "rgb(0,229,255)".
+    // Expected: '#00c0e0' = r=0x00=0, g=0xc0=192, b=0xe0=224 → "rgb(0,192,224)".
     const ctxOcean = makeCtxWithCanvas();
     renderContourLines(ctxOcean, segments, grid, t, "metric", "ocean");
     const oceanStyle = lastStrokeStyle(ctxOcean);
-    expect(oceanStyle).toBe("rgb(0,229,255)"); // band[0] colour for depth < 15.24 m
+    expect(oceanStyle).toBe("rgb(0,192,224)"); // band[2] colour for 4.57 m < depth < 10.67 m
 
     // Thermal with the same store state must use the colormap-sample path, not the band path.
     // Expected computation:  thermal is grid-relative → contourDomain = {min:0, max:20}.

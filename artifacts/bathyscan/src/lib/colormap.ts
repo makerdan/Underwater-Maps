@@ -8,12 +8,12 @@ export interface ColorStop {
 }
 
 /**
- * Canonical default depth band boundaries in feet (the default 10-band
+ * Canonical default depth band boundaries in feet (the default 12-band
  * scale). Retained for consumers that need the historical default layout;
  * the live user-configured boundaries come from paletteStore.
  */
 export const DEPTH_BAND_BOUNDARIES_FT = [
-  0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000,
+  0, 5, 15, 35, 70, 110, 150, 200, 250, 310, 400, 500, 36000,
 ] as const;
 
 /** Default maximum depth of the ocean colormap scale in feet. */

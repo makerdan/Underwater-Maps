@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { DEPTH_BAND_BOUNDARIES_FT, OCEAN_MAX_DEPTH_FT, getColormap } from "../lib/colormap";
+import { DEPTH_BAND_BOUNDARIES_FT, OCEAN_MAX_DEPTH_FT, OCEAN_MAX_DEPTH_M, getColormap } from "../lib/colormap";
 
 // Shared stub — implementations live in src/__tests__/mocks/three.ts,
 // wired via __mocks__/three.ts so no factory is needed here.
@@ -158,7 +158,7 @@ describe("getColormap", () => {
     expect(c.b).toBeCloseTo(expected.b, 2);
   });
 
-  it("ocean theme returns consistent colours at all 10-band boundary stops", () => {
+  it("ocean theme returns consistent colours at all 12-band boundary stops", () => {
     const fn = getColormap("ocean");
     // Normalised t values for the 11 band boundaries (0–2000 ft)
     const stops = DEPTH_BAND_BOUNDARIES_FT.map(
@@ -337,7 +337,7 @@ describe("sanitizeBandColors", () => {
     expect(sanitizeBandColors(42)).toBeNull();
   });
 
-  it("returns null when the array has fewer than 10 entries", () => {
+  it("returns null when the array has fewer than 12 entries", () => {
     expect(sanitizeBandColors(["#ffffff"])).toBeNull();
   });
 
@@ -348,15 +348,15 @@ describe("sanitizeBandColors", () => {
     expect(sanitizeBandColors(tooMany)).toBeNull();
   });
 
-  it("accepts a valid 10-entry hex array and lowercases each entry", () => {
-    const input = Array(10).fill("#AABBCC");
+  it("accepts a valid 12-entry hex array and lowercases each entry", () => {
+    const input = Array(12).fill("#AABBCC");
     const result = sanitizeBandColors(input);
     expect(result).not.toBeNull();
     expect(result!.every((c) => c === "#aabbcc")).toBe(true);
   });
 
   it("returns null when any entry is an invalid hex string", () => {
-    const input = Array(10).fill("#001122");
+    const input = Array(12).fill("#001122");
     input[3] = "notahex";
     expect(sanitizeBandColors(input)).toBeNull();
   });
@@ -366,13 +366,13 @@ describe("bandColors store integration", () => {
   beforeEach(() => { usePaletteStore.getState().reset(); });
   afterEach(() => { usePaletteStore.getState().reset(); });
 
-  it("DEFAULT_BAND_COLORS has 10 entries", () => {
-    expect(DEFAULT_BAND_COLORS).toHaveLength(10);
+  it("DEFAULT_BAND_COLORS has 12 entries", () => {
+    expect(DEFAULT_BAND_COLORS).toHaveLength(12);
   });
 
   it("store bandColors initialises to DEFAULT_BAND_COLORS", () => {
     const { bandColors } = usePaletteStore.getState();
-    expect(bandColors).toHaveLength(10);
+    expect(bandColors).toHaveLength(12);
     DEFAULT_BAND_COLORS.forEach((c, i) => {
       expect(bandColors[i]).toBe(c);
     });
@@ -393,7 +393,7 @@ describe("bandColors store integration", () => {
   });
 
   it("setBandColors() replaces all band colours and getColormap picks them up", () => {
-    const allRed = Array(10).fill("#ff0000") as string[];
+    const allRed = Array(12).fill("#ff0000") as string[];
     usePaletteStore.getState().setBandColors(allRed);
     const fn = getColormap("ocean");
     const c = fn(0);
@@ -405,8 +405,9 @@ describe("bandColors store integration", () => {
   it("resetBandColors() restores DEFAULT_BAND_COLORS and getColormap reverts", () => {
     usePaletteStore.getState().setBandColor(6, "#ff0000");
     usePaletteStore.getState().resetBandColors();
-    const fn = getColormap("ocean");
-    const t = 300 / 2000;
+    const fn = getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M });
+    // 250 ft is the exact lower boundary of band 8 → returns DEFAULT_BAND_COLORS[8] exactly.
+    const t = 250 / 2000;
     const c = fn(t);
     const expected = hexToRgb("#0d47a1");
     expect(c.r).toBeCloseTo(expected.r, 2);
@@ -419,9 +420,9 @@ describe("bandColors store integration", () => {
     const corrupt = [...DEFAULT_BAND_COLORS] as string[];
     corrupt[4] = "notvalid";
     usePaletteStore.setState({ bandColors: corrupt });
-    const fn = getColormap("ocean");
-    // Band 4 (200 ft) should fall back to DEFAULT_BAND_COLORS[4]
-    const t = 200 / 2000;
+    const fn = getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M });
+    // Band 4 (70–110 ft): sample at the exact lower boundary (70 ft) to hit the stop directly.
+    const t = 70 / 2000;
     const c = fn(t);
     const expected = hexToRgb(DEFAULT_BAND_COLORS[4]!);
     expect(c.r).toBeCloseTo(expected.r, 2);
@@ -460,15 +461,13 @@ describe("bandColors store integration", () => {
 });
 
 describe("DEPTH_BAND_BOUNDARIES_FT", () => {
-  it("exports 11 boundary values (10 bands)", () => {
-    expect(DEPTH_BAND_BOUNDARIES_FT).toHaveLength(11);
+  it("exports 13 boundary values (12 bands)", () => {
+    expect(DEPTH_BAND_BOUNDARIES_FT).toHaveLength(13);
   });
 
-  it("starts at 0 ft and ends at OCEAN_MAX_DEPTH_FT (2000 ft)", () => {
+  it("starts at 0 ft and ends at 36000 ft", () => {
     expect(DEPTH_BAND_BOUNDARIES_FT[0]).toBe(0);
-    expect(DEPTH_BAND_BOUNDARIES_FT[DEPTH_BAND_BOUNDARIES_FT.length - 1]).toBe(
-      OCEAN_MAX_DEPTH_FT,
-    );
+    expect(DEPTH_BAND_BOUNDARIES_FT[DEPTH_BAND_BOUNDARIES_FT.length - 1]).toBe(36000);
   });
 
   it("boundaries are strictly ascending", () => {
@@ -480,7 +479,7 @@ describe("DEPTH_BAND_BOUNDARIES_FT", () => {
   });
 
   it("no two adjacent band boundaries share the same colour", () => {
-    const fn = getColormap("ocean");
+    const fn = getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M });
     // Directly compare the colour at each consecutive pair of boundaries.
     // Adjacent stops must differ in at least one RGB channel so no two
     // neighbouring bands collapse to the same hue.
@@ -499,8 +498,8 @@ describe("DEPTH_BAND_BOUNDARIES_FT", () => {
     }
   });
 
-  it("exact colours at key band boundaries (300 ft, 350 ft, 450 ft, 600 ft)", () => {
-    const fn = getColormap("ocean");
+  it("exact colours at key band boundaries (250 ft, 310 ft, 400 ft, 600 ft)", () => {
+    const fn = getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M });
     const check = (ft: number, hex: string) => {
       const t = ft / OCEAN_MAX_DEPTH_FT;
       const c = fn(t);
@@ -509,18 +508,24 @@ describe("DEPTH_BAND_BOUNDARIES_FT", () => {
       expect(c.g).toBeCloseTo(exp.g, 2);
       expect(c.b).toBeCloseTo(exp.b, 2);
     };
-    check(300, "#0d47a1"); // royal blue
-    check(350, "#1a237e"); // indigo navy
-    check(450, "#283593"); // deep navy
-    check(600, "#1e2b6e"); // dark navy
+    check(250, "#0d47a1"); // royal blue — exact lower boundary of band 8
+    check(310, "#1a237e"); // indigo navy — exact lower boundary of band 9
+    check(400, "#283593"); // deep navy — exact lower boundary of band 10
+    check(600, "#1e2b6e"); // dark navy — beyond 500 ft → deepest band
   });
 
-  it("normalised t positions for all boundaries fall within [0, 1]", () => {
-    for (const ft of DEPTH_BAND_BOUNDARIES_FT) {
+  it("normalised t positions for all non-sentinel boundaries fall within [0, 1]", () => {
+    // The last boundary (36000 ft) is a deep-ocean sentinel that intentionally
+    // exceeds OCEAN_MAX_DEPTH_FT — it is clamped to t=1 at render time.
+    // Only the first 12 boundaries (band lower edges) must normalise to [0, 1].
+    for (const ft of DEPTH_BAND_BOUNDARIES_FT.slice(0, -1)) {
       const t = ft / OCEAN_MAX_DEPTH_FT;
       expect(t).toBeGreaterThanOrEqual(0);
       expect(t).toBeLessThanOrEqual(1);
     }
+    // The deep-ocean cap intentionally exceeds the standard scale.
+    const lastBoundary = DEPTH_BAND_BOUNDARIES_FT[DEPTH_BAND_BOUNDARIES_FT.length - 1]!;
+    expect(lastBoundary).toBeGreaterThan(OCEAN_MAX_DEPTH_FT);
   });
 });
 
@@ -529,8 +534,8 @@ describe("getOceanStops respects live bandBoundaries from store", () => {
   afterEach(() => { usePaletteStore.getState().reset(); });
 
   it("by default, each band stop t-position matches DEFAULT_BAND_BOUNDARIES[i] / 2000", () => {
-    const fn = getColormap("ocean");
-    for (let i = 0; i < 10; i++) {
+    const fn = getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M });
+    for (let i = 0; i < 12; i++) {
       const ft = DEFAULT_BAND_BOUNDARIES[i]!;
       const t = ft / OCEAN_MAX_DEPTH_FT;
       const c = fn(t);
@@ -542,39 +547,40 @@ describe("getOceanStops respects live bandBoundaries from store", () => {
   });
 
   it("after setBandBoundary, the moved stop's colour appears at the new t-position", () => {
-    usePaletteStore.getState().setBandBoundary(3, 180);
+    // bb[9] default = 310; valid range = [bb[8]+1, bb[10]-1] = [251, 399]
+    usePaletteStore.getState().setBandBoundary(9, 360);
     const updated = usePaletteStore.getState().bandBoundaries;
-    expect(updated[3]).toBe(180);
+    expect(updated[9]).toBe(360);
 
-    const fn = getColormap("ocean");
-    const tNew = 180 / OCEAN_MAX_DEPTH_FT;
+    const fn = getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M });
+    const tNew = 360 / OCEAN_MAX_DEPTH_FT;
     const c = fn(tNew);
-    const expected = hexToRgb(usePaletteStore.getState().bandColors[3]!);
+    const expected = hexToRgb(usePaletteStore.getState().bandColors[9]!);
     expect(c.r).toBeCloseTo(expected.r, 2);
     expect(c.g).toBeCloseTo(expected.g, 2);
     expect(c.b).toBeCloseTo(expected.b, 2);
   });
 
   it("after setBandBoundary, the old t-position yields an interpolated colour (stop has moved)", () => {
-    // Move boundary[2] from 100 ft → 120 ft.
-    // At the old position (t = 100/2000) the value is now between stop 1
-    // (at t = 50/2000) and the moved stop 2 (at t = 120/2000).
-    usePaletteStore.getState().setBandBoundary(2, 120);
-    const fn = getColormap("ocean");
+    // Move boundary[9] from 310 ft → 360 ft.
+    // At the old position (t = 310/2000) the value is now between stop 8
+    // (at t = 250/2000) and the moved stop 9 (at t = 360/2000).
+    usePaletteStore.getState().setBandBoundary(9, 360);
+    const fn = getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M });
     const bc = usePaletteStore.getState().bandColors;
 
-    const tOld = 100 / OCEAN_MAX_DEPTH_FT;       // 0.05
-    const tStop1 = 50 / OCEAN_MAX_DEPTH_FT;       // 0.025
-    const tStop2New = 120 / OCEAN_MAX_DEPTH_FT;   // 0.06
+    const tOld = 310 / OCEAN_MAX_DEPTH_FT;       // 0.155
+    const tStop8 = 250 / OCEAN_MAX_DEPTH_FT;      // 0.125
+    const tStop9New = 360 / OCEAN_MAX_DEPTH_FT;   // 0.18
 
-    const stop1Color = hexToRgb(bc[1]!);
-    const stop2Color = hexToRgb(bc[2]!);
+    const stop8Color = hexToRgb(bc[8]!);
+    const stop9Color = hexToRgb(bc[9]!);
 
-    // t=0.05 is between stop1 (t=0.025) and stop2 (t=0.06)
-    const alpha = (tOld - tStop1) / (tStop2New - tStop1);
-    const expectedR = stop1Color.r + (stop2Color.r - stop1Color.r) * alpha;
-    const expectedG = stop1Color.g + (stop2Color.g - stop1Color.g) * alpha;
-    const expectedB = stop1Color.b + (stop2Color.b - stop1Color.b) * alpha;
+    // t=0.155 is between stop8 (t=0.125) and stop9 (t=0.18)
+    const alpha = (tOld - tStop8) / (tStop9New - tStop8);
+    const expectedR = stop8Color.r + (stop9Color.r - stop8Color.r) * alpha;
+    const expectedG = stop8Color.g + (stop9Color.g - stop8Color.g) * alpha;
+    const expectedB = stop8Color.b + (stop9Color.b - stop8Color.b) * alpha;
 
     const cAtOld = fn(tOld);
     expect(cAtOld.r).toBeCloseTo(expectedR, 2);
@@ -600,9 +606,9 @@ describe("getOceanStops respects live bandBoundaries from store", () => {
 
   it("getOceanStops falls back to DEFAULT_BAND_BOUNDARIES when store has a degenerate boundaries array", () => {
     usePaletteStore.setState({ bandBoundaries: [] as unknown as number[] });
-    const fn = getColormap("ocean");
+    const fn = getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M });
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 12; i++) {
       const ft = DEFAULT_BAND_BOUNDARIES[i]!;
       const t = ft / OCEAN_MAX_DEPTH_FT;
       const c = fn(t);
@@ -618,8 +624,8 @@ describe("getOceanStops respects live bandBoundaries from store", () => {
     usePaletteStore.getState().setBandBoundaries(custom);
     usePaletteStore.getState().resetBandBoundaries();
 
-    const fn = getColormap("ocean");
-    for (let i = 0; i < 10; i++) {
+    const fn = getColormap("ocean", { min: 0, max: OCEAN_MAX_DEPTH_M });
+    for (let i = 0; i < 12; i++) {
       const ft = DEFAULT_BAND_BOUNDARIES[i]!;
       const t = ft / OCEAN_MAX_DEPTH_FT;
       const c = fn(t);

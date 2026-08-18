@@ -487,7 +487,7 @@ describe("paletteStore.hydrateFromServer", () => {
   });
 
   it("applies a valid bandBoundaries payload from the server", () => {
-    const incoming = [0, 40, 90, 140, 190, 240, 290, 340, 440, 590, 2000];
+    const incoming = [0, 5, 20, 45, 80, 120, 165, 215, 265, 320, 410, 510, 2000];
     usePaletteStore.getState().hydrateFromServer({ bandBoundaries: incoming });
     expect(usePaletteStore.getState().bandBoundaries).toEqual(incoming);
   });
@@ -519,24 +519,24 @@ describe("paletteStore.hydrateFromServer", () => {
   it("leaves bandBoundaries untouched when the payload does not start at 0", () => {
     const before = [...usePaletteStore.getState().bandBoundaries];
     usePaletteStore.getState().hydrateFromServer({
-      bandBoundaries: [10, 50, 100, 150, 200, 250, 300, 350, 450, 600, 2000],
+      bandBoundaries: [10, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 600, 2000],
     });
     expect(usePaletteStore.getState().bandBoundaries).toEqual(before);
   });
 
   it("accepts a payload ending at a value other than 2000 (last boundary is editable)", () => {
-    const custom = [0, 50, 100, 150, 200, 250, 300, 350, 450, 600, 1999];
+    const custom = [0, 5, 15, 35, 70, 110, 150, 200, 250, 310, 400, 500, 1999];
     usePaletteStore.getState().hydrateFromServer({ bandBoundaries: custom });
     expect(usePaletteStore.getState().bandBoundaries).toEqual(custom);
   });
 
   it("applies only bandBoundaries when it is the sole field present; other fields survive", () => {
-    const seededBoundaries = [0, 60, 110, 160, 210, 260, 310, 360, 460, 610, 2000];
+    const seededBoundaries = [0, 60, 110, 160, 210, 260, 310, 360, 410, 460, 510, 610, 2000];
     usePaletteStore.getState().setBandBoundaries(seededBoundaries);
     usePaletteStore.getState().setShallow("#aabbcc");
     usePaletteStore.getState().setDeep("#112233");
 
-    const newBoundaries = [0, 40, 90, 140, 190, 240, 290, 340, 440, 590, 2000];
+    const newBoundaries = [0, 5, 20, 45, 80, 120, 165, 215, 265, 320, 410, 510, 2000];
     usePaletteStore.getState().hydrateFromServer({ bandBoundaries: newBoundaries });
 
     const st = usePaletteStore.getState();
@@ -634,13 +634,13 @@ describe("sanitizeBandBoundaries", () => {
     expect(sanitizeBandBoundaries(borderline)).toBeNull();
   });
 
-  it("accepts a valid 11-entry strictly-increasing array", () => {
+  it("accepts a valid 13-entry strictly-increasing array", () => {
     const valid = [...DEFAULT_BAND_BOUNDARIES];
     const result = sanitizeBandBoundaries(valid);
     expect(result).not.toBeNull();
-    expect(result).toHaveLength(11);
+    expect(result).toHaveLength(13);
     expect(result![0]).toBe(0);
-    expect(result![10]).toBe(2000);
+    expect(result![12]).toBe(36000);
     for (let i = 1; i < result!.length; i++) {
       expect(result![i]).toBeGreaterThan(result![i - 1]!);
     }
@@ -657,19 +657,20 @@ describe("paletteStore.setBandBoundary", () => {
     expect(usePaletteStore.getState().bandBoundaries[0]).toBe(before[0]);
   });
 
-  it("updates index 10 (last boundary is now editable)", () => {
-    usePaletteStore.getState().setBandBoundary(10, 1000);
-    expect(usePaletteStore.getState().bandBoundaries[10]).toBe(1000);
+  it("updates index 12 (last boundary is now editable)", () => {
+    usePaletteStore.getState().setBandBoundary(12, 1000);
+    expect(usePaletteStore.getState().bandBoundaries[12]).toBe(1000);
   });
 
   it("clamps the last boundary to MAX_BOUNDARY_FT", () => {
-    usePaletteStore.getState().setBandBoundary(10, 99999);
-    expect(usePaletteStore.getState().bandBoundaries[10]).toBe(36000);
+    usePaletteStore.getState().setBandBoundary(12, 99999);
+    expect(usePaletteStore.getState().bandBoundaries[12]).toBe(36000);
   });
 
   it("updates an interior boundary to a valid value", () => {
-    usePaletteStore.getState().setBandBoundary(3, 160);
-    expect(usePaletteStore.getState().bandBoundaries[3]).toBe(160);
+    // bb[3] default = 35; valid range = [bb[2]+1, bb[4]-1] = [16, 69]
+    usePaletteStore.getState().setBandBoundary(3, 50);
+    expect(usePaletteStore.getState().bandBoundaries[3]).toBe(50);
   });
 
   it("clamps the new value to at least prev + MIN_BOUNDARY_GAP_FT", () => {
@@ -689,26 +690,29 @@ describe("paletteStore.setBandBoundary", () => {
   });
 
   it("rounds the incoming value to the nearest integer", () => {
-    usePaletteStore.getState().setBandBoundary(5, 255.7);
-    expect(usePaletteStore.getState().bandBoundaries[5]).toBe(256);
+    // bb[5] default = 110; valid range = [bb[4]+1, bb[6]-1] = [71, 149]
+    usePaletteStore.getState().setBandBoundary(5, 120.7);
+    expect(usePaletteStore.getState().bandBoundaries[5]).toBe(121);
   });
 
   it("reflects the updated boundary immediately in the store", () => {
-    usePaletteStore.getState().setBandBoundary(4, 220);
+    // bb[4] default = 70; valid range = [bb[3]+1, bb[5]-1] = [36, 109]
+    usePaletteStore.getState().setBandBoundary(4, 90);
     const bb = usePaletteStore.getState().bandBoundaries;
-    expect(bb[4]).toBe(220);
+    expect(bb[4]).toBe(90);
     expect(bb[0]).toBe(0);
-    expect(bb[10]).toBe(2000);
+    expect(bb[12]).toBe(36000);
   });
 
   it("leaves all other boundaries unchanged", () => {
+    // bb[6] default = 150; valid range = [bb[5]+1, bb[7]-1] = [111, 199]
     const before = [...usePaletteStore.getState().bandBoundaries];
-    usePaletteStore.getState().setBandBoundary(6, 310);
+    usePaletteStore.getState().setBandBoundary(6, 170);
     const after = usePaletteStore.getState().bandBoundaries;
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < 13; i++) {
       if (i !== 6) expect(after[i]).toBe(before[i]);
     }
-    expect(after[6]).toBe(310);
+    expect(after[6]).toBe(170);
   });
 });
 
@@ -842,7 +846,7 @@ describe("paletteStore.setBandBoundaries / resetBandBoundaries", () => {
   afterEach(() => { usePaletteStore.getState().reset(); });
 
   it("replaces all boundaries with a valid array", () => {
-    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 460, 610, 2000];
+    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 410, 460, 510, 610, 2000];
     usePaletteStore.getState().setBandBoundaries(custom);
     expect(usePaletteStore.getState().bandBoundaries).toEqual(custom);
   });
@@ -853,14 +857,14 @@ describe("paletteStore.setBandBoundaries / resetBandBoundaries", () => {
   });
 
   it("resetBandBoundaries() restores DEFAULT_BAND_BOUNDARIES", () => {
-    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 460, 610, 2000];
+    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 410, 460, 510, 610, 2000];
     usePaletteStore.getState().setBandBoundaries(custom);
     usePaletteStore.getState().resetBandBoundaries();
     expect(usePaletteStore.getState().bandBoundaries).toEqual([...DEFAULT_BAND_BOUNDARIES]);
   });
 
   it("reset() also restores bandBoundaries to defaults", () => {
-    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 460, 610, 2000];
+    const custom = [0, 60, 110, 160, 210, 260, 310, 360, 410, 460, 510, 610, 2000];
     usePaletteStore.getState().setBandBoundaries(custom);
     usePaletteStore.getState().reset();
     expect(usePaletteStore.getState().bandBoundaries).toEqual([...DEFAULT_BAND_BOUNDARIES]);

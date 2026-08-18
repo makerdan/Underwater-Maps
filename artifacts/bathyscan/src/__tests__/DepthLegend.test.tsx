@@ -50,9 +50,10 @@ describe("DepthLegend", () => {
     });
     // Every in-range boundary should produce a visible label
     expect(expected.length).toBeGreaterThan(0);
-    // 50 ft = 15 m is within [10, 160] → should be rendered
-    expect(getAllByText("50 ft")).toHaveLength(1);
-    expect(getAllByText("450 ft")).toHaveLength(1);
+    // 35 ft = 10.7 m is within [10, 160] → should be rendered
+    expect(getAllByText("35 ft")).toHaveLength(1);
+    // 500 ft = 152.4 m is within [10, 160] → should be rendered
+    expect(getAllByText("500 ft")).toHaveLength(1);
   });
 
   it("omits the 0 ft boundary when minDepth > 0", () => {
