@@ -32,7 +32,9 @@
  * short-circuits to "approved" to avoid an extra request on every e2e load.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { authorizedFetch } from "@/lib/authorizedFetch";
+import { getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { useUser, useClerk } from "@/lib/clerkCompat";
 import { DEV_AUTH_BYPASS } from "@/lib/devAuth";
 
@@ -164,6 +166,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
   const [attempt, setAttempt] = useState(0);
   const { user } = useUser();
   const { signOut } = useClerk();
+  const queryClient = useQueryClient();
 
   const email = user?.primaryEmailAddress?.emailAddress ?? null;
 
@@ -204,6 +207,18 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        // 2xx: seed the TanStack Query cache so the settings sync that runs
+        // inside the now-approved children can reuse this response without
+        // making a second GET /api/settings round-trip.
+        if (res.status >= 200 && res.status < 300) {
+          try {
+            const data: unknown = await res.json();
+            queryClient.setQueryData(getGetSettingsQueryKey(), data);
+          } catch {
+            // Body parse failed — settings sync will fetch its own copy.
+          }
+        }
+
         // 2xx, 401, 4xx-other: fail open. Session expiry and per-route
         // errors are handled by the app itself.
         setState("approved");
@@ -216,7 +231,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [attempt]);
+  }, [attempt, queryClient]);
 
   // Periodic re-probe while the awaiting-approval screen is showing.
   // When the admin approves the user the next poll will transition automatically

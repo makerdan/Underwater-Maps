@@ -26,6 +26,7 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const signOutMock = vi.fn(async () => undefined);
 
@@ -47,6 +48,13 @@ vi.mock("@/lib/authorizedFetch", () => ({
   authorizedFetch: (...args: unknown[]) => authorizedFetchMock(...args),
 }));
 
+// Stub getGetSettingsQueryKey so AccessGate can call it without the full
+// api-client-react setup (no real fetch, no Orval codegen dependency).
+vi.mock("@workspace/api-client-react", () => ({
+  getGetSettingsQueryKey: () => ["settings"],
+  getAuthToken: async () => null,
+}));
+
 // AdminPanel dependencies (for the Regression Guard tests below).
 vi.mock("@/lib/blobDownload", () => ({ triggerBlobDownload: vi.fn() }));
 vi.mock("@/components/admin/UserAccessSection", () => ({
@@ -64,11 +72,17 @@ function jsonResponse(status: number, body?: unknown): Response {
   } as unknown as Response;
 }
 
+function makeQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+}
 function renderGate() {
+  const qc = makeQueryClient();
   return render(
-    <AccessGate>
-      <div data-testid="app-content">explorer</div>
-    </AccessGate>,
+    <QueryClientProvider client={qc}>
+      <AccessGate>
+        <div data-testid="app-content">explorer</div>
+      </AccessGate>
+    </QueryClientProvider>,
   );
 }
 

@@ -431,8 +431,14 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     query: {
       enabled: isLoaded && isSignedIn === true,
       queryKey: getGetSettingsQueryKey(),
-      refetchOnMount: "always",
-      staleTime: 0,
+      // refetchOnMount:"always" / staleTime:0 used to unconditionally re-fetch
+      // on every mount. AccessGate now seeds the cache with its probe response
+      // (the same GET /api/settings call) before children mount, so a short
+      // staleTime lets us skip the duplicate round-trip when the data is fresh.
+      // 5 s is long enough to cover the gate→Main mount gap; subsequent mounts
+      // (e.g. HMR, route transitions) still refetch when the data is older.
+      refetchOnMount: true,
+      staleTime: 5_000,
       retry: false,
     },
   });
