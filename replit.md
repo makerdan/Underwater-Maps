@@ -462,6 +462,7 @@ Every new sign-in is held as **pending** until an admin approves it (`requireApp
 | GET | `/admin/skill/failure-gate` | Download the failure-gate skill zip with no-cache headers |
 | GET | `/admin/large-datasets-diff` | Detect Large_Datasets files that have changed since last import |
 | GET | `/admin/users` | List user approval records (paginated) |
+| GET | `/admin/users/pending-count` | Count of users awaiting approval |
 | POST | `/admin/users/:clerkUserId/approve` | Approve a pending or banned user |
 | POST | `/admin/users/:clerkUserId/ban` | Ban a user (with optional admin note) |
 | POST | `/admin/users/:clerkUserId/restore` | Restore a banned user back to approved |
