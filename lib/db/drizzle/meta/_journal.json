@@ -169,6 +169,13 @@
       "when": 1787019071104,
       "tag": "0023_add_special_collection_meta",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787023550128,
+      "tag": "0024_add_user_access",
+      "breakpoints": true
     }
   ]
 }

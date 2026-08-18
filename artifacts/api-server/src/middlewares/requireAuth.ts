@@ -1,6 +1,7 @@
 import { getAuth } from "@clerk/express";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger.js";
+import { requireApproved, shouldEnforceApproval } from "./requireApproved.js";
 
 // ---------------------------------------------------------------------------
 // Production safety guard — refuse to start if E2E_AUTH_BYPASS is active
@@ -71,6 +72,9 @@ function readBypassUserId(req: Request): string | null {
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const bypassUserId = readBypassUserId(req);
   if (bypassUserId) {
+    // E2E bypass path: the approval gate is intentionally skipped — e2e and
+    // integration suites exercise routes as arbitrary user IDs with no
+    // user_access rows. requireApproved must never run on this path.
     (req as AuthenticatedRequest).clerkUserId = bypassUserId;
     next();
     return;
@@ -83,5 +87,14 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
   (req as AuthenticatedRequest).clerkUserId = userId;
+
+  // Approval gate: every real Clerk sign-in must be admin-approved (or an
+  // admin) before reaching any authenticated endpoint. Chained here so that
+  // every route using requireAuth gets the check without per-route wiring.
+  // requireApproved handles its own errors (forwards to next(err)).
+  if (shouldEnforceApproval()) {
+    void requireApproved(req, res, next);
+    return;
+  }
   next();
 }

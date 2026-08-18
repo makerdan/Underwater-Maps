@@ -4388,6 +4388,220 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /admin/users:
+    get:
+      operationId: adminListUsers
+      tags: [admin]
+      summary: List user approval records (paginated)
+      description: >-
+        Admin-only. Returns user_access rows ordered by Clerk user ID with
+        keyset pagination. Optionally filtered by approval status.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, banned]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          description: Clerk user ID of the last row from the previous page.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated list of user approval records
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users, nextCursor]
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/UserAccessRecord"
+                  nextCursor:
+                    type: string
+                    nullable: true
+        "400":
+          description: Invalid query parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /admin/users/{clerkUserId}/approve:
+    post:
+      operationId: adminApproveUser
+      tags: [admin]
+      summary: Approve a pending or banned user
+      parameters:
+        - name: clerkUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: "#/components/schemas/UserAccessRecord"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: No user_access row for that Clerk user ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /admin/users/{clerkUserId}/ban:
+    post:
+      operationId: adminBanUser
+      tags: [admin]
+      summary: Ban a user (with optional admin note)
+      parameters:
+        - name: clerkUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 2000
+      responses:
+        "200":
+          description: User banned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: "#/components/schemas/UserAccessRecord"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: No user_access row for that Clerk user ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /admin/users/{clerkUserId}/restore:
+    post:
+      operationId: adminRestoreUser
+      tags: [admin]
+      summary: Restore a banned user back to approved
+      parameters:
+        - name: clerkUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User restored to approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: "#/components/schemas/UserAccessRecord"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: No user_access row for that Clerk user ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /admin/users/{clerkUserId}:
+    delete:
+      operationId: adminDeleteUser
+      tags: [admin]
+      summary: Hard-delete a user approval record
+      description: >-
+        Admin-only. Removes the user_access row entirely; the user returns to
+        pending on their next login.
+      parameters:
+        - name: clerkUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Record deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted, clerkUserId]
+                properties:
+                  deleted:
+                    type: boolean
+                    enum: [true]
+                  clerkUserId:
+                    type: string
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: No user_access row for that Clerk user ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /me/export:
     get:
       operationId: exportUserData
@@ -6158,6 +6372,12 @@ components:
                       type: number
                     angleDeg:
                       type: number
+                    flipH:
+                      type: boolean
+                      description: Horizontal mirror applied to this tile. Absent = false (backward compat with pre-flip layouts).
+                    flipV:
+                      type: boolean
+                      description: Vertical mirror applied to this tile. Absent = false (backward compat with pre-flip layouts).
               groups:
                 type: array
                 maxItems: 20
@@ -6963,6 +7183,35 @@ components:
           type: string
           description: Failure reason, present for failed objects
 
+    UserAccessRecord:
+      type: object
+      required:
+        - clerkUserId
+        - status
+        - email
+        - displayName
+        - adminNote
+        - createdAt
+        - updatedAt
+      properties:
+        clerkUserId:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, banned]
+        email:
+          type: string
+          nullable: true
+        displayName:
+          type: string
+          nullable: true
+        adminNote:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
     ApiError:
       type: object
       properties:

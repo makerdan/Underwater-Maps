@@ -274,8 +274,15 @@ const terrainBundleJobsTableStub = {
   createdAt: "createdAt",
 };
 
-// Zod insert-schema stubs — only runtime presence is required; tests that
-// actually parse data should use the real schema or a custom mock.
+const userAccessTableStub = {
+  clerkUserId: "clerkUserId",
+  status: "status",
+  email: "email",
+  displayName: "displayName",
+  adminNote: "adminNote",
+  createdAt: "createdAt",
+  updatedAt: "updatedAt",
+};
 const insertSchemaStub = { parse: (v: unknown) => v, safeParse: (v: unknown) => ({ success: true as const, data: v }) };
 
 // MARKER_TYPES constant — abbreviated stub covering the canonical union.
@@ -355,6 +362,8 @@ export function createDbMock(options: DbMockOptions = {}) {
     conversations: conversationsTableStub,
     messages: messagesTableStub,
     terrainBundleJobsTable: terrainBundleJobsTableStub,
+    userAccessTable: userAccessTableStub,
+    userAccessStatusEnum: { enumName: "user_access_status", enumValues: ["pending", "approved", "banned"] },
     MARKER_TYPES: MARKER_TYPES_STUB,
     // Mirrored from lib/db — valid values for dataset_collections.collection_kind.
     COLLECTION_KINDS: ["standard", "special"] as const,

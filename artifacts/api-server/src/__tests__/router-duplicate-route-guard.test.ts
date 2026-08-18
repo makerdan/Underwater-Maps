@@ -87,6 +87,7 @@ import rawsWeatherRouter from "../routes/raws-weather.js";
 import nceiRouter from "../routes/ncei.js";
 import searchFederatedRouter from "../routes/search-federated.js";
 import adminRouter from "../routes/admin.js";
+import adminUsersRouter from "../routes/admin-users.js";
 import githubRouter from "../routes/github.js";
 import collectionsRouter from "../routes/collections.js";
 import terrainBundlesRouter from "../routes/terrain-bundles.js";
@@ -126,6 +127,7 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["ncei", nceiRouter],
   ["search-federated", searchFederatedRouter],
   ["admin", adminRouter],
+  ["admin-users", adminUsersRouter],
   ["github", githubRouter],
   ["terrain-bundles", terrainBundlesRouter],
   ["env-pack", envPackRouter],

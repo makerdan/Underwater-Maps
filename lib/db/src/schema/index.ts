@@ -20,3 +20,4 @@ export * from "./upload-calibration.js";
 export * from "./conversations.js";
 export * from "./messages.js";
 export * from "./terrain-bundle-jobs.js";
+export * from "./user-access.js";

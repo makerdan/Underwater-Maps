@@ -233,6 +233,10 @@ export type UserSettingsPuzzleLayoutsItemTilesItem = {
   tx: number;
   ty: number;
   angleDeg: number;
+  /** Horizontal mirror applied to this tile. Absent = false (backward compat with pre-flip layouts). */
+  flipH?: boolean;
+  /** Vertical mirror applied to this tile. Absent = false (backward compat with pre-flip layouts). */
+  flipV?: boolean;
 };
 
 export type UserSettingsPuzzleLayoutsItem = {
@@ -1361,6 +1365,25 @@ export interface BucketObjectInfo {
   ageMs: number;
   /** Failure reason, present for failed objects */
   error?: string;
+}
+
+export type UserAccessRecordStatus = typeof UserAccessRecordStatus[keyof typeof UserAccessRecordStatus];
+
+
+export const UserAccessRecordStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  banned: 'banned',
+} as const;
+
+export interface UserAccessRecord {
+  clerkUserId: string;
+  status: UserAccessRecordStatus;
+  email: string | null;
+  displayName: string | null;
+  adminNote: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ApiError {
@@ -4646,6 +4669,55 @@ export type AdminLargeDatasetsDiff200 = {
   entries: AdminLargeDatasetsDiff200EntriesItem[];
 };
 
+export type AdminListUsersParams = {
+status?: AdminListUsersStatus;
+/**
+ * @minimum 1
+ * @maximum 200
+ */
+limit?: number;
+/**
+ * Clerk user ID of the last row from the previous page.
+ */
+cursor?: string;
+};
+
+export type AdminListUsersStatus = typeof AdminListUsersStatus[keyof typeof AdminListUsersStatus];
+
+
+export const AdminListUsersStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  banned: 'banned',
+} as const;
+
+export type AdminListUsers200 = {
+  users: UserAccessRecord[];
+  nextCursor: string | null;
+};
+
+export type AdminApproveUser200 = {
+  user: UserAccessRecord;
+};
+
+export type AdminBanUserBody = {
+  /** @maxLength 2000 */
+  note?: string;
+};
+
+export type AdminBanUser200 = {
+  user: UserAccessRecord;
+};
+
+export type AdminRestoreUser200 = {
+  user: UserAccessRecord;
+};
+
+export type AdminDeleteUser200 = {
+  deleted: true;
+  clerkUserId: string;
+};
+
 export type ExportUserData200Settings = { [key: string]: unknown } | null;
 
 export type ExportUserData200MarkersItem = { [key: string]: unknown };
@@ -5066,4 +5138,3 @@ export type GetTerrainBundlesPresetId202 = {
   status?: GetTerrainBundlesPresetId202Status;
   message?: string;
 };
-

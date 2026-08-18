@@ -77,6 +77,16 @@ const SAVE_ROW = {
   catalog: CATALOG_ENTRY,
 };
 
+const USER_ACCESS_RECORD = {
+  clerkUserId: "user_2abc",
+  status: "pending",
+  email: "angler@example.com",
+  displayName: "Test Angler",
+  adminNote: null,
+  createdAt: "2026-08-18T10:00:00.000Z",
+  updatedAt: "2026-08-18T10:00:00.000Z",
+};
+
 const FAILED_SAVE_ROW = {
   ...SAVE_ROW,
   id: "5e0a1b2c-3d4e-4f5a-8b7c-9d0e1f2a3b4d",
@@ -589,6 +599,32 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
         },
       },
     ],
+  },
+  AdminListUsersResponse: {
+    schema: apiZod.AdminListUsersResponse,
+    payloads: [
+      {
+        users: [USER_ACCESS_RECORD, { ...USER_ACCESS_RECORD, clerkUserId: "user_2def", status: "banned", adminNote: "spam" }],
+        nextCursor: "user_2def",
+      },
+      { users: [], nextCursor: null },
+    ],
+  },
+  AdminApproveUserResponse: {
+    schema: apiZod.AdminApproveUserResponse,
+    payloads: [{ user: { ...USER_ACCESS_RECORD, status: "approved" } }],
+  },
+  AdminBanUserResponse: {
+    schema: apiZod.AdminBanUserResponse,
+    payloads: [{ user: { ...USER_ACCESS_RECORD, status: "banned", adminNote: "abuse" } }],
+  },
+  AdminRestoreUserResponse: {
+    schema: apiZod.AdminRestoreUserResponse,
+    payloads: [{ user: { ...USER_ACCESS_RECORD, status: "approved" } }],
+  },
+  AdminDeleteUserResponse: {
+    schema: apiZod.AdminDeleteUserResponse,
+    payloads: [{ deleted: true, clerkUserId: "user_2abc" }],
   },
   AdminLargeDatasetsDiffResponse: {
     schema: apiZod.AdminLargeDatasetsDiffResponse,

@@ -21,8 +21,15 @@ import type {
 
 import type {
   AddDatasetCollectionMemberBody,
+  AdminApproveUser200,
+  AdminBanUser200,
+  AdminBanUserBody,
   AdminBucketMonitor200,
+  AdminDeleteUser200,
   AdminLargeDatasetsDiff200,
+  AdminListUsers200,
+  AdminListUsersParams,
+  AdminRestoreUser200,
   ApiError,
   CatalogSaveBody,
   CatchEntry,
@@ -8856,6 +8863,374 @@ export function useAdminLargeDatasetsDiff<TData = Awaited<ReturnType<typeof admi
 
 
 
+
+export const getAdminListUsersUrl = (params?: AdminListUsersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/users?${stringifiedParams}` : `/api/admin/users`
+}
+
+/**
+ * Admin-only. Returns user_access rows ordered by Clerk user ID with keyset pagination. Optionally filtered by approval status.
+ * @summary List user approval records (paginated)
+ */
+export const adminListUsers = async (params?: AdminListUsersParams, options?: RequestInit): Promise<AdminListUsers200> => {
+
+  return customFetch<AdminListUsers200>(getAdminListUsersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAdminListUsersQueryKey = (params?: AdminListUsersParams,) => {
+    return [
+    `/api/admin/users`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getAdminListUsersQueryOptions = <TData = Awaited<ReturnType<typeof adminListUsers>>, TError = ErrorType<ApiError>>(params?: AdminListUsersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminListUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAdminListUsersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof adminListUsers>>> = ({ signal }) => adminListUsers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof adminListUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AdminListUsersQueryResult = NonNullable<Awaited<ReturnType<typeof adminListUsers>>>
+export type AdminListUsersQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List user approval records (paginated)
+ */
+
+export function useAdminListUsers<TData = Awaited<ReturnType<typeof adminListUsers>>, TError = ErrorType<ApiError>>(
+ params?: AdminListUsersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof adminListUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAdminListUsersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAdminApproveUserUrl = (clerkUserId: string,) => {
+
+
+
+
+  return `/api/admin/users/${clerkUserId}/approve`
+}
+
+/**
+ * @summary Approve a pending or banned user
+ */
+export const adminApproveUser = async (clerkUserId: string, options?: RequestInit): Promise<AdminApproveUser200> => {
+
+  return customFetch<AdminApproveUser200>(getAdminApproveUserUrl(clerkUserId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAdminApproveUserMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminApproveUser>>, TError,{clerkUserId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminApproveUser>>, TError,{clerkUserId: string}, TContext> => {
+
+const mutationKey = ['adminApproveUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminApproveUser>>, {clerkUserId: string}> = (props) => {
+          const {clerkUserId} = props ?? {};
+
+          return  adminApproveUser(clerkUserId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminApproveUserMutationResult = NonNullable<Awaited<ReturnType<typeof adminApproveUser>>>
+
+    export type AdminApproveUserMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Approve a pending or banned user
+ */
+export const useAdminApproveUser = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminApproveUser>>, TError,{clerkUserId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminApproveUser>>,
+        TError,
+        {clerkUserId: string},
+        TContext
+      > => {
+      return useMutation(getAdminApproveUserMutationOptions(options));
+    }
+
+export const getAdminBanUserUrl = (clerkUserId: string,) => {
+
+
+
+
+  return `/api/admin/users/${clerkUserId}/ban`
+}
+
+/**
+ * @summary Ban a user (with optional admin note)
+ */
+export const adminBanUser = async (clerkUserId: string,
+    adminBanUserBody?: AdminBanUserBody, options?: RequestInit): Promise<AdminBanUser200> => {
+
+  return customFetch<AdminBanUser200>(getAdminBanUserUrl(clerkUserId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      adminBanUserBody,)
+  }
+);}
+
+
+
+
+export const getAdminBanUserMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminBanUser>>, TError,{clerkUserId: string;data?: BodyType<AdminBanUserBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminBanUser>>, TError,{clerkUserId: string;data?: BodyType<AdminBanUserBody>}, TContext> => {
+
+const mutationKey = ['adminBanUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminBanUser>>, {clerkUserId: string;data?: BodyType<AdminBanUserBody>}> = (props) => {
+          const {clerkUserId,data} = props ?? {};
+
+          return  adminBanUser(clerkUserId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminBanUserMutationResult = NonNullable<Awaited<ReturnType<typeof adminBanUser>>>
+    export type AdminBanUserMutationBody = BodyType<AdminBanUserBody> | undefined
+    export type AdminBanUserMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Ban a user (with optional admin note)
+ */
+export const useAdminBanUser = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminBanUser>>, TError,{clerkUserId: string;data?: BodyType<AdminBanUserBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminBanUser>>,
+        TError,
+        {clerkUserId: string;data?: BodyType<AdminBanUserBody>},
+        TContext
+      > => {
+      return useMutation(getAdminBanUserMutationOptions(options));
+    }
+
+export const getAdminRestoreUserUrl = (clerkUserId: string,) => {
+
+
+
+
+  return `/api/admin/users/${clerkUserId}/restore`
+}
+
+/**
+ * @summary Restore a banned user back to approved
+ */
+export const adminRestoreUser = async (clerkUserId: string, options?: RequestInit): Promise<AdminRestoreUser200> => {
+
+  return customFetch<AdminRestoreUser200>(getAdminRestoreUserUrl(clerkUserId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAdminRestoreUserMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminRestoreUser>>, TError,{clerkUserId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminRestoreUser>>, TError,{clerkUserId: string}, TContext> => {
+
+const mutationKey = ['adminRestoreUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminRestoreUser>>, {clerkUserId: string}> = (props) => {
+          const {clerkUserId} = props ?? {};
+
+          return  adminRestoreUser(clerkUserId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminRestoreUserMutationResult = NonNullable<Awaited<ReturnType<typeof adminRestoreUser>>>
+
+    export type AdminRestoreUserMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Restore a banned user back to approved
+ */
+export const useAdminRestoreUser = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminRestoreUser>>, TError,{clerkUserId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminRestoreUser>>,
+        TError,
+        {clerkUserId: string},
+        TContext
+      > => {
+      return useMutation(getAdminRestoreUserMutationOptions(options));
+    }
+
+export const getAdminDeleteUserUrl = (clerkUserId: string,) => {
+
+
+
+
+  return `/api/admin/users/${clerkUserId}`
+}
+
+/**
+ * Admin-only. Removes the user_access row entirely; the user returns to pending on their next login.
+ * @summary Hard-delete a user approval record
+ */
+export const adminDeleteUser = async (clerkUserId: string, options?: RequestInit): Promise<AdminDeleteUser200> => {
+
+  return customFetch<AdminDeleteUser200>(getAdminDeleteUserUrl(clerkUserId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getAdminDeleteUserMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminDeleteUser>>, TError,{clerkUserId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminDeleteUser>>, TError,{clerkUserId: string}, TContext> => {
+
+const mutationKey = ['adminDeleteUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminDeleteUser>>, {clerkUserId: string}> = (props) => {
+          const {clerkUserId} = props ?? {};
+
+          return  adminDeleteUser(clerkUserId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminDeleteUserMutationResult = NonNullable<Awaited<ReturnType<typeof adminDeleteUser>>>
+
+    export type AdminDeleteUserMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Hard-delete a user approval record
+ */
+export const useAdminDeleteUser = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminDeleteUser>>, TError,{clerkUserId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminDeleteUser>>,
+        TError,
+        {clerkUserId: string},
+        TContext
+      > => {
+      return useMutation(getAdminDeleteUserMutationOptions(options));
+    }
 
 export const getExportUserDataUrl = () => {
 
