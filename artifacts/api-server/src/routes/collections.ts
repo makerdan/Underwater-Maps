@@ -10,9 +10,14 @@
  * datasets. Deleting a dataset or catalog save cascades its membership rows
  * away at the DB level (see lib/db/src/schema/dataset-collections.ts).
  */
-import { Router } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { eq, and, inArray } from "drizzle-orm";
 import { z } from "zod";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import os from "os";
+import { randomUUID } from "crypto";
 import {
   db,
   datasetCollectionsTable,
@@ -20,6 +25,9 @@ import {
   customDatasetsTable,
   userCatalogSavesTable,
   datasetCatalogTable,
+  emptySpecialCollectionMeta,
+  type SpecialCollectionMeta,
+  type LayoutRevision,
 } from "@workspace/db";
 import {
   GetUserCollectionsResponse,
@@ -27,6 +35,8 @@ import {
   PatchUserCollectionsIdRenameBody,
   PatchUserCollectionsIdRenameResponse,
   PostUserCollectionsIdMembersBody,
+  PatchUserCollectionsIdMetaBody,
+  PostUserCollectionsIdLayoutBody,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -35,6 +45,78 @@ import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const CollectionIdParamSchema = z.string().uuid("Collection id must be a valid UUID");
 const MemberIdParamSchema = z.string().uuid("Member id must be a valid UUID");
+
+/** Max saved layout revisions per special collection — oldest dropped beyond this. */
+export const MAX_LAYOUT_REVISIONS = 20;
+
+// ── Background image storage ────────────────────────────────────────────────
+// Reference images live on local disk under a flat `collection-bg` directory;
+// the storage key recorded in specialMeta is `collection-bg/<collectionId>.<ext>`.
+// COLLECTION_BG_DIR overrides the location (used by tests). Resolved lazily so
+// the env var can be set before the first upload rather than at import time.
+function collectionBgDir(): string {
+  return (
+    process.env["COLLECTION_BG_DIR"] ??
+    path.join(os.tmpdir(), "bathyscan-collection-bg")
+  );
+}
+
+const BG_MAX_BYTES = 10 * 1024 * 1024;
+const BG_MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+};
+const BG_EXT_TO_MIME: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+};
+
+const bgUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: BG_MAX_BYTES },
+  fileFilter(_req, file, cb) {
+    if (BG_MIME_TO_EXT[file.mimetype] !== undefined) {
+      cb(null, true);
+    } else {
+      cb(
+        Object.assign(new Error("Unsupported image type. Accepted: JPEG, PNG, WebP"), {
+          code: "UNSUPPORTED_IMAGE_TYPE",
+        }) as unknown as null,
+        false,
+      );
+    }
+  },
+});
+
+/**
+ * Translates background-upload multer errors into structured responses:
+ * oversize file → 413, unsupported MIME type → 415.
+ */
+function bgUploadErrorHandler(
+  err: unknown,
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({
+        error: "file_too_large",
+        details: `Background image exceeds the ${Math.floor(BG_MAX_BYTES / (1024 * 1024))} MB limit.`,
+      });
+      return;
+    }
+    res.status(400).json({ error: "upload_error", details: err.message });
+    return;
+  }
+  if (err instanceof Error && (err as { code?: string }).code === "UNSUPPORTED_IMAGE_TYPE") {
+    res.status(415).json({ error: "unsupported_media_type", details: err.message });
+    return;
+  }
+  next(err as Error);
+}
 
 const router = Router();
 
@@ -140,17 +222,58 @@ async function loadMembersByCollection(
   return out;
 }
 
+/**
+ * Meta payload for a special collection — falls back to a fresh empty meta
+ * object when the JSONB column is somehow NULL (defensive; special rows are
+ * always created with meta).
+ */
+function metaOf(row: typeof datasetCollectionsTable.$inferSelect): SpecialCollectionMeta {
+  return row.specialMeta ?? emptySpecialCollectionMeta();
+}
+
 function collectionToJson(
   row: typeof datasetCollectionsTable.$inferSelect,
   members: MemberJson[],
 ) {
+  const kind = row.collectionKind === "special" ? "special" : "standard";
   return {
     id: row.id,
     name: row.name,
+    collectionKind: kind,
+    ...(kind === "special" ? { specialMeta: metaOf(row) } : {}),
     members,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/**
+ * Load a single collection owned by the user, or null. Shared by the
+ * special-collection meta/layout/background handlers.
+ */
+async function loadOwnedCollection(
+  userId: string,
+  id: string,
+): Promise<typeof datasetCollectionsTable.$inferSelect | null> {
+  const [row] = await db
+    .select()
+    .from(datasetCollectionsTable)
+    .where(and(eq(datasetCollectionsTable.id, id), eq(datasetCollectionsTable.userId, userId)));
+  return row ?? null;
+}
+
+/** Persist a new specialMeta value and bump updatedAt. Returns the updated row. */
+async function saveMeta(
+  userId: string,
+  id: string,
+  meta: SpecialCollectionMeta,
+): Promise<typeof datasetCollectionsTable.$inferSelect | null> {
+  const [updated] = await db
+    .update(datasetCollectionsTable)
+    .set({ specialMeta: meta, updatedAt: new Date() })
+    .where(and(eq(datasetCollectionsTable.id, id), eq(datasetCollectionsTable.userId, userId)))
+    .returning();
+  return updated ?? null;
 }
 
 async function listUserCollections(userId: string) {
@@ -176,7 +299,10 @@ router.get("/user/collections", requireAuth, asyncHandler(async (req, res): Prom
 // ── POST /user/collections ─────────────────────────────────────────────────
 router.post("/user/collections", requireAuth, dataMutationRateLimit, validateBody(PostUserCollectionsBody, "POST /api/user/collections"), asyncHandler(async (req, res): Promise<void> => {
   const userId = (req as AuthenticatedRequest).clerkUserId;
-  const { name: rawName } = res.locals.parsedBody;
+  const { name: rawName, collectionKind } = res.locals.parsedBody as {
+    name: string;
+    collectionKind?: "standard" | "special";
+  };
   const name = trimName(rawName);
   if (!name) {
     res.status(400).json({ error: "invalid_name", details: "Collection name is required" });
@@ -189,9 +315,15 @@ router.post("/user/collections", requireAuth, dataMutationRateLimit, validateBod
     return;
   }
 
+  const kind = collectionKind ?? "standard";
   const [created] = await db
     .insert(datasetCollectionsTable)
-    .values({ userId, name })
+    .values({
+      userId,
+      name,
+      collectionKind: kind,
+      specialMeta: kind === "special" ? emptySpecialCollectionMeta() : null,
+    })
     .returning();
   if (!created) {
     res.status(500).json({ error: "db_error", details: "Could not create collection" });
@@ -405,6 +537,279 @@ router.delete("/user/collections/:id/members/:memberId", requireAuth, dataMutati
   if (deleted.length === 0) {
     res.status(404).json({ error: "not_found", details: "Member not found" });
     return;
+  }
+  res.status(204).send();
+}));
+
+// ── PATCH /user/collections/:id/meta ───────────────────────────────────────
+router.patch("/user/collections/:id/meta", requireAuth, dataMutationRateLimit, validateBody(PatchUserCollectionsIdMetaBody, "PATCH /api/user/collections/:id/meta"), asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const idParsed = CollectionIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid collection id" });
+    return;
+  }
+  const id = idParsed.data;
+  const body = res.locals.parsedBody as {
+    bgOpacity?: number;
+    bgGeoAnchors?: SpecialCollectionMeta["bgGeoAnchors"];
+    activeRevisionId?: string | null;
+  };
+
+  if (
+    body.bgOpacity === undefined &&
+    body.bgGeoAnchors === undefined &&
+    body.activeRevisionId === undefined
+  ) {
+    res.status(400).json({ error: "empty_patch", details: "Provide at least one of bgOpacity, bgGeoAnchors, activeRevisionId" });
+    return;
+  }
+
+  const collection = await loadOwnedCollection(userId, id);
+  if (!collection) {
+    res.status(404).json({ error: "not_found", details: "Collection not found" });
+    return;
+  }
+  if (collection.collectionKind !== "special") {
+    res.status(400).json({ error: "not_special", details: "Only special collections carry puzzle metadata" });
+    return;
+  }
+
+  const meta = metaOf(collection);
+  if (body.activeRevisionId !== undefined && body.activeRevisionId !== null) {
+    const exists = meta.layoutRevisions.some((r) => r.id === body.activeRevisionId);
+    if (!exists) {
+      res.status(400).json({ error: "unknown_revision", details: "activeRevisionId does not reference a saved layout revision" });
+      return;
+    }
+  }
+
+  const next: SpecialCollectionMeta = {
+    ...meta,
+    ...(body.bgOpacity !== undefined ? { bgOpacity: body.bgOpacity } : {}),
+    ...(body.bgGeoAnchors !== undefined ? { bgGeoAnchors: body.bgGeoAnchors } : {}),
+    ...(body.activeRevisionId !== undefined ? { activeRevisionId: body.activeRevisionId } : {}),
+  };
+  const updated = await saveMeta(userId, id, next);
+  if (!updated) {
+    res.status(404).json({ error: "not_found", details: "Collection not found" });
+    return;
+  }
+  const membersByCollection = await loadMembersByCollection([id]);
+  res.json(collectionToJson(updated, membersByCollection.get(id) ?? []));
+}));
+
+// ── POST /user/collections/:id/layout ──────────────────────────────────────
+router.post("/user/collections/:id/layout", requireAuth, dataMutationRateLimit, validateBody(PostUserCollectionsIdLayoutBody, "POST /api/user/collections/:id/layout"), asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const idParsed = CollectionIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid collection id" });
+    return;
+  }
+  const id = idParsed.data;
+  const body = res.locals.parsedBody as {
+    name: string;
+    tiles: LayoutRevision["tiles"];
+    groups: LayoutRevision["groups"];
+  };
+  const name = trimName(body.name);
+  if (!name) {
+    res.status(400).json({ error: "invalid_name", details: "Layout revision name is required" });
+    return;
+  }
+
+  const collection = await loadOwnedCollection(userId, id);
+  if (!collection) {
+    res.status(404).json({ error: "not_found", details: "Collection not found" });
+    return;
+  }
+  if (collection.collectionKind !== "special") {
+    res.status(400).json({ error: "not_special", details: "Only special collections carry puzzle layouts" });
+    return;
+  }
+
+  const meta = metaOf(collection);
+  const savedAt = new Date().toISOString();
+  const existingIdx = meta.layoutRevisions.findIndex(
+    (r) => r.name.toLowerCase() === name.toLowerCase(),
+  );
+
+  let revision: LayoutRevision;
+  let revisions: LayoutRevision[];
+  if (existingIdx >= 0) {
+    // Replace in place — the revision id stays stable so external references
+    // (e.g. activeRevisionId on another device) keep working.
+    revision = { ...meta.layoutRevisions[existingIdx]!, savedAt, tiles: body.tiles, groups: body.groups };
+    revisions = meta.layoutRevisions.map((r, i) => (i === existingIdx ? revision : r));
+  } else {
+    revision = { id: randomUUID(), name, savedAt, tiles: body.tiles, groups: body.groups };
+    revisions = [...meta.layoutRevisions, revision];
+    // Cap: drop oldest first (revisions are stored in append order).
+    while (revisions.length > MAX_LAYOUT_REVISIONS) revisions.shift();
+  }
+
+  const updated = await saveMeta(userId, id, {
+    ...meta,
+    layoutRevisions: revisions,
+    activeRevisionId: revision.id,
+  });
+  if (!updated) {
+    res.status(404).json({ error: "not_found", details: "Collection not found" });
+    return;
+  }
+  res.status(201).json(revision);
+}));
+
+// ── DELETE /user/collections/:id/layout/:revisionId ────────────────────────
+router.delete("/user/collections/:id/layout/:revisionId", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const idParsed = CollectionIdParamSchema.safeParse(req.params["id"]);
+  const revParsed = z.string().uuid().safeParse(req.params["revisionId"]);
+  if (!idParsed.success || !revParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: "Invalid collection or revision id" });
+    return;
+  }
+  const id = idParsed.data;
+  const revisionId = revParsed.data;
+
+  const collection = await loadOwnedCollection(userId, id);
+  if (!collection) {
+    res.status(404).json({ error: "not_found", details: "Collection not found" });
+    return;
+  }
+  if (collection.collectionKind !== "special") {
+    res.status(400).json({ error: "not_special", details: "Only special collections carry puzzle layouts" });
+    return;
+  }
+
+  const meta = metaOf(collection);
+  const remaining = meta.layoutRevisions.filter((r) => r.id !== revisionId);
+  if (remaining.length === meta.layoutRevisions.length) {
+    res.status(404).json({ error: "not_found", details: "Layout revision not found" });
+    return;
+  }
+
+  // If the active revision was deleted, fall back to the most recently saved
+  // remaining revision (or null when none remain).
+  let activeRevisionId = meta.activeRevisionId;
+  if (activeRevisionId === revisionId) {
+    activeRevisionId = remaining.length > 0 ? remaining[remaining.length - 1]!.id : null;
+  }
+
+  await saveMeta(userId, id, { ...meta, layoutRevisions: remaining, activeRevisionId });
+  res.status(204).send();
+}));
+
+// ── POST /user/collections/:id/background ──────────────────────────────────
+router.post("/user/collections/:id/background", requireAuth, dataMutationRateLimit, bgUpload.single("file"), bgUploadErrorHandler, asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const idParsed = CollectionIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid collection id" });
+    return;
+  }
+  const id = idParsed.data;
+  const file = (req as Request & { file?: Express.Multer.File }).file;
+  if (!file) {
+    res.status(400).json({ error: "missing_file", details: "Attach the image as multipart field 'file'" });
+    return;
+  }
+
+  const collection = await loadOwnedCollection(userId, id);
+  if (!collection) {
+    res.status(404).json({ error: "not_found", details: "Collection not found" });
+    return;
+  }
+  if (collection.collectionKind !== "special") {
+    res.status(400).json({ error: "not_special", details: "Only special collections carry a background image" });
+    return;
+  }
+
+  const ext = BG_MIME_TO_EXT[file.mimetype];
+  if (!ext) {
+    // fileFilter already rejects these; defensive double-check.
+    res.status(415).json({ error: "unsupported_media_type", details: "Unsupported image type. Accepted: JPEG, PNG, WebP" });
+    return;
+  }
+
+  const dir = collectionBgDir();
+  await fs.promises.mkdir(dir, { recursive: true });
+
+  const meta = metaOf(collection);
+  // A re-upload may change the extension — remove the old file first.
+  if (meta.bgImageKey !== null) {
+    const oldPath = path.join(dir, path.basename(meta.bgImageKey));
+    await fs.promises.unlink(oldPath).catch(() => undefined);
+  }
+
+  const fileName = `${id}${ext}`;
+  await fs.promises.writeFile(path.join(dir, fileName), file.buffer);
+  await saveMeta(userId, id, { ...meta, bgImageKey: `collection-bg/${fileName}` });
+
+  res.json({ url: `/api/user/collections/${id}/background` });
+}));
+
+// ── GET /user/collections/:id/background ───────────────────────────────────
+router.get("/user/collections/:id/background", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const idParsed = CollectionIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid collection id" });
+    return;
+  }
+  const id = idParsed.data;
+
+  const collection = await loadOwnedCollection(userId, id);
+  if (!collection) {
+    res.status(404).json({ error: "not_found", details: "Collection not found" });
+    return;
+  }
+  const meta = collection.specialMeta;
+  if (collection.collectionKind !== "special" || !meta || meta.bgImageKey === null) {
+    res.status(404).json({ error: "not_found", details: "No background image for this collection" });
+    return;
+  }
+
+  const fileName = path.basename(meta.bgImageKey);
+  const filePath = path.join(collectionBgDir(), fileName);
+  let data: Buffer;
+  try {
+    data = await fs.promises.readFile(filePath);
+  } catch {
+    res.status(404).json({ error: "not_found", details: "Background image file is missing" });
+    return;
+  }
+  const mime = BG_EXT_TO_MIME[path.extname(fileName).toLowerCase()] ?? "application/octet-stream";
+  res.setHeader("Content-Type", mime);
+  res.send(data);
+}));
+
+// ── DELETE /user/collections/:id/background ────────────────────────────────
+router.delete("/user/collections/:id/background", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res): Promise<void> => {
+  const userId = (req as AuthenticatedRequest).clerkUserId;
+  const idParsed = CollectionIdParamSchema.safeParse(req.params["id"]);
+  if (!idParsed.success) {
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid collection id" });
+    return;
+  }
+  const id = idParsed.data;
+
+  const collection = await loadOwnedCollection(userId, id);
+  if (!collection) {
+    res.status(404).json({ error: "not_found", details: "Collection not found" });
+    return;
+  }
+  if (collection.collectionKind !== "special") {
+    res.status(400).json({ error: "not_special", details: "Only special collections carry a background image" });
+    return;
+  }
+
+  const meta = metaOf(collection);
+  if (meta.bgImageKey !== null) {
+    const filePath = path.join(collectionBgDir(), path.basename(meta.bgImageKey));
+    await fs.promises.unlink(filePath).catch(() => undefined);
+    await saveMeta(userId, id, { ...meta, bgImageKey: null });
   }
   res.status(204).send();
 }));

@@ -16,3 +16,5 @@ Adding a new route module (`artifacts/api-server/src/routes/<name>.ts` mounted i
 **How to apply:** Run the grep sweep and update the guard list in the same commit that mounts any new router.
 
 - Adding a new drizzle-orm operator import (e.g. `inArray`) to an existing route file breaks every test that wholesale-mocks `drizzle-orm` for that route: the mock factory lacks the new export and the route 500s at runtime with "No "inArray" export is defined on the mock". Grep for `vi.mock("drizzle-orm"` in tests covering the touched route and add the operator to each factory.
+
+Also applies to NEW SCHEMA EXPORTS on an existing router: any api-zod schema referenced at module init (e.g. in a validateBody() call in a route file) must be added to every explicit-list `vi.mock("@workspace/api-zod")` (markers*.test.ts trio), and any new lib/db export needs a stub in `createDbMock()` (mock-factory-guards.test.ts fails first with the exact missing name).

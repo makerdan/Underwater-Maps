@@ -114,6 +114,7 @@ import type {
   HealthStatus,
   Hyd93AnnotationPoint,
   IntertidalSpotFeatureCollection,
+  LayoutRevision,
   ListGithubRepos200Item,
   ListGithubWorkflowRuns200,
   ListGithubWorkflowRunsParams,
@@ -124,6 +125,7 @@ import type {
   MoveDatasetFolderBody,
   NceiPortalResult,
   NceiPortalSaveBody,
+  PatchCollectionMetaBody,
   PatchDatasetsMySavesIdMoveBody,
   PatchDatasetsMySavesIdRenameBody,
   PatchRouteBody,
@@ -148,6 +150,8 @@ import type {
   PostTerrainBundles200,
   PostTerrainBundles202,
   PostTerrainBundlesBody,
+  PostUserCollectionsIdBackground200,
+  PostUserCollectionsIdBackgroundBody,
   PutGithubFileContents200,
   PutGithubFileContentsBody,
   QueryResult,
@@ -160,6 +164,7 @@ import type {
   RenameTrollingPresetFolderBody,
   RequestGcsUploadUrl200,
   RequestGcsUploadUrlBody,
+  SaveLayoutBody,
   SavedRoute,
   SubstrateFeatureCollection,
   SurfaceConditions,
@@ -2410,6 +2415,443 @@ export const useDeleteUserCollectionsIdMembersMemberId = <TError = ErrorType<Api
         TContext
       > => {
       return useMutation(getDeleteUserCollectionsIdMembersMemberIdMutationOptions(options));
+    }
+
+export const getPatchUserCollectionsIdMetaUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/collections/${id}/meta`
+}
+
+/**
+ * @summary Update special-collection metadata (background opacity, geo anchors, active revision)
+ */
+export const patchUserCollectionsIdMeta = async (id: string,
+    patchCollectionMetaBody: PatchCollectionMetaBody, options?: RequestInit): Promise<DatasetCollection> => {
+
+  return customFetch<DatasetCollection>(getPatchUserCollectionsIdMetaUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      patchCollectionMetaBody,)
+  }
+);}
+
+
+
+
+export const getPatchUserCollectionsIdMetaMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserCollectionsIdMeta>>, TError,{id: string;data: BodyType<PatchCollectionMetaBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchUserCollectionsIdMeta>>, TError,{id: string;data: BodyType<PatchCollectionMetaBody>}, TContext> => {
+
+const mutationKey = ['patchUserCollectionsIdMeta'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchUserCollectionsIdMeta>>, {id: string;data: BodyType<PatchCollectionMetaBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchUserCollectionsIdMeta(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchUserCollectionsIdMetaMutationResult = NonNullable<Awaited<ReturnType<typeof patchUserCollectionsIdMeta>>>
+    export type PatchUserCollectionsIdMetaMutationBody = BodyType<PatchCollectionMetaBody>
+    export type PatchUserCollectionsIdMetaMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Update special-collection metadata (background opacity, geo anchors, active revision)
+ */
+export const usePatchUserCollectionsIdMeta = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchUserCollectionsIdMeta>>, TError,{id: string;data: BodyType<PatchCollectionMetaBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchUserCollectionsIdMeta>>,
+        TError,
+        {id: string;data: BodyType<PatchCollectionMetaBody>},
+        TContext
+      > => {
+      return useMutation(getPatchUserCollectionsIdMetaMutationOptions(options));
+    }
+
+export const getPostUserCollectionsIdLayoutUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/collections/${id}/layout`
+}
+
+/**
+ * @summary Save a named puzzle layout revision (max 20 kept; becomes the active revision)
+ */
+export const postUserCollectionsIdLayout = async (id: string,
+    saveLayoutBody: SaveLayoutBody, options?: RequestInit): Promise<LayoutRevision> => {
+
+  return customFetch<LayoutRevision>(getPostUserCollectionsIdLayoutUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      saveLayoutBody,)
+  }
+);}
+
+
+
+
+export const getPostUserCollectionsIdLayoutMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserCollectionsIdLayout>>, TError,{id: string;data: BodyType<SaveLayoutBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postUserCollectionsIdLayout>>, TError,{id: string;data: BodyType<SaveLayoutBody>}, TContext> => {
+
+const mutationKey = ['postUserCollectionsIdLayout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postUserCollectionsIdLayout>>, {id: string;data: BodyType<SaveLayoutBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  postUserCollectionsIdLayout(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostUserCollectionsIdLayoutMutationResult = NonNullable<Awaited<ReturnType<typeof postUserCollectionsIdLayout>>>
+    export type PostUserCollectionsIdLayoutMutationBody = BodyType<SaveLayoutBody>
+    export type PostUserCollectionsIdLayoutMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Save a named puzzle layout revision (max 20 kept; becomes the active revision)
+ */
+export const usePostUserCollectionsIdLayout = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserCollectionsIdLayout>>, TError,{id: string;data: BodyType<SaveLayoutBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postUserCollectionsIdLayout>>,
+        TError,
+        {id: string;data: BodyType<SaveLayoutBody>},
+        TContext
+      > => {
+      return useMutation(getPostUserCollectionsIdLayoutMutationOptions(options));
+    }
+
+export const getDeleteUserCollectionsIdLayoutRevisionIdUrl = (id: string,
+    revisionId: string,) => {
+
+
+
+
+  return `/api/user/collections/${id}/layout/${revisionId}`
+}
+
+/**
+ * @summary Delete one saved layout revision from a special collection
+ */
+export const deleteUserCollectionsIdLayoutRevisionId = async (id: string,
+    revisionId: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteUserCollectionsIdLayoutRevisionIdUrl(id,revisionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteUserCollectionsIdLayoutRevisionIdMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsIdLayoutRevisionId>>, TError,{id: string;revisionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsIdLayoutRevisionId>>, TError,{id: string;revisionId: string}, TContext> => {
+
+const mutationKey = ['deleteUserCollectionsIdLayoutRevisionId'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUserCollectionsIdLayoutRevisionId>>, {id: string;revisionId: string}> = (props) => {
+          const {id,revisionId} = props ?? {};
+
+          return  deleteUserCollectionsIdLayoutRevisionId(id,revisionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUserCollectionsIdLayoutRevisionIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUserCollectionsIdLayoutRevisionId>>>
+
+    export type DeleteUserCollectionsIdLayoutRevisionIdMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete one saved layout revision from a special collection
+ */
+export const useDeleteUserCollectionsIdLayoutRevisionId = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsIdLayoutRevisionId>>, TError,{id: string;revisionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUserCollectionsIdLayoutRevisionId>>,
+        TError,
+        {id: string;revisionId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteUserCollectionsIdLayoutRevisionIdMutationOptions(options));
+    }
+
+export const getPostUserCollectionsIdBackgroundUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/collections/${id}/background`
+}
+
+/**
+ * @summary Upload a reference background image for a special collection (JPEG/PNG/WebP, max 10 MB)
+ */
+export const postUserCollectionsIdBackground = async (id: string,
+    postUserCollectionsIdBackgroundBody: PostUserCollectionsIdBackgroundBody, options?: RequestInit): Promise<PostUserCollectionsIdBackground200> => {
+    const formData = new FormData();
+formData.append(`file`, postUserCollectionsIdBackgroundBody.file);
+
+  return customFetch<PostUserCollectionsIdBackground200>(getPostUserCollectionsIdBackgroundUrl(id),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getPostUserCollectionsIdBackgroundMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserCollectionsIdBackground>>, TError,{id: string;data: BodyType<PostUserCollectionsIdBackgroundBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postUserCollectionsIdBackground>>, TError,{id: string;data: BodyType<PostUserCollectionsIdBackgroundBody>}, TContext> => {
+
+const mutationKey = ['postUserCollectionsIdBackground'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postUserCollectionsIdBackground>>, {id: string;data: BodyType<PostUserCollectionsIdBackgroundBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  postUserCollectionsIdBackground(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostUserCollectionsIdBackgroundMutationResult = NonNullable<Awaited<ReturnType<typeof postUserCollectionsIdBackground>>>
+    export type PostUserCollectionsIdBackgroundMutationBody = BodyType<PostUserCollectionsIdBackgroundBody>
+    export type PostUserCollectionsIdBackgroundMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Upload a reference background image for a special collection (JPEG/PNG/WebP, max 10 MB)
+ */
+export const usePostUserCollectionsIdBackground = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postUserCollectionsIdBackground>>, TError,{id: string;data: BodyType<PostUserCollectionsIdBackgroundBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postUserCollectionsIdBackground>>,
+        TError,
+        {id: string;data: BodyType<PostUserCollectionsIdBackgroundBody>},
+        TContext
+      > => {
+      return useMutation(getPostUserCollectionsIdBackgroundMutationOptions(options));
+    }
+
+export const getGetUserCollectionsIdBackgroundUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/collections/${id}/background`
+}
+
+/**
+ * @summary Serve the stored background image for a special collection
+ */
+export const getUserCollectionsIdBackground = async (id: string, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetUserCollectionsIdBackgroundUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserCollectionsIdBackgroundQueryKey = (id: string,) => {
+    return [
+    `/api/user/collections/${id}/background`
+    ] as const;
+    }
+
+
+export const getGetUserCollectionsIdBackgroundQueryOptions = <TData = Awaited<ReturnType<typeof getUserCollectionsIdBackground>>, TError = ErrorType<ApiError>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserCollectionsIdBackground>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserCollectionsIdBackgroundQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserCollectionsIdBackground>>> = ({ signal }) => getUserCollectionsIdBackground(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserCollectionsIdBackground>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserCollectionsIdBackgroundQueryResult = NonNullable<Awaited<ReturnType<typeof getUserCollectionsIdBackground>>>
+export type GetUserCollectionsIdBackgroundQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Serve the stored background image for a special collection
+ */
+
+export function useGetUserCollectionsIdBackground<TData = Awaited<ReturnType<typeof getUserCollectionsIdBackground>>, TError = ErrorType<ApiError>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserCollectionsIdBackground>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserCollectionsIdBackgroundQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getDeleteUserCollectionsIdBackgroundUrl = (id: string,) => {
+
+
+
+
+  return `/api/user/collections/${id}/background`
+}
+
+/**
+ * @summary Delete the stored background image and clear its storage key
+ */
+export const deleteUserCollectionsIdBackground = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteUserCollectionsIdBackgroundUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteUserCollectionsIdBackgroundMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsIdBackground>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsIdBackground>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteUserCollectionsIdBackground'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUserCollectionsIdBackground>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteUserCollectionsIdBackground(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUserCollectionsIdBackgroundMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUserCollectionsIdBackground>>>
+
+    export type DeleteUserCollectionsIdBackgroundMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Delete the stored background image and clear its storage key
+ */
+export const useDeleteUserCollectionsIdBackground = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUserCollectionsIdBackground>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUserCollectionsIdBackground>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteUserCollectionsIdBackgroundMutationOptions(options));
     }
 
 export const getGetMarkersUrl = (params?: GetMarkersParams,) => {

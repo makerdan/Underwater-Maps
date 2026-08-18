@@ -343,6 +343,12 @@ All routes are served under the `/api` prefix by the Express 5 server.
 | DELETE | `/user/collections/:id` | Delete a dataset collection (members are removed; datasets are never deleted) |
 | POST | `/user/collections/:id/members` | Add a dataset or catalog save to a collection (idempotent for existing members) |
 | DELETE | `/user/collections/:id/members/:memberId` | Remove a member from a collection (never deletes the dataset itself) |
+| PATCH | `/user/collections/:id/meta` | Update special-collection metadata (background opacity, geo anchors, active revision) |
+| POST | `/user/collections/:id/layout` | Save a named puzzle layout revision (max 20 kept; becomes the active revision) |
+| DELETE | `/user/collections/:id/layout/:revisionId` | Delete one saved layout revision from a special collection |
+| POST | `/user/collections/:id/background` | Upload a reference background image for a special collection (JPEG/PNG/WebP, max 10 MB) |
+| GET | `/user/collections/:id/background` | Serve the stored background image for a special collection |
+| DELETE | `/user/collections/:id/background` | Delete the stored background image and clear its storage key |
 
 ### Markers
 

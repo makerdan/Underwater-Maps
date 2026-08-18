@@ -22,6 +22,14 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+import fs from "fs";
+import path from "path";
+import os from "os";
+
+// Background images land in a per-run temp dir (the route resolves
+// COLLECTION_BG_DIR lazily on each request, so setting it here is enough).
+const bgDir = fs.mkdtempSync(path.join(os.tmpdir(), "collections-bg-test-"));
+process.env["COLLECTION_BG_DIR"] = bgDir;
 
 type Row = Record<string, unknown>;
 
@@ -69,7 +77,7 @@ vi.mock("@workspace/db", async () => {
   };
 
   const datasetCollectionsTable = mkTable("dataset_collections", [
-    "id", "userId", "name", "createdAt", "updatedAt",
+    "id", "userId", "name", "collectionKind", "specialMeta", "createdAt", "updatedAt",
   ]);
   const datasetCollectionMembersTable = mkTable("dataset_collection_members", [
     "id", "collectionId", "datasetId", "catalogSaveId", "createdAt",
@@ -260,7 +268,47 @@ import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 
 function seedCollection(userId: string, name: string): string {
   const id = uid();
-  state.collections.push({ id, userId, name, createdAt: new Date(), updatedAt: new Date() });
+  state.collections.push({
+    id,
+    userId,
+    name,
+    collectionKind: "standard",
+    specialMeta: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return id;
+}
+
+type MetaShape = {
+  bgImageKey: string | null;
+  bgOpacity: number;
+  bgGeoAnchors: Array<{ lon: number; lat: number; imgX: number; imgY: number }> | null;
+  layoutRevisions: Array<{
+    id: string;
+    name: string;
+    savedAt: string;
+    tiles: Array<{ datasetId: string; tx: number; ty: number; angleDeg: number; locked: boolean; annotation?: string | null }>;
+    groups: Array<{ id: string; name: string; datasetIds: string[] }>;
+  }>;
+  activeRevisionId: string | null;
+};
+
+function emptyMeta(): MetaShape {
+  return { bgImageKey: null, bgOpacity: 0.5, bgGeoAnchors: null, layoutRevisions: [], activeRevisionId: null };
+}
+
+function seedSpecialCollection(userId: string, name: string, meta?: Partial<MetaShape>): string {
+  const id = uid();
+  state.collections.push({
+    id,
+    userId,
+    name,
+    collectionKind: "special",
+    specialMeta: { ...emptyMeta(), ...meta },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
   return id;
 }
 
@@ -558,5 +606,342 @@ describe("DELETE /api/user/collections/:id/members/:memberId", () => {
     const res = await request(app).delete(`/api/user/collections/${cid}/members/${memberId}`);
     expect(res.status).toBe(404);
     expect(state.members).toHaveLength(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Special collections — kind, meta, layout revisions, background image
+// ─────────────────────────────────────────────────────────────────────────────
+
+function seedRevision(n: number): MetaShape["layoutRevisions"][number] {
+  return {
+    id: uid(),
+    name: `Rev ${n}`,
+    savedAt: new Date(2026, 0, n + 1).toISOString(),
+    tiles: [{ datasetId: `ds-${n}`, tx: n, ty: n, angleDeg: 0, locked: false }],
+    groups: [],
+  };
+}
+
+describe("collection kind (create / read round-trip)", () => {
+  it("creates a special collection with empty meta and round-trips it through GET", async () => {
+    const created = await request(app)
+      .post("/api/user/collections")
+      .send({ name: "Alaska 01", collectionKind: "special" });
+    expect(created.status).toBe(201);
+    expect(created.body.collectionKind).toBe("special");
+    expect(created.body.specialMeta).toEqual(emptyMeta());
+
+    const res = await request(app).get("/api/user/collections");
+    expect(res.status).toBe(200);
+    expect(res.body[0].collectionKind).toBe("special");
+    expect(res.body[0].specialMeta).toMatchObject({ bgOpacity: 0.5, layoutRevisions: [] });
+  });
+
+  it("defaults to standard kind and omits specialMeta from responses", async () => {
+    const created = await request(app).post("/api/user/collections").send({ name: "Plain" });
+    expect(created.status).toBe(201);
+    expect(created.body.collectionKind).toBe("standard");
+    expect(created.body).not.toHaveProperty("specialMeta");
+    expect(state.collections[0]).toMatchObject({ collectionKind: "standard", specialMeta: null });
+  });
+
+  it("rejects an unknown collectionKind value", async () => {
+    const res = await request(app)
+      .post("/api/user/collections")
+      .send({ name: "Bad", collectionKind: "weird" });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("PATCH /api/user/collections/:id/meta", () => {
+  it("updates bgOpacity and bgGeoAnchors", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const anchors = [
+      { lon: -150.1, lat: 61.2, imgX: 10, imgY: 20 },
+      { lon: -149.5, lat: 60.9, imgX: 800, imgY: 600 },
+    ];
+    const res = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({ bgOpacity: 0.8, bgGeoAnchors: anchors });
+    expect(res.status).toBe(200);
+    expect(res.body.specialMeta.bgOpacity).toBe(0.8);
+    expect(res.body.specialMeta.bgGeoAnchors).toEqual(anchors);
+  });
+
+  it("rejects an out-of-range opacity", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const res = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({ bgOpacity: 1.5 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("rejects anchors with out-of-bounds coordinates", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const res = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({
+        bgGeoAnchors: [
+          { lon: 200, lat: 61, imgX: 0, imgY: 0 },
+          { lon: -149, lat: 61, imgX: 1, imgY: 1 },
+        ],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("rejects an anchor list that is not exactly two points", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const res = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({ bgGeoAnchors: [{ lon: -150, lat: 61, imgX: 0, imgY: 0 }] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+
+  it("rejects an activeRevisionId that references no saved revision", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const res = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({ activeRevisionId: uid() });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("unknown_revision");
+  });
+
+  it("accepts activeRevisionId null and an existing revision id", async () => {
+    const rev = seedRevision(1);
+    const cid = seedSpecialCollection("user-a", "Alaska 01", {
+      layoutRevisions: [rev],
+      activeRevisionId: null,
+    });
+    const set = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({ activeRevisionId: rev.id });
+    expect(set.status).toBe(200);
+    expect(set.body.specialMeta.activeRevisionId).toBe(rev.id);
+
+    const clear = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({ activeRevisionId: null });
+    expect(clear.status).toBe(200);
+    expect(clear.body.specialMeta.activeRevisionId).toBeNull();
+  });
+
+  it("rejects an empty patch body", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const res = await request(app).patch(`/api/user/collections/${cid}/meta`).send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("empty_patch");
+  });
+
+  it("400s not_special on a standard collection", async () => {
+    const cid = seedCollection("user-a", "Plain");
+    const res = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({ bgOpacity: 0.3 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("not_special");
+  });
+
+  it("404s when the collection belongs to another user", async () => {
+    const cid = seedSpecialCollection("user-b", "Not Yours");
+    const res = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({ bgOpacity: 0.3 });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /api/user/collections/:id/layout", () => {
+  it("saves a named revision, sets it active, and round-trips through GET", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const body = {
+      name: "First pass",
+      tiles: [{ datasetId: "ds-1", tx: 1.5, ty: -2, angleDeg: 45, locked: true, annotation: "NW corner" }],
+      groups: [{ id: "g1", name: "North", datasetIds: ["ds-1"] }],
+    };
+    const res = await request(app).post(`/api/user/collections/${cid}/layout`).send(body);
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ name: "First pass", tiles: body.tiles, groups: body.groups });
+    expect(typeof res.body.id).toBe("string");
+
+    const list = await request(app).get("/api/user/collections");
+    const meta = list.body[0].specialMeta;
+    expect(meta.layoutRevisions).toHaveLength(1);
+    expect(meta.activeRevisionId).toBe(res.body.id);
+  });
+
+  it("replaces a same-named revision in place, keeping its id", async () => {
+    const rev = seedRevision(1);
+    const cid = seedSpecialCollection("user-a", "Alaska 01", { layoutRevisions: [rev] });
+    const res = await request(app)
+      .post(`/api/user/collections/${cid}/layout`)
+      .send({ name: rev.name.toUpperCase(), tiles: [], groups: [] });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBe(rev.id);
+    const meta = (state.collections[0]!["specialMeta"]) as MetaShape;
+    expect(meta.layoutRevisions).toHaveLength(1);
+    expect(meta.layoutRevisions[0]!.tiles).toEqual([]);
+    expect(meta.activeRevisionId).toBe(rev.id);
+  });
+
+  it("caps revisions at 20, dropping the oldest", async () => {
+    const revs = Array.from({ length: 20 }, (_, i) => seedRevision(i));
+    const cid = seedSpecialCollection("user-a", "Alaska 01", { layoutRevisions: revs });
+    const res = await request(app)
+      .post(`/api/user/collections/${cid}/layout`)
+      .send({ name: "Rev 21", tiles: [], groups: [] });
+    expect(res.status).toBe(201);
+    const meta = (state.collections[0]!["specialMeta"]) as MetaShape;
+    expect(meta.layoutRevisions).toHaveLength(20);
+    expect(meta.layoutRevisions.some((r) => r.id === revs[0]!.id)).toBe(false); // oldest dropped
+    expect(meta.layoutRevisions[19]!.name).toBe("Rev 21");
+  });
+
+  it("400s not_special on a standard collection", async () => {
+    const cid = seedCollection("user-a", "Plain");
+    const res = await request(app)
+      .post(`/api/user/collections/${cid}/layout`)
+      .send({ name: "X", tiles: [], groups: [] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("not_special");
+  });
+
+  it("rejects a tiles entry missing required fields", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const res = await request(app)
+      .post(`/api/user/collections/${cid}/layout`)
+      .send({ name: "X", tiles: [{ datasetId: "ds-1" }], groups: [] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+  });
+});
+
+describe("DELETE /api/user/collections/:id/layout/:revisionId", () => {
+  it("removes the revision and falls the active pointer back to the newest remaining", async () => {
+    const [a, b] = [seedRevision(1), seedRevision(2)];
+    const cid = seedSpecialCollection("user-a", "Alaska 01", {
+      layoutRevisions: [a, b],
+      activeRevisionId: b.id,
+    });
+    const res = await request(app).delete(`/api/user/collections/${cid}/layout/${b.id}`);
+    expect(res.status).toBe(204);
+    const meta = (state.collections[0]!["specialMeta"]) as MetaShape;
+    expect(meta.layoutRevisions).toHaveLength(1);
+    expect(meta.activeRevisionId).toBe(a.id);
+  });
+
+  it("clears activeRevisionId when the last revision is deleted", async () => {
+    const rev = seedRevision(1);
+    const cid = seedSpecialCollection("user-a", "Alaska 01", {
+      layoutRevisions: [rev],
+      activeRevisionId: rev.id,
+    });
+    const res = await request(app).delete(`/api/user/collections/${cid}/layout/${rev.id}`);
+    expect(res.status).toBe(204);
+    const meta = (state.collections[0]!["specialMeta"]) as MetaShape;
+    expect(meta.layoutRevisions).toHaveLength(0);
+    expect(meta.activeRevisionId).toBeNull();
+  });
+
+  it("404s for an unknown revision id", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const res = await request(app).delete(`/api/user/collections/${cid}/layout/${uid()}`);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("background image upload / serve / delete", () => {
+  const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"); // PNG magic + IHDR start
+
+  it("uploads a PNG, stores the file, sets bgImageKey, and serves it back", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const up = await request(app)
+      .post(`/api/user/collections/${cid}/background`)
+      .attach("file", PNG, { filename: "chart.png", contentType: "image/png" });
+    expect(up.status).toBe(200);
+    expect(up.body.url).toBe(`/api/user/collections/${cid}/background`);
+    const meta = (state.collections[0]!["specialMeta"]) as MetaShape;
+    expect(meta.bgImageKey).toBe(`collection-bg/${cid}.png`);
+    expect(fs.existsSync(path.join(bgDir, `${cid}.png`))).toBe(true);
+
+    const got = await request(app).get(`/api/user/collections/${cid}/background`);
+    expect(got.status).toBe(200);
+    expect(got.headers["content-type"]).toContain("image/png");
+    expect(Buffer.compare(got.body as Buffer, PNG)).toBe(0);
+  });
+
+  it("re-upload with a different type replaces the old file and key", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    await request(app)
+      .post(`/api/user/collections/${cid}/background`)
+      .attach("file", PNG, { filename: "chart.png", contentType: "image/png" });
+    const up2 = await request(app)
+      .post(`/api/user/collections/${cid}/background`)
+      .attach("file", Buffer.from("fake-jpeg"), { filename: "chart.jpg", contentType: "image/jpeg" });
+    expect(up2.status).toBe(200);
+    const meta = (state.collections[0]!["specialMeta"]) as MetaShape;
+    expect(meta.bgImageKey).toBe(`collection-bg/${cid}.jpg`);
+    expect(fs.existsSync(path.join(bgDir, `${cid}.png`))).toBe(false);
+    expect(fs.existsSync(path.join(bgDir, `${cid}.jpg`))).toBe(true);
+  });
+
+  it("415s on an unsupported image type", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const res = await request(app)
+      .post(`/api/user/collections/${cid}/background`)
+      .attach("file", Buffer.from("GIF89a"), { filename: "anim.gif", contentType: "image/gif" });
+    expect(res.status).toBe(415);
+    expect(res.body.error).toBe("unsupported_media_type");
+  });
+
+  it("413s on a file over 10 MB", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const big = Buffer.alloc(10 * 1024 * 1024 + 1, 1);
+    const res = await request(app)
+      .post(`/api/user/collections/${cid}/background`)
+      .attach("file", big, { filename: "huge.png", contentType: "image/png" });
+    expect(res.status).toBe(413);
+    expect(res.body.error).toBe("file_too_large");
+  });
+
+  it("400s when no file field is attached", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const res = await request(app).post(`/api/user/collections/${cid}/background`);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("missing_file");
+  });
+
+  it("400s not_special when uploading to a standard collection", async () => {
+    const cid = seedCollection("user-a", "Plain");
+    const res = await request(app)
+      .post(`/api/user/collections/${cid}/background`)
+      .attach("file", PNG, { filename: "chart.png", contentType: "image/png" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("not_special");
+  });
+
+  it("404s on GET when no background is set", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const res = await request(app).get(`/api/user/collections/${cid}/background`);
+    expect(res.status).toBe(404);
+  });
+
+  it("DELETE removes the file and clears bgImageKey (idempotent on empty)", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    await request(app)
+      .post(`/api/user/collections/${cid}/background`)
+      .attach("file", PNG, { filename: "chart.png", contentType: "image/png" });
+    const del = await request(app).delete(`/api/user/collections/${cid}/background`);
+    expect(del.status).toBe(204);
+    const meta = (state.collections[0]!["specialMeta"]) as MetaShape;
+    expect(meta.bgImageKey).toBeNull();
+    expect(fs.existsSync(path.join(bgDir, `${cid}.png`))).toBe(false);
+
+    // Deleting again is a no-op 204.
+    const again = await request(app).delete(`/api/user/collections/${cid}/background`);
+    expect(again.status).toBe(204);
   });
 });

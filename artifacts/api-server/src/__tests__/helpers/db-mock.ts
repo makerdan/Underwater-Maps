@@ -135,6 +135,8 @@ const datasetCollectionsTableStub = {
   id: "id",
   userId: "userId",
   name: "name",
+  collectionKind: "collectionKind",
+  specialMeta: "specialMeta",
   createdAt: "createdAt",
   updatedAt: "updatedAt",
 };
@@ -354,6 +356,17 @@ export function createDbMock(options: DbMockOptions = {}) {
     messages: messagesTableStub,
     terrainBundleJobsTable: terrainBundleJobsTableStub,
     MARKER_TYPES: MARKER_TYPES_STUB,
+    // Mirrored from lib/db — valid values for dataset_collections.collection_kind.
+    COLLECTION_KINDS: ["standard", "special"] as const,
+    // Real (pure) helper mirrored from lib/db — routes call it when creating
+    // special collections; keep in sync with emptySpecialCollectionMeta().
+    emptySpecialCollectionMeta: () => ({
+      bgImageKey: null,
+      bgOpacity: 0.5,
+      bgGeoAnchors: null,
+      layoutRevisions: [],
+      activeRevisionId: null,
+    }),
     insertConversationSchema: insertSchemaStub,
     insertGpsTrailPointSchema: insertSchemaStub,
     insertGpsTrailSchema: insertSchemaStub,

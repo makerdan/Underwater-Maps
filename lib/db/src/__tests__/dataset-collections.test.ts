@@ -82,6 +82,64 @@ async function insertSave(userId: string, catalogId = "cat-1"): Promise<string> 
   return row!.id;
 }
 
+describe("dataset_collections — collection kind + special meta (special collections)", () => {
+  it("defaults collection_kind to 'standard' with NULL meta (existing-row behavior)", async () => {
+    const id = await insertCollection("user-1", "Plain");
+    const [row] = await ctx.db
+      .select()
+      .from(datasetCollectionsTable)
+      .where(eq(datasetCollectionsTable.id, id));
+    expect(row!.collectionKind).toBe("standard");
+    expect(row!.specialMeta).toBeNull();
+  });
+
+  it("rejects an unknown collection_kind (dataset_collections_kind_check)", async () => {
+    await expectPgError(
+      ctx.db
+        .insert(datasetCollectionsTable)
+        .values({ userId: "user-1", name: "Weird", collectionKind: "puzzle" as never }),
+      "23514", // check_violation
+    );
+  });
+
+  it("round-trips a SpecialCollectionMeta JSONB payload intact", async () => {
+    const meta = {
+      bgImageKey: "collection-bg/abc.png",
+      bgOpacity: 0.75,
+      bgGeoAnchors: [
+        { lon: -150.25, lat: 61.125, imgX: 12.5, imgY: 30 },
+        { lon: -149.5, lat: 60.875, imgX: 800, imgY: 600 },
+      ] as [
+        { lon: number; lat: number; imgX: number; imgY: number },
+        { lon: number; lat: number; imgX: number; imgY: number },
+      ],
+      layoutRevisions: [
+        {
+          id: "11111111-1111-1111-1111-111111111111",
+          name: "First pass",
+          savedAt: "2026-08-18T00:00:00.000Z",
+          tiles: [
+            { datasetId: "ds-1", tx: 1.5, ty: -2.25, angleDeg: 45, locked: true, annotation: "NW" },
+          ],
+          groups: [{ id: "g1", name: "North", datasetIds: ["ds-1"] }],
+        },
+      ],
+      activeRevisionId: "11111111-1111-1111-1111-111111111111",
+    };
+    const [inserted] = await ctx.db
+      .insert(datasetCollectionsTable)
+      .values({ userId: "user-1", name: "Alaska 01", collectionKind: "special", specialMeta: meta })
+      .returning();
+    expect(inserted!.collectionKind).toBe("special");
+
+    const [row] = await ctx.db
+      .select()
+      .from(datasetCollectionsTable)
+      .where(eq(datasetCollectionsTable.id, inserted!.id));
+    expect(row!.specialMeta).toEqual(meta);
+  });
+});
+
 describe("dataset_collections — unique name per user (dataset_collections_user_name_uniq)", () => {
   it("rejects two collections with the same name (exact case) for the same user", async () => {
     await insertCollection("u1", "Trip Prep");

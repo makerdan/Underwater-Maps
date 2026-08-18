@@ -1102,6 +1102,240 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /user/collections/{id}/meta:
+    patch:
+      operationId: patchUserCollectionsIdMeta
+      tags: [user-datasets]
+      summary: Update special-collection metadata (background opacity, geo anchors, active revision)
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchCollectionMetaBody"
+      responses:
+        "200":
+          description: Updated collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetCollection"
+        "400":
+          description: Invalid opacity, anchors, revision reference, or non-special collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Collection not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/collections/{id}/layout:
+    post:
+      operationId: postUserCollectionsIdLayout
+      tags: [user-datasets]
+      summary: Save a named puzzle layout revision (max 20 kept; becomes the active revision)
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveLayoutBody"
+      responses:
+        "201":
+          description: Saved layout revision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LayoutRevision"
+        "400":
+          description: Invalid layout body or non-special collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Collection not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/collections/{id}/layout/{revisionId}:
+    delete:
+      operationId: deleteUserCollectionsIdLayoutRevisionId
+      tags: [user-datasets]
+      summary: Delete one saved layout revision from a special collection
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: revisionId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Revision removed
+        "400":
+          description: Non-special collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Collection or revision not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /user/collections/{id}/background:
+    post:
+      operationId: postUserCollectionsIdBackground
+      tags: [user-datasets]
+      summary: Upload a reference background image for a special collection (JPEG/PNG/WebP, max 10 MB)
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: JPEG, PNG, or WebP reference image
+      responses:
+        "200":
+          description: Stored background image URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url:
+                    type: string
+        "400":
+          description: Missing file or non-special collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Collection not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: Image exceeds the 10 MB limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "415":
+          description: Unsupported image type (only JPEG, PNG, WebP accepted)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    get:
+      operationId: getUserCollectionsIdBackground
+      tags: [user-datasets]
+      summary: Serve the stored background image for a special collection
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The stored image file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Collection or background image not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteUserCollectionsIdBackground
+      tags: [user-datasets]
+      summary: Delete the stored background image and clear its storage key
+      security:
+        - clerkAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Background image removed
+        "400":
+          description: Non-special collection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Collection not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /markers:
     get:
       operationId: getMarkers
@@ -7268,6 +7502,12 @@ components:
           type: string
         name:
           type: string
+        collectionKind:
+          type: string
+          enum: [standard, special]
+          description: Special collections carry puzzle-layout metadata in specialMeta
+        specialMeta:
+          $ref: "#/components/schemas/SpecialCollectionMeta"
         members:
           type: array
           items:
@@ -7281,15 +7521,188 @@ components:
       required:
         - id
         - name
+        - collectionKind
         - members
         - createdAt
         - updatedAt
+
+    CollectionGeoAnchor:
+      type: object
+      description: A control point mapping an image pixel to a geographic coordinate
+      properties:
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        imgX:
+          type: number
+          minimum: 0
+        imgY:
+          type: number
+          minimum: 0
+      required:
+        - lon
+        - lat
+        - imgX
+        - imgY
+
+    LayoutTile:
+      type: object
+      description: One puzzle tile transform inside a saved layout revision
+      properties:
+        datasetId:
+          type: string
+        tx:
+          type: number
+        ty:
+          type: number
+        angleDeg:
+          type: number
+        locked:
+          type: boolean
+        annotation:
+          type: string
+          nullable: true
+      required:
+        - datasetId
+        - tx
+        - ty
+        - angleDeg
+        - locked
+
+    LayoutGroup:
+      type: object
+      description: A named group of tiles inside a layout revision
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        datasetIds:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - name
+        - datasetIds
+
+    LayoutRevision:
+      type: object
+      description: A named, timestamped snapshot of the puzzle layout
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        savedAt:
+          type: string
+          format: date-time
+        tiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/LayoutTile"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/LayoutGroup"
+      required:
+        - id
+        - name
+        - savedAt
+        - tiles
+        - groups
+
+    SpecialCollectionMeta:
+      type: object
+      description: Puzzle-layout metadata stored on special collections
+      properties:
+        bgImageKey:
+          type: string
+          nullable: true
+          description: Server storage key for the reference background image (null = none)
+        bgOpacity:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Background image opacity (default 0.5)
+        bgGeoAnchors:
+          type: array
+          nullable: true
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/CollectionGeoAnchor"
+          description: Exactly two control points once registered; null until then
+        layoutRevisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/LayoutRevision"
+          description: Named layout revision history (max 20, oldest dropped)
+        activeRevisionId:
+          type: string
+          nullable: true
+          description: Which revision is currently active (null = none)
+      required:
+        - bgImageKey
+        - bgOpacity
+        - bgGeoAnchors
+        - layoutRevisions
+        - activeRevisionId
+
+    PatchCollectionMetaBody:
+      type: object
+      description: Partial update of special-collection metadata; at least one field must be present
+      properties:
+        bgOpacity:
+          type: number
+          minimum: 0
+          maximum: 1
+        bgGeoAnchors:
+          type: array
+          nullable: true
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/CollectionGeoAnchor"
+        activeRevisionId:
+          type: string
+          nullable: true
+
+    SaveLayoutBody:
+      type: object
+      description: Save (or replace, when the name matches an existing revision) a named puzzle layout
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        tiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/LayoutTile"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/LayoutGroup"
+      required:
+        - name
+        - tiles
+        - groups
 
     CreateDatasetCollectionBody:
       type: object
       properties:
         name:
           type: string
+        collectionKind:
+          type: string
+          enum: [standard, special]
+          description: Defaults to standard; special collections are created with empty puzzle metadata
       required:
         - name
 

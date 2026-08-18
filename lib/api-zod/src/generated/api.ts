@@ -51,7 +51,6 @@ export const getDatasetsIdTerrainQueryResolutionMin = 32;
 export const getDatasetsIdTerrainQueryResolutionMax = 512;
 
 
-
 export const GetDatasetsIdTerrainQueryParams = zod.object({
   "resolution": zod.coerce.number().min(getDatasetsIdTerrainQueryResolutionMin).max(getDatasetsIdTerrainQueryResolutionMax).default(getDatasetsIdTerrainQueryResolutionDefault)
 })
@@ -378,7 +377,6 @@ export const postDatasetsRasterCommitBodyPdfDepthUnitDefault = `feet`;
 export const postDatasetsRasterCommitBodyResolutionDefault = 256;
 export const postDatasetsRasterCommitBodyResolutionMin = 32;
 export const postDatasetsRasterCommitBodyResolutionMax = 512;
-
 
 
 export const PostDatasetsRasterCommitBody = zod.object({
@@ -724,7 +722,6 @@ export const postUserDatasetsIdGeorefBodyControlPointsMin = 2;
 export const postUserDatasetsIdGeorefBodyControlPointsMax = 4;
 
 
-
 export const PostUserDatasetsIdGeorefBody = zod.object({
   "controlPoints": zod.array(zod.object({
   "px": zod.number().describe('Pixel X coordinate (column) in the image, measured from the left edge'),
@@ -934,13 +931,43 @@ export const DeleteUserFoldersIdBody = zod.object({
   "mode": zod.enum(['contents', 'promote']).describe('contents = delete folder and everything inside; promote = move children to grandparent before deleting')
 })
 
-
 /**
  * @summary List all dataset collections (with members) for the current user
  */
+export const getUserCollectionsResponseSpecialMetaBgOpacityMin = 0;
 export const GetUserCollectionsResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
+  "collectionKind": zod.enum(['standard', 'special']).describe('Special collections carry puzzle-layout metadata in specialMeta'),
+  "specialMeta": zod.object({
+  "bgImageKey": zod.string().nullable().describe('Server storage key for the reference background image (null = none)'),
+  "bgOpacity": zod.number().min(getUserCollectionsResponseSpecialMetaBgOpacityMin).max(getUserCollectionsResponseSpecialMetaBgOpacityMax).describe('Background image opacity (default 0.5)'),
+  "bgGeoAnchors": zod.array(zod.object({
+  "lon": zod.number().min(getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemLonMin).max(getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemLonMax),
+  "lat": zod.number().min(getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemLatMin).max(getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemLatMax),
+  "imgX": zod.number().min(getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemImgXMin),
+  "imgY": zod.number().min(getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemImgYMin)
+}).describe('A control point mapping an image pixel to a geographic coordinate')).min(getUserCollectionsResponseSpecialMetaBgGeoAnchorsMin).max(getUserCollectionsResponseSpecialMetaBgGeoAnchorsMax).nullable().describe('Exactly two control points once registered; null until then'),
+  "layoutRevisions": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "savedAt": zod.coerce.date(),
+  "tiles": zod.array(zod.object({
+  "datasetId": zod.string(),
+  "tx": zod.number(),
+  "ty": zod.number(),
+  "angleDeg": zod.number(),
+  "locked": zod.boolean(),
+  "annotation": zod.string().nullish()
+}).describe('One puzzle tile transform inside a saved layout revision')),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "datasetIds": zod.array(zod.string())
+}).describe('A named group of tiles inside a layout revision'))
+}).describe('A named, timestamped snapshot of the puzzle layout')).describe('Named layout revision history (max 20, oldest dropped)'),
+  "activeRevisionId": zod.string().nullable().describe('Which revision is currently active (null = none)')
+}).optional().describe('Puzzle-layout metadata stored on special collections'),
   "members": zod.array(zod.object({
   "id": zod.string().describe('Membership row UUID (use for removal)'),
   "kind": zod.enum(['dataset', 'catalogSave']),
@@ -958,7 +985,8 @@ export const GetUserCollectionsResponse = zod.array(GetUserCollectionsResponseIt
  * @summary Create a new dataset collection
  */
 export const PostUserCollectionsBody = zod.object({
-  "name": zod.string()
+  "name": zod.string(),
+  "collectionKind": zod.enum(['standard', 'special']).optional().describe('Defaults to standard; special collections are created with empty puzzle metadata')
 })
 
 
@@ -973,9 +1001,40 @@ export const PatchUserCollectionsIdRenameBody = zod.object({
   "name": zod.string()
 })
 
+export const patchUserCollectionsIdRenameResponseSpecialMetaBgOpacityMin = 0;
 export const PatchUserCollectionsIdRenameResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
+  "collectionKind": zod.enum(['standard', 'special']).describe('Special collections carry puzzle-layout metadata in specialMeta'),
+  "specialMeta": zod.object({
+  "bgImageKey": zod.string().nullable().describe('Server storage key for the reference background image (null = none)'),
+  "bgOpacity": zod.number().min(patchUserCollectionsIdRenameResponseSpecialMetaBgOpacityMin).max(patchUserCollectionsIdRenameResponseSpecialMetaBgOpacityMax).describe('Background image opacity (default 0.5)'),
+  "bgGeoAnchors": zod.array(zod.object({
+  "lon": zod.number().min(patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemLonMin).max(patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemLonMax),
+  "lat": zod.number().min(patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemLatMin).max(patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemLatMax),
+  "imgX": zod.number().min(patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemImgXMin),
+  "imgY": zod.number().min(patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemImgYMin)
+}).describe('A control point mapping an image pixel to a geographic coordinate')).min(patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsMin).max(patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsMax).nullable().describe('Exactly two control points once registered; null until then'),
+  "layoutRevisions": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "savedAt": zod.coerce.date(),
+  "tiles": zod.array(zod.object({
+  "datasetId": zod.string(),
+  "tx": zod.number(),
+  "ty": zod.number(),
+  "angleDeg": zod.number(),
+  "locked": zod.boolean(),
+  "annotation": zod.string().nullish()
+}).describe('One puzzle tile transform inside a saved layout revision')),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "datasetIds": zod.array(zod.string())
+}).describe('A named group of tiles inside a layout revision'))
+}).describe('A named, timestamped snapshot of the puzzle layout')).describe('Named layout revision history (max 20, oldest dropped)'),
+  "activeRevisionId": zod.string().nullable().describe('Which revision is currently active (null = none)')
+}).optional().describe('Puzzle-layout metadata stored on special collections'),
   "members": zod.array(zod.object({
   "id": zod.string().describe('Membership row UUID (use for removal)'),
   "kind": zod.enum(['dataset', 'catalogSave']),
@@ -1017,7 +1076,12 @@ export const DeleteUserCollectionsIdMembersMemberIdParams = zod.object({
   "memberId": zod.coerce.string()
 })
 
-
+/**
+ * @summary Update special-collection metadata (background opacity, geo anchors, active revision)
+ */
+export const PatchUserCollectionsIdMetaParams = zod.object({
+  "id": zod.coerce.string()
+})
 /**
  * @summary List persisted markers for a dataset or within bounds
  */
@@ -1032,7 +1096,6 @@ export const getMarkersQueryMaxLatMax = 90;
 
 export const getMarkersQueryMaxLonMin = -180;
 export const getMarkersQueryMaxLonMax = 180;
-
 
 
 export const GetMarkersQueryParams = zod.object({
@@ -1144,7 +1207,6 @@ export const patchMarkersIdBodyNotesMax = 2000;
 export const patchMarkersIdBodyDepthMin = 0;
 
 
-
 export const PatchMarkersIdBody = zod.object({
   "datasetId": zod.string().nullish().describe('Reassign this marker to a different dataset, or pass null to make it unassigned.'),
   "label": zod.string().min(1).max(patchMarkersIdBodyLabelMax).optional(),
@@ -1253,7 +1315,6 @@ export const postMarkersMarkerIdCatchesBodyPhotosDefault = [];
 export const postMarkersMarkerIdCatchesBodyPhotosMax = 6;
 
 
-
 export const PostMarkersMarkerIdCatchesBody = zod.object({
   "symbol": zod.string().min(1).max(postMarkersMarkerIdCatchesBodySymbolMax),
   "symbolName": zod.string().max(postMarkersMarkerIdCatchesBodySymbolNameMax).default(postMarkersMarkerIdCatchesBodySymbolNameDefault),
@@ -1278,7 +1339,6 @@ export const patchCatchesIdBodyNotesMax = 1000;
 export const patchCatchesIdBodyPhotosItemMax = 512;
 
 export const patchCatchesIdBodyPhotosMax = 6;
-
 
 
 export const PatchCatchesIdBody = zod.object({
@@ -1402,7 +1462,6 @@ export const getTrailsIdPointsQueryPageDefault = 1;
 
 export const getTrailsIdPointsQueryPageSizeDefault = 200;
 export const getTrailsIdPointsQueryPageSizeMax = 1000;
-
 
 
 export const GetTrailsIdPointsQueryParams = zod.object({
@@ -3040,7 +3099,6 @@ export const getTrollingPresetsResponseWaypointsItemLonMin = -180;
 export const getTrollingPresetsResponseWaypointsItemLonMax = 180;
 
 
-
 export const GetTrollingPresetsResponseItem = zod.object({
   "id": zod.string().describe('UUID primary key'),
   "userId": zod.string(),
@@ -3080,7 +3138,6 @@ export const postTrollingPresetsBodyWaypointsItemLonMax = 180;
 export const postTrollingPresetsBodyWaypointsMax = 50;
 
 
-
 export const PostTrollingPresetsBody = zod.object({
   "name": zod.string().min(1).max(postTrollingPresetsBodyNameMax),
   "headingDeg": zod.number().min(postTrollingPresetsBodyHeadingDegMin).max(postTrollingPresetsBodyHeadingDegMax),
@@ -3105,7 +3162,6 @@ export const PatchTrollingPresetsIdParams = zod.object({
 export const patchTrollingPresetsIdBodyNameMax = 80;
 
 
-
 export const PatchTrollingPresetsIdBody = zod.object({
   "name": zod.string().min(1).max(patchTrollingPresetsIdBodyNameMax).optional(),
   "sortOrder": zod.number().optional(),
@@ -3123,7 +3179,6 @@ export const patchTrollingPresetsIdResponseWaypointsItemLatMax = 90;
 
 export const patchTrollingPresetsIdResponseWaypointsItemLonMin = -180;
 export const patchTrollingPresetsIdResponseWaypointsItemLonMax = 180;
-
 
 
 export const PatchTrollingPresetsIdResponse = zod.object({
@@ -3170,7 +3225,6 @@ export const GetTrollingPresetFoldersResponse = zod.array(GetTrollingPresetFolde
 export const postTrollingPresetFoldersBodyNameMax = 80;
 
 
-
 export const PostTrollingPresetFoldersBody = zod.object({
   "name": zod.string().min(1).max(postTrollingPresetFoldersBodyNameMax)
 })
@@ -3184,7 +3238,6 @@ export const PatchTrollingPresetFoldersIdParams = zod.object({
 })
 
 export const patchTrollingPresetFoldersIdBodyNameMax = 80;
-
 
 
 export const PatchTrollingPresetFoldersIdBody = zod.object({
@@ -3318,7 +3371,6 @@ export const getIntertidalSpotsQueryMinScoreMin = 0;
 export const getIntertidalSpotsQueryMinScoreMax = 100;
 
 
-
 export const GetIntertidalSpotsQueryParams = zod.object({
   "type": zod.enum(['tidepool', 'beachcombing', 'both']).default(getIntertidalSpotsQueryTypeDefault).describe('Filter to tidepool spots, beachcombing spots, or both'),
   "minScore": zod.coerce.number().min(getIntertidalSpotsQueryMinScoreMin).max(getIntertidalSpotsQueryMinScoreMax).default(getIntertidalSpotsQueryMinScoreDefault).describe('Minimum score (inclusive) for the returned activity type')
@@ -3329,7 +3381,6 @@ export const getIntertidalSpotsResponseFeaturesItemPropertiesTidepoolScoreMax = 
 
 export const getIntertidalSpotsResponseFeaturesItemPropertiesBeachcombingScoreMin = 0;
 export const getIntertidalSpotsResponseFeaturesItemPropertiesBeachcombingScoreMax = 100;
-
 
 
 export const GetIntertidalSpotsResponse = zod.object({
@@ -3512,7 +3563,6 @@ export const postDatasetsBboxQueryBodyEastMax = 180;
 
 export const postDatasetsBboxQueryBodyWestMin = -180;
 export const postDatasetsBboxQueryBodyWestMax = 180;
-
 
 
 export const PostDatasetsBboxQueryBody = zod.object({
@@ -3716,7 +3766,6 @@ export const postSearchFederatedSaveBodyAreaRequestCenterLonMin = -180;
 export const postSearchFederatedSaveBodyAreaRequestCenterLonMax = 180;
 
 
-
 export const PostSearchFederatedSaveBody = zod.object({
   "result": zod.object({
   "id": zod.string().describe('Globally unique id (\"<sourceId>:<upstream id>\")'),
@@ -3804,7 +3853,6 @@ export const getNceiSearchQueryMaxDefault = 20;
 export const getNceiSearchQueryMaxMax = 100;
 
 
-
 export const GetNceiSearchQueryParams = zod.object({
   "q": zod.coerce.string().optional().describe('Free-text keyword query (e.g. \"Sitka bathymetry\", \"Alaska DEM\")'),
   "bbox": zod.coerce.string().optional().describe('Spatial filter as \"minLon,minLat,maxLon,maxLat\"'),
@@ -3848,7 +3896,6 @@ export const postNceiSaveBodyAreaRequestCenterLatMax = 90;
 
 export const postNceiSaveBodyAreaRequestCenterLonMin = -180;
 export const postNceiSaveBodyAreaRequestCenterLonMax = 180;
-
 
 
 export const PostNceiSaveBody = zod.object({
@@ -3935,7 +3982,6 @@ export const postDatasetsCatalogIdSaveBodyAreaRequestCenterLatMax = 90;
 
 export const postDatasetsCatalogIdSaveBodyAreaRequestCenterLonMin = -180;
 export const postDatasetsCatalogIdSaveBodyAreaRequestCenterLonMax = 180;
-
 
 
 export const PostDatasetsCatalogIdSaveBody = zod.object({
@@ -4259,7 +4305,6 @@ export const getSurfaceConditionsResponseForecast48hItemRelHourMin = 0;
 export const getSurfaceConditionsResponseForecast48hItemRelHourMax = 47;
 
 
-
 export const GetSurfaceConditionsResponse = zod.object({
   "available": zod.boolean(),
   "lat": zod.number(),
@@ -4500,7 +4545,6 @@ export const getEnvPackQueryDaysDefault = 14;
 export const getEnvPackQueryDaysMax = 14;
 
 
-
 export const GetEnvPackQueryParams = zod.object({
   "lat": zod.coerce.number().describe('Latitude of the center point'),
   "lon": zod.coerce.number().describe('Longitude of the center point'),
@@ -4728,7 +4772,6 @@ export const finalizeChunkedUploadBodyResolutionMin = 32;
 export const finalizeChunkedUploadBodyResolutionMax = 512;
 
 
-
 export const FinalizeChunkedUploadBody = zod.object({
   "uploadId": zod.string(),
   "fileName": zod.string(),
@@ -4881,7 +4924,6 @@ export const GetTidesStationIdDatumsResponse = zod.object({
  */
 export const getTidalScheduleQueryDaysDefault = 3;
 export const getTidalScheduleQueryDaysMax = 14;
-
 
 
 export const GetTidalScheduleQueryParams = zod.object({
@@ -5144,7 +5186,6 @@ export const QueryTerrainResponse = zod.object({
 export const poeHelpBodyQuestionMax = 1000;
 
 
-
 export const PoeHelpBody = zod.object({
   "question": zod.string().max(poeHelpBodyQuestionMax),
   "history": zod.array(zod.object({
@@ -5165,7 +5206,6 @@ export const PoeHelpResponse = zod.object({
 export const poeUpscaleBodyUpscaleFactorDefault = 2;
 export const poeUpscaleBodyUpscaleFactorMin = 2;
 export const poeUpscaleBodyUpscaleFactorMax = 4;
-
 
 
 export const PoeUpscaleBody = zod.object({
@@ -5213,7 +5253,6 @@ export const createRouteBodyWaypointsMin = 2;
 export const createRouteBodyWaypointsMax = 20;
 
 
-
 export const CreateRouteBody = zod.object({
   "datasetId": zod.string(),
   "name": zod.string().max(createRouteBodyNameMax),
@@ -5234,7 +5273,6 @@ export const PatchRouteParams = zod.object({
 })
 
 export const patchRouteBodyNameMax = 120;
-
 
 
 export const PatchRouteBody = zod.object({
@@ -5277,7 +5315,6 @@ export const getTerrainLandQuerySizeMin = 32;
 export const getTerrainLandQuerySizeMax = 256;
 
 
-
 export const GetTerrainLandQueryParams = zod.object({
   "bbox": zod.coerce.string().describe('\"minLon,minLat,maxLon,maxLat\" — four comma-separated finite numbers'),
   "size": zod.coerce.number().min(getTerrainLandQuerySizeMin).max(getTerrainLandQuerySizeMax).default(getTerrainLandQuerySizeDefault).describe('Grid side length N, clamped to [32, 256]')
@@ -5302,7 +5339,6 @@ export const getTerrainSatelliteTileQuerySizeMin = 64;
 export const getTerrainSatelliteTileQuerySizeMax = 1024;
 
 
-
 export const GetTerrainSatelliteTileQueryParams = zod.object({
   "bbox": zod.coerce.string().describe('\"minLon,minLat,maxLon,maxLat\" — four comma-separated finite numbers'),
   "size": zod.coerce.number().min(getTerrainSatelliteTileQuerySizeMin).max(getTerrainSatelliteTileQuerySizeMax).default(getTerrainSatelliteTileQuerySizeDefault).describe('Image resolution in pixels, clamped to [64, 1024]')
@@ -5321,7 +5357,6 @@ Map (terrain → heatmap → satellite). Antimeridian-crossing bboxes
 export const getTerrainTerrainTileQuerySizeDefault = 512;
 export const getTerrainTerrainTileQuerySizeMin = 64;
 export const getTerrainTerrainTileQuerySizeMax = 1024;
-
 
 
 export const GetTerrainTerrainTileQueryParams = zod.object({
@@ -5349,7 +5384,6 @@ export const GetTerrainDownloadInfoQueryParams = zod.object({
 
 export const getTerrainDownloadInfoResponseWaterFractionMin = 0;
 export const getTerrainDownloadInfoResponseWaterFractionMax = 1;
-
 
 
 export const GetTerrainDownloadInfoResponse = zod.object({
@@ -5400,7 +5434,6 @@ export const getTidalPackQueryDaysMin = 3;
 export const getTidalPackQueryDaysMax = 14;
 
 
-
 export const GetTidalPackQueryParams = zod.object({
   "lat": zod.coerce.number().min(getTidalPackQueryLatMin).max(getTidalPackQueryLatMax),
   "lon": zod.coerce.number().min(getTidalPackQueryLonMin).max(getTidalPackQueryLonMax),
@@ -5436,7 +5469,6 @@ export const getWeatherPackQueryLatMax = 90;
 
 export const getWeatherPackQueryLonMin = -180;
 export const getWeatherPackQueryLonMax = 180;
-
 
 
 export const GetWeatherPackQueryParams = zod.object({
@@ -5603,3 +5635,196 @@ export const GetTerrainBundlesPresetIdResponse = zod.object({
 }).passthrough().describe('Processed depth grid bundle with metadata')
 
 
+export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemLonMax = 180;
+
+export const patchUserCollectionsIdMetaResponseSpecialMetaBgOpacityMin = 0;
+
+export const PostUserCollectionsIdBackgroundResponse = zod.object({
+  "url": zod.string()
+})
+
+export const patchUserCollectionsIdMetaBodyBgOpacityMin = 0;
+
+export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsMin = 2;
+
+/**
+ * @summary Serve the stored background image for a special collection
+ */
+export const GetUserCollectionsIdBackgroundParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const patchUserCollectionsIdMetaBodyBgGeoAnchorsMax = 2;
+
+export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemImgXMin = 0;
+
+export const patchUserCollectionsIdMetaBodyBgGeoAnchorsItemLatMin = -90;
+
+export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemLatMax = 90;
+
+export const PostUserCollectionsIdLayoutBody = zod.object({
+  "name": zod.string().min(1).max(postUserCollectionsIdLayoutBodyNameMax),
+  "tiles": zod.array(zod.object({
+  "datasetId": zod.string(),
+  "tx": zod.number(),
+  "ty": zod.number(),
+  "angleDeg": zod.number(),
+  "locked": zod.boolean(),
+  "annotation": zod.string().nullish()
+}).describe('One puzzle tile transform inside a saved layout revision')),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "datasetIds": zod.array(zod.string())
+}).describe('A named group of tiles inside a layout revision'))
+}).describe('Save (or replace, when the name matches an existing revision) a named puzzle layout')
+
+export const patchUserCollectionsIdMetaBodyBgGeoAnchorsItemLonMax = 180;
+
+export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemLatMin = -90;
+
+export const PostUserCollectionsIdBackgroundBody = zod.object({
+  "file": zod.instanceof(File).describe('JPEG, PNG, or WebP reference image')
+})
+
+export const patchUserCollectionsIdMetaBodyBgGeoAnchorsMin = 2;
+
+export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsMax = 2;
+
+export const PatchUserCollectionsIdMetaResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "collectionKind": zod.enum(['standard', 'special']).describe('Special collections carry puzzle-layout metadata in specialMeta'),
+  "specialMeta": zod.object({
+  "bgImageKey": zod.string().nullable().describe('Server storage key for the reference background image (null = none)'),
+  "bgOpacity": zod.number().min(patchUserCollectionsIdMetaResponseSpecialMetaBgOpacityMin).max(patchUserCollectionsIdMetaResponseSpecialMetaBgOpacityMax).describe('Background image opacity (default 0.5)'),
+  "bgGeoAnchors": zod.array(zod.object({
+  "lon": zod.number().min(patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemLonMin).max(patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemLonMax),
+  "lat": zod.number().min(patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemLatMin).max(patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemLatMax),
+  "imgX": zod.number().min(patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemImgXMin),
+  "imgY": zod.number().min(patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemImgYMin)
+}).describe('A control point mapping an image pixel to a geographic coordinate')).min(patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsMin).max(patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsMax).nullable().describe('Exactly two control points once registered; null until then'),
+  "layoutRevisions": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "savedAt": zod.coerce.date(),
+  "tiles": zod.array(zod.object({
+  "datasetId": zod.string(),
+  "tx": zod.number(),
+  "ty": zod.number(),
+  "angleDeg": zod.number(),
+  "locked": zod.boolean(),
+  "annotation": zod.string().nullish()
+}).describe('One puzzle tile transform inside a saved layout revision')),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "datasetIds": zod.array(zod.string())
+}).describe('A named group of tiles inside a layout revision'))
+}).describe('A named, timestamped snapshot of the puzzle layout')).describe('Named layout revision history (max 20, oldest dropped)'),
+  "activeRevisionId": zod.string().nullable().describe('Which revision is currently active (null = none)')
+}).optional().describe('Puzzle-layout metadata stored on special collections'),
+  "members": zod.array(zod.object({
+  "id": zod.string().describe('Membership row UUID (use for removal)'),
+  "kind": zod.enum(['dataset', 'catalogSave']),
+  "refId": zod.string().describe('The referenced custom_datasets.id (kind=dataset) or user_catalog_saves.id (kind=catalogSave)'),
+  "name": zod.string().describe('Display name of the referenced item at read time'),
+  "createdAt": zod.coerce.date()
+}).describe('A membership row linking a collection to exactly one library item — either an uploaded dataset (kind=dataset) or a saved catalog entry (kind=catalogSave).')),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).describe('A user-defined, named group of library datasets (spans folders)')
+
+export const patchUserCollectionsIdRenameResponseSpecialMetaBgOpacityMax = 1;
+
+export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemLonMax = 180;
+
+export const patchUserCollectionsIdMetaBodyBgGeoAnchorsItemLatMax = 90;
+
+export const getUserCollectionsResponseSpecialMetaBgOpacityMax = 1;
+
+export const patchUserCollectionsIdMetaBodyBgGeoAnchorsItemImgYMin = 0;
+
+/**
+ * @summary Save a named puzzle layout revision (max 20 kept; becomes the active revision)
+ */
+export const PostUserCollectionsIdLayoutParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+/**
+ * @summary Delete one saved layout revision from a special collection
+ */
+export const DeleteUserCollectionsIdLayoutRevisionIdParams = zod.object({
+  "id": zod.coerce.string(),
+  "revisionId": zod.coerce.string()
+})
+
+export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemLonMin = -180;
+
+export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsMin = 2;
+
+export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsMax = 2;
+
+export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemLonMax = 180;
+
+export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemImgXMin = 0;
+
+export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemLatMin = -90;
+
+export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemLatMax = 90;
+
+export const patchUserCollectionsIdRenameResponseSpecialMetaBgGeoAnchorsItemImgYMin = 0;
+
+export const patchUserCollectionsIdMetaBodyBgGeoAnchorsItemLonMin = -180;
+
+export const PatchUserCollectionsIdMetaBody = zod.object({
+  "bgOpacity": zod.number().min(patchUserCollectionsIdMetaBodyBgOpacityMin).max(patchUserCollectionsIdMetaBodyBgOpacityMax).optional(),
+  "bgGeoAnchors": zod.array(zod.object({
+  "lon": zod.number().min(patchUserCollectionsIdMetaBodyBgGeoAnchorsItemLonMin).max(patchUserCollectionsIdMetaBodyBgGeoAnchorsItemLonMax),
+  "lat": zod.number().min(patchUserCollectionsIdMetaBodyBgGeoAnchorsItemLatMin).max(patchUserCollectionsIdMetaBodyBgGeoAnchorsItemLatMax),
+  "imgX": zod.number().min(patchUserCollectionsIdMetaBodyBgGeoAnchorsItemImgXMin),
+  "imgY": zod.number().min(patchUserCollectionsIdMetaBodyBgGeoAnchorsItemImgYMin)
+}).describe('A control point mapping an image pixel to a geographic coordinate')).min(patchUserCollectionsIdMetaBodyBgGeoAnchorsMin).max(patchUserCollectionsIdMetaBodyBgGeoAnchorsMax).nullish(),
+  "activeRevisionId": zod.string().nullish()
+}).describe('Partial update of special-collection metadata; at least one field must be present')
+
+export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemImgXMin = 0;
+
+export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemLatMax = 90;
+
+export const patchUserCollectionsIdMetaResponseSpecialMetaBgOpacityMax = 1;
+
+export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsMin = 2;
+
+export const patchUserCollectionsIdMetaBodyBgGeoAnchorsItemImgXMin = 0;
+
+export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsMax = 2;
+
+/**
+ * @summary Delete the stored background image and clear its storage key
+ */
+export const DeleteUserCollectionsIdBackgroundParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const patchUserCollectionsIdMetaBodyBgOpacityMax = 1;
+
+export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemLonMin = -180;
+
+export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemImgYMin = 0;
+
+export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemLonMin = -180;
+
+export const patchUserCollectionsIdMetaResponseSpecialMetaBgGeoAnchorsItemImgYMin = 0;
+
+export const postUserCollectionsIdLayoutBodyNameMax = 120;
+
+/**
+ * @summary Upload a reference background image for a special collection (JPEG/PNG/WebP, max 10 MB)
+ */
+export const PostUserCollectionsIdBackgroundParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const getUserCollectionsResponseSpecialMetaBgGeoAnchorsItemLatMin = -90;

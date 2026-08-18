@@ -136,11 +136,15 @@ export async function createTestDb(): Promise<TestContext> {
       ON user_catalog_saves (user_id, catalog_id);
 
     CREATE TABLE dataset_collections (
-      id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id     text NOT NULL,
-      name        text NOT NULL,
-      created_at  timestamp NOT NULL DEFAULT now(),
-      updated_at  timestamp NOT NULL DEFAULT now()
+      id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id                  text NOT NULL,
+      name                     text NOT NULL,
+      collection_kind          text NOT NULL DEFAULT 'standard',
+      special_collection_meta  jsonb,
+      created_at               timestamp NOT NULL DEFAULT now(),
+      updated_at               timestamp NOT NULL DEFAULT now(),
+      CONSTRAINT dataset_collections_kind_check
+        CHECK (collection_kind IN ('standard', 'special'))
     );
 
     CREATE INDEX dataset_collections_user_id_idx

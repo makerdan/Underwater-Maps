@@ -162,6 +162,13 @@
       "when": 1786931428626,
       "tag": "0022_add_dataset_collections",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787019071104,
+      "tag": "0023_add_special_collection_meta",
+      "breakpoints": true
     }
   ]
 }

@@ -1885,18 +1885,151 @@ export interface DatasetCollectionMember {
 }
 
 /**
+ * Special collections carry puzzle-layout metadata in specialMeta
+ */
+export type DatasetCollectionCollectionKind = typeof DatasetCollectionCollectionKind[keyof typeof DatasetCollectionCollectionKind];
+
+
+export const DatasetCollectionCollectionKind = {
+  standard: 'standard',
+  special: 'special',
+} as const;
+
+/**
+ * A control point mapping an image pixel to a geographic coordinate
+ */
+export interface CollectionGeoAnchor {
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  lon: number;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  lat: number;
+  /** @minimum 0 */
+  imgX: number;
+  /** @minimum 0 */
+  imgY: number;
+}
+
+/**
+ * One puzzle tile transform inside a saved layout revision
+ */
+export interface LayoutTile {
+  datasetId: string;
+  tx: number;
+  ty: number;
+  angleDeg: number;
+  locked: boolean;
+  annotation?: string | null;
+}
+
+/**
+ * A named group of tiles inside a layout revision
+ */
+export interface LayoutGroup {
+  id: string;
+  name: string;
+  datasetIds: string[];
+}
+
+/**
+ * A named, timestamped snapshot of the puzzle layout
+ */
+export interface LayoutRevision {
+  id: string;
+  name: string;
+  savedAt: string;
+  tiles: LayoutTile[];
+  groups: LayoutGroup[];
+}
+
+/**
+ * Puzzle-layout metadata stored on special collections
+ */
+export interface SpecialCollectionMeta {
+  /** Server storage key for the reference background image (null = none) */
+  bgImageKey: string | null;
+  /**
+     * Background image opacity (default 0.5)
+     * @minimum 0
+     * @maximum 1
+     */
+  bgOpacity: number;
+  /**
+     * Exactly two control points once registered; null until then
+     * @minItems 2
+     * @maxItems 2
+     */
+  bgGeoAnchors: CollectionGeoAnchor[] | null;
+  /** Named layout revision history (max 20, oldest dropped) */
+  layoutRevisions: LayoutRevision[];
+  /** Which revision is currently active (null = none) */
+  activeRevisionId: string | null;
+}
+
+/**
  * A user-defined, named group of library datasets (spans folders)
  */
 export interface DatasetCollection {
   id: string;
   name: string;
+  /** Special collections carry puzzle-layout metadata in specialMeta */
+  collectionKind: DatasetCollectionCollectionKind;
+  specialMeta?: SpecialCollectionMeta;
   members: DatasetCollectionMember[];
   createdAt: string;
   updatedAt: string;
 }
 
+/**
+ * Partial update of special-collection metadata; at least one field must be present
+ */
+export interface PatchCollectionMetaBody {
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  bgOpacity?: number;
+  /**
+     * @minItems 2
+     * @maxItems 2
+     */
+  bgGeoAnchors?: CollectionGeoAnchor[] | null;
+  activeRevisionId?: string | null;
+}
+
+/**
+ * Save (or replace, when the name matches an existing revision) a named puzzle layout
+ */
+export interface SaveLayoutBody {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  tiles: LayoutTile[];
+  groups: LayoutGroup[];
+}
+
+/**
+ * Defaults to standard; special collections are created with empty puzzle metadata
+ */
+export type CreateDatasetCollectionBodyCollectionKind = typeof CreateDatasetCollectionBodyCollectionKind[keyof typeof CreateDatasetCollectionBodyCollectionKind];
+
+
+export const CreateDatasetCollectionBodyCollectionKind = {
+  standard: 'standard',
+  special: 'special',
+} as const;
+
 export interface CreateDatasetCollectionBody {
   name: string;
+  /** Defaults to standard; special collections are created with empty puzzle metadata */
+  collectionKind?: CreateDatasetCollectionBodyCollectionKind;
 }
 
 export interface RenameDatasetCollectionBody {
@@ -3694,6 +3827,15 @@ export type PostDatasetsRasterCommitBody = {
   resolution?: number;
   /** Output dataset file name (used to derive the dataset display name) */
   fileName: string;
+};
+
+export type PostUserCollectionsIdBackgroundBody = {
+  /** JPEG, PNG, or WebP reference image */
+  file: Blob;
+};
+
+export type PostUserCollectionsIdBackground200 = {
+  url: string;
 };
 
 export type GetMarkersParams = {
