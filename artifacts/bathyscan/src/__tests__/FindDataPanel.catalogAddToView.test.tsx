@@ -9,7 +9,7 @@
  *   4. Clicking ADD calls addSelected(presetId, "preset") on the terrain store.
  *   5. When the preset is already in the terrain store's selected pool the button
  *      shows "IN VIEW" and is disabled (cannot re-add).
- *   6. When selectedIds.length >= MAX_ACTIVE_DATASETS the button is disabled even
+ *   6. When visibleDatasets.length >= MAX_ACTIVE_DATASETS the button is disabled even
  *      though the entry is not yet in view (view is full).
  *   7. handleLoadCatalogSave calls setPendingExternalUserDatasetId with the save's
  *      datasetId and calls onClose when its onConfirm fires.
@@ -413,6 +413,48 @@ describe("FindDataPanel — catalog ADD button", () => {
     fireEvent.click(btn);
 
     expect(addSelectedSpy).not.toHaveBeenCalled();
+  });
+
+  it("ADD button is enabled for a third entry when proximity has auto-enrolled other IDs in selectedIds", () => {
+    // Two datasets are actually visible (cap = MAX_ACTIVE_DATASETS, typically 3).
+    const primaryEntry: VisibleDataset = {
+      datasetId: "existing-primary-abc",
+      source: "preset",
+      activeGrid: null,
+      overviewGrid: null,
+    };
+    const secondEntry: VisibleDataset = {
+      datasetId: "second-dataset-xyz",
+      source: "preset",
+      activeGrid: null,
+      overviewGrid: null,
+    };
+    // Proximity has pooled a dozen catalog IDs into selectedIds — none are visible.
+    const proximityPooled = Array.from({ length: 10 }, (_, i) => `proximity-pool-${i}`);
+    useTerrainStore.setState({
+      ...BLANK_TERRAIN_STATE,
+      visibleDatasets: [primaryEntry, secondEntry],
+      primaryDatasetIds: ["existing-primary-abc", "second-dataset-xyz"],
+      primaryDatasetId: "existing-primary-abc",
+      selectedIds: ["existing-primary-abc", "second-dataset-xyz", ...proximityPooled],
+      selectedSources: Object.fromEntries([
+        ["existing-primary-abc", "preset"],
+        ["second-dataset-xyz", "preset"],
+        ...proximityPooled.map((id) => [id, "preset"]),
+      ]),
+    });
+
+    const addSelectedSpy = vi.spyOn(useTerrainStore.getState(), "addSelected");
+    renderPanel();
+
+    // PRESET_ENTRY (thorne-bay-bathy) is NOT visible and NOT at cap → ADD enabled.
+    const btn = screen.getByTestId(`catalog-add-to-view-${PRESET_ENTRY.id}`);
+    expect(btn).toHaveTextContent("ADD");
+    expect(btn).not.toBeDisabled();
+
+    fireEvent.click(btn);
+    expect(addSelectedSpy).toHaveBeenCalledTimes(1);
+    expect(addSelectedSpy).toHaveBeenCalledWith(PRESET_ID, "preset", PRESET_ENTRY.lastUpdated);
   });
 
   it("shows ADD buttons for each preset card independently when a primary is loaded", () => {

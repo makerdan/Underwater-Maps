@@ -1125,19 +1125,16 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   // Terrain store — used to derive "Add to View" state for catalog cards and
   // to gate NCEI WCS saves (which require an active terrain area bbox).
   const terrainVisibleDatasets = useTerrainStore((s) => s.visibleDatasets);
-  const terrainSelectedIds = useTerrainStore((s) => s.selectedIds);
   const terrainActiveGrid = useTerrainStore((s) => s.activeGrid);
 
   const maxActiveDatasets = useSettingsStore((s) => s.maxActiveDatasets ?? 3);
   const hasCatalogPrimary = terrainVisibleDatasets.length > 0;
-  const atCatalogCap = terrainSelectedIds.length >= maxActiveDatasets;
-  // Set of all dataset IDs currently selected (active or queued) — for "IN VIEW" state.
-  const catalogSelectedIdSet = useMemo(
-    () => new Set([
-      ...terrainVisibleDatasets.map((v) => v.datasetId),
-      ...terrainSelectedIds,
-    ]),
-    [terrainVisibleDatasets, terrainSelectedIds],
+  const atCatalogCap = terrainVisibleDatasets.length >= maxActiveDatasets;
+  // Set of dataset IDs actively mounted in the 3D scene — for "IN VIEW" state.
+  // Proximity-pooled datasets in selectedIds that are NOT yet visible show "ADD".
+  const catalogVisibleIdSet = useMemo(
+    () => new Set(terrainVisibleDatasets.map((v) => v.datasetId)),
+    [terrainVisibleDatasets],
   );
 
   const handleCatalogAddToView = useCallback((presetId: string, dataUpdatedAt?: string | null) => {
@@ -1910,7 +1907,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                       presetId={presetId}
                       onLoad={handleLoad}
                       hasPrimary={hasCatalogPrimary}
-                      inView={presetId !== null && catalogSelectedIdSet.has(presetId)}
+                      inView={presetId !== null && catalogVisibleIdSet.has(presetId)}
                       atCap={atCatalogCap}
                       onAddToView={handleCatalogAddToView}
                       saveBlockedReason={saveBlockedReason}
@@ -1958,7 +1955,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                     )}
                     {federatedExternalResults.map((item) => {
                       const addDsId = federatedMaterializedMap.get(federatedItemToCatalogId(item)) ?? null;
-                      const itemInView = addDsId ? catalogSelectedIdSet.has(addDsId) : false;
+                      const itemInView = addDsId ? catalogVisibleIdSet.has(addDsId) : false;
                       return (
                         <FederatedResultCard
                           key={item.id}
