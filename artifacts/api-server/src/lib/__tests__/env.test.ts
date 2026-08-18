@@ -351,6 +351,79 @@ describe("validateStartupEnv", () => {
       expect(caught!.message).not.toContain("permanent lockout");
     });
 
+    describe("dev-mode startup warning (console.warn) when ADMIN_USER_IDS is unset", () => {
+      let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+
+      beforeEach(() => {
+        consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      });
+
+      afterEach(() => {
+        consoleWarnSpy.mockRestore();
+      });
+
+      it("emits a console.warn in development when ADMIN_USER_IDS is unset", () => {
+        vi.stubEnv("ADMIN_USER_IDS", "");
+        vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+        vi.stubEnv("REPLIT_DEPLOYMENT", "");
+        vi.stubEnv("NODE_ENV", "development");
+        expect(() => validateStartupEnv()).not.toThrow();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("ADMIN_USER_IDS is not set"),
+        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("no one can approve pending users"),
+        );
+      });
+
+      it("does NOT warn in development when ADMIN_USER_IDS is set to a valid id (regression guard)", () => {
+        vi.stubEnv("ADMIN_USER_IDS", "user_abc123");
+        vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+        vi.stubEnv("REPLIT_DEPLOYMENT", "");
+        vi.stubEnv("NODE_ENV", "development");
+        expect(() => validateStartupEnv()).not.toThrow();
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it("does NOT warn or exit in production when ADMIN_USER_IDS is set (regression guard)", () => {
+        vi.stubEnv("ADMIN_USER_IDS", "user_abc123");
+        vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+        vi.stubEnv("REPLIT_DEPLOYMENT", "1");
+        vi.stubEnv("NODE_ENV", "");
+        expect(() => validateStartupEnv()).not.toThrow();
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it("stays silent under NODE_ENV=test to keep unit-test output clean", () => {
+        vi.stubEnv("ADMIN_USER_IDS", "");
+        vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+        vi.stubEnv("REPLIT_DEPLOYMENT", "");
+        vi.stubEnv("NODE_ENV", "test");
+        expect(() => validateStartupEnv()).not.toThrow();
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it("does NOT warn in development when BUCKET_MONITOR_ADMIN=1 provides an admin pathway", () => {
+        vi.stubEnv("ADMIN_USER_IDS", "");
+        vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");
+        vi.stubEnv("REPLIT_DEPLOYMENT", "");
+        vi.stubEnv("NODE_ENV", "development");
+        expect(() => validateStartupEnv()).not.toThrow();
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      });
+
+      it("production with ADMIN_USER_IDS unset aborts startup (throws) before the server can bind", () => {
+        // In production the guard is fatal, not a warning: app.ts calls
+        // validateStartupEnv() at module init, so the throw prevents
+        // app.listen from ever running and the process exits non-zero.
+        vi.stubEnv("ADMIN_USER_IDS", "");
+        vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
+        vi.stubEnv("REPLIT_DEPLOYMENT", "");
+        vi.stubEnv("NODE_ENV", "production");
+        expect(() => validateStartupEnv()).toThrow(/ADMIN_USER_IDS/);
+      });
+    });
+
     it("emits a critical-level log entry (not just a warning) for the lockout issue", () => {
       vi.stubEnv("ADMIN_USER_IDS", "");
       vi.stubEnv("BUCKET_MONITOR_ADMIN", "");

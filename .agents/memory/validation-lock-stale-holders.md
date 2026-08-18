@@ -7,6 +7,8 @@ When a platform validation run is aborted mid-flight (e.g. it exceeds its window
 
 **How to fix:** `ps -eo pid,lstart,args | grep validation-lock.mjs`, kill the process groups of every holder that belongs to a dead/aborted run (`kill -9 -- -<pgid>`), remove leftover `.local/validation-lock-*.lock` files, then restart the tier workflow you actually need.
 
+**Recovery principle:** the lock is an exclusive-*pathname* file recording the holder pid (no flock, no held fd) — never blind-`rm` a validation lock: deleting a live holder's lock lets a second command run concurrently with it. Proving the holder pid dead is *also* not enough on its own — a read→check-dead→unlink sequence has a TOCTOU race (a waiter can reclaim and a new wrapper acquire a replacement lock between the read and the unlink). Every stale-lock unlink must go through the shared atomic verify-then-unlink protocol in `scripts/lib/reclaim-mutex.mjs` (per-lock-file mkdir mutex + byte-identical generation check + staleness re-verify on a fresh read inside the mutex); both `validation-lock.mjs`'s reclaim and the post-merge cleaner (`scripts/clean-stale-validation-locks.mjs`) use it. Live orphaned holder *processes* still require the manual pgid-kill step above.
+
 **Why:** the lock's dead-PID reclaim only fires when the holder PID is gone; orphaned wrappers stay alive because only their Temporal parent died.
 
 **Also:** the full registered validation set (typecheck, lint, 3 tiers, 2 e2e suites, …) cannot finish inside a mark_task_complete window when serialized — expect RUNNING/timeouts; verify with the task's designated tier workflow instead and skip validation with a reason.

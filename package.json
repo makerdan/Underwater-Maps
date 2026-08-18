@@ -40,6 +40,7 @@
     "check:skip-count": "node --test scripts/__tests__/check-skip-count.test.mjs && node scripts/check-skip-count.mjs",
     "check:testdb-schema-drift": "node --test scripts/__tests__/check-testdb-schema-drift.test.mjs && node scripts/check-testdb-schema-drift.mjs",
     "check:runbutton-noop": "node --test scripts/__tests__/check-runbutton-noop.test.mjs && node scripts/check-runbutton-noop.mjs",
+    "check:stale-lock-cleanup": "node --test scripts/__tests__/clean-stale-validation-locks.test.mjs",
     "check:ports": "node scripts/check-hardcoded-ports.mjs",
     "check:e2e-user-ids": "bash scripts/check-e2e-user-ids.sh",
     "check:e2e-panel-collapse": "bash scripts/check-e2e-panel-collapse.sh",

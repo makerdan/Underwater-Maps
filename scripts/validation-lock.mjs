@@ -54,6 +54,7 @@ import {
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { reclaimStaleLock } from "./lib/reclaim-mutex.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -129,11 +130,22 @@ function pidAlive(pid) {
 }
 
 function readLockInfo() {
-  const lines = readFileSync(lockFile, "utf8").split("\n");
+  const raw = readFileSync(lockFile, "utf8");
+  const lines = raw.split("\n");
   const pid = Number(lines[0]?.trim());
   const acquiredAt = Number(lines[1]?.trim());
   const mtimeMs = statSync(lockFile).mtimeMs;
-  return { pid, acquiredAt, mtimeMs };
+  return { pid, acquiredAt, mtimeMs, raw };
+}
+
+/** Staleness conditions shared by the initial detection pass and the
+ * inside-mutex re-verification in reclaimStaleLock(). */
+function isStaleForReclaim(info, now) {
+  return (
+    (Number.isInteger(info.pid) && info.pid > 0 && !pidAlive(info.pid)) ||
+    now - info.mtimeMs > STALE_HEARTBEAT_MS ||
+    (Number.isFinite(info.acquiredAt) && info.acquiredAt > 0 && now - info.acquiredAt > MAX_HOLD_MS)
+  );
 }
 
 function tryAcquire() {
@@ -145,7 +157,7 @@ function tryAcquire() {
   } catch (err) {
     if (err.code !== "EEXIST") throw err;
     try {
-      const { pid: holderPid, acquiredAt, mtimeMs } = readLockInfo();
+      const { pid: holderPid, acquiredAt, mtimeMs, raw } = readLockInfo();
       const now = Date.now();
       let reason = null;
       let isHungHolder = false;
@@ -168,7 +180,22 @@ function tryAcquire() {
             try { process.kill(holderPid, "SIGKILL"); } catch { /* ESRCH — already exited, suppress */ }
           } catch { /* process already gone — proceed with reclaim */ }
         }
-        try { unlinkSync(lockFile); } catch { /* raced with another reclaimer */ }
+        // Atomic verify-then-unlink via the shared reclaim protocol
+        // (scripts/lib/reclaim-mutex.mjs): under a per-lock-file mutex,
+        // re-verify the pathname still holds the exact lock generation we
+        // inspected (byte-identical contents) and that it is still stale.
+        // A direct unlink here would race: another reclaimer could remove
+        // the stale file and a new wrapper could acquire a replacement lock
+        // between our read above and the unlink — the unlink would then
+        // destroy the new live holder's lock.
+        const outcome = reclaimStaleLock(lockFile, {
+          expectedRaw: raw,
+          isStillStale: (fresh) => isStaleForReclaim(fresh, Date.now()),
+          mutexTimeoutMs: 1_000,
+        });
+        if (outcome === "changed" || outcome === "busy") {
+          console.log(`[validation-lock] reclaim skipped (${outcome}) — retrying on next poll`);
+        }
       }
     } catch { /* lock vanished between open and read — just retry */ }
     return false;

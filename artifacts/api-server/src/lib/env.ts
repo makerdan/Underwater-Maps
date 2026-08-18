@@ -178,6 +178,25 @@ export function validateStartupEnv(): EnvIssue[] {
     });
   }
 
+  // In non-production the missing-admin condition is not fatal (dev sessions
+  // routinely run without it), but it is still the top silent
+  // misconfiguration: every sign-in lands as permanently pending and the
+  // admin panel shows an empty user list with no explanation. Warn loudly on
+  // startup so developers see it before going live. Suppressed under
+  // NODE_ENV=test to keep unit-test output clean; console.warn (stderr) is
+  // used deliberately so the message is visible even when the structured
+  // logger output is filtered.
+  if (
+    !isProduction &&
+    !adminIdsPresent &&
+    !bucketAdminActive &&
+    process.env["NODE_ENV"] !== "test"
+  ) {
+    console.warn(
+      "⚠  ADMIN_USER_IDS is not set — no one can approve pending users. Set this secret before going live.",
+    );
+  }
+
   for (const issue of issues) {
     const safeMeta = { name: issue.name, valueLength: issue.valueLength, valuePreview: issue.valuePreview };
     if (issue.critical) {

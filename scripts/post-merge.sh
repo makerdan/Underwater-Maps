@@ -4,6 +4,12 @@ set -e
 # (which runs codegen) does not time out waiting on a lock left by a prior
 # interrupted run. Safe here because post-merge.sh runs serially.
 rm -f lib/api-zod/src/generated/.codegen.lock
+# Clear any stale validation locks left by aborted runs. An orphaned
+# .local/validation-lock-*.lock deadlocks every subsequent validation run
+# until removed. The cleaner removes only locks whose recorded holder pid is
+# dead — a blind `rm -f` would break mutual exclusion for a validation step
+# that is legitimately still running while post-merge executes.
+node scripts/clean-stale-validation-locks.mjs
 # Install Python image-processing packages required by raster_contour.py.
 # Uses bare `pip` + PYTHONUSERBASE=.pythonlibs per Nix pip convention (python3 -m pip
 # and uv both fail against the read-only Nix store).

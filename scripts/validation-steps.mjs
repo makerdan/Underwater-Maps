@@ -113,6 +113,9 @@ export function getValidationSteps(logPrefix) {
     // no resource: parses .replit and fails if the run-button workflow has workflow.run tasks
     // or more than one task — prevents boot storms after environment restarts, sub-second
     { name: "check:runbutton-noop", resource: null, cmd: "pnpm run check:runbutton-noop", tiers: FAST },
+    // no resource: self-test for the post-merge stale-lock cleaner — proves cleanup
+    // never removes a live holder's lock (mutual exclusion preserved), sub-second
+    { name: "check:stale-lock-cleanup", resource: null, cmd: "pnpm run check:stale-lock-cleanup", tiers: FAST },
     // unit-cpu resource: prevents CPU saturation / budget breach
     { name: "test:unit", resource: "unit-cpu", cmd: "pnpm run test:unit", tiers: STANDARD },
     // all check:* steps are lightweight; no resource needed
