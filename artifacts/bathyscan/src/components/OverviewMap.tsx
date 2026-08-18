@@ -4373,11 +4373,36 @@ export const OverviewMap: React.FC = () => {
                 borderRadius: 4,
                 padding: "2px 6px",
               }}>
-                <span style={{ color: "rgba(192,132,252,0.7)", fontFamily: "'JetBrains Mono', monospace", fontSize: "calc(10px * var(--bs-font-scale,1))", letterSpacing: "0.05em", marginRight: 2 }}>↻</span>
-                <button data-testid="overview-puzzle-rotate-minus90" style={btnStyle} title="Rotate −90°" onClick={() => applyDelta(-90)}>−90°</button>
-                <button data-testid="overview-puzzle-rotate-minus45" style={btnStyle} title="Rotate −45°" onClick={() => applyDelta(-45)}>−45°</button>
-                <button data-testid="overview-puzzle-rotate-minus5"  style={btnStyle} title="Rotate −5°"  onClick={() => applyDelta(-5)}>−5°</button>
-                <button data-testid="overview-puzzle-rotate-minus1"  style={btnStyle} title="Rotate −1°"  onClick={() => applyDelta(-1)}>−1°</button>
+                <select
+                  data-testid="overview-puzzle-rotate-dropdown"
+                  value=""
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v)) applyDelta(v);
+                    e.target.value = "";
+                  }}
+                  title="Rotate by step"
+                  style={{
+                    background: "rgba(0,0,0,0.55)",
+                    border: "1px solid rgba(168,85,247,0.55)",
+                    borderRadius: 3,
+                    color: "#e9d5ff",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: "calc(11px * var(--bs-font-scale,1))",
+                    padding: "1px 2px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="" disabled>↻ Step…</option>
+                  <option value="-90">−90°</option>
+                  <option value="-45">−45°</option>
+                  <option value="-5">−5°</option>
+                  <option value="-1">−1°</option>
+                  <option value="1">+1°</option>
+                  <option value="5">+5°</option>
+                  <option value="45">+45°</option>
+                  <option value="90">+90°</option>
+                </select>
                 <input
                   data-testid="overview-puzzle-angle-input"
                   type="number"

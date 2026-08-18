@@ -179,9 +179,8 @@ test.describe("BathyScan — Overview Puzzle rotation panel", () => {
     // Rotation panel must now be visible.
     await expect(page.getByTestId("overview-puzzle-rotation-panel")).toBeVisible({ timeout: 3_000 });
 
-    // All rotation buttons must be present.
-    await expect(page.getByTestId("overview-puzzle-rotate-plus90")).toBeVisible();
-    await expect(page.getByTestId("overview-puzzle-rotate-minus90")).toBeVisible();
+    // Rotation dropdown and angle input must be present.
+    await expect(page.getByTestId("overview-puzzle-rotate-dropdown")).toBeVisible();
     await expect(page.getByTestId("overview-puzzle-angle-input")).toBeVisible();
   });
 
@@ -217,8 +216,8 @@ test.describe("BathyScan — Overview Puzzle rotation panel", () => {
     const angleBefore = await getPuzzleAngle(page, tileId);
     expect(angleBefore ?? 0).toBe(0);
 
-    // Click the +90° button.
-    await page.getByTestId("overview-puzzle-rotate-plus90").dispatchEvent("click");
+    // Select +90° from the dropdown.
+    await page.selectOption("[data-testid='overview-puzzle-rotate-dropdown']", "90");
 
     // The transform must now show angleDeg = 90.
     await expect
@@ -300,7 +299,7 @@ test.describe("BathyScan — Overview Puzzle rotation panel", () => {
     await expect(page.getByTestId("overview-puzzle-rotation-panel")).toBeVisible({ timeout: 3_000 });
 
     // Apply a non-zero rotation first so the reset button appears.
-    await page.getByTestId("overview-puzzle-rotate-plus90").dispatchEvent("click");
+    await page.selectOption("[data-testid='overview-puzzle-rotate-dropdown']", "90");
     await expect
       .poll(() => getPuzzleAngle(page, tileId), { timeout: 3_000 })
       .toBe(90);
