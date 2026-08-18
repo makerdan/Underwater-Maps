@@ -259,6 +259,15 @@ Authentication is handled by **Clerk** across all surfaces:
 - API server: Clerk Express middleware validates session tokens on every protected route (`CLERK_SECRET_KEY`).
 - Dev/e2e bypass: `VITE_DEV_AUTH_BYPASS=1` skips Clerk in headless Playwright runs. Never set in production.
 
+#### Bootstrap admin (avoid lockout)
+
+Every new sign-in is held as **pending** until an admin approves it (`requireApproved` middleware, `artifacts/api-server/src/middlewares/requireApproved.ts`). Admins bypass the approval check entirely via `isAdmin()` in `artifacts/api-server/src/lib/adminAccess.ts`.
+
+- **`ADMIN_USER_IDS`** (Replit Secret, shared) — comma-separated Clerk user IDs that are unconditional admins. Set at least the owner's ID before the app goes live or nobody can approve new users.
+- `BUCKET_MONITOR_ADMIN=1` is a dev-only shortcut that makes *every* user an admin. It must **never** be set in production (`validateStartupEnv()` will refuse to start if it detects this in prod).
+- To find your Clerk user ID: Clerk Dashboard → Users, or check the `userId` field in any authenticated API response.
+- Admins can approve/ban/restore users via `POST /admin/users/:clerkUserId/approve` (and related routes).
+
 ---
 
 <!-- GENERATED:API-ROUTES:START -->
