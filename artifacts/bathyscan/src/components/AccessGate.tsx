@@ -31,10 +31,13 @@
  * requireApproved), so the probe would always be a meaningless 200. The gate
  * short-circuits to "approved" to avoid an extra request on every e2e load.
  */
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { useUser, useClerk } from "@/lib/clerkCompat";
 import { DEV_AUTH_BYPASS } from "@/lib/devAuth";
+
+/** How often (ms) to re-probe the server while the awaiting-approval screen is showing. */
+export const PENDING_POLL_INTERVAL_MS = 30_000;
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -164,6 +167,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
 
   const email = user?.primaryEmailAddress?.emailAddress ?? null;
 
+  // Initial probe (and manual retry via `attempt`).
   useEffect(() => {
     if (DEV_AUTH_BYPASS) return;
     let cancelled = false;
@@ -214,6 +218,65 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
     };
   }, [attempt]);
 
+  // Periodic re-probe while the awaiting-approval screen is showing.
+  // When the admin approves the user the next poll will transition automatically
+  // to "approved" without requiring a page reload.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCancelledRef = useRef(false);
+
+  const runPoll = useCallback(async () => {
+    if (pollCancelledRef.current) return;
+    try {
+      const res = await authorizedFetch(`${basePath}/api/settings`);
+      if (pollCancelledRef.current) return;
+
+      if (res.status === 403) {
+        let code: string | undefined;
+        try {
+          code = ((await res.json()) as { error?: string }).error;
+        } catch {
+          // ignore parse error, stay pending
+        }
+        if (pollCancelledRef.current) return;
+        if (code === "awaiting_approval") return; // still pending — do nothing
+        if (code === "account_banned") {
+          setState("banned");
+          return;
+        }
+        // Unknown 403: fail open
+        setState("approved");
+        return;
+      }
+
+      if (res.status >= 200 && res.status < 500) {
+        // Includes 2xx (approved), 4xx-other (fail open per gate contract).
+        // 5xx: silently ignore and keep polling.
+        setState("approved");
+      }
+      // 5xx: do nothing, keep polling
+    } catch {
+      // Network failure during a background poll — silently ignore and retry
+      // on the next tick rather than crashing the pending screen.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (state !== "pending" || DEV_AUTH_BYPASS) return;
+
+    pollCancelledRef.current = false;
+    pollRef.current = setInterval(() => {
+      void runPoll();
+    }, PENDING_POLL_INTERVAL_MS);
+
+    return () => {
+      pollCancelledRef.current = true;
+      if (pollRef.current !== null) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [state, runPoll]);
+
   if (state === "approved") return <>{children}</>;
 
   if (state === "checking") {
@@ -233,7 +296,10 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
             {email}
           </div>
         )}
-        <div style={S.text}>You will be notified when your account is approved.</div>
+        <div style={S.text}>
+          This page checks automatically — you will be let in the moment your
+          account is approved.
+        </div>
         <button
           style={S.button}
           data-testid="access-gate-signout"

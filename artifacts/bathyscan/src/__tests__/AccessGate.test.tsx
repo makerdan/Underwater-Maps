@@ -5,7 +5,7 @@
  *   - Approved user: probe resolves 200 → children render, no gate screen
  *     (Regression Guard #1: approved users are never blocked by the gate).
  *   - Pending user: 403 awaiting_approval → awaiting-approval screen with the
- *     user's email, notification note, and Sign out button; children never
+ *     user's email, auto-check note, and Sign out button; children never
  *     render.
  *   - Banned user: 403 account_banned → suspended screen; children never
  *     render.
@@ -15,14 +15,17 @@
  *   - Sign out button calls Clerk's signOut().
  *   - No content flash: while the probe is unresolved only the spinner is
  *     shown, and a re-mount while pending still gates without flashing.
+ *   - Polling: while the awaiting-approval screen is showing the gate
+ *     re-probes every PENDING_POLL_INTERVAL_MS and transitions to "approved"
+ *     automatically when the server returns 200, without a page reload.
  *
  * Regression Guard #2: AdminPanel's status === "forbidden" branch still
  * renders the forbidden card for non-admins, and UserAccessSection is NOT
  * rendered for non-admins (only when status === "ok").
  */
 import React from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 
 const signOutMock = vi.fn(async () => undefined);
 
@@ -50,7 +53,7 @@ vi.mock("@/components/admin/UserAccessSection", () => ({
   UserAccessSection: () => <div data-testid="user-access-stub" />,
 }));
 
-import { AccessGate } from "@/components/AccessGate";
+import { AccessGate, PENDING_POLL_INTERVAL_MS } from "@/components/AccessGate";
 import { AdminPanel } from "@/components/AdminPanel";
 
 function jsonResponse(status: number, body?: unknown): Response {
@@ -70,7 +73,9 @@ function renderGate() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  // resetAllMocks clears both recorded calls AND stored implementations so
+  // a mockResolvedValue() set in one test cannot bleed into the next.
+  vi.resetAllMocks();
 });
 
 describe("AccessGate — approved user (Regression Guard #1)", () => {
@@ -136,7 +141,8 @@ describe("AccessGate — pending user", () => {
     expect(
       screen.getByText(/awaiting admin approval/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/notified when your account is approved/i)).toBeInTheDocument();
+    // Updated copy: automatic polling, no email notification promise.
+    expect(screen.getByText(/checks automatically/i)).toBeInTheDocument();
     expect(screen.queryByTestId("app-content")).toBeNull();
   });
 
@@ -164,6 +170,142 @@ describe("AccessGate — pending user", () => {
       expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument(),
     );
     expect(screen.queryByTestId("app-content")).toBeNull();
+  });
+});
+
+describe("AccessGate — automatic polling while pending", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Helper: let the initial access probe settle (triggers the mount effect,
+   * fires the fetch, and flushes the resulting state update) using fake timers.
+   */
+  async function drainInitialProbe() {
+    // act(async) flushes the microtask queue so the mocked fetch promise and
+    // its .json() parse both resolve before we assert.
+    await act(async () => {});
+  }
+
+  /**
+   * Helper: advance fake time by `ms` milliseconds and flush all resulting
+   * microtasks so that poll callback + fetch promise + React state update all
+   * settle atomically inside a single act() call.
+   */
+  async function advanceAndFlush(ms: number) {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
+
+  it("re-probes at PENDING_POLL_INTERVAL_MS and lets the user through when 200 is returned, without a page reload", async () => {
+    vi.useFakeTimers();
+
+    // First call: pending. Second call (from poll): approved.
+    authorizedFetchMock
+      .mockResolvedValueOnce(jsonResponse(403, { error: "awaiting_approval" }))
+      .mockResolvedValueOnce(jsonResponse(200, {}));
+
+    renderGate();
+    await drainInitialProbe();
+
+    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-content")).toBeNull();
+    expect(authorizedFetchMock).toHaveBeenCalledTimes(1);
+
+    // Advance the clock exactly one poll interval.
+    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
+
+    // Poll returned 200 → children should now be visible without a page reload.
+    expect(screen.getByTestId("app-content")).toBeInTheDocument();
+    expect(screen.queryByTestId("access-gate-pending")).toBeNull();
+    expect(authorizedFetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("stays pending when the poll still returns 403 awaiting_approval", async () => {
+    vi.useFakeTimers();
+
+    authorizedFetchMock.mockResolvedValue(
+      jsonResponse(403, { error: "awaiting_approval" }),
+    );
+
+    renderGate();
+    await drainInitialProbe();
+
+    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
+
+    // Advance through two full poll cycles.
+    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
+    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
+
+    // Still pending — not approved, not crashed.
+    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-content")).toBeNull();
+    // Initial probe + 2 poll ticks.
+    expect(authorizedFetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("transitions to banned if the poll returns 403 account_banned", async () => {
+    vi.useFakeTimers();
+
+    authorizedFetchMock
+      .mockResolvedValueOnce(jsonResponse(403, { error: "awaiting_approval" }))
+      .mockResolvedValueOnce(jsonResponse(403, { error: "account_banned" }));
+
+    renderGate();
+    await drainInitialProbe();
+
+    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
+
+    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
+
+    expect(screen.getByTestId("access-gate-banned")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-content")).toBeNull();
+  });
+
+  it("silently ignores network errors during polling and keeps checking", async () => {
+    vi.useFakeTimers();
+
+    authorizedFetchMock
+      .mockResolvedValueOnce(jsonResponse(403, { error: "awaiting_approval" }))
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce(jsonResponse(200, {}));
+
+    renderGate();
+    await drainInitialProbe();
+
+    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
+
+    // First poll tick: network error — pending screen must survive, not crash.
+    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
+    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
+
+    // Second poll tick: 200 — transitions to approved.
+    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
+    expect(screen.getByTestId("app-content")).toBeInTheDocument();
+  });
+
+  it("stops polling after the component unmounts", async () => {
+    vi.useFakeTimers();
+
+    authorizedFetchMock.mockResolvedValue(
+      jsonResponse(403, { error: "awaiting_approval" }),
+    );
+
+    const { unmount } = renderGate();
+    await drainInitialProbe();
+
+    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
+
+    const callsAfterMount = authorizedFetchMock.mock.calls.length;
+
+    unmount();
+
+    // Advancing after unmount should produce no additional fetch calls.
+    await advanceAndFlush(PENDING_POLL_INTERVAL_MS * 3);
+
+    expect(authorizedFetchMock).toHaveBeenCalledTimes(callsAfterMount);
   });
 });
 
