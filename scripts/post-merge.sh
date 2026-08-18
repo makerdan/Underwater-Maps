@@ -84,6 +84,11 @@ bash scripts/check-e2e-panel-collapse.sh
 # Zustand rehydration; the spec must use setItem with an explicit known-good value
 # instead.  See the script header for the correct pattern per key.
 bash scripts/check-e2e-localstorage-removeitem.sh
+# Guardrail: reject a .replit that adds workflow.run tasks to the run-button
+# workflow, which would launch a boot storm on every environment restart.
+# This check runs after the merge has landed so any agent-written .replit
+# replacement is evaluated before the environment restarts and fires it.
+node scripts/check-runbutton-noop.mjs
 # Unit tests are intentionally not run here — the full recursive test suite
 # consumes enough memory to get OOM-killed mid-run. Tests are covered by the
 # validation system (test-unit workflow) and pre-existing failures are tracked
