@@ -14,7 +14,8 @@ Full detail in `docs/audits/bug-audit-preexisting-2026-08.md`.
 - check:fixture-freshness survey.laz — .laz now compared size-only (lazrs bytes are environment-dependent).
 
 **STILL LIVE:**
-- `tests/e2e/overview-puzzle-multiselect.spec.ts` — 3/6 tests fail deterministically: `expect.poll(...).toSatisfy is not a function` (Vitest matcher, unsupported by Playwright expect.poll; 5 call sites). The documented "60 s timeout" did NOT reproduce solo — load artifact of the full palette suite.
+- `tests/e2e/overview-puzzle-multiselect.spec.ts` — 2/6 tests still fail deterministically after the toSatisfy fixes, verified on a pristine main checkout (sessionStorage-hydration reload test; Reset-button test, a spec/app mismatch — Reset renders only when a tile has a nonzero transform, but the test creates only a group).
+- Durable rule: tests that scrub the tide slider to a hard-coded hour fail during that wall-clock UTC hour (setHour short-circuits when the target hour equals "now"). Always derive the target hour from the current hour plus an offset.
 - Plan-archive lint gates block every tier per environment — see plan-file-lint-backlog.md.
 - Raw `pnpm audit --audit-level=moderate` — 6 dev-only vulns (5 moderate + 1 exempted high via jsdom→undici; 1 postcss). Registered check:audit gate is green.
 

@@ -132,7 +132,13 @@ vi.mock("@/lib/zoneOverlayStore", () => ({
 vi.mock("@/lib/uiStore", () => ({
   useUiStore: Object.assign(
     (_sel: unknown) => undefined,
-    { setState: vi.fn() },
+    {
+      setState: vi.fn(),
+      // performSignOutCleanup (imported transitively) calls
+      // useUiStore.getState().setPuzzleGeoTransforms(...) — the mock must
+      // expose getState or any test invoking sign-out cleanup crashes.
+      getState: vi.fn(() => ({ setPuzzleGeoTransforms: vi.fn() })),
+    },
   ),
   CURRENT_DEPTH_LAYERS: ["surface", "mid", "bottom"],
 }));

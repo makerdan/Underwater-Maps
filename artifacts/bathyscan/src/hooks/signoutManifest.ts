@@ -32,6 +32,8 @@ import { useDriftStore } from "@/lib/driftStore";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { usePaletteStore } from "@/lib/paletteStore";
 import { useDriveBoatStore } from "@/lib/driveBoatStore";
+import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
+import { usePuzzleStore } from "@/lib/puzzleStore";
 
 // ─── Stores that hold per-user session state ─────────────────────────────────
 
@@ -123,6 +125,24 @@ export const SIGNOUT_STORE_MANIFEST: readonly StoreManifestEntry[] = [
     installProbe: (probe) =>
       swapAction(useDriveBoatStore, "resetForSignOut", probe),
   },
+  {
+    storeName: "specialCollectionStore",
+    module: "lib/specialCollectionStore.ts",
+    hasResetAction: () =>
+      typeof useSpecialCollectionStore.getState().resetForSignOut === "function",
+    installProbe: (probe) =>
+      swapAction(useSpecialCollectionStore, "resetForSignOut", probe),
+  },
+  {
+    storeName: "puzzleStore",
+    module: "lib/puzzleStore.ts",
+    // Holds the per-user puzzle layout mirror (3D marker geography). Its
+    // resetForSignOut also bumps signOutNonce so a mounted OverviewMap clears
+    // its component-local transforms/groups in the live instance.
+    hasResetAction: () =>
+      typeof usePuzzleStore.getState().resetForSignOut === "function",
+    installProbe: (probe) => swapAction(usePuzzleStore, "resetForSignOut", probe),
+  },
 ];
 
 // ─── Stores explicitly excluded from sign-out reset ──────────────────────────
@@ -159,7 +179,6 @@ export const SIGNOUT_EXCLUDED_STORES: readonly ExcludedStoreEntry[] = [
   { storeName: "offlineStore", module: "lib/offlineStore.ts", reason: "Connectivity/session-expiry flags describing the device's current network state." },
   { storeName: "panelCollapseStore", module: "lib/panelCollapseStore.ts", reason: "Reset directly by performSignOutCleanup (setState to defaults) and its 'bathyscan:panel-collapse' key is in the localStorage manifest; no named reset action needed." },
   { storeName: "proximityStreamingStore", module: "lib/proximityStreamingStore.ts", reason: "Transient proximity-streaming HUD state." },
-  { storeName: "puzzleStore", module: "lib/puzzleStore.ts", reason: "In-memory mirror of Overview Map puzzle mode; the persisted puzzle keys are cleared via the localStorage manifest." },
   { storeName: "satelliteTileStore", module: "lib/satelliteTileStore.ts", reason: "Blob object-URL for the loaded dataset's satellite texture." },
   { storeName: "simulatedDataStore", module: "lib/simulatedDataStore.ts", reason: "Simulated-data warning dialog state (per dataset-switch, not per user)." },
   { storeName: "terrainStore", module: "lib/terrainStore.ts", reason: "Loaded terrain grids/datasets (server data, auth-guarded per account at fetch time); reloaded per sign-in, heavy to wipe eagerly." },

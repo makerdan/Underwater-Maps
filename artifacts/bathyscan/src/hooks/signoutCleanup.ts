@@ -31,6 +31,9 @@ import { useTrailStore } from "@/lib/trailStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useLiveModeStore } from "@/lib/liveMode";
 import { useDriveBoatStore } from "@/lib/driveBoatStore";
+import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
+import { usePuzzleStore } from "@/lib/puzzleStore";
+import { useUiStore } from "@/lib/uiStore";
 
 function safeRemove(key: string): void {
   try {
@@ -96,6 +99,19 @@ export function performSignOutCleanup(): void {
   // AppProvider (which now reads these from the store) reflects defaults
   // immediately — without requiring a page reload.
   useDriveBoatStore.getState().resetForSignOut();
+
+  // Active special collection (per-account server data: reference image,
+  // geo-anchors, layout revisions) and any queued puzzle-layout restore.
+  useSpecialCollectionStore.getState().resetForSignOut();
+
+  // Live puzzle layout state: wipe the puzzleStore mirror (3D marker
+  // geography) and bump its signOutNonce so a MOUNTED OverviewMap clears its
+  // component-local transforms/groups/selection too — otherwise the previous
+  // account's layout survives in the live component until unmount. Also clear
+  // the uiStore geo-transform mirror directly so it is clean even when
+  // OverviewMap is not mounted.
+  usePuzzleStore.getState().resetForSignOut();
+  useUiStore.getState().setPuzzleGeoTransforms(new Map());
 
   // Overview Map puzzle layout (localStorage + its sessionStorage twin).
   safeRemove("bathyscan:puzzleTransforms");

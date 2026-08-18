@@ -18,11 +18,15 @@
  *  10. AddToCollectionDialog: pick an existing collection → one add-member
  *      call per target; create-new-name path creates first, then adds.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 import { renderWithProviders } from "./setup";
 import { CollectionsSection, AddToCollectionDialog } from "@/components/CollectionsSection";
+import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
+import { useTerrainStore } from "@/lib/terrainStore";
+import { useUiStore } from "@/lib/uiStore";
+import { buildRestoredPuzzleState } from "@/lib/puzzleRestore";
 
 // ---------------------------------------------------------------------------
 // Hoisted shared spies
@@ -173,6 +177,36 @@ const COLLECTION_TRIP = {
   updatedAt: "2024-01-01T00:00:00Z",
 };
 
+const REVISION_1 = {
+  id: "rev-1",
+  name: "Draft 1",
+  savedAt: "2024-02-01T00:00:00Z",
+  tiles: [
+    { datasetId: "ds-1", tx: 12, ty: -8, angleDeg: 90, locked: true, annotation: "north shelf" },
+    { datasetId: "ds-2", tx: -4, ty: 6, angleDeg: 0, locked: false, annotation: null },
+  ],
+  groups: [{ id: "g1", name: "Group 1", datasetIds: ["ds-1", "ds-2"] }],
+};
+
+const COLLECTION_SPECIAL = {
+  id: "col-sp",
+  name: "Alaska 01",
+  collectionKind: "special",
+  specialMeta: {
+    bgImageKey: null,
+    bgOpacity: 0.5,
+    bgGeoAnchors: null,
+    layoutRevisions: [REVISION_1],
+    activeRevisionId: "rev-1",
+  },
+  members: [
+    { id: "mem-sp-1", kind: "dataset", refId: "ds-1", name: "Survey A", createdAt: "2024-01-02T00:00:00Z" },
+    { id: "mem-sp-2", kind: "dataset", refId: "ds-2", name: "Survey B", createdAt: "2024-01-03T00:00:00Z" },
+  ],
+  createdAt: "2024-01-01T00:00:00Z",
+  updatedAt: "2024-01-01T00:00:00Z",
+};
+
 class FakeApiError extends Error {
   data: unknown;
   status: number;
@@ -193,6 +227,8 @@ beforeEach(() => {
   mocks.removeMemberMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.deleteDatasetMutateAsync.mockReset();
   mocks.invalidateQueries.mockReset().mockResolvedValue(undefined);
+  useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0 });
+  useUiStore.getState().setOverviewOpen(false);
 });
 
 // ---------------------------------------------------------------------------
@@ -318,6 +354,124 @@ describe("CollectionsSection", () => {
       expect(mocks.removeMemberMutateAsync).toHaveBeenCalledWith({ id: "col-trip", memberId: "mem-1" });
     });
     expect(mocks.deleteDatasetMutateAsync).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Special collections (reference-image puzzle assembly)
+// ---------------------------------------------------------------------------
+
+describe("CollectionsSection — special collections", () => {
+  it("standard collections show no settings gear or activate button", () => {
+    currentCollections = [COLLECTION_TRIP];
+    renderWithProviders(<CollectionsSection />);
+    expect(screen.queryByTestId("btn-collection-settings-col-trip")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("btn-activate-collection-col-trip")).not.toBeInTheDocument();
+  });
+
+  it("special create flow posts collectionKind and opens the settings sheet", async () => {
+    mocks.createMutateAsync.mockResolvedValue({
+      id: "col-sp-new",
+      name: "Alaska 01",
+      collectionKind: "special",
+      specialMeta: {
+        bgImageKey: null,
+        bgOpacity: 0.5,
+        bgGeoAnchors: null,
+        layoutRevisions: [],
+        activeRevisionId: null,
+      },
+      members: [],
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+    });
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-new-collection"));
+    fireEvent.click(screen.getByTestId("input-new-collection-special"));
+    fireEvent.change(screen.getByTestId("input-new-collection"), { target: { value: "Alaska 01" } });
+    fireEvent.click(screen.getByTestId("btn-create-collection"));
+    await waitFor(() => {
+      expect(mocks.createMutateAsync).toHaveBeenCalledWith({
+        data: { name: "Alaska 01", collectionKind: "special" },
+      });
+    });
+    // Settings sheet opens immediately on the freshly created collection.
+    await waitFor(() => {
+      expect(screen.getByTestId("collection-settings-sheet-col-sp-new")).toBeInTheDocument();
+    });
+  });
+
+  it("settings sheet opens from the gear button and closes again", async () => {
+    currentCollections = [COLLECTION_SPECIAL];
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-collection-settings-col-sp"));
+    expect(screen.getByTestId("collection-settings-sheet-col-sp")).toBeInTheDocument();
+    // The saved revision is listed with Restore/Delete actions.
+    expect(screen.getByTestId("collection-revision-row-rev-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("btn-close-collection-settings-col-sp"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("collection-settings-sheet-col-sp")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Activate for Puzzle", () => {
+    const origAddSelected = useTerrainStore.getState().addSelected;
+    afterEach(() => {
+      useTerrainStore.setState({ addSelected: origAddSelected });
+    });
+
+    it("loads members, opens the Overview, and queues the active revision restore", async () => {
+      const addSelected = vi.fn();
+      useTerrainStore.setState({ addSelected });
+      currentCollections = [COLLECTION_SPECIAL];
+      renderWithProviders(<CollectionsSection />);
+      fireEvent.click(screen.getByTestId("btn-activate-collection-col-sp"));
+
+      await waitFor(() => {
+        expect(useSpecialCollectionStore.getState().pendingRestore).not.toBeNull();
+      });
+      // (a) every member dataset was loaded,
+      expect(addSelected).toHaveBeenCalledWith("ds-1", "user");
+      expect(addSelected).toHaveBeenCalledWith("ds-2", "user");
+      // (b/d) the collection is active (background overlay source of truth),
+      const { active } = useSpecialCollectionStore.getState();
+      expect(active?.collectionId).toBe("col-sp");
+      expect(active?.bgOpacity).toBe(0.5);
+      // and the Overview panel was opened.
+      expect(useUiStore.getState().overviewOpen).toBe(true);
+    });
+
+    it("REGRESSION GUARD: the queued restore yields both tiles with store and canvas views in lockstep", async () => {
+      useTerrainStore.setState({ addSelected: vi.fn() });
+      currentCollections = [COLLECTION_SPECIAL];
+      renderWithProviders(<CollectionsSection />);
+      fireEvent.click(screen.getByTestId("btn-activate-collection-col-sp"));
+
+      await waitFor(() => {
+        expect(useSpecialCollectionStore.getState().pendingRestore).not.toBeNull();
+      });
+      const payload = useSpecialCollectionStore.getState().pendingRestore!.payload;
+      expect(payload.tiles).toHaveLength(2);
+
+      // Build the restored state exactly as OverviewMap's consumer effect does.
+      const restored = buildRestoredPuzzleState(payload, new Set(["ds-1", "ds-2"]), 0);
+
+      // Both tiles present in BOTH views simultaneously…
+      for (const id of ["ds-1", "ds-2"] as const) {
+        expect(restored.transforms.has(id)).toBe(true);
+        expect(id in restored.storeRecord).toBe(true);
+        // …and the two views can never diverge: same object identity.
+        expect(restored.storeRecord[id]).toBe(restored.transforms.get(id));
+      }
+      // Values match the fetched revision (a partial apply would break one side).
+      expect(restored.transforms.get("ds-1")).toMatchObject({
+        tx: 12, ty: -8, angleDeg: 90, locked: true, annotation: "north shelf",
+      });
+      expect(restored.transforms.get("ds-2")).toMatchObject({ tx: -4, ty: 6, angleDeg: 0 });
+      // The group round-trips too.
+      expect(restored.groups.size).toBe(1);
+      expect([...[...restored.groups.values()][0]!].sort()).toEqual(["ds-1", "ds-2"]);
+    });
   });
 });
 

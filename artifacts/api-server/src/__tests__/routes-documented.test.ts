@@ -60,6 +60,11 @@ const UNDOCUMENTED_ALLOWLIST = new Set([
   // Internal admin endpoint: returns per-key rate-limit usage counters.
   // Not part of the public API surface; only callable by admin user IDs.
   "GET /admin/rate-limit/usage",
+  // Internal admin endpoint: lightweight count of users awaiting approval,
+  // polled by the admin header badge via authorizedFetch (response schema is
+  // hand-written in lib/api-zod custom.ts, not the generated client).
+  // Not part of the public API surface; only callable by admin user IDs.
+  "GET /admin/users/pending-count",
   // Internal admin endpoint: returns in-process upscale cache hit/miss stats.
   // Not part of the public API surface; only callable by admin user IDs.
   "GET /admin/upscale-cache-stats",

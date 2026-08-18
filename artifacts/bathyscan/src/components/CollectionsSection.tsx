@@ -38,6 +38,10 @@ import {
   type PackRollupStatus,
 } from "@/hooks/useOfflinePackStatus";
 import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
+import { useTerrainStore } from "@/lib/terrainStore";
+import { useUiStore } from "@/lib/uiStore";
+import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
+import { CollectionSettingsSheet } from "./CollectionSettingsSheet";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -208,7 +212,13 @@ const CollectionRow: React.FC<{
   onDownloadOffline?: () => void;
   /** Rollup offline status across the collection's members ("none" hides the badge). */
   offlineRollup?: PackRollupStatus;
-}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none" }) => {
+  /** Special collections only: open the settings sheet (bg image, anchors, revisions). */
+  onOpenSettings?: () => void;
+  /** Special collections only: load members + enter puzzle mode + restore layout. */
+  onActivate?: () => void;
+  /** True while the activate flow is loading datasets. */
+  activating?: boolean;
+}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, activating = false }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -242,7 +252,7 @@ const CollectionRow: React.FC<{
           className="flex-1 flex items-center gap-1 text-left hover:bg-white/5"
           style={{ background: "transparent", border: "none", color: "#cbd5e1", cursor: "pointer", fontSize: "calc(13.5px * var(--bs-font-scale, 1))", padding: "2px 4px", minWidth: 0 }}
         >
-          <span style={{ flexShrink: 0 }}>{expanded ? "▾" : "▸"} 🗂</span>
+          <span style={{ flexShrink: 0 }}>{expanded ? "▾" : "▸"} {collection.collectionKind === "special" ? "✷" : "🗂"}</span>
           {editing ? (
             <input
               ref={inputRef}
@@ -287,6 +297,25 @@ const CollectionRow: React.FC<{
         </button>
         {!editing && (
           <>
+            {onActivate && (
+              <button
+                data-testid={`btn-activate-collection-${collection.id}`}
+                aria-label={`Activate collection "${collection.name}" for puzzle assembly`}
+                title="Load member datasets, enter puzzle mode, and restore the saved layout"
+                disabled={activating}
+                onClick={onActivate}
+                style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.35)", borderRadius: 3, color: "#fbbf24", cursor: activating ? "wait" : "pointer", fontSize: "calc(10.5px * var(--bs-font-scale, 1))", padding: "1px 6px", flexShrink: 0, letterSpacing: "0.05em", whiteSpace: "nowrap" }}
+              >{activating ? "⟳ …" : "⧉ Puzzle"}</button>
+            )}
+            {onOpenSettings && (
+              <button
+                data-testid={`btn-collection-settings-${collection.id}`}
+                aria-label={`Settings for collection "${collection.name}"`}
+                title="Collection settings: reference image, opacity, geo anchors, layout revisions"
+                onClick={onOpenSettings}
+                style={{ background: "transparent", border: "none", color: "#67e8f9", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", flexShrink: 0 }}
+              >⚙</button>
+            )}
             {onDownloadOffline && (
               <button
                 data-testid={`btn-download-collection-${collection.id}`}
@@ -402,6 +431,13 @@ export const CollectionsSection: React.FC = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [removingMemberIds, setRemovingMemberIds] = useState<Set<string>>(() => new Set());
   const createInputRef = useRef<HTMLInputElement | null>(null);
+  // Special-collection UI state.
+  const [createSpecial, setCreateSpecial] = useState(false);
+  const [settingsForId, setSettingsForId] = useState<string | null>(null);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
+  // Freshly-created collection kept as a fallback so the settings sheet can
+  // open immediately, before the collections query refetch lands.
+  const [createdFallback, setCreatedFallback] = useState<DatasetCollection | null>(null);
 
   useEffect(() => { if (creating) createInputRef.current?.focus(); }, [creating]);
 
@@ -421,16 +457,27 @@ export const CollectionsSection: React.FC = () => {
     setCreatePending(true);
     setCreateError(null);
     try {
-      await createMutation.mutateAsync({ data: { name: trimmed } });
+      const created = await createMutation.mutateAsync({
+        data: { name: trimmed, ...(createSpecial ? { collectionKind: "special" as const } : {}) },
+      });
       await invalidate();
       setCreateValue("");
       setCreating(false);
+      if (createSpecial) {
+        setCreateSpecial(false);
+        // Open the settings sheet right away so the reference image and geo
+        // anchors can be configured as part of the creation flow.
+        if (created?.id) {
+          setCreatedFallback(created);
+          setSettingsForId(created.id);
+        }
+      }
     } catch (err) {
       setCreateError(friendlyError(err, "Could not create collection"));
     } finally {
       setCreatePending(false);
     }
-  }, [createValue, createPending, createMutation, invalidate]);
+  }, [createValue, createPending, createSpecial, createMutation, invalidate]);
 
   const handleRename = useCallback(async (id: string, name: string) => {
     await renameMutation.mutateAsync({ id, data: { name } });
@@ -464,6 +511,33 @@ export const CollectionsSection: React.FC = () => {
       setRemovingMemberIds((s) => { const n = new Set(s); n.delete(memberId); return n; });
     }
   }, [removeMemberMutation, invalidate]);
+
+  /**
+   * "Activate for Puzzle": load all member datasets into the Overview pool,
+   * enter puzzle mode, restore the active layout revision from the server,
+   * and enable the background reference overlay.
+   */
+  const handleActivate = useCallback(async (c: DatasetCollection) => {
+    if (activatingId) return;
+    setActivatingId(c.id);
+    try {
+      const terrain = useTerrainStore.getState();
+      for (const m of c.members) {
+        const datasetId = memberDatasetId(m);
+        if (datasetId) terrain.addSelected(datasetId, "user");
+      }
+      await useSpecialCollectionStore.getState().activateForPuzzle(c);
+      useUiStore.getState().setOverviewOpen(true);
+    } finally {
+      setActivatingId(null);
+    }
+  }, [activatingId, memberDatasetId]);
+
+  const hasSpecialCollections = sorted.some((c) => c.collectionKind === "special");
+  const settingsCollection = settingsForId
+    ? sorted.find((c) => c.id === settingsForId) ??
+      (createdFallback?.id === settingsForId ? createdFallback : null)
+    : null;
 
   // Hidden entirely for signed-out users — collections are per-account state.
   if (!isLoaded || !isSignedIn) return null;
@@ -512,6 +586,26 @@ export const CollectionsSection: React.FC = () => {
                   style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 3, color: "#00e5ff", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "3px 10px", cursor: createPending ? "wait" : "pointer", letterSpacing: "0.08em", textTransform: "uppercase", opacity: !createValue.trim() ? 0.4 : 1, flexShrink: 0 }}
                 >{createPending ? "…" : "Create"}</button>
               </div>
+              <label
+                className="flex items-center gap-1"
+                style={{ marginTop: 4, cursor: "pointer", color: "#94a3b8", fontSize: "calc(12px * var(--bs-font-scale, 1))", userSelect: "none" }}
+              >
+                <input
+                  data-testid="input-new-collection-special"
+                  type="checkbox"
+                  checked={createSpecial}
+                  disabled={createPending}
+                  onChange={(e) => setCreateSpecial(e.target.checked)}
+                  style={{ accentColor: "#fbbf24" }}
+                />
+                <span>✷ Special (with reference image)</span>
+              </label>
+              {!hasSpecialCollections && (
+                <div data-testid="collections-special-callout" style={{ marginTop: 3, color: "#64748b", fontSize: "calc(11px * var(--bs-font-scale, 1))" }}>
+                  Special collections add a background reference image and saved
+                  puzzle layouts — ideal for assembling many surveys into one map.
+                </div>
+              )}
               {createError && (
                 <div data-testid="collections-create-error" style={{ marginTop: 4, color: "#fca5a5", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}>{createError}</div>
               )}
@@ -536,9 +630,19 @@ export const CollectionsSection: React.FC = () => {
               removingMemberIds={removingMemberIds}
               onDownloadOffline={() => useOfflineScopeStore.getState().requestScopeDownload({ kind: "collection", collectionId: c.id })}
               offlineRollup={collectionRollup(c)}
+              onOpenSettings={c.collectionKind === "special" ? () => setSettingsForId(c.id) : undefined}
+              onActivate={c.collectionKind === "special" ? () => void handleActivate(c) : undefined}
+              activating={activatingId === c.id}
             />
           ))}
         </div>
+      )}
+
+      {settingsCollection && (
+        <CollectionSettingsSheet
+          collection={settingsCollection}
+          onClose={() => setSettingsForId(null)}
+        />
       )}
 
       {confirmDelete && (

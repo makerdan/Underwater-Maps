@@ -127,40 +127,40 @@ describe("TidePanel slider — pointer drag calls onScrubChange", () => {
     const input = container.querySelector("input[type='range']") as HTMLInputElement;
     expect(input).not.toBeNull();
 
+    // setHour(hour) short-circuits (returns null, no callback) when the target
+    // hour equals the CURRENT hour for today, so a fixed literal makes this
+    // test fail deterministically during that wall-clock hour. Always pick an
+    // hour that is not "now".
+    const dragHour = (new Date().getUTCHours() + 3) % 24;
     act(() => {
       fireEvent.pointerDown(input, { pointerId: 1, clientX: 10, clientY: 9 });
       fireEvent.pointerMove(input, { pointerId: 1, clientX: 50, clientY: 9 });
       // The browser fires a 'change' event as the thumb drags; simulate it
-      fireEvent.change(input, { target: { value: "10" } });
+      fireEvent.change(input, { target: { value: String(dragHour) } });
       fireEvent.pointerUp(input, { pointerId: 1 });
     });
 
-    // setHour(10) calls onScrubChange internally
+    // setHour(dragHour) calls onScrubChange internally
     expect(onScrubChange).toHaveBeenCalled();
   });
 
-  it("changing the range input to a new hour calls onScrubChange with a Date at that hour", () => {
+  it("changing the range input calls onScrubChange with a Date at the chosen hour", () => {
     const onScrubChange = vi.fn();
     const { container } = renderPanel(onScrubChange);
     const input = container.querySelector("input[type='range']") as HTMLInputElement;
 
-    // Time-of-day deflake: if the slider already sits at the target hour
-    // (e.g. running during the 05:xx hour), React's value tracker swallows a
-    // change event to the identical value and onScrubChange never fires.
-    // Pick an hour that differs from the input's current value.
-    const targetHour = input.value === "5" ? 6 : 5;
-
+    // Never scrub to the current hour: setHour returns null without invoking
+    // the callback when the hour matches "now" for today (time-of-day flake —
+    // a literal "5" failed only during the 05:00 UTC hour).
+    const targetHour = (new Date().getUTCHours() + 5) % 24;
     act(() => {
       fireEvent.change(input, { target: { value: String(targetHour) } });
     });
 
     expect(onScrubChange).toHaveBeenCalled();
     const arg = onScrubChange.mock.calls[0]?.[0];
-    // setHour returns null when hour matches "now" for today — accept both Date and null
-    if (arg !== null) {
-      expect(arg).toBeInstanceOf(Date);
-      expect((arg as Date).getUTCHours()).toBe(targetHour);
-    }
+    expect(arg).toBeInstanceOf(Date);
+    expect((arg as Date).getUTCHours()).toBe(targetHour);
   });
 });
 

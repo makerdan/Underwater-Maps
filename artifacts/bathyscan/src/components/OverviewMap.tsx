@@ -26,6 +26,10 @@ import {
   getGetUserDatasetsQueryKey,
   getGetDatasetsIdOverviewQueryKey,
   getGetUserDatasetsIdOverviewQueryKey,
+  postUserCollectionsIdLayout,
+  patchUserCollectionsIdMeta,
+  deleteUserCollectionsIdLayoutRevisionId,
+  type LayoutRevision,
   type Marker,
   type GpsTrail,
   type DatasetCatalogSearchResult,
@@ -74,6 +78,12 @@ import {
   drawSelectionRect,
   buildIntertidalHotspotDescriptors,
   shouldDrawOverlayAtScale,
+  drawBackgroundImage,
+  computeGapOverlapMask,
+  drawGapOverlap,
+  GAP_OVERLAP_STEP_PX,
+  type GapOverlapMask,
+  type GapOverlapTileInput,
   type ContourSegment,
   type EfhLegendLayout,
   type OverviewTransform,
@@ -114,7 +124,10 @@ import { approxBboxForRadius } from "@/lib/coordinateParser";
 import { useSubstrateCoverageToast } from "@/hooks/useSubstrateCoverageToast";
 import { useIntertidal } from "@/lib/useIntertidal";
 import { IntertidalBandLegend } from "@/components/IntertidalBandLegend";
-import { usePuzzleStore } from "@/lib/puzzleStore";
+import { usePuzzleStore, type PuzzleTransform } from "@/lib/puzzleStore";
+import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
+import { computeSnapAdjustment, type SnapEdgeSeg, type SnapRect } from "@/lib/puzzleSnap";
+import { buildRestoredPuzzleState, applyDragTranslation } from "@/lib/puzzleRestore";
 
 interface TooltipState {
   visible: boolean;
@@ -146,6 +159,18 @@ function expandWithGroupMembers(
     }
   }
   return result;
+}
+
+/**
+ * Canonical signature of a puzzle layout (positions, rotation, lock, note) —
+ * compared against the last saved/restored signature to detect unsaved
+ * changes before switching server layout revisions.
+ */
+function layoutSignatureOf(transforms: ReadonlyMap<string, PuzzleTransform>): string {
+  const entries = [...transforms.entries()]
+    .map(([id, xf]) => [id, xf.tx, xf.ty, xf.angleDeg, !!xf.locked, xf.annotation ?? ""] as const)
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  return JSON.stringify(entries);
 }
 export const OverviewMap: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
@@ -500,12 +525,30 @@ export const OverviewMap: React.FC = () => {
   const [layoutsDropdownOpen, setLayoutsDropdownOpen] = useState(false);
   const layoutsDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Snap-to-neighbor toggle (default on) — tiles snap flush when an edge
+  // comes within SNAP_THRESHOLD_PX of a neighbor's facing edge.
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const snapEnabledRef = useRef(true);
+  useEffect(() => { snapEnabledRef.current = snapEnabled; }, [snapEnabled]);
+  // Gap/overlap indicator overlay toggle.
+  const [showGapOverlay, setShowGapOverlay] = useState(false);
+  const showGapOverlayRef = useRef(false);
+  useEffect(() => { showGapOverlayRef.current = showGapOverlay; dirtyRef.current = true; }, [showGapOverlay]);
+  // Green flash on a just-snapped edge, drawn by the rAF loop until expiry.
+  const snapFlashRef = useRef<{ edges: SnapEdgeSeg[]; until: number } | null>(null);
+  const lastSnapKeyRef = useRef<string | null>(null);
+  // Debounced (200 ms) gap/overlap raster cache keyed by view+transform signature.
+  const gapMaskCacheRef = useRef<{ key: string; mask: GapOverlapMask | null; computedAt: number } | null>(null);
+  const gapRecomputeTimerRef = useRef<number | null>(null);
+  // Tile annotation editor (right-click → Add note). ≤ 40 chars per note.
+  const [annotationEditor, setAnnotationEditor] = useState<{ datasetId: string; value: string } | null>(null);
+
   // Per-dataset spatial offsets (canvas pixels). Persists for the lifetime of
   // the session — toggling puzzle mode OFF leaves tiles where they were placed.
   const [puzzleTransforms, setPuzzleTransforms] = useState<
-    Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>
+    Map<string, PuzzleTransform>
   >(new Map());
-  const puzzleTransformsRef = useRef<Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>>(new Map());
+  const puzzleTransformsRef = useRef<Map<string, PuzzleTransform>>(new Map());
   useEffect(() => {
     puzzleTransformsRef.current = puzzleTransforms;
     dirtyRef.current = true;
@@ -576,7 +619,7 @@ export const OverviewMap: React.FC = () => {
   const setPuzzleStoreTransforms = usePuzzleStore((s) => s.setPuzzleTransforms);
   useEffect(() => {
     // Convert Map → plain object for the store.
-    const record: Record<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }> = {};
+    const record: Record<string, PuzzleTransform> = {};
     for (const [id, xf] of puzzleTransforms) record[id] = xf;
     setPuzzleStoreTransforms(record);
   }, [puzzleTransforms, setPuzzleStoreTransforms]);
@@ -590,12 +633,17 @@ export const OverviewMap: React.FC = () => {
         sessionStorage.getItem("bathyscan:puzzleTransforms") ??
         localStorage.getItem("bathyscan:puzzleTransforms");
       if (raw) {
-        const entries = JSON.parse(raw) as Array<[string, { tx: number; ty: number; angleDeg: number; flipH?: boolean; flipV?: boolean }]>;
+        const entries = JSON.parse(raw) as Array<[string, { tx: number; ty: number; angleDeg: number; flipH?: boolean; flipV?: boolean; locked?: boolean; annotation?: string }]>;
         if (Array.isArray(entries) && entries.length > 0) {
           // Normalise: default flipH/flipV to false for entries saved before this feature.
           setPuzzleTransforms(new Map(entries.map(([id, xf]) => [
             id,
-            { tx: xf.tx, ty: xf.ty, angleDeg: xf.angleDeg, flipH: xf.flipH ?? false, flipV: xf.flipV ?? false },
+            {
+              tx: xf.tx, ty: xf.ty, angleDeg: xf.angleDeg,
+              flipH: xf.flipH ?? false, flipV: xf.flipV ?? false,
+              ...(xf.locked ? { locked: true } : {}),
+              ...(xf.annotation ? { annotation: String(xf.annotation).slice(0, 40) } : {}),
+            },
           ])));
         }
       }
@@ -706,7 +754,7 @@ export const OverviewMap: React.FC = () => {
   const restorePuzzleLayout = useCallback((layout: PuzzleLayout) => {
     const aliveIds = new Set(visibleDatasets.map((v) => v.datasetId));
     // Restore transforms only for datasets still visible.
-    const nextTransforms = new Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>();
+    const nextTransforms = new Map<string, PuzzleTransform>();
     for (const tile of layout.tiles) {
       if (aliveIds.has(tile.datasetId)) {
         nextTransforms.set(tile.datasetId, {
@@ -755,6 +803,127 @@ export const OverviewMap: React.FC = () => {
     setTimeout(() => setPuzzleSaved(false), 1500);
   }, [puzzleLayouts, setPuzzleLayouts]);
 
+  // Signature of the current layout — compared against the last saved/restored
+  // signature to detect unsaved changes before switching revisions.
+  const lastAppliedLayoutSigRef = useRef<string | null>(null);
+
+  /**
+   * Save the current layout (tiles incl. locked + annotation, and groups) as a
+   * named revision on the active special collection's server record.
+   */
+  const [serverLayoutSaving, setServerLayoutSaving] = useState(false);
+  const saveLayoutToServer = useCallback(async (name: string) => {
+    const active = useSpecialCollectionStore.getState().active;
+    const trimmed = name.trim().slice(0, 120);
+    if (!active || !trimmed || serverLayoutSaving) return;
+    const tiles = [...puzzleTransformsRef.current.entries()].map(([tileId, xf]) => ({
+      datasetId: tileId,
+      tx: xf.tx,
+      ty: xf.ty,
+      angleDeg: xf.angleDeg,
+      locked: !!xf.locked,
+      annotation: xf.annotation ?? null,
+    }));
+    let gIndex = 0;
+    const groups = [...puzzleGroupsRef.current.entries()].map(([gid, members]) => ({
+      id: gid,
+      name: `Group ${++gIndex}`,
+      datasetIds: [...members],
+    }));
+    setServerLayoutSaving(true);
+    try {
+      const revision = await postUserCollectionsIdLayout(active.collectionId, {
+        name: trimmed,
+        tiles,
+        groups,
+      });
+      useSpecialCollectionStore.getState().appendRevision(active.collectionId, revision);
+      lastAppliedLayoutSigRef.current = layoutSignatureOf(puzzleTransformsRef.current);
+      setPuzzleLayoutFormOpen(false);
+      setPuzzleLayoutNameInput("");
+      setPuzzleSaved(true);
+      setTimeout(() => setPuzzleSaved(false), 1500);
+    } catch {
+      toast({
+        title: "Save failed",
+        description: "Could not save the layout to the server. Please try again.",
+        variant: "destructive",
+        duration: 4000,
+      });
+    } finally {
+      setServerLayoutSaving(false);
+    }
+  }, [serverLayoutSaving]);
+
+  /** Restore a server layout revision, confirming first if unsaved changes exist. */
+  const restoreServerRevision = useCallback((rev: LayoutRevision) => {
+    const active = useSpecialCollectionStore.getState().active;
+    if (!active) return;
+    const sig = layoutSignatureOf(puzzleTransformsRef.current);
+    if (
+      lastAppliedLayoutSigRef.current !== null &&
+      sig !== lastAppliedLayoutSigRef.current &&
+      typeof window !== "undefined" &&
+      !window.confirm(`Discard unsaved layout changes and restore "${rev.name}"?`)
+    ) {
+      return;
+    }
+    useSpecialCollectionStore.getState().requestRestore({
+      tiles: rev.tiles.map((tl) => ({
+        datasetId: tl.datasetId,
+        tx: tl.tx,
+        ty: tl.ty,
+        angleDeg: tl.angleDeg,
+        locked: tl.locked,
+        annotation: tl.annotation ?? undefined,
+      })),
+      groups: rev.groups.map((g) => [...g.datasetIds]),
+    });
+    // Persist the active-revision choice (fire-and-forget; UI already updated).
+    patchUserCollectionsIdMeta(active.collectionId, { activeRevisionId: rev.id }).catch(() => {});
+    useSpecialCollectionStore.setState((s) =>
+      s.active?.collectionId === active.collectionId
+        ? { active: { ...s.active, activeRevisionId: rev.id } }
+        : {},
+    );
+    setLayoutsDropdownOpen(false);
+  }, []);
+
+  /** Delete a server layout revision. */
+  const deleteServerRevision = useCallback(async (rev: LayoutRevision) => {
+    const active = useSpecialCollectionStore.getState().active;
+    if (!active) return;
+    try {
+      await deleteUserCollectionsIdLayoutRevisionId(active.collectionId, rev.id);
+      useSpecialCollectionStore.getState().removeRevision(active.collectionId, rev.id);
+    } catch {
+      toast({
+        title: "Delete failed",
+        description: "Could not delete the layout revision. Please try again.",
+        variant: "destructive",
+        duration: 4000,
+      });
+    }
+  }, []);
+
+  /** Commit the annotation editor's text onto its tile (empty → remove note). */
+  const commitAnnotation = useCallback(() => {
+    if (!annotationEditor) return;
+    const trimmed = annotationEditor.value.trim().slice(0, 40);
+    setPuzzleTransforms((prev) => {
+      const next = new Map(prev);
+      const existing = prev.get(annotationEditor.datasetId) ??
+        { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
+      const copy: PuzzleTransform = { ...existing };
+      if (trimmed) copy.annotation = trimmed;
+      else delete copy.annotation;
+      next.set(annotationEditor.datasetId, copy);
+      return next;
+    });
+    setAnnotationEditor(null);
+    dirtyRef.current = true;
+  }, [annotationEditor]);
+
   const puzzleDragSubModeRef = useRef<"translate" | "rotate" | null>(null);
   // Which corner handle was hit at mousedown (for click-nudge detection).
   const puzzleHandleEdgeRef = useRef<"topLeft" | "topRight" | "bottomRight" | "bottomLeft" | null>(null);
@@ -765,11 +934,73 @@ export const OverviewMap: React.FC = () => {
     mx: number; my: number;
     tx: number; ty: number; angleDeg: number;
     cx: number; cy: number;
-    startTransforms: Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>;
+    startTransforms: Map<string, PuzzleTransform>;
     collectiveCx: number; collectiveCy: number;
     startAngleDeg: number;
   }>({ mx: 0, my: 0, tx: 0, ty: 0, angleDeg: 0, cx: 0, cy: 0,
        startTransforms: new Map(), collectiveCx: 0, collectiveCy: 0, startAngleDeg: 0 });
+
+  // Sign-out isolation: when performSignOutCleanup() bumps the puzzleStore
+  // signOutNonce, clear ALL component-local puzzle state in the live instance.
+  // Without this, the mounted OverviewMap keeps the previous account's tile
+  // transforms/groups on the canvas and would re-mirror them into puzzleStore
+  // (and the uiStore geo-transform mirror) on the next local state change.
+  const puzzleSignOutNonce = usePuzzleStore((s) => s.signOutNonce);
+  const lastSeenSignOutNonceRef = useRef(puzzleSignOutNonce);
+  useEffect(() => {
+    if (puzzleSignOutNonce === lastSeenSignOutNonceRef.current) return;
+    lastSeenSignOutNonceRef.current = puzzleSignOutNonce;
+    setPuzzleMode(false);
+    setPuzzleTransforms(new Map());
+    setPuzzleGroups(new Map());
+    setPuzzleSelectedIds(new Set(), null);
+    puzzleGroupCounterRef.current = 0;
+    lastAppliedLayoutSigRef.current = null;
+    useUiStore.getState().setPuzzleGeoTransforms(new Map());
+    dirtyRef.current = true;
+  }, [puzzleSignOutNonce, setPuzzleSelectedIds]);
+
+  // --- Special collection (reference-image puzzle assembly) ----------------
+  const spcActive = useSpecialCollectionStore((s) => s.active);
+  const spcPendingRestore = useSpecialCollectionStore((s) => s.pendingRestore);
+  const spcPendingPuzzleOn = useSpecialCollectionStore((s) => s.pendingPuzzleOn);
+  // Redraw when the active special collection (image / opacity / anchors) changes.
+  useEffect(() => { dirtyRef.current = true; }, [spcActive]);
+  // Enter puzzle mode when a collection is activated without a saved revision.
+  useEffect(() => {
+    if (spcPendingPuzzleOn > 0) {
+      setPuzzleMode(true);
+      dirtyRef.current = true;
+    }
+  }, [spcPendingPuzzleOn]);
+
+  // Consume a pending layout restore in ONE batch: puzzle mode, canvas
+  // transform Map, and groups are all derived from the same payload
+  // (buildRestoredPuzzleState). The puzzleStore record is committed
+  // SYNCHRONOUSLY here — from the same builder output, sharing the same
+  // transform objects as the canvas Map — rather than waiting for the
+  // dependent mirror effect, so 3D marker geography can never observe a
+  // window where the canvas has restored but the store still holds the
+  // prior layout (or vice versa). The mirror effect that later re-fires on
+  // the canvas state commit writes the identical record and is a no-op.
+  useEffect(() => {
+    if (!spcPendingRestore) return;
+    const aliveIds = new Set(visibleDatasetsRef.current.map((v) => v.datasetId));
+    const restored = buildRestoredPuzzleState(
+      spcPendingRestore.payload,
+      aliveIds,
+      puzzleGroupCounterRef.current,
+    );
+    puzzleGroupCounterRef.current = restored.groupCounterEnd;
+    usePuzzleStore.getState().setPuzzleTransforms(restored.storeRecord);
+    setPuzzleMode(true);
+    setPuzzleTransforms(restored.transforms);
+    setPuzzleGroups(restored.groups);
+    setPuzzleSelectedIds(new Set(), null);
+    dirtyRef.current = true;
+    lastAppliedLayoutSigRef.current = layoutSignatureOf(restored.transforms);
+    useSpecialCollectionStore.getState().consumeRestore();
+  }, [spcPendingRestore, setPuzzleSelectedIds]);
 
   // Hit rect for the "Find Data" link rendered in the empty-state canvas.
   // Updated each rAF frame when no datasets are selected; used by handleClick
@@ -1838,6 +2069,32 @@ export const OverviewMap: React.FC = () => {
 
       const primIdNow = primaryDatasetIdRef.current;
 
+      // Special-collection background reference image — drawn BELOW all
+      // dataset heatmaps, only while puzzle mode is on and a special
+      // collection with a loaded image is active. Positioned via the
+      // two-point geo-anchor affine when set, else stretched to the union
+      // bbox of the visible datasets, at the configured opacity.
+      if (puzzleModeRef.current) {
+        const spcNow = useSpecialCollectionStore.getState().active;
+        if (spcNow?.bgImage) {
+          const bgBboxes = visibleNow
+            .map((v) => (v.datasetId === primIdNow ? grid : v.overviewGrid))
+            .filter((g): g is NonNullable<typeof g> => g != null)
+            .map((g) => ({ minLon: g.minLon, maxLon: g.maxLon, minLat: g.minLat, maxLat: g.maxLat }));
+          drawBackgroundImage(
+            ctx,
+            spcNow.bgImage,
+            spcNow.bgImageW,
+            spcNow.bgImageH,
+            spcNow.bgGeoAnchors,
+            bgBboxes,
+            worldGrid,
+            t,
+            spcNow.bgOpacity,
+          );
+        }
+      }
+
       // Helper: apply puzzle transform for a tile and draw selection affordances.
       // Called inside the tile loop for each dataset to draw; wraps the actual
       // drawImage calls in ctx.save()/restore() with per-tile rotation+translation.
@@ -1920,6 +2177,30 @@ export const OverviewMap: React.FC = () => {
               ctx.restore();
               break; // show first group membership only
             }
+          }
+        }
+        // Padlock glyph for locked tiles + italic annotation note — rendered
+        // in the NW corner label area, below the group pill when present.
+        if (puzzleModeRef.current && pxform) {
+          let labelY = by0 + 18;
+          if (pxform.locked) {
+            ctx.save();
+            ctx.font = "10px monospace";
+            ctx.textBaseline = "top";
+            ctx.fillText("🔒", bx0 + 4, labelY);
+            ctx.restore();
+            labelY += 13;
+          }
+          if (pxform.annotation) {
+            ctx.save();
+            ctx.font = "italic 9px monospace";
+            ctx.textBaseline = "top";
+            ctx.fillStyle = "rgba(226,232,240,0.9)";
+            ctx.strokeStyle = "rgba(0,0,0,0.6)";
+            ctx.lineWidth = 2;
+            ctx.strokeText(pxform.annotation, bx0 + 4, labelY);
+            ctx.fillText(pxform.annotation, bx0 + 4, labelY);
+            ctx.restore();
           }
         }
 
@@ -2018,6 +2299,72 @@ export const OverviewMap: React.FC = () => {
         );
       }
       ctx.globalAlpha = 1.0;
+
+      // Gap/overlap indicator — red hatch where the union bbox has no tile
+      // coverage, orange fill where two or more tiles overlap. Rasterized at
+      // 1/4 resolution and recomputed with a 200 ms debounce.
+      if (puzzleModeRef.current && showGapOverlayRef.current) {
+        const gapTiles: GapOverlapTileInput[] = [];
+        for (const v of visibleNow) {
+          const og = v.datasetId === primIdNow ? grid : v.overviewGrid;
+          if (!og) continue;
+          const [gx0, gy0] = lonLatToCanvas(og.minLon, og.maxLat, worldGrid, t);
+          const [gx1, gy1] = lonLatToCanvas(og.maxLon, og.minLat, worldGrid, t);
+          const gxf = puzzleTransformsRef.current.get(v.datasetId);
+          gapTiles.push({
+            x0: gx0, y0: gy0, x1: gx1, y1: gy1,
+            tx: gxf?.tx ?? 0, ty: gxf?.ty ?? 0, angleDeg: gxf?.angleDeg ?? 0,
+          });
+        }
+        const gapKey =
+          viewKey + "::" +
+          gapTiles
+            .map((g) => `${g.x0.toFixed(1)},${g.y0.toFixed(1)},${g.x1.toFixed(1)},${g.y1.toFixed(1)},${g.tx.toFixed(1)},${g.ty.toFixed(1)},${g.angleDeg}`)
+            .join(";");
+        const gapCache = gapMaskCacheRef.current;
+        const gapNow = performance.now();
+        if (!gapCache || (gapCache.key !== gapKey && gapNow - gapCache.computedAt >= 200)) {
+          gapMaskCacheRef.current = {
+            key: gapKey,
+            mask: computeGapOverlapMask(gapTiles, GAP_OVERLAP_STEP_PX),
+            computedAt: gapNow,
+          };
+        } else if (gapCache.key !== gapKey && gapRecomputeTimerRef.current === null) {
+          // Debounce window still open — schedule a redraw once it elapses.
+          gapRecomputeTimerRef.current = window.setTimeout(() => {
+            gapRecomputeTimerRef.current = null;
+            dirtyRef.current = true;
+          }, Math.max(10, 205 - (gapNow - gapCache.computedAt)));
+        }
+        const gapMask = gapMaskCacheRef.current?.mask;
+        if (gapMask) drawGapOverlap(ctx, gapMask);
+      }
+
+      // Brief green flash on a just-snapped tile edge (≤ 300 ms).
+      if (snapFlashRef.current) {
+        const flash = snapFlashRef.current;
+        if (performance.now() < flash.until) {
+          ctx.save();
+          ctx.strokeStyle = "rgba(34,197,94,0.95)";
+          ctx.lineWidth = 3;
+          for (const seg of flash.edges) {
+            ctx.beginPath();
+            if (seg.axis === "v") {
+              ctx.moveTo(seg.pos, seg.from);
+              ctx.lineTo(seg.pos, seg.to);
+            } else {
+              ctx.moveTo(seg.from, seg.pos);
+              ctx.lineTo(seg.to, seg.pos);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+          dirtyRef.current = true; // keep animating until the flash expires
+        } else {
+          snapFlashRef.current = null;
+          dirtyRef.current = true;
+        }
+      }
 
       // Simulated-data rainbow hatch — drawn over any coverage area whose
       // grid reports a synthetic data source. Real-data areas are untouched.
@@ -2443,7 +2790,7 @@ export const OverviewMap: React.FC = () => {
               const ccy = count > 0 ? sumCy / count : my;
 
               // Snapshot all selected transforms for multi-tile rotate.
-              const startTransforms = new Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>();
+              const startTransforms = new Map<string, PuzzleTransform>();
               for (const id of selectedIds) {
                 const xf = puzzleTransformsRef.current.get(id) ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
                 startTransforms.set(id, { ...xf });
@@ -2534,10 +2881,11 @@ export const OverviewMap: React.FC = () => {
         const newPrimaryId = hitId ?? (newSelection.size > 0 ? ([...newSelection][0] ?? null) : null);
         setPuzzleSelectedIds(newSelection, newPrimaryId);
 
-        // Set translate drag submode if a tile was hit and is in the final selection.
-        if (hitId !== null && newSelection.has(hitId)) {
+        // Set translate drag submode if a tile was hit and is in the final
+        // selection. Locked tiles are selectable but never start a drag.
+        if (hitId !== null && newSelection.has(hitId) && !puzzleTransformsRef.current.get(hitId)?.locked) {
           // Snapshot all selected transforms for multi-tile drag.
-          const startTransforms = new Map<string, { tx: number; ty: number; angleDeg: number; flipH: boolean; flipV: boolean }>();
+          const startTransforms = new Map<string, PuzzleTransform>();
           for (const id of newSelection) {
             const xf = puzzleTransformsRef.current.get(id) ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
             startTransforms.set(id, { ...xf });
@@ -2634,20 +2982,64 @@ export const OverviewMap: React.FC = () => {
         if (subMode === "translate" && puzzleSelectedIdsRef.current.size > 0) {
           hasDraggedRef.current = true;
           const start = puzzleDragStartRef.current;
-          const dx = mx - start.mx;
-          const dy = my - start.my;
-          setPuzzleTransforms((prev) => {
-            const next = new Map(prev);
-            for (const [id, startXf] of start.startTransforms) {
-              const existing = prev.get(id);
-              next.set(id, {
-                ...(existing ?? { tx: 0, ty: 0, angleDeg: startXf.angleDeg, flipH: false, flipV: false }),
-                tx: startXf.tx + dx,
-                ty: startXf.ty + dy,
-              });
+          let dx = mx - start.mx;
+          let dy = my - start.my;
+
+          // Snap-to-neighbor: probe with the grabbed (primary) tile's bbox.
+          // Only unrotated tiles participate — rotated bbox edges aren't
+          // axis-aligned, so "flush" is undefined for them.
+          if (snapEnabledRef.current) {
+            const tSnap = transformRef.current;
+            const wgSnap = worldGridRef.current ?? overviewGrid;
+            const probeId = puzzlePrimaryIdRef.current;
+            const probeStart = probeId ? start.startTransforms.get(probeId) : undefined;
+            if (tSnap && wgSnap && probeId && probeStart && !probeStart.locked && probeStart.angleDeg % 360 === 0) {
+              const probeV = visibleDatasetsRef.current.find((v) => v.datasetId === probeId);
+              const probeOg = probeId === primaryDatasetIdRef.current ? overviewGrid : probeV?.overviewGrid;
+              if (probeOg) {
+                const [pbx0, pby0] = lonLatToCanvas(probeOg.minLon, probeOg.maxLat, wgSnap, tSnap);
+                const [pbx1, pby1] = lonLatToCanvas(probeOg.maxLon, probeOg.minLat, wgSnap, tSnap);
+                const moving: SnapRect = {
+                  left: pbx0 + probeStart.tx + dx,
+                  top: pby0 + probeStart.ty + dy,
+                  right: pbx1 + probeStart.tx + dx,
+                  bottom: pby1 + probeStart.ty + dy,
+                };
+                const neighbors: SnapRect[] = [];
+                for (const v of visibleDatasetsRef.current) {
+                  if (puzzleSelectedIdsRef.current.has(v.datasetId)) continue;
+                  const og = v.datasetId === primaryDatasetIdRef.current ? overviewGrid : v.overviewGrid;
+                  if (!og) continue;
+                  const nxf = puzzleTransformsRef.current.get(v.datasetId);
+                  if ((nxf?.angleDeg ?? 0) % 360 !== 0) continue;
+                  const [nx0, ny0] = lonLatToCanvas(og.minLon, og.maxLat, wgSnap, tSnap);
+                  const [nx1, ny1] = lonLatToCanvas(og.maxLon, og.minLat, wgSnap, tSnap);
+                  neighbors.push({
+                    left: nx0 + (nxf?.tx ?? 0),
+                    top: ny0 + (nxf?.ty ?? 0),
+                    right: nx1 + (nxf?.tx ?? 0),
+                    bottom: ny1 + (nxf?.ty ?? 0),
+                  });
+                }
+                const snap = computeSnapAdjustment(moving, neighbors);
+                if (snap.edges.length > 0) {
+                  dx += snap.dx;
+                  dy += snap.dy;
+                  // Flash only when a NEW edge pairing engages (not every frame).
+                  const key = snap.edges.map((sg) => `${sg.axis}:${Math.round(sg.pos)}`).join("|");
+                  if (key !== lastSnapKeyRef.current) {
+                    lastSnapKeyRef.current = key;
+                    snapFlashRef.current = { edges: snap.edges, until: performance.now() + 300 };
+                  }
+                } else {
+                  lastSnapKeyRef.current = null;
+                }
+              }
             }
-            return next;
-          });
+          }
+
+          // applyDragTranslation skips locked tiles (lock blocks drag).
+          setPuzzleTransforms((prev) => applyDragTranslation(prev, start.startTransforms, dx, dy));
           canvas.style.cursor = "grabbing";
           return;
         }
@@ -2667,6 +3059,7 @@ export const OverviewMap: React.FC = () => {
           setPuzzleTransforms((prev) => {
             const next = new Map(prev);
             for (const [id, startXf] of start.startTransforms) {
+              if (startXf.locked) continue; // locked tiles never rotate
               const newAngle = startXf.angleDeg + deltaDeg;
               let orbitTx = startXf.tx;
               let orbitTy = startXf.ty;
@@ -2835,6 +3228,7 @@ export const OverviewMap: React.FC = () => {
               const next = new Map(prev);
               for (const nudgeId of nudgeIds) {
                 const existing = prev.get(nudgeId);
+                if (existing?.locked) continue; // locked tiles never rotate
                 const current = existing?.angleDeg ?? 0;
                 next.set(nudgeId, { ...(existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false }), angleDeg: current + delta });
               }
@@ -3097,6 +3491,82 @@ export const OverviewMap: React.FC = () => {
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
+
+      // Puzzle mode: right-click on a tile opens a tile-specific menu
+      // (add/edit/remove note, lock/unlock) instead of the standard menu.
+      if (puzzleModeRef.current) {
+        const ctxWorldGrid = worldGridRef.current ?? overviewGrid;
+        const sortedCtx = sortByRecency(visibleDatasetsRef.current);
+        let tileHitId: string | null = null;
+        // Newest-first so the hit matches the tile drawn on top.
+        for (let i = sortedCtx.length - 1; i >= 0; i--) {
+          const v = sortedCtx[i];
+          if (!v) continue;
+          const og = v.datasetId === primaryDatasetIdRef.current ? overviewGrid : v.overviewGrid;
+          if (!og) continue;
+          const [tbx0, tby0] = lonLatToCanvas(og.minLon, og.maxLat, ctxWorldGrid, t);
+          const [tbx1, tby1] = lonLatToCanvas(og.maxLon, og.minLat, ctxWorldGrid, t);
+          const tcxc = (tbx0 + tbx1) / 2;
+          const tcyc = (tby0 + tby1) / 2;
+          const pxf = puzzleTransformsRef.current.get(v.datasetId);
+          const aRad = ((pxf?.angleDeg ?? 0) * Math.PI) / 180;
+          const pdx = mx - (tcxc + (pxf?.tx ?? 0));
+          const pdy = my - (tcyc + (pxf?.ty ?? 0));
+          // Inverse-rotate the pointer into the tile's local frame.
+          const lx = tcxc + pdx * Math.cos(-aRad) - pdy * Math.sin(-aRad);
+          const ly = tcyc + pdx * Math.sin(-aRad) + pdy * Math.cos(-aRad);
+          if (lx >= tbx0 && lx <= tbx1 && ly >= tby0 && ly <= tby1) {
+            tileHitId = v.datasetId;
+            break;
+          }
+        }
+        if (tileHitId !== null) {
+          const tileId = tileHitId;
+          const xfNow = puzzleTransformsRef.current.get(tileId);
+          const tileItems: ContextMenuItem[] = [
+            {
+              label: xfNow?.annotation ? "Edit note" : "Add note",
+              icon: "📝",
+              onClick: () => setAnnotationEditor({ datasetId: tileId, value: xfNow?.annotation ?? "" }),
+            },
+            ...(xfNow?.annotation
+              ? [{
+                  label: "Remove note",
+                  icon: "✕",
+                  onClick: () => {
+                    setPuzzleTransforms((prev) => {
+                      const next = new Map(prev);
+                      const existing = prev.get(tileId);
+                      if (existing) {
+                        const copy: PuzzleTransform = { ...existing };
+                        delete copy.annotation;
+                        next.set(tileId, copy);
+                      }
+                      return next;
+                    });
+                    dirtyRef.current = true;
+                  },
+                }]
+              : []),
+            {
+              label: xfNow?.locked ? "Unlock tile" : "Lock tile",
+              icon: xfNow?.locked ? "🔓" : "🔒",
+              onClick: () => {
+                setPuzzleTransforms((prev) => {
+                  const next = new Map(prev);
+                  const existing = prev.get(tileId) ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
+                  next.set(tileId, { ...existing, locked: !existing.locked });
+                  return next;
+                });
+                dirtyRef.current = true;
+              },
+            },
+          ];
+          useContextMenuStore.getState().show(e.clientX, e.clientY, tileItems);
+          return;
+        }
+        // No tile hit — fall through to the standard context menu.
+      }
 
       // Hit-test markers so we can close the context menu if the marker is
       // filtered away while the menu is open (overviewShowMarkers toggle or
@@ -4049,6 +4519,80 @@ export const OverviewMap: React.FC = () => {
             </button>
           </ViewscreenTooltip>
 
+          {/* Active special collection badge */}
+          {puzzleMode && spcActive && (
+            <span
+              data-testid="overview-special-collection-badge"
+              title={`Special collection "${spcActive.name}" is active`}
+              style={{
+                color: "#fbbf24",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                letterSpacing: "0.05em",
+                lineHeight: "18px",
+                padding: "2px 4px",
+                whiteSpace: "nowrap",
+                maxWidth: 140,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              ✷ {spcActive.name}
+            </span>
+          )}
+
+          {/* Snap-to-neighbor toggle — visible in puzzle mode */}
+          {puzzleMode && (
+            <ViewscreenTooltip label="Snap tiles flush when dragged within 12 px of a neighbor's edge" side="bottom">
+              <button
+                data-testid="overview-puzzle-snap-toggle"
+                aria-pressed={snapEnabled}
+                onClick={() => setSnapEnabled((v) => !v)}
+                style={{
+                  background: snapEnabled ? "rgba(34,197,94,0.15)" : "rgba(0,10,20,0.75)",
+                  border: `1px solid ${snapEnabled ? "rgba(34,197,94,0.6)" : "rgba(0,229,255,0.2)"}`,
+                  borderRadius: 3,
+                  color: snapEnabled ? "#4ade80" : "#94a3b8",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  padding: "2px 8px",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  lineHeight: "18px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ⌗ SNAP
+              </button>
+            </ViewscreenTooltip>
+          )}
+
+          {/* Gap/overlap indicator toggle — visible in puzzle mode */}
+          {puzzleMode && (
+            <ViewscreenTooltip label="Highlight uncovered gaps (red) and overlapping tiles (orange)" side="bottom">
+              <button
+                data-testid="overview-puzzle-gap-toggle"
+                aria-pressed={showGapOverlay}
+                onClick={() => setShowGapOverlay((v) => !v)}
+                style={{
+                  background: showGapOverlay ? "rgba(251,146,60,0.15)" : "rgba(0,10,20,0.75)",
+                  border: `1px solid ${showGapOverlay ? "rgba(251,146,60,0.6)" : "rgba(0,229,255,0.2)"}`,
+                  borderRadius: 3,
+                  color: showGapOverlay ? "#fb923c" : "#94a3b8",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  padding: "2px 8px",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  lineHeight: "18px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ▦ GAPS
+              </button>
+            </ViewscreenTooltip>
+          )}
+
           {/* Reset button — visible when any tile has been moved or rotated */}
           {hasPuzzleTransforms && (
             <ViewscreenTooltip label="Snap all tiles back to their original positions" side="bottom">
@@ -4121,8 +4665,10 @@ export const OverviewMap: React.FC = () => {
             </ViewscreenTooltip>
           )}
 
-          {/* Save named layout preset — visible when puzzle has any transforms */}
-          {hasPuzzleTransforms && (
+          {/* Save named layout preset — visible when puzzle has any transforms
+              (or always in puzzle mode when a special collection is active,
+              so an initial arrangement can be saved as revision #1). */}
+          {(hasPuzzleTransforms || (puzzleMode && spcActive != null)) && (
             <ViewscreenTooltip label="Pin this arrangement as a named layout preset (synced to your account)" side="bottom">
               <button
                 data-testid="overview-puzzle-save-layout"
@@ -4149,8 +4695,10 @@ export const OverviewMap: React.FC = () => {
             </ViewscreenTooltip>
           )}
 
-          {/* Restore / delete named layout presets — visible when puzzle mode is on and layouts exist */}
-          {puzzleMode && puzzleLayouts.length > 0 && (
+          {/* Restore / delete named layout presets — visible when puzzle mode
+              is on and layouts exist. With an active special collection the
+              dropdown lists its server-saved revisions instead. */}
+          {puzzleMode && (spcActive ? spcActive.layoutRevisions.length > 0 : puzzleLayouts.length > 0) && (
             <div ref={layoutsDropdownRef} style={{ position: "relative" }}>
               <ViewscreenTooltip label="Restore a previously saved puzzle layout" side="bottom">
                 <button
@@ -4193,7 +4741,63 @@ export const OverviewMap: React.FC = () => {
                     overflow: "hidden",
                   }}
                 >
-                  {puzzleLayouts.map((layout) => (
+                  {spcActive ? [...spcActive.layoutRevisions]
+                    .sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1))
+                    .map((rev) => (
+                      <div
+                        key={rev.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "4px 8px",
+                          borderBottom: "1px solid rgba(99,102,241,0.15)",
+                          background: rev.id === spcActive.activeRevisionId ? "rgba(251,191,36,0.08)" : "transparent",
+                        }}
+                      >
+                        <button
+                          data-testid={`overview-puzzle-revision-restore-${rev.id}`}
+                          onClick={() => restoreServerRevision(rev)}
+                          title={`Restore revision "${rev.name}"`}
+                          style={{
+                            flex: 1,
+                            background: "transparent",
+                            border: "none",
+                            color: rev.id === spcActive.activeRevisionId ? "#fbbf24" : "#e2e8f0",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                            textAlign: "left",
+                            cursor: "pointer",
+                            padding: "2px 4px",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          ↩ {rev.name}
+                          <span style={{ color: "#64748b", fontSize: "calc(9px * var(--bs-font-scale, 1))", marginLeft: 6 }}>
+                            {new Date(rev.savedAt).toLocaleDateString()}
+                          </span>
+                        </button>
+                        <button
+                          data-testid={`overview-puzzle-revision-delete-${rev.id}`}
+                          onClick={() => void deleteServerRevision(rev)}
+                          title="Delete this revision"
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "#f87171",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                            cursor: "pointer",
+                            padding: "2px 4px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )) : puzzleLayouts.map((layout) => (
                     <div
                       key={layout.id}
                       style={{
@@ -4273,7 +4877,8 @@ export const OverviewMap: React.FC = () => {
                 onChange={(e) => setPuzzleLayoutNameInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && puzzleLayoutNameInput.trim()) {
-                    saveCurrentPuzzleLayout(puzzleLayoutNameInput);
+                    if (spcActive) void saveLayoutToServer(puzzleLayoutNameInput);
+                    else saveCurrentPuzzleLayout(puzzleLayoutNameInput);
                   } else if (e.key === "Escape") {
                     setPuzzleLayoutFormOpen(false);
                     setPuzzleLayoutNameInput("");
@@ -4294,8 +4899,11 @@ export const OverviewMap: React.FC = () => {
               />
               <button
                 data-testid="overview-puzzle-layout-confirm"
-                disabled={!puzzleLayoutNameInput.trim()}
-                onClick={() => saveCurrentPuzzleLayout(puzzleLayoutNameInput)}
+                disabled={!puzzleLayoutNameInput.trim() || serverLayoutSaving}
+                onClick={() => {
+                  if (spcActive) void saveLayoutToServer(puzzleLayoutNameInput);
+                  else saveCurrentPuzzleLayout(puzzleLayoutNameInput);
+                }}
                 style={{
                   background: puzzleLayoutNameInput.trim() ? "rgba(168,85,247,0.25)" : "transparent",
                   border: "1px solid rgba(168,85,247,0.4)",
@@ -4317,6 +4925,81 @@ export const OverviewMap: React.FC = () => {
                   setPuzzleLayoutFormOpen(false);
                   setPuzzleLayoutNameInput("");
                 }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#64748b",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                  cursor: "pointer",
+                  padding: "1px 4px",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Tile annotation editor — opened via right-click → Add note */}
+          {annotationEditor && (
+            <div
+              data-testid="overview-puzzle-annotation-form"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                background: "rgba(8,16,32,0.95)",
+                border: "1px solid rgba(34,211,238,0.45)",
+                borderRadius: 4,
+                padding: "2px 6px",
+              }}
+            >
+              <input
+                data-testid="overview-puzzle-annotation-input"
+                autoFocus
+                type="text"
+                value={annotationEditor.value}
+                maxLength={40}
+                onChange={(e) =>
+                  setAnnotationEditor((prev) => (prev ? { ...prev, value: e.target.value } : prev))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitAnnotation();
+                  else if (e.key === "Escape") setAnnotationEditor(null);
+                }}
+                placeholder="Note (max 40 chars)…"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "#e2e8f0",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                  width: 160,
+                  minWidth: 100,
+                }}
+              />
+              <button
+                data-testid="overview-puzzle-annotation-confirm"
+                onClick={commitAnnotation}
+                style={{
+                  background: "rgba(34,211,238,0.2)",
+                  border: "1px solid rgba(34,211,238,0.4)",
+                  borderRadius: 3,
+                  color: "#22d3ee",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(10px * var(--bs-font-scale, 1))",
+                  padding: "1px 6px",
+                  cursor: "pointer",
+                  letterSpacing: "0.08em",
+                  lineHeight: "18px",
+                }}
+              >
+                OK
+              </button>
+              <button
+                data-testid="overview-puzzle-annotation-cancel"
+                onClick={() => setAnnotationEditor(null)}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -4413,6 +5096,49 @@ export const OverviewMap: React.FC = () => {
             );
           })()}
 
+          {/* Lock toggle — visible in puzzle mode when any tile is selected */}
+          {puzzleMode && puzzleSelectedIds.size > 0 && (() => {
+            const allLocked = [...puzzleSelectedIds].every((id) => puzzleTransforms.get(id)?.locked);
+            const toggleLock = () => {
+              setPuzzleTransforms((prev) => {
+                const next = new Map(prev);
+                for (const id of puzzleSelectedIds) {
+                  const existing = prev.get(id) ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
+                  next.set(id, { ...existing, locked: !allLocked });
+                }
+                return next;
+              });
+              dirtyRef.current = true;
+            };
+            return (
+              <ViewscreenTooltip
+                label={allLocked ? "Unlock selected tile(s) so they can move again" : "Lock selected tile(s) against drag and rotate"}
+                side="bottom"
+              >
+                <button
+                  data-testid="overview-puzzle-lock-toggle"
+                  aria-pressed={allLocked}
+                  onClick={toggleLock}
+                  style={{
+                    background: allLocked ? "rgba(251,191,36,0.15)" : "rgba(0,10,20,0.75)",
+                    border: `1px solid ${allLocked ? "rgba(251,191,36,0.6)" : "rgba(0,229,255,0.2)"}`,
+                    borderRadius: 3,
+                    color: allLocked ? "#fbbf24" : "#94a3b8",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                    padding: "2px 8px",
+                    cursor: "pointer",
+                    letterSpacing: "0.1em",
+                    lineHeight: "18px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {allLocked ? "🔓 UNLOCK" : "🔒 LOCK"}
+                </button>
+              </ViewscreenTooltip>
+            );
+          })()}
+
           {/* Rotation controls — visible in puzzle mode when any tile is selected */}
           {puzzleMode && puzzleSelectedIds.size > 0 && (() => {
             const primaryIdForPanel = puzzlePrimaryIdRef.current ?? ([...puzzleSelectedIds][0] ?? null);
@@ -4422,6 +5148,7 @@ export const OverviewMap: React.FC = () => {
                 const next = new Map(prev);
                 for (const id of puzzleSelectedIds) {
                   const existing = prev.get(id);
+                  if (existing?.locked) continue; // locked tiles never rotate
                   next.set(id, {
                     ...(existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false }),
                     angleDeg: (existing?.angleDeg ?? 0) + delta,
@@ -4550,6 +5277,7 @@ export const OverviewMap: React.FC = () => {
                 const next = new Map(prev);
                 for (const id of puzzleSelectedIds) {
                   const existing = prev.get(id);
+                  if (existing?.locked) continue; // locked tiles never flip
                   const base = existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
                   next.set(id, { ...base, [axis]: !base[axis] });
                 }

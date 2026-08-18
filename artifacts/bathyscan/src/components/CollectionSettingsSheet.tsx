@@ -1,0 +1,715 @@
+/**
+ * CollectionSettingsSheet — settings drawer for a "special" dataset collection
+ * (puzzle assembly with a reference image).
+ *
+ * Exposes:
+ *  (a) background image upload — drag-and-drop or file picker with a
+ *      thumbnail preview (authed fetch/upload via the generated client);
+ *  (b) opacity slider 10–90 % (default 50 %);
+ *  (c) geo-anchor control — pin two control points (A and B) by clicking the
+ *      preview image and typing the known lat/lon for each; the Overview
+ *      overlay auto-scales/rotates the image to match;
+ *  (d) layout revision list with Restore and Delete actions.
+ *
+ * Metadata changes are PATCHed to /user/collections/:id/meta and mirrored
+ * into the specialCollectionStore so a live overlay updates immediately.
+ */
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  getUserCollectionsIdBackground,
+  postUserCollectionsIdBackground,
+  deleteUserCollectionsIdBackground,
+  patchUserCollectionsIdMeta,
+  deleteUserCollectionsIdLayoutRevisionId,
+  getGetUserCollectionsQueryKey,
+  type CollectionGeoAnchor,
+  type DatasetCollection,
+  type LayoutRevision,
+} from "@workspace/api-client-react";
+import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
+
+const MONO = "'JetBrains Mono', 'Fira Code', monospace";
+
+const sectionTitleStyle: React.CSSProperties = {
+  color: "#94a3b8",
+  fontSize: "calc(11px * var(--bs-font-scale, 1))",
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  margin: "14px 0 6px",
+};
+
+/** Pin marker rendered over the preview image for a placed anchor. */
+const AnchorPin: React.FC<{ label: string; xPct: number; yPct: number; color: string }> = ({
+  label,
+  xPct,
+  yPct,
+  color,
+}) => (
+  <div
+    style={{
+      position: "absolute",
+      left: `${xPct}%`,
+      top: `${yPct}%`,
+      transform: "translate(-50%, -100%)",
+      color,
+      fontSize: "calc(12px * var(--bs-font-scale, 1))",
+      fontWeight: 700,
+      textShadow: "0 0 3px rgba(0,0,0,0.9)",
+      pointerEvents: "none",
+      lineHeight: 1,
+    }}
+  >
+    📍{label}
+  </div>
+);
+
+interface AnchorDraft {
+  imgX: number | null;
+  imgY: number | null;
+  lon: string;
+  lat: string;
+}
+
+const EMPTY_DRAFT: AnchorDraft = { imgX: null, imgY: null, lon: "", lat: "" };
+
+export const CollectionSettingsSheet: React.FC<{
+  collection: DatasetCollection;
+  onClose: () => void;
+}> = ({ collection, onClose }) => {
+  const qc = useQueryClient();
+  const meta = collection.specialMeta;
+
+  // ---- Background image preview -----------------------------------------
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [imgNatural, setImgNatural] = useState<{ w: number; h: number } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+
+  const setPreviewFromBlob = useCallback((blob: Blob | null) => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    if (blob && blob.size > 0) {
+      const url = URL.createObjectURL(blob);
+      previewUrlRef.current = url;
+      setPreviewUrl(url);
+    } else {
+      previewUrlRef.current = null;
+      setPreviewUrl(null);
+      setImgNatural(null);
+    }
+  }, []);
+
+  // Load the existing background image once (authed endpoint — cannot use a
+  // bare <img src> URL because the Authorization header would be missing).
+  useEffect(() => {
+    let cancelled = false;
+    if (meta?.bgImageKey) {
+      getUserCollectionsIdBackground(collection.id)
+        .then((blob) => {
+          if (!cancelled && blob instanceof Blob) setPreviewFromBlob(blob);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run only on mount/collection change; meta.bgImageKey updates are handled by the upload/remove handlers themselves
+  }, [collection.id]);
+
+  const invalidate = useCallback(
+    () => qc.invalidateQueries({ queryKey: getGetUserCollectionsQueryKey() }),
+    [qc],
+  );
+
+  const handleUpload = useCallback(
+    async (file: File) => {
+      if (uploading) return;
+      setError(null);
+      if (!file.type.startsWith("image/")) {
+        setError("Please choose an image file (PNG, JPEG, or WebP).");
+        return;
+      }
+      setUploading(true);
+      try {
+        await postUserCollectionsIdBackground(collection.id, { file });
+        setPreviewFromBlob(file);
+        await useSpecialCollectionStore.getState().reloadBgImage(collection.id);
+        await invalidate();
+      } catch {
+        setError("Upload failed. Please try again.");
+      } finally {
+        setUploading(false);
+      }
+    },
+    [collection.id, uploading, invalidate, setPreviewFromBlob],
+  );
+
+  const handleRemoveImage = useCallback(async () => {
+    setError(null);
+    try {
+      await deleteUserCollectionsIdBackground(collection.id);
+      setPreviewFromBlob(null);
+      await useSpecialCollectionStore.getState().reloadBgImage(collection.id);
+      await invalidate();
+    } catch {
+      setError("Could not remove the image.");
+    }
+  }, [collection.id, invalidate, setPreviewFromBlob]);
+
+  // ---- Opacity slider (10–90 %, default 50 %) ----------------------------
+  const [opacityPct, setOpacityPct] = useState(() =>
+    Math.round(Math.min(0.9, Math.max(0.1, meta?.bgOpacity ?? 0.5)) * 100),
+  );
+  const opacityPatchTimer = useRef<number | null>(null);
+  const handleOpacityChange = useCallback(
+    (pct: number) => {
+      setOpacityPct(pct);
+      // Live-sync the overlay; debounce the PATCH.
+      useSpecialCollectionStore.getState().setBgOpacity(collection.id, pct / 100);
+      if (opacityPatchTimer.current !== null) window.clearTimeout(opacityPatchTimer.current);
+      opacityPatchTimer.current = window.setTimeout(() => {
+        opacityPatchTimer.current = null;
+        patchUserCollectionsIdMeta(collection.id, { bgOpacity: pct / 100 })
+          .then(() => invalidate())
+          .catch(() => setError("Could not save the opacity setting."));
+      }, 400);
+    },
+    [collection.id, invalidate],
+  );
+  useEffect(
+    () => () => {
+      if (opacityPatchTimer.current !== null) window.clearTimeout(opacityPatchTimer.current);
+    },
+    [],
+  );
+
+  // ---- Geo anchors --------------------------------------------------------
+  const existingAnchors = (meta?.bgGeoAnchors ?? null) as CollectionGeoAnchor[] | null;
+  const [anchorMode, setAnchorMode] = useState<"A" | "B" | null>(null);
+  const [draftA, setDraftA] = useState<AnchorDraft>(() =>
+    existingAnchors?.[0]
+      ? {
+          imgX: existingAnchors[0].imgX,
+          imgY: existingAnchors[0].imgY,
+          lon: String(existingAnchors[0].lon),
+          lat: String(existingAnchors[0].lat),
+        }
+      : EMPTY_DRAFT,
+  );
+  const [draftB, setDraftB] = useState<AnchorDraft>(() =>
+    existingAnchors?.[1]
+      ? {
+          imgX: existingAnchors[1].imgX,
+          imgY: existingAnchors[1].imgY,
+          lon: String(existingAnchors[1].lon),
+          lat: String(existingAnchors[1].lat),
+        }
+      : EMPTY_DRAFT,
+  );
+  const [anchorsSaving, setAnchorsSaving] = useState(false);
+
+  const handlePreviewClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!anchorMode || !imgNatural) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const relX = (e.clientX - rect.left) / rect.width;
+      const relY = (e.clientY - rect.top) / rect.height;
+      const imgX = Math.max(0, Math.round(relX * imgNatural.w));
+      const imgY = Math.max(0, Math.round(relY * imgNatural.h));
+      if (anchorMode === "A") setDraftA((d) => ({ ...d, imgX, imgY }));
+      else setDraftB((d) => ({ ...d, imgX, imgY }));
+      setAnchorMode(null);
+    },
+    [anchorMode, imgNatural],
+  );
+
+  const parseAnchor = (d: AnchorDraft): CollectionGeoAnchor | null => {
+    const lon = Number(d.lon);
+    const lat = Number(d.lat);
+    if (d.imgX === null || d.imgY === null) return null;
+    if (!Number.isFinite(lon) || lon < -180 || lon > 180) return null;
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) return null;
+    return { lon, lat, imgX: d.imgX, imgY: d.imgY };
+  };
+  const anchorA = parseAnchor(draftA);
+  const anchorB = parseAnchor(draftB);
+  const anchorsComplete = anchorA !== null && anchorB !== null;
+
+  const handleSaveAnchors = useCallback(async () => {
+    if (!anchorA || !anchorB || anchorsSaving) return;
+    setAnchorsSaving(true);
+    setError(null);
+    try {
+      await patchUserCollectionsIdMeta(collection.id, { bgGeoAnchors: [anchorA, anchorB] });
+      useSpecialCollectionStore.getState().setBgAnchors(collection.id, [anchorA, anchorB]);
+      await invalidate();
+    } catch {
+      setError("Could not save the geo anchors.");
+    } finally {
+      setAnchorsSaving(false);
+    }
+  }, [anchorA, anchorB, anchorsSaving, collection.id, invalidate]);
+
+  const handleClearAnchors = useCallback(async () => {
+    setError(null);
+    try {
+      await patchUserCollectionsIdMeta(collection.id, { bgGeoAnchors: null });
+      useSpecialCollectionStore.getState().setBgAnchors(collection.id, null);
+      setDraftA(EMPTY_DRAFT);
+      setDraftB(EMPTY_DRAFT);
+      await invalidate();
+    } catch {
+      setError("Could not clear the geo anchors.");
+    }
+  }, [collection.id, invalidate]);
+
+  // ---- Revision list ------------------------------------------------------
+  const revisions = [...(meta?.layoutRevisions ?? [])].sort((a, b) =>
+    a.savedAt < b.savedAt ? 1 : -1,
+  );
+  const [deletingRevisionIds, setDeletingRevisionIds] = useState<Set<string>>(() => new Set());
+
+  const handleRestoreRevision = useCallback(
+    (rev: LayoutRevision) => {
+      const store = useSpecialCollectionStore.getState();
+      // Restoring from the sheet only makes sense when this collection is the
+      // active one; the "Activate for Puzzle" flow covers the cold path.
+      if (store.active?.collectionId === collection.id) {
+        store.requestRestore({
+          tiles: rev.tiles.map((tl) => ({
+            datasetId: tl.datasetId,
+            tx: tl.tx,
+            ty: tl.ty,
+            angleDeg: tl.angleDeg,
+            locked: tl.locked,
+            annotation: tl.annotation ?? undefined,
+          })),
+          groups: rev.groups.map((g) => [...g.datasetIds]),
+        });
+        patchUserCollectionsIdMeta(collection.id, { activeRevisionId: rev.id }).catch(() => {});
+        useSpecialCollectionStore.setState((s) =>
+          s.active?.collectionId === collection.id
+            ? { active: { ...s.active, activeRevisionId: rev.id } }
+            : {},
+        );
+      }
+    },
+    [collection.id],
+  );
+
+  const handleDeleteRevision = useCallback(
+    async (rev: LayoutRevision) => {
+      setDeletingRevisionIds((s) => new Set(s).add(rev.id));
+      setError(null);
+      try {
+        await deleteUserCollectionsIdLayoutRevisionId(collection.id, rev.id);
+        useSpecialCollectionStore.getState().removeRevision(collection.id, rev.id);
+        await invalidate();
+      } catch {
+        setError("Could not delete the revision.");
+      } finally {
+        setDeletingRevisionIds((s) => {
+          const n = new Set(s);
+          n.delete(rev.id);
+          return n;
+        });
+      }
+    },
+    [collection.id, invalidate],
+  );
+
+  const isActiveCollection =
+    useSpecialCollectionStore((s) => s.active?.collectionId) === collection.id;
+
+  const anchorFieldStyle: React.CSSProperties = {
+    width: 82,
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(0,229,255,0.2)",
+    borderRadius: 3,
+    color: "#e2e8f0",
+    padding: "2px 6px",
+    fontSize: "calc(12px * var(--bs-font-scale, 1))",
+    outline: "none",
+    fontFamily: "inherit",
+  };
+
+  const renderAnchorRow = (
+    label: "A" | "B",
+    draft: AnchorDraft,
+    setDraft: React.Dispatch<React.SetStateAction<AnchorDraft>>,
+  ) => (
+    <div className="flex items-center gap-1" style={{ marginBottom: 4, flexWrap: "wrap" }}>
+      <button
+        data-testid={`btn-pin-anchor-${label.toLowerCase()}-${collection.id}`}
+        onClick={() => setAnchorMode((m) => (m === label ? null : label))}
+        disabled={!previewUrl}
+        aria-pressed={anchorMode === label}
+        style={{
+          background: anchorMode === label ? "rgba(0,229,255,0.15)" : "transparent",
+          border: `1px solid ${anchorMode === label ? "rgba(0,229,255,0.6)" : "rgba(0,229,255,0.25)"}`,
+          borderRadius: 3,
+          color: previewUrl ? "#00e5ff" : "#475569",
+          fontSize: "calc(11px * var(--bs-font-scale, 1))",
+          padding: "2px 8px",
+          cursor: previewUrl ? "pointer" : "not-allowed",
+          letterSpacing: "0.05em",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {anchorMode === label ? `Click image…` : `Pin point ${label}`}
+      </button>
+      <span style={{ color: "#64748b", fontSize: "calc(11px * var(--bs-font-scale, 1))" }}>
+        {draft.imgX !== null && draft.imgY !== null ? `(${draft.imgX}, ${draft.imgY})` : "not set"}
+      </span>
+      <input
+        data-testid={`input-anchor-${label.toLowerCase()}-lat-${collection.id}`}
+        placeholder="lat"
+        value={draft.lat}
+        onChange={(e) => setDraft((d) => ({ ...d, lat: e.target.value }))}
+        style={anchorFieldStyle}
+      />
+      <input
+        data-testid={`input-anchor-${label.toLowerCase()}-lon-${collection.id}`}
+        placeholder="lon"
+        value={draft.lon}
+        onChange={(e) => setDraft((d) => ({ ...d, lon: e.target.value }))}
+        style={anchorFieldStyle}
+      />
+    </div>
+  );
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Settings for collection "${collection.name}"`}
+      data-testid={`collection-settings-sheet-${collection.id}`}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10000,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "rgba(0,10,20,0.97)",
+          border: "1px solid rgba(0,229,255,0.35)",
+          borderRadius: 6,
+          padding: 18,
+          width: 420,
+          maxWidth: "92vw",
+          maxHeight: "86vh",
+          overflowY: "auto",
+          color: "#cbd5e1",
+          fontFamily: MONO,
+          fontSize: "calc(13px * var(--bs-font-scale, 1))",
+        }}
+      >
+        <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: "calc(15px * var(--bs-font-scale, 1))",
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+            }}
+          >
+            ✷ {collection.name} — settings
+          </div>
+          <button
+            data-testid={`btn-close-collection-settings-${collection.id}`}
+            onClick={onClose}
+            aria-label="Close settings"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#64748b",
+              cursor: "pointer",
+              fontSize: "calc(14px * var(--bs-font-scale, 1))",
+              padding: "2px 6px",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {error && (
+          <div
+            data-testid="collection-settings-error"
+            style={{ color: "#fca5a5", fontSize: "calc(12px * var(--bs-font-scale, 1))", margin: "4px 0" }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* (a) Background image upload */}
+        <div style={sectionTitleStyle}>Reference image</div>
+        <div
+          data-testid={`collection-bg-dropzone-${collection.id}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) void handleUpload(file);
+          }}
+          onClick={anchorMode ? undefined : () => fileInputRef.current?.click()}
+          style={{
+            position: "relative",
+            border: `1px dashed ${dragOver ? "rgba(0,229,255,0.8)" : "rgba(0,229,255,0.3)"}`,
+            borderRadius: 4,
+            minHeight: 90,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: anchorMode ? "crosshair" : "pointer",
+            background: dragOver ? "rgba(0,229,255,0.06)" : "rgba(255,255,255,0.02)",
+            overflow: "hidden",
+          }}
+        >
+          {previewUrl ? (
+            <div
+              style={{ position: "relative", width: "100%" }}
+              onClick={(e) => {
+                if (anchorMode) {
+                  e.stopPropagation();
+                  handlePreviewClick(e);
+                }
+              }}
+            >
+              <img
+                data-testid={`collection-bg-preview-${collection.id}`}
+                src={previewUrl}
+                alt="Reference background"
+                style={{ display: "block", width: "100%", height: "auto" }}
+                onLoad={(e) =>
+                  setImgNatural({
+                    w: e.currentTarget.naturalWidth,
+                    h: e.currentTarget.naturalHeight,
+                  })
+                }
+              />
+              {imgNatural && draftA.imgX !== null && draftA.imgY !== null && (
+                <AnchorPin
+                  label="A"
+                  xPct={(draftA.imgX / imgNatural.w) * 100}
+                  yPct={(draftA.imgY / imgNatural.h) * 100}
+                  color="#4ade80"
+                />
+              )}
+              {imgNatural && draftB.imgX !== null && draftB.imgY !== null && (
+                <AnchorPin
+                  label="B"
+                  xPct={(draftB.imgX / imgNatural.w) * 100}
+                  yPct={(draftB.imgY / imgNatural.h) * 100}
+                  color="#fbbf24"
+                />
+              )}
+            </div>
+          ) : (
+            <span style={{ color: "#64748b", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: 12, textAlign: "center" }}>
+              {uploading ? "Uploading…" : "Drag an image here, or click to choose a file"}
+            </span>
+          )}
+        </div>
+        <input
+          ref={fileInputRef}
+          data-testid={`input-collection-bg-file-${collection.id}`}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void handleUpload(file);
+            e.target.value = "";
+          }}
+        />
+        {previewUrl && (
+          <div className="flex items-center gap-2" style={{ marginTop: 4 }}>
+            <button
+              data-testid={`btn-replace-collection-bg-${collection.id}`}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(0,229,255,0.25)",
+                borderRadius: 3,
+                color: "#00e5ff",
+                fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                padding: "2px 8px",
+                cursor: "pointer",
+              }}
+            >
+              {uploading ? "Uploading…" : "Replace"}
+            </button>
+            <button
+              data-testid={`btn-remove-collection-bg-${collection.id}`}
+              onClick={() => void handleRemoveImage()}
+              disabled={uploading}
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(239,68,68,0.3)",
+                borderRadius: 3,
+                color: "#f87171",
+                fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                padding: "2px 8px",
+                cursor: "pointer",
+              }}
+            >
+              Remove
+            </button>
+          </div>
+        )}
+
+        {/* (b) Opacity slider */}
+        <div style={sectionTitleStyle}>Overlay opacity — {opacityPct}%</div>
+        <input
+          data-testid={`input-collection-bg-opacity-${collection.id}`}
+          type="range"
+          min={10}
+          max={90}
+          step={1}
+          value={opacityPct}
+          onChange={(e) => handleOpacityChange(Number(e.target.value))}
+          style={{ width: "100%" }}
+          aria-label="Background image opacity"
+        />
+
+        {/* (c) Geo anchors */}
+        <div style={sectionTitleStyle}>Geo anchors</div>
+        <div style={{ color: "#64748b", fontSize: "calc(11.5px * var(--bs-font-scale, 1))", marginBottom: 6 }}>
+          Pin two known points on the image, then enter their lat/lon. The
+          overlay scales and rotates to match. Without anchors the image is
+          stretched over the loaded datasets.
+        </div>
+        {renderAnchorRow("A", draftA, setDraftA)}
+        {renderAnchorRow("B", draftB, setDraftB)}
+        <div className="flex items-center gap-2" style={{ marginTop: 4 }}>
+          <button
+            data-testid={`btn-save-anchors-${collection.id}`}
+            onClick={() => void handleSaveAnchors()}
+            disabled={!anchorsComplete || anchorsSaving}
+            style={{
+              background: anchorsComplete ? "rgba(0,229,255,0.1)" : "transparent",
+              border: "1px solid rgba(0,229,255,0.3)",
+              borderRadius: 3,
+              color: anchorsComplete ? "#00e5ff" : "#475569",
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+              padding: "2px 10px",
+              cursor: anchorsComplete && !anchorsSaving ? "pointer" : "not-allowed",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            {anchorsSaving ? "Saving…" : "Save anchors"}
+          </button>
+          {existingAnchors && (
+            <button
+              data-testid={`btn-clear-anchors-${collection.id}`}
+              onClick={() => void handleClearAnchors()}
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(239,68,68,0.3)",
+                borderRadius: 3,
+                color: "#f87171",
+                fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                padding: "2px 10px",
+                cursor: "pointer",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* (d) Layout revisions */}
+        <div style={sectionTitleStyle}>Layout revisions</div>
+        {revisions.length === 0 ? (
+          <div
+            data-testid={`collection-revisions-empty-${collection.id}`}
+            style={{ color: "#64748b", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}
+          >
+            No saved layouts yet — arrange tiles in the Overview puzzle and use
+            “Save Layout…”.
+          </div>
+        ) : (
+          revisions.map((rev) => (
+            <div
+              key={rev.id}
+              data-testid={`collection-revision-row-${rev.id}`}
+              className="flex items-center gap-2"
+              style={{
+                padding: "3px 4px",
+                borderBottom: "1px solid rgba(255,255,255,0.05)",
+              }}
+            >
+              <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+                {rev.name}
+                {meta?.activeRevisionId === rev.id && (
+                  <span style={{ color: "#fbbf24", marginLeft: 6, fontSize: "calc(10px * var(--bs-font-scale, 1))" }}>
+                    ACTIVE
+                  </span>
+                )}
+                <span style={{ color: "#64748b", marginLeft: 6, fontSize: "calc(10.5px * var(--bs-font-scale, 1))" }}>
+                  {new Date(rev.savedAt).toLocaleString()}
+                </span>
+              </span>
+              <button
+                data-testid={`btn-restore-revision-${rev.id}`}
+                onClick={() => handleRestoreRevision(rev)}
+                disabled={!isActiveCollection}
+                title={
+                  isActiveCollection
+                    ? `Restore "${rev.name}"`
+                    : "Activate this collection for puzzle first"
+                }
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(0,229,255,0.25)",
+                  borderRadius: 3,
+                  color: isActiveCollection ? "#00e5ff" : "#475569",
+                  fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                  padding: "1px 8px",
+                  cursor: isActiveCollection ? "pointer" : "not-allowed",
+                }}
+              >
+                Restore
+              </button>
+              <button
+                data-testid={`btn-delete-revision-${rev.id}`}
+                onClick={() => void handleDeleteRevision(rev)}
+                disabled={deletingRevisionIds.has(rev.id)}
+                title="Delete this revision"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#f87171",
+                  fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                  cursor: deletingRevisionIds.has(rev.id) ? "wait" : "pointer",
+                  padding: "1px 4px",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
