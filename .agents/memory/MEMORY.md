@@ -121,3 +121,4 @@
 - [Markers bbox guard vs bundled presets](markers-bbox-bundled-presets.md) — resolveDatasetBbox only checks DB tables; bundled ids (thorne-bay) crash the custom_datasets UUID query → every marker POST 500s; quick-drop/marker-flow e2e are the detectors.
 - [Validation command editor outage](validation-command-editor-outage.md) — when setValidationCommand fails with "toml-editor error" for adds AND updates, run registered commands as-is; test-standard fits the ~10 min window (~9.3 min observed).
 - [New route module checklist](new-route-module-checklist.md) — mounting a new api-server router breaks wholesale api-zod mocks (add new exports) and the router-duplicate-route-guard ROUTERS list; sweep both in one pass.
+- [Approval gate bootstrap](approval-gate-bootstrap.md) — an admin-list fix does not rewrite an existing pending row; distinguish admin bypass configuration from the stored development approval state.
