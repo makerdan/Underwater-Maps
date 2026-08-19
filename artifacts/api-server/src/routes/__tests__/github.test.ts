@@ -130,6 +130,10 @@ beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   // Grant E2E_USER admin access so happy-path tests pass admin gate.
   vi.stubEnv("ADMIN_USER_IDS", E2E_USER);
+  // Defensive: a BUCKET_MONITOR_ADMIN=1 leak from an earlier file in the
+  // singleFork queue would make EVERY user an admin, turning the 403
+  // admin-gate tests into 500s (handler runs against reset octokit mocks).
+  vi.stubEnv("BUCKET_MONITOR_ADMIN", "");
   // Use the in-memory rate-limit backend — no Postgres needed.
   vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
   __resetRateLimitMemory();

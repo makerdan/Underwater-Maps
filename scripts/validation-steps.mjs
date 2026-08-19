@@ -124,7 +124,9 @@ export function getValidationSteps(logPrefix) {
     // no resource: pure schema-vs-snapshot diff, no DB connection, sub-second
     { name: "check:schema-stale", resource: null, cmd: "pnpm run check:schema-stale", tiers: STANDARD },
     // no resource: pure source-file scan for bare numeric fontSize: values, sub-second
-    { name: "check:font-scale", resource: null, cmd: "pnpm run check:font-scale", tiers: STANDARD },
+    // FAST tier (Task 4219): guards the offline-button icon and all inline
+    // font sizing on every fast-tier run, not just standard+.
+    { name: "check:font-scale", resource: null, cmd: "pnpm run check:font-scale", tiers: FAST },
     { name: "check:e2e-user-ids", resource: null, cmd: "pnpm run check:e2e-user-ids", tiers: FULL },
     { name: "check:e2e-cjs-globals", resource: null, cmd: "pnpm run check:e2e-cjs-globals", tiers: FULL },
     // no resource: grep-based panel-collapse localStorage guard, sub-second

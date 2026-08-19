@@ -758,3 +758,30 @@ describe("useDatasetProximityStreaming — no 3D scene (mobile GPS mirror)", () 
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task 4219 (#4148) — panel remount must not re-initiate dataset activation
+// ---------------------------------------------------------------------------
+describe("unmount/remount does not re-activate an already-active dataset", () => {
+  it("keeps onActivate at one call across hook unmount and remount", () => {
+    setCameraAt(CAM_INSIDE_ORIGIN.lon, CAM_INSIDE_ORIGIN.lat);
+    addSelectedOnly("ds-a");
+
+    const onActivate = vi.fn();
+    const first = renderStreamingHook({ "ds-a": BBOX_ORIGIN }, onActivate);
+    act(() => { vi.advanceTimersByTime(TICK_MS); });
+    expect(onActivate).toHaveBeenCalledTimes(1);
+
+    // The app reacts to onActivate by loading the dataset into a slot.
+    addVisible("ds-a");
+
+    // Simulate the panel unmounting and remounting mid-session.
+    first.unmount();
+    const second = renderStreamingHook({ "ds-a": BBOX_ORIGIN }, onActivate);
+    act(() => { vi.advanceTimersByTime(TICK_MS * 3); });
+
+    // No additional activation fetch fired for the already-active dataset.
+    expect(onActivate).toHaveBeenCalledTimes(1);
+    second.unmount();
+  });
+});

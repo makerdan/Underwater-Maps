@@ -3636,7 +3636,39 @@ export const OverviewMap: React.FC = () => {
         if (tileHitId !== null) {
           const tileId = tileHitId;
           const xfNow = puzzleTransformsRef.current.get(tileId);
+          // Flip the hit tile plus any group co-members (a grouped tile
+          // flips as part of its group, matching multi-move semantics).
+          const flipIds = new Set<string>([tileId]);
+          for (const members of puzzleGroupsRef.current.values()) {
+            if (members.has(tileId)) {
+              for (const m of members) flipIds.add(m);
+              break;
+            }
+          }
+          const applyTileFlip = (axis: "flipH" | "flipV") => {
+            setPuzzleTransforms((prev) => {
+              const next = new Map(prev);
+              for (const id of flipIds) {
+                const existing = prev.get(id);
+                const base = existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
+                next.set(id, { ...base, [axis]: !base[axis] });
+              }
+              return next;
+            });
+            dirtyRef.current = true;
+          };
           const tileItems: ContextMenuItem[] = [
+            {
+              label: "Flip H",
+              icon: "⇔",
+              onClick: () => applyTileFlip("flipH"),
+            },
+            {
+              label: "Flip V",
+              icon: "⇕",
+              onClick: () => applyTileFlip("flipV"),
+            },
+            { label: "", onClick: () => {}, separator: true },
             {
               label: xfNow?.annotation ? "Edit note" : "Add note",
               icon: "📝",

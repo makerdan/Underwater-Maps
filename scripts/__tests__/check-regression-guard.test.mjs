@@ -669,3 +669,45 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// (K) --fix-stub on an already-compliant plan → no mutation, no misleading
+//     "stub inserted" output (Task 4219 / #4196)
+// ---------------------------------------------------------------------------
+
+describe("--fix-stub idempotency on a fully-filled plan", () => {
+  it("leaves the file untouched, exits 0, and does not claim a stub was inserted", () => {
+    const dir = makeTasksDir("fixstub-idempotent");
+    const planPath = join(dir, ".local", "tasks", "task-clean.md");
+    writePlan(
+      dir,
+      "task-clean.md",
+      planWith(
+        "**Covers:** the upload-retry path in uploadService.ts\n" +
+          "**Test location:** artifacts/bathyscan/src/__tests__/uploadService.test.ts\n" +
+          "**What it checks:** retries on transient 503, succeeds on the second attempt\n",
+      ),
+    );
+    const fileBefore = readFileSync(planPath, "utf8");
+
+    const result = run(dir, ["--fix-stub"]);
+
+    assert.equal(
+      result.status,
+      0,
+      `expected exit 0\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+    // (a) the plan file must not be modified
+    const fileAfter = readFileSync(planPath, "utf8");
+    assert.equal(fileAfter, fileBefore, "plan file must not be mutated by --fix-stub");
+    // (c) output must not mislead about work performed
+    assert.ok(
+      !/stubs? inserted/i.test(result.stdout),
+      `stdout must not claim a stub was inserted\nstdout: ${result.stdout}`,
+    );
+    assert.ok(
+      !result.stdout.includes("patched"),
+      `stdout must not claim the file was patched\nstdout: ${result.stdout}`,
+    );
+  });
+});

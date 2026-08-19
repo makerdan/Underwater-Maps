@@ -626,6 +626,10 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
     schema: apiZod.AdminDeleteUserResponse,
     payloads: [{ deleted: true, clerkUserId: "user_2abc" }],
   },
+  AdminPendingCountResponse: {
+    schema: apiZod.AdminPendingCountResponse,
+    payloads: [{ count: 0 }, { count: 3 }],
+  },
   AdminLargeDatasetsDiffResponse: {
     schema: apiZod.AdminLargeDatasetsDiffResponse,
     payloads: [

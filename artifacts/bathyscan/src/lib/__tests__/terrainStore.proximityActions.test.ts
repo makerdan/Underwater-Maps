@@ -536,3 +536,50 @@ describe("terrainStore — headless retarget preserves proximity-loaded grids", 
     expect(s.selectedIds).toEqual(expect.arrayContaining(["ds-a", "ds-b"]));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task 4219 (#4148 family) — proximity slot count on dataset delete
+// ---------------------------------------------------------------------------
+describe("active slot count on dataset delete", () => {
+  beforeEach(() => {
+    // Earlier describes mutate the user-configurable cap; pin it back to the
+    // default so these counts are deterministic regardless of test order.
+    useSettingsStore.setState({ maxActiveDatasets: MAX_ACTIVE_DATASETS });
+  });
+
+  it("decrements the slot count synchronously when a dataset is deleted (no reload)", () => {
+    useTerrainStore.getState().addSelected("ds-a", "preset");
+    useTerrainStore.getState().addSelected("ds-b", "preset");
+    useTerrainStore.getState().addSelected("ds-c", "user");
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(3);
+
+    useTerrainStore.getState().removeSelected("ds-b");
+
+    // Read immediately after the action — the decrement must be synchronous.
+    const s = useTerrainStore.getState();
+    expect(s.visibleDatasets).toHaveLength(2);
+    expect(s.visibleDatasets.some((v) => v.datasetId === "ds-b")).toBe(false);
+    expect(s.selectedIds).not.toContain("ds-b");
+  });
+
+  it("frees a slot at cap so a queued dataset can activate right after a delete", () => {
+    for (let i = 0; i < MAX_ACTIVE_DATASETS; i++) {
+      useTerrainStore.getState().addSelected(`ds-fill-${i}`, "preset");
+    }
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(MAX_ACTIVE_DATASETS);
+
+    // Selecting one more does not exceed the cap.
+    useTerrainStore.getState().addSelected("ds-q", "preset");
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(MAX_ACTIVE_DATASETS);
+
+    // Delete one active dataset — the slot frees immediately…
+    useTerrainStore.getState().removeSelected("ds-fill-0");
+    expect(useTerrainStore.getState().visibleDatasets).toHaveLength(MAX_ACTIVE_DATASETS - 1);
+
+    // …and the queued dataset can now take it without a reload.
+    useTerrainStore.getState().autoActivate("ds-q");
+    const after = useTerrainStore.getState();
+    expect(after.visibleDatasets.some((v) => v.datasetId === "ds-q")).toBe(true);
+    expect(after.visibleDatasets).toHaveLength(MAX_ACTIVE_DATASETS);
+  });
+});

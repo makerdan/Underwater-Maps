@@ -10,7 +10,7 @@
  * tests run without network access or a real bucket.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
 // ── Stub the entire bucketMonitor module ──────────────────────────────────────
@@ -194,6 +194,14 @@ describe("GET /api/admin/bucket-monitor", () => {
   beforeEach(() => {
     vi.mocked(getBucketStatus).mockResolvedValue(MOCK_SUMMARY);
     // Clear admin env vars before each test so tests are isolated
+    delete process.env["BUCKET_MONITOR_ADMIN"];
+    delete process.env["ADMIN_USER_IDS"];
+  });
+
+  // Also clear AFTER each test — the singleFork pool shares process.env
+  // across files, so a trailing BUCKET_MONITOR_ADMIN=1 would leak admin
+  // access into every subsequent suite.
+  afterEach(() => {
     delete process.env["BUCKET_MONITOR_ADMIN"];
     delete process.env["ADMIN_USER_IDS"];
   });

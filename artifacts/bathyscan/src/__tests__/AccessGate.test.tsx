@@ -420,3 +420,27 @@ describe("AdminPanel forbidden branch (Regression Guard #2)", () => {
     expect(screen.queryByTestId("user-access-stub")).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Denied user — the admin deny action sets status "banned"; requireApproved
+// maps it to 403 { error: "account_banned" } (see requireApproved.test.ts).
+// A denied user must therefore land on the SAME suspended screen a banned
+// user sees — never a blank page and never the app. (Task 4219 / #4193 family)
+// ---------------------------------------------------------------------------
+describe("AccessGate — denied user (deny action outcome)", () => {
+  it("shows the suspended screen after an admin denies the user, never a blank page", async () => {
+    authorizedFetchMock.mockResolvedValue(
+      jsonResponse(403, { error: "account_banned", details: "denied by admin" }),
+    );
+    renderGate();
+    await waitFor(() =>
+      expect(screen.getByTestId("access-gate-banned")).toBeInTheDocument(),
+    );
+    // The blocked screen has visible copy — not a blank page.
+    expect(
+      screen.getByText(/account has been suspended\. contact the site admin/i),
+    ).toBeInTheDocument();
+    // Children (the app) never render for a denied user.
+    expect(screen.queryByTestId("app-content")).toBeNull();
+  });
+});

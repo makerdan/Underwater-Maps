@@ -17,7 +17,7 @@
  *   POST /api/poe/query                    — PoeQueryResponse
  *   POST /api/poe/help                     — PoeHelpResponse
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
 // ── Per-test schema-failure flags ────────────────────────────────────────────
@@ -207,6 +207,13 @@ vi.mock("../../lib/bucketMonitor.js", async () => {
 import app from "../../app.js";
 
 // ── Reset all flags before each test ─────────────────────────────────────────
+// vi.stubEnv persists across FILES in the singleFork pool unless unstubbed —
+// a leaked BUCKET_MONITOR_ADMIN=1 makes every user an admin in later suites
+// (github.test.ts admin-gate 403 tests then 500 instead). Always unstub.
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");

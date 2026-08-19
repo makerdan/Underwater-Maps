@@ -39,6 +39,14 @@ commits (`2642def7`/`b54085ae`/`f3760f55`), not by concurrent frontend work.
 Triage rule: run the file solo before blaming your diff; if solo-green, treat as
 baseline breakage.
 
+
+## Load-flaky (not baseline failures)
+- Durable rule: tests that wait on real-time retries/backoff or heavy component
+  interaction can time out under a saturated tier run yet pass solo — completion
+  validation runs EVERY registered command concurrently, so such tests need
+  explicit generous timeouts (or fake timers) and mocked network side effects
+  (e.g. the Poe upscale hook) to stay deterministic. Solo-green + tier-red on a
+  timeout is load, not a regression.
 ## 2026-08-18 — OverviewMap pointercancel order-dependent failure
 `OverviewMap.pointercancel.test.tsx` fails under the full bathyscan unit run
 (1/5667) but passes 3/3 solo. Same class as the github.test.ts entry above:
