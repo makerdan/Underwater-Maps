@@ -477,7 +477,8 @@ export function UserAccessSection() {
       )}
 
       {listQuery.isSuccess && rows.length > 0 && (
-        <table style={S.table}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <table style={{ ...S.table, minWidth: 680 }}>
           <thead>
             <tr>
               <th style={S.th}>Name</th>
@@ -503,6 +504,7 @@ export function UserAccessSection() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {actionError !== null && (

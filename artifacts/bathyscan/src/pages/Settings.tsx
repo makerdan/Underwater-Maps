@@ -10,6 +10,7 @@
 import React, { useEffect, useRef, useState, useCallback, useSyncExternalStore } from "react";
 import { useLocation } from "wouter";
 import { useUser, useClerk } from "@/lib/clerkCompat";
+import { authorizedFetch } from "@/lib/authorizedFetch";
 import { useHelpStore } from "@/lib/helpStore";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -24,7 +25,7 @@ import {
 } from "@/lib/settingsStore";
 
 import { S, FONT } from "./settings/styles";
-import { NAV_TABS, MOBILE_NAV_TABS, type Tab, basePath } from "./settings/constants";
+import { ADMIN_NAV_TAB, NAV_TABS, MOBILE_NAV_TABS, type Tab, basePath } from "./settings/constants";
 import { SyncContext } from "./settings/components/SyncContext";
 import { Toggle } from "./settings/components/Toggle";
 import { GlobalResetFooter } from "./settings/components/GlobalResetFooter";
@@ -39,6 +40,7 @@ import { MarkerSymbolsSection } from "./settings/MarkerSymbolsSection";
 import { DataStorageSection } from "./settings/DataStorageSection";
 import { AccessibilitySection } from "./settings/AccessibilitySection";
 import { AccountSection } from "./settings/AccountSection";
+import { AdminSection } from "./settings/AdminSection";
 // MOBILE-ONLY: dedicated 2D Chart section (never rendered on desktop)
 import { ChartMapSection } from "./settings/ChartMapSection";
 
@@ -51,7 +53,11 @@ const DEFAULT_TAB: Tab = "visuals";
 function isKnownTab(v: string | null): v is Tab {
   // MOBILE-ONLY: "chart-map" is a valid tab on mobile; accept it for URL
   // restore so a reload on mobile doesn't fall back to the default tab.
-  return v !== null && (NAV_TABS.some((t) => t.id === v) || v === "chart-map");
+  return v !== null && (
+    NAV_TABS.some((t) => t.id === v) ||
+    v === "chart-map" ||
+    v === "admin"
+  );
 }
 
 function readTabFromUrl(): Tab {
@@ -77,12 +83,62 @@ function writeTabToUrl(next: Tab): void {
 
 export function Settings() {
   const [, setLocation] = useLocation();
-  const { isSignedIn, user } = useUser();
+  const { isSignedIn, isLoaded, user } = useUser();
   const { signOut } = useClerk();
   const openHelp = useHelpStore((s) => s.openHelp);
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<Tab>(readTabFromUrl);
   const [savedMsg, setSavedMsg] = useState(false);
+  const authLoaded = isLoaded !== false;
+  const [adminAccess, setAdminAccess] = useState<
+    "checking" | "allowed" | "denied" | "error"
+  >("checking");
+  const [adminProbeAttempt, setAdminProbeAttempt] = useState(0);
+  const isAdminUser = adminAccess === "allowed";
+  const visibleTabs = [
+    ...(isMobile ? MOBILE_NAV_TABS : NAV_TABS),
+    ...(isAdminUser ? [ADMIN_NAV_TAB] : []),
+  ];
+  // Never mount admin UI for a manually-entered URL when the client has no
+  // admin claim. The effect below also normalizes the link back to the default.
+  const activeTab =
+    tab === "admin" && adminAccess !== "allowed" && adminAccess !== "error"
+      ? DEFAULT_TAB
+      : tab;
+
+  // Confirm discoverability against the same server policy that protects the
+  // operations. Clerk metadata is deliberately not used as an authority: an
+  // ADMIN_USER_IDS allowlisted operator may not have a duplicated role claim.
+  useEffect(() => {
+    if (!authLoaded) return;
+    if (!isSignedIn) {
+      setAdminAccess("denied");
+      return;
+    }
+    let cancelled = false;
+    setAdminAccess("checking");
+    void authorizedFetch(`${basePath}/api/admin/users/pending-count`)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok) setAdminAccess("allowed");
+        else if (res.status === 401 || res.status === 403) setAdminAccess("denied");
+        else setAdminAccess("error");
+      })
+      .catch(() => {
+        if (!cancelled) setAdminAccess("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [adminProbeAttempt, authLoaded, isSignedIn, user?.id]);
+
+  useEffect(() => {
+    if (adminAccess === "denied" && tab === "admin") {
+      setTab(DEFAULT_TAB);
+      writeTabToUrl(DEFAULT_TAB);
+    }
+  }, [adminAccess, tab]);
+
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flashSavedMsg = useCallback(() => {
@@ -428,13 +484,14 @@ export function Settings() {
           <nav style={S.sidebar} className="bs-settings-sidebar" aria-label="Settings sections">
             {/* MOBILE-ONLY: phone tab strip includes the "2D Chart" tab;
                 desktop always renders the original NAV_TABS unchanged. */}
-            {(isMobile ? MOBILE_NAV_TABS : NAV_TABS).map((t) => (
+            {visibleTabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => handleTabSelect(t.id)}
-                style={S.navItem(tab === t.id)}
-                data-nav-active={tab === t.id ? "true" : "false"}
-                aria-current={tab === t.id ? "page" : undefined}
+                style={S.navItem(activeTab === t.id)}
+                data-nav-active={activeTab === t.id ? "true" : "false"}
+                data-testid={`settings-nav-${t.id}`}
+                aria-current={activeTab === t.id ? "page" : undefined}
               >
                 {t.label}
               </button>
@@ -443,18 +500,49 @@ export function Settings() {
 
           {/* Content */}
           <div style={S.content} className="bs-settings-content">
-            {tab === "general" && <GeneralSection />}
-            {tab === "visuals" && <VisualsSection />}
-            {tab === "palette" && <PaletteSection />}
-            {tab === "navigation" && <NavigationSection />}
-            {tab === "display-overlays" && <DisplayOverlaysSection />}
-            {tab === "map-layers" && <MapLayersSection />}
-            {tab === "marker-symbols" && <MarkerSymbolsSection />}
-            {tab === "data-storage" && <DataStorageSection />}
-            {tab === "accessibility" && <AccessibilitySection />}
-            {tab === "account" && <AccountSection />}
+            {activeTab === "general" && <GeneralSection />}
+            {activeTab === "visuals" && <VisualsSection />}
+            {activeTab === "palette" && <PaletteSection />}
+            {activeTab === "navigation" && <NavigationSection />}
+            {activeTab === "display-overlays" && <DisplayOverlaysSection />}
+            {activeTab === "map-layers" && <MapLayersSection />}
+            {activeTab === "marker-symbols" && <MarkerSymbolsSection />}
+            {activeTab === "data-storage" && <DataStorageSection />}
+            {activeTab === "accessibility" && <AccessibilitySection />}
+            {activeTab === "account" && <AccountSection />}
+            {activeTab === "admin" && isAdminUser && <AdminSection />}
+            {activeTab === "admin" && adminAccess === "error" && (
+              <section data-testid="admin-access-error">
+                <div style={S.card}>
+                  <div style={S.cardHeader}>ADMIN ACCESS UNAVAILABLE</div>
+                  <div style={{ padding: "14px 16px" }}>
+                    <p style={{ ...S.sublabel, marginTop: 0 }}>
+                      BathyScan could not verify administrator access. No admin
+                      data has been loaded.
+                    </p>
+                    <button
+                      data-testid="admin-access-retry"
+                      onClick={() => setAdminProbeAttempt((attempt) => attempt + 1)}
+                      style={{
+                        background: "rgba(0,229,255,0.06)",
+                        border: "1px solid rgba(0,229,255,0.25)",
+                        borderRadius: 3,
+                        color: "#67e8f9",
+                        fontFamily: FONT,
+                        fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                        letterSpacing: "0.15em",
+                        padding: "5px 12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      RETRY
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
             {/* MOBILE-ONLY: 2D Chart section — only reachable via the mobile tab strip */}
-            {tab === "chart-map" && <ChartMapSection />}
+            {activeTab === "chart-map" && <ChartMapSection />}
 
             {/* Footer: global reset */}
             <GlobalResetFooter />

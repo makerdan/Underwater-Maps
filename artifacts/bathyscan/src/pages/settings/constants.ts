@@ -24,10 +24,11 @@ export const FIXED_SHORTCUTS: { keys: string; desc: string }[] = [
 export type Tab =
   | "general" | "visuals" | "palette" | "navigation" | "display-overlays"
   | "map-layers" | "marker-symbols" | "data-storage" | "accessibility" | "account"
+  | "admin"
   // MOBILE-ONLY: dedicated 2D Chart section (absent from the desktop tab strip).
   | "chart-map";
 
-/** Desktop tab list — exactly 10 tabs, unchanged from before. */
+/** Base Settings tabs visible to every visitor. Admin is appended at runtime. */
 export const NAV_TABS: { id: Tab; label: string }[] = [
   { id: "general", label: "GENERAL" },
   { id: "visuals", label: "VISUALS & PERF" },
@@ -61,6 +62,12 @@ export const MOBILE_NAV_TABS: { id: Tab; label: string }[] = [
   { id: "accessibility", label: "ACCESSIBILITY" },
   { id: "account", label: "ACCOUNT & PRIVACY" },
 ];
+
+/** Admin-only destination. Kept separate so ordinary users never receive it in navigation. */
+export const ADMIN_NAV_TAB: { id: Tab; label: string } = {
+  id: "admin",
+  label: "ADMIN",
+};
 
 // Derived from the marker symbol library so Settings always matches the
 // picker (species section + always-on Natural World / Mariner / Special).

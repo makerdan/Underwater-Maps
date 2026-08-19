@@ -59,6 +59,9 @@ function mockRoutes(pending: TestPendingUser[]) {
   authorizedFetchMock.mockImplementation(async (...args: unknown[]) => {
     const url = String(args[0]);
     if (url.includes("upscale-cache-stats")) return jsonResponse(200, STATS);
+    if (url.includes("/api/admin/users/test-notification")) {
+      return jsonResponse(200, { sent: true, recipientCount: 1 });
+    }
     if (url.includes("/api/admin/users?status=pending")) {
       return jsonResponse(200, { users: pending });
     }
@@ -74,6 +77,37 @@ beforeEach(() => {
 });
 
 describe("AdminPanel — pending approvals badge after batch actions", () => {
+  it("renders the consolidated user, email, cache, dataset, rate-limit, and skill tools", async () => {
+    mockRoutes([]);
+    render(<AdminPanel />);
+    await waitFor(() =>
+      expect(screen.getByTestId("user-access-stub")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Email Delivery Verification")).toBeInTheDocument();
+    expect(screen.getByText("Upscale Cache")).toBeInTheDocument();
+    expect(screen.getByText("Dataset Bucket Status")).toBeInTheDocument();
+    expect(screen.getByText("Large Dataset Changes")).toBeInTheDocument();
+    expect(screen.getByText("Rate Limit Activity")).toBeInTheDocument();
+    expect(screen.getByText("Skill Download")).toBeInTheDocument();
+  });
+
+  it("sends an email-delivery verification through the protected admin route", async () => {
+    mockRoutes([]);
+    render(<AdminPanel />);
+    const button = await screen.findByTestId("admin-test-notification");
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(screen.getByTestId("admin-email-success")).toBeInTheDocument(),
+    );
+    expect(
+      authorizedFetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url).includes("/api/admin/users/test-notification") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      ),
+    ).toBe(true);
+  });
+
   it("shows the pending count badge with the initial number of pending users", async () => {
     mockRoutes([makeUser(1), makeUser(2), makeUser(3)]);
     render(<AdminPanel />);

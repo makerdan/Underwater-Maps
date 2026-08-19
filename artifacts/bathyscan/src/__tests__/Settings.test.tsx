@@ -7,13 +7,32 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 
 // ---- Heavy module mocks (Clerk, react-query, API hooks, wouter, idb) ----
+const settingsAuth = vi.hoisted(() => ({
+  user: {
+    id: "user-test-id",
+    primaryEmailAddress: { emailAddress: "test@example.com" },
+    username: "test",
+    publicMetadata: {} as { role?: string },
+  },
+}));
+const adminAccessFetch = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/clerkCompat", async () => {
   const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
-  return mockClerkCompat();
+  return mockClerkCompat({
+    useUser: () => ({
+      user: settingsAuth.user,
+      isSignedIn: true,
+      isLoaded: true,
+    }),
+  });
 });
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/settings", vi.fn()],
+}));
+
+vi.mock("@/lib/authorizedFetch", () => ({
+  authorizedFetch: (...args: unknown[]) => adminAccessFetch(...args),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -73,6 +92,10 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
+vi.mock("@/pages/settings/AdminSection", () => ({
+  AdminSection: () => <div data-testid="admin-section-stub">ADMIN HUB</div>,
+}));
+
 // ---- Imports under test ----
 import { Settings } from "@/pages/Settings";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
@@ -104,6 +127,10 @@ beforeEach(() => {
   mockCachesDelete.mockClear();
   mockCachesKeys.mockClear();
   mockCachesOpen.mockClear();
+  settingsAuth.user.publicMetadata = {};
+  adminAccessFetch.mockReset();
+  adminAccessFetch.mockImplementation(() => new Promise(() => {}));
+  window.history.replaceState(null, "", "/settings");
   Object.defineProperty(window, "caches", {
     value: { keys: mockCachesKeys, delete: mockCachesDelete, open: mockCachesOpen },
     writable: true,
@@ -112,6 +139,56 @@ beforeEach(() => {
 });
 
 describe("Settings page", () => {
+  it("hides the Admin destination from ordinary users", async () => {
+    adminAccessFetch.mockResolvedValue({ ok: false, status: 403 });
+    render(<Settings />);
+    await waitFor(() =>
+      expect(adminAccessFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/admin/users/pending-count"),
+      ),
+    );
+    expect(screen.queryByTestId("admin-section-stub")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("settings-nav-admin")).not.toBeInTheDocument();
+  });
+
+  it("shows the Admin destination for a server-authorized administrator without requiring Clerk role metadata", async () => {
+    adminAccessFetch.mockResolvedValue({ ok: true, status: 200 });
+    render(<Settings />);
+    fireEvent.click(await screen.findByTestId("settings-nav-admin"));
+    expect(screen.getByTestId("admin-section-stub")).toBeInTheDocument();
+    expect(window.location.search).toContain("tab=admin");
+    expect(settingsAuth.user.publicMetadata.role).toBeUndefined();
+  });
+
+  it("falls back safely when a non-admin opens a direct Admin tab URL", async () => {
+    adminAccessFetch.mockResolvedValue({ ok: false, status: 403 });
+    window.history.replaceState(null, "", "/settings?tab=admin");
+    render(<Settings />);
+    expect(screen.queryByTestId("admin-section-stub")).not.toBeInTheDocument();
+    expect(screen.getByText("QUALITY PRESET")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(window.location.search).toContain("tab=visuals"),
+    );
+  });
+
+  it("keeps a failed Admin access check distinct from forbidden and retries safely", async () => {
+    adminAccessFetch
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    window.history.replaceState(null, "", "/settings?tab=admin");
+    render(<Settings />);
+
+    expect(await screen.findByTestId("admin-access-error")).toHaveTextContent(
+      /no admin data has been loaded/i,
+    );
+    expect(screen.queryByTestId("admin-section-stub")).not.toBeInTheDocument();
+    expect(window.location.search).toContain("tab=admin");
+
+    fireEvent.click(screen.getByTestId("admin-access-retry"));
+    expect(await screen.findByTestId("admin-section-stub")).toBeInTheDocument();
+    expect(adminAccessFetch).toHaveBeenCalledTimes(2);
+  });
+
   it("renders all section tabs in the sidebar", () => {
     render(<Settings />);
     const expected = NAV_TABS.map((t) => t.label);

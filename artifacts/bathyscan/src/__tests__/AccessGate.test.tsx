@@ -444,7 +444,7 @@ describe("AdminPanel forbidden branch (Regression Guard #2)", () => {
     render(<AdminPanel />);
     await waitFor(() =>
       expect(
-        screen.getByText(/failed to load admin stats/i),
+        screen.getByText(/admin tools are temporarily unavailable/i),
       ).toBeInTheDocument(),
     );
     expect(screen.queryByTestId("user-access-stub")).toBeNull();

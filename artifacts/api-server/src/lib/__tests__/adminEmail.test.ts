@@ -245,7 +245,7 @@ describe("notifyAdminsNewPendingUser", () => {
     const call = (sendMailMock.mock.calls as unknown[][])[0]![0] as Record<string, string>;
     expect(call.text).toContain("https://app.bathyscan.example");
     expect(call.html).toContain("https://app.bathyscan.example");
-    expect(call.html).toContain("/settings?tab=account");
+    expect(call.html).toContain("/settings?tab=admin");
   });
 
   it("email body falls back to text hint when APP_BASE_URL is absent", async () => {
@@ -257,7 +257,7 @@ describe("notifyAdminsNewPendingUser", () => {
 
     const call = (sendMailMock.mock.calls as unknown[][])[0]![0] as Record<string, string>;
     expect(call.text).toContain("Settings");
-    expect(call.text).toContain("Account");
+    expect(call.text).toContain("Admin");
     // No anchor href in the HTML
     expect(call.html).not.toContain('href="http');
   });
@@ -328,6 +328,7 @@ describe("sendAdminTestNotification", () => {
     expect(call.subject).toMatch(/test notification/i);
     expect(call.text).toMatch(/test notification/i);
     expect(call.text).toMatch(/no user is waiting/i);
+    expect(call.text).toMatch(/settings → admin/i);
   });
 
   it("returns a safe failure reason when SMTP delivery rejects", async () => {

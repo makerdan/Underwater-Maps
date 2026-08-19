@@ -16,7 +16,7 @@
  *     inline error on Clerk rejection
  *   - DELETE ACCOUNT split error paths: network failure, 401/403, 5xx,
  *     and delete-success + sign-out-failure (button removed from DOM)
- *   - AdminPanel rendered only for users with the admin role
+ *   - The personal Account section never renders the admin dashboard
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -85,10 +85,6 @@ vi.mock("@/pages/settings/components/SectionTitle", () => ({
 
 vi.mock("@/hooks/signoutCleanup", () => ({
   performSignOutCleanup: vi.fn(),
-}));
-
-vi.mock("@/components/AdminPanel", () => ({
-  AdminPanel: () => <div data-testid="admin-panel-stub" />,
 }));
 
 import { AccountSection } from "../AccountSection";
@@ -429,17 +425,17 @@ describe("AccountSection — DELETE ACCOUNT split error paths", () => {
   });
 });
 
-describe("AccountSection — AdminPanel conditional render", () => {
+describe("AccountSection — admin dashboard separation", () => {
   afterEach(() => {
     restoreDefaultMocks();
   });
 
-  it("does NOT render AdminPanel for a user without the admin role", () => {
+  it("does not render an admin dashboard for a regular user", () => {
     render(<AccountSection />);
-    expect(screen.queryByTestId("admin-panel-stub")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pending Approvals")).not.toBeInTheDocument();
   });
 
-  it("renders AdminPanel when the user's publicMetadata role is admin", () => {
+  it("does not render an admin dashboard even when the account belongs to an admin", () => {
     vi.mocked(useUser).mockImplementation(
       () =>
         ({
@@ -452,6 +448,7 @@ describe("AccountSection — AdminPanel conditional render", () => {
         }) as unknown as UseUserReturn,
     );
     render(<AccountSection />);
-    expect(screen.getByTestId("admin-panel-stub")).toBeInTheDocument();
+    expect(screen.queryByText("Pending Approvals")).not.toBeInTheDocument();
+    expect(screen.getByText("SETTINGS BACKUP")).toBeInTheDocument();
   });
 });

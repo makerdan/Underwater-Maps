@@ -11,7 +11,7 @@
  * and an error state if the fetch fails or returns 403.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { UserAccessSection } from "@/components/admin/UserAccessSection";
@@ -126,6 +126,87 @@ function SkeletonCard() {
   );
 }
 
+type AdminLoadState = "loading" | "ok" | "empty" | "error";
+
+function OperationalCard({
+  title,
+  endpoint,
+  describe,
+}: {
+  title: string;
+  endpoint: string;
+  describe: (data: Record<string, unknown>) => string;
+}) {
+  const [state, setState] = useState<AdminLoadState>("loading");
+  const [message, setMessage] = useState("");
+  const describeRef = useRef(describe);
+  describeRef.current = describe;
+  const load = useCallback(async () => {
+    setState("loading");
+    try {
+      const res = await authorizedFetch(`${basePath}${endpoint}`);
+      if (!res.ok) throw new Error("request failed");
+      const data = (await res.json()) as Record<string, unknown>;
+      const next = describeRef.current(data);
+      setMessage(next);
+      setState(next === "" ? "empty" : "ok");
+    } catch {
+      // Do not surface transport errors, bucket names, or authorization details.
+      setState("error");
+    }
+  }, [endpoint]);
+  useEffect(() => { void load(); }, [load]);
+  return (
+    <div style={{ ...S.card, marginTop: 12 }}>
+      <div style={S.cardTitle}>{title}</div>
+      {state === "loading" && <div style={{ ...S.skeleton, width: "65%" }} />}
+      {state === "ok" && <div style={S.note}>{message}</div>}
+      {state === "empty" && <div style={S.note}>No current activity.</div>}
+      {state === "error" && <div style={S.error}>Unable to load this operational summary.</div>}
+      <button
+        data-testid={`admin-refresh-${title.toLowerCase().replace(/\W+/g, "-")}`}
+        onClick={() => void load()}
+        disabled={state === "loading"}
+        style={{ ...S.cardTitle, background: "none", border: "none", padding: 0, marginTop: 10, cursor: "pointer", opacity: state === "loading" ? 0.5 : 1 }}
+      >
+        REFRESH
+      </button>
+    </div>
+  );
+}
+
+function EmailDeliveryCard() {
+  const [state, setState] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const send = async () => {
+    setState("sending");
+    try {
+      const res = await authorizedFetch(`${basePath}/api/admin/users/test-notification`, { method: "POST" });
+      if (!res.ok) throw new Error("request failed");
+      const data = (await res.json()) as { sent?: boolean };
+      if (data.sent !== true) throw new Error("delivery failed");
+      setState("success");
+    } catch {
+      setState("error");
+    }
+  };
+  return (
+    <div style={{ ...S.card, marginTop: 12 }}>
+      <div style={S.cardTitle}>Email Delivery Verification</div>
+      <div style={S.note}>Send a test approval notification to configured administrators.</div>
+      <button
+        data-testid="admin-test-notification"
+        onClick={() => void send()}
+        disabled={state === "sending"}
+        style={{ ...S.cardTitle, background: "none", border: "1px solid rgba(0,229,255,0.25)", borderRadius: 3, padding: "5px 10px", marginTop: 10, cursor: state === "sending" ? "default" : "pointer" }}
+      >
+        {state === "sending" ? "SENDING…" : "SEND TEST NOTIFICATION"}
+      </button>
+      {state === "success" && <div data-testid="admin-email-success" style={{ ...S.note, color: "#4ade80" }}>Test notification sent.</div>}
+      {state === "error" && <div data-testid="admin-email-error" style={{ ...S.error, marginTop: 8 }}>Unable to send the test notification.</div>}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Pending Approvals card
 // ---------------------------------------------------------------------------
@@ -151,7 +232,7 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
   }, []);
 
   useEffect(() => {
-    if (adminStatus === "loading" || adminStatus === "forbidden") return;
+    if (adminStatus !== "ok") return;
     void load();
   }, [adminStatus, load]);
 
@@ -450,12 +531,17 @@ export function AdminPanel() {
 
       {status === "error" && (
         <div style={S.card}>
-          <div style={S.error}>Failed to load admin stats. Check server logs.</div>
+          <div style={S.error}>Admin tools are temporarily unavailable.</div>
         </div>
       )}
 
+      {/* User approval management — mounted only after a protected server
+          endpoint confirms admin access, so no other admin requests are made
+          for a forbidden caller. */}
+      {status === "ok" && <UserAccessSection />}
+
       {status === "ok" && stats && (
-        <div style={S.card}>
+        <div style={{ ...S.card, marginTop: 12 }}>
           <div style={S.cardTitle}>Upscale Cache</div>
 
           <div style={S.row}>
@@ -487,12 +573,42 @@ export function AdminPanel() {
         </div>
       )}
 
-      {/* User approval management — only mounted once the server has
-          confirmed the current user is an admin (status === "ok"), so
-          non-admins never fire the /api/admin/users request. */}
-      {status === "ok" && <UserAccessSection />}
+      {status === "ok" && (
+        <>
+          <EmailDeliveryCard />
+          <OperationalCard
+            title="Dataset Bucket Status"
+            endpoint="/api/admin/bucket-monitor"
+            describe={(data) => {
+              const counts = data.counts as Record<string, unknown> | undefined;
+              return counts
+                ? Object.entries(counts).map(([name, value]) => `${name}: ${String(value)}`).join(" · ")
+                : "";
+            }}
+          />
+          <OperationalCard
+            title="Large Dataset Changes"
+            endpoint="/api/admin/large-datasets-diff"
+            describe={(data) => {
+              const changed = typeof data.changedCount === "number" ? data.changedCount : 0;
+              const missing = typeof data.unimportedCount === "number" ? data.unimportedCount : 0;
+              return changed + missing > 0
+                ? `${changed} changed · ${missing} not yet imported`
+                : "No changed or unimported large datasets.";
+            }}
+          />
+          <OperationalCard
+            title="Rate Limit Activity"
+            endpoint="/api/admin/rate-limit/usage"
+            describe={(data) => {
+              const count = typeof data.count === "number" ? data.count : 0;
+              return count > 0 ? `${count} active usage bucket${count === 1 ? "" : "s"}.` : "";
+            }}
+          />
+        </>
+      )}
 
-      <SkillDownloadCard adminStatus={status} />
+      {status === "ok" && <SkillDownloadCard adminStatus={status} />}
     </div>
   );
 }

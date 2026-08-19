@@ -108,7 +108,7 @@ function buildNewPendingUserEmail(user: PendingUserInfo): {
   const id = user.clerkUserId;
 
   const appUrl = process.env["APP_BASE_URL"]?.trim().replace(/\/$/, "") ?? "";
-  const approvalPath = "/settings?tab=account";
+  const approvalPath = "/settings?tab=admin";
   const approvalUrl = appUrl ? `${appUrl}${approvalPath}` : null;
 
   const notificationIntro = user.isTestNotification
@@ -127,7 +127,7 @@ function buildNewPendingUserEmail(user: PendingUserInfo): {
     "",
     approvalUrl
       ? `Review and approve at: ${approvalUrl}`
-      : "To review and approve, open the app and go to Settings → Account.",
+      : "To review and approve, open the app and go to Settings → Admin.",
   ].join("\n");
 
   const html = `
@@ -158,7 +158,7 @@ function buildNewPendingUserEmail(user: PendingUserInfo): {
                   padding:10px 20px;border-radius:4px;font-weight:bold;margin-top:8px">
            Review &amp; Approve
          </a>`
-      : `<p style="margin-top:16px">Open the app and go to <strong>Settings → Account</strong> to review and approve.</p>`
+      : `<p style="margin-top:16px">Open the app and go to <strong>Settings → Admin</strong> to review and approve.</p>`
   }
   <hr style="margin:32px 0;border:none;border-top:1px solid #eee">
   <p style="font-size:0.8em;color:#888">

@@ -10,7 +10,6 @@ import { useToast } from "@/hooks/use-toast";
 import { S, FONT } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { formatLastSynced } from "./constants";
-import { AdminPanel } from "@/components/AdminPanel";
 import {
   buildSettingsExport,
   parseSettingsImport,
@@ -274,12 +273,6 @@ export function AccountSection() {
     })();
   };
 
-  // Admin role comes from Clerk public metadata; the server independently
-  // enforces access (ADMIN_USER_IDS), this only decides whether to render
-  // the panel at all so ordinary users never see a 403 notice.
-  const isAdminUser =
-    (user?.publicMetadata as { role?: unknown } | undefined)?.role === "admin";
-
   return (
     <>
       <SectionTitle helpId="account" helpLabel="Account">◈ ACCOUNT</SectionTitle>
@@ -519,13 +512,6 @@ export function AccountSection() {
       </div>
       )}
 
-      {/* Admin-only stats panel — rendered only for admin users so ordinary
-          users never see a 403 notice they can't act on. */}
-      {isAdminUser && (
-        <div style={{ marginTop: 24 }}>
-          <AdminPanel />
-        </div>
-      )}
     </>
   );
 }
