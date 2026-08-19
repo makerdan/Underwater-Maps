@@ -38,7 +38,7 @@ import { getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { useUser, useClerk } from "@/lib/clerkCompat";
 import { DEV_AUTH_BYPASS } from "@/lib/devAuth";
 
-/** How often (ms) to re-probe the server while the awaiting-approval screen is showing. */
+/** How often (ms) to re-probe the server while an access-blocked screen is showing. */
 export const PENDING_POLL_INTERVAL_MS = 30_000;
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -233,9 +233,9 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
     };
   }, [attempt, queryClient]);
 
-  // Periodic re-probe while the awaiting-approval screen is showing.
-  // When the admin approves the user the next poll will transition automatically
-  // to "approved" without requiring a page reload.
+  // Periodic re-probe while a blocked access screen is showing.
+  // When the admin approves or reinstates the user the next poll will transition
+  // automatically to "approved" without requiring a page reload.
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollCancelledRef = useRef(false);
 
@@ -276,7 +276,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (state !== "pending" || DEV_AUTH_BYPASS) return;
+    if ((state !== "pending" && state !== "banned") || DEV_AUTH_BYPASS) return;
 
     pollCancelledRef.current = false;
     pollRef.current = setInterval(() => {

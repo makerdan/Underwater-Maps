@@ -15,9 +15,9 @@
  *   - Sign out button calls Clerk's signOut().
  *   - No content flash: while the probe is unresolved only the spinner is
  *     shown, and a re-mount while pending still gates without flashing.
- *   - Polling: while the awaiting-approval screen is showing the gate
- *     re-probes every PENDING_POLL_INTERVAL_MS and transitions to "approved"
- *     automatically when the server returns 200, without a page reload.
+ *   - Polling: while an awaiting-approval or suspended screen is showing, the
+ *     gate re-probes every PENDING_POLL_INTERVAL_MS and transitions to
+ *     "approved" automatically when the server returns 200, without a reload.
  *
  * Regression Guard #2: AdminPanel's status === "forbidden" branch still
  * renders the forbidden card for non-admins, and UserAccessSection is NOT
@@ -320,6 +320,36 @@ describe("AccessGate — automatic polling while pending", () => {
     await advanceAndFlush(PENDING_POLL_INTERVAL_MS * 3);
 
     expect(authorizedFetchMock).toHaveBeenCalledTimes(callsAfterMount);
+  });
+});
+
+describe("AccessGate — automatic polling while banned", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("re-probes at PENDING_POLL_INTERVAL_MS and lets a reinstated user through without a page reload", async () => {
+    vi.useFakeTimers();
+
+    // First call: banned. Second call (from poll): reinstated/approved.
+    authorizedFetchMock
+      .mockResolvedValueOnce(jsonResponse(403, { error: "account_banned" }))
+      .mockResolvedValueOnce(jsonResponse(200, {}));
+
+    renderGate();
+    await act(async () => {});
+
+    expect(screen.getByTestId("access-gate-banned")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-content")).toBeNull();
+    expect(authorizedFetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(PENDING_POLL_INTERVAL_MS);
+    });
+
+    expect(screen.getByTestId("app-content")).toBeInTheDocument();
+    expect(screen.queryByTestId("access-gate-banned")).toBeNull();
+    expect(authorizedFetchMock).toHaveBeenCalledTimes(2);
   });
 });
 
