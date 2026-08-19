@@ -3164,11 +3164,17 @@ paths:
       summary: Fetch hourly surface weather and tidal conditions for drift planning
       description: |
         Returns 48 hours of hourly wind, tidal current, and wave data for a given
-        lat/lon from Open-Meteo. Tidal current is approximated via a sinusoidal
-        model when live data is unavailable. Returns estimatedConditions=true when
-        Open-Meteo is unreachable and default values are substituted. The `hours`
-        array contains the first 24 hours (backward-compatible); `forecast48h`
-        contains all 48 hours with ISO timestamps and relative hour indices.
+        lat/lon from Open-Meteo. Saltwater tidal current falls back to a
+        sinusoidal model when live NOAA data is unavailable. Pass
+        `waterType=freshwater` for lakes and rivers: the response never
+        synthesizes tidal values. Missing NOAA current or water-level rows are
+        omitted independently. When neither is available, `tidalAvailable` is
+        false, `tidalDataSource` is `unavailable`, and hourly entries retain
+        wind/wave data without tidal fields. Returns estimatedConditions=true
+        when Open-Meteo is unreachable
+        and default values are substituted. The `hours` array contains the first
+        24 hours (backward-compatible); `forecast48h` contains all 48 hours with
+        ISO timestamps and relative hour indices.
       parameters:
         - name: lat
           in: query
@@ -3182,6 +3188,13 @@ paths:
           schema:
             type: number
           description: Longitude of query point
+        - name: waterType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [saltwater, freshwater]
+          description: Set to freshwater to disable synthetic tidal fallbacks.
       responses:
         "200":
           description: 24-hour surface conditions array
@@ -3982,7 +3995,15 @@ paths:
       operationId: getTidal
       tags: [tidal]
       summary: Current tide height, current speed/direction, and next high/low event
-      description: Queries the nearest NOAA water-level and currents-prediction stations for the given coordinates and returns current conditions with slack window data.
+      description: |
+        Queries the nearest NOAA water-level and currents-prediction stations
+        for the given coordinates and returns current conditions with slack
+        window data. Set `waterType=freshwater` for lakes and rivers. Freshwater
+        requests use compatible NOAA observations or a current USGS gage-height
+        reading only; missing portions are omitted and no sinusoidal tide or
+        current is fabricated. If no compatible observation exists, the response
+        is `available:false`, `source:"unavailable"`, and
+        `unavailableReason:"freshwater_no_compatible_observation"`.
       parameters:
         - in: query
           name: lat
@@ -4003,6 +4024,13 @@ paths:
             type: string
             format: date-time
           description: ISO 8601 datetime for the prediction (defaults to now)
+        - in: query
+          name: waterType
+          required: false
+          schema:
+            type: string
+            enum: [saltwater, freshwater]
+          description: Set to freshwater to prohibit synthetic tidal fallback data.
       responses:
         "200":
           description: Current tidal conditions
@@ -4031,7 +4059,12 @@ paths:
                         type: number
                   source:
                     type: string
-                    enum: [noaa, estimated]
+                    enum: [noaa, estimated, usgs, unavailable]
+                  unavailableReason:
+                    type: string
+                    enum: [freshwater_no_compatible_observation]
+                    description: Present when a freshwater request has no compatible NOAA or USGS observation.
+                required: [available, source]
         "400":
           description: lat and lon are required
           content:
@@ -4198,7 +4231,13 @@ paths:
       operationId: getTidalSchedule
       tags: [tidal]
       summary: Multi-day tide schedule with slack windows
-      description: Returns an ordered list of high/low tide events with slack windows and current direction changes for the requested location and day range.
+      description: |
+        Returns an ordered list of high/low tide events with slack windows and
+        current direction changes for the requested location and day range. Set
+        `waterType=freshwater` to prohibit synthetic schedules. A freshwater
+        request with no compatible NOAA observation returns `available:false`,
+        `source:"unavailable"`, the freshwater unavailable reason, and an empty
+        `events` array.
       parameters:
         - in: query
           name: lat
@@ -4226,6 +4265,13 @@ paths:
             type: string
             format: date-time
           description: ISO 8601 start datetime (defaults to now)
+        - in: query
+          name: waterType
+          required: false
+          schema:
+            type: string
+            enum: [saltwater, freshwater]
+          description: Set to freshwater to prohibit synthetic schedules.
       responses:
         "200":
           description: Tide schedule
@@ -4238,7 +4284,10 @@ paths:
                     type: boolean
                   source:
                     type: string
-                    enum: [noaa, estimated]
+                    enum: [noaa, estimated, unavailable]
+                  unavailableReason:
+                    type: string
+                    enum: [freshwater_no_compatible_observation]
                   stationId:
                     type: string
                   stationName:
@@ -4265,6 +4314,7 @@ paths:
                           type: string
                         windowEnd:
                           type: string
+                required: [available, source, rangeStart, rangeEnd, events]
         "400":
           description: lat and lon are required
           content:
@@ -9056,8 +9106,15 @@ components:
           type: string
         tidalDataSource:
           type: string
-          enum: [noaa-coops, sinusoidal]
-          description: Source of tidal current data — real NOAA CO-OPS station predictions or sinusoidal M2 approximation
+          enum: [noaa-coops, sinusoidal, unavailable]
+          description: Source of tidal current data. Freshwater requests without a compatible observation use unavailable, never sinusoidal.
+        tidalAvailable:
+          type: boolean
+          description: False when no compatible tidal-current observation is available. A partial response may still include measured tideHeightM values.
+        tidalUnavailableReason:
+          type: string
+          enum: [freshwater_no_compatible_observation]
+          description: Present when a freshwater request has neither compatible current nor water-level data.
         tidalStationId:
           type: string
           description: NOAA CO-OPS station id used when tidalDataSource is noaa-coops
@@ -9067,6 +9124,16 @@ components:
         tidalStationDistanceKm:
           type: number
           description: Distance in kilometers from the requested point to the NOAA station
+        tideHeightSource:
+          type: string
+          enum: [noaa-coops, none]
+          description: Source of hourly water-level values.
+        tideHeightStationId:
+          type: string
+          description: NOAA CO-OPS station id used for tideHeightM values.
+        tideHeightStationName:
+          type: string
+          description: Human-readable NOAA water-level station name.
         estimatedConditions:
           type: boolean
           description: True when actual data was unavailable and defaults were substituted
@@ -9083,7 +9150,13 @@ components:
         - available
         - lat
         - lon
+        - dataSource
+        - tidalDataSource
+        - tidalAvailable
+        - tideHeightSource
+        - estimatedConditions
         - hours
+        - forecast48h
 
     ForecastHour:
       type: object
@@ -9120,10 +9193,6 @@ components:
         - windSpeedKnots
         - windDegrees
         - waveHeightM
-        - tidalSpeedKnots
-        - tidalDegrees
-        - isSlack
-        - phase
 
     WeatherStation:
       type: object
@@ -9728,17 +9797,18 @@ components:
           description: Swell/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable.
         isSlack:
           type: boolean
-          description: True when the modeled tidal current is below the slack threshold (~0.1 kn)
+          description: True when the available tidal current is below the slack threshold (~0.1 kn)
         phase:
           type: string
           enum: [flooding, ebbing, slack-high, slack-low]
           description: Tidal phase for this hour
+        tideHeightM:
+          type: number
+          description: NOAA-predicted water level above MLLW in metres; omitted when that hour has no compatible value.
       required:
         - hour
         - windSpeedKnots
         - windDegrees
-        - tidalSpeedKnots
-        - tidalDegrees
         - waveHeightM
 
     SlackBlock:

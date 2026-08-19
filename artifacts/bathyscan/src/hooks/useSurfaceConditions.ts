@@ -209,22 +209,26 @@ export function useSurfaceConditions(
     };
 
     const estimated = !!data?.estimatedConditions || isError || !data;
-    // currentsAvailable: true when a real station was resolved (noaa-coops, usgs, glerl).
-    // false only when sinusoidal synthetic fallback was used (no real station in range).
+    // currentsAvailable follows the API's explicit availability marker.
+    // Saltwater sinusoidal data remains usable; freshwater no-data does not.
     // When loading or no data yet, optimistically return true so UI doesn't flash "unavailable".
-    const tidalSrc = (data as (typeof data & { tidalDataSource?: string }) | undefined)?.tidalDataSource;
-    const currentsAvailable = !data || isLoading || tidalSrc !== "sinusoidal";
+    const currentsAvailable = !data || isLoading || data.tidalAvailable;
     const hoursRaw = data?.hours ?? [];
 
     const hours: SurfaceSnapshot[] = hoursRaw.map((h, i) => {
       const next = hoursRaw[i + 1];
-      const rising = next ? next.tidalSpeedKnots >= h.tidalSpeedKnots : true;
+      const tidalSpeedKnots = h.tidalSpeedKnots ?? 0;
+      const tidalDegrees = h.tidalDegrees ?? 0;
+      const rising =
+        next?.tidalSpeedKnots !== undefined && h.tidalSpeedKnots !== undefined
+          ? next.tidalSpeedKnots >= h.tidalSpeedKnots
+          : true;
       return {
         hour: h.hour,
         windSpeedKnots: h.windSpeedKnots,
         windDegrees: h.windDegrees,
-        tidalSpeedKnots: h.tidalSpeedKnots,
-        tidalDegrees: h.tidalDegrees,
+        tidalSpeedKnots,
+        tidalDegrees,
         waveHeightM: h.waveHeightM,
         ...(h.waveDirectionDeg !== undefined ? { waveDirectionDeg: h.waveDirectionDeg } : {}),
         tideRising: rising,

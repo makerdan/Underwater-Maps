@@ -390,6 +390,12 @@ export const TidalScheduleQuerySchema = z.object({
   lon: lonCoordSchema,
   days: daysSchema(1, 14),
   start: optionalDateStringSchema,
+  waterType: z
+    .enum(["saltwater", "freshwater"], {
+      invalid_type_error: "waterType must be a string",
+      message: "waterType must be 'saltwater' or 'freshwater'",
+    })
+    .optional(),
 });
 
 export type TidalScheduleQuery = z.infer<typeof TidalScheduleQuerySchema>;

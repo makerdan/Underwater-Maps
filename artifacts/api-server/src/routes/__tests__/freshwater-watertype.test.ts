@@ -144,7 +144,7 @@ describe("GET /tidal — freshwater gating [freshwater-env]", () => {
     fetchSpy.mockRestore();
   });
 
-  it("waterType=freshwater + no NOAA station + Great Lakes → GLERL synthetic model", async () => {
+  it("waterType=freshwater + no compatible observation → unavailable without numeric tidal data", async () => {
     fetchSpy.mockResolvedValue(emptyStationsResponse());
 
     const res = await request(makeTidalApp()).get(
@@ -152,13 +152,11 @@ describe("GET /tidal — freshwater gating [freshwater-env]", () => {
     );
 
     expect(res.status).toBe(200);
-    // lat=44.0, lon=-87.0 is Lake Michigan → GLERL synthetic fallback
-    expect(res.body.available).toBe(true);
-    expect(res.body.source).toBe("glerl");
-    expect(res.body.isModeled).toBe(true);
-    expect(typeof res.body.tideHeight).toBe("number");
-    expect(typeof res.body.currentSpeed).toBe("number");
-    expect(res.body.stationName).toBe("GLERL Great Lakes Model");
+    expect(res.body.available).toBe(false);
+    expect(res.body.source).toBe("unavailable");
+    expect(res.body.unavailableReason).toBe("freshwater_no_compatible_observation");
+    expect(res.body.tideHeight).toBeUndefined();
+    expect(res.body.currentSpeed).toBeUndefined();
   });
 
   it("waterType=saltwater + no NOAA station → { available: true } with sinusoidal fallback", async () => {
@@ -187,25 +185,17 @@ describe("GET /tidal — freshwater gating [freshwater-env]", () => {
     expect(res.body.source).toBe("estimated");
   });
 
-  it("waterType=freshwater + Great Lakes coordinates → always uses GLERL (bounding-box fires before any NOAA fetch)", async () => {
-    // Mackinaw City (45.78, -84.73) falls inside the Michigan Great Lakes
-    // bounding box.  The GLERL early-exit in tidal.ts fires BEFORE any NOAA
-    // upstream fetch, so source is always "glerl" for GL+freshwater regardless
-    // of what NOAA might return.  No fetch mock is required — zero fetch calls.
+  it("waterType=freshwater + Great Lakes coordinates never uses a local GLERL sinusoid", async () => {
+    fetchSpy.mockResolvedValue(emptyStationsResponse());
     const res = await request(makeTidalApp()).get(
       `/tidal?lat=45.78&lon=-84.73&datetime=2026-07-20T03:00:00Z&waterType=freshwater`,
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.available).toBe(true);
-    expect(res.body.source).toBe("glerl");
-    expect(res.body.isModeled).toBe(true);
-    expect(res.body.stationName).toBe("GLERL Great Lakes Model");
-    // Numeric tidal fields present
-    expect(typeof res.body.tideHeight).toBe("number");
-    expect(typeof res.body.currentSpeed).toBe("number");
-    // Exactly 0 NOAA/USGS fetch calls — GLERL is purely synthetic
-    expect(fetchSpy.mock.calls.length).toBe(0);
+    expect(res.body.available).toBe(false);
+    expect(res.body.source).toBe("unavailable");
+    expect(res.body.tideHeight).toBeUndefined();
+    expect(res.body.currentSpeed).toBeUndefined();
   });
 
   it("waterType=invalid → 400 with validation error", async () => {
@@ -234,12 +224,7 @@ describe("GET /surface-conditions — freshwater gating [freshwater-env]", () =>
     globalThis.fetch = realFetch;
   });
 
-  it("waterType=freshwater + no NOAA station + Great Lakes → { available: true } with GLERL data", async () => {
-    // lat=44.0, lon=-87.0 is Lake Michigan (isGreatLakes=true).
-    // When NOAA returns no station, resolveTidal() falls back to GLERL.
-    // The surface-conditions endpoint serves the synthetic GLERL data rather
-    // than blocking with available:false — freshwater Great Lakes users should
-    // see current/tide estimates, not an empty state.
+  it("waterType=freshwater + no NOAA station retains weather but omits fabricated tides", async () => {
     fetchMock.mockImplementation((url: string) => {
       if (String(url).includes("tidesandcurrents.noaa.gov")) {
         return Promise.resolve(emptyStationsResponse());
@@ -256,7 +241,12 @@ describe("GET /surface-conditions — freshwater gating [freshwater-env]", () =>
 
     expect(res.status).toBe(200);
     expect(res.body.available).toBe(true);
-    expect(res.body.tidalDataSource).toBe("glerl");
+    expect(res.body.tidalAvailable).toBe(false);
+    expect(res.body.tidalDataSource).toBe("unavailable");
+    expect(res.body.hours[0].windSpeedKnots).toBe(10);
+    expect(res.body.hours[0].waveHeightM).toBe(0.3);
+    expect(res.body.hours[0].tidalSpeedKnots).toBeUndefined();
+    expect(res.body.forecast48h[0].tidalSpeedKnots).toBeUndefined();
     expect(Array.isArray(res.body.hours)).toBe(true);
   });
 
@@ -303,6 +293,12 @@ describe("GET /surface-conditions — freshwater gating [freshwater-env]", () =>
   });
 
   it("waterType=freshwater + NOAA station found → { available: true } (sentinel pass-through)", async () => {
+    const now = new Date();
+    const datePrefix = [
+      now.getUTCFullYear(),
+      String(now.getUTCMonth() + 1).padStart(2, "0"),
+      String(now.getUTCDate()).padStart(2, "0"),
+    ].join("-");
     const station = {
       id: "9087088",
       name: "Mackinaw City",
@@ -325,30 +321,12 @@ describe("GET /surface-conditions — freshwater gating [freshwater-env]", () =>
           jsonResponse({
             current_predictions: {
               cp: [
-                { Time: "2026-07-20 00:00", Velocity_Major: 0.8, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 01:00", Velocity_Major: 0.6, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 02:00", Velocity_Major: 0.2, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 03:00", Velocity_Major: -0.3, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 04:00", Velocity_Major: -0.7, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 05:00", Velocity_Major: -0.9, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 06:00", Velocity_Major: -0.8, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 07:00", Velocity_Major: -0.5, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 08:00", Velocity_Major: -0.1, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 09:00", Velocity_Major: 0.4, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 10:00", Velocity_Major: 0.8, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 11:00", Velocity_Major: 1.0, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 12:00", Velocity_Major: 0.9, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 13:00", Velocity_Major: 0.6, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 14:00", Velocity_Major: 0.2, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 15:00", Velocity_Major: -0.3, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 16:00", Velocity_Major: -0.7, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 17:00", Velocity_Major: -1.0, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 18:00", Velocity_Major: -0.9, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 19:00", Velocity_Major: -0.5, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 20:00", Velocity_Major: -0.1, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 21:00", Velocity_Major: 0.3, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 22:00", Velocity_Major: 0.7, meanFloodDir: 50, meanEbbDir: 230 },
-                { Time: "2026-07-20 23:00", Velocity_Major: 1.0, meanFloodDir: 50, meanEbbDir: 230 },
+                ...Array.from({ length: 24 }, (_, hour) => ({
+                  Time: `${datePrefix} ${String(hour).padStart(2, "0")}:00`,
+                  Velocity_Major: hour < 12 ? 0.8 : -0.8,
+                  meanFloodDir: 50,
+                  meanEbbDir: 230,
+                })),
               ],
             },
           }),
@@ -367,6 +345,9 @@ describe("GET /surface-conditions — freshwater gating [freshwater-env]", () =>
     expect(res.status).toBe(200);
     // When a real NOAA station is found, freshwater gating must NOT block.
     expect(res.body.available).toBe(true);
+    expect(res.body.tidalAvailable).toBe(true);
+    expect(res.body.tidalDataSource).toBe("noaa-coops");
+    expect(res.body.forecast48h[24].tidalSpeedKnots).toBeUndefined();
   });
 
   it("waterType=invalid → 400 with validation error", async () => {

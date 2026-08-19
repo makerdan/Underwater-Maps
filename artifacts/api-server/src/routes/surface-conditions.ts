@@ -11,8 +11,8 @@
  *          NOAA_STATION_MAX_KM of the requested point ("noaa-coops"), OR
  *       2. Shared slack-tide synthetic model (see lib/slack.ts) using a
  *          semi-diurnal schedule anchored on local solar noon
- *          ("sinusoidal") for points outside NOAA coverage or when the
- *          NOAA fetch fails.
+ *          ("sinusoidal") for saltwater points outside NOAA coverage or when
+ *          the NOAA fetch fails. Freshwater requests never use this fallback.
  *   - Tide height (water level):
  *       NOAA CO-OPS hourly water-level predictions for the nearest tide
  *       station (waterlevels network).  Cosine-interpolated from hi/lo events
@@ -21,6 +21,9 @@
  *
  * Either source yields per-hour `isSlack` + `phase` metadata so the UI can
  * fade arrows, halt drift, and label the timeline at slack tides.
+ * Freshwater responses preserve only NOAA rows that actually resolved. They
+ * omit missing current and water-level fields while retaining independent wind
+ * and wave values.
  *
  * The overall response includes an `estimatedConditions` flag for wind/wave
  * estimation and a separate `tidalDataSource` field for the tidal source.
@@ -38,7 +41,6 @@ import { registerCache } from "../lib/cacheRegistry.js";
 import { LatLonQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
-import { isGreatLakes } from "./tidal.js";
 
 const router = Router();
 
@@ -55,12 +57,12 @@ interface HourlySurfaceCondition {
   hour: number;
   windSpeedKnots: number;
   windDegrees: number;
-  tidalSpeedKnots: number;
-  tidalDegrees: number;
+  tidalSpeedKnots?: number;
+  tidalDegrees?: number;
   waveHeightM: number;
   waveDirectionDeg?: number;
-  isSlack: boolean;
-  phase: TidePhase;
+  isSlack?: boolean;
+  phase?: TidePhase;
   /** Predicted tide height above chart datum (MLLW, metres). Omitted when no nearby NOAA water-level station is available. */
   tideHeightM?: number;
 }
@@ -77,6 +79,10 @@ interface TidalHour {
   tidalDegrees: number;
   isSlack: boolean;
   phase: TidePhase;
+}
+
+interface ObservedTidalHour extends Omit<TidalHour, "tidalDegrees"> {
+  tidalDegrees?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +258,17 @@ interface NoaaPredictionRow {
 export function parseNoaaPredictions(
   raw: { current_predictions?: { cp?: NoaaPredictionRow[] } },
   utcDate: Date,
-): TidalHour[] | null {
+): TidalHour[] | null;
+export function parseNoaaPredictions(
+  raw: { current_predictions?: { cp?: NoaaPredictionRow[] } },
+  utcDate: Date,
+  preserveMissing: true,
+): Array<ObservedTidalHour | undefined> | null;
+export function parseNoaaPredictions(
+  raw: { current_predictions?: { cp?: NoaaPredictionRow[] } },
+  utcDate: Date,
+  preserveMissing = false,
+): Array<ObservedTidalHour | undefined> | null {
   const rows = raw.current_predictions?.cp;
   if (!Array.isArray(rows) || rows.length === 0) return null;
 
@@ -260,7 +276,7 @@ export function parseNoaaPredictions(
   const mm = utcDate.getUTCMonth();
   const dd = utcDate.getUTCDate();
 
-  const byHour = new Map<number, TidalHour>();
+  const byHour = new Map<number, ObservedTidalHour>();
   for (const row of rows) {
     if (!row.Time) continue;
     // NOAA Time format: "YYYY-MM-DD HH:mm" in GMT when time_zone=gmt
@@ -279,13 +295,13 @@ export function parseNoaaPredictions(
     if (typeof v !== "number" || isNaN(v)) continue;
 
     const speed = Math.abs(v);
-    let dir: number;
+    let dir: number | undefined;
     if (v >= 0 && typeof floodDir === "number" && !isNaN(floodDir)) {
       dir = floodDir;
     } else if (v < 0 && typeof ebbDir === "number" && !isNaN(ebbDir)) {
       dir = ebbDir;
     } else {
-      dir = 0;
+      dir = preserveMissing ? undefined : 0;
     }
     const isSlack = speed < SLACK_THRESHOLD_DEFAULT;
     // Sign of v: ≥0 means flooding (so slack here is the slack-low that
@@ -300,7 +316,9 @@ export function parseNoaaPredictions(
         : "ebbing";
     byHour.set(rh, {
       tidalSpeedKnots: Math.round(speed * 10) / 10,
-      tidalDegrees: Math.round(((dir % 360) + 360) % 360),
+      ...(dir !== undefined
+        ? { tidalDegrees: Math.round(((dir % 360) + 360) % 360) }
+        : {}),
       isSlack,
       phase,
     });
@@ -308,24 +326,35 @@ export function parseNoaaPredictions(
 
   if (byHour.size === 0) return null;
 
-  // Fill all 24 hours, repeating the last known value for any gaps.
+  if (preserveMissing) {
+    return Array.from({ length: 24 }, (_, h) => byHour.get(h));
+  }
+
+  // Preserve the legacy saltwater behavior by carrying the last known value
+  // across missing rows.
   const out: TidalHour[] = [];
   let last: TidalHour = { tidalSpeedKnots: 0, tidalDegrees: 0, isSlack: true, phase: "slack-low" };
   for (let h = 0; h < 24; h++) {
     const v = byHour.get(h);
-    if (v) last = v;
+    if (v) last = v as TidalHour;
     out.push(last);
   }
   return out;
 }
 
-async function fetchNoaaPredictions(stationId: string, utcDate: Date): Promise<TidalHour[] | null> {
+async function fetchNoaaPredictions(
+  stationId: string,
+  utcDate: Date,
+  preserveMissing: boolean,
+): Promise<Array<ObservedTidalHour | undefined> | null> {
   const yyyymmdd = `${utcDate.getUTCFullYear()}${String(utcDate.getUTCMonth() + 1).padStart(2, "0")}${String(utcDate.getUTCDate()).padStart(2, "0")}`;
   const url = `${NOAA_PREDICTIONS_BASE}?product=currents_predictions&station=${encodeURIComponent(stationId)}&begin_date=${yyyymmdd}&end_date=${yyyymmdd}&time_zone=gmt&units=english&interval=h&format=json`;
   const res = await fetchWithTimeout(url, 8000);
   if (!res.ok) return null;
   const json = (await res.json()) as { current_predictions?: { cp?: NoaaPredictionRow[] } };
-  return parseNoaaPredictions(json, utcDate);
+  return preserveMissing
+    ? parseNoaaPredictions(json, utcDate, true)
+    : parseNoaaPredictions(json, utcDate);
 }
 
 // ---------------------------------------------------------------------------
@@ -337,13 +366,24 @@ async function fetchNoaaPredictions(stationId: string, utcDate: Date): Promise<T
  * (one number per UTC hour 0–23, metres above MLLW).
  *
  * NOAA returns `{ predictions: [{ t: "YYYY-MM-DD HH:mm", v: "1.234" }] }`.
- * Missing hours are filled by carrying the last known value forward.
+ * Missing hours are filled by carrying the last known value forward for the
+ * legacy saltwater path. Freshwater callers request sparse output instead.
  * Returns null when the payload is empty or all rows fall outside the target date.
  */
 export function parseNoaaTideHeights(
   raw: { predictions?: Array<{ t?: string; v?: string | number }> },
   utcDate: Date,
-): number[] | null {
+): number[] | null;
+export function parseNoaaTideHeights(
+  raw: { predictions?: Array<{ t?: string; v?: string | number }> },
+  utcDate: Date,
+  preserveMissing: true,
+): Array<number | undefined> | null;
+export function parseNoaaTideHeights(
+  raw: { predictions?: Array<{ t?: string; v?: string | number }> },
+  utcDate: Date,
+  preserveMissing = false,
+): Array<number | undefined> | null {
   const rows = raw.predictions;
   if (!Array.isArray(rows) || rows.length === 0) return null;
 
@@ -368,6 +408,10 @@ export function parseNoaaTideHeights(
 
   if (byHour.size === 0) return null;
 
+  if (preserveMissing) {
+    return Array.from({ length: 24 }, (_, h) => byHour.get(h));
+  }
+
   const out: number[] = [];
   let last = 0;
   for (let h = 0; h < 24; h++) {
@@ -384,20 +428,27 @@ export function parseNoaaTideHeights(
 
 /**
  * Cache of NOAA hourly water-level predictions.
- * Key: `stationId|YYYYMMDD` (UTC date string).
+ * Key: `stationId|YYYYMMDD|mode` (UTC date string plus sparse/filled policy).
  * TTL: 30 min for non-empty results; 5 min for null (no data / fetch failure).
  * Registered with cacheRegistry so the admin clear endpoint and test setup
  * can flush it.
  */
-const tideHeightsPredictionsCache = new Map<string, { result: number[] | null; ts: number }>();
+const tideHeightsPredictionsCache = new Map<
+  string,
+  { result: Array<number | undefined> | null; ts: number }
+>();
 const TIDE_HEIGHTS_CACHE_TTL_MS = 30 * 60 * 1000;
 const TIDE_HEIGHTS_EMPTY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 registerCache(() => tideHeightsPredictionsCache.clear());
 
-async function fetchNoaaTideHeightsPredictions(stationId: string, utcDate: Date): Promise<number[] | null> {
+async function fetchNoaaTideHeightsPredictions(
+  stationId: string,
+  utcDate: Date,
+  preserveMissing: boolean,
+): Promise<Array<number | undefined> | null> {
   const yyyymmdd = `${utcDate.getUTCFullYear()}${String(utcDate.getUTCMonth() + 1).padStart(2, "0")}${String(utcDate.getUTCDate()).padStart(2, "0")}`;
-  const cacheKey = `${stationId}|${yyyymmdd}`;
+  const cacheKey = `${stationId}|${yyyymmdd}|${preserveMissing ? "sparse" : "filled"}`;
   const now = Date.now();
   const cached = tideHeightsPredictionsCache.get(cacheKey);
   if (cached) {
@@ -415,7 +466,9 @@ async function fetchNoaaTideHeightsPredictions(stationId: string, utcDate: Date)
       return null;
     }
     const json = (await res.json()) as { predictions?: Array<{ t?: string; v?: string | number }> };
-    const result = parseNoaaTideHeights(json, utcDate);
+    const result = preserveMissing
+      ? parseNoaaTideHeights(json, utcDate, true)
+      : parseNoaaTideHeights(json, utcDate);
     tideHeightsPredictionsCache.set(cacheKey, { result, ts: now });
     return result;
   } catch {
@@ -436,12 +489,21 @@ async function resolveTideHeights(
   lat: number,
   lon: number,
   utcDate: Date,
-): Promise<{ heights: number[]; stationId: string; stationName: string } | null> {
+  preserveMissing: boolean,
+): Promise<{
+  heights: Array<number | undefined>;
+  stationId: string;
+  stationName: string;
+} | null> {
   try {
     const stations = await fetchNoaaHeightsStations();
     const nearest = findNearestStation(stations, lat, lon, NOAA_HEIGHTS_STATION_MAX_KM);
     if (!nearest) return null;
-    const heights = await fetchNoaaTideHeightsPredictions(nearest.station.id, utcDate);
+    const heights = await fetchNoaaTideHeightsPredictions(
+      nearest.station.id,
+      utcDate,
+      preserveMissing,
+    );
     if (!heights) return null;
     return { heights, stationId: nearest.station.id, stationName: nearest.station.name };
   } catch {
@@ -468,8 +530,8 @@ async function fetchWithTimeout(url: string, timeoutMs = 6000): Promise<Response
 // ---------------------------------------------------------------------------
 
 interface ResolvedTidal {
-  hours: TidalHour[];
-  source: "noaa-coops" | "sinusoidal" | "usgs" | "glerl";
+  hours?: Array<ObservedTidalHour | undefined>;
+  source: "noaa-coops" | "sinusoidal" | "unavailable";
   stationId?: string;
   stationName?: string;
   distanceKm?: number;
@@ -496,7 +558,11 @@ async function resolveTidal(
     const stations = await fetchNoaaStations();
     const nearest = findNearestStation(stations, lat, lon);
     if (nearest) {
-      const hours = await fetchNoaaPredictions(nearest.station.id, new Date(startMs));
+      const hours = await fetchNoaaPredictions(
+        nearest.station.id,
+        new Date(startMs),
+        waterType === "freshwater",
+      );
       if (hours) {
         return {
           hours,
@@ -511,16 +577,9 @@ async function resolveTidal(
     // fall through to freshwater or sinusoidal fallback
   }
 
-  // No NOAA station found — choose fallback based on water type and location.
+  // Freshwater has no scientifically valid local-model fallback.
   if (waterType === "freshwater") {
-    if (isGreatLakes(lat, lon)) {
-      return {
-        hours: buildSinusoidalTidalHours(lat, lon, startMs),
-        source: "glerl",
-        stationName: "GLERL Great Lakes Model",
-      };
-    }
-    return { hours: buildSinusoidalTidalHours(lat, lon, startMs), source: "usgs" };
+    return { source: "unavailable" };
   }
   return { hours: buildSinusoidalTidalHours(lat, lon, startMs), source: "sinusoidal" };
 }
@@ -538,10 +597,10 @@ export interface ForecastHour {
   windDegrees: number;
   waveHeightM: number;
   waveDirectionDeg?: number;
-  tidalSpeedKnots: number;
-  tidalDegrees: number;
-  isSlack: boolean;
-  phase: TidePhase;
+  tidalSpeedKnots?: number;
+  tidalDegrees?: number;
+  isSlack?: boolean;
+  phase?: TidePhase;
 }
 
 // ---------------------------------------------------------------------------
@@ -565,18 +624,25 @@ router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> =
   const startMs = nowTopOfHourMs();
   const utcDate = new Date(startMs);
 
-  const [tidal, tideHeightsResult] = await Promise.all([
-    resolveTidal(lat, lon, startMs, waterType),
-    resolveTideHeights(lat, lon, utcDate),
-  ]);
+  const tidal = await resolveTidal(lat, lon, startMs, waterType);
+  const tideHeightsResult = await resolveTideHeights(
+    lat,
+    lon,
+    utcDate,
+    waterType === "freshwater",
+  );
 
-  // Build a 48-hour sinusoidal tidal baseline for the forecast strip.
-  // Hours 0–23 will be overridden by NOAA data when available.
-  const tidal48 = buildSinusoidalTidalHours(lat, lon, startMs, 48);
-  if (tidal.source === "noaa-coops") {
+  // Freshwater responses expose only the compatible NOAA hours that actually
+  // resolved. Saltwater keeps the existing 48-hour sinusoidal baseline, with
+  // its first day overridden by NOAA when available.
+  const tidal48 =
+    waterType === "freshwater"
+      ? tidal.hours
+      : buildSinusoidalTidalHours(lat, lon, startMs, 48);
+  if (waterType !== "freshwater" && tidal.source === "noaa-coops") {
     for (let h = 0; h < 24; h++) {
-      const noaaHour = tidal.hours[h];
-      if (noaaHour) tidal48[h] = noaaHour;
+      const noaaHour = tidal.hours?.[h];
+      if (noaaHour && tidal48) tidal48[h] = noaaHour;
     }
   }
 
@@ -639,18 +705,23 @@ router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> =
     ...(waveData?.[h]?.waveDirectionDeg !== undefined
       ? { waveDirectionDeg: waveData[h]!.waveDirectionDeg }
       : {}),
-    tidalSpeedKnots: tidal.hours[h]!.tidalSpeedKnots,
-    tidalDegrees: tidal.hours[h]!.tidalDegrees,
-    isSlack: tidal.hours[h]!.isSlack,
-    phase: tidal.hours[h]!.phase,
-    ...(tideHeightsResult !== null
-      ? { tideHeightM: tideHeightsResult.heights[h] ?? 0 }
+    ...(tidal.hours?.[h]
+      ? {
+          tidalSpeedKnots: tidal.hours[h]!.tidalSpeedKnots,
+          ...(tidal.hours[h]!.tidalDegrees !== undefined
+            ? { tidalDegrees: tidal.hours[h]!.tidalDegrees }
+            : {}),
+          isSlack: tidal.hours[h]!.isSlack,
+          phase: tidal.hours[h]!.phase,
+        }
+      : {}),
+    ...(tideHeightsResult?.heights[h] !== undefined
+      ? { tideHeightM: tideHeightsResult.heights[h] }
       : {}),
   }));
 
   const forecast48h: ForecastHour[] = Array.from({ length: 48 }, (_, h) => {
     const slotMs = startMs + h * 3600_000;
-    const tidalH = tidal48[h]!;
     return {
       relHour: h,
       isoTime: new Date(slotMs).toISOString(),
@@ -660,10 +731,16 @@ router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> =
       ...(waveData?.[h]?.waveDirectionDeg !== undefined
         ? { waveDirectionDeg: waveData[h]!.waveDirectionDeg }
         : {}),
-      tidalSpeedKnots: tidalH.tidalSpeedKnots,
-      tidalDegrees: tidalH.tidalDegrees,
-      isSlack: tidalH.isSlack,
-      phase: tidalH.phase,
+      ...(tidal48?.[h]
+        ? {
+            tidalSpeedKnots: tidal48[h]!.tidalSpeedKnots,
+            ...(tidal48[h]!.tidalDegrees !== undefined
+              ? { tidalDegrees: tidal48[h]!.tidalDegrees }
+              : {}),
+            isSlack: tidal48[h]!.isSlack,
+            phase: tidal48[h]!.phase,
+          }
+        : {}),
     };
   });
 
@@ -685,6 +762,10 @@ router.get("/surface-conditions", asyncHandler(async (req, res): Promise<void> =
       lon,
       dataSource: estimatedConditions ? "estimated" : "open-meteo",
       tidalDataSource: tidal.source,
+      tidalAvailable: tidal.source !== "unavailable",
+      ...(tidal.source === "unavailable" && tideHeightsResult === null
+        ? { tidalUnavailableReason: "freshwater_no_compatible_observation" }
+        : {}),
       ...(tidal.stationId ? { tidalStationId: tidal.stationId } : {}),
       ...(tidal.stationName ? { tidalStationName: tidal.stationName } : {}),
       ...(typeof tidal.distanceKm === "number" ? { tidalStationDistanceKm: tidal.distanceKm } : {}),

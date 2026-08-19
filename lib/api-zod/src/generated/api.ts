@@ -4511,17 +4511,24 @@ export const PostDatasetsMySavesIdRetryResponse = zod.object({
 
 /**
  * Returns 48 hours of hourly wind, tidal current, and wave data for a given
-lat/lon from Open-Meteo. Tidal current is approximated via a sinusoidal
-model when live data is unavailable. Returns estimatedConditions=true when
-Open-Meteo is unreachable and default values are substituted. The `hours`
-array contains the first 24 hours (backward-compatible); `forecast48h`
-contains all 48 hours with ISO timestamps and relative hour indices.
+lat/lon from Open-Meteo. Saltwater tidal current falls back to a
+sinusoidal model when live NOAA data is unavailable. Pass
+`waterType=freshwater` for lakes and rivers: the response never
+synthesizes tidal values. Missing NOAA current or water-level rows are
+omitted independently. When neither is available, `tidalAvailable` is
+false, `tidalDataSource` is `unavailable`, and hourly entries retain
+wind/wave data without tidal fields. Returns estimatedConditions=true
+when Open-Meteo is unreachable
+and default values are substituted. The `hours` array contains the first
+24 hours (backward-compatible); `forecast48h` contains all 48 hours with
+ISO timestamps and relative hour indices.
 
  * @summary Fetch hourly surface weather and tidal conditions for drift planning
  */
 export const GetSurfaceConditionsQueryParams = zod.object({
   "lat": zod.coerce.number().describe('Latitude of query point'),
-  "lon": zod.coerce.number().describe('Longitude of query point')
+  "lon": zod.coerce.number().describe('Longitude of query point'),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Set to freshwater to disable synthetic tidal fallbacks.')
 })
 
 export const getSurfaceConditionsResponseHoursItemHourMin = 0;
@@ -4536,22 +4543,28 @@ export const GetSurfaceConditionsResponse = zod.object({
   "available": zod.boolean(),
   "lat": zod.number(),
   "lon": zod.number(),
-  "dataSource": zod.string().optional(),
-  "tidalDataSource": zod.enum(['noaa-coops', 'sinusoidal']).optional().describe('Source of tidal current data — real NOAA CO-OPS station predictions or sinusoidal M2 approximation'),
+  "dataSource": zod.string(),
+  "tidalDataSource": zod.enum(['noaa-coops', 'sinusoidal', 'unavailable']).describe('Source of tidal current data. Freshwater requests without a compatible observation use unavailable, never sinusoidal.'),
+  "tidalAvailable": zod.boolean().describe('False when no compatible tidal-current observation is available. A partial response may still include measured tideHeightM values.'),
+  "tidalUnavailableReason": zod.enum(['freshwater_no_compatible_observation']).optional().describe('Present when a freshwater request has neither compatible current nor water-level data.'),
   "tidalStationId": zod.string().optional().describe('NOAA CO-OPS station id used when tidalDataSource is noaa-coops'),
   "tidalStationName": zod.string().optional().describe('Human-readable name of the NOAA CO-OPS station'),
   "tidalStationDistanceKm": zod.number().optional().describe('Distance in kilometers from the requested point to the NOAA station'),
-  "estimatedConditions": zod.boolean().optional().describe('True when actual data was unavailable and defaults were substituted'),
+  "tideHeightSource": zod.enum(['noaa-coops', 'none']).describe('Source of hourly water-level values.'),
+  "tideHeightStationId": zod.string().optional().describe('NOAA CO-OPS station id used for tideHeightM values.'),
+  "tideHeightStationName": zod.string().optional().describe('Human-readable NOAA water-level station name.'),
+  "estimatedConditions": zod.boolean().describe('True when actual data was unavailable and defaults were substituted'),
   "hours": zod.array(zod.object({
   "hour": zod.number().min(getSurfaceConditionsResponseHoursItemHourMin).max(getSurfaceConditionsResponseHoursItemHourMax),
   "windSpeedKnots": zod.number(),
   "windDegrees": zod.number(),
-  "tidalSpeedKnots": zod.number(),
-  "tidalDegrees": zod.number(),
+  "tidalSpeedKnots": zod.number().optional(),
+  "tidalDegrees": zod.number().optional(),
   "waveHeightM": zod.number(),
   "waveDirectionDeg": zod.number().optional().describe('Swell\/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable.'),
-  "isSlack": zod.boolean().optional().describe('True when the modeled tidal current is below the slack threshold (~0.1 kn)'),
-  "phase": zod.enum(['flooding', 'ebbing', 'slack-high', 'slack-low']).optional().describe('Tidal phase for this hour')
+  "isSlack": zod.boolean().optional().describe('True when the available tidal current is below the slack threshold (~0.1 kn)'),
+  "phase": zod.enum(['flooding', 'ebbing', 'slack-high', 'slack-low']).optional().describe('Tidal phase for this hour'),
+  "tideHeightM": zod.number().optional().describe('NOAA-predicted water level above MLLW in metres; omitted when that hour has no compatible value.')
 })),
   "forecast48h": zod.array(zod.object({
   "relHour": zod.number().min(getSurfaceConditionsResponseForecast48hItemRelHourMin).max(getSurfaceConditionsResponseForecast48hItemRelHourMax).describe('Relative hours from the fetch time (0–47).'),
@@ -4560,11 +4573,11 @@ export const GetSurfaceConditionsResponse = zod.object({
   "windDegrees": zod.number(),
   "waveHeightM": zod.number(),
   "waveDirectionDeg": zod.number().optional().describe('Swell\/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable.'),
-  "tidalSpeedKnots": zod.number(),
-  "tidalDegrees": zod.number(),
-  "isSlack": zod.boolean(),
-  "phase": zod.enum(['flooding', 'ebbing', 'slack-high', 'slack-low'])
-})).optional().describe('48-hour hourly forecast strip, anchored at the current UTC hour (relHour 0 = now).')
+  "tidalSpeedKnots": zod.number().optional(),
+  "tidalDegrees": zod.number().optional(),
+  "isSlack": zod.boolean().optional(),
+  "phase": zod.enum(['flooding', 'ebbing', 'slack-high', 'slack-low']).optional()
+})).describe('48-hour hourly forecast strip, anchored at the current UTC hour (relHour 0 = now).')
 })
 
 
@@ -5081,17 +5094,26 @@ export const GetGcsJobStatusResponse = zod.object({
 
 
 /**
- * Queries the nearest NOAA water-level and currents-prediction stations for the given coordinates and returns current conditions with slack window data.
+ * Queries the nearest NOAA water-level and currents-prediction stations
+for the given coordinates and returns current conditions with slack
+window data. Set `waterType=freshwater` for lakes and rivers. Freshwater
+requests use compatible NOAA observations or a current USGS gage-height
+reading only; missing portions are omitted and no sinusoidal tide or
+current is fabricated. If no compatible observation exists, the response
+is `available:false`, `source:"unavailable"`, and
+`unavailableReason:"freshwater_no_compatible_observation"`.
+
  * @summary Current tide height, current speed/direction, and next high/low event
  */
 export const GetTidalQueryParams = zod.object({
   "lat": zod.coerce.number().describe('Latitude in decimal degrees'),
   "lon": zod.coerce.number().describe('Longitude in decimal degrees'),
-  "datetime": zod.date().optional().describe('ISO 8601 datetime for the prediction (defaults to now)')
+  "datetime": zod.date().optional().describe('ISO 8601 datetime for the prediction (defaults to now)'),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Set to freshwater to prohibit synthetic tidal fallback data.')
 })
 
 export const GetTidalResponse = zod.object({
-  "available": zod.boolean().optional(),
+  "available": zod.boolean(),
   "tideHeight": zod.number().optional(),
   "currentDirection": zod.number().optional(),
   "currentSpeed": zod.number().optional(),
@@ -5100,7 +5122,8 @@ export const GetTidalResponse = zod.object({
   "time": zod.string().optional(),
   "height": zod.number().optional()
 }).optional(),
-  "source": zod.enum(['noaa', 'estimated']).optional()
+  "source": zod.enum(['noaa', 'estimated', 'usgs', 'unavailable']),
+  "unavailableReason": zod.enum(['freshwater_no_compatible_observation']).optional().describe('Present when a freshwater request has no compatible NOAA or USGS observation.')
 })
 
 
@@ -5170,7 +5193,13 @@ export const GetTidesStationIdDatumsResponse = zod.object({
 
 
 /**
- * Returns an ordered list of high/low tide events with slack windows and current direction changes for the requested location and day range.
+ * Returns an ordered list of high/low tide events with slack windows and
+current direction changes for the requested location and day range. Set
+`waterType=freshwater` to prohibit synthetic schedules. A freshwater
+request with no compatible NOAA observation returns `available:false`,
+`source:"unavailable"`, the freshwater unavailable reason, and an empty
+`events` array.
+
  * @summary Multi-day tide schedule with slack windows
  */
 export const getTidalScheduleQueryDaysDefault = 3;
@@ -5182,16 +5211,18 @@ export const GetTidalScheduleQueryParams = zod.object({
   "lat": zod.coerce.number(),
   "lon": zod.coerce.number(),
   "days": zod.coerce.number().min(1).max(getTidalScheduleQueryDaysMax).default(getTidalScheduleQueryDaysDefault).describe('Number of days to return (1–14)'),
-  "start": zod.date().optional().describe('ISO 8601 start datetime (defaults to now)')
+  "start": zod.date().optional().describe('ISO 8601 start datetime (defaults to now)'),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional().describe('Set to freshwater to prohibit synthetic schedules.')
 })
 
 export const GetTidalScheduleResponse = zod.object({
-  "available": zod.boolean().optional(),
-  "source": zod.enum(['noaa', 'estimated']).optional(),
+  "available": zod.boolean(),
+  "source": zod.enum(['noaa', 'estimated', 'unavailable']),
+  "unavailableReason": zod.enum(['freshwater_no_compatible_observation']).optional(),
   "stationId": zod.string().optional(),
   "stationName": zod.string().optional(),
-  "rangeStart": zod.string().optional(),
-  "rangeEnd": zod.string().optional(),
+  "rangeStart": zod.string(),
+  "rangeEnd": zod.string(),
   "events": zod.array(zod.object({
   "type": zod.enum(['high', 'low']).optional(),
   "time": zod.string().optional(),
@@ -5199,7 +5230,7 @@ export const GetTidalScheduleResponse = zod.object({
   "nextDirectionDeg": zod.number().optional(),
   "windowStart": zod.string().optional(),
   "windowEnd": zod.string().optional()
-})).optional()
+}))
 })
 
 

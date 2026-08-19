@@ -439,7 +439,11 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
   GetTidesStationResponse: {
     schema: apiZod.GetTidesStationResponse,
     payloads: [
-      { available: false },
+      {
+        available: false,
+        source: "unavailable",
+        unavailableReason: "freshwater_no_compatible_observation",
+      },
       {
         available: true,
         station: { id: "9447130", name: "Seattle", lat: 47.602, lon: -122.339, distanceMiles: 3.4 },
@@ -469,9 +473,8 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
       { stationId: "9447130", mhwFt: null, mhhwFt: null, datum: "MLLW", units: "feet" },
     ],
   },
-  // GetTidalResponse: strict validateResponse is intentionally avoided in
-  // tidal.ts (see comment there), but the spec schema still documents the
-  // shape — pin a realistic payload so spec drift is still caught.
+  // GET /tidal preserves legacy station metadata in addition to this generated
+  // core contract, so the route checks with safeParse without stripping extras.
   GetTidalResponse: {
     schema: apiZod.GetTidalResponse,
     payloads: [
@@ -483,7 +486,11 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
         nextEvent: { type: "high", time: "2026-07-20T04:12:00.000Z", height: 3.1 },
         source: "noaa",
       },
-      { available: false },
+      {
+        available: false,
+        source: "unavailable",
+        unavailableReason: "freshwater_no_compatible_observation",
+      },
     ],
   },
   GetTidalScheduleResponse: {
@@ -507,7 +514,14 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
           },
         ],
       },
-      { available: false },
+      {
+        available: false,
+        source: "unavailable",
+        unavailableReason: "freshwater_no_compatible_observation",
+        rangeStart: "2026-07-20T00:00:00.000Z",
+        rangeEnd: "2026-07-21T00:00:00.000Z",
+        events: [],
+      },
     ],
   },
   GetTidalPackResponse: {

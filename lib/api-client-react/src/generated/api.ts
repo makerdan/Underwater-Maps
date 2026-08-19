@@ -6688,11 +6688,17 @@ export const getGetSurfaceConditionsUrl = (params: GetSurfaceConditionsParams,) 
 
 /**
  * Returns 48 hours of hourly wind, tidal current, and wave data for a given
-lat/lon from Open-Meteo. Tidal current is approximated via a sinusoidal
-model when live data is unavailable. Returns estimatedConditions=true when
-Open-Meteo is unreachable and default values are substituted. The `hours`
-array contains the first 24 hours (backward-compatible); `forecast48h`
-contains all 48 hours with ISO timestamps and relative hour indices.
+lat/lon from Open-Meteo. Saltwater tidal current falls back to a
+sinusoidal model when live NOAA data is unavailable. Pass
+`waterType=freshwater` for lakes and rivers: the response never
+synthesizes tidal values. Missing NOAA current or water-level rows are
+omitted independently. When neither is available, `tidalAvailable` is
+false, `tidalDataSource` is `unavailable`, and hourly entries retain
+wind/wave data without tidal fields. Returns estimatedConditions=true
+when Open-Meteo is unreachable
+and default values are substituted. The `hours` array contains the first
+24 hours (backward-compatible); `forecast48h` contains all 48 hours with
+ISO timestamps and relative hour indices.
 
  * @summary Fetch hourly surface weather and tidal conditions for drift planning
  */
@@ -8229,7 +8235,15 @@ export const getGetTidalUrl = (params: GetTidalParams,) => {
 }
 
 /**
- * Queries the nearest NOAA water-level and currents-prediction stations for the given coordinates and returns current conditions with slack window data.
+ * Queries the nearest NOAA water-level and currents-prediction stations
+for the given coordinates and returns current conditions with slack
+window data. Set `waterType=freshwater` for lakes and rivers. Freshwater
+requests use compatible NOAA observations or a current USGS gage-height
+reading only; missing portions are omitted and no sinusoidal tide or
+current is fabricated. If no compatible observation exists, the response
+is `available:false`, `source:"unavailable"`, and
+`unavailableReason:"freshwater_no_compatible_observation"`.
+
  * @summary Current tide height, current speed/direction, and next high/low event
  */
 export const getTidal = async (params: GetTidalParams, options?: RequestInit): Promise<GetTidal200> => {
@@ -8555,7 +8569,13 @@ export const getGetTidalScheduleUrl = (params: GetTidalScheduleParams,) => {
 }
 
 /**
- * Returns an ordered list of high/low tide events with slack windows and current direction changes for the requested location and day range.
+ * Returns an ordered list of high/low tide events with slack windows and
+current direction changes for the requested location and day range. Set
+`waterType=freshwater` to prohibit synthetic schedules. A freshwater
+request with no compatible NOAA observation returns `available:false`,
+`source:"unavailable"`, the freshwater unavailable reason, and an empty
+`events` array.
+
  * @summary Multi-day tide schedule with slack windows
  */
 export const getTidalSchedule = async (params: GetTidalScheduleParams, options?: RequestInit): Promise<GetTidalSchedule200> => {

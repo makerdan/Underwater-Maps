@@ -2848,7 +2848,7 @@ export interface TrailPointsPage {
 }
 
 /**
- * Source of tidal current data — real NOAA CO-OPS station predictions or sinusoidal M2 approximation
+ * Source of tidal current data. Freshwater requests without a compatible observation use unavailable, never sinusoidal.
  */
 export type SurfaceConditionsTidalDataSource = typeof SurfaceConditionsTidalDataSource[keyof typeof SurfaceConditionsTidalDataSource];
 
@@ -2856,6 +2856,28 @@ export type SurfaceConditionsTidalDataSource = typeof SurfaceConditionsTidalData
 export const SurfaceConditionsTidalDataSource = {
   'noaa-coops': 'noaa-coops',
   sinusoidal: 'sinusoidal',
+  unavailable: 'unavailable',
+} as const;
+
+/**
+ * Present when a freshwater request has neither compatible current nor water-level data.
+ */
+export type SurfaceConditionsTidalUnavailableReason = typeof SurfaceConditionsTidalUnavailableReason[keyof typeof SurfaceConditionsTidalUnavailableReason];
+
+
+export const SurfaceConditionsTidalUnavailableReason = {
+  freshwater_no_compatible_observation: 'freshwater_no_compatible_observation',
+} as const;
+
+/**
+ * Source of hourly water-level values.
+ */
+export type SurfaceConditionsTideHeightSource = typeof SurfaceConditionsTideHeightSource[keyof typeof SurfaceConditionsTideHeightSource];
+
+
+export const SurfaceConditionsTideHeightSource = {
+  'noaa-coops': 'noaa-coops',
+  none: 'none',
 } as const;
 
 /**
@@ -2879,15 +2901,17 @@ export interface HourlySurfaceCondition {
   hour: number;
   windSpeedKnots: number;
   windDegrees: number;
-  tidalSpeedKnots: number;
-  tidalDegrees: number;
+  tidalSpeedKnots?: number;
+  tidalDegrees?: number;
   waveHeightM: number;
   /** Swell/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable. */
   waveDirectionDeg?: number;
-  /** True when the modeled tidal current is below the slack threshold (~0.1 kn) */
+  /** True when the available tidal current is below the slack threshold (~0.1 kn) */
   isSlack?: boolean;
   /** Tidal phase for this hour */
   phase?: HourlySurfaceConditionPhase;
+  /** NOAA-predicted water level above MLLW in metres; omitted when that hour has no compatible value. */
+  tideHeightM?: number;
 }
 
 export type ForecastHourPhase = typeof ForecastHourPhase[keyof typeof ForecastHourPhase];
@@ -2914,30 +2938,40 @@ export interface ForecastHour {
   waveHeightM: number;
   /** Swell/wave direction in degrees (0–359) from Open-Meteo Marine API; omitted when data is unavailable. */
   waveDirectionDeg?: number;
-  tidalSpeedKnots: number;
-  tidalDegrees: number;
-  isSlack: boolean;
-  phase: ForecastHourPhase;
+  tidalSpeedKnots?: number;
+  tidalDegrees?: number;
+  isSlack?: boolean;
+  phase?: ForecastHourPhase;
 }
 
 export interface SurfaceConditions {
   available: boolean;
   lat: number;
   lon: number;
-  dataSource?: string;
-  /** Source of tidal current data — real NOAA CO-OPS station predictions or sinusoidal M2 approximation */
-  tidalDataSource?: SurfaceConditionsTidalDataSource;
+  dataSource: string;
+  /** Source of tidal current data. Freshwater requests without a compatible observation use unavailable, never sinusoidal. */
+  tidalDataSource: SurfaceConditionsTidalDataSource;
+  /** False when no compatible tidal-current observation is available. A partial response may still include measured tideHeightM values. */
+  tidalAvailable: boolean;
+  /** Present when a freshwater request has neither compatible current nor water-level data. */
+  tidalUnavailableReason?: SurfaceConditionsTidalUnavailableReason;
   /** NOAA CO-OPS station id used when tidalDataSource is noaa-coops */
   tidalStationId?: string;
   /** Human-readable name of the NOAA CO-OPS station */
   tidalStationName?: string;
   /** Distance in kilometers from the requested point to the NOAA station */
   tidalStationDistanceKm?: number;
+  /** Source of hourly water-level values. */
+  tideHeightSource: SurfaceConditionsTideHeightSource;
+  /** NOAA CO-OPS station id used for tideHeightM values. */
+  tideHeightStationId?: string;
+  /** Human-readable NOAA water-level station name. */
+  tideHeightStationName?: string;
   /** True when actual data was unavailable and defaults were substituted */
-  estimatedConditions?: boolean;
+  estimatedConditions: boolean;
   hours: HourlySurfaceCondition[];
   /** 48-hour hourly forecast strip, anchored at the current UTC hour (relHour 0 = now). */
-  forecast48h?: ForecastHour[];
+  forecast48h: ForecastHour[];
 }
 
 /**
@@ -4211,7 +4245,19 @@ lat: number;
  * Longitude of query point
  */
 lon: number;
+/**
+ * Set to freshwater to disable synthetic tidal fallbacks.
+ */
+waterType?: GetSurfaceConditionsWaterType;
 };
+
+export type GetSurfaceConditionsWaterType = typeof GetSurfaceConditionsWaterType[keyof typeof GetSurfaceConditionsWaterType];
+
+
+export const GetSurfaceConditionsWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
 
 export type GetWeatherStationsParams = {
 /**
@@ -4493,7 +4539,19 @@ lon: number;
  * ISO 8601 datetime for the prediction (defaults to now)
  */
 datetime?: string;
+/**
+ * Set to freshwater to prohibit synthetic tidal fallback data.
+ */
+waterType?: GetTidalWaterType;
 };
+
+export type GetTidalWaterType = typeof GetTidalWaterType[keyof typeof GetTidalWaterType];
+
+
+export const GetTidalWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
 
 export type GetTidal200NextEventType = typeof GetTidal200NextEventType[keyof typeof GetTidal200NextEventType];
 
@@ -4515,15 +4573,29 @@ export type GetTidal200Source = typeof GetTidal200Source[keyof typeof GetTidal20
 export const GetTidal200Source = {
   noaa: 'noaa',
   estimated: 'estimated',
+  usgs: 'usgs',
+  unavailable: 'unavailable',
+} as const;
+
+/**
+ * Present when a freshwater request has no compatible NOAA or USGS observation.
+ */
+export type GetTidal200UnavailableReason = typeof GetTidal200UnavailableReason[keyof typeof GetTidal200UnavailableReason];
+
+
+export const GetTidal200UnavailableReason = {
+  freshwater_no_compatible_observation: 'freshwater_no_compatible_observation',
 } as const;
 
 export type GetTidal200 = {
-  available?: boolean;
+  available: boolean;
   tideHeight?: number;
   currentDirection?: number;
   currentSpeed?: number;
   nextEvent?: GetTidal200NextEvent;
-  source?: GetTidal200Source;
+  source: GetTidal200Source;
+  /** Present when a freshwater request has no compatible NOAA or USGS observation. */
+  unavailableReason?: GetTidal200UnavailableReason;
 };
 
 export type GetTidesStationParams = {
@@ -4609,7 +4681,19 @@ days?: number;
  * ISO 8601 start datetime (defaults to now)
  */
 start?: string;
+/**
+ * Set to freshwater to prohibit synthetic schedules.
+ */
+waterType?: GetTidalScheduleWaterType;
 };
+
+export type GetTidalScheduleWaterType = typeof GetTidalScheduleWaterType[keyof typeof GetTidalScheduleWaterType];
+
+
+export const GetTidalScheduleWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
 
 export type GetTidalSchedule200Source = typeof GetTidalSchedule200Source[keyof typeof GetTidalSchedule200Source];
 
@@ -4617,6 +4701,14 @@ export type GetTidalSchedule200Source = typeof GetTidalSchedule200Source[keyof t
 export const GetTidalSchedule200Source = {
   noaa: 'noaa',
   estimated: 'estimated',
+  unavailable: 'unavailable',
+} as const;
+
+export type GetTidalSchedule200UnavailableReason = typeof GetTidalSchedule200UnavailableReason[keyof typeof GetTidalSchedule200UnavailableReason];
+
+
+export const GetTidalSchedule200UnavailableReason = {
+  freshwater_no_compatible_observation: 'freshwater_no_compatible_observation',
 } as const;
 
 export type GetTidalSchedule200EventsItemType = typeof GetTidalSchedule200EventsItemType[keyof typeof GetTidalSchedule200EventsItemType];
@@ -4637,13 +4729,14 @@ export type GetTidalSchedule200EventsItem = {
 };
 
 export type GetTidalSchedule200 = {
-  available?: boolean;
-  source?: GetTidalSchedule200Source;
+  available: boolean;
+  source: GetTidalSchedule200Source;
+  unavailableReason?: GetTidalSchedule200UnavailableReason;
   stationId?: string;
   stationName?: string;
-  rangeStart?: string;
-  rangeEnd?: string;
-  events?: GetTidalSchedule200EventsItem[];
+  rangeStart: string;
+  rangeEnd: string;
+  events: GetTidalSchedule200EventsItem[];
 };
 
 export type AdminBucketMonitor200Counts = {

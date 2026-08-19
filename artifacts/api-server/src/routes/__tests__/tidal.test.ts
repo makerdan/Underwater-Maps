@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
-import freshwaterUsgsUnavailable from "./fixtures/freshwater-usgs-unavailable.json";
-import freshwaterUsgsAvailable from "./fixtures/freshwater-usgs-available.json";
-import freshwaterGlerl from "./fixtures/freshwater-glerl.json";
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: vi.fn(
@@ -18,7 +15,10 @@ vi.mock("@clerk/shared/keys", () => ({
   publishableKeyFromHost: vi.fn(() => "pk_test_mock"),
 }));
 
-import tidalRouter, { __clearHighLowEventsCacheForTests } from "../tidal";
+import tidalRouter, {
+  __clearHighLowEventsCacheForTests,
+  __clearStationListCachesForTests,
+} from "../tidal";
 
 function makeApp() {
   const app = express();
@@ -410,12 +410,13 @@ describe("GET /tidal?waterType=freshwater", () => {
   beforeEach(() => {
     fetchSpy = vi.spyOn(globalThis, "fetch") as ReturnType<typeof vi.spyOn>;
     __clearHighLowEventsCacheForTests();
+    __clearStationListCachesForTests();
   });
   afterEach(() => {
     fetchSpy.mockRestore();
   });
 
-  it("returns available:false with source:'usgs' when no nearby USGS station is found", async () => {
+  it("returns the documented unavailable result when no nearby USGS station is found", async () => {
     fetchSpy.mockResolvedValue(jsonResponse({ value: { timeSeries: [] } }));
 
     const res = await request(makeApp()).get(
@@ -424,16 +425,12 @@ describe("GET /tidal?waterType=freshwater", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.available).toBe(false);
-    expect(res.body.source).toBe("usgs");
-    // Must NOT fall through to sinusoidal (which sets available:true + tideHeight)
+    expect(res.body.source).toBe("unavailable");
+    expect(res.body.unavailableReason).toBe("freshwater_no_compatible_observation");
     expect(res.body.tideHeight).toBeUndefined();
-    // Shape matches the shared fixture
-    expect(res.body).toMatchObject(freshwaterUsgsUnavailable);
   });
 
-  it("returns available:true with source:'estimated' when a USGS station is found but has no current gage reading", async () => {
-    // Station found in the IV response, but no values array — gage sensor offline
-    // or outside the PT1H window.  Heights come from the synthetic model.
+  it("returns unavailable when a USGS station has no current gage reading", async () => {
     fetchSpy.mockResolvedValue(
       jsonResponse({
         value: {
@@ -446,7 +443,7 @@ describe("GET /tidal?waterType=freshwater", () => {
                   geogLocation: { latitude: 43.5422, longitude: -89.47 },
                 },
               },
-              // No "values" field → gageHeightFt remains undefined → synthetic fallback
+              // No "values" field → no compatible observation.
             },
           ],
         },
@@ -458,17 +455,11 @@ describe("GET /tidal?waterType=freshwater", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.available).toBe(true);
-    // No current reading — heights come from the synthetic model, so source stays "estimated".
-    expect(res.body.source).toBe("estimated");
-    expect(res.body.heightsSource).toBe("estimated");
-    expect(res.body.currentsSource).toBe("estimated");
-    expect(res.body.stationId).toBe("05407000");
-    expect(res.body.stationName).toBe("Wisconsin River at Portage, WI");
-    expect(res.body.isPredicted).toBe(true);
-    expect(typeof res.body.tideHeight).toBe("number");
-    // Shape matches the shared fixture (subset check)
-    expect(res.body).toMatchObject(freshwaterUsgsAvailable);
+    expect(res.body.available).toBe(false);
+    expect(res.body.source).toBe("unavailable");
+    expect(res.body.tideHeight).toBeUndefined();
+    expect(res.body.currentSpeed).toBeUndefined();
+    expect(res.body.nextEvent).toBeUndefined();
   });
 
   it("returns tideHeight from real gage reading and source:'usgs' when USGS IV data is present", async () => {
@@ -511,8 +502,6 @@ describe("GET /tidal?waterType=freshwater", () => {
     // Real gage data → source labels reflect measured data.
     expect(res.body.source).toBe("usgs");
     expect(res.body.heightsSource).toBe("usgs");
-    // Currents are always synthetic (no USGS currents IV product).
-    expect(res.body.currentsSource).toBe("estimated");
     expect(res.body.stationId).toBe("05407000");
     expect(res.body.stationName).toBe("Wisconsin River at Portage, WI");
     // tideHeight must be the exact gage reading, not a synthetic interpolation.
@@ -520,9 +509,59 @@ describe("GET /tidal?waterType=freshwater", () => {
     // Not predicted — this is a measured value.
     expect(res.body.isPredicted).toBe(false);
     expect(res.body.isModeled).toBe(false);
+    expect(res.body.currentDirection).toBeUndefined();
+    expect(res.body.currentSpeed).toBeUndefined();
+    expect(res.body.currentsSource).toBeUndefined();
+    expect(res.body.nextEvent).toBeUndefined();
+    expect(res.body.slack).toBeUndefined();
   });
 
-  it("falls back to synthetic model when USGS IV values array is present but empty", async () => {
+  it("uses compatible NOAA observations without synthesizing missing freshwater fields", async () => {
+    const station = {
+      id: "9087088",
+      name: "Mackinaw City",
+      lat: 45.78,
+      lng: -84.73,
+    };
+    fetchSpy.mockImplementation((url: unknown) => {
+      const value = String(url);
+      if (value.includes("stations.json")) {
+        return Promise.resolve(jsonResponse({ stations: [station] }));
+      }
+      if (value.includes("product=currents_predictions")) {
+        return Promise.resolve(jsonResponse({
+          current_predictions: {
+            cp: [{ Type: "flood", Speed: "1.2", Direction: "50" }],
+          },
+        }));
+      }
+      if (value.includes("product=predictions")) {
+        return Promise.resolve(jsonResponse({
+          predictions: [
+            { t: "2026-07-20 06:00", v: "0.4", type: "L" },
+            { t: "2026-07-20 12:00", v: "1.2", type: "H" },
+            { t: "2026-07-20 18:00", v: "0.3", type: "L" },
+          ],
+        }));
+      }
+      return Promise.reject(new Error(`unexpected url ${value}`));
+    });
+
+    const res = await request(makeApp()).get(
+      "/tidal?lat=45.78&lon=-84.73&datetime=2026-07-20T12:00:00Z&waterType=freshwater",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.available).toBe(true);
+    expect(res.body.source).toBe("noaa");
+    expect(res.body.heightsSource).toBe("noaa");
+    expect(res.body.currentsSource).toBe("noaa");
+    expect(res.body.tideHeight).toBe(1.2);
+    expect(res.body.currentDirection).toBe(50);
+    expect(res.body.currentSpeed).toBe(1.2);
+  });
+
+  it("does not synthesize a model when USGS IV values array is empty", async () => {
     fetchSpy.mockResolvedValue(
       jsonResponse({
         value: {
@@ -547,34 +586,25 @@ describe("GET /tidal?waterType=freshwater", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.available).toBe(true);
-    expect(res.body.source).toBe("estimated");
-    expect(res.body.heightsSource).toBe("estimated");
-    expect(res.body.isPredicted).toBe(true);
+    expect(res.body.available).toBe(false);
+    expect(res.body.source).toBe("unavailable");
+    expect(res.body.tideHeight).toBeUndefined();
   });
 
-  it("returns available:true with source:'glerl' for Great Lakes coordinates", async () => {
-    // Great Lakes → GLERL bounding-box check fires before any USGS fetch
+  it("returns unavailable rather than a GLERL sinusoidal series for Great Lakes coordinates", async () => {
+    fetchSpy.mockResolvedValue(jsonResponse({ value: { timeSeries: [] } }));
     const res = await request(makeApp()).get(
       "/tidal?lat=44.0&lon=-86.0&datetime=2026-07-20T12:00:00Z&waterType=freshwater",
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.available).toBe(true);
-    expect(res.body.source).toBe("glerl");
-    expect(res.body.heightsSource).toBe("glerl");
-    expect(res.body.currentsSource).toBe("glerl");
-    expect(res.body.stationName).toMatch(/GLERL/);
-    expect(res.body.isPredicted).toBe(true);
-    expect(typeof res.body.tideHeight).toBe("number");
-    // No USGS network call should have been made
-    expect(fetchSpy.mock.calls.length).toBe(0);
-    // Shape matches the shared fixture (subset check)
-    expect(res.body).toMatchObject(freshwaterGlerl);
+    expect(res.body.available).toBe(false);
+    expect(res.body.source).toBe("unavailable");
+    expect(res.body.tideHeight).toBeUndefined();
+    expect(res.body.currentSpeed).toBeUndefined();
   });
 
-  it("does not return source:'estimated' or source:'noaa' for freshwater (regression guard)", async () => {
-    // No USGS station found — but source must still be 'usgs', not 'estimated'
+  it("never returns a modeled source for freshwater without an observation", async () => {
     fetchSpy.mockResolvedValue(jsonResponse({ value: { timeSeries: [] } }));
 
     const res = await request(makeApp()).get(
@@ -582,8 +612,32 @@ describe("GET /tidal?waterType=freshwater", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.source).not.toBe("estimated");
-    expect(res.body.source).not.toBe("noaa");
+    expect(res.body.source).toBe("unavailable");
+  });
+
+  it("does not serve a cached saltwater estimate to a freshwater request", async () => {
+    fetchSpy.mockImplementation((url: unknown) => {
+      if (String(url).includes("waterservices.usgs.gov")) {
+        return Promise.resolve(jsonResponse({ value: { timeSeries: [] } }));
+      }
+      return Promise.resolve(jsonResponse({ stations: [] }));
+    });
+
+    const app = makeApp();
+    const saltwater = await request(app).get(
+      "/tidal?lat=43.55&lon=-89.47&datetime=2026-07-20T12:00:00Z&waterType=saltwater",
+    );
+    expect(saltwater.body.source).toBe("estimated");
+
+    const freshwater = await request(app).get(
+      "/tidal?lat=43.55&lon=-89.47&datetime=2026-07-20T12:00:00Z&waterType=freshwater",
+    );
+    expect(freshwater.body).toMatchObject({
+      available: false,
+      source: "unavailable",
+      unavailableReason: "freshwater_no_compatible_observation",
+    });
+    expect(freshwater.body.tideHeight).toBeUndefined();
   });
 
   it("Great Lakes path does not silently fall back to sinusoidal when waterType is omitted", async () => {
@@ -607,5 +661,75 @@ describe("GET /tidal?waterType=freshwater", () => {
     );
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid_param");
+  });
+});
+
+describe("GET /tidal/schedule?waterType=freshwater", () => {
+  beforeEach(() => {
+    __clearHighLowEventsCacheForTests();
+    __clearStationListCachesForTests();
+  });
+
+  it("returns an empty unavailable schedule rather than synthetic events", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ stations: [] }));
+    try {
+      const res = await request(makeApp()).get(
+        "/tidal/schedule?lat=43.55&lon=-89.47&days=2&start=2026-07-20T12:00:00Z&waterType=freshwater",
+      );
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        available: false,
+        source: "unavailable",
+        unavailableReason: "freshwater_no_compatible_observation",
+        events: [],
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("keeps NOAA height events but omits derived current directions and slack windows", async () => {
+    const station = {
+      id: "9087088",
+      name: "Mackinaw City",
+      lat: 45.78,
+      lng: -84.73,
+    };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: unknown) => {
+      const value = String(url);
+      if (value.includes("stations.json")) {
+        return Promise.resolve(jsonResponse({ stations: [station] }));
+      }
+      if (value.includes("product=predictions")) {
+        return Promise.resolve(jsonResponse({
+          predictions: [
+            { t: "2026-07-20 06:00", v: "0.4", type: "L" },
+            { t: "2026-07-20 12:00", v: "1.2", type: "H" },
+            { t: "2026-07-20 18:00", v: "0.3", type: "L" },
+          ],
+        }));
+      }
+      return Promise.reject(new Error(`unexpected url ${value}`));
+    });
+
+    try {
+      const res = await request(makeApp()).get(
+        "/tidal/schedule?lat=45.78&lon=-84.73&days=1&start=2026-07-20T00:00:00Z&waterType=freshwater",
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.available).toBe(true);
+      expect(res.body.source).toBe("noaa");
+      expect(res.body.events).toHaveLength(3);
+      expect(res.body.events[0]).toMatchObject({
+        type: "low",
+        height: 0.4,
+      });
+      expect(res.body.events[0].nextDirectionDeg).toBeUndefined();
+      expect(res.body.events[0].windowStart).toBeUndefined();
+      expect(res.body.events[0].windowEnd).toBeUndefined();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

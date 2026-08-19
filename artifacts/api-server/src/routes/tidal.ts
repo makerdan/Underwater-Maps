@@ -17,8 +17,9 @@ import {
   TidalScheduleQuerySchema,
   TidalPackQuerySchema,
 } from "./schemas.js";
-import { z, type ZodError } from "zod";
+import type { ZodError } from "zod";
 import {
+  GetTidalResponse,
   GetTidalScheduleResponse,
   GetTidalPackResponse,
 } from "@workspace/api-zod";
@@ -56,10 +57,11 @@ interface StationRef {
 }
 
 /** All known data-source labels for tidal data. */
-export type TidalSource = "noaa" | "estimated" | "usgs" | "glerl";
+export type TidalSource = "noaa" | "estimated" | "usgs" | "unavailable";
 
 interface TidalResponse {
   available: boolean;
+  unavailableReason?: "freshwater_no_compatible_observation";
   tideHeight?: number;
   currentDirection?: number;
   currentSpeed?: number;
@@ -84,8 +86,7 @@ interface TidalResponse {
   distanceKm?: number;
   /**
    * True when tidal heights / water levels are derived from a physical model
-   * or gage-height extrapolation rather than direct tide-gauge measurements.
-   * Freshwater rivers (USGS) and Great Lakes (GLERL) are always modeled.
+   * rather than direct measurements.
    */
   isModeled?: boolean;
   /**
@@ -98,7 +99,7 @@ interface TidalResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Freshwater helpers — USGS NWIS and GLERL Great Lakes
+// Freshwater helpers — USGS NWIS
 // ---------------------------------------------------------------------------
 
 const USGS_IV_BASE = "https://waterservices.usgs.gov/nwis/iv/";
@@ -127,30 +128,6 @@ interface UsgsIvResponse {
       }>;
     }>;
   };
-}
-
-/**
- * Approximate bounding boxes for the five Great Lakes (GLERL model coverage).
- * Used to decide whether to label freshwater tidal data as "glerl" vs "usgs".
- */
-const GREAT_LAKES_BOUNDS: Array<{
-  latMin: number;
-  latMax: number;
-  lonMin: number;
-  lonMax: number;
-}> = [
-  { latMin: 46.0, latMax: 49.0, lonMin: -92.5, lonMax: -84.0 }, // Superior
-  { latMin: 41.5, latMax: 46.0, lonMin: -88.0, lonMax: -84.5 }, // Michigan
-  { latMin: 43.0, latMax: 46.5, lonMin: -84.5, lonMax: -79.5 }, // Huron
-  { latMin: 41.5, latMax: 43.0, lonMin: -83.5, lonMax: -78.5 }, // Erie
-  { latMin: 43.0, latMax: 44.5, lonMin: -79.5, lonMax: -75.7 }, // Ontario
-];
-
-/** Returns true when the coordinates fall within any of the five Great Lakes. */
-export function isGreatLakes(lat: number, lon: number): boolean {
-  return GREAT_LAKES_BOUNDS.some(
-    (b) => lat >= b.latMin && lat <= b.latMax && lon >= b.lonMin && lon <= b.lonMax,
-  );
 }
 
 /**
@@ -602,7 +579,7 @@ const TIDAL_RESULT_TTL_MS = 10 * 60 * 1000;
 const TIDAL_RESULT_ESTIMATED_TTL_MS = 2 * 60 * 1000;
 
 /**
- * Freshwater result cache — dedups USGS / GLERL responses for nearby points
+ * Freshwater result cache — dedups USGS responses for nearby points
  * within the same 30-min window AND acts as a stale-while-revalidate buffer:
  * when USGS NWIS is unreachable the most-recent successful response is served
  * with `isStale: true` rather than degrading to `available: false`.
@@ -621,22 +598,25 @@ registerCache(() => {
   freshwaterResultCache.clear();
 });
 
-function tidalResultCacheKey(lat: number, lon: number, refMs: number): string {
+function tidalResultCacheKey(
+  lat: number,
+  lon: number,
+  refMs: number,
+  waterType: "saltwater" | "freshwater" | undefined,
+): string {
   const latBucket = Math.round(lat * 2) / 2;
   const lonBucket = Math.round(lon * 2) / 2;
   const timeBucket = Math.floor(refMs / (30 * 60 * 1000));
-  return `${latBucket}|${lonBucket}|${timeBucket}`;
+  return `${waterType ?? "unspecified"}|${latBucket}|${lonBucket}|${timeBucket}`;
 }
 
-// Loose response schema for safeParse+warn on GET /tidal.  Uses passthrough() so that
-// extra fields (stationName, stationId, isPredicted, heightsSource, currentsSource, slack,
-// isModeled, etc.) and the "glerl"/"usgs" source values are not treated as schema violations.
-// Strict validateResponse(GetTidalResponse, …) is intentionally avoided because the OpenAPI
-// spec enum(['noaa', 'estimated']) does not yet cover the GLERL / USGS source paths.
-const TidalLooseResponseSchema = z.union([
-  z.object({ available: z.literal(false), source: z.string() }).passthrough(),
-  z.object({ available: z.literal(true), source: z.string() }).passthrough(),
-]);
+function checkTidalResponse(body: TidalResponse): TidalResponse {
+  const parsed = GetTidalResponse.safeParse(body);
+  if (!parsed.success) {
+    logger.warn({ err: parsed.error }, "GET /api/tidal — response shape mismatch");
+  }
+  return body;
+}
 
 // GET /tidal?lat=&lon=&datetime=
 router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
@@ -654,7 +634,7 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
 
   // Short-term result cache: serve identical responses for nearby points
   // within the same ~30-min window without redundant NOAA upstream calls.
-  const cacheKey = tidalResultCacheKey(lat, lon, refMs);
+  const cacheKey = tidalResultCacheKey(lat, lon, refMs, waterType);
   const now = Date.now();
   const cachedResult = tidalResultCache.get(cacheKey);
   if (cachedResult) {
@@ -663,51 +643,6 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
       res.json(cachedResult.body);
       return;
     }
-  }
-
-  // Freshwater + Great Lakes: go straight to GLERL without any NOAA network
-  // calls. isGreatLakes is a pure bounding-box check so this path is
-  // completely synchronous (0 fetches), satisfying the "no upstream calls"
-  // contract expected by freshwater tests.
-  if (waterType === "freshwater" && isGreatLakes(lat, lon)) {
-    const fwCacheKey = tidalResultCacheKey(lat, lon, refMs);
-    const fwNow = Date.now();
-    const cachedFw = freshwaterResultCache.get(fwCacheKey);
-    if (cachedFw && fwNow - cachedFw.ts < FRESHWATER_RESULT_TTL_MS) {
-      res.json(cachedFw.body);
-      return;
-    }
-    const fwEvents = buildSyntheticEvents(refMs, lon);
-    const fwPeakSpeedKnots = 0.5;
-    // True modulo — JS % returns negative values when the left operand is
-    // negative (e.g. Gulf of Mexico: (25−100)*73.1+360 = −5122.5; −5122.5%360 = −82.5°).
-    const fwFloodBearing = (((lat + lon) * 73.1) % 360 + 360) % 360;
-    const fwSample = computeSlackSample({
-      events: fwEvents,
-      refTime: refMs,
-      peakSpeedKnots: fwPeakSpeedKnots,
-      floodBearingDeg: fwFloodBearing,
-      slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
-    });
-    const glerlBody: TidalResponse = {
-      available: true,
-      tideHeight: interpolateHeight(fwEvents, refMs),
-      currentDirection: fwSample.directionDeg,
-      currentSpeed: fwSample.speedKnots,
-      nextEvent: nextEventFrom(fwEvents, refMs),
-      stationName: "GLERL Great Lakes Model",
-      isPredicted: true,
-      source: "glerl",
-      heightsSource: "glerl",
-      currentsSource: "glerl",
-      isModeled: true,
-      slack: fwSample.slack,
-    };
-    freshwaterResultCache.set(fwCacheKey, { body: glerlBody, ts: fwNow });
-    const _gp = TidalLooseResponseSchema.safeParse(glerlBody);
-    if (!_gp.success) logger.warn({ err: _gp.error }, "GET /api/tidal — GLERL response shape mismatch");
-    res.json(glerlBody);
-    return;
   }
 
   // Look up both station networks in parallel — they're independent.
@@ -721,6 +656,76 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
     heightsStation ? getHighLowEvents(heightsStation.id, refTime) : Promise.resolve(null),
     currentsStation ? getCurrentsPeak(currentsStation.id, refTime) : Promise.resolve(null),
   ]);
+
+  if (waterType === "freshwater") {
+    // A compatible NOAA observation may expose heights, currents, or both.
+    // Preserve only the measurements actually returned; do not fill either
+    // missing half of the response with an ocean-tide model.
+    if ((heightsEvents?.length ?? 0) > 0 || currentsPeak) {
+      const freshwaterNoaaBody: TidalResponse = {
+        available: true,
+        source: "noaa",
+        ...(heightsEvents?.length
+          ? {
+              tideHeight: interpolateHeight(heightsEvents, refMs),
+              nextEvent: nextEventFrom(heightsEvents, refMs),
+              heightsSource: "noaa" as const,
+              heightsStation: heightsStation ? { id: heightsStation.id, name: heightsStation.name } : undefined,
+            }
+          : {}),
+        ...(currentsPeak
+          ? {
+              currentDirection: currentsPeak.floodBearingDeg,
+              currentSpeed: currentsPeak.peakSpeedKnots,
+              currentsSource: "noaa" as const,
+              currentsStation: currentsStation ? { id: currentsStation.id, name: currentsStation.name } : undefined,
+            }
+          : {}),
+        stationName: heightsStation?.name ?? currentsStation?.name,
+        stationId: heightsStation?.id ?? currentsStation?.id,
+        isPredicted: true,
+      };
+      res.json(checkTidalResponse(freshwaterNoaaBody));
+      return;
+    }
+
+    const fwCacheKey = tidalResultCacheKey(lat, lon, refMs, waterType);
+    const cachedFw = freshwaterResultCache.get(fwCacheKey);
+    if (cachedFw && now - cachedFw.ts < FRESHWATER_RESULT_TTL_MS) {
+      res.json(cachedFw.body);
+      return;
+    }
+
+    const usgsStation = await getNearestUsgsStation(lat, lon);
+    if (usgsStation?.gageHeightFt != null) {
+      const usgsBody: TidalResponse = {
+        available: true,
+        tideHeight: usgsStation.gageHeightFt,
+        stationName: usgsStation.name,
+        stationId: usgsStation.id,
+        source: "usgs",
+        heightsSource: "usgs",
+        distanceKm: haversineKm(lat, lon, usgsStation.lat, usgsStation.lng),
+        isPredicted: false,
+        isModeled: false,
+      };
+      freshwaterResultCache.set(fwCacheKey, { body: usgsBody, ts: now });
+      res.json(checkTidalResponse(usgsBody));
+      return;
+    }
+
+    if (cachedFw && now - cachedFw.ts < FRESHWATER_STALE_TTL_MS) {
+      res.json({ ...cachedFw.body, isStale: true, cachedAt: new Date(cachedFw.ts).toISOString() });
+      return;
+    }
+
+    res.json(checkTidalResponse({
+      available: false,
+      source: "unavailable",
+      unavailableReason: "freshwater_no_compatible_observation",
+    } satisfies TidalResponse));
+    return;
+  }
 
   let events: TideEvent[];
   let heightsSource: "noaa" | "estimated";
@@ -765,104 +770,6 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
   const overallSource: "noaa" | "estimated" =
     heightsSource === "noaa" || currentsSource === "noaa" ? "noaa" : "estimated";
 
-  // Freshwater gating: when caller declares waterType=freshwater and no real
-  // NOAA station was found, use GLERL synthetic seiche model for Great Lakes or
-  // attempt a USGS NWIS gage lookup for rivers/smaller lakes. The sinusoidal
-  // estimated model is a saltwater coastal approximation and must not be served
-  // as tidal data for inland freshwater bodies.
-  if (waterType === "freshwater" && overallSource === "estimated") {
-    const fwCacheKey = tidalResultCacheKey(lat, lon, refMs);
-    const fwNow = Date.now();
-
-    // isGreatLakes is handled earlier (pre-NOAA early-exit); we should never
-    // reach here for GL+freshwater. Guard defensively just in case.
-    if (isGreatLakes(lat, lon)) {
-      res.json(freshwaterResultCache.get(fwCacheKey)?.body ?? { available: false, source: "glerl" });
-      return;
-    }
-
-    // Non-Great-Lakes freshwater: attempt USGS NWIS gage lookup.
-    const cachedFw = freshwaterResultCache.get(fwCacheKey);
-    if (cachedFw && fwNow - cachedFw.ts < FRESHWATER_RESULT_TTL_MS) {
-      res.json(cachedFw.body);
-      return;
-    }
-
-    let usgsStation: Awaited<ReturnType<typeof getNearestUsgsStation>>;
-    try {
-      usgsStation = await getNearestUsgsStation(lat, lon);
-    } catch {
-      usgsStation = null;
-    }
-
-    if (!usgsStation) {
-      // No USGS station reachable — try the stale cache as a fallback.
-      if (cachedFw && fwNow - cachedFw.ts < FRESHWATER_STALE_TTL_MS) {
-        const staleBody: TidalResponse = {
-          ...cachedFw.body,
-          isStale: true,
-          cachedAt: new Date(cachedFw.ts).toISOString(),
-        };
-        res.json(staleBody);
-        return;
-      }
-      const _fp = TidalLooseResponseSchema.safeParse({ available: false, source: "usgs" });
-      if (!_fp.success) logger.warn({ err: _fp.error }, "GET /api/tidal — unavailable fallback shape mismatch");
-      res.json({ available: false, source: "usgs" } as TidalResponse);
-      return;
-    }
-
-    // USGS station found — use the real gage-height reading when the IV
-    // response included one, otherwise fall back to the synthetic model.
-    const fwEvents = buildSyntheticEvents(refMs, lon);
-    const fwPeakSpeedKnots = 0.3;
-    // True modulo — JS % returns negative values when the left operand is
-    // negative (e.g. Gulf of Mexico: (25−100)*73.1+360 = −5122.5; −5122.5%360 = −82.5°).
-    const fwFloodBearing = (((lat + lon) * 73.1) % 360 + 360) % 360;
-    const fwSample = computeSlackSample({
-      events: fwEvents,
-      refTime: refMs,
-      peakSpeedKnots: fwPeakSpeedKnots,
-      floodBearingDeg: fwFloodBearing,
-      slackThresholdKnots: SLACK_THRESHOLD_DEFAULT,
-    });
-    const distanceKm = haversineKm(lat, lon, usgsStation.lat, usgsStation.lng);
-
-    // Real gage-height reading available — use it and label the source "usgs"
-    // so callers know the height is a measured value, not a synthetic estimate.
-    // When the IV window returned no current reading (sensor offline, gap in
-    // record, etc.) fall back to the sinusoidal synthetic model and keep the
-    // source label as "estimated" so the UI can distinguish the two cases.
-    const hasRealGageHeight = usgsStation.gageHeightFt != null;
-    const tideHeightFt = hasRealGageHeight
-      ? usgsStation.gageHeightFt!
-      : interpolateHeight(fwEvents, refMs);
-    const usgsHeightsSource: TidalSource = hasRealGageHeight ? "usgs" : "estimated";
-    const usgsOverallSource: TidalSource = hasRealGageHeight ? "usgs" : "estimated";
-
-    const usgsBody: TidalResponse = {
-      available: true,
-      tideHeight: tideHeightFt,
-      currentDirection: fwSample.directionDeg,
-      currentSpeed: fwSample.speedKnots,
-      nextEvent: nextEventFrom(fwEvents, refMs),
-      stationName: usgsStation.name,
-      stationId: usgsStation.id,
-      isPredicted: !hasRealGageHeight,
-      source: usgsOverallSource,
-      heightsSource: usgsHeightsSource,
-      currentsSource: "estimated",
-      distanceKm,
-      isModeled: !hasRealGageHeight,
-      slack: fwSample.slack,
-    };
-    freshwaterResultCache.set(fwCacheKey, { body: usgsBody, ts: fwNow });
-    const _up = TidalLooseResponseSchema.safeParse(usgsBody);
-    if (!_up.success) logger.warn({ err: _up.error }, "GET /api/tidal — USGS response shape mismatch");
-    res.json(usgsBody);
-    return;
-  }
-
   const legacyStationName =
     heightsStationRef?.name ??
     currentsStationRef?.name ??
@@ -886,9 +793,7 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
     slack: sample.slack,
   };
   tidalResultCache.set(cacheKey, { body, ts: Date.now() });
-  const _bp = TidalLooseResponseSchema.safeParse(body);
-  if (!_bp.success) logger.warn({ err: _bp.error }, "GET /api/tidal — response shape mismatch");
-  res.json(body);
+  res.json(checkTidalResponse(body));
 }));
 
 // GET /tidal/schedule?lat=&lon=&days=N&start=ISO
@@ -900,7 +805,7 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
     res.status(400).json({ error: "invalid_param", details: tidalValidationDetails(parsed.error) });
     return;
   }
-  const { lat, lon } = parsed.data;
+  const { lat, lon, waterType } = parsed.data;
   const days = parsed.data.days ?? 7;
   const startTime: Date = parsed.data.start ? new Date(parsed.data.start) : new Date();
   const endMs = startTime.getTime() + days * 24 * 3600 * 1000;
@@ -928,6 +833,18 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
     floodBearing = (((lat + lon) * 73.1) % 360 + 360) % 360;
   }
 
+  if (waterType === "freshwater" && !events) {
+    res.json(validateResponse(GetTidalScheduleResponse, {
+      available: false,
+      source: "unavailable",
+      unavailableReason: "freshwater_no_compatible_observation",
+      rangeStart: startTime.toISOString(),
+      rangeEnd: new Date(endMs).toISOString(),
+      events: [],
+    }, "GET /api/tidal/schedule"));
+    return;
+  }
+
   if (!events) {
     events = buildSyntheticEvents(startTime.getTime(), lon, days + 2);
     source = "estimated";
@@ -943,10 +860,10 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
     time: string;
     height: number;
     /** Direction the current flips TO after this event */
-    nextDirectionDeg: number;
+    nextDirectionDeg?: number;
     /** ISO start/end of the slack window (~30-45 min around the event) */
-    windowStart: string;
-    windowEnd: string;
+    windowStart?: string;
+    windowEnd?: string;
   };
 
   const ebbBearing = (floodBearing + 180) % 360;
@@ -986,9 +903,13 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
       type: e.type,
       time: new Date(e.time).toISOString(),
       height: e.height,
-      nextDirectionDeg: Math.round(nextDirectionDeg),
-      windowStart: new Date(e.time - halfBefore).toISOString(),
-      windowEnd: new Date(e.time + halfAfter).toISOString(),
+      ...(waterType === "freshwater"
+        ? {}
+        : {
+            nextDirectionDeg: Math.round(nextDirectionDeg),
+            windowStart: new Date(e.time - halfBefore).toISOString(),
+            windowEnd: new Date(e.time + halfAfter).toISOString(),
+          }),
     });
   }
 
