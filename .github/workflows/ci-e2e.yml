@@ -126,6 +126,13 @@ jobs:
       # fixed on 2026-07-21 and confirmed green on 2026-07-30, so they run
       # normally here.
       #
+      # ── Inclusions (confirmed) ────────────────────────────────────────
+      # This step runs the ENTIRE tests/e2e directory (no path filter), so
+      # the palette and settings-sync specs — palette-cross-device-sync,
+      # palette-picker, adaptive-palette, settings-cross-device-sync,
+      # settings-save-buttons, settings — all run automatically after every
+      # merge to main. Do not add a path list here without preserving them.
+      #
       # "signed upload" (catch-journal photo happy path) is excluded because
       # it PUTs a photo to a real signed object-storage URL. Object storage
       # is served by the Replit sidecar (PRIVATE_OBJECT_DIR /

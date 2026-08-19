@@ -1,18 +1,89 @@
 name: CI — Typecheck, Lint & Unit Suites
 
+# ── PR gate trigger: pull_request_target ─────────────────────────────────────
+# This workflow uses pull_request_target (not pull_request) so that runs for
+# first-time / unknown contributors can be gated behind a maintainer approval
+# via the `pr-checks` environment protection rule.
+#
+# The approval gate lives in a SEPARATE `gate` job that only runs for PR
+# authors without prior merged contributions. Environment "Required
+# reviewers" rules apply to every run of a job that references the
+# environment — GitHub does not exempt established contributors — so putting
+# `environment: pr-checks` on the main `ci` job would force manual approval
+# for ALL PRs. Splitting the gate out keeps established contributors on
+# fully automatic CI while unknown authors wait for a maintainer.
+#
+# Security posture for the `ci` job (which executes PR-head code):
+#   • permissions is pinned to contents: read — the GITHUB_TOKEN handed to
+#     this run cannot write to the repository even though pull_request_target
+#     normally grants a write token.
+#   • The checkout step uses persist-credentials: false, so the PR's code
+#     never sees a usable token on disk.
+#   • This workflow references no repository secrets (the e2e workflows use
+#     hardcoded dummy Clerk keys; none appear here).
 on:
   push:
-  pull_request:
+  pull_request_target:
 
 jobs:
+  # ── Approval gate — first-time / unknown contributors only ────────────────
+  # The `pr-checks` environment must be created in GitHub Settings →
+  # Environments with "Required reviewers" set to maintainers. Once
+  # configured, this job (and therefore the whole run, via `needs:`) waits
+  # for a maintainer's approval before any PR-head code executes for an
+  # unknown author. Until the environment is configured in Settings, GitHub
+  # auto-creates it with no protection rules and the gate is a harmless
+  # pass-through.
+  gate:
+    name: Approval gate (first-time / unknown contributors)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Only PR runs whose author has NO prior merged contributions enter the
+    # protected environment. author_association values OWNER / MEMBER /
+    # COLLABORATOR (standing access) and CONTRIBUTOR (has prior merged PRs)
+    # skip the gate entirely, so regular contributors keep automatic CI.
+    # push events never match and also skip the gate.
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'),
+                github.event.pull_request.author_association)
+    environment: pr-checks
+    # This job runs no repository code and needs no token at all.
+    permissions: {}
+    steps:
+      - name: Maintainer approval granted
+        run: echo "pr-checks environment approval granted — proceeding to CI."
+
   ci:
     name: Static checks + unit suites
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
+    needs: gate
+    # Run when the gate PASSED (unknown author, maintainer approved) or was
+    # SKIPPED (push event, or PR from an established contributor). Never run
+    # when the gate failed or the approval was rejected/cancelled.
+    if: >-
+      always() &&
+      (needs.gate.result == 'success' || needs.gate.result == 'skipped')
+
+    # Restrict the GITHUB_TOKEN: pull_request_target grants write permissions
+    # by default, which untrusted PR code must never receive.
+    permissions:
+      contents: read
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # pull_request_target checks out the BASE branch by default, which
+          # would make this gate a no-op (it would test main, not the PR).
+          # Check out the PR head explicitly — safe here because the job's
+          # GITHUB_TOKEN is read-only, credentials are not persisted, no
+          # secrets are referenced, and unknown-author runs are held behind
+          # the `gate` job's pr-checks environment approval.
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.ref }}
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -38,8 +109,9 @@ jobs:
       #   • check:skill-mirror-sync      (reads .local/custom_skills/)
       #   • fix:failure-gate-stubs       (writes to .local/tasks/)
       #   • fix:regression-guard-stubs   (writes to .local/tasks/)
-      # check:failure-gate and check:regression-guard stay included: with
-      # --skip-if-no-task they self-skip when TASK_PLAN_FILE is unset (as in CI).
+      # The failure-gate + regression-guard checks stay included via the
+      # single `pnpm run verify` step: with --skip-if-no-task they self-skip
+      # when TASK_PLAN_FILE is unset (as in CI).
 
       - name: typecheck
         run: pnpm run typecheck
@@ -77,14 +149,11 @@ jobs:
       - name: 'check:runner-step-sync'
         run: pnpm run check:runner-step-sync
 
-      - name: 'check:failure-gate'
-        run: node scripts/check-failure-gate.mjs --skip-if-no-task
+      - name: 'verify: failure-gate + regression-guard'
+        run: pnpm run verify
 
       - name: 'check:failure-gate-self-test'
         run: pnpm run check:failure-gate-self-test
-
-      - name: 'check:regression-guard'
-        run: node scripts/check-regression-guard.mjs --stubs-only --skip-if-no-task
 
       - name: 'check:skip-count'
         run: pnpm run check:skip-count

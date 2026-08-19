@@ -37,6 +37,7 @@
     "check:failure-gate-self-test": "node --test scripts/__tests__/check-failure-gate.test.mjs",
     "check:regression-guard-self-test": "node --test scripts/__tests__/check-regression-guard.test.mjs",
     "check:regression-guard": "node --test scripts/__tests__/check-regression-guard.test.mjs && node scripts/check-regression-guard.mjs",
+    "verify": "node scripts/check-failure-gate.mjs --skip-if-no-task && node scripts/check-regression-guard.mjs --stubs-only --skip-if-no-task",
     "check:skip-count": "node --test scripts/__tests__/check-skip-count.test.mjs && node scripts/check-skip-count.mjs",
     "check:testdb-schema-drift": "node --test scripts/__tests__/check-testdb-schema-drift.test.mjs && node scripts/check-testdb-schema-drift.mjs",
     "check:runbutton-noop": "node --test scripts/__tests__/check-runbutton-noop.test.mjs && node scripts/check-runbutton-noop.mjs",

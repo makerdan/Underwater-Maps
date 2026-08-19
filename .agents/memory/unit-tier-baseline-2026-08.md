@@ -38,3 +38,9 @@ mock leakage from an earlier file in the shard, introduced with the admin-gate
 commits (`2642def7`/`b54085ae`/`f3760f55`), not by concurrent frontend work.
 Triage rule: run the file solo before blaming your diff; if solo-green, treat as
 baseline breakage.
+
+## 2026-08-18 — OverviewMap pointercancel order-dependent failure
+`OverviewMap.pointercancel.test.tsx` fails under the full bathyscan unit run
+(1/5667) but passes 3/3 solo. Same class as the github.test.ts entry above:
+order/load-dependent, observed right after the puzzle-layout merge wave —
+solo-verify before blaming an unrelated diff.
