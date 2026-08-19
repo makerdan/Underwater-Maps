@@ -14,6 +14,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useTidalData } from "@/hooks/useTidalData";
+import {
+  getPackForLocation as mockGetPackForLocation,
+  getOfflineTideValue as mockGetOfflineTideValue,
+} from "@/lib/offlinePackStore";
 
 // ---------------------------------------------------------------------------
 // Module-level mocks
@@ -28,6 +32,11 @@ vi.mock("@/lib/offlinePackStore", () => ({
   getPackForLocation: vi.fn().mockResolvedValue(null),
   getOfflineTideValue: vi.fn(),
 }));
+
+const offlinePack = {
+  tidePack: { station: "Mock Marine Station" },
+  savedAt: "2026-08-19T12:00:00.000Z",
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -62,11 +71,17 @@ function makeFetchResponse(lat: number, lon: number) {
 
 describe("useTidalData — lat/lon ref stabilisation", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
+  let getPackForLocation: ReturnType<typeof vi.fn>;
+  let getOfflineTideValue: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
+    getPackForLocation = vi.mocked(mockGetPackForLocation);
+    getOfflineTideValue = vi.mocked(mockGetOfflineTideValue);
+    getPackForLocation.mockReset();
+    getOfflineTideValue.mockReset();
   });
 
   afterEach(() => {
@@ -137,5 +152,40 @@ describe("useTidalData — lat/lon ref stabilisation", () => {
     });
 
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps freshwater unavailable after a network failure, while saltwater can use the marine offline pack", async () => {
+    fetchSpy.mockRejectedValue(new TypeError("Network unavailable"));
+    getPackForLocation.mockResolvedValue(offlinePack);
+    getOfflineTideValue.mockReturnValue({
+      tideHeight: 4.2,
+      currentDirection: 135,
+      currentSpeed: 1.8,
+    });
+
+    const freshwater = renderHook(() => useTidalData(47.5, -122.3, null, "freshwater"));
+    await flushPromises();
+
+    // A marine offline pack must not create a freshwater source badge, modeled
+    // current, or water-level reading when the freshwater network request fails.
+    expect(freshwater.result.current.data).toEqual({ available: false });
+    expect(freshwater.result.current.isOfflinePack).toBe(false);
+    expect(getPackForLocation).not.toHaveBeenCalled();
+
+    const saltwater = renderHook(() => useTidalData(47.5, -122.3, null, "saltwater"));
+    await flushPromises();
+
+    expect(saltwater.result.current.data).toMatchObject({
+      available: true,
+      stationName: "Mock Marine Station",
+      tideHeight: 4.2,
+      currentDirection: 135,
+      currentSpeed: 1.8,
+      source: "noaa",
+      isOfflinePack: true,
+      packSnapshotAt: offlinePack.savedAt,
+    });
+    expect(saltwater.result.current.isOfflinePack).toBe(true);
+    expect(getPackForLocation).toHaveBeenCalledWith(47.5, -122.3);
   });
 });
