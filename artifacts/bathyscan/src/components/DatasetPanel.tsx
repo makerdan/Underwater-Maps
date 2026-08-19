@@ -2092,19 +2092,6 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     let backoffMs = 1_500;
     let timerId: ReturnType<typeof setTimeout> | null = null;
 
-    // Tracks how many consecutive non-OK poll responses have been received.
-    // A single transient failure (e.g. a brief network blip) resets to 0 on
-    // the next successful response, so it does not trigger the error path.
-    // Three in a row strongly indicates the server lost track of the job —
-    // the most common cause is a server restart wiping in-memory job state.
-    // TODO: eliminate this heuristic once job state is persisted to the DB.
-    let consecutiveFailures = 0;
-
-    // After this many consecutive non-OK poll responses the poll loop stops
-    // and surfaces a clear, retryable error message instead of spinning for
-    // the full 5-minute timeout.
-    const POLL_INTERRUPT_THRESHOLD = 3;
-
     const poll = async () => {
       if (stopped) return;
 
@@ -2115,30 +2102,30 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         backoffMs = 1_500; // reset back-off on any successful network response
 
         if (!resp.ok) {
-          consecutiveFailures++;
-          // Three consecutive non-OK responses indicate a transient or
-          // persistent server problem. In most cases job state is recovered
-          // automatically: the server persists each job to the upload_jobs
-          // DB table on finalize, updates it as processing progresses, and
-          // re-queues stale rows on restart — so a single restart should not
-          // produce a 404. This threshold remains as a final safety net for
-          // unrecoverable scenarios (e.g. DB unavailable during restart).
-          if (consecutiveFailures >= POLL_INTERRUPT_THRESHOLD) {
+          // A 404 from the durable endpoint is definitive: the job row is
+          // missing for this user, so polling cannot recover it. Other
+          // non-OK responses (including a 5xx while the API/DB is restarting)
+          // remain recoverable and must not discard the upload session.
+          if (resp.status === 404) {
             stopped = true;
             clearUploadSession();
             setChunkedPhase("error");
+            let details = "";
+            try {
+              const body = await resp.json() as { details?: string };
+              details = typeof body.details === "string" ? body.details : "";
+            } catch { /* response body is optional */ }
             setChunkedError(
-              "Upload processing was interrupted (the server may have restarted). " +
-              "Your file was received — please try uploading again.",
+              details ||
+              "Upload processing could not be recovered. Your file was received, " +
+              "but the processing record is no longer available. Please retry the upload.",
             );
             return;
           }
+          backoffMs = Math.min(backoffMs * 2, 15_000);
           scheduleNext();
           return;
         }
-
-        // Successful response — reset the consecutive-failure counter.
-        consecutiveFailures = 0;
 
         const job = await resp.json() as {
           status: string; progress: number; error?: string; datasetId?: string;
@@ -2236,7 +2223,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       if (timerId !== null) clearTimeout(timerId);
       setChunkedPhase((prev) => {
         if (prev === "processing") {
-          setChunkedError("Processing timed out. The file may still be processing — check back in a few minutes or try uploading again.");
+          setChunkedError(
+            "Processing status is temporarily unavailable. Your file was received and " +
+            "may still be processing — check your connection, then retry status.",
+          );
           return "error";
         }
         return prev;
@@ -4341,7 +4331,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
                             cursor: "pointer",
                           }}
                         >
-                          Retry upload
+                           {chunkedError?.startsWith("Processing status")
+                             ? "Retry status"
+                             : "Retry upload"}
                         </button>
                       </div>
                     )}

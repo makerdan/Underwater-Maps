@@ -1,16 +1,14 @@
 /**
  * DatasetPanel.pollInterrupt.test.tsx
  *
- * Verifies that the chunked-upload poll loop surfaces a clear, retryable
- * "interrupted" error after POLL_INTERRUPT_THRESHOLD (3) consecutive non-OK
- * poll responses, instead of spinning silently for the full 10-minute timeout.
+ * Verifies that the chunked-upload poll loop survives transient API failures
+ * and only surfaces an interruption after the durable job is confirmed missing.
  *
  * Three scenarios are covered:
  *
- *   (a) Three consecutive non-OK poll responses → chunkedPhase becomes "error"
- *       and the interruption message is displayed.
- *   (b) One non-OK response followed by a successful response → failure counter
- *       resets; no error is surfaced, polling continues normally.
+ *   (a) A confirmed 404 → chunkedPhase becomes "error" and the missing-job
+ *       message is displayed.
+ *   (b) One non-OK response followed by a successful response → no error is surfaced.
  *   (c) A job status:"error" response → the existing job-error path fires,
  *       NOT the new consecutive-failure path.
  *
@@ -359,7 +357,7 @@ function makeJobResponse(body: object): Response {
   } as Response;
 }
 
-/** Build a non-OK Response-like object (simulates 404 after server restart). */
+/** Build a non-OK Response-like object. */
 function makeNonOkResponse(status = 404): Response {
   return {
     ok: false,
@@ -444,7 +442,7 @@ function installMockAndRender(pollResponses: Response[]): {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe("DatasetPanel — poll interruption error (SEED F-008)", () => {
+describe("DatasetPanel — durable poll recovery (SEED F-008)", () => {
   beforeEach(() => {
     authorizedFetchMock.mockReset();
   });
@@ -457,16 +455,11 @@ describe("DatasetPanel — poll interruption error (SEED F-008)", () => {
   });
 
   /**
-   * (a) Three consecutive non-OK poll responses → interruption error.
-   *
-   * Real timers are used so the 1.5 s poll intervals fire naturally.
-   * waitFor polls until the error appears (up to 10 s = well within
-   * the 15 s per-test budget even with three poll cycles).
+   * (a) A confirmed 404 is terminal. It is the only non-OK poll response
+   * that tells the user the durable job cannot be recovered.
    */
-  it("(a) surfaces the interruption error after 3 consecutive non-OK poll responses", async () => {
-    const { nthJobPoll } = installMockAndRender([
-      makeNonOkResponse(404),
-      makeNonOkResponse(404),
+   it("(a) surfaces a missing-job error after a confirmed 404", async () => {
+    installMockAndRender([
       makeNonOkResponse(404),
     ]);
 
@@ -476,36 +469,22 @@ describe("DatasetPanel — poll interruption error (SEED F-008)", () => {
       dropzoneMock.trigger([file]);
     });
 
-    // Wait until the 3rd poll has fired — at that point the threshold is met
-    // and the component sets the error state. Then flush React updates.
-    await act(async () => {
-      await nthJobPoll(3);
-    });
-
-    // The interruption error message must be displayed.
     await waitFor(
       () => {
         expect(
-          screen.getByText(/Upload processing was interrupted/i),
+          screen.getByText(/Upload processing could not be recovered/i),
         ).toBeInTheDocument();
       },
       { timeout: 3_000 },
     );
 
-    // The server-restart hint must also appear in the message.
-    expect(
-      screen.getByText(/the server may have restarted/i),
-    ).toBeInTheDocument();
-
-    // The retry button must be visible (chunkedPhase === "error").
+    // The retry button is appropriate only after the missing job is confirmed.
     expect(screen.getByTestId("btn-retry-chunked-upload")).toBeInTheDocument();
-  }, 15_000);
+  }, 10_000);
 
   /**
-   * (b) One non-OK followed by a successful "done" response → counter resets,
-   * no interruption error is surfaced, and the poll loop terminates cleanly.
-   *
-   * Sequence: [non-OK → counter=1] then [done+datasetId → counter=0, STOP].
+   * (b) One transient non-OK followed by a successful "done" response → no
+   * interruption error is surfaced and the poll loop terminates cleanly.
    *
    * WHY fake timers:
    *   React 18's act() drains ALL pending scheduled work — including real
@@ -519,10 +498,8 @@ describe("DatasetPanel — poll interruption error (SEED F-008)", () => {
    *   exactly 2 s inside act() so poll 2 fires and returns "done" (no further
    *   timer is scheduled), then act() settles cleanly.
    *
-   * The counter-reset assertion: absence of the interruption error after
-   * [non-OK, done] proves the OK path reset consecutiveFailures to 0 — if it
-   * had stayed at 1, a single additional non-OK would not reach 3 anyway, but
-   * the counter-reset path is the important correctness invariant.
+   * The important invariant is that the first failure did not discard the
+   * session or stop recovery before the durable response arrived.
    */
   it("(b) resets the failure counter on a successful response — no error after 1 non-OK then 1 OK", async () => {
     vi.useFakeTimers();
@@ -550,10 +527,9 @@ describe("DatasetPanel — poll interruption error (SEED F-008)", () => {
       await vi.advanceTimersByTimeAsync(2_000);
     });
 
-    // The interruption error must NOT be present — consecutiveFailures went
-    // 0 → 1 (non-OK) → 0 (reset on OK "done"), never reaching the threshold.
+    // The transient interruption must not become a user-visible error.
     expect(
-      screen.queryByText(/Upload processing was interrupted/i),
+      screen.queryByText(/Upload processing could not be recovered/i),
     ).not.toBeInTheDocument();
 
     // The retry button must NOT be visible — chunkedPhase moved to "idle"
