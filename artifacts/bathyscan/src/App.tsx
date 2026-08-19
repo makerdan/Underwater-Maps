@@ -680,6 +680,7 @@ function Main() {
     centerLat,
     centerLon,
     7,
+    waterTypeForDatasets,
   );
 
   const prevTidalAvailableRef = useRef<boolean | null>(null);
@@ -691,7 +692,9 @@ function Main() {
       effectiveTidalData && "available" in effectiveTidalData
         ? effectiveTidalData.available
         : null;
-    const events = tidalScheduleForRange?.events;
+    const events = tidalScheduleForRange?.available
+      ? tidalScheduleForRange.events
+      : undefined;
     const hasEvents = Boolean(events && events.length > 0);
 
     // Skip if neither availability nor schedule-event presence has changed.
@@ -711,14 +714,14 @@ function Main() {
         start: new Date(firstEvent.time),
         end: new Date(lastEvent.time),
       });
-    } else {
+    } else if (waterTypeForDatasets !== "freshwater") {
       const now = new Date();
       setTimelineRange({
         start: new Date(now.getTime() - 12 * 3_600_000),
         end: new Date(now.getTime() + 12 * 3_600_000),
       });
     }
-  }, [effectiveTidalData, tidalScheduleForRange, setTimelineRange]);
+  }, [effectiveTidalData, tidalScheduleForRange, waterTypeForDatasets, setTimelineRange]);
 
   // Fallback: set range when a new terrain dataset loads and the above effect
   // hasn't fired yet (tidal overlay off, no data fetched).

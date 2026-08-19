@@ -32,6 +32,7 @@ export function useTidalSchedule(
   lat: number | null,
   lon: number | null,
   days = 7,
+  waterType?: "saltwater" | "freshwater",
 ): { schedule: TidalSchedule | null; loading: boolean; isError: boolean; isCachedPack?: boolean } {
   const [schedule, setSchedule] = useState<TidalSchedule | null>(null);
   const [loading, setLoading] = useState(false);
@@ -42,10 +43,23 @@ export function useTidalSchedule(
 
   useEffect(() => {
     if (lat === null || lon === null) return;
+    // Do not let a previous water type's forecast remain visible while the
+    // new request is resolving.
+    setSchedule(null);
+    setIsError(false);
 
     // When offline, serve from the cached env pack when available,
     // not expired, and covering the requested location.
     if (!isOnline) {
+      // Environmental packs contain marine NOAA predictions. Never present
+      // those predictions as freshwater tidal availability.
+      if (waterType === "freshwater") {
+        setSchedule(null);
+        setIsCachedPack(false);
+        setIsError(false);
+        setLoading(false);
+        return;
+      }
       const isExpired = envPack
         ? new Date(envPack.expiresAt).getTime() < Date.now()
         : true;
@@ -88,12 +102,23 @@ export function useTidalSchedule(
       setLoading(true);
       try {
         const base = API_BASE.endsWith("/") ? API_BASE : `${API_BASE}/`;
-        const url = `${base}api/tidal/schedule?lat=${lat}&lon=${lon}&days=${days}`;
+        const params = new URLSearchParams({
+          lat: String(lat),
+          lon: String(lon),
+          days: String(days),
+        });
+        if (waterType) params.set("waterType", waterType);
+        const url = `${base}api/tidal/schedule?${params.toString()}`;
         const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as TidalSchedule;
+        // An unavailable response is authoritative. Clear any stale events
+        // rather than allowing a backend fallback payload to look usable.
+        const normalized: TidalSchedule = json.available
+          ? json
+          : { ...json, available: false, source: undefined, events: [] };
         if (!cancelled && !controller.signal.aborted) {
-          setSchedule(json);
+          setSchedule(normalized);
           setIsError(false);
         }
       } catch (err) {
@@ -115,7 +140,7 @@ export function useTidalSchedule(
       cancelled = true;
       controller.abort();
     };
-  }, [lat, lon, days, isOnline, envPack]);
+  }, [lat, lon, days, waterType, isOnline, envPack]);
 
   return { schedule, loading, isError, isCachedPack };
 }

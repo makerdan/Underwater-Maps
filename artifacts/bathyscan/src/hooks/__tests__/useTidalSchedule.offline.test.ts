@@ -186,4 +186,57 @@ describe("useTidalSchedule offline fallback", () => {
 
     expect(global.fetch).toHaveBeenCalled();
   });
+
+  it("includes the active water type in online requests", () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        available: true,
+        source: "noaa",
+        rangeStart: new Date().toISOString(),
+        rangeEnd: new Date().toISOString(),
+        events: [],
+      }),
+    });
+
+    renderHook(() => useTidalSchedule(NEAR_LAT, NEAR_LON, 7, "freshwater"));
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("waterType=freshwater"),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("normalizes an unavailable response so it cannot expose schedule events", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        available: false,
+        source: "estimated",
+        rangeStart: new Date().toISOString(),
+        rangeEnd: new Date().toISOString(),
+        events: [{ type: "high", time: new Date().toISOString() }],
+      }),
+    });
+
+    const { result } = renderHook(() => useTidalSchedule(NEAR_LAT, NEAR_LON, 7, "freshwater"));
+
+    await act(async () => {});
+    expect(result.current.schedule?.available).toBe(false);
+    expect(result.current.schedule?.events).toEqual([]);
+    expect(result.current.schedule?.source).toBeUndefined();
+  });
+
+  it("does not use an offline marine pack for freshwater", () => {
+    act(() => {
+      useOfflineStore.setState({ isOnline: false });
+      useEnvOfflineStore.setState({ envPack: makePack() });
+    });
+
+    const { result } = renderHook(() => useTidalSchedule(NEAR_LAT, NEAR_LON, 7, "freshwater"));
+
+    expect(result.current.schedule).toBeNull();
+    expect(result.current.isCachedPack).toBe(false);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
 });

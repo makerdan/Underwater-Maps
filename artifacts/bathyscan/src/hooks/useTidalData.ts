@@ -89,6 +89,7 @@ export function useTidalData(
   const [retryCount, setRetryCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isOnline = useOfflineStore((s) => s.isOnline);
+  const previousWaterTypeRef = useRef(waterType);
 
   const retry = useCallback(() => {
     setRetryCount((c) => c + 1);
@@ -106,6 +107,12 @@ export function useTidalData(
 
     let cancelled = false;
     let activeController: AbortController | null = null;
+    if (previousWaterTypeRef.current !== waterType) {
+      // A saltwater reading must not remain visible while a freshwater
+      // availability request is in flight (or vice versa).
+      setData(null);
+      previousWaterTypeRef.current = waterType;
+    }
 
     async function fetchTidal() {
       const currentLat = latRef.current;
@@ -132,7 +139,9 @@ export function useTidalData(
         if (controller.signal.aborted) return;
         // On network failure, try the offline pack
         if (!cancelled) {
-          const pack = await getPackForLocation(currentLat, currentLon).catch(() => null);
+          const pack = waterType === "freshwater"
+            ? null
+            : await getPackForLocation(currentLat, currentLon).catch(() => null);
           if (pack) {
             const dt = scrubDatetime ?? new Date();
             const packVal = getOfflineTideValue(pack, dt);
@@ -163,7 +172,9 @@ export function useTidalData(
     if (!isOnline) {
       void (async () => {
         setLoading(true);
-        const pack = await getPackForLocation(lat, lon).catch(() => null);
+        const pack = waterType === "freshwater"
+          ? null
+          : await getPackForLocation(lat, lon).catch(() => null);
         if (!cancelled) {
           if (pack) {
             const dt = scrubDatetime ?? new Date();
@@ -181,7 +192,9 @@ export function useTidalData(
             });
           } else {
             // Secondary fallback: env pack (broader coverage, no currents data)
-            const envPack = useEnvOfflineStore.getState().envPack;
+            const envPack = waterType === "freshwater"
+              ? null
+              : useEnvOfflineStore.getState().envPack;
             const isExpired = useEnvOfflineStore.getState().isExpired();
             const station = envPack && !isExpired ? getEnvPackTideStation(envPack) : null;
             if (station) {

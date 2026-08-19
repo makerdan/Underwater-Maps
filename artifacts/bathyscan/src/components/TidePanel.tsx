@@ -102,7 +102,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
     (s) => selectManualConditionsActiveSource(s)[datasetId],
   );
   const setManualConditionsActiveSource = useSettingsStore((s) => s.setManualConditionsActiveSource);
-  const { schedule, isError: scheduleError } = useTidalSchedule(lat, lon, 7);
+  const { schedule, isError: scheduleError } = useTidalSchedule(lat, lon, 7, waterType);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -150,7 +150,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   // Sorted slack event center-times across the full loaded window, used for
   // Prev/Next slack jump buttons.
   const slackTimesMs = useMemo(() => {
-    if (!schedule) return [] as number[];
+    if (!schedule || !schedule.available) return [] as number[];
     return schedule.events
       .map((e) => new Date(e.time).getTime())
       .filter((t) => Number.isFinite(t))
@@ -185,7 +185,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   // Bucket schedule events by day-offset for badge counts.
   const slackCountsByDay = useMemo(() => {
     const counts: Record<number, number> = {};
-    if (!schedule) return counts;
+    if (!schedule || !schedule.available) return counts;
     for (const e of schedule.events) {
       const t = new Date(e.time);
       const dayStart = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate());
@@ -199,7 +199,7 @@ export const TidePanel: React.FC<TidePanelProps> = ({
   // Slack windows that intersect the currently-selected day, projected
   // onto the 0–24h slider range as percentages.
   const slackBandsForSelectedDay = useMemo(() => {
-    if (!schedule) return [] as Array<{
+    if (!schedule || !schedule.available) return [] as Array<{
       leftPct: number;
       widthPct: number;
       centerPct: number;

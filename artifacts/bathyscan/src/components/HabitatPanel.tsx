@@ -281,7 +281,10 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
 
   const centerLat = terrain ? (terrain.minLat + terrain.maxLat) / 2 : null;
   const centerLon = terrain ? (terrain.minLon + terrain.maxLon) / 2 : null;
-  const { schedule } = useTidalSchedule(centerLat, centerLon, 3);
+  // Determine active water type from terrain (authoritative) or settings fallback
+  // before requesting the schedule so freshwater cannot use marine fallbacks.
+  const waterType = (terrain?.waterType as "saltwater" | "freshwater" | undefined) ?? settingsWaterType;
+  const { schedule } = useTidalSchedule(centerLat, centerLon, 3, waterType);
 
   const tidalPreference = activeSpecies
     ? (SPECIES_CONFIGS[activeSpecies]?.tidalPreference ?? "any")
@@ -310,8 +313,6 @@ export const HabitatPanel: React.FC<HabitatPanelProps> = ({ embedded = false }) 
   const qc = useQueryClient();
   const postMarkers = usePostMarkers();
 
-  // Determine active water type from terrain (authoritative) or settings fallback
-  const waterType = (terrain?.waterType as "saltwater" | "freshwater" | undefined) ?? settingsWaterType;
   const speciesIds: SpeciesId[] = waterType === "freshwater"
     ? (FRESHWATER_SPECIES_IDS as unknown as FreshwaterSpeciesId[])
     : (SALTWATER_SPECIES_IDS as unknown as SaltwaterSpeciesId[]);
