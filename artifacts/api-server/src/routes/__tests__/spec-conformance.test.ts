@@ -610,6 +610,10 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
       { users: [], nextCursor: null },
     ],
   },
+  AdminPendingCountResponse: {
+    schema: apiZod.AdminPendingCountResponse,
+    payloads: [{ count: 3 }, { count: 0 }],
+  },
   AdminApproveUserResponse: {
     schema: apiZod.AdminApproveUserResponse,
     payloads: [{ user: { ...USER_ACCESS_RECORD, status: "approved" } }],
@@ -625,10 +629,6 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
   AdminDeleteUserResponse: {
     schema: apiZod.AdminDeleteUserResponse,
     payloads: [{ deleted: true, clerkUserId: "user_2abc" }],
-  },
-  AdminPendingCountResponse: {
-    schema: apiZod.AdminPendingCountResponse,
-    payloads: [{ count: 0 }, { count: 3 }],
   },
   AdminLargeDatasetsDiffResponse: {
     schema: apiZod.AdminLargeDatasetsDiffResponse,
