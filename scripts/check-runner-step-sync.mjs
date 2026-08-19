@@ -20,6 +20,8 @@
  *      script such as post-merge.sh — unless allowlisted with a reason. This
  *      catches check files that exist only on disk and can go permanently
  *      unused with no warning.
+ *   4. Fresh-database E2E workflows must bootstrap from the Drizzle schema
+ *      instead of the migration journal, which cannot initialize an empty DB.
  *
  * Usage:
  *   node scripts/check-runner-step-sync.mjs
@@ -343,6 +345,35 @@ export function buildGithubWorkflowText(rootDir) {
     .join("\n");
 }
 
+/**
+ * Returns contract violations for fresh-database E2E workflow bootstrap.
+ * Both GitHub jobs create empty Postgres service containers, so their executable
+ * commands must use schema-derived push-force and must never invoke migrate.
+ */
+export function findE2eDatabaseBootstrapProblems(
+  prWorkflowSource,
+  mainWorkflowSource,
+) {
+  const required = "pnpm --filter @workspace/db run push-force";
+  const forbidden = "pnpm --filter @workspace/db run migrate";
+  const workflows = [
+    ["ci-e2e-pr.yml", extractGithubWorkflowRunText(prWorkflowSource)],
+    ["ci-e2e.yml", extractGithubWorkflowRunText(mainWorkflowSource)],
+  ];
+  const problems = [];
+
+  for (const [name, runText] of workflows) {
+    if (!runText.includes(required)) {
+      problems.push(`${name}: fresh database bootstrap must run push-force`);
+    }
+    if (runText.includes(forbidden)) {
+      problems.push(`${name}: fresh database bootstrap must not run migrate`);
+    }
+  }
+
+  return problems;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -385,6 +416,25 @@ function main() {
     console.error(
       "  Fix: add the portable command to a pull-request GitHub workflow and its token to\n" +
       "  GITHUB_CI_COVERAGE, OR add a substantive local-only exclusion reason there.",
+    );
+  }
+
+  const e2eBootstrapProblems = findE2eDatabaseBootstrapProblems(
+    readFileSync(
+      resolve(root, ".github", "workflows", "ci-e2e-pr.yml"),
+      "utf8",
+    ),
+    readFileSync(resolve(root, ".github", "workflows", "ci-e2e.yml"), "utf8"),
+  );
+  if (e2eBootstrapProblems.length > 0) {
+    failed = true;
+    console.error(
+      "[check-runner-step-sync] FAIL — E2E fresh-database bootstrap drifted:",
+    );
+    for (const problem of e2eBootstrapProblems) console.error(`  ${problem}`);
+    console.error(
+      "  Fix: initialize each empty Postgres service with `pnpm --filter @workspace/db run push-force`;\n" +
+        "  the migration journal cannot bootstrap a fresh database.",
     );
   }
 

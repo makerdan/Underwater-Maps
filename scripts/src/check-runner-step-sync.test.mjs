@@ -16,6 +16,7 @@ import {
   findGithubCiParityProblems,
   buildGithubWorkflowText,
   extractGithubWorkflowRunText,
+  findE2eDatabaseBootstrapProblems,
 } from "../check-runner-step-sync.mjs";
 import { getValidationSteps, getStepsForTier, KNOWN_TIERS } from "../validation-steps.mjs";
 
@@ -233,6 +234,47 @@ test("GitHub workflow text includes PR run commands and ignores main-only workfl
   assert.match(workflowText, /pnpm run check:runner-step-sync/);
   assert.match(workflowText, /pnpm run check:fixture-freshness/);
   assert.doesNotMatch(workflowText, /DIST_DIR=dist-e2e-\$\{E2E_API_PORT\}/);
+});
+
+test("fresh-database E2E workflows use schema push instead of migrations", () => {
+  const pushWorkflow = `
+    # pnpm --filter @workspace/db run migrate
+    - name: Create database schema
+      run: pnpm --filter @workspace/db run push-force
+  `;
+  const migrateWorkflow = `
+    - name: Run database migrations
+      run: pnpm --filter @workspace/db run migrate
+  `;
+
+  assert.deepEqual(
+    findE2eDatabaseBootstrapProblems(pushWorkflow, pushWorkflow),
+    [],
+  );
+  assert.deepEqual(
+    findE2eDatabaseBootstrapProblems(migrateWorkflow, pushWorkflow),
+    [
+      "ci-e2e-pr.yml: fresh database bootstrap must run push-force",
+      "ci-e2e-pr.yml: fresh database bootstrap must not run migrate",
+    ],
+  );
+});
+
+test("real E2E workflows preserve the fresh-database bootstrap contract", () => {
+  const workflowsDir = resolve(root, ".github", "workflows");
+  const prWorkflow = readFileSync(
+    resolve(workflowsDir, "ci-e2e-pr.yml"),
+    "utf8",
+  );
+  const mainWorkflow = readFileSync(
+    resolve(workflowsDir, "ci-e2e.yml"),
+    "utf8",
+  );
+
+  assert.deepEqual(
+    findE2eDatabaseBootstrapProblems(prWorkflow, mainWorkflow),
+    [],
+  );
 });
 
 // ---------------------------------------------------------------------------

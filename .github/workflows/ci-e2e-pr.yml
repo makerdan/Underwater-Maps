@@ -84,8 +84,16 @@ jobs:
       - name: Build shared libs (emit .d.ts for workspace packages)
         run: pnpm run typecheck:libs
 
-      - name: Run database migrations
-        run: pnpm --filter @workspace/db run migrate
+      # WHY push --force, not migrate:
+      #   The migration journal cannot bootstrap a fresh database:
+      #   0000_baseline.sql is an empty stub and the real schema baseline
+      #   is ordered after migrations that already reference its tables.
+      #   `drizzle-kit migrate` therefore exits 1 against this empty CI
+      #   service container, before Playwright can check API health.
+      #   `push --force` derives the required DDL directly from the Drizzle
+      #   schema, matching the main E2E workflow and local fresh-DB setup.
+      - name: Create database schema (drizzle-kit push)
+        run: pnpm --filter @workspace/db run push-force
 
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
