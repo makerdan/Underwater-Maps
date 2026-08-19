@@ -24,7 +24,7 @@ export function SliderRow({
   const fmt = format ?? ((v) => String(v));
   const inputId = `slider-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
-    <div style={S.row}>
+    <div style={S.row} className="bs-settings-row">
       <div>
         <label htmlFor={inputId} style={S.label}>{label}</label>
         {sublabel && <div style={S.sublabel}>{sublabel}</div>}
@@ -52,7 +52,7 @@ export function ToggleRow({
   label: string; value: boolean; onChange: (v: boolean) => void; sublabel?: string;
 }) {
   return (
-    <div style={S.row}>
+    <div style={S.row} className="bs-settings-row">
       <div>
         <div style={S.label}>{label}</div>
         {sublabel && <div style={S.sublabel}>{sublabel}</div>}
@@ -69,7 +69,7 @@ export function SelectRow<T extends string>({
   options: { value: T; label: string }[]; sublabel?: string;
 }) {
   return (
-    <div style={S.row}>
+    <div style={S.row} className="bs-settings-row">
       <div>
         <div style={S.label}>{label}</div>
         {sublabel && <div style={S.sublabel}>{sublabel}</div>}
@@ -83,7 +83,7 @@ export function ColorRow({
   label, value, onChange, sublabel,
 }: { label: string; value: string; onChange: (v: string) => void; sublabel?: string }) {
   return (
-    <div style={S.row}>
+    <div style={S.row} className="bs-settings-row">
       <div>
         <div style={S.label}>{label}</div>
         {sublabel && <div style={S.sublabel}>{sublabel}</div>}
@@ -167,7 +167,7 @@ export function ColormapSelectRow({
   const current = options.find((o) => o.value === value) ?? options[0]!;
 
   return (
-    <div style={S.row}>
+    <div style={S.row} className="bs-settings-row">
       <div>
         <div style={S.label}>{label}</div>
         {sublabel && <div style={S.sublabel}>{sublabel}</div>}

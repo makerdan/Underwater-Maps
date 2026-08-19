@@ -52,7 +52,7 @@ export function NavigationSection() {
       <SectionActionsRow sections={["camera", "shortcuts"]} />
       <div style={S.card}>
         <div style={S.cardHeader}>BASICS</div>
-        <div style={S.row}>
+        <div style={S.row} className="bs-settings-row">
           <div>
             <div style={S.label}>Default Speed Tier</div>
             <div style={S.sublabel}>0 = slowest, 4 = fastest</div>

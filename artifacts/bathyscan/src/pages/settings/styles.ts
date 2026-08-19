@@ -30,6 +30,7 @@ export const S = {
     maxWidth: 960,
     margin: "0 auto",
     width: "100%",
+    minWidth: 0,
     gap: 0,
   } as React.CSSProperties,
 
@@ -38,11 +39,14 @@ export const S = {
     flexShrink: 0,
     borderRight: "1px solid var(--bs-s-border, rgba(0,229,255,0.1))",
     padding: "20px 0 25vh 0",
+    boxSizing: "border-box",
   } as React.CSSProperties,
 
   content: {
     flex: 1,
     padding: "24px 28px",
+    minWidth: 0,
+    boxSizing: "border-box",
     overflowY: "auto" as const,
     maxHeight: "calc(100dvh - 41px)",
   } as React.CSSProperties,
@@ -119,6 +123,7 @@ export const S = {
     borderBottom: "1px solid var(--bs-s-row-border, rgba(0,229,255,0.05))",
     fontSize: "calc(11px * var(--bs-font-scale, 1))",
     gap: 12,
+    minWidth: 0,
   } as React.CSSProperties,
 
   label: {
@@ -151,6 +156,21 @@ export const S = {
     width: 120,
   } as React.CSSProperties,
 
+  toggleTarget: {
+    position: "relative",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 44,
+    height: 44,
+    padding: 0,
+    background: "transparent",
+    border: "none",
+    color: "inherit",
+    cursor: "pointer",
+    flexShrink: 0,
+  } as React.CSSProperties,
+
   toggle: (on: boolean): React.CSSProperties => ({
     position: "relative",
     display: "inline-block",
@@ -163,7 +183,6 @@ export const S = {
       ? "1px solid var(--bs-s-toggle-on-border, rgba(0,229,255,0.5))"
       : "1px solid var(--bs-s-toggle-off-border, rgba(0,229,255,0.15))",
     borderRadius: 10,
-    cursor: "pointer",
     flexShrink: 0,
     transition: "background 0.15s, border-color 0.15s",
   }),

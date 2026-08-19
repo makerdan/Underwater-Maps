@@ -61,7 +61,7 @@ export function KeyBindingCapture({
     // Malformed or stale action id (e.g. persisted state from a newer build).
     // Render a safe fallback row instead of crashing the settings page.
     return (
-      <div style={S.row} data-testid={`shortcut-unknown-${action}`}>
+      <div style={S.row} className="bs-settings-row" data-testid={`shortcut-unknown-${action}`}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={S.label}>Unknown action</div>
           <div style={S.sublabel}>
@@ -73,7 +73,7 @@ export function KeyBindingCapture({
   }
 
   return (
-    <div style={S.row}>
+    <div style={S.row} className="bs-settings-row">
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={S.label}>{def.label}</div>
         <div style={S.sublabel}>{def.description}</div>
@@ -219,7 +219,7 @@ export function CrosshairMenuGamepadCapture() {
   }, [capturing, setValue]);
 
   return (
-    <div style={S.row}>
+    <div style={S.row} className="bs-settings-row">
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={S.label}>Gamepad button</div>
         <div style={S.sublabel}>

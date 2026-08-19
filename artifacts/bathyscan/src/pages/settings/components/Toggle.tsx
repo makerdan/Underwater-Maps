@@ -3,17 +3,18 @@ import { S } from "../styles";
 
 export function Toggle({ value, onChange, "aria-label": ariaLabel }: { value: boolean; onChange: (v: boolean) => void; "aria-label"?: string }) {
   return (
-    <div
+    <button
+      type="button"
       role="switch"
       aria-checked={value}
       aria-label={ariaLabel}
       onClick={() => onChange(!value)}
-      style={S.toggle(value)}
-      tabIndex={0}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onChange(!value)}
+      style={S.toggleTarget}
     >
-      <div style={S.toggleKnob(value)} />
-    </div>
+      <span aria-hidden="true" style={S.toggle(value)}>
+        <span style={S.toggleKnob(value)} />
+      </span>
+    </button>
   );
 }
 

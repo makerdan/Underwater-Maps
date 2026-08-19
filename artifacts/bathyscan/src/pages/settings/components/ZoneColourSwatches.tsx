@@ -132,6 +132,7 @@ export function ZoneColourSwatches() {
             key={i}
             data-testid={`settings-zone-row-${i}`}
             style={{ ...S.row }}
+            className="bs-settings-row bs-settings-zone-row"
           >
             <Toggle
               value={visible}

@@ -408,11 +408,28 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
 
   /* ── Settings page: stack sidebar above content ─────────────────────────── */
 
+  .bs-settings-page {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   /* Topbar: allow wrapping so BACK / SETTINGS / actions don't collide */
   .bs-settings-topbar {
     flex-wrap: wrap;
     gap: 8px !important;
     padding: 8px 12px !important;
+  }
+  .bs-settings-topbar > button {
+    min-height: 44px !important;
+    flex-shrink: 0;
+  }
+  .bs-settings-topbar-actions {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px !important;
   }
 
   /* Hide schema version number — saves space on narrow topbar */
@@ -423,18 +440,43 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
   /* Stack sidebar on top of content instead of beside it */
   .bs-settings-layout {
     flex-direction: column !important;
+    width: 100%;
   }
 
-  /* Sidebar becomes a horizontal scrollable tab strip */
+  /* Sidebar becomes a wrapping two-column tab grid. Every section remains
+     reachable without making the page itself horizontally scroll. */
   .bs-settings-sidebar {
     width: 100% !important;
     border-right: none !important;
     border-bottom: 1px solid rgba(0, 229, 255, 0.1);
     padding: 6px 0 !important;
-    display: flex !important;
-    flex-direction: row !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+  }
+  .bs-settings-sidebar button {
+    min-width: 0 !important;
+    min-height: 44px !important;
+    width: 100%;
+    padding: 8px 10px;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .bs-settings-row {
     flex-wrap: wrap;
-    overflow-x: auto;
+    align-items: flex-start;
+  }
+  .bs-settings-row > :first-child {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+  .bs-settings-row > :last-child {
+    flex: 0 1 auto;
+    max-width: 100%;
+  }
+  .bs-settings-zone-row > :first-child {
+    flex: 0 0 auto;
   }
 
   /* Content area: no fixed height cap on mobile — page itself scrolls */
@@ -442,6 +484,16 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
     padding: 16px !important;
     max-height: none !important;
     overflow-y: visible !important;
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  .bs-settings-page [role="switch"]:focus-visible,
+  .bs-settings-page button:focus-visible,
+  .bs-settings-page select:focus-visible,
+  .bs-settings-page input:focus-visible {
+    outline: 2px solid var(--bs-s-accent, #00e5ff);
+    outline-offset: 2px;
   }
 }
 

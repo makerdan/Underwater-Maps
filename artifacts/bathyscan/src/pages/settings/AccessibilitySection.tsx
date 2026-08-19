@@ -26,7 +26,7 @@ export function AccessibilitySection() {
           onChange={s.setColorBlindSafePalette}
           sublabel="Switch markers to a high-contrast palette"
         />
-        <div style={S.row}>
+        <div style={S.row} className="bs-settings-row">
           <div>
             <label htmlFor="settings-text-size-select" style={S.label}>Text Size</label>
             <div style={S.sublabel}>Scales all panel and HUD text</div>

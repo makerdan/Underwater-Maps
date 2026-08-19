@@ -62,7 +62,7 @@ function DatumOverrideRow({
           : "No tide station selected — load a dataset to resolve one, or enter a value manually.";
 
   return (
-    <div style={S.row}>
+    <div style={S.row} className="bs-settings-row">
       <div>
         <div style={S.label}>{label}</div>
         <div style={S.sublabel} data-testid={`${testId}-sublabel`}>{sublabel}</div>
@@ -240,7 +240,7 @@ export function VisualsSection() {
           sublabel="Floating particles around the camera"
         />
         {s.enableMarineSnow && (
-          <div style={{ ...S.row, paddingLeft: 28, background: "rgba(0,229,255,0.02)" }}>
+          <div className="bs-settings-row" style={{ ...S.row, paddingLeft: 28, background: "rgba(0,229,255,0.02)" }}>
             <div>
               <div style={S.label}>Marine Snow Density</div>
             </div>

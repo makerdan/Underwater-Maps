@@ -306,7 +306,11 @@ export function Settings() {
             >
               <span>SHOW ADVANCED</span>
               <span data-testid="show-advanced-toggle">
-                <Toggle value={showAdvancedEverywhere} onChange={setShowAdvancedEverywhere} />
+                <Toggle
+                  value={showAdvancedEverywhere}
+                  onChange={setShowAdvancedEverywhere}
+                  aria-label="Show advanced settings"
+                />
               </span>
             </label>
             {savedMsg && (
@@ -492,6 +496,7 @@ export function Settings() {
                 data-nav-active={activeTab === t.id ? "true" : "false"}
                 data-testid={`settings-nav-${t.id}`}
                 aria-current={activeTab === t.id ? "page" : undefined}
+                type="button"
               >
                 {t.label}
               </button>

@@ -130,7 +130,7 @@ export function DisplayOverlaysSection() {
       <AdvancedDisclosure testId="habitat-advanced">
         <div style={S.card}>
           <h3 style={S.cardHeader}>HABITAT DEFAULTS</h3>
-          <div style={S.row}>
+          <div style={S.row} className="bs-settings-row">
             <div>
               <label htmlFor="settings-default-species-input" style={S.label}>Default Species</label>
               <div style={S.sublabel}>Pre-fills the habitat species filter</div>

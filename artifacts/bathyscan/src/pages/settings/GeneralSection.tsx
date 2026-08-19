@@ -30,7 +30,7 @@ export function GeneralSection() {
       <SectionActionsRow sections={["environment", "hud", "data"]} withReset={false} />
       {/* Environment card */}
       <div style={S.card}>
-        <div style={S.row}>
+        <div style={S.row} className="bs-settings-row">
           <div>
             <div style={S.label}>Exploration Mode</div>
             <div style={S.sublabel}>
@@ -119,7 +119,7 @@ export function GeneralSection() {
       {/* Startup Defaults card */}
       <div style={S.card}>
         <div style={S.cardHeader}>STARTUP DEFAULTS</div>
-        <div style={S.row}>
+        <div style={S.row} className="bs-settings-row">
           <div>
             <div style={S.label}>Default Map Load</div>
             <div style={S.sublabel}>Dataset that opens automatically on every launch</div>
@@ -132,7 +132,7 @@ export function GeneralSection() {
         {/* No bundled preset regions exist yet, so show a plain note instead
             of a single-option (non-functional) selector. Restore a SelectRow
             here once bundled regions ship. */}
-        <div style={{ ...S.row, borderBottom: "none" }}>
+        <div className="bs-settings-row" style={{ ...S.row, borderBottom: "none" }}>
           <div>
             <div style={S.label}>Default Region</div>
             <p style={{ ...S.sublabel, margin: "2px 0 0" }} data-testid="default-region-note">
@@ -146,7 +146,7 @@ export function GeneralSection() {
           (e2e contract: replay-tour-btn lives in the GENERAL tab). */}
       <div style={S.card}>
         <div style={S.cardHeader}>GUIDED TOUR</div>
-        <div style={S.row}>
+        <div style={S.row} className="bs-settings-row">
           <div>
             <div style={S.label}>Replay App Tour</div>
             <div style={S.sublabel}>Reset the onboarding tour and restart it from the beginning</div>
@@ -172,7 +172,7 @@ export function GeneralSection() {
             ▶ REPLAY TOUR
           </button>
         </div>
-        <div style={{ ...S.row, borderBottom: "none" }}>
+        <div className="bs-settings-row" style={{ ...S.row, borderBottom: "none" }}>
           <div>
             <div style={S.label}>Tour status</div>
             <div style={S.sublabel}>

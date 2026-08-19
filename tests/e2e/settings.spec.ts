@@ -389,6 +389,56 @@ test.describe("Settings page", () => {
     await expect(sw).toHaveAttribute("aria-checked", "false");
   });
 
+  for (const width of [375, 390]) {
+    test(`narrow Settings layout has no page overflow at ${width}px and keeps controls reachable`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 812 });
+      await page.goto("/settings");
+      await page.waitForLoadState("domcontentloaded");
+
+      await expect(page.getByTestId("settings-nav-chart-map")).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId("settings-back-btn")).toBeVisible();
+      await expect(page.getByLabel("Show advanced settings")).toBeVisible();
+
+      const dimensions = await page.evaluate(() => ({
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+        settingsWidth: document.querySelector(".bs-settings-page")?.getBoundingClientRect().width ?? 0,
+      }));
+      expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+      expect(dimensions.settingsWidth).toBeLessThanOrEqual(width + 1);
+
+      const lastTab = page.getByTestId("settings-nav-account");
+      await lastTab.scrollIntoViewIfNeeded();
+      await lastTab.focus();
+      await expect(lastTab).toBeFocused();
+      await lastTab.press("Enter");
+      await expect(page.locator("text=◈ ACCOUNT").first()).toBeVisible();
+
+      const advancedSwitch = page.getByRole("switch", { name: "Show advanced settings" });
+      const advancedInitial = await advancedSwitch.getAttribute("aria-checked");
+      await advancedSwitch.focus();
+      await advancedSwitch.press("Space");
+      await expect(advancedSwitch).toHaveAttribute(
+        "aria-checked",
+        advancedInitial === "true" ? "false" : "true",
+      );
+
+      await page.getByTestId("settings-nav-visuals").press("Enter");
+      const causticsSwitch = page.getByRole("switch", { name: "Caustics Effect" });
+      await expect(causticsSwitch).toBeVisible();
+      const switchBox = await causticsSwitch.boundingBox();
+      expect(switchBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+      expect(switchBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+      const initial = await causticsSwitch.getAttribute("aria-checked");
+      await causticsSwitch.focus();
+      await causticsSwitch.press("Space");
+      await expect(causticsSwitch).toHaveAttribute(
+        "aria-checked",
+        initial === "true" ? "false" : "true",
+      );
+    });
+  }
+
   test("comma keyboard shortcut navigates to /settings from the main page", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
