@@ -288,6 +288,7 @@ Every new sign-in is held as **pending** until an admin approves it (`requireApp
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/datasets/upload` | Upload an XYZ or CSV file and persist it to the user's dataset library |
+| POST | `/datasets/upload/start` | Start a resumable chunked dataset upload |
 | POST | `/datasets/upload/chunk` | Upload one chunk of a large dataset file |
 | GET | `/datasets/upload/chunk/status/:uploadId` | List which chunk indices have been received for an upload session |
 | POST | `/datasets/upload/chunk/finalize` | Finalize a chunked upload and start processing |
