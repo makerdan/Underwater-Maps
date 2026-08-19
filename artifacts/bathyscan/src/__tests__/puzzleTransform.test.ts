@@ -172,6 +172,18 @@ describe("applyGeoCorrectionToGrid", () => {
     expect(withZero).toEqual(without);
   });
 
+  it("uses the saved heading as a secondary group Y rotation while zero stays identity (Regression Guard)", () => {
+    const primary = makeGrid("primary", { minLon: -99.5, maxLon: -96.5, minLat: 30.5, maxLat: 33.5 });
+    const identity = computeSecondaryMeshTransform(primary, grid, { angleDeg: 0 });
+    const rotated = computeSecondaryMeshTransform(primary, grid, { angleDeg: 90 });
+
+    // The heading is the only changed part of the shared terrain/marker group
+    // transform, so rotation cannot alter the established placement or scale.
+    expect({ ...rotated, rotationY: 0 }).toEqual(identity);
+    expect(identity.rotationY).toBe(0);
+    expect(rotated.rotationY).toBeCloseTo(Math.PI / 2, 12);
+  });
+
   it("shifts the bbox copy by the delta and never mutates the input grid", () => {
     const before = { minLon: grid.minLon, maxLon: grid.maxLon, minLat: grid.minLat, maxLat: grid.maxLat };
     const shifted = applyGeoCorrectionToGrid(grid, { dLon: 0.5, dLat: -0.25 });

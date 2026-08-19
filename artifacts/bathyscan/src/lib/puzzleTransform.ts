@@ -95,8 +95,8 @@ export function tileCenterLonLat(og: {
 /**
  * Geographic correction for one dataset, derived from its saved puzzle-tile
  * transform. `dLon`/`dLat` shift the dataset's effective 3D render origin;
- * `angleDeg` is retained as a heading offset (meshes are NOT rotated in world
- * space — rotation rendering is a separate future task).
+ * `angleDeg` is retained as a heading offset for secondary mesh and
+ * marker-group rotation.
  */
 export interface GeoCorrection {
   dLon: number;

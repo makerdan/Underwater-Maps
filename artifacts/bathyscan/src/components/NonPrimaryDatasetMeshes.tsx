@@ -160,8 +160,9 @@ export function computeSecondaryYAlignment(
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the full group transform { cx, cy, cz, xScale, yScale, zScale }
- * for a secondary dataset mesh relative to the primary.
+ * Compute the full group transform
+ * { cx, cy, cz, xScale, yScale, zScale, rotationY } for a secondary dataset
+ * mesh relative to the primary.
  *
  * Exported so MarkerLayer can apply the EXACT same transform to the secondary
  * dataset's marker group, ensuring markers sit on top of their terrain tile.
@@ -176,7 +177,16 @@ export function computeSecondaryYAlignment(
 export function computeSecondaryMeshTransform(
   primary: TerrainData,
   secondary: TerrainData,
-): { cx: number; cy: number; cz: number; xScale: number; yScale: number; zScale: number } {
+  geoCorrection?: Pick<GeoCorrection, "angleDeg"> | null,
+): {
+  cx: number;
+  cy: number;
+  cz: number;
+  xScale: number;
+  yScale: number;
+  zScale: number;
+  rotationY: number;
+} {
   const primaryLonRange = lonSpan(primary.minLon, primary.maxLon) || 1;
   const primaryLatRange = (primary.maxLat - primary.minLat) || 1;
   const primaryDepthRange = (primary.maxDepth - primary.minDepth) || 1;
@@ -205,8 +215,12 @@ export function computeSecondaryMeshTransform(
   const { yScale, cy } = computeSecondaryYAlignment(
     secDepthRange, primaryDepthRange, primary.minDepth, secondary.minDepth,
   );
+  // Puzzle angles rotate clockwise in the Overview Map's Y-down coordinates.
+  // A positive Three.js Y rotation maps local +X toward world -Z (south), so
+  // the same positive angle preserves the tile's 2D orientation in 3D.
+  const rotationY = ((geoCorrection?.angleDeg ?? 0) * Math.PI) / 180;
 
-  return { cx, cy, cz, xScale, yScale, zScale };
+  return { cx, cy, cz, xScale, yScale, zScale, rotationY };
 }
 
 // ---------------------------------------------------------------------------
@@ -283,9 +297,10 @@ export const NonPrimaryDatasetMeshes: React.FC<NonPrimaryDatasetMeshesProps> = (
           // the exact same group transform to secondary-dataset markers,
           // keeping them co-located with their mesh tiles. Placement uses the
           // geo-corrected bboxes; the mesh itself renders the ORIGINAL grid.
-          const { cx, cy, cz, xScale, yScale, zScale } = computeSecondaryMeshTransform(
+          const { cx, cy, cz, xScale, yScale, zScale, rotationY } = computeSecondaryMeshTransform(
             effectivePrimary,
             applyGeoCorrectionToGrid(g, v.geoCorrection),
+            v.geoCorrection,
           );
 
           // Multi-primary: tidal overlay for this secondary dataset (if data available)
@@ -296,6 +311,7 @@ export const NonPrimaryDatasetMeshes: React.FC<NonPrimaryDatasetMeshesProps> = (
               key={v.datasetId}
               name={v.datasetId}
               position={[cx, cy, cz]}
+              rotation={[0, rotationY, 0]}
               scale={[xScale, yScale, zScale]}
             >
               <TerrainMesh grid={g} depthBias />

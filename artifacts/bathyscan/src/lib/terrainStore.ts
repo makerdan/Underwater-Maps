@@ -58,9 +58,9 @@ export interface VisibleDataset {
   /**
    * Optional geographic correction from an applied special-collection puzzle
    * layout (Apply-to-3D). When present, the 3D scene shifts this dataset's
-   * effective render origin by {dLon, dLat}; `angleDeg` is retained as a
-   * heading offset only. The stored grids (activeGrid/overviewGrid bboxes)
-   * are NEVER mutated — the correction applies to scene placement only.
+   * effective render origin by {dLon, dLat} and rotates secondary meshes around
+   * their centres by `angleDeg`. The stored grids (activeGrid/overviewGrid
+   * bboxes) are NEVER mutated — the correction applies to scene placement only.
    */
   geoCorrection?: GeoCorrection | null;
 }

@@ -154,6 +154,8 @@ interface DatasetMarkerGroup {
   grid: TerrainData;
   /** Primary world-space translation [cx, cy, cz] for the group. Primary = [0,0,0]. */
   position: [number, number, number];
+  /** Y-axis rotation in radians. Primary = [0,0,0]. */
+  rotation: [number, number, number];
   /** Scale [xScale, yScale, zScale]. Primary = [1,1,1]. */
   scale: [number, number, number];
 }
@@ -199,17 +201,20 @@ export const MarkerLayer: React.FC = () => {
         map.set(v.datasetId, {
           grid: v.activeGrid,
           position: [0, 0, 0],
+          rotation: [0, 0, 0],
           scale: [1, 1, 1],
         });
       } else {
         // Secondary: use the same transform as the mesh so markers co-locate.
-        const { cx, cy, cz, xScale, yScale, zScale } = computeSecondaryMeshTransform(
+        const { cx, cy, cz, xScale, yScale, zScale, rotationY } = computeSecondaryMeshTransform(
           effectivePrimary,
           applyGeoCorrectionToGrid(v.activeGrid, v.geoCorrection),
+          v.geoCorrection,
         );
         map.set(v.datasetId, {
           grid: v.activeGrid,
           position: [cx, cy, cz],
+          rotation: [0, rotationY, 0],
           scale: [xScale, yScale, zScale],
         });
       }
@@ -346,7 +351,13 @@ export const MarkerLayer: React.FC = () => {
       {Array.from(byDataset.entries()).map(([datasetId, dsMarkers]) => {
         const dg = datasetGroups.get(datasetId)!;
         return (
-          <group key={datasetId} name={`marker-group-${datasetId}`} position={dg.position} scale={dg.scale}>
+          <group
+            key={datasetId}
+            name={`marker-group-${datasetId}`}
+            position={dg.position}
+            rotation={dg.rotation}
+            scale={dg.scale}
+          >
             {dsMarkers.map((m) => (
               <MarkerSprite
                 key={m.id}
