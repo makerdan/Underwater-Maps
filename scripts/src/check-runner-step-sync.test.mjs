@@ -17,6 +17,12 @@ import {
   buildGithubWorkflowText,
   extractGithubWorkflowRunText,
   findE2eDatabaseBootstrapProblems,
+  isSupportedLocalOnlyExclusion,
+  getGithubWorkflowScopes,
+  readGithubWorkflowRuns,
+  findRedundantStandaloneSuiteRuns,
+  findSuiteOverlapExclusionProblems,
+  GITHUB_SUITE_OVERLAP_EXCLUSIONS,
 } from "../check-runner-step-sync.mjs";
 import { getValidationSteps, getStepsForTier, KNOWN_TIERS } from "../validation-steps.mjs";
 
@@ -181,7 +187,7 @@ test("GitHub parity flags a canonical step with no coverage declaration", () => 
 
 test("GitHub parity flags a missing workflow token and invalid exclusion contract", () => {
   const missingToken = findGithubCiParityProblems(
-    [{ name: "check:portable" }],
+    [{ name: "check:portable", cmd: "pnpm run check:portable" }],
     "pnpm run something-else",
     { "check:portable": { tokens: ["pnpm run check:portable"] } },
   );
@@ -201,16 +207,130 @@ test("GitHub parity flags a missing workflow token and invalid exclusion contrac
   );
 });
 
+test("GitHub parity binds tokens to the canonical command or a documented equivalent", () => {
+  const unrelated = findGithubCiParityProblems(
+    [{ name: "check:new", cmd: "pnpm run check:new" }],
+    "pnpm run lint",
+    { "check:new": { tokens: ["pnpm run lint"] } },
+  );
+  assert.deepEqual(
+    unrelated,
+    ["check:new: workflow tokens must include the canonical command or use a mechanically verified composite/suite equivalent"],
+  );
+
+  const equivalent = findGithubCiParityProblems(
+    [{ name: "check:new", cmd: "pnpm run check:new" }],
+    "pnpm run verify",
+    {
+      "check:new": {
+        tokens: ["pnpm run verify"],
+        compositeScript: "verify",
+      },
+    },
+    {
+      verify: "pnpm run lint && pnpm run check:new",
+    },
+  );
+  assert.deepEqual(equivalent, []);
+
+  const lyingEquivalent = findGithubCiParityProblems(
+    [{ name: "check:new", cmd: "pnpm run check:new" }],
+    "pnpm run verify",
+    {
+      "check:new": {
+        tokens: ["pnpm run verify"],
+        compositeScript: "verify",
+      },
+    },
+    {
+      verify: "pnpm run lint",
+    },
+  );
+  assert.deepEqual(
+    lyingEquivalent,
+    ["check:new: workflow tokens must include the canonical command or use a mechanically verified composite/suite equivalent"],
+  );
+});
+
+test("GitHub parity only accepts executable command positions, not comments or echo arguments", () => {
+  const coverage = { "check:portable": { tokens: ["pnpm run check:portable"] } };
+  assert.deepEqual(
+    findGithubCiParityProblems(
+      [{ name: "check:portable", cmd: "pnpm run check:portable" }],
+      "echo ok # pnpm run check:portable\necho 'pnpm run check:portable'",
+      coverage,
+    ),
+    ['check:portable: GitHub workflow token missing: "pnpm run check:portable"'],
+  );
+  assert.deepEqual(
+    findGithubCiParityProblems(
+      [{ name: "check:portable", cmd: "pnpm run check:portable" }],
+      "CI=true pnpm run check:portable --flag",
+      coverage,
+    ),
+    [],
+  );
+});
+
 test("GitHub parity flags stale declarations and accepts documented local-only exclusions", () => {
   const problems = findGithubCiParityProblems(
     [{ name: "check:local-only" }],
     "",
     {
-      "check:local-only": { excluded: "Requires Agent-local state that GitHub Actions cannot reproduce safely." },
+      "check:local-only": {
+        excluded: "Requires Agent-local state that GitHub Actions cannot reproduce safely.",
+        dependency: "replit-state",
+        canonicalCommand: "pnpm run check:local-only",
+      },
       "check:removed": { excluded: "This old entry no longer corresponds to a canonical validation step." },
     },
   );
   assert.deepEqual(problems, ["check:removed: stale GitHub CI coverage entry"]);
+});
+
+test("GitHub parity requires local-only exclusions to name a supported environment dependency", () => {
+  assert.equal(
+    isSupportedLocalOnlyExclusion({
+      excluded: "Requires Replit state that is unavailable in GitHub Actions.",
+    }),
+    false,
+  );
+  assert.equal(
+    isSupportedLocalOnlyExclusion({
+      excluded: "Requires Agent task-plan context in gitignored .local/tasks data.",
+      dependency: "task-plan-context",
+    }),
+    true,
+  );
+
+  const problems = findGithubCiParityProblems(
+    [{ name: "check:local-only" }],
+    "",
+    {
+      "check:local-only": {
+        excluded: "This is intentionally local only and has enough words.",
+        dependency: "not-a-supported-category",
+      },
+    },
+  );
+  assert.match(problems[0], /supported dependency category/);
+});
+
+test("GitHub parity flags an exclusion that becomes unnecessary when its command reaches PR CI", () => {
+  const problems = findGithubCiParityProblems(
+    [{ name: "check:local-only", cmd: "pnpm run check:local-only" }],
+    "pnpm run check:local-only",
+    {
+      "check:local-only": {
+        excluded: "Requires Replit validation-lock state that GitHub normally lacks.",
+        dependency: "replit-state",
+      },
+    },
+  );
+  assert.deepEqual(
+    problems,
+    ["check:local-only: stale local-only exclusion — its canonical command now runs in a pull-request workflow"],
+  );
 });
 
 test("GitHub workflow extraction counts run commands but not comments or step names", () => {
@@ -222,11 +342,19 @@ test("GitHub workflow extraction counts run commands but not comments or step na
       run: >-
         pnpm run check:block
         --flag
+        # pnpm run check:block-comment
+    - name: Inline comment
+      run: echo ok # pnpm run check:inline-comment
+    - name: Quoted hash
+      run: echo "keep # as data"
   `);
   assert.match(runText, /pnpm run check:scalar/);
   assert.match(runText, /pnpm run check:block/);
   assert.doesNotMatch(runText, /comment-only/);
   assert.doesNotMatch(runText, /name-only/);
+  assert.doesNotMatch(runText, /block-comment/);
+  assert.doesNotMatch(runText, /inline-comment/);
+  assert.match(runText, /keep # as data/);
 });
 
 test("GitHub workflow text includes PR run commands and ignores main-only workflows", () => {
@@ -260,6 +388,69 @@ test("fresh-database E2E workflows use schema push instead of migrations", () =>
   );
 });
 
+test("workflow scopes separate pull-request and push commands", () => {
+  assert.deepEqual(
+    getGithubWorkflowScopes("on:\n  pull_request:\n  push:\n    branches: [main]\n"),
+    ["pull-request", "push"],
+  );
+  assert.deepEqual(
+    getGithubWorkflowScopes("on: [push, pull_request]\n"),
+    ["pull-request", "push"],
+  );
+  assert.deepEqual(
+    getGithubWorkflowScopes('"on": pull_request_target\n'),
+    ["pull-request"],
+  );
+  assert.deepEqual(
+    getGithubWorkflowScopes("on:\n  workflow_dispatch: # pull_request\n"),
+    [],
+  );
+  assert.deepEqual(getGithubWorkflowScopes("on:\n  workflow_dispatch:\n"), []);
+});
+
+test("workflow reader returns only executable run commands", () => {
+  const workflows = readGithubWorkflowRuns(root);
+  const prWorkflow = workflows.find((workflow) => workflow.file === "ci-pr.yml");
+  assert.ok(prWorkflow);
+  assert.ok(prWorkflow.scopes.includes("pull-request"));
+  assert.ok(prWorkflow.commands.includes("pnpm run check:runner-step-sync"));
+  assert.ok(!prWorkflow.commands.some((command) => command.includes("Static checks + unit suites")));
+});
+
+// ---------------------------------------------------------------------------
+// Behavioral suite routing — targeted runs may not duplicate discovery
+// ---------------------------------------------------------------------------
+
+test("duplicate targeted unit and browser runs are flagged within the same event scope", () => {
+  const problems = findRedundantStandaloneSuiteRuns([
+    {
+      file: "ci.yml",
+      scopes: ["pull-request"],
+      commands: [
+        "pnpm exec vitest run --shard=1/2",
+        "pnpm exec vitest run artifacts/api-server/src/foo.test.ts",
+        "pnpm --filter @workspace/api-server run test:unit -- src/bar.test.ts",
+        "pnpm exec vitest run --grep focused-case",
+        "pnpm exec vitest run --project api-server",
+        "pnpm exec playwright test",
+        'npx playwright test "tests/e2e/foo.spec.ts"',
+        "pnpm exec playwright test --grep focused-case",
+      ],
+    },
+  ], []);
+  assert.deepEqual(
+    problems.map((problem) => `${problem.suite}:${problem.command}`),
+    [
+      "unit:pnpm exec vitest run artifacts/api-server/src/foo.test.ts",
+      "unit:pnpm --filter @workspace/api-server run test:unit -- src/bar.test.ts",
+      "unit:pnpm exec vitest run --grep focused-case",
+      "unit:pnpm exec vitest run --project api-server",
+      'browser:npx playwright test "tests/e2e/foo.spec.ts"',
+      "browser:pnpm exec playwright test --grep focused-case",
+    ],
+  );
+});
+
 test("real E2E workflows preserve the fresh-database bootstrap contract", () => {
   const workflowsDir = resolve(root, ".github", "workflows");
   const prWorkflow = readFileSync(
@@ -274,6 +465,56 @@ test("real E2E workflows preserve the fresh-database bootstrap contract", () => 
   assert.deepEqual(
     findE2eDatabaseBootstrapProblems(prWorkflow, mainWorkflow),
     [],
+  );
+});
+
+test("targeted suites on a different event scope do not count as duplicates", () => {
+  const problems = findRedundantStandaloneSuiteRuns([
+    { file: "main.yml", scopes: ["push"], commands: ["pnpm exec playwright test"] },
+    {
+      file: "pr.yml",
+      scopes: ["pull-request"],
+      commands: ["pnpm exec playwright test tests/e2e/smoke.spec.ts"],
+    },
+  ], []);
+  assert.deepEqual(problems, []);
+});
+
+test("a recorded overlap is accepted and stale or malformed declarations are flagged", () => {
+  const workflows = [{
+    file: "ci-e2e.yml",
+    scopes: ["push"],
+    commands: [
+      "pnpm exec playwright test",
+      "pnpm exec playwright test tests/e2e/palette-cross-device-sync.spec.ts",
+    ],
+  }];
+  const exclusion = [{
+    workflow: "ci-e2e.yml",
+    scope: "push",
+    command: "pnpm exec playwright test tests/e2e/palette-cross-device-sync.spec.ts",
+    reason: "Uses dedicated ports and test identity to preserve sync-isolation coverage.",
+  }];
+
+  assert.deepEqual(findRedundantStandaloneSuiteRuns(workflows, exclusion), []);
+  assert.deepEqual(findSuiteOverlapExclusionProblems(workflows, exclusion), []);
+  assert.deepEqual(
+    findSuiteOverlapExclusionProblems(workflows, [{
+      workflow: "ci-e2e.yml",
+      scope: "push",
+      command: "pnpm exec playwright test tests/e2e/removed.spec.ts",
+      reason: "This recorded command no longer exists in the real workflow.",
+    }]),
+    ["ci-e2e.yml (push): stale suite-overlap exclusion for exact command"],
+  );
+  assert.deepEqual(
+    findSuiteOverlapExclusionProblems(workflows, [{
+      workflow: "ci-e2e.yml",
+      scope: "push",
+      command: "x",
+      reason: "short",
+    }]),
+    ["malformed suite-overlap exclusion (workflow, scope, exact command, and substantive reason are required)"],
   );
 });
 
@@ -292,6 +533,12 @@ test("an allowlisted orphan check file is not flagged", () => {
     "check-manual.mjs": "manual-only tooling",
   });
   assert.deepEqual(orphans, []);
+});
+
+test("GitHub workflow references count as non-orphaned check-file references", () => {
+  const refText = buildReferenceText(root, resolve(root, "scripts"));
+  assert.match(refText, /check:runner-step-sync/);
+  assert.deepEqual(findOrphanCheckFiles(["check-runner-step-sync.mjs"], refText, {}), []);
 });
 
 test("stale orphan allowlist entries are flagged (deleted file or now referenced)", () => {
@@ -318,15 +565,30 @@ test("all check:* scripts in package.json are covered by the shared step list or
 
 test("every canonical validation step has portable GitHub coverage or a documented local-only exclusion", () => {
   const workflowText = buildGithubWorkflowText(root);
+  const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
   assert.ok(workflowText.length > 0, "expected GitHub PR workflow run commands");
   assert.deepEqual(
-    findGithubCiParityProblems(getValidationSteps("test"), workflowText),
+    findGithubCiParityProblems(getValidationSteps("test"), workflowText, GITHUB_CI_COVERAGE, pkg.scripts),
     [],
   );
   assert.ok(
     Object.values(GITHUB_CI_COVERAGE).every((entry) =>
       (Array.isArray(entry.tokens) && entry.tokens.length > 0) ||
-      (typeof entry.excluded === "string" && entry.excluded.length >= 20)),
+      (typeof entry.excluded === "string" &&
+        entry.excluded.length >= 20 &&
+        typeof entry.dependency === "string")),
+  );
+});
+
+test("the committed workflows have no unrecorded duplicate behavioral suite runs or stale overlap exclusions", () => {
+  const workflowRuns = readGithubWorkflowRuns(root);
+  assert.ok(workflowRuns.length > 0, "expected GitHub workflows");
+  assert.deepEqual(findRedundantStandaloneSuiteRuns(workflowRuns), []);
+  assert.deepEqual(findSuiteOverlapExclusionProblems(workflowRuns), []);
+  assert.ok(
+    GITHUB_SUITE_OVERLAP_EXCLUSIONS.every(
+      (entry) => typeof entry.reason === "string" && entry.reason.length >= 20,
+    ),
   );
 });
 

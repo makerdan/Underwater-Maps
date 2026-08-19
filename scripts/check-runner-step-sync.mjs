@@ -13,8 +13,9 @@
  *      never run in a tier, and allowlist entries that have gone stale.
  *   2. Every canonical validation step must declare its GitHub Actions coverage:
  *      either a command token found in a PR workflow, or an explicit documented
- *      local-only exclusion. This prevents a new portable guard from becoming
- *      Agent-only merely because it was added to validation-steps.mjs.
+ *      local-only exclusion tied to a supported environment dependency. This
+ *      prevents a new portable guard from becoming Agent-only merely because it
+ *      was added to validation-steps.mjs.
  *   3. Every check-*.{mjs,sh} FILE in scripts/ must be referenced somewhere —
  *      a package.json script, a workflow (.replit), or another (non-check)
  *      script such as post-merge.sh — unless allowlisted with a reason. This
@@ -22,6 +23,9 @@
  *      unused with no warning.
  *   4. Fresh-database E2E workflows must bootstrap from the Drizzle schema
  *      instead of the migration journal, which cannot initialize an empty DB.
+ *   5. Targeted unit and browser test runs may not duplicate a discovery-based
+ *      suite on the same GitHub event scope, unless the intentional overlap is
+ *      recorded below with a substantive reason.
  *
  * Usage:
  *   node scripts/check-runner-step-sync.mjs
@@ -80,12 +84,31 @@ export const ORPHAN_FILE_ALLOWLIST = {};
 // must explain why the check is meaningful only with Replit/Agent-local state.
 // ---------------------------------------------------------------------------
 
+/**
+ * GitHub executes unit packages separately so the api-server can retain its
+ * sequential two-shard OOM guard. This exact set is the only accepted
+ * equivalent for the root `pnpm run test:unit` discovery command.
+ */
+export const WORKSPACE_UNIT_CI_TOKENS = [
+  "pnpm exec vitest run --shard=1/2",
+  "pnpm exec vitest run --shard=2/2",
+  "pnpm --filter @workspace/api-zod run test:unit",
+  "pnpm --filter @workspace/db run test:unit",
+  "pnpm --filter @workspace/poe run test:unit",
+  "pnpm --filter @workspace/bathyscan run test:unit",
+  "pnpm --filter @workspace/scripts run test:unit",
+];
+
 export const GITHUB_CI_COVERAGE = {
-  typecheck: { tokens: ["pnpm run typecheck"] },
+  typecheck: {
+    canonicalCommand: "pnpm run typecheck",
+    tokens: ["pnpm run typecheck"],
+  },
   lint: { tokens: ["pnpm run lint"] },
   "check:lock-skill-sync": { tokens: ["pnpm run check:lock-skill-sync"] },
   "check:skill-mirror-sync": {
     excluded: "Reads the gitignored .local/custom_skills mirror, which is Agent-local and absent from GitHub checkouts.",
+    dependency: "gitignored-local-data",
   },
   "check:failure-gate-zip": { tokens: ["pnpm run check:failure-gate-zip"] },
   "check:poe-setup-zip": { tokens: ["pnpm run check:poe-setup-zip"] },
@@ -98,30 +121,33 @@ export const GITHUB_CI_COVERAGE = {
   "check:runner-step-sync": { tokens: ["pnpm run check:runner-step-sync"] },
   "fix:failure-gate-stubs": {
     excluded: "Mutates Agent task plans under gitignored .local/tasks/, which GitHub Actions must not create or repair.",
+    dependency: "task-plan-context",
   },
-  "check:failure-gate": { tokens: ["pnpm run verify"] },
+  "check:failure-gate": {
+    tokens: ["pnpm run verify"],
+    compositeScript: "verify",
+  },
   "check:failure-gate-self-test": { tokens: ["pnpm run check:failure-gate-self-test"] },
   "check:pre-commit-self-test": { tokens: ["pnpm run check:pre-commit-self-test"] },
   "check:regression-guard-self-test": { tokens: ["pnpm run check:regression-guard-self-test"] },
   "fix:regression-guard-stubs": {
     excluded: "Mutates Agent task plans under gitignored .local/tasks/, which GitHub Actions must not create or repair.",
+    dependency: "task-plan-context",
   },
-  "check:regression-guard": { tokens: ["pnpm run verify"] },
+  "check:regression-guard": {
+    tokens: ["pnpm run verify"],
+    compositeScript: "verify",
+  },
   "check:skip-count": { tokens: ["pnpm run check:skip-count"] },
   "check:testdb-schema-drift": { tokens: ["pnpm run check:testdb-schema-drift"] },
   "check:runbutton-noop": { tokens: ["pnpm run check:runbutton-noop"] },
   "check:stale-lock-cleanup": {
     excluded: "Tests Replit validation-lock recovery behavior; GitHub uses isolated ephemeral runners rather than the shared local lock.",
+    dependency: "replit-state",
   },
   "test:unit": {
-    tokens: [
-      "pnpm exec vitest run --shard=1/2",
-      "pnpm exec vitest run --shard=2/2",
-      "pnpm --filter @workspace/api-zod run test:unit",
-      "pnpm --filter @workspace/db run test:unit",
-      "pnpm --filter @workspace/poe run test:unit",
-      "pnpm --filter @workspace/bathyscan run test:unit",
-    ],
+    tokens: WORKSPACE_UNIT_CI_TOKENS,
+    coverageMode: "workspace-unit-suites",
   },
   "check:docs-stale": { tokens: ["pnpm run check:docs-stale"] },
   "check:catalog-coverage": { tokens: ["pnpm run check:catalog-coverage"] },
@@ -138,8 +164,51 @@ export const GITHUB_CI_COVERAGE = {
   "check:trip-window-raw-units": { tokens: ["pnpm run check:trip-window-raw-units"] },
   "audit:marker-bbox": {
     excluded: "Requires a live development DATABASE_URL to audit persisted marker rows; GitHub PR runners have no production-like database state.",
+    dependency: "live-development-database",
+    canonicalCommand: "pnpm --filter @workspace/db audit:marker-bbox -- --ci",
   },
 };
+
+/**
+ * Local-only validation can only be justified by a dependency that is absent
+ * from a normal GitHub runner. Keep this intentionally narrow: "local-only"
+ * alone is not a useful reviewable reason.
+ */
+export const LOCAL_ONLY_DEPENDENCIES = [
+  "replit-state",
+  "task-plan-context",
+  "live-development-service",
+  "live-development-database",
+  "gitignored-local-data",
+  "object-storage-sidecar",
+];
+
+/**
+ * Existing intentional browser overlap: the relocated sync suite needs its
+ * own database, ports, dist directory, and test identity. The command token
+ * is executable command text, not a step name or a comment, so removing or
+ * changing the suite makes this declaration stale.
+ */
+export const GITHUB_SUITE_OVERLAP_EXCLUSIONS = [
+  {
+    workflow: "ci-e2e.yml",
+    scope: "push",
+    command: [
+      "pnpm exec playwright test",
+      "--reporter=list,html",
+      "tests/e2e/palette-cross-device-sync.spec.ts",
+      "tests/e2e/onboarding-tour.spec.ts",
+      "tests/e2e/settings-cross-device-sync.spec.ts",
+      "tests/e2e/settings-save-buttons.spec.ts",
+      "tests/e2e/zone-colour-server-sync.spec.ts",
+      "tests/e2e/tooltips.spec.ts",
+      "tests/e2e/adaptive-palette.spec.ts",
+      "tests/e2e/overview-puzzle-multiselect.spec.ts",
+    ].join("\n"),
+    reason:
+      "Uses a dedicated database, relocated ports, dist directory, and test identity to protect palette/settings synchronization isolation.",
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Checks
@@ -205,7 +274,8 @@ export function findLocalIgnoredDirsDeclarations(scriptsDir) {
 
 /**
  * Builds the searchable reference text: root package.json, the .replit
- * workflow config, and every non-check *.mjs / *.sh script in scripts/.
+ * workflow config, GitHub workflow sources, and every non-check *.mjs / *.sh
+ * script in scripts/.
  * Check files themselves are excluded as sources so a check file cannot
  * "cover" itself (or another orphan) merely by mentioning it in a comment.
  */
@@ -215,6 +285,15 @@ export function buildReferenceText(rootDir, scriptsDir) {
     parts.push(readFileSync(resolve(rootDir, ".replit"), "utf8"));
   } catch {
     // .replit may not exist in stripped-down environments; skip
+  }
+  const workflowsDir = resolve(rootDir, ".github", "workflows");
+  try {
+    for (const file of readdirSync(workflowsDir)) {
+      if (!/\.(yml|yaml)$/.test(file)) continue;
+      parts.push(readFileSync(resolve(workflowsDir, file), "utf8"));
+    }
+  } catch {
+    // GitHub workflows may not exist in stripped-down environments; skip
   }
   for (const f of readdirSync(scriptsDir)) {
     if (/^check-/.test(f)) continue;
@@ -246,6 +325,32 @@ export function findStaleAllowlistEntries(pkg, ciSteps, allowlist = CI_COVERAGE_
 }
 
 /**
+ * Returns whether a local-only exclusion reason names one of the supported
+ * dependencies which GitHub Actions cannot provide. The length requirement
+ * rejects bare labels such as "local only"; the dependency requirement makes
+ * the exception concrete and reviewable.
+ */
+export function isSupportedLocalOnlyExclusion(entry) {
+  return typeof entry?.excluded === "string" &&
+    entry.excluded.trim().length >= 20 &&
+    LOCAL_ONLY_DEPENDENCIES.includes(entry?.dependency);
+}
+
+function workflowContainsExecutableToken(workflowRunText, token) {
+  if (typeof token !== "string" || token.length === 0) return false;
+  return workflowRunText.split("\n").some((line) =>
+    line
+      .split(/\s*(?:&&|\|\||;)\s*/)
+      .map((segment) =>
+        segment
+          .trim()
+          .replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+)+/, ""),
+      )
+      .some((segment) => segment === token || segment.startsWith(`${token} `)),
+  );
+}
+
+/**
  * Returns coverage-contract violations for the canonical validation registry.
  * A step needs either one or more non-empty workflow search tokens, or a
  * substantive local-only exclusion reason. Tokens must all appear in the
@@ -260,27 +365,75 @@ export function findGithubCiParityProblems(
   validationSteps,
   workflowRunText,
   coverage = GITHUB_CI_COVERAGE,
+  packageScripts = {},
 ) {
   const stepNames = new Set(validationSteps.map((step) => step.name));
   const problems = [];
 
-  for (const name of stepNames) {
+  for (const step of validationSteps) {
+    const { name } = step;
     const entry = coverage[name];
     if (!entry) {
       problems.push(`${name}: no GitHub CI coverage entry`);
       continue;
     }
     const hasTokens = Array.isArray(entry.tokens) && entry.tokens.length > 0;
-    const hasExclusion = typeof entry.excluded === "string" && entry.excluded.trim().length >= 20;
+    const hasExclusion = typeof entry.excluded === "string" && entry.excluded.trim().length > 0;
     if (hasTokens === hasExclusion) {
       problems.push(`${name}: declare exactly one of non-empty tokens or a substantive excluded reason`);
       continue;
     }
     if (hasTokens) {
+      const canonicalCommand =
+        typeof step.cmd === "string" ? step.cmd : entry.canonicalCommand;
+      if (typeof canonicalCommand !== "string" || canonicalCommand.length === 0) {
+        problems.push(`${name}: function-based step must declare canonicalCommand`);
+      } else if (!entry.tokens.includes(canonicalCommand)) {
+        const compositeToken =
+          typeof entry.compositeScript === "string"
+            ? `pnpm run ${entry.compositeScript}`
+            : null;
+        const compositeBody =
+          typeof entry.compositeScript === "string"
+            ? packageScripts[entry.compositeScript]
+            : null;
+        const compositeCoversCanonical =
+          compositeToken !== null &&
+          entry.tokens.length === 1 &&
+          entry.tokens[0] === compositeToken &&
+          typeof compositeBody === "string" &&
+          workflowContainsExecutableToken(compositeBody, canonicalCommand);
+        const workspaceUnitCoverage =
+          name === "test:unit" &&
+          canonicalCommand === "pnpm run test:unit" &&
+          entry.coverageMode === "workspace-unit-suites" &&
+          entry.tokens.length === WORKSPACE_UNIT_CI_TOKENS.length &&
+          WORKSPACE_UNIT_CI_TOKENS.every((token) => entry.tokens.includes(token));
+        if (!compositeCoversCanonical && !workspaceUnitCoverage) {
+        problems.push(
+            `${name}: workflow tokens must include the canonical command or use a mechanically verified composite/suite equivalent`,
+        );
+        }
+      }
       for (const token of entry.tokens) {
-        if (typeof token !== "string" || token.length === 0 || !workflowRunText.includes(token)) {
+        if (!workflowContainsExecutableToken(workflowRunText, token)) {
           problems.push(`${name}: GitHub workflow token missing: ${JSON.stringify(token)}`);
         }
+      }
+    } else if (!isSupportedLocalOnlyExclusion(entry)) {
+      problems.push(
+        `${name}: local-only exclusion must declare a substantive reason and supported dependency category ` +
+        `(${LOCAL_ONLY_DEPENDENCIES.join(", ")})`,
+      );
+    } else {
+      const canonicalCommand =
+        typeof step.cmd === "string" ? step.cmd : entry.canonicalCommand;
+      if (typeof canonicalCommand !== "string" || canonicalCommand.length === 0) {
+        problems.push(`${name}: function-based excluded step must declare canonicalCommand`);
+      } else if (workflowContainsExecutableToken(workflowRunText, canonicalCommand)) {
+      problems.push(
+        `${name}: stale local-only exclusion — its canonical command now runs in a pull-request workflow`,
+      );
       }
     }
   }
@@ -297,7 +450,42 @@ export function findGithubCiParityProblems(
  * documenting a command cannot satisfy the parity contract after its step is
  * removed. Handles scalar commands and YAML literal/folded block commands.
  */
-export function extractGithubWorkflowRunText(source) {
+function stripUnquotedComment(value) {
+  let singleQuoted = false;
+  let doubleQuoted = false;
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\" && doubleQuoted) {
+      escaped = true;
+      continue;
+    }
+    if (char === "'" && !doubleQuoted) {
+      singleQuoted = !singleQuoted;
+      continue;
+    }
+    if (char === '"' && !singleQuoted) {
+      doubleQuoted = !doubleQuoted;
+      continue;
+    }
+    if (
+      char === "#" &&
+      !singleQuoted &&
+      !doubleQuoted &&
+      (index === 0 || /\s/.test(value[index - 1]))
+    ) {
+      return value.slice(0, index).trimEnd();
+    }
+  }
+  return value;
+}
+
+export function extractGithubWorkflowRunCommands(source) {
   const lines = source.split("\n");
   const commands = [];
   for (let index = 0; index < lines.length; index++) {
@@ -305,9 +493,9 @@ export function extractGithubWorkflowRunText(source) {
     if (!match) continue;
 
     const indent = match[1].length;
-    const value = match[2].trim();
+    const value = stripUnquotedComment(match[2].trim());
     if (!/^[>|][+-]?$/.test(value)) {
-      commands.push(value);
+      if (value.length > 0) commands.push(value);
       continue;
     }
 
@@ -321,12 +509,78 @@ export function extractGithubWorkflowRunText(source) {
       }
       const nextIndent = /^\s*/.exec(next)?.[0].length ?? 0;
       if (nextIndent <= indent) break;
-      block.push(next.trim());
+      const commandLine = stripUnquotedComment(next.trim());
+      if (commandLine.length > 0) block.push(commandLine);
       index++;
     }
-    commands.push(block.join("\n"));
+    const command = block.join("\n").trim();
+    if (command.length > 0) commands.push(command);
   }
-  return commands.join("\n");
+  return commands;
+}
+
+export function extractGithubWorkflowRunText(source) {
+  return extractGithubWorkflowRunCommands(source).join("\n");
+}
+
+/**
+ * Returns GitHub event scopes which can execute a workflow. Scope matching is
+ * intentionally conservative: a duplicate only matters when both commands can
+ * run for the same PR or main-branch push.
+ */
+export function getGithubWorkflowScopes(source) {
+  const lines = source.split("\n");
+  const onIndex = lines.findIndex((line) => /^["']?on["']?:/.test(line));
+  if (onIndex === -1) return [];
+
+  const declaration = /^["']?on["']?:\s*(.*)$/.exec(lines[onIndex]);
+  const inlineValue = stripUnquotedComment(declaration?.[1]?.trim() ?? "");
+  let eventText = inlineValue;
+  if (inlineValue.length === 0) {
+    const block = [];
+    for (let index = onIndex + 1; index < lines.length; index++) {
+      const line = lines[index];
+      if (line.trim() === "" || line.trimStart().startsWith("#")) continue;
+      if (!/^\s+/.test(line)) break;
+      const eventLine = stripUnquotedComment(line.trim());
+      if (eventLine.length > 0) block.push(eventLine);
+    }
+    eventText = block.join("\n");
+  }
+
+  const scopes = [];
+  if (/\b(?:pull_request|pull_request_target)\b/.test(eventText)) {
+    scopes.push("pull-request");
+  }
+  if (/\bpush\b/.test(eventText)) {
+    scopes.push("push");
+  }
+  return scopes;
+}
+
+/**
+ * Reads workflow files into executable command records. Workflow comments and
+ * step names are excluded through extractGithubWorkflowRunText(), so prose
+ * cannot make a command look covered.
+ */
+export function readGithubWorkflowRuns(rootDir) {
+  const workflowsDir = resolve(rootDir, ".github", "workflows");
+  try {
+    return readdirSync(workflowsDir)
+      .filter((file) => /\.(yml|yaml)$/.test(file))
+      .sort()
+      .map((file) => {
+        const source = readFileSync(resolve(workflowsDir, file), "utf8");
+        return {
+          file,
+          scopes: getGithubWorkflowScopes(source),
+          commands: extractGithubWorkflowRunCommands(source)
+            .filter((command) => command.trim().length > 0),
+        };
+      });
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -335,13 +589,9 @@ export function extractGithubWorkflowRunText(source) {
  * parity contract because they do not protect pull requests.
  */
 export function buildGithubWorkflowText(rootDir) {
-  const workflowsDir = resolve(rootDir, ".github", "workflows");
-  return readdirSync(workflowsDir)
-    .filter((file) => /\.(yml|yaml)$/.test(file))
-    .sort()
-    .map((file) => readFileSync(resolve(workflowsDir, file), "utf8"))
-    .filter((source) => /^\s{2}(?:pull_request|pull_request_target):/m.test(source))
-    .map(extractGithubWorkflowRunText)
+  return readGithubWorkflowRuns(rootDir)
+    .filter((workflow) => workflow.scopes.includes("pull-request"))
+    .flatMap((workflow) => workflow.commands)
     .join("\n");
 }
 
@@ -371,6 +621,123 @@ export function findE2eDatabaseBootstrapProblems(
     }
   }
 
+  return problems;
+}
+
+function isBrowserDiscoveryCommand(command) {
+  return /\bplaywright\s+test\b/.test(command) &&
+    !isTargetedBrowserCommand(command);
+}
+
+function isTargetedBrowserCommand(command) {
+  return /\bplaywright\s+test\b/.test(command) &&
+    (
+      /\btests\/e2e\/[^\s'"]+\.spec\.[cm]?[jt]sx?\b/.test(command) ||
+      /(?:^|\s)(?:--grep|--project|--last-failed)(?:=|\s)/.test(command)
+    );
+}
+
+function containsTestFile(command) {
+  return /\b[^\s'"]+(?:\.test|\.spec)\.[cm]?[jt]sx?\b/.test(command);
+}
+
+function isUnitDiscoveryCommand(command) {
+  if (isTargetedUnitCommand(command)) return false;
+  return /\bpnpm(?:\s+-r)?\s+run\s+test:unit\b/.test(command) ||
+    /\bpnpm\s+--filter\s+\S+\s+run\s+test:unit\b/.test(command) ||
+    /\bvitest\s+run\s+--shard(?:=|\s)/.test(command);
+}
+
+function isTargetedUnitCommand(command) {
+  const invokesUnitRunner =
+    /\b(?:vitest\s+run|node\s+--(?:import\s+\S+\s+)?test)\b/.test(command) ||
+    /\bpnpm(?:\s+--filter\s+\S+)?\s+run\s+test:unit\b/.test(command);
+  return invokesUnitRunner && (
+    containsTestFile(command) ||
+    /(?:^|\s)(?:-t|--testNamePattern|--test-name-pattern|--grep|--project)(?:=|\s)/.test(command)
+  );
+}
+
+function findPotentialStandaloneSuiteRuns(workflowRuns) {
+  const potential = [];
+  const scopes = new Set(workflowRuns.flatMap((workflow) => workflow.scopes));
+
+  for (const scope of scopes) {
+    const commands = workflowRuns.flatMap((workflow) =>
+      workflow.scopes.includes(scope)
+        ? workflow.commands.map((command) => ({ file: workflow.file, command }))
+        : [],
+    );
+    const browserDiscoveryExists = commands.some(({ command }) => isBrowserDiscoveryCommand(command));
+    const unitDiscoveryExists = commands.some(({ command }) => isUnitDiscoveryCommand(command));
+
+    for (const entry of commands) {
+      if (browserDiscoveryExists && isTargetedBrowserCommand(entry.command)) {
+        potential.push({ ...entry, scope, suite: "browser" });
+      }
+      if (unitDiscoveryExists && isTargetedUnitCommand(entry.command)) {
+        potential.push({ ...entry, scope, suite: "unit" });
+      }
+    }
+  }
+  return potential;
+}
+
+function matchesSuiteOverlapExclusion(candidate, exclusion) {
+  return exclusion &&
+    exclusion.workflow === candidate.file &&
+    exclusion.scope === candidate.scope &&
+    typeof exclusion.command === "string" &&
+    exclusion.command.length > 0 &&
+    candidate.command === exclusion.command &&
+    typeof exclusion.reason === "string" &&
+    exclusion.reason.trim().length >= 20;
+}
+
+/**
+ * Finds targeted unit/browser runs that duplicate discovery-based coverage in
+ * the same GitHub event scope and have no recorded intentional-overlap reason.
+ */
+export function findRedundantStandaloneSuiteRuns(
+  workflowRuns,
+  exclusions = GITHUB_SUITE_OVERLAP_EXCLUSIONS,
+) {
+  return findPotentialStandaloneSuiteRuns(workflowRuns).filter(
+    (candidate) => !exclusions.some((exclusion) => matchesSuiteOverlapExclusion(candidate, exclusion)),
+  );
+}
+
+/**
+ * Reports malformed or stale intentional-overlap declarations. An exclusion is
+ * stale when the referenced executable command disappears or is no longer an
+ * actual duplicate, so exemptions cannot accumulate unnoticed.
+ */
+export function findSuiteOverlapExclusionProblems(
+  workflowRuns,
+  exclusions = GITHUB_SUITE_OVERLAP_EXCLUSIONS,
+) {
+  const potential = findPotentialStandaloneSuiteRuns(workflowRuns);
+  const problems = [];
+  for (const exclusion of exclusions) {
+    if (
+      typeof exclusion?.workflow !== "string" ||
+      !["pull-request", "push"].includes(exclusion?.scope) ||
+      typeof exclusion?.command !== "string" ||
+      exclusion.command.length === 0 ||
+      typeof exclusion?.reason !== "string" ||
+      exclusion.reason.trim().length < 20
+    ) {
+      problems.push(
+        "malformed suite-overlap exclusion (workflow, scope, exact command, and substantive reason are required)",
+      );
+      continue;
+    }
+    if (!potential.some((candidate) => matchesSuiteOverlapExclusion(candidate, exclusion))) {
+      problems.push(
+        `${exclusion.workflow} (${exclusion.scope}): stale suite-overlap exclusion for exact command`,
+      );
+    }
+  }
   return problems;
 }
 
@@ -408,6 +775,8 @@ function main() {
   const githubParityProblems = findGithubCiParityProblems(
     getValidationSteps("check-runner-step-sync"),
     buildGithubWorkflowText(root),
+    GITHUB_CI_COVERAGE,
+    pkg.scripts,
   );
   if (githubParityProblems.length > 0) {
     failed = true;
@@ -438,6 +807,31 @@ function main() {
     );
   }
 
+  const workflowRuns = readGithubWorkflowRuns(root);
+  const redundantSuiteRuns = findRedundantStandaloneSuiteRuns(workflowRuns);
+  if (redundantSuiteRuns.length > 0) {
+    failed = true;
+    console.error("[check-runner-step-sync] FAIL — targeted behavioral test run duplicates discovery coverage:");
+    for (const run of redundantSuiteRuns) {
+      console.error(`  ${run.file} (${run.scope}, ${run.suite}): ${run.command}`);
+    }
+    console.error(
+      "  Fix: let the test join its package's test:unit or Playwright discovery suite instead.\n" +
+      "  If isolated execution is required, record the exact executable command and a substantive\n" +
+      "  reason in GITHUB_SUITE_OVERLAP_EXCLUSIONS.",
+    );
+  }
+
+  const suiteOverlapProblems = findSuiteOverlapExclusionProblems(workflowRuns);
+  if (suiteOverlapProblems.length > 0) {
+    failed = true;
+    console.error("[check-runner-step-sync] FAIL — suite-overlap exclusion problem(s):");
+    for (const problem of suiteOverlapProblems) console.error(`  ${problem}`);
+    console.error(
+      "  Fix: remove stale exclusions, or provide the executable workflow command and a substantive reason.",
+    );
+  }
+
   // Orphaned check FILES: check-*.{mjs,sh} on disk referenced nowhere.
   const checkFiles = listCheckFiles(__dirname);
   const referenceText = buildReferenceText(root, __dirname);
@@ -449,7 +843,7 @@ function main() {
     for (const f of orphans) console.error(`  scripts/${f}`);
     console.error(
       "  Fix: wire the file up (package.json script + scripts/validation-steps.mjs\n" +
-      "  step, workflow, or invoking script), delete it, OR add it to\n" +
+      "  step, GitHub workflow, or invoking script), delete it, OR add it to\n" +
       "  ORPHAN_FILE_ALLOWLIST in scripts/check-runner-step-sync.mjs with a reason.",
     );
   }

@@ -13,6 +13,38 @@ BathyScan turns raw bathymetry (seafloor and lake-bed depth data) into an intera
 - Required env: `DATABASE_URL` — Postgres connection string
 - **GitHub sync** — `scripts/post-merge.sh` automatically pushes to the GitHub mirror after every successful merge. The push is skipped (with a log message) if `GITHUB_TOKEN` or `GITHUB_REPO_URL` is not set, so contributors without those secrets are unaffected. Set both secrets to keep the GitHub mirror current with no manual effort.
 
+
+### Validation routing for contributors
+
+Choose the test's home before adding CI work:
+
+1. **Portable static check** — add its canonical entry (including tier) in
+   `scripts/validation-steps.mjs`, add the executable command to a
+   pull-request workflow, and declare the matching workflow command token in
+   `GITHUB_CI_COVERAGE` in `scripts/check-runner-step-sync.mjs`. The
+   `check:runner-step-sync` guard rejects missing, stale, or comment-only
+   workflow coverage.
+2. **Agent/local-only static check** — register it in the same canonical list,
+   but use a `GITHUB_CI_COVERAGE.excluded` reason plus its structured
+   `dependency` category only for an unavailable dependency: Replit state,
+   Agent/task-plan context, gitignored local data, a live development
+   service/database, or the object-storage sidecar. GitHub Actions must not run
+   local repair or live-state audits.
+3. **Unit test** — add it to the owning package's existing `test:unit` suite
+   (or that package's explicit suite manifest). `pnpm run test:unit` is the
+   Agent-wide suite and the existing GitHub package suites provide CI coverage;
+   do not create a one-test workflow command.
+4. **Browser test** — place it under `tests/e2e/` so the local full Playwright
+   command and the main-branch discovery suite find it. Add it to the PR smoke
+   list only when it meets that workflow's scope and budget; do not create a
+   standalone browser workflow. A necessary isolated overlap must be recorded
+   with its exact executable command and reason in
+   `GITHUB_SUITE_OVERLAP_EXCLUSIONS`.
+
+Run `pnpm run check:runner-step-sync` after any validation, workflow, or test
+routing change. It checks PR command parity, local-only exclusions, orphaned
+checks, and redundant targeted unit/browser executions.
+
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9

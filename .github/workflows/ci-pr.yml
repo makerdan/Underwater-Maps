@@ -239,3 +239,6 @@ jobs:
 
       - name: 'test:unit — lib/poe'
         run: pnpm --filter @workspace/poe run test:unit
+
+      - name: 'test:unit — validation scripts'
+        run: pnpm --filter @workspace/scripts run test:unit
