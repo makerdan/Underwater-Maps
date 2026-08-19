@@ -462,6 +462,33 @@ describe("DatasetPanel — collapsible streaming queue", () => {
     expect(screen.getByTestId("selected-dataset-row-queued-ds-1")).toBeInTheDocument();
   });
 
+  it("wraps long active and queued names without ellipsis clipping", () => {
+    const activeId = "active-dataset-name-without-any-convenient-break-points";
+    const queuedId = "queued-dataset-name-without-any-convenient-break-points";
+    terrainState.visibleDatasets = [
+      { datasetId: activeId, activeGrid: null, source: "preset" },
+    ];
+    terrainState.selectedIds = [activeId, queuedId];
+    terrainState.selectedSources = { [activeId]: "preset", [queuedId]: "preset" };
+    terrainState.primaryDatasetId = activeId;
+    collapseState.collapsed.streamingQueue = false;
+
+    render(<DatasetPanel />);
+
+    for (const testId of [
+      `visible-dataset-name-${activeId}`,
+      `selected-dataset-name-${queuedId}`,
+    ]) {
+      const name = screen.getByTestId(testId);
+      expect(name).toHaveStyle({ overflowWrap: "anywhere", whiteSpace: "normal" });
+      expect(name).not.toHaveStyle({ textOverflow: "ellipsis" });
+    }
+
+    expect(screen.getByTestId(`loading-badge-${activeId}`)).toHaveStyle({ flexShrink: "0" });
+    expect(screen.getByTestId(`btn-remove-visible-${activeId}`)).toHaveStyle({ flexShrink: "0" });
+    expect(screen.getByTestId(`btn-deselect-${queuedId}`)).toHaveStyle({ flexShrink: "0" });
+  });
+
   it("(d) DEFAULTS.streamingQueue is true (collapsed by default)", () => {
     expect(DEFAULTS.streamingQueue).toBe(true);
   });

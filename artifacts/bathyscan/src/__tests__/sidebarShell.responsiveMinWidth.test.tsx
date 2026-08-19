@@ -13,7 +13,7 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
-import { SidebarSection } from "@/components/SidebarSection";
+import { SidebarSection, SidebarSectionGroup } from "@/components/SidebarSection";
 import { usePanelCollapseStore, DEFAULTS } from "@/lib/panelCollapseStore";
 
 // ---------------------------------------------------------------------------
@@ -109,6 +109,24 @@ describe("Sidebar shell — responsive minWidth", () => {
     );
     const el = findFirstMinWidth(container);
     assertViewportRelative(el, "SidebarSection");
+  });
+
+  it("wide SidebarSectionGroup adds two CSS inches while staying viewport-safe", () => {
+    const { getByTestId } = render(
+      <SidebarSectionGroup wide testId="wide-library-shell">
+        <SidebarSection id="mapData" title="Your Data">
+          <div>library content</div>
+        </SidebarSection>
+      </SidebarSectionGroup>,
+    );
+
+    const shell = getByTestId("wide-library-shell");
+    for (const size of [shell.style.width, shell.style.minWidth, shell.style.maxWidth]) {
+      // The CSSOM resolves 520px + 2in to its required 712 CSS-pixel target.
+      expect(size).toContain("712px");
+      expect(size).toContain("100vw");
+      expect(size).toContain("-32px");
+    }
   });
 
   it("SidebarModeTabs uses a viewport-relative minWidth", async () => {

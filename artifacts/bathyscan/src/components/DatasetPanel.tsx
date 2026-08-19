@@ -515,12 +515,12 @@ const VisibleDatasetRows: React.FC<{
             </span>
 
             <span
+              data-testid={`visible-dataset-name-${vd.datasetId}`}
               style={{
                 flex: 1,
                 minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                overflowWrap: "anywhere",
+                whiteSpace: "normal",
                 letterSpacing: "0.04em",
               }}
             >
@@ -689,12 +689,12 @@ const VisibleDatasetRows: React.FC<{
                 </span>
 
                 <span
+                  data-testid={`selected-dataset-name-${id}`}
                   style={{
                     flex: 1,
                     minWidth: 0,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    overflowWrap: "anywhere",
+                    whiteSpace: "normal",
                     letterSpacing: "0.04em",
                   }}
                 >

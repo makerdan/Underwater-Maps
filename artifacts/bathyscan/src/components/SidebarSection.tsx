@@ -153,6 +153,8 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
 interface SidebarSectionGroupProps {
   children: React.ReactNode;
   testId?: string;
+  /** Gives a single group more room on desktop while retaining the viewport cap. */
+  wide?: boolean;
 }
 
 /**
@@ -164,10 +166,18 @@ interface SidebarSectionGroupProps {
 export const SidebarSectionGroup: React.FC<SidebarSectionGroupProps> = ({
   children,
   testId,
+  wide = false,
 }) => {
   const items = React.Children.toArray(children).filter(Boolean);
   const groupStyle: React.CSSProperties = {
     ...SHELL,
+    ...(wide
+      ? {
+          width: "min(calc(520px + 2in), calc(100vw - 32px))",
+          minWidth: "min(calc(520px + 2in), calc(100vw - 32px))",
+          maxWidth: "min(calc(520px + 2in), calc(100vw - 32px))",
+        }
+      : {}),
     // Hide any sub-pixel bleed from inner segments past the rounded corners.
     overflow: "hidden",
   };

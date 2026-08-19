@@ -1518,7 +1518,7 @@ function Main() {
                 the user switches away.
             ══════════════════════════════════════════════════ */}
             <div style={{ display: sidebarMode === 'explore' ? 'flex' : 'none', flexDirection: 'column', gap: 8 }}>
-              <SidebarSectionGroup>
+              <SidebarSectionGroup wide>
                 <SidebarSection id="mapData" title="Your Data">
                   {(!terrain || showDatasetPanel) ? <DatasetPanel embedded /> : null}
                 </SidebarSection>
