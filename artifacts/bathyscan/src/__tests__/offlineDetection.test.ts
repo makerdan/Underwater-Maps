@@ -183,7 +183,7 @@ describe("getTokenWithRetry — offline guard", () => {
     }));
 
     const { useOfflineStore } = await import("@/lib/offlineStore");
-    const { getTokenWithRetry } = await import("@/App");
+    const { getTokenWithRetry } = await import("@/lib/offlineDetection");
 
     // Confirm store is offline.
     expect(useOfflineStore.getState().isOnline).toBe(false);
@@ -191,11 +191,19 @@ describe("getTokenWithRetry — offline guard", () => {
     const onExpired = vi.fn();
     const getToken = vi.fn().mockResolvedValue(null);
 
-    const resultPromise = getTokenWithRetry(getToken, onExpired, 0);
-    await vi.runAllTimersAsync();
+    const retryDelay = 1_000;
+    const resultPromise = getTokenWithRetry(getToken, onExpired, retryDelay);
+
+    // Let the first async token call schedule the retry before moving fake
+    // time. A zero-delay all-timers sweep races module-import work under a
+    // saturated unit tier.
+    await Promise.resolve();
+    expect(getToken).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(retryDelay);
     const result = await resultPromise;
 
     expect(result).toBeNull();
+    expect(getToken).toHaveBeenCalledTimes(2);
     expect(onExpired).not.toHaveBeenCalled();
   });
 
@@ -207,16 +215,20 @@ describe("getTokenWithRetry — offline guard", () => {
       useToast: vi.fn(() => ({ toast: vi.fn(), toasts: [] })),
     }));
 
-    const { getTokenWithRetry } = await import("@/App");
+    const { getTokenWithRetry } = await import("@/lib/offlineDetection");
 
     const onExpired = vi.fn();
     const getToken = vi.fn().mockResolvedValue(null);
 
-    const resultPromise = getTokenWithRetry(getToken, onExpired, 0);
-    await vi.runAllTimersAsync();
+    const retryDelay = 1_000;
+    const resultPromise = getTokenWithRetry(getToken, onExpired, retryDelay);
+    await Promise.resolve();
+    expect(getToken).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(retryDelay);
     const result = await resultPromise;
 
     expect(result).toBeNull();
+    expect(getToken).toHaveBeenCalledTimes(2);
     expect(onExpired).toHaveBeenCalledTimes(1);
   });
 });
