@@ -316,10 +316,10 @@ export default defineConfig({
       base: basePath + "/",
       manifest: false,
       injectManifest: {
-        // The main index chunk is ~2.7 MB (three.js + app code), above
-        // workbox's 2 MB default. Raise the cap so the chunk is precached
-        // and the production build doesn't fail.
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // The main index chunk (three.js + app code) is over Workbox's
+        // 2 MiB default. Leave headroom for ordinary product growth while
+        // keeping the offline app shell available after first load.
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       },
       devOptions: {
         enabled: false,
