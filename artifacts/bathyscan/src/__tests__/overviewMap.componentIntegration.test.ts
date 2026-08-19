@@ -1087,12 +1087,17 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
     // -----------------------------------------------------------------------
     type DrawImageCall = { bitmap: unknown; x: number; y: number; w: number; h: number };
     const drawImageCalls: DrawImageCall[] = [];
+    const backgroundFillCalls: Array<[number, number, number, number]> = [];
 
     const mockCtx = new Proxy(
       {
         // Required by renderContourLines / renderScaleBar which read ctx.canvas.width/height.
         canvas: { width: CANVAS_W, height: CANVAS_H },
-        fillRect: vi.fn(),
+        fillRect: vi.fn((...args: [number, number, number, number]) => {
+          if (args[0] === 0 && args[1] === 0 && args[2] === CANVAS_W && args[3] === CANVAS_H) {
+            backgroundFillCalls.push(args);
+          }
+        }),
         fillStyle: "" as string | CanvasGradient | CanvasPattern,
         font: "",
         textAlign: "start" as CanvasTextAlign,
@@ -1208,6 +1213,14 @@ describe("OverviewMap — multi-dataset heatmaps drawn at correct canvas positio
     // The camera-arrow polygon is set by the rAF loop after a successful draw —
     // its presence guarantees at least one full draw frame has completed.
     await waitForCameraArrow();
+    // Let the follow-up frame caused by publishing the SVG transform settle.
+    await act(async () => { await new Promise((r) => setTimeout(r, 200)); });
+
+    // A clean animation frame must preserve the loaded maps rather than
+    // clearing the canvas before deciding whether a redraw is needed. Every
+    // loaded-data background clear belongs to a redraw with at least one
+    // heatmap image; idle frames must not add background-only clears.
+    expect(backgroundFillCalls.length).toBeLessThanOrEqual(drawImageCalls.length);
 
     getContextSpy.mockRestore();
 

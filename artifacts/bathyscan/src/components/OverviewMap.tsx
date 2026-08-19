@@ -1998,7 +1998,7 @@ export const OverviewMap: React.FC = () => {
       // (depth range for colormap legend, upscale request bbox, satellite tile).
       const grid = overviewGrid;
       const bitmap = bitmapRef.current;
-      const t = transformRef.current;
+      let t = transformRef.current;
 
       if (!ctx) {
         rafRef.current = requestAnimationFrame(loop);
@@ -2008,17 +2008,14 @@ export const OverviewMap: React.FC = () => {
       const cW = canvas.width;
       const cH = canvas.height;
 
-      // Always paint the background first so the canvas shows the dark-navy
-      // colour even before data arrives — prevents the default transparent-
-      // black canvas from appearing as a solid black flash on open.
-      ctx.fillStyle = "#020818";
-      ctx.fillRect(0, 0, cW, cH);
-
       // Case 1: No datasets selected — show an empty-state hint rather than the
       // loading spinner. The rAF loop keeps running so the hint stays visible and
       // responds immediately when the user selects a dataset.
       const visibleNow = visibleDatasetsRef.current;
       if (visibleNow.length === 0) {
+        // Empty and loading states have no rendered map to preserve.
+        ctx.fillStyle = "#020818";
+        ctx.fillRect(0, 0, cW, cH);
         nullGridSince = null; // reset the stale-fetch tracker
         ctx.font = "11px 'JetBrains Mono', monospace";
         ctx.textAlign = "center";
@@ -2053,6 +2050,8 @@ export const OverviewMap: React.FC = () => {
         // Case 2: Datasets are selected but their grids are still fetching.
         // Track how long we've been waiting; after 15 s assume the fetch failed
         // and show an error message instead of spinning forever.
+        ctx.fillStyle = "#020818";
+        ctx.fillRect(0, 0, cW, cH);
         if (nullGridSince === null) nullGridSince = Date.now();
         const waitedMs = Date.now() - nullGridSince;
         ctx.fillStyle = "rgba(0,229,255,0.35)";
@@ -2113,6 +2112,9 @@ export const OverviewMap: React.FC = () => {
           transformRef.current = to;
           fitAnimRef.current = null;
         }
+        // Fit animation updates transformRef directly; render this frame with
+        // the latest transform rather than the snapshot captured above.
+        t = transformRef.current;
       }
 
       // When multiple datasets are visible, `worldGrid` is a synthetic TerrainData
@@ -2135,6 +2137,11 @@ export const OverviewMap: React.FC = () => {
         }
       }
       dirtyRef.current = false;
+
+      // Loaded map pixels persist between frames. Clear only when this frame
+      // will redraw, so an idle rAF cannot erase an already-painted map.
+      ctx.fillStyle = "#020818";
+      ctx.fillRect(0, 0, cW, cH);
 
       // Detect view changes and invalidate stale upscaled bitmap
       const viewKey = `${t.scale.toFixed(2)}_${t.offsetX.toFixed(0)}_${t.offsetY.toFixed(0)}`;
