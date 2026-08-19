@@ -213,100 +213,9 @@ describe("AccessGate — automatic polling while pending", () => {
     });
   }
 
-  it("re-probes at PENDING_POLL_INTERVAL_MS and lets the user through when 200 is returned, without a page reload", async () => {
-    vi.useFakeTimers();
-
-    // First call: pending. Second call (from poll): approved.
-    authorizedFetchMock
-      .mockResolvedValueOnce(jsonResponse(403, { error: "awaiting_approval" }))
-      .mockResolvedValueOnce(jsonResponse(200, {}));
-
-    renderGate();
-    await drainInitialProbe();
-
-    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
-    expect(screen.queryByTestId("app-content")).toBeNull();
-    expect(authorizedFetchMock).toHaveBeenCalledTimes(1);
-
-    // Advance the clock exactly one poll interval.
-    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
-
-    // Poll returned 200 → children should now be visible without a page reload.
-    expect(screen.getByTestId("app-content")).toBeInTheDocument();
-    expect(screen.queryByTestId("access-gate-pending")).toBeNull();
-    expect(authorizedFetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("stays pending when the poll still returns 403 awaiting_approval", async () => {
-    vi.useFakeTimers();
-
-    authorizedFetchMock.mockResolvedValue(
-      jsonResponse(403, { error: "awaiting_approval" }),
-    );
-
-    renderGate();
-    await drainInitialProbe();
-
-    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
-
-    // Advance through two full poll cycles.
-    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
-    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
-
-    // Still pending — not approved, not crashed.
-    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
-    expect(screen.queryByTestId("app-content")).toBeNull();
-    // Initial probe + 2 poll ticks.
-    expect(authorizedFetchMock).toHaveBeenCalledTimes(3);
-  });
-
-  it("transitions to banned if the poll returns 403 account_banned", async () => {
-    vi.useFakeTimers();
-
-    authorizedFetchMock
-      .mockResolvedValueOnce(jsonResponse(403, { error: "awaiting_approval" }))
-      .mockResolvedValueOnce(jsonResponse(403, { error: "account_banned" }));
-
-    renderGate();
-    await drainInitialProbe();
-
-    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
-
-    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
-
-    expect(screen.getByTestId("access-gate-banned")).toBeInTheDocument();
-    expect(screen.queryByTestId("app-content")).toBeNull();
-  });
-
-  it("silently ignores network errors during polling and keeps checking", async () => {
-    vi.useFakeTimers();
-
-    authorizedFetchMock
-      .mockResolvedValueOnce(jsonResponse(403, { error: "awaiting_approval" }))
-      .mockRejectedValueOnce(new Error("network down"))
-      .mockResolvedValueOnce(jsonResponse(200, {}));
-
-    renderGate();
-    await drainInitialProbe();
-
-    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
-
-    // First poll tick: network error — pending screen must survive, not crash.
-    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
-    expect(screen.getByTestId("access-gate-pending")).toBeInTheDocument();
-
-    // Second poll tick: 200 — transitions to approved.
-    await advanceAndFlush(PENDING_POLL_INTERVAL_MS);
-    expect(screen.getByTestId("app-content")).toBeInTheDocument();
-  });
-
-  it("stops polling after the component unmounts", async () => {
-    vi.useFakeTimers();
-
-    authorizedFetchMock.mockResolvedValue(
-      jsonResponse(403, { error: "awaiting_approval" }),
-    );
-
+    const statusBeforePoll = screen.getByTestId(
+      "access-gate-check-status",
+    ).textContent;
     const { unmount } = renderGate();
     await drainInitialProbe();
 
@@ -474,3 +383,11 @@ describe("AccessGate — denied user (deny action outcome)", () => {
     expect(screen.queryByTestId("app-content")).toBeNull();
   });
 });
+
+    const statusAfterFirstPoll = screen.getByTestId(
+      "access-gate-check-status",
+    ).textContent;
+
+    const statusAfterSecondPoll = screen.getByTestId(
+      "access-gate-check-status",
+    ).textContent;

@@ -137,6 +137,14 @@ const S = {
     color: "#64748b",
     animation: "bs-access-pulse 1.2s ease-in-out infinite",
   } as React.CSSProperties,
+
+  checkStatus: {
+    fontSize: "calc(10px * var(--bs-font-scale, 1))",
+    letterSpacing: "0.08em",
+    color: "#64748b",
+    marginTop: 12,
+    minHeight: "calc(15px * var(--bs-font-scale, 1))",
+  } as React.CSSProperties,
 };
 
 function GateScreen({
@@ -164,6 +172,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
     DEV_AUTH_BYPASS ? "approved" : "checking",
   );
   const [attempt, setAttempt] = useState(0);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const { user } = useUser();
   const { signOut } = useClerk();
   const queryClient = useQueryClient();
@@ -175,6 +184,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
     if (DEV_AUTH_BYPASS) return;
     let cancelled = false;
     setState("checking");
+    setLastChecked(null);
 
     async function check(): Promise<void> {
       try {
@@ -241,6 +251,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
 
   const runPoll = useCallback(async () => {
     if (pollCancelledRef.current) return;
+    setLastChecked(new Date());
     try {
       const res = await authorizedFetch(`${basePath}/api/settings`);
       if (pollCancelledRef.current) return;
@@ -314,6 +325,23 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
         <div style={S.text}>
           This page checks automatically — you will be let in the moment your
           account is approved.
+        </div>
+        <div
+          style={S.checkStatus}
+          data-testid="access-gate-check-status"
+          aria-live="polite"
+        >
+          Checking…
+          {lastChecked && (
+            <>
+              {" · "}Last checked{" "}
+              {lastChecked.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+            </>
+          )}
         </div>
         <button
           style={S.button}
