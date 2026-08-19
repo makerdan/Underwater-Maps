@@ -387,6 +387,10 @@ describe("DatasetPanel — handleRetryChunked health probe", () => {
       const url = typeof input === "string" ? input : String(input);
       fetchCallCount++;
 
+      if (url.includes("/datasets/upload/start")) {
+        return { ok: true, status: 200, json: async () => ({ uploadId: "00000000-0000-4000-8000-000000000001" }) } as Response;
+      }
+
       // Health probe during retry — simulate a network failure.
       if (url.includes("/api/healthz")) {
         throw new TypeError("Failed to fetch");
@@ -452,6 +456,10 @@ describe("DatasetPanel — handleRetryChunked health probe", () => {
     vi.spyOn(global, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : String(input);
 
+      if (url.includes("/datasets/upload/start")) {
+        return { ok: true, status: 200, json: async () => ({ uploadId: "00000000-0000-4000-8000-000000000002" }) } as Response;
+      }
+
       if (url.includes("/api/healthz")) {
         // Simulate the server returning 503 during the health probe.
         return { ok: false, status: 503, json: async () => ({}) } as Response;
@@ -507,6 +515,9 @@ describe("DatasetPanel — handleRetryChunked health probe", () => {
 
     vi.spyOn(global, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : String(input);
+      if (url.includes("/datasets/upload/start")) {
+        return { ok: true, status: 200, json: async () => ({ uploadId: "00000000-0000-4000-8000-000000000003" }) } as Response;
+      }
       if (url.includes("/api/healthz")) {
         throw new TypeError("Failed to fetch");
       }
@@ -545,6 +556,9 @@ describe("DatasetPanel — handleRetryChunked health probe", () => {
 
     vi.spyOn(global, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : String(input);
+      if (url.includes("/datasets/upload/start")) {
+        return { ok: true, status: 200, json: async () => ({ uploadId: "00000000-0000-4000-8000-000000000004" }) } as Response;
+      }
       if (url.includes("/api/healthz")) {
         healthProbeCount++;
         throw new TypeError("Failed to fetch");
@@ -598,6 +612,10 @@ describe("DatasetPanel — handleRetryChunked health probe", () => {
 
     vi.spyOn(global, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : String(input);
+
+      if (url.includes("/datasets/upload/start")) {
+        return { ok: true, status: 200, json: async () => ({ uploadId: "00000000-0000-4000-8000-000000000005" }) } as Response;
+      }
 
       if (url.includes("/api/healthz")) {
         if (!serverBack) throw new TypeError("Failed to fetch");

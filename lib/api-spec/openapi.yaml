@@ -3664,12 +3664,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /datasets/upload/start:
+    post:
+      operationId: startChunkedUpload
+      tags: [datasets]
+      summary: Start a resumable chunked dataset upload
+      description: Creates a server-owned upload session. The returned uploadId must be used for every chunk, status, and finalize request.
+      responses:
+        "200":
+          description: Upload session created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uploadId]
+                properties:
+                  uploadId:
+                    type: string
+                    format: uuid
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /datasets/upload/chunk:
     post:
       operationId: uploadDatasetChunk
       tags: [datasets]
       summary: Upload one chunk of a large dataset file
-      description: Receives a single 5 MB slice of a file. The first chunk (chunkIndex=0) opens the upload session; subsequent chunks must come from the same authenticated user.
+      description: Receives a single 5 MB slice of a file for a server-owned upload session created by POST /datasets/upload/start. All chunks must come from the same authenticated user.
       requestBody:
         required: true
         content:
@@ -3680,7 +3705,7 @@ paths:
               properties:
                 uploadId:
                   type: string
-                  description: Stable UUID chosen by the client for this upload session
+                  description: Server-issued UUID returned by POST /datasets/upload/start
                 chunkIndex:
                   type: integer
                   description: 0-based index of this slice
@@ -3712,7 +3737,7 @@ paths:
       operationId: getChunkUploadStatus
       tags: [datasets]
       summary: List which chunk indices have been received for an upload session
-      description: Returns the chunk indices already received on disk (or reconstructed from the database after a server restart) so the client can resume a chunked upload from the first missing slice instead of starting over.
+      description: Returns the exact chunk indices currently present on disk. After a restart with no temporary chunk files, returns an empty list so the client safely re-uploads rather than skipping missing data.
       parameters:
         - in: path
           name: uploadId
@@ -3734,6 +3759,11 @@ paths:
                     type: array
                     items:
                       type: integer
+                  lifecycleStatus:
+                    type: string
+                    enum: [uploading, queued, processing, done, error]
+                  jobId:
+                    type: string
         "403":
           description: Upload session belongs to a different user
           content:
@@ -3830,6 +3860,28 @@ paths:
                     type: string
                   datasetId:
                     type: string
+                  skippedCount:
+                    type: integer
+                  skippedFormats:
+                    type: array
+                    items:
+                      type: string
+                  soundingCount:
+                    type: integer
+                  substrateCount:
+                    type: integer
+                  parseWarnings:
+                    type: array
+                    items:
+                      type: string
+                  eta:
+                    type: integer
+                    minimum: 0
+                    nullable: true
+                  currentStageStartedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
         "403":
           description: Job belongs to a different user
           content:

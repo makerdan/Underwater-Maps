@@ -65,12 +65,16 @@ const { FakeParseWorker, dbControl } = vi.hoisted(() => {
   const selectFrom = vi.fn().mockReturnValue({ where: selectWhere });
 
   // Chainable DB update mock
-  const updateWhere = vi.fn().mockResolvedValue([]);
+  const updateReturning = vi.fn().mockResolvedValue([{ id: "winner" }]);
+  const updateWhere = vi.fn().mockImplementation(() => Object.assign(
+    Promise.resolve([]),
+    { returning: updateReturning },
+  ));
   const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
 
   return {
     FakeParseWorker,
-    dbControl: { selectWhere, selectFrom, updateWhere, updateSet },
+    dbControl: { selectWhere, selectFrom, updateReturning, updateWhere, updateSet },
   };
 });
 
@@ -143,7 +147,11 @@ function resetSelectDefault(): void {
 
 /** Reset the DB update mock. */
 function resetUpdateDefault(): void {
-  dbControl.updateWhere.mockReset().mockResolvedValue([]);
+  dbControl.updateReturning.mockReset().mockResolvedValue([{ id: "winner" }]);
+  dbControl.updateWhere.mockReset().mockImplementation(() => Object.assign(
+    Promise.resolve([]),
+    { returning: dbControl.updateReturning },
+  ));
   dbControl.updateSet.mockReset().mockReturnValue({ where: dbControl.updateWhere });
 }
 
@@ -328,6 +336,50 @@ describe("recoverStaleUploadJobs — irrecoverable jobs (no meta sidecar)", () =
   });
 });
 
+describe("recoverStaleUploadJobs — resumable uploading sessions", () => {
+  beforeEach(() => {
+    resetSelectDefault();
+    resetUpdateDefault();
+  });
+
+  it("restores a partial uploading session without queuing processing or inventing chunks", async () => {
+    const uploadId = crypto.randomUUID();
+    const jobId = crypto.randomUUID();
+    dbControl.selectWhere.mockResolvedValueOnce([{
+      id: jobId,
+      userId: USER_A,
+      status: "uploading",
+      uploadId,
+      fileName: null,
+      totalChunks: 3,
+      chunksReceived: 2,
+      resolution: null,
+      smoothing: null,
+      updatedAt: new Date(Date.now() - 5_000),
+    }]);
+
+    await expect(recoverStaleUploadJobs()).resolves.toBe(true);
+
+    const statusRes = await request(app)
+      .get(`/api/datasets/upload/chunk/status/${uploadId}`)
+      .set(AUTH_A);
+
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body).toMatchObject({
+      uploadId,
+      receivedChunks: [],
+      lifecycleStatus: "uploading",
+    });
+    expect(statusRes.body).not.toHaveProperty("jobId");
+    expect(dbControl.updateSet).toHaveBeenCalledWith({
+      updatedAt: expect.any(Date),
+    });
+    expect(dbControl.updateSet).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: expect.any(String) }),
+    );
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 3. recoverStaleUploadJobs — recoverable (sidecar + assembled file exist)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -424,6 +476,39 @@ describe("recoverStaleUploadJobs — recoverable jobs (sidecar + assembled file)
 
     expect(dbControl.updateSet).toHaveBeenCalledWith(
       expect.objectContaining({ status: "error" }),
+    );
+  });
+
+  it("does not re-queue a finalized job when only some expected chunks remain", async () => {
+    const uploadId = `upload-partial-${crypto.randomUUID()}`;
+    const jobId = `job-partial-${crypto.randomUUID()}`;
+    dbControl.selectWhere.mockResolvedValueOnce([{
+      id: jobId,
+      userId: USER_A,
+      status: "queued",
+      uploadId,
+      fileName: "survey.xyz",
+      totalChunks: 2,
+      chunksReceived: 1,
+      resolution: 32,
+      smoothing: false,
+      updatedAt: new Date(),
+    }]);
+
+    const accessSpy = vi.spyOn(fs.promises, "access").mockImplementation(async (candidate) => {
+      const candidatePath = String(candidate);
+      if (candidatePath.endsWith(`${uploadId}-chunk-0`)) return;
+      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    });
+
+    await recoverStaleUploadJobs();
+    accessSpy.mockRestore();
+
+    expect(dbControl.updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "error",
+        error: expect.stringContaining("Server restarted"),
+      }),
     );
   });
 });

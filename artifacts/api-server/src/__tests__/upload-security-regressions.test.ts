@@ -14,16 +14,16 @@
  *      keeps the existing session (sessionJobId unchanged) instead of
  *      overwriting it and creating a second DB row.
  *
- * H-1. Finalize strict DB persist: when db.insert (persistJobToDB) throws,
- *      finalize returns 500 and does NOT spawn a parse worker.
+ * H-1. Finalize durable transition: when the conditional queued-state DB
+ *      update throws, finalize returns 500 and does NOT spawn a parse worker.
  *
  * H-2. Direct-upload DB hard failure: POST /datasets/upload returns 500
  *      with error:"save_failed" when the customDatasetsTable insert throws.
  *
  * L-10a. Chunk-status: accessible-but-empty chunk directory returns [].
  *
- * L-10b. Chunk-status: inaccessible chunk directory falls back to the
- *        DB chunksReceived count and synthesises receivedChunks = [0..N-1].
+ * L-10b. Chunk-status: inaccessible directory returns [] rather than
+ *        inventing contiguous chunk indices from an aggregate DB count.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -66,7 +66,11 @@ const { FakeParseWorker, workerSpawnCount, dbControl } = vi.hoisted(() => {
     // db.insert returning: by default succeeds; set to null to make it throw
     insertShouldThrow: false,
     insertThrowMessage: "DB write failed",
+    sessionInsertShouldThrow: false,
+    sessionInsertPromise: null as Promise<unknown[]> | null,
     // db.update for finalize idempotency guard
+    updateShouldThrow: false,
+    updatePromise: null as Promise<unknown[]> | null,
     updateReturningRows: [{ id: "winner" }] as unknown[],
   };
 
@@ -90,7 +94,12 @@ const { FakeParseWorker, workerSpawnCount, dbControl } = vi.hoisted(() => {
     }
     return Object.assign(Promise.resolve([]), { returning: insertReturning });
   };
-  const insertOnConflictDoNothing = () => Promise.resolve([]);
+  const insertOnConflictDoNothing = () => {
+    if (dbControl.sessionInsertPromise) return dbControl.sessionInsertPromise;
+    return dbControl.sessionInsertShouldThrow
+      ? Promise.reject(new Error("upload session insert failed"))
+      : Promise.resolve([]);
+  };
   const insertValues = () => ({
     onConflictDoUpdate: insertOnConflictDoUpdate,
     onConflictDoNothing: insertOnConflictDoNothing,
@@ -98,10 +107,24 @@ const { FakeParseWorker, workerSpawnCount, dbControl } = vi.hoisted(() => {
   });
 
   const updateWhere = () => ({
-    returning: () => Promise.resolve(dbControl.updateReturningRows),
-    then: (res: (v: unknown[]) => unknown) => Promise.resolve([]).then(res),
-    catch: (rej: (e: unknown) => unknown) => Promise.resolve([]).catch(rej),
-    finally: (fn: () => void) => Promise.resolve([]).finally(fn),
+    returning: () => dbControl.updateShouldThrow
+      ? Promise.reject(new Error("idempotency guard unavailable"))
+      : dbControl.updatePromise ?? Promise.resolve(dbControl.updateReturningRows),
+    then: (res: (v: unknown[]) => unknown, rej?: (e: unknown) => unknown) => (
+      dbControl.updateShouldThrow
+        ? Promise.reject(new Error("update unavailable"))
+        : Promise.resolve([])
+    ).then(res, rej),
+    catch: (rej: (e: unknown) => unknown) => (
+      dbControl.updateShouldThrow
+        ? Promise.reject(new Error("update unavailable"))
+        : Promise.resolve([])
+    ).catch(rej),
+    finally: (fn: () => void) => (
+      dbControl.updateShouldThrow
+        ? Promise.reject(new Error("update unavailable"))
+        : Promise.resolve([])
+    ).finally(fn),
   });
   const updateSet = () => ({ where: updateWhere });
 
@@ -209,6 +232,10 @@ function resetDbDefaults(): void {
   dbControl.selectRows = [];
   dbControl.insertShouldThrow = false;
   dbControl.insertThrowMessage = "DB write failed";
+  dbControl.sessionInsertShouldThrow = false;
+  dbControl.sessionInsertPromise = null;
+  dbControl.updateShouldThrow = false;
+  dbControl.updatePromise = null;
   dbControl.updateReturningRows = [{ id: "winner" }];
   workerSpawnCount.value = 0;
 }
@@ -309,15 +336,13 @@ describe("H-1: finalize strict DB persist failure", () => {
     resetDbDefaults();
   });
 
-  it("returns 500 when persistJobToDB (db.insert) throws during finalize", async () => {
+  it("returns 500 when the durable queued-state transition throws during finalize", async () => {
         const userId = "user_finalize_fail";
 
     // Upload chunk 0 to create the session.
     const uploadId = await uploadChunk0(userId);
 
-    // Make db.insert throw for the finalize persist step.
-    dbControl.insertShouldThrow = true;
-    dbControl.insertThrowMessage = "disk quota exceeded";
+    dbControl.updateShouldThrow = true;
 
     const res = await request(app)
       .post("/api/datasets/upload/chunk/finalize")
@@ -334,7 +359,7 @@ describe("H-1: finalize strict DB persist failure", () => {
 
     const uploadId = await uploadChunk0(userId);
 
-    dbControl.insertShouldThrow = true;
+    dbControl.updateShouldThrow = true;
 
     await request(app)
       .post("/api/datasets/upload/chunk/finalize")
@@ -345,6 +370,154 @@ describe("H-1: finalize strict DB persist failure", () => {
     // Give any accidentally-fired async job time to start.
     await new Promise<void>((r) => setTimeout(r, 100));
     expect(workerSpawnCount.value).toBe(0);
+  });
+
+  it("keeps concurrent finalize requests single-flight when the DB guard fails", async () => {
+    const userId = "user_finalize_guard_fail";
+    const uploadId = await uploadChunk0(userId);
+    dbControl.updateShouldThrow = true;
+
+    const finalize = () => request(app)
+      .post("/api/datasets/upload/chunk/finalize")
+      .set(authHeader(userId))
+      .set("Content-Type", "application/json")
+      .send({ uploadId, fileName: "survey.xyz", totalChunks: 1, resolution: 32 });
+
+    const [first, second] = await Promise.all([finalize(), finalize()]);
+    expect([first.status, second.status].sort()).toEqual([409, 500]);
+    expect([first.body.error, second.body.error]).toEqual(
+      expect.arrayContaining(["finalize_in_progress", "finalize_db_error"]),
+    );
+    expect(workerSpawnCount.value).toBe(0);
+
+    dbControl.updateShouldThrow = false;
+    const retry = await finalize();
+    expect(retry.status).toBe(200);
+  });
+
+  it("does not expose jobId while the durable queued-state transition is pending", async () => {
+    const userId = "user_finalize_pending";
+    const uploadId = await uploadChunk0(userId);
+
+    let resolveTransition!: (rows: unknown[]) => void;
+    dbControl.updatePromise = new Promise<unknown[]>((resolve) => {
+      resolveTransition = resolve;
+    });
+
+    const finalize = () => request(app)
+      .post("/api/datasets/upload/chunk/finalize")
+      .set(authHeader(userId))
+      .set("Content-Type", "application/json")
+      .send({ uploadId, fileName: "survey.xyz", totalChunks: 1, resolution: 32 });
+
+    const firstPromise = finalize().then((response) => response);
+    const deadline = Date.now() + 2_000;
+    while (!getUploadSessionForTest(uploadId)?.finalizing && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(getUploadSessionForTest(uploadId)?.finalizing).toBe(true);
+
+    const second = await finalize();
+    expect(second.status).toBe(409);
+    expect(second.body).toMatchObject({ error: "finalize_in_progress" });
+    expect(second.body).not.toHaveProperty("jobId");
+
+    resolveTransition([{ id: getUploadSessionForTest(uploadId)?.sessionJobId }]);
+    const first = await firstPromise;
+    expect(first.status).toBe(200);
+    expect(first.body.jobId).toBeTypeOf("string");
+  });
+});
+
+describe("H-0: chunk-zero durable session failure", () => {
+  beforeEach(() => {
+    __resetRateLimitMemory();
+    resetDbDefaults();
+  });
+
+  it("returns a stable error, removes chunk zero, and allows a clean retry", async () => {
+    const userId = "user_session_persist_fail";
+    const startRes = await request(app)
+      .post("/api/datasets/upload/start")
+      .set(authHeader(userId));
+    const uploadId = (startRes.body as { uploadId: string }).uploadId;
+
+    dbControl.sessionInsertShouldThrow = true;
+    const failed = await request(app)
+      .post("/api/datasets/upload/chunk")
+      .set(authHeader(userId))
+      .field("uploadId", uploadId)
+      .field("chunkIndex", "0")
+      .field("totalChunks", "1")
+      .attach("file", Buffer.from("first"), { filename: "data.xyz", contentType: "text/plain" });
+
+    expect(failed.status).toBe(500);
+    expect(failed.body).toMatchObject({ error: "upload_session_persist_failed" });
+
+    const statusAfterFailure = await request(app)
+      .get(`/api/datasets/upload/chunk/status/${uploadId}`)
+      .set(authHeader(userId));
+    expect(statusAfterFailure.status).toBe(200);
+    expect(statusAfterFailure.body.receivedChunks).toEqual([]);
+
+    dbControl.sessionInsertShouldThrow = false;
+    const retry = await request(app)
+      .post("/api/datasets/upload/chunk")
+      .set(authHeader(userId))
+      .field("uploadId", uploadId)
+      .field("chunkIndex", "0")
+      .field("totalChunks", "1")
+      .attach("file", Buffer.from("retry"), { filename: "data.xyz", contentType: "text/plain" });
+    expect(retry.status).toBe(200);
+  });
+
+  it("rejects later chunks while chunk zero durable registration is pending", async () => {
+    const userId = "user_session_insert_race";
+    const startRes = await request(app)
+      .post("/api/datasets/upload/start")
+      .set(authHeader(userId));
+    const uploadId = (startRes.body as { uploadId: string }).uploadId;
+
+    let rejectInsert!: (error: Error) => void;
+    dbControl.sessionInsertPromise = new Promise<unknown[]>((_resolve, reject) => {
+      rejectInsert = reject;
+    });
+
+    const chunkZeroPromise = request(app)
+      .post("/api/datasets/upload/chunk")
+      .set(authHeader(userId))
+      .field("uploadId", uploadId)
+      .field("chunkIndex", "0")
+      .field("totalChunks", "2")
+      .attach("file", Buffer.from("first"), { filename: "data.xyz", contentType: "text/plain" })
+      .then((response) => response);
+
+    const deadline = Date.now() + 2_000;
+    while (!getUploadSessionForTest(uploadId)?.initializing && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(getUploadSessionForTest(uploadId)?.initializing).toBe(true);
+
+    const chunkOne = await request(app)
+      .post("/api/datasets/upload/chunk")
+      .set(authHeader(userId))
+      .field("uploadId", uploadId)
+      .field("chunkIndex", "1")
+      .field("totalChunks", "2")
+      .attach("file", Buffer.from("second"), { filename: "data.xyz", contentType: "text/plain" });
+    expect(chunkOne.status).toBe(409);
+    expect(chunkOne.body).toMatchObject({ error: "upload_session_initializing" });
+
+    rejectInsert(new Error("durable insert failed"));
+    const chunkZero = await chunkZeroPromise;
+    expect(chunkZero.status).toBe(500);
+
+    dbControl.sessionInsertPromise = null;
+    const statusRes = await request(app)
+      .get(`/api/datasets/upload/chunk/status/${uploadId}`)
+      .set(authHeader(userId));
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.receivedChunks).toEqual([]);
   });
 });
 
@@ -466,7 +639,7 @@ describe("L-10: chunk-status disk / DB fallback logic", () => {
     expect((res.body as { receivedChunks: number[] }).receivedChunks).toEqual([]);
   });
 
-  it("L-10b: returns synthesised receivedChunks=[0..N-1] when chunk directory is inaccessible", async () => {
+  it("L-10b: returns [] when chunk directory is inaccessible", async () => {
     const uploadId = crypto.randomUUID();
     const userId = "user_status_no_dir";
     const CHUNKS_RECEIVED = 3;
@@ -477,6 +650,8 @@ describe("L-10: chunk-status disk / DB fallback logic", () => {
       userId,
       sessionJobId: "mock-job-" + uploadId.slice(0, 8),
       chunksReceived: CHUNKS_RECEIVED,
+      status: "uploading",
+      totalChunks: CHUNKS_RECEIVED + 1,
     }];
 
     // Make readdir throw so the disk path is skipped.
@@ -490,8 +665,7 @@ describe("L-10: chunk-status disk / DB fallback logic", () => {
 
     expect(res.status).toBe(200);
     const { receivedChunks } = res.body as { receivedChunks: number[] };
-    // Should synthesise [0, 1, 2] from chunksReceived=3.
-    expect(receivedChunks).toEqual([0, 1, 2]);
+    expect(receivedChunks).toEqual([]);
   });
 
   it("L-10b: returns [] (no fallback) when directory is inaccessible and DB chunksReceived is 0", async () => {
@@ -502,6 +676,8 @@ describe("L-10: chunk-status disk / DB fallback logic", () => {
       userId,
       sessionJobId: "mock-job-zero",
       chunksReceived: 0,
+      status: "uploading",
+      totalChunks: 1,
     }];
 
     readdirSpy = vi.spyOn(fs.promises, "readdir").mockRejectedValueOnce(

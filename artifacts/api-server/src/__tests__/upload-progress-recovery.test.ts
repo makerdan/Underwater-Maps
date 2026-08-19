@@ -8,9 +8,8 @@
  *     with chunksReceived = 1.
  *  2. A subsequent chunk triggers updateChunksReceivedInDB — updates the row
  *     with the new chunksReceived count.
- *  3. GET /datasets/upload/chunk/status/:uploadId synthesises receivedChunks
- *     from DB when the disk directory is empty (post-restart state where /tmp
- *     has been wiped but the DB row persists).
+ *  3. GET /datasets/upload/chunk/status/:uploadId never invents received chunk
+ *     indices from the DB aggregate when /tmp is empty after a restart.
  *
  * All three scenarios live here so they are easy to find alongside the
  * existing multer-chunk-limit tests.
@@ -38,7 +37,7 @@ const {
     returning: insertReturningSpy,
   }));
   const updateSetWhereSpy = vi.fn().mockImplementation(() => ({
-    returning: vi.fn().mockResolvedValue([]),
+    returning: vi.fn().mockResolvedValue([{ id: "queued-upload-job" }]),
     then: (resolve: (v: unknown[]) => unknown) => Promise.resolve([]).then(resolve),
     catch: (reject: (e: unknown) => unknown) => Promise.resolve([]).catch(reject),
     finally: (fn: () => void) => Promise.resolve([]).finally(fn),
@@ -130,10 +129,6 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ received: 0 });
 
-    // createUploadSessionRow fires-and-forgets — give the microtask queue a
-    // tick to flush the async DB call before asserting on the spy.
-    await new Promise((r) => setTimeout(r, 50));
-
     expect(insertValuesSpy).toHaveBeenCalledOnce();
 
     const insertedValues = (insertValuesSpy.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]![0]!;
@@ -147,7 +142,7 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     });
   });
 
-  it("chunk N > 0 calls updateChunksReceivedInDB with chunkIndex + 1", async () => {
+  it("chunk N > 0 persists the exact number of chunk files on disk", async () => {
     const startRes2 = await request(app)
       .post("/api/datasets/upload/start")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
@@ -171,30 +166,27 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     updateSetSpy.mockClear();
     updateSetWhereSpy.mockClear();
 
-    // Send chunk 1 — this should call updateChunksReceivedInDB(uploadId, 2).
+    // Send chunk 2 out of order. Exactly two files now exist (0 and 2), so the
+    // DB aggregate must be 2 rather than the high-water value 3.
     const res1 = await request(app)
       .post("/api/datasets/upload/chunk")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", E2E_USER)
       .field("uploadId", uploadId)
-      .field("chunkIndex", "1")
+      .field("chunkIndex", "2")
       .field("totalChunks", "3")
       .attach("file", SMALL_CHUNK, "data.csv");
 
     expect(res1.status).toBe(200);
-    expect(res1.body).toMatchObject({ received: 1 });
-
-    // updateChunksReceivedInDB is fire-and-forget — flush microtasks.
-    await new Promise((r) => setTimeout(r, 50));
+    expect(res1.body).toMatchObject({ received: 2 });
 
     expect(updateSetSpy).toHaveBeenCalledOnce();
 
     const setValues = (updateSetSpy.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]![0]!;
-    // chunkIndex 1 → chunksReceived = chunkIndex + 1 = 2
     expect(setValues).toMatchObject({ chunksReceived: 2 });
   });
 
-  it("GET chunk/status synthesises receivedChunks from DB when disk is empty (post-restart)", async () => {
+  it("GET chunk/status returns [] when disk is empty after restart", async () => {
     // Use an uploadId that was never sent to the chunk endpoint in this test
     // run, so the in-memory uploadSessions map has no entry for it.  This
     // simulates a server restart where the map was cleared.
@@ -206,6 +198,8 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
         userId: E2E_USER,
         chunksReceived: 4,
         sessionJobId: "mock-session-job-id-abc123",
+        status: "uploading",
+        totalChunks: 4,
       },
     ];
 
@@ -217,9 +211,8 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ uploadId });
 
-    // The synthesised list should be [0, 1, 2, 3] — one entry per
-    // chunksReceived (DB fallback for wiped /tmp).
-    expect(res.body.receivedChunks).toEqual([0, 1, 2, 3]);
+    expect(res.body.receivedChunks).toEqual([]);
+    expect(res.body.lifecycleStatus).toBe("uploading");
   });
 
   it("chunk N > 0 is accepted via DB fallback without requiring chunk 0 to be re-sent (simulated restart)", async () => {
@@ -235,6 +228,8 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
         userId: E2E_USER,
         sessionJobId: "mock-session-job-id-resume",
         chunksReceived: 1,
+        status: "uploading",
+        totalChunks: 3,
       },
     ];
 
@@ -265,6 +260,8 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
       {
         userId: E2E_USER,
         sessionJobId: "mock-session-job-finalize",
+        status: "uploading",
+        totalChunks: 1,
       },
     ];
 
@@ -301,6 +298,8 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
         userId: E2E_USER,
         sessionJobId: "mock-session-job-id-roundtrip",
         chunksReceived: 1,
+        status: "uploading",
+        totalChunks: 3,
       },
     ];
 
@@ -314,10 +313,9 @@ describe("Upload progress recovery — DB-backed session tracking", () => {
       .set("x-e2e-user-id", E2E_USER);
 
     expect(statusRes.status).toBe(200);
-    // DB synthesis fallback: no chunk file exists on disk (no chunk was actually sent),
-    // but the DB row has chunksReceived=1, so the server synthesises [0].
-    // This tests that the DB-backed session rehydration works correctly.
-    expect(statusRes.body.receivedChunks).toEqual([0]);
+    // No chunk file exists on disk, so the safe answer is [] even though the
+    // aggregate DB count says one chunk was received before restart.
+    expect(statusRes.body.receivedChunks).toEqual([]);
 
     // Step 3: send chunk 1 — this should now hit the in-memory fast path
     // (session was restored by the status call above).  No DB select needed.

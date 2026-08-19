@@ -102,8 +102,9 @@
 - [mark_task_complete validation window](mark-complete-validation-window.md) — completion workflow polls ~10.5 min but full suite takes 45+ min; never re-call immediately, drain orphaned lock waiters, verify run logs, then finalize with skip reason.
 - [Tesseract OCR upscale requirement](tesseract-ocr-upscale.md) — LSTM silently returns empty on <1200 px images; upscale to 2400 px short-side; labels must sit ≥60 px clear of any drawn lines in test fixtures.
 - [lib/db test DDL drift](lib-db-testdb-ddl-drift.md) — lib/db constraint tests create tables from hand-written SQL in test-db.ts, not the Drizzle schema; every new schema column must be added there too or all inserts fail.
-- [Server-owned uploadIds in tests](server-owned-upload-ids.md) — chunk-0 with a client-generated UUID is rejected 403 upload_not_started; test helpers must call POST /api/datasets/upload/start first and use the returned uploadId.
-- [chunk-status DB synthesis rule](chunk-status-db-synthesis.md) — synthesise [0..N-1] from DB chunksReceived ONLY when the session was rehydrated from DB (restart); live in-memory session + empty dir must return [] so the client re-uploads.
+- [Server-owned uploadIds in tests](server-owned-upload-ids.md) — chunk-0 requires POST /api/datasets/upload/start; its success is not exposed until chunk 0 and the durable row both exist.
+- [Chunk status is disk-authoritative](chunk-status-db-synthesis.md) — never synthesize received chunk indexes from a DB count; return exact disk indexes or [] so clients safely re-upload holes.
+- [Upload finalize durable handoff](upload-finalize-durable-handoff.md) — never expose a polling jobId until the full queued state is durable; in-flight finalize replies must omit jobId.
 - [cacheRegistry lint for new lib caches](cache-registry-lint.md) — any api-server lib module-level Map cache must call registerCache(() => cache.clear()) or cacheRegistry-lint.test.ts fails.
 - [Tier-gate baseline triage rules](unit-tier-baseline-route-guard.md) — gate policies that must not regress (tier-lock hard-fail, task-agnostic validation commands) + rules for pre-existing-vs-new failure triage.
 - [Tier-lock TASK_PLAN_FILE requirement](tier-lock-plan-file.md) — tier runs hard-fail without TASK_PLAN_FILE + compliant ## Validation/## Regression Guard sections; fix-stub then hand-fill, run via upserted validation command.

@@ -214,24 +214,31 @@ function startServer(port: number): void {
       logger.warn({ err: calibErr }, "Calibration load failed (non-critical)");
     });
 
-    // Mark any upload jobs that were still queued/processing when the previous
-    // process died — re-queues recoverable ones, marks the rest as error.
-    void recoverStaleUploadJobs().catch((recoverErr: unknown) => {
-      logger.warn({ err: recoverErr }, "Upload job recovery failed (non-critical)");
-    });
+    // Reconstruct durable upload ownership before deleting orphaned temp files.
+    // Cleanup is skipped if recovery could not query the DB: without a complete
+    // ownership set, deleting by filename could destroy resumable uploads.
+    void recoverStaleUploadJobs()
+      .then(async (recovered) => {
+        if (!recovered) {
+          logger.warn("Upload chunk cleanup skipped because recovery did not complete");
+          return;
+        }
+        await cleanupStaleChunks();
+        try {
+          stopUploadCleanupJob = startUploadCleanupJob();
+        } catch (err) {
+          logger.error({ err }, "[startup] startUploadCleanupJob failed");
+        }
+      })
+      .catch((recoverErr: unknown) => {
+        logger.warn({ err: recoverErr }, "Upload recovery/cleanup failed (non-critical)");
+      });
 
     // Reset terrain bundle jobs left in "running" by the previous process and
     // re-dispatch all pending jobs (duplicate-dispatch protected in the route
     // module; non-critical, errors are caught).
     void recoverStaleTerrainBundleJobs().catch((bundleErr: unknown) => {
       logger.warn({ err: bundleErr }, "Terrain bundle job recovery failed (non-critical)");
-    });
-
-    // Purge chunk files left behind by uploads that were in flight when the
-    // previous process was killed (raw chunk slices only; assembled files for
-    // recovered jobs are preserved and cleaned up by processUploadJob).
-    void cleanupStaleChunks().catch((cleanErr: unknown) => {
-      logger.warn({ err: cleanErr }, "Stale chunk cleanup failed (non-critical)");
     });
 
     // Seed the dataset discovery catalog on startup (idempotent).
@@ -256,18 +263,6 @@ function startServer(port: number): void {
       stopWeatherCacheRefresher = startWeatherCacheRefresher();
     } catch (err) {
       logger.error({ err }, "[startup] startWeatherCacheRefresher failed");
-    }
-
-    // Start the background abandoned-upload cleanup job — deletes upload_jobs
-    // rows stuck in "uploading" status beyond ABANDONED_UPLOAD_THRESHOLD_MS
-    // (default 24 h). Runs immediately and then every UPLOAD_CLEANUP_INTERVAL_MS
-    // (default 12 h) so abandoned rows are purged even on long-lived servers.
-    // The returned stop function is stored so the SIGTERM handler can clear
-    // the interval explicitly before the process begins draining connections.
-    try {
-      stopUploadCleanupJob = startUploadCleanupJob();
-    } catch (err) {
-      logger.error({ err }, "[startup] startUploadCleanupJob failed");
     }
 
     // Start the background orphaned-photos cleanup job — lists all objects

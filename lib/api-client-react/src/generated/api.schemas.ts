@@ -4368,8 +4368,12 @@ export const GetDatasetZonesW = {
   freshwater: 'freshwater',
 } as const;
 
+export type StartChunkedUpload200 = {
+  uploadId: string;
+};
+
 export type UploadDatasetChunkBody = {
-  /** Stable UUID chosen by the client for this upload session */
+  /** Server-issued UUID returned by POST /datasets/upload/start */
   uploadId: string;
   /** 0-based index of this slice */
   chunkIndex: number;
@@ -4382,9 +4386,22 @@ export type UploadDatasetChunk200 = {
   received?: number;
 };
 
+export type GetChunkUploadStatus200LifecycleStatus = typeof GetChunkUploadStatus200LifecycleStatus[keyof typeof GetChunkUploadStatus200LifecycleStatus];
+
+
+export const GetChunkUploadStatus200LifecycleStatus = {
+  uploading: 'uploading',
+  queued: 'queued',
+  processing: 'processing',
+  done: 'done',
+  error: 'error',
+} as const;
+
 export type GetChunkUploadStatus200 = {
   uploadId: string;
   receivedChunks: number[];
+  lifecycleStatus?: GetChunkUploadStatus200LifecycleStatus;
+  jobId?: string;
 };
 
 export type FinalizeChunkedUploadBody = {
@@ -4417,6 +4434,14 @@ export type GetUploadJobStatus200 = {
   progress?: number;
   error?: string;
   datasetId?: string;
+  skippedCount?: number;
+  skippedFormats?: string[];
+  soundingCount?: number;
+  substrateCount?: number;
+  parseWarnings?: string[];
+  /** @minimum 0 */
+  eta?: number | null;
+  currentStageStartedAt?: string | null;
 };
 
 export type RequestGcsUploadUrlBody = {

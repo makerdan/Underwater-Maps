@@ -137,6 +137,18 @@ describe("sweepStaleUploadSessions", () => {
     await fs.promises.unlink(chunk0).catch(() => undefined);
   });
 
+  it("preserves a recently-active live session even before any chunk exists", async () => {
+    const uploadId = uid("fresh-empty");
+    setUploadSessionForTest(uploadId, {
+      userId: "user-1",
+      lastActivityAt: FRESH,
+    });
+
+    await sweepStaleUploadSessions();
+
+    expect(getUploadSessionForTest(uploadId)).toBeDefined();
+  });
+
   it("never evicts a session that is mid-finalize, even with a stale timestamp", async () => {
     const uploadId = uid("finalizing");
     setUploadSessionForTest(uploadId, {

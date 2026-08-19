@@ -4962,11 +4962,20 @@ export const GetDatasetZonesResponse = zod.object({
 
 
 /**
- * Receives a single 5 MB slice of a file. The first chunk (chunkIndex=0) opens the upload session; subsequent chunks must come from the same authenticated user.
+ * Creates a server-owned upload session. The returned uploadId must be used for every chunk, status, and finalize request.
+ * @summary Start a resumable chunked dataset upload
+ */
+export const StartChunkedUploadResponse = zod.object({
+  "uploadId": zod.string().uuid()
+})
+
+
+/**
+ * Receives a single 5 MB slice of a file for a server-owned upload session created by POST /datasets/upload/start. All chunks must come from the same authenticated user.
  * @summary Upload one chunk of a large dataset file
  */
 export const UploadDatasetChunkBody = zod.object({
-  "uploadId": zod.string().describe('Stable UUID chosen by the client for this upload session'),
+  "uploadId": zod.string().describe('Server-issued UUID returned by POST \/datasets\/upload\/start'),
   "chunkIndex": zod.number().describe('0-based index of this slice'),
   "totalChunks": zod.number().describe('Total number of slices the client will send'),
   "file": zod.instanceof(File)
@@ -4978,7 +4987,7 @@ export const UploadDatasetChunkResponse = zod.object({
 
 
 /**
- * Returns the chunk indices already received on disk (or reconstructed from the database after a server restart) so the client can resume a chunked upload from the first missing slice instead of starting over.
+ * Returns the exact chunk indices currently present on disk. After a restart with no temporary chunk files, returns an empty list so the client safely re-uploads rather than skipping missing data.
  * @summary List which chunk indices have been received for an upload session
  */
 export const GetChunkUploadStatusParams = zod.object({
@@ -4987,7 +4996,9 @@ export const GetChunkUploadStatusParams = zod.object({
 
 export const GetChunkUploadStatusResponse = zod.object({
   "uploadId": zod.string(),
-  "receivedChunks": zod.array(zod.number())
+  "receivedChunks": zod.array(zod.number()),
+  "lifecycleStatus": zod.enum(['uploading', 'queued', 'processing', 'done', 'error']).optional(),
+  "jobId": zod.string().optional()
 })
 
 
@@ -5021,11 +5032,22 @@ export const GetUploadJobStatusParams = zod.object({
   "jobId": zod.coerce.string()
 })
 
+export const getUploadJobStatusResponseEtaMin = 0;
+
+
+
 export const GetUploadJobStatusResponse = zod.object({
   "status": zod.enum(['queued', 'processing', 'done', 'error']).optional(),
   "progress": zod.number().optional(),
   "error": zod.string().optional(),
-  "datasetId": zod.string().optional()
+  "datasetId": zod.string().optional(),
+  "skippedCount": zod.number().optional(),
+  "skippedFormats": zod.array(zod.string()).optional(),
+  "soundingCount": zod.number().optional(),
+  "substrateCount": zod.number().optional(),
+  "parseWarnings": zod.array(zod.string()).optional(),
+  "eta": zod.number().min(getUploadJobStatusResponseEtaMin).nullish(),
+  "currentStageStartedAt": zod.coerce.date().nullish()
 })
 
 

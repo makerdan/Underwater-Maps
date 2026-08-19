@@ -28,6 +28,9 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as zlib from "zlib";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import request from "supertest";
 
 // ---------------------------------------------------------------------------
@@ -39,7 +42,7 @@ import request from "supertest";
 // above all import/variable declarations.
 // ---------------------------------------------------------------------------
 
-const { FakeParseWorker } = vi.hoisted(() => {
+const { FakeParseWorker, workerControl } = vi.hoisted(() => {
   const { EventEmitter } = require("events") as typeof import("events");
 
   const FAKE_TERRAIN = {
@@ -55,6 +58,10 @@ const { FakeParseWorker } = vi.hoisted(() => {
     constructor(_path: string, _options?: unknown) {
       super();
       setImmediate(() => {
+        if (workerControl.failMessage) {
+          this.emit("message", { type: "error", message: workerControl.failMessage });
+          return;
+        }
         this.emit("message", {
           type: "result",
           terrain: FAKE_TERRAIN,
@@ -65,7 +72,7 @@ const { FakeParseWorker } = vi.hoisted(() => {
     terminate(): Promise<number> { return Promise.resolve(0); }
   }
 
-  return { FakeParseWorker };
+  return { FakeParseWorker, workerControl: { failMessage: "" } };
 });
 
 vi.mock("worker_threads", async (importOriginal) => {
@@ -85,6 +92,11 @@ vi.mock("@workspace/db", async () => {
   // Both share the same insert mock; values() must expose both methods.
   const onConflictDoUpdateMock = vi.fn().mockResolvedValue([]);
   const returningMock = vi.fn().mockResolvedValue([{ id: "gz-chunk-dataset-id" }]);
+  const updateReturningMock = vi.fn().mockResolvedValue([{ id: "queued-upload-job" }]);
+  const updateWhereMock = vi.fn().mockImplementation(() => Object.assign(
+    Promise.resolve([]),
+    { returning: updateReturningMock },
+  ));
   const valuesMock = vi.fn().mockReturnValue({
     returning: returningMock,
     onConflictDoUpdate: onConflictDoUpdateMock,
@@ -93,6 +105,9 @@ vi.mock("@workspace/db", async () => {
   return createDbMock({
     db: {
       insert: vi.fn().mockReturnValue({ values: valuesMock }),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({ where: updateWhereMock }),
+      }),
     },
   });
 });
@@ -126,6 +141,7 @@ import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 beforeEach(() => {
   __resetRateLimitMemory();
+  workerControl.failMessage = "";
 });
 
 const AUTHED_HEADER = { "x-mock-clerk-user-id": "user_gz_chunk_test" };
@@ -209,4 +225,64 @@ describe("chunked .gz upload — regression: parseWorker must use baseFileName n
     },
     15_000,
   );
+});
+
+describe("chunked upload terminal failure lifecycle", () => {
+  it("persists one error state, removes temp artifacts, and returns the same jobId on finalize retry", async () => {
+    workerControl.failMessage = "Synthetic parser failure";
+    const startRes = await request(app)
+      .post("/api/datasets/upload/start")
+      .set(AUTHED_HEADER);
+    const uploadId = (startRes.body as { uploadId: string }).uploadId;
+
+    const chunkRes = await request(app)
+      .post("/api/datasets/upload/chunk")
+      .set(AUTHED_HEADER)
+      .field("uploadId", uploadId)
+      .field("chunkIndex", "0")
+      .field("totalChunks", "1")
+      .attach("file", Buffer.from("lon,lat,depth\n142,11,100"), {
+        filename: "broken.xyz",
+        contentType: "text/plain",
+      });
+    expect(chunkRes.status).toBe(200);
+
+    const finalizeRes = await request(app)
+      .post("/api/datasets/upload/chunk/finalize")
+      .set(AUTHED_HEADER)
+      .send({ uploadId, fileName: "broken.xyz", totalChunks: 1, resolution: 32 });
+    expect(finalizeRes.status).toBe(200);
+    const { jobId } = finalizeRes.body as { jobId: string };
+
+    const deadline = Date.now() + 5_000;
+    let terminal: { status?: string; error?: string } = {};
+    while (Date.now() < deadline) {
+      const pollRes = await request(app)
+        .get(`/api/datasets/upload/jobs/${jobId}`)
+        .set(AUTHED_HEADER);
+      terminal = pollRes.body as typeof terminal;
+      if (terminal.status === "error") break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    expect(terminal).toMatchObject({
+      status: "error",
+      error: "Synthetic parser failure",
+    });
+
+    const chunkPath = path.join(os.tmpdir(), "bathyscan-chunks", `${uploadId}-chunk-0`);
+    const assembledPath = path.join(os.tmpdir(), "bathyscan-chunks", `${jobId}-assembled`);
+    await expect(fs.promises.access(chunkPath)).rejects.toThrow();
+    await expect(fs.promises.access(assembledPath)).rejects.toThrow();
+
+    const retryRes = await request(app)
+      .post("/api/datasets/upload/chunk/finalize")
+      .set(AUTHED_HEADER)
+      .send({ uploadId, fileName: "broken.xyz", totalChunks: 1, resolution: 32 });
+    expect(retryRes.status).toBe(409);
+    expect(retryRes.body).toMatchObject({
+      error: "already_failed",
+      jobId,
+    });
+  });
 });

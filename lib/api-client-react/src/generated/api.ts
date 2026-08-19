@@ -175,6 +175,7 @@ import type {
   RequestGcsUploadUrlBody,
   SaveLayoutBody,
   SavedRoute,
+  StartChunkedUpload200,
   SubstrateFeatureCollection,
   SurfaceConditions,
   TemperatureProfile,
@@ -7679,6 +7680,77 @@ export function useGetDatasetZones<TData = Awaited<ReturnType<typeof getDatasetZ
 
 
 
+export const getStartChunkedUploadUrl = () => {
+
+
+
+
+  return `/api/datasets/upload/start`
+}
+
+/**
+ * Creates a server-owned upload session. The returned uploadId must be used for every chunk, status, and finalize request.
+ * @summary Start a resumable chunked dataset upload
+ */
+export const startChunkedUpload = async ( options?: RequestInit): Promise<StartChunkedUpload200> => {
+
+  return customFetch<StartChunkedUpload200>(getStartChunkedUploadUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getStartChunkedUploadMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startChunkedUpload>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startChunkedUpload>>, TError,void, TContext> => {
+
+const mutationKey = ['startChunkedUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startChunkedUpload>>, void> = () => {
+
+
+          return  startChunkedUpload(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartChunkedUploadMutationResult = NonNullable<Awaited<ReturnType<typeof startChunkedUpload>>>
+
+    export type StartChunkedUploadMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Start a resumable chunked dataset upload
+ */
+export const useStartChunkedUpload = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startChunkedUpload>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startChunkedUpload>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getStartChunkedUploadMutationOptions(options));
+    }
+
 export const getUploadDatasetChunkUrl = () => {
 
 
@@ -7688,7 +7760,7 @@ export const getUploadDatasetChunkUrl = () => {
 }
 
 /**
- * Receives a single 5 MB slice of a file. The first chunk (chunkIndex=0) opens the upload session; subsequent chunks must come from the same authenticated user.
+ * Receives a single 5 MB slice of a file for a server-owned upload session created by POST /datasets/upload/start. All chunks must come from the same authenticated user.
  * @summary Upload one chunk of a large dataset file
  */
 export const uploadDatasetChunk = async (uploadDatasetChunkBody: UploadDatasetChunkBody, options?: RequestInit): Promise<UploadDatasetChunk200> => {
@@ -7765,7 +7837,7 @@ export const getGetChunkUploadStatusUrl = (uploadId: string,) => {
 }
 
 /**
- * Returns the chunk indices already received on disk (or reconstructed from the database after a server restart) so the client can resume a chunked upload from the first missing slice instead of starting over.
+ * Returns the exact chunk indices currently present on disk. After a restart with no temporary chunk files, returns an empty list so the client safely re-uploads rather than skipping missing data.
  * @summary List which chunk indices have been received for an upload session
  */
 export const getChunkUploadStatus = async (uploadId: string, options?: RequestInit): Promise<GetChunkUploadStatus200> => {

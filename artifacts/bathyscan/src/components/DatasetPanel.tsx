@@ -1566,6 +1566,44 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   );
 
   // ─── Chunked upload helpers ────────────────────────────────────────────────
+  const startChunkedUploadSession = useCallback(async (): Promise<string | null> => {
+    let response: Response;
+    try {
+      response = await authorizedFetch(`${API_BASE}/api/datasets/upload/start`, {
+        method: "POST",
+      });
+    } catch (networkErr) {
+      setChunkedPhase("error");
+      setChunkedError(
+        networkErr instanceof TypeError
+          ? "Connection lost before the upload could start — reconnecting…"
+          : "Failed to start the upload session",
+      );
+      markServerUnreachable();
+      return null;
+    }
+
+    const body = await response.json().catch(() => ({})) as unknown as {
+      uploadId?: unknown;
+      details?: string;
+      error?: string;
+    };
+    if (!response.ok) {
+      setChunkedPhase("error");
+      setChunkedError(body.details ?? body.error ?? "Failed to start the upload session");
+      return null;
+    }
+    if (typeof body.uploadId !== "string" || !body.uploadId) {
+      setChunkedPhase("error");
+      setChunkedError("Server returned an invalid upload session — please retry.");
+      return null;
+    }
+
+    chunkedUploadIdRef.current = body.uploadId;
+    chunkedFailedAtRef.current = null;
+    return body.uploadId;
+  }, []);
+
   // doSendChunks sends slices [fromIndex, totalChunks) for the given uploadId.
   // Returns true on success; on any chunk failure sets error state and returns false,
   // storing the failed chunk index in chunkedFailedAtRef so a retry can resume there.
@@ -1635,24 +1673,45 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // Returns true on success; sets error state and returns false otherwise.
   const doFinalizeChunks = useCallback(async (file: File, uploadId: string): Promise<boolean> => {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    const finalResp = await authorizedFetch(`${API_BASE}/api/datasets/upload/chunk/finalize`, {
-      method: "POST",
-      body: JSON.stringify({ uploadId, fileName: file.name, totalChunks, resolution: 256 }),
-      headers: { "Content-Type": "application/json" },
-    });
-
-    if (!finalResp.ok) {
-      // Cast via unknown — advisory shape for json() which returns any.
-      const errBody = await finalResp.json().catch(() => ({})) as unknown as { details?: string; error?: string };
-      // Use totalChunks as sentinel: all chunks are present, only finalize failed
+    let finalResp: Response;
+    try {
+      finalResp = await authorizedFetch(`${API_BASE}/api/datasets/upload/chunk/finalize`, {
+        method: "POST",
+        body: JSON.stringify({ uploadId, fileName: file.name, totalChunks, resolution: 256 }),
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (networkErr) {
       chunkedFailedAtRef.current = totalChunks;
       setChunkedPhase("error");
-      setChunkedError(errBody.details ?? errBody.error ?? "Failed to start server processing");
+      setChunkedError(
+        networkErr instanceof TypeError
+          ? "Connection lost while finalizing — reconnecting…"
+          : "Failed to start server processing",
+      );
+      markServerUnreachable();
       return false;
     }
 
-    const finalBody = await finalResp.json().catch(() => ({})) as unknown as { jobId?: unknown };
+    const finalBody = await finalResp.json().catch(() => ({})) as unknown as {
+      jobId?: unknown;
+      details?: string;
+      error?: string;
+    };
     const jobId = finalBody?.jobId;
+    const recoverableHandoff =
+      finalResp.status === 409 &&
+      typeof jobId === "string" &&
+      jobId.length > 0 &&
+      ["already_processing", "already_completed", "already_failed"].includes(finalBody.error ?? "");
+
+    if (!finalResp.ok && !recoverableHandoff) {
+      // Use totalChunks as sentinel: all chunks are present, only finalize failed
+      chunkedFailedAtRef.current = totalChunks;
+      setChunkedPhase("error");
+      setChunkedError(finalBody.details ?? finalBody.error ?? "Failed to start server processing");
+      return false;
+    }
+
     if (typeof jobId !== "string" || !jobId) {
       chunkedFailedAtRef.current = totalChunks;
       setChunkedPhase("error");
@@ -2009,14 +2068,13 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setChunkedError(null);
     setChunkedJobId(null);
 
-    const uploadId = crypto.randomUUID();
-    chunkedUploadIdRef.current = uploadId;
-    chunkedFailedAtRef.current = null;
+    const uploadId = await startChunkedUploadSession();
+    if (!uploadId) return;
 
     const chunksOk = await doSendChunks(file, uploadId, 0);
     if (!chunksOk) return;
     await doFinalizeChunks(file, uploadId);
-  }, [doSendChunks, doFinalizeChunks]);
+  }, [startChunkedUploadSession, doSendChunks, doFinalizeChunks]);
 
   // ─── Poll job-status endpoint while chunked processing is in flight ────────
   // Once the server queues the job (finalize returns jobId), we poll
@@ -2204,26 +2262,44 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     setChunkedPhase("uploading");
     setChunkedError(null);
     setChunkedJobId(null);
-    chunkedUploadIdRef.current = saved.uploadId;
+    let activeSession = saved;
+    chunkedUploadIdRef.current = activeSession.uploadId;
     chunkedFailedAtRef.current = null;
 
     // Ask the server which chunks it already has so we skip them.
     let resumeFrom = 0;
     try {
       const statusResp = await authorizedFetch(
-        `${API_BASE}/api/datasets/upload/chunk/status/${encodeURIComponent(saved.uploadId)}`,
+        `${API_BASE}/api/datasets/upload/chunk/status/${encodeURIComponent(activeSession.uploadId)}`,
       );
       if (statusResp.ok) {
-        const { receivedChunks } = await statusResp.json() as { receivedChunks: number[] };
+        const statusBody = await statusResp.json() as {
+          receivedChunks: number[];
+          lifecycleStatus?: "uploading" | "queued" | "processing" | "done" | "error";
+          jobId?: string;
+        };
+        if (statusBody.jobId && statusBody.lifecycleStatus !== "uploading") {
+          clearUploadSession();
+          setChunkedPhase("processing");
+          setChunkedJobId(statusBody.jobId);
+          setChunkedJobProgress(0);
+          return;
+        }
+        const { receivedChunks } = statusBody;
         const receivedSet = new Set(receivedChunks);
         let firstMissing = 0;
         while (firstMissing < saved.totalChunks && receivedSet.has(firstMissing)) firstMissing++;
         resumeFrom = firstMissing;
+      } else if (statusResp.status === 403 || statusResp.status === 404) {
+        const replacementUploadId = await startChunkedUploadSession();
+        if (!replacementUploadId) return;
+        activeSession = { ...saved, uploadId: replacementUploadId };
+        resumeFrom = 0;
       }
     } catch { /* fall back to 0 */ }
 
     // Re-persist the session so it survives any further reloads during transfer.
-    saveUploadSession(saved);
+    saveUploadSession(activeSession);
     setChunkedUploadProgress(Math.round((resumeFrom / saved.totalChunks) * 100));
     setChunkedJobProgress(0);
 
@@ -2234,10 +2310,10 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
         : "Restarting upload from the beginning",
     });
 
-    const ok = await doSendChunks(file, saved.uploadId, resumeFrom);
+    const ok = await doSendChunks(file, activeSession.uploadId, resumeFrom);
     if (!ok) return;
-    await doFinalizeChunks(file, saved.uploadId);
-  }, [doSendChunks, doFinalizeChunks, toast]);
+    await doFinalizeChunks(file, activeSession.uploadId);
+  }, [doSendChunks, doFinalizeChunks, startChunkedUploadSession, toast]);
 
   const onDrop = useCallback(
     (accepted: File[], rejected: FileRejection[]) => {
@@ -2556,8 +2632,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
   // visible for when connectivity is restored.
   const handleRetryChunked = useCallback(async () => {
     if (!lastChunkedFile || chunkedPhase === "uploading" || chunkedPhase === "processing") return;
-    const uploadId = chunkedUploadIdRef.current;
-    if (!uploadId) return;
+    let uploadId = chunkedUploadIdRef.current;
+    if (!uploadId) {
+      uploadId = await startChunkedUploadSession();
+      if (!uploadId) return;
+    }
 
     // ── Server health probe ────────────────────────────────────────────────────
     let serverReachable = false;
@@ -2580,23 +2659,53 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     }
 
     const totalChunks = Math.ceil(lastChunkedFile.size / CHUNK_SIZE);
-    const failedAt = chunkedFailedAtRef.current ?? 0;
+    let resumeFrom = chunkedFailedAtRef.current ?? 0;
+
+    try {
+      const statusResp = await authorizedFetch(
+        `${API_BASE}/api/datasets/upload/chunk/status/${encodeURIComponent(uploadId)}`,
+      );
+      if (statusResp.ok) {
+        const statusBody = await statusResp.json() as {
+          receivedChunks: number[];
+          lifecycleStatus?: "uploading" | "queued" | "processing" | "done" | "error";
+          jobId?: string;
+        };
+        if (statusBody.jobId && statusBody.lifecycleStatus !== "uploading") {
+          clearUploadSession();
+          setChunkedPhase("processing");
+          setChunkedJobId(statusBody.jobId);
+          setChunkedJobProgress(0);
+          return;
+        }
+        const receivedSet = new Set(statusBody.receivedChunks);
+        resumeFrom = 0;
+        while (resumeFrom < totalChunks && receivedSet.has(resumeFrom)) resumeFrom++;
+      } else if (statusResp.status === 403 || statusResp.status === 404) {
+        const replacementUploadId = await startChunkedUploadSession();
+        if (!replacementUploadId) return;
+        uploadId = replacementUploadId;
+        resumeFrom = 0;
+      }
+    } catch {
+      // Keep the local failed index when the status endpoint is unavailable.
+    }
 
     setChunkedPhase("uploading");
     setChunkedError(null);
     // Show progress from where we are — don't reset to 0 if early chunks already landed
-    setChunkedUploadProgress(Math.round((Math.min(failedAt, totalChunks) / totalChunks) * 100));
+    setChunkedUploadProgress(Math.round((Math.min(resumeFrom, totalChunks) / totalChunks) * 100));
 
-    if (failedAt >= totalChunks) {
+    if (resumeFrom >= totalChunks) {
       // All chunks were already received; only the finalize call failed. Retry it directly.
       await doFinalizeChunks(lastChunkedFile, uploadId);
     } else {
       // Resume chunk transfer from the failed index, then finalize.
-      const chunksOk = await doSendChunks(lastChunkedFile, uploadId, failedAt);
+      const chunksOk = await doSendChunks(lastChunkedFile, uploadId, resumeFrom);
       if (!chunksOk) return;
       await doFinalizeChunks(lastChunkedFile, uploadId);
     }
-  }, [lastChunkedFile, chunkedPhase, doSendChunks, doFinalizeChunks]);
+  }, [lastChunkedFile, chunkedPhase, startChunkedUploadSession, doSendChunks, doFinalizeChunks]);
 
   // ─── Auto-resume chunked upload on reconnect ───────────────────────────────
   // When a network error interrupted a chunk upload, doSendChunks sets
@@ -2635,15 +2744,28 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       }
 
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      let activeUploadId = uploadId;
 
       // Ask the server which chunk slices it already has on disk.
       let resumeFrom = chunkedFailedAtRef.current ?? 0;
       try {
         const statusResp = await authorizedFetch(
-          `${API_BASE}/api/datasets/upload/chunk/status/${encodeURIComponent(uploadId)}`,
+          `${API_BASE}/api/datasets/upload/chunk/status/${encodeURIComponent(activeUploadId)}`,
         );
         if (statusResp.ok) {
-          const { receivedChunks } = await statusResp.json() as { receivedChunks: number[] };
+          const statusBody = await statusResp.json() as {
+            receivedChunks: number[];
+            lifecycleStatus?: "uploading" | "queued" | "processing" | "done" | "error";
+            jobId?: string;
+          };
+          if (statusBody.jobId && statusBody.lifecycleStatus !== "uploading") {
+            clearUploadSession();
+            setChunkedPhase("processing");
+            setChunkedJobId(statusBody.jobId);
+            setChunkedJobProgress(0);
+            return;
+          }
+          const { receivedChunks } = statusBody;
           const receivedSet = new Set(receivedChunks);
           // Find the first gap in the received set.
           let firstMissing = 0;
@@ -2651,6 +2773,11 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             firstMissing++;
           }
           resumeFrom = firstMissing;
+        } else if (statusResp.status === 403 || statusResp.status === 404) {
+          const replacementUploadId = await startChunkedUploadSession();
+          if (!replacementUploadId) return;
+          activeUploadId = replacementUploadId;
+          resumeFrom = 0;
         }
       } catch {
         // Status endpoint unreachable — fall back to the in-memory failed index.
@@ -2667,16 +2794,16 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       setChunkedUploadProgress(Math.round((Math.min(resumeFrom, totalChunks) / totalChunks) * 100));
 
       if (resumeFrom >= totalChunks) {
-        await doFinalizeChunks(file, uploadId);
+        await doFinalizeChunks(file, activeUploadId);
       } else {
-        const ok = await doSendChunks(file, uploadId, resumeFrom);
+        const ok = await doSendChunks(file, activeUploadId, resumeFrom);
         if (!ok) return;
-        await doFinalizeChunks(file, uploadId);
+        await doFinalizeChunks(file, activeUploadId);
       }
     });
 
     return unsubscribe;
-  }, [chunkedPhase, lastChunkedFile, doSendChunks, doFinalizeChunks, toast]);
+  }, [chunkedPhase, lastChunkedFile, doSendChunks, doFinalizeChunks, startChunkedUploadSession, toast]);
 
   const isAnyUploadBusy = postDatasetsUpload.isPending || chunkedPhase === "uploading" || chunkedPhase === "processing" || gcsPhase === "uploading" || gcsPhase === "processing" || rasterExtractPhase === "extracting" || rasterExtractPhase === "committing";
 

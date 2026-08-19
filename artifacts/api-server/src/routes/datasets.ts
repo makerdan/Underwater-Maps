@@ -31,6 +31,7 @@ import {
   FinalizeChunkedUploadResponse,
   RequestGcsUploadUrlResponse,
   GetGcsJobStatusResponse,
+  StartChunkedUploadResponse,
 } from "@workspace/api-zod";
 import { validateResponse } from "../middlewares/validateResponse.js";
 import {
@@ -142,6 +143,14 @@ export function validateTerrainForDb(terrain: unknown, context: string): StoredT
 // that only the originating user can send subsequent chunks, finalize, or poll.
 interface UploadSession {
   userId: string;
+  /** True while chunk 0 is moving to disk and its durable row is being created. */
+  initializing?: boolean;
+  /** Whether this process created the session or restored it from upload_jobs. */
+  source?: "live" | "rehydrated";
+  /** Durable lifecycle state mirrored from upload_jobs. */
+  lifecycleStatus?: "uploading" | "queued" | "processing" | "done" | "error";
+  /** Expected chunk count once chunk 0 establishes it. */
+  totalChunks?: number;
   /**
    * True while a finalize is in-flight (set synchronously before any await so
    * concurrent requests see it immediately and return 409 without racing).
@@ -449,18 +458,37 @@ async function persistJobToDB(
   }
 }
 
+async function persistTerminalJobToDB(jobId: string, state: JobState): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await persistJobToDB(jobId, state, undefined, { strict: true });
+      return;
+    } catch (err) {
+      lastError = err;
+      logger.warn(
+        { err, jobId, status: state.status, attempt },
+        "[upload-job] terminal state persistence retry failed",
+      );
+    }
+  }
+  logger.error(
+    { err: lastError, jobId, status: state.status },
+    "[upload-job] terminal state could not be persisted after retries",
+  );
+}
+
 /**
- * Creates an "uploading" row in the DB when chunk 0 is received.
- * This lets the chunk-status endpoint reconstruct progress after a server
- * restart that wiped /tmp — the row is later promoted to "queued" by
- * persistJobToDB() during finalize (same row id = sessionJobId).
+ * Creates the durable "uploading" row after chunk 0 reaches its canonical disk
+ * path. A failed insert is reported to the caller and the chunk is removed so
+ * disk and durable state cannot disagree about whether the session started.
  */
 async function createUploadSessionRow(
   sessionJobId: string,
   userId: string,
   uploadId: string,
   totalChunks: number,
-): Promise<void> {
+): Promise<boolean> {
   try {
     await db
       .insert(uploadJobsTable)
@@ -475,16 +503,17 @@ async function createUploadSessionRow(
         updatedAt: new Date(),
       })
       .onConflictDoNothing();
+    return true;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.warn({ sessionJobId, uploadId, errMsg }, `[upload-session] createUploadSessionRow failed`);
+    return false;
   }
 }
 
 /**
- * Increments chunksReceived in the DB for an active upload session.
- * Called after each successful chunk write (except chunk 0, which is set
- * to 1 at row creation time).  Fire-and-forget — non-fatal on failure.
+ * Stores the exact number of chunk files present for an active upload session.
+ * The precise index set remains disk-authoritative; this aggregate is advisory.
  */
 async function updateChunksReceivedInDB(
   uploadId: string,
@@ -501,6 +530,20 @@ async function updateChunksReceivedInDB(
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.warn({ uploadId, chunksReceived, errMsg }, `[upload-session] updateChunksReceivedInDB failed`);
+  }
+}
+
+async function countReceivedChunksOnDisk(uploadId: string): Promise<number> {
+  try {
+    const prefix = `${uploadId}-chunk-`;
+    const entries = await fs.promises.readdir(CHUNK_BASE_DIR);
+    return entries.filter((entry) => {
+      if (!entry.startsWith(prefix)) return false;
+      const index = Number(entry.slice(prefix.length));
+      return Number.isInteger(index) && index >= 0;
+    }).length;
+  } catch {
+    return 0;
   }
 }
 
@@ -521,21 +564,25 @@ async function updateChunksReceivedInDB(
  * Called once from the server's startup sequence in index.ts, before
  * cleanupStaleChunks() runs.
  */
-export async function recoverStaleUploadJobs(): Promise<void> {
+export async function recoverStaleUploadJobs(): Promise<boolean> {
   try {
     const staleJobs = await db
       .select({
         id: uploadJobsTable.id,
         userId: uploadJobsTable.userId,
+        status: uploadJobsTable.status,
         uploadId: uploadJobsTable.uploadId,
         fileName: uploadJobsTable.fileName,
         totalChunks: uploadJobsTable.totalChunks,
+        chunksReceived: uploadJobsTable.chunksReceived,
         resolution: uploadJobsTable.resolution,
         smoothing: uploadJobsTable.smoothing,
+        updatedAt: uploadJobsTable.updatedAt,
       })
       .from(uploadJobsTable)
       .where(and(
         or(
+          eq(uploadJobsTable.status, "uploading"),
           eq(uploadJobsTable.status, "queued"),
           eq(uploadJobsTable.status, "processing"),
         ),
@@ -545,9 +592,10 @@ export async function recoverStaleUploadJobs(): Promise<void> {
         isNull(uploadJobsTable.objectKey),
       ));
 
-    if (staleJobs.length === 0) return;
+    if (staleJobs.length === 0) return true;
 
     const recoverable: string[] = [];
+    const resumable: string[] = [];
     const failed: string[] = [];
 
     for (const job of staleJobs) {
@@ -558,6 +606,21 @@ export async function recoverStaleUploadJobs(): Promise<void> {
       let totalChunks = job.totalChunks;
       let resolution = job.resolution;
       let smoothing = job.smoothing;
+      const lifecycleStatus = job.status ?? "queued";
+
+      if (lifecycleStatus === "uploading" && uploadId && totalChunks != null) {
+        uploadSessions.set(uploadId, {
+          userId: job.userId,
+          sessionJobId: job.id,
+          serverIssued: true,
+          source: "rehydrated",
+          lifecycleStatus: "uploading",
+          totalChunks,
+          lastActivityAt: job.updatedAt?.getTime() ?? Date.now(),
+        });
+        resumable.push(job.id);
+        continue;
+      }
 
       if (!uploadId || !fileName || totalChunks == null || resolution == null || smoothing == null) {
         // Legacy sidecar fallback — rows predating the DB meta columns.
@@ -579,20 +642,40 @@ export async function recoverStaleUploadJobs(): Promise<void> {
       }
 
       if (uploadId && fileName && totalChunks != null && resolution != null && smoothing != null) {
-        // Check whether the assembled file or at least chunk 0 still exists.
+        // A finalized job is recoverable only from its complete source: either
+        // the assembled file or every expected chunk.
         const assembledPath = path.join(CHUNK_BASE_DIR, `${job.id}-assembled`);
         const assembledExists = await fs.promises.access(assembledPath)
           .then(() => true).catch(() => false);
 
-        const chunk0Path = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-0`);
-        const chunksExist = !assembledExists && await fs.promises.access(chunk0Path)
-          .then(() => true).catch(() => false);
+        let chunksComplete = assembledExists;
+        if (!assembledExists) {
+          chunksComplete = true;
+          for (let i = 0; i < totalChunks; i++) {
+            const chunkPath = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${i}`);
+            const exists = await fs.promises.access(chunkPath)
+              .then(() => true).catch(() => false);
+            if (!exists) {
+              chunksComplete = false;
+              break;
+            }
+          }
+        }
 
-        if (assembledExists || chunksExist) {
+        if (assembledExists || chunksComplete) {
           // Restore the in-memory upload session so chunk-status queries work.
           // Include sessionJobId so that if the client retries finalize the
           // same DB row is reused instead of spawning a second one.
-          uploadSessions.set(uploadId, { userId: job.userId, sessionJobId: job.id, serverIssued: true, lastActivityAt: Date.now() });
+          uploadSessions.set(uploadId, {
+            userId: job.userId,
+            sessionJobId: job.id,
+            activeJobId: job.id,
+            serverIssued: true,
+            source: "rehydrated",
+            lifecycleStatus: "queued",
+            totalChunks,
+            lastActivityAt: Date.now(),
+          });
 
           // Re-queue the job with its original parameters.
           const requeued: JobState = { status: "queued", progress: 0, userId: job.userId };
@@ -636,15 +719,24 @@ export async function recoverStaleUploadJobs(): Promise<void> {
         `[upload-jobs] recovered and re-queued ${recoverable.length} stale job(s) after restart`,
       );
     }
+    if (resumable.length > 0) {
+      logger.info(
+        { count: resumable.length },
+        `[upload-jobs] restored ${resumable.length} resumable upload session(s) after restart`,
+      );
+    }
     if (failed.length > 0) {
       logger.info(
         { count: failed.length },
         `[upload-jobs] marked ${failed.length} stale job(s) as error after restart (no recoverable source)`,
       );
     }
+    return true;
   } catch (err) {
-    // Non-fatal — the server continues; stale jobs will surface as error on poll.
+    // Non-fatal — the server continues, but startup cleanup must not run because
+    // the active ownership set could not be reconstructed safely.
     logger.error({ err }, "[upload-jobs] failed to recover stale jobs on startup");
+    return false;
   }
 }
 
@@ -698,6 +790,10 @@ export async function cleanupStaleChunks(): Promise<void> {
     let removedSidecars = 0;
     for (const entry of entries) {
       if (CHUNK_PATTERN.test(entry)) {
+        const uploadId = entry.replace(/-chunk-\d+$/, "");
+        if (uploadSessions.has(uploadId)) {
+          continue;
+        }
         await fs.promises.unlink(path.join(CHUNK_BASE_DIR, entry)).catch(() => undefined);
         removedChunks++;
       } else if (SIDECAR_PATTERN.test(entry)) {
@@ -725,9 +821,8 @@ export async function cleanupStaleChunks(): Promise<void> {
  *
  * These rows are created on the first chunk of a multi-part upload.  If the
  * client never calls finalize (browser closed, network dropped, tab killed)
- * the row stays "uploading" forever.  Because recoverStaleUploadJobs() only
- * handles "queued" and "processing" rows, abandoned "uploading" rows would
- * otherwise accumulate without bound.
+ * the row stays "uploading" forever. Recovery restores those rows for resume,
+ * while this sweep removes only rows whose durable activity remains stale.
  *
  * Called once from the server's startup sequence in index.ts, after
  * recoverStaleUploadJobs() and cleanupStaleChunks() have run.
@@ -737,7 +832,34 @@ export const ABANDONED_UPLOAD_THRESHOLD_MS =
 
 export async function cleanupAbandonedUploadJobs(): Promise<void> {
   try {
-    const cutoff = new Date(Date.now() - ABANDONED_UPLOAD_THRESHOLD_MS);
+    const now = Date.now();
+    const cutoff = new Date(now - ABANDONED_UPLOAD_THRESHOLD_MS);
+
+    // Keep DB activity in sync for every live resumable session before the
+    // broad stale-row delete. If a heartbeat fails, abort this cleanup cycle:
+    // retaining stale rows is safer than deleting a session that is active in
+    // this process.
+    for (const session of uploadSessions.values()) {
+      const isLiveUploadingSession =
+        session.lifecycleStatus === "uploading" &&
+        (
+          session.initializing === true ||
+          session.finalizing === true ||
+          now - session.lastActivityAt < ABANDONED_UPLOAD_THRESHOLD_MS
+        );
+      if (!isLiveUploadingSession || !session.sessionJobId) continue;
+
+      await db
+        .update(uploadJobsTable)
+        .set({ updatedAt: new Date(now) })
+        .where(
+          and(
+            eq(uploadJobsTable.id, session.sessionJobId),
+            eq(uploadJobsTable.status, "uploading"),
+          ),
+        );
+    }
+
     const deleted = await db
       .delete(uploadJobsTable)
       .where(
@@ -787,6 +909,7 @@ export async function sweepStaleUploadSessions(): Promise<void> {
   for (const [uploadId, session] of uploadSessions) {
     const activeJob = session.activeJobId ? uploadJobs.get(session.activeJobId) : undefined;
     const isActive =
+      session.initializing === true ||
       session.finalizing === true ||
       activeJob?.status === "queued" ||
       activeJob?.status === "processing";
@@ -838,7 +961,15 @@ export async function sweepStaleUploadSessions(): Promise<void> {
 /** Test-only: seed an in-memory upload session. */
 export function setUploadSessionForTest(
   uploadId: string,
-  session: { userId: string; lastActivityAt: number; finalizing?: boolean; activeJobId?: string; sessionJobId?: string },
+  session: {
+    userId: string;
+    lastActivityAt: number;
+    initializing?: boolean;
+    finalizing?: boolean;
+    activeJobId?: string;
+    sessionJobId?: string;
+    lifecycleStatus?: UploadSession["lifecycleStatus"];
+  },
 ): void {
   uploadSessions.set(uploadId, session);
 }
@@ -1089,6 +1220,8 @@ async function processUploadJob(
   await withChunkProcessSlot(async () => {
   try {
     job.status = "processing";
+    const uploadSession = uploadSessions.get(uploadId);
+    if (uploadSession) uploadSession.lifecycleStatus = "processing";
     // Capture wall-clock start time and file extension for the calibration table.
     job.jobStartedAt = Date.now();
     job.fileExt = path.extname(fileName).toLowerCase();
@@ -1096,9 +1229,16 @@ async function processUploadJob(
     // Persist "processing" to DB so a future process knows this job started.
     await persistJobToDB(jobId, { ...job });
 
-    // Stream chunks one-at-a-time into a single assembled file.
-    // Peak RAM: one 5 MB chunk. No Buffer.concat across all chunks.
-    await streamChunksToFile(uploadId, totalChunks, assembledPath);
+    // Recovery may already have a complete assembled source. Preserve and use
+    // it instead of truncating it and attempting to rebuild from cleaned chunks.
+    const assembledExists = await fs.promises.access(assembledPath)
+      .then(() => true)
+      .catch(() => false);
+    if (!assembledExists) {
+      // Stream chunks one-at-a-time into a single assembled file.
+      // Peak RAM: one 5 MB chunk. No Buffer.concat across all chunks.
+      await streamChunksToFile(uploadId, totalChunks, assembledPath);
+    }
     // Record assembled file size for pre-40% ETA calibration (larger files
     // take proportionally longer to parse and grid than to assemble).
     job.fileBytes = await fs.promises.stat(assembledPath)
@@ -1248,7 +1388,8 @@ async function processUploadJob(
         updateProgressWithEta(job, 100);
         job.status = "done";
         job.datasetId = saved?.id ?? gridId;
-        await persistJobToDB(jobId, { ...job });
+        if (uploadSession) uploadSession.lifecycleStatus = "done";
+        await persistTerminalJobToDB(jobId, { ...job });
         return;
       }
 
@@ -1314,17 +1455,20 @@ async function processUploadJob(
     updateProgressWithEta(job, 100);
     job.status = "done";
     job.datasetId = saved?.id ?? gridId;
-    await persistJobToDB(jobId, { ...job });
+    if (uploadSession) uploadSession.lifecycleStatus = "done";
+    await persistTerminalJobToDB(jobId, { ...job });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Processing failed";
     job.status = "error";
     job.error = msg;
+    const uploadSession = uploadSessions.get(uploadId);
+    if (uploadSession) uploadSession.lifecycleStatus = "error";
     logger.error({ err, jobId }, `[chunk-job:${jobId}] failed`);
     // Persist the error state so polls return a clear failure instead of a
     // stale "processing" status. The in-memory state is already "error" above,
     // so subsequent polls on this process will be correct even if the DB write
     // fails. persistJobToDB logs its own warning on failure.
-    await persistJobToDB(jobId, { ...job });
+    await persistTerminalJobToDB(jobId, { ...job });
   } finally {
     await cleanupChunks(uploadId, totalChunks);
     await fs.promises.unlink(assembledPath).catch(() => undefined);
@@ -2641,8 +2785,6 @@ router.post(
 // returns the uploadId.  Subsequent chunk-submit and finalize calls must supply
 // a uploadId that originated from this endpoint — client-supplied UUIDs are
 // rejected with 403 to prevent session-slot squatting.
-const PostUploadStartResponse = z.object({ uploadId: z.string().uuid() });
-
 router.post(
   "/datasets/upload/start",
   requireAuth,
@@ -2650,8 +2792,14 @@ router.post(
     const userId = (req as AuthenticatedRequest).clerkUserId;
     const uploadId = crypto.randomUUID();
     // Pre-register the session so chunk-0 can verify it was server-issued.
-    uploadSessions.set(uploadId, { userId, serverIssued: true, lastActivityAt: Date.now() });
-    res.json(validateResponse(PostUploadStartResponse, { uploadId }, "POST /api/datasets/upload/start"));
+    uploadSessions.set(uploadId, {
+      userId,
+      serverIssued: true,
+      source: "live",
+      lifecycleStatus: "uploading",
+      lastActivityAt: Date.now(),
+    });
+    res.json(validateResponse(StartChunkedUploadResponse, { uploadId }, "POST /api/datasets/upload/start"));
   }),
 );
 
@@ -2686,6 +2834,12 @@ router.post(
     }
 
     const userId = (req as AuthenticatedRequest).clerkUserId;
+    let pendingSessionRow: {
+      sessionJobId: string;
+      userId: string;
+      uploadId: string;
+      totalChunks: number;
+    } | null = null;
 
     if (chunkIndex === 0) {
       // First chunk: verify the session was server-issued (created by
@@ -2712,18 +2866,48 @@ router.post(
         });
         return;
       }
+      if (existingSession.lifecycleStatus && existingSession.lifecycleStatus !== "uploading") {
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(409).json({
+          error: existingSession.lifecycleStatus === "done"
+            ? "already_completed"
+            : existingSession.lifecycleStatus === "error"
+              ? "already_failed"
+              : "already_processing",
+          ...(existingSession.activeJobId ? { jobId: existingSession.activeJobId } : {}),
+          details: "This upload has already been finalized.",
+        });
+        return;
+      }
+      if (existingSession.initializing) {
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(409).json({
+          error: "upload_session_initializing",
+          details: "Chunk 0 is still being durably registered. Retry this chunk.",
+        });
+        return;
+      }
+      if (existingSession.totalChunks !== undefined && existingSession.totalChunks !== totalChunks) {
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(409).json({
+          error: "chunk_count_mismatch",
+          details: `Upload session expects ${existingSession.totalChunks} chunks, not ${totalChunks}.`,
+        });
+        return;
+      }
       if (!existingSession.sessionJobId) {
         // First time chunk-0 is received for this session — generate the
         // jobId now so the same DB row transitions uploading→queued.
         const sessionJobId = crypto.randomUUID();
-        existingSession.sessionJobId = sessionJobId;
+        existingSession.initializing = true;
         existingSession.lastActivityAt = Date.now();
-        // Await so in-memory and DB state advance together (non-fatal on failure).
-        await createUploadSessionRow(sessionJobId, userId, uploadId, totalChunks);
+        pendingSessionRow = { sessionJobId, userId, uploadId, totalChunks };
       } else {
         // Same user retrying chunk 0 — refresh activity and continue.
         existingSession.lastActivityAt = Date.now();
       }
+      existingSession.totalChunks = totalChunks;
+      existingSession.lifecycleStatus = "uploading";
     } else {
       // Subsequent chunks: verify ownership.
     let session = uploadSessions.get(uploadId);
@@ -2738,14 +2922,26 @@ router.post(
         .select({
           userId: uploadJobsTable.userId,
           sessionJobId: uploadJobsTable.id,
+          status: uploadJobsTable.status,
+          totalChunks: uploadJobsTable.totalChunks,
         })
         .from(uploadJobsTable)
         .where(eq(uploadJobsTable.uploadId, uploadId));
 
         if (dbJob) {
+          const durableStatus = dbJob.status ?? "uploading";
           // Session was originally created via the server-owned start endpoint;
           // mark it as such so the ownership chain remains intact after restart.
-          session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, serverIssued: true, lastActivityAt: Date.now() };
+          session = {
+            userId: dbJob.userId,
+            sessionJobId: dbJob.sessionJobId,
+            serverIssued: true,
+            source: "rehydrated",
+            activeJobId: durableStatus === "uploading" ? undefined : dbJob.sessionJobId,
+            lifecycleStatus: durableStatus,
+            totalChunks: dbJob.totalChunks ?? totalChunks,
+            lastActivityAt: Date.now(),
+          };
           uploadSessions.set(uploadId, session);
         }
       }
@@ -2760,6 +2956,36 @@ router.post(
         res.status(403).json({ error: "forbidden", details: "Upload session belongs to a different user." });
         return;
       }
+      if (session.initializing) {
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(409).json({
+          error: "upload_session_initializing",
+          details: "Chunk 0 is still being durably registered. Retry this chunk.",
+        });
+        return;
+      }
+      if (session.lifecycleStatus && session.lifecycleStatus !== "uploading") {
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(409).json({
+          error: session.lifecycleStatus === "done"
+            ? "already_completed"
+            : session.lifecycleStatus === "error"
+              ? "already_failed"
+              : "already_processing",
+          ...(session.activeJobId ? { jobId: session.activeJobId } : {}),
+          details: "This upload has already been finalized.",
+        });
+        return;
+      }
+      if (session.totalChunks !== undefined && session.totalChunks !== totalChunks) {
+        await fs.promises.unlink(file.path).catch(() => undefined);
+        res.status(409).json({
+          error: "chunk_count_mismatch",
+          details: `Upload session expects ${session.totalChunks} chunks, not ${totalChunks}.`,
+        });
+        return;
+      }
+      session.totalChunks = totalChunks;
       // Refresh activity so an in-progress upload is never swept mid-flight.
       session.lastActivityAt = Date.now();
     }
@@ -2770,15 +2996,43 @@ router.post(
       await fs.promises.rename(file.path, dest);
     } catch {
       await fs.promises.unlink(file.path).catch(() => undefined);
+      if (pendingSessionRow) {
+        const failedSession = uploadSessions.get(uploadId);
+        if (failedSession) failedSession.initializing = false;
+      }
       res.status(500).json({ error: "chunk_write_error", details: "Failed to store chunk." });
       return;
     }
 
-    // Update chunksReceived in DB after successful disk write.
-    // Chunk 0 already set chunksReceived=1 in createUploadSessionRow; only
-    // subsequent chunks need an increment here.
+    if (pendingSessionRow) {
+      const persisted = await createUploadSessionRow(
+        pendingSessionRow.sessionJobId,
+        pendingSessionRow.userId,
+        pendingSessionRow.uploadId,
+        pendingSessionRow.totalChunks,
+      );
+      if (!persisted) {
+        await fs.promises.unlink(dest).catch(() => undefined);
+        const failedSession = uploadSessions.get(uploadId);
+        if (failedSession) failedSession.initializing = false;
+        res.status(500).json({
+          error: "upload_session_persist_failed",
+          details: "Could not persist the upload session. Retry this chunk.",
+        });
+        return;
+      }
+      const persistedSession = uploadSessions.get(uploadId);
+      if (persistedSession) {
+        persistedSession.sessionJobId = pendingSessionRow.sessionJobId;
+        persistedSession.initializing = false;
+      }
+    }
+
+    // Persist an exact count of chunk files currently present. chunkIndex + 1
+    // is only a high-water mark and overstates progress for out-of-order writes.
     if (chunkIndex > 0) {
-      void updateChunksReceivedInDB(uploadId, chunkIndex + 1);
+      const chunksReceived = await countReceivedChunksOnDisk(uploadId);
+      await updateChunksReceivedInDB(uploadId, chunksReceived);
     }
 
     res.json(validateResponse(UploadDatasetChunkResponse, { received: chunkIndex }, "POST /api/datasets/upload/chunk"));
@@ -2807,10 +3061,6 @@ router.get(
     // Verify session ownership before queuing
     let session = uploadSessions.get(uploadId);
 
-    // DB chunksReceived is captured here so it is available for the disk-empty
-    // fallback below even when the in-memory session already existed.
-    let dbChunksReceived: number | null = null;
-
     if (!session) {
       // DB fallback — handles the case where the server restarted between
       // chunk uploads and the in-memory session was lost.  An "uploading"
@@ -2819,19 +3069,30 @@ router.get(
       const [dbJob] = await db
         .select({
           userId: uploadJobsTable.userId,
-          chunksReceived: uploadJobsTable.chunksReceived,
           sessionJobId: uploadJobsTable.id,
+          status: uploadJobsTable.status,
+          totalChunks: uploadJobsTable.totalChunks,
+          updatedAt: uploadJobsTable.updatedAt,
         })
         .from(uploadJobsTable)
         .where(eq(uploadJobsTable.uploadId, uploadId));
 
       if (dbJob) {
+        const durableStatus = dbJob.status ?? "uploading";
         // Restore the in-memory session so future requests in this process
         // take the fast path.
         // Mark server-issued so the ownership chain survives a server restart.
-        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, serverIssued: true, lastActivityAt: Date.now() };
+        session = {
+          userId: dbJob.userId,
+          sessionJobId: dbJob.sessionJobId,
+          activeJobId: durableStatus === "uploading" ? undefined : dbJob.sessionJobId,
+          serverIssued: true,
+          source: "rehydrated",
+          lifecycleStatus: durableStatus,
+          totalChunks: dbJob.totalChunks ?? undefined,
+          lastActivityAt: dbJob.updatedAt?.getTime() ?? Date.now(),
+        };
         uploadSessions.set(uploadId, session);
-        dbChunksReceived = dbJob.chunksReceived ?? null;
       }
     }
 
@@ -2839,16 +3100,41 @@ router.get(
       res.status(404).json({ error: "upload_not_found" });
       return;
     }
+    if (session.initializing) {
+      res.status(409).json({
+        error: "upload_session_initializing",
+        details: "Chunk 0 is still being durably registered. Retry shortly.",
+      });
+      return;
+    }
+
+    const touchedAt = new Date();
+    session.lastActivityAt = touchedAt.getTime();
+    if (session.lifecycleStatus === "uploading" && session.sessionJobId) {
+      try {
+        await db
+          .update(uploadJobsTable)
+          .set({ updatedAt: touchedAt })
+          .where(
+            and(
+              eq(uploadJobsTable.id, session.sessionJobId),
+              eq(uploadJobsTable.status, "uploading"),
+            ),
+          );
+      } catch (err) {
+        logger.warn(
+          { err, uploadId, sessionJobId: session.sessionJobId },
+          "[chunk-status] durable activity heartbeat failed",
+        );
+      }
+    }
 
     // L-10: enumerate actual chunk files on disk — disk is always the
     // authoritative source of truth while chunks are actively arriving.
     //
-    // The DB chunksReceived count is used as a fallback ONLY when the chunk
-    // directory itself is inaccessible (e.g. /tmp not yet created after a
-    // fresh container start).  An accessible-but-empty directory means chunks
-    // were lost on restart — return [] so the client re-uploads rather than
-    // synthesising [0..N-1] from the count, which would cause finalize to
-    // fail the all-chunks-present verification.
+    // A DB count cannot identify holes after out-of-order or retried chunks.
+    // If the directory is inaccessible, [] is the only safe answer and causes
+    // the client to re-upload rather than skip data that may be missing.
     const receivedChunks: number[] = [];
     let chunkDirAccessible = true;
     let dirEntries: string[] = [];
@@ -2858,7 +3144,7 @@ router.get(
       chunkDirAccessible = false;
       logger.warn(
         { uploadId, CHUNK_BASE_DIR },
-        "[chunk-status] chunk directory not accessible; falling back to DB chunksReceived count",
+        "[chunk-status] chunk directory not accessible; reporting no received chunks",
       );
     }
 
@@ -2872,28 +3158,13 @@ router.get(
       }
     }
 
-    // DB synthesis fallback — dbChunksReceived is non-null ONLY when the
-    // session was just rehydrated from the DB (server restart wiped the
-    // in-memory map).  In that restart case the disk may also have been
-    // wiped, so the server-owned DB count is the best available progress
-    // signal.  For a live in-memory session (dbChunksReceived === null), an
-    // accessible-but-empty directory means chunks were genuinely lost —
-    // return [] so the client re-uploads rather than synthesising [0..N-1],
-    // which would cause finalize to fail the all-chunks-present verification.
-    // DB count is server-owned, so synthesising from it is safe. This is
-    // distinct from trusting a CLIENT-supplied list — the risk the disk-
-    // primary approach guards against.
-    if (receivedChunks.length === 0 && dbChunksReceived !== null && dbChunksReceived > 0) {
-      // Disk was wiped (container restart) but the DB still knows how many
-      // chunks arrived.  Synthesise the contiguous list so the client can ask
-      // for only the next missing chunk rather than starting over.
-      for (let i = 0; i < dbChunksReceived; i++) {
-        receivedChunks.push(i);
-      }
-    }
-
     receivedChunks.sort((a, b) => a - b);
-    res.json(validateResponse(GetChunkUploadStatusResponse, { uploadId, receivedChunks }, "GET /api/datasets/upload/chunk/status/:uploadId"));
+    res.json(validateResponse(GetChunkUploadStatusResponse, {
+      uploadId,
+      receivedChunks,
+      lifecycleStatus: session.lifecycleStatus ?? "uploading",
+      ...(session.activeJobId ? { jobId: session.activeJobId } : {}),
+    }, "GET /api/datasets/upload/chunk/status/:uploadId"));
   }),
 );
 
@@ -2922,19 +3193,6 @@ router.post(
       return;
     }
 
-    // Verify that all chunks are present before queuing
-    for (let i = 0; i < totalChunks; i++) {
-      const chunkPath = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${i}`);
-      const exists = await fs.promises.access(chunkPath).then(() => true).catch(() => false);
-      if (!exists) {
-        res.status(409).json({
-          error: "missing_chunks",
-          details: `Chunk ${i} of ${totalChunks} not yet received. Re-upload missing chunks and retry.`,
-        });
-        return;
-      }
-    }
-
     const userId = (req as AuthenticatedRequest).clerkUserId;
 
     // Verify session ownership before queuing
@@ -2950,13 +3208,25 @@ router.post(
         .select({
           userId: uploadJobsTable.userId,
           sessionJobId: uploadJobsTable.id,
+          status: uploadJobsTable.status,
+          totalChunks: uploadJobsTable.totalChunks,
         })
         .from(uploadJobsTable)
         .where(eq(uploadJobsTable.uploadId, uploadId));
 
       if (dbJob) {
+        const durableStatus = dbJob.status ?? "uploading";
         // Mark server-issued — only legitimately started sessions have DB rows.
-        session = { userId: dbJob.userId, sessionJobId: dbJob.sessionJobId, serverIssued: true, lastActivityAt: Date.now() };
+        session = {
+          userId: dbJob.userId,
+          sessionJobId: dbJob.sessionJobId,
+          activeJobId: durableStatus === "uploading" ? undefined : dbJob.sessionJobId,
+          serverIssued: true,
+          source: "rehydrated",
+          lifecycleStatus: durableStatus,
+          totalChunks: dbJob.totalChunks ?? undefined,
+          lastActivityAt: Date.now(),
+        };
         uploadSessions.set(uploadId, session);
       }
     }
@@ -2973,6 +3243,20 @@ router.post(
       res.status(403).json({ error: "upload_not_started", details: "This upload was not registered via the server. Call POST /api/datasets/upload/start first." });
       return;
     }
+    if (session.initializing) {
+      res.status(409).json({
+        error: "upload_session_initializing",
+        details: "Chunk 0 is still being durably registered. Retry shortly.",
+      });
+      return;
+    }
+    if (session.totalChunks !== undefined && session.totalChunks !== totalChunks) {
+      res.status(409).json({
+        error: "chunk_count_mismatch",
+        details: `Upload session expects ${session.totalChunks} chunks, not ${totalChunks}.`,
+      });
+      return;
+    }
     // Refresh activity so the session is never swept while finalize is underway.
     session.lastActivityAt = Date.now();
 
@@ -2984,25 +3268,45 @@ router.post(
     // returns 409 without waiting for the first to finish.
     if (session.finalizing) {
       res.status(409).json({
-        error: "already_processing",
-        details: "A finalize for this upload is already in progress. Poll the existing jobId.",
+        error: "finalize_in_progress",
+        details: "This upload is still being finalized. Retry shortly.",
       });
       return;
     }
     if (session.activeJobId) {
       const existingJob = uploadJobs.get(session.activeJobId);
-      if (existingJob && (existingJob.status === "queued" || existingJob.status === "processing")) {
+      const existingStatus = existingJob?.status ?? session.lifecycleStatus;
+      if (existingStatus && existingStatus !== "uploading") {
         res.status(409).json({
-          error: "already_processing",
+          error: existingStatus === "done"
+            ? "already_completed"
+            : existingStatus === "error"
+              ? "already_failed"
+              : "already_processing",
           jobId: session.activeJobId,
-          details: "A finalize job for this upload is already running. Poll the existing jobId.",
+          details: "This upload has already been handed off. Poll the existing jobId.",
         });
         return;
       }
     }
-
-    // Lock acquired — set before any await so concurrent requests see it immediately.
     session.finalizing = true;
+
+    // Verify all chunks only after the idempotent handoff checks above. If a
+    // finalize response was lost and processing already removed temp files,
+    // the client must recover the existing jobId instead of seeing a false
+    // missing-chunks failure.
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkPath = path.join(CHUNK_BASE_DIR, `${uploadId}-chunk-${i}`);
+      const exists = await fs.promises.access(chunkPath).then(() => true).catch(() => false);
+      if (!exists) {
+        session.finalizing = false;
+        res.status(409).json({
+          error: "missing_chunks",
+          details: `Chunk ${i} of ${totalChunks} not yet received. Re-upload missing chunks and retry.`,
+        });
+        return;
+      }
+    }
 
     let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
     let jobId: string;
@@ -3010,7 +3314,15 @@ router.post(
       smoothing = await getSmoothingPreference(req);
       // Reuse the UUID generated on chunk 0 so the "uploading" DB row
       // transitions to "queued" in-place rather than creating a second row.
-      jobId = session.sessionJobId ?? crypto.randomUUID();
+      if (!session.sessionJobId) {
+        session.finalizing = false;
+        res.status(500).json({
+          error: "upload_session_missing",
+          details: "The durable upload session is missing. Re-upload from chunk 0.",
+        });
+        return;
+      }
+      jobId = session.sessionJobId;
 
       // DB-backed idempotency guard — authoritative even across server
       // restarts (the in-memory flags above are just a fast path).  A
@@ -3021,45 +3333,70 @@ router.post(
       try {
         const winners = await db
           .update(uploadJobsTable)
-          .set({ status: "queued", updatedAt: new Date() })
+          .set({
+            status: "queued",
+            progress: 0,
+            error: null,
+            datasetId: null,
+            updatedAt: new Date(),
+            stageStartedAt: null,
+            uploadId,
+            fileName,
+            totalChunks,
+            chunksReceived: totalChunks,
+            resolution,
+            smoothing,
+          })
           .where(
             and(
               eq(uploadJobsTable.id, jobId),
-              or(
-                eq(uploadJobsTable.status, "uploading"),
-                eq(uploadJobsTable.status, "error"),
-                eq(uploadJobsTable.status, "done"),
-              ),
+              eq(uploadJobsTable.status, "uploading"),
             ),
           )
           .returning({ id: uploadJobsTable.id });
 
         if (winners.length === 0) {
-          // Either no row exists yet (chunk-0 insert failed — the upsert in
-          // persistJobToDB below creates it, and the in-memory lock covers
-          // same-process races), or the row is already queued/processing
-          // (another finalize won the transition).
-    const rows = await db
-      .select()
-      .from(uploadJobsTable)
-      .where(eq(uploadJobsTable.id, jobId));
+          // Another process may already have durably handed off this upload.
+          // Read its status before deciding whether it is safe to expose jobId.
+          const rows = await db
+            .select()
+            .from(uploadJobsTable)
+            .where(eq(uploadJobsTable.id, jobId));
           const current = rows[0];
-          if (current && (current.status === "queued" || current.status === "processing")) {
+          const currentStatus = current?.status;
+          if (current && currentStatus !== "uploading") {
             session.activeJobId = jobId;
+            session.lifecycleStatus = currentStatus;
             session.finalizing = false;
             res.status(409).json({
-              error: "already_processing",
+              error: currentStatus === "done"
+                ? "already_completed"
+                : currentStatus === "error"
+                  ? "already_failed"
+                  : "already_processing",
               jobId,
-              details: "A finalize job for this upload is already running. Poll the existing jobId.",
+              details: "This upload has already been handed off. Poll the existing jobId.",
             });
             return;
           }
+          session.finalizing = false;
+          res.status(current ? 409 : 500).json({
+            error: current ? "finalize_conflict" : "upload_session_missing",
+            details: current
+              ? "The upload is still being finalized. Retry shortly."
+              : "The durable upload session is missing. Re-upload from chunk 0.",
+          });
+          return;
         }
       } catch (guardErr) {
-        // DB unavailable — fall back to the in-memory guard rather than
-        // blocking uploads (matches persistJobToDB's non-fatal policy).
         const errMsg = guardErr instanceof Error ? guardErr.message : String(guardErr);
-        logger.warn({ jobId, uploadId, errMsg }, `[finalize] DB idempotency guard failed, falling back to in-memory guard: ${errMsg}`);
+        session.finalizing = false;
+        logger.error({ jobId, uploadId, errMsg }, `[finalize] DB idempotency guard failed: ${errMsg}`);
+        res.status(500).json({
+          error: "finalize_db_error",
+          details: "Failed to register upload job. Please retry.",
+        });
+        return;
       }
     } catch (err) {
       // Release lock so the client can retry.
@@ -3070,35 +3407,11 @@ router.post(
     const initialState: JobState = { status: "queued", progress: 0, userId, lastActivityAt: Date.now() };
     uploadJobs.set(jobId, initialState);
 
-    // Promote from in-flight lock to a stable jobId reference, then clear the
-    // finalizing flag (the activeJobId check above prevents duplicate jobs from
-    // any subsequent finalize calls once the job is queued/processing).
+    // The conditional update above persisted the complete queued job metadata.
+    // Only now is it safe to publish jobId to concurrent callers and pollers.
     session.activeJobId = jobId;
+    session.lifecycleStatus = "queued";
     session.finalizing = false;
-
-    // H-1: persist initial "queued" state + chunk-upload metadata to DB before
-    // firing the job.  Use strict:true so a DB failure surfaces as a hard 500
-    // rather than silently continuing — a queued job with no DB row cannot be
-    // polled or recovered after a server restart.
-    try {
-      await persistJobToDB(jobId, initialState, {
-        uploadId,
-        fileName,
-        totalChunks,
-        chunksReceived: totalChunks, // all chunks verified present above
-        resolution,
-        smoothing,
-      }, { strict: true });
-    } catch (persistErr) {
-      // Roll back in-memory state so the client can retry finalize cleanly.
-      uploadJobs.delete(jobId);
-      session.activeJobId = undefined;
-      session.finalizing = false;
-      const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
-      logger.error({ jobId, uploadId, errMsg }, `[finalize] failed to persist job to DB — aborting finalize: ${errMsg}`);
-      res.status(500).json({ error: "finalize_db_error", details: "Failed to register upload job. Please retry." });
-      return;
-    }
 
     // Fire-and-forget — the client polls /jobs/:jobId
     void processUploadJob(jobId, uploadId, totalChunks, fileName, resolution, userId, smoothing);
@@ -3296,6 +3609,13 @@ router.get(
 
     if (dbJob.userId !== userId) {
       res.status(403).json({ error: "forbidden", details: "This job belongs to a different user." });
+      return;
+    }
+    if (dbJob.status === "uploading") {
+      res.status(409).json({
+        error: "upload_not_finalized",
+        details: "This upload is still receiving chunks and has not been finalized.",
+      });
       return;
     }
 

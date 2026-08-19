@@ -404,6 +404,14 @@ function installMockAndRender(pollResponses: Response[]): {
   authorizedFetchMock.mockImplementation(async (url: unknown) => {
     const u = String(url);
 
+    if (u.includes("/upload/start")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ uploadId: "00000000-0000-4000-8000-000000000001" }),
+      } as Response;
+    }
+
     if (u.includes("/upload/chunk/finalize")) {
       return {
         ok: true,

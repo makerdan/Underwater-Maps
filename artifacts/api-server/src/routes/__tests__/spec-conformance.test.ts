@@ -717,7 +717,6 @@ const LOCAL_SCHEMA_ALLOWLIST = new Set([
   "TemperatureProfileResponseSchema", // temperature-profile.ts (local union)
   "AdminRateLimitUsageResponseSchema", // admin.ts (local)
   "AdminUpscaleCacheStatsResponseSchema", // admin.ts (local)
-  "PostUploadStartResponse", // datasets.ts (local, { uploadId: uuid } — payload built on the same line)
 ]);
 
 // ---------------------------------------------------------------------------

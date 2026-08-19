@@ -455,14 +455,24 @@ describe("DatasetPanel — chunked upload error display", () => {
   });
 
   it("shows the server details string when a chunk request returns a 422", async () => {
-    vi.spyOn(global, "fetch").mockResolvedValue({
-      ok: false,
-      status: 422,
-      json: async () => ({
-        error: "parse_error",
-        details: "BAG file header is corrupt and cannot be parsed.",
-      }),
-    } as Response);
+    vi.spyOn(global, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : String(input);
+      if (url.includes("/upload/start")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ uploadId: "00000000-0000-4000-8000-000000000007" }),
+        } as Response;
+      }
+      return {
+        ok: false,
+        status: 422,
+        json: async () => ({
+          error: "parse_error",
+          details: "BAG file header is corrupt and cannot be parsed.",
+        }),
+      } as Response;
+    });
 
     render(<DatasetPanel />);
 
@@ -487,6 +497,13 @@ describe("DatasetPanel — chunked upload error display", () => {
     vi.spyOn(global, "fetch").mockImplementation(
       async (input: RequestInfo | URL) => {
         const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/upload/start")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ uploadId: "00000000-0000-4000-8000-000000000006" }),
+          } as Response;
+        }
         if (url.includes("/chunk/finalize")) {
           return {
             ok: false,
