@@ -8,10 +8,14 @@
  *
  * What remains is the CI coverage meta-check:
  *   1. Every "check:*" script defined in the root package.json must appear in
- *      the shared CI step sequence, unless it is explicitly allowlisted below
- *      with a reason. This catches check scripts that exist but silently
- *      never run in CI, and allowlist entries that have gone stale.
- *   2. Every check-*.{mjs,sh} FILE in scripts/ must be referenced somewhere —
+ *      the shared validation-step sequence, unless it is explicitly allowlisted
+ *      below with a reason. This catches check scripts that exist but silently
+ *      never run in a tier, and allowlist entries that have gone stale.
+ *   2. Every canonical validation step must declare its GitHub Actions coverage:
+ *      either a command token found in a PR workflow, or an explicit documented
+ *      local-only exclusion. This prevents a new portable guard from becoming
+ *      Agent-only merely because it was added to validation-steps.mjs.
+ *   3. Every check-*.{mjs,sh} FILE in scripts/ must be referenced somewhere —
  *      a package.json script, a workflow (.replit), or another (non-check)
  *      script such as post-merge.sh — unless allowlisted with a reason. This
  *      catches check files that exist only on disk and can go permanently
@@ -63,6 +67,77 @@ export const CI_COVERAGE_ALLOWLIST = {
 // but is not referenced by any npm script, workflow, or other script —
 // e.g. { "check-manual-only.mjs": "invoked by humans, not automated runners" }.
 export const ORPHAN_FILE_ALLOWLIST = {};
+
+// ---------------------------------------------------------------------------
+// GitHub Actions validation parity
+//
+// Every canonical validation step has exactly one entry here. `tokens` are
+// searched across all .github/workflows/*.yml files that run for pull requests;
+// they intentionally support equivalent coverage such as `verify`, manually
+// sharded unit commands, and the dedicated drift workflow. `excluded` entries
+// must explain why the check is meaningful only with Replit/Agent-local state.
+// ---------------------------------------------------------------------------
+
+export const GITHUB_CI_COVERAGE = {
+  typecheck: { tokens: ["pnpm run typecheck"] },
+  lint: { tokens: ["pnpm run lint"] },
+  "check:lock-skill-sync": { tokens: ["pnpm run check:lock-skill-sync"] },
+  "check:skill-mirror-sync": {
+    excluded: "Reads the gitignored .local/custom_skills mirror, which is Agent-local and absent from GitHub checkouts.",
+  },
+  "check:failure-gate-zip": { tokens: ["pnpm run check:failure-gate-zip"] },
+  "check:poe-setup-zip": { tokens: ["pnpm run check:poe-setup-zip"] },
+  "check:port-authority-zip": { tokens: ["pnpm run check:port-authority-zip"] },
+  "check:port-authority-heavy-zip": { tokens: ["pnpm run check:port-authority-heavy-zip"] },
+  "check:tier-lock": { tokens: ["pnpm run check:tier-lock"] },
+  "check:root-relative-api": { tokens: ["pnpm run check:root-relative-api"] },
+  "check:deps-suppression": { tokens: ["pnpm run check:deps-suppression"] },
+  "check:duplicate-hooks-registry": { tokens: ["pnpm run check:duplicate-hooks-registry"] },
+  "check:runner-step-sync": { tokens: ["pnpm run check:runner-step-sync"] },
+  "fix:failure-gate-stubs": {
+    excluded: "Mutates Agent task plans under gitignored .local/tasks/, which GitHub Actions must not create or repair.",
+  },
+  "check:failure-gate": { tokens: ["pnpm run verify"] },
+  "check:failure-gate-self-test": { tokens: ["pnpm run check:failure-gate-self-test"] },
+  "check:pre-commit-self-test": { tokens: ["pnpm run check:pre-commit-self-test"] },
+  "check:regression-guard-self-test": { tokens: ["pnpm run check:regression-guard-self-test"] },
+  "fix:regression-guard-stubs": {
+    excluded: "Mutates Agent task plans under gitignored .local/tasks/, which GitHub Actions must not create or repair.",
+  },
+  "check:regression-guard": { tokens: ["pnpm run verify"] },
+  "check:skip-count": { tokens: ["pnpm run check:skip-count"] },
+  "check:testdb-schema-drift": { tokens: ["pnpm run check:testdb-schema-drift"] },
+  "check:runbutton-noop": { tokens: ["pnpm run check:runbutton-noop"] },
+  "check:stale-lock-cleanup": {
+    excluded: "Tests Replit validation-lock recovery behavior; GitHub uses isolated ephemeral runners rather than the shared local lock.",
+  },
+  "test:unit": {
+    tokens: [
+      "pnpm exec vitest run --shard=1/2",
+      "pnpm exec vitest run --shard=2/2",
+      "pnpm --filter @workspace/api-zod run test:unit",
+      "pnpm --filter @workspace/db run test:unit",
+      "pnpm --filter @workspace/poe run test:unit",
+      "pnpm --filter @workspace/bathyscan run test:unit",
+    ],
+  },
+  "check:docs-stale": { tokens: ["pnpm run check:docs-stale"] },
+  "check:catalog-coverage": { tokens: ["pnpm run check:catalog-coverage"] },
+  "check:schema-stale": { tokens: ["pnpm run check:schema-stale"] },
+  "check:font-scale": { tokens: ["pnpm run check:font-scale"] },
+  "check:e2e-user-ids": { tokens: ["pnpm run check:e2e-user-ids"] },
+  "check:e2e-cjs-globals": { tokens: ["pnpm run check:e2e-cjs-globals"] },
+  "check:e2e-panel-collapse": { tokens: ["pnpm run check:e2e-panel-collapse"] },
+  "check:fixture-freshness": { tokens: ["pnpm run check:fixture-freshness"] },
+  "check:ports": { tokens: ["pnpm run check:ports"] },
+  "check:port-drift": { tokens: ["pnpm run check:port-drift"] },
+  "check:audit": { tokens: ["pnpm run check:audit"] },
+  "check:bare-pino-http-mock": { tokens: ["pnpm run check:bare-pino-http-mock"] },
+  "check:trip-window-raw-units": { tokens: ["pnpm run check:trip-window-raw-units"] },
+  "audit:marker-bbox": {
+    excluded: "Requires a live development DATABASE_URL to audit persisted marker rows; GitHub PR runners have no production-like database state.",
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Checks
@@ -168,6 +243,106 @@ export function findStaleAllowlistEntries(pkg, ciSteps, allowlist = CI_COVERAGE_
   return Object.keys(allowlist).filter((n) => !scriptNames.has(n) || ciSet.has(n));
 }
 
+/**
+ * Returns coverage-contract violations for the canonical validation registry.
+ * A step needs either one or more non-empty workflow search tokens, or a
+ * substantive local-only exclusion reason. Tokens must all appear in the
+ * supplied workflow text so multi-command coverage (the sharded unit suite)
+ * cannot silently lose a package.
+ *
+ * @param {Array<{name: string}>} validationSteps
+ * @param {string} workflowRunText
+ * @param {Record<string, {tokens?: string[], excluded?: string}>} coverage
+ */
+export function findGithubCiParityProblems(
+  validationSteps,
+  workflowRunText,
+  coverage = GITHUB_CI_COVERAGE,
+) {
+  const stepNames = new Set(validationSteps.map((step) => step.name));
+  const problems = [];
+
+  for (const name of stepNames) {
+    const entry = coverage[name];
+    if (!entry) {
+      problems.push(`${name}: no GitHub CI coverage entry`);
+      continue;
+    }
+    const hasTokens = Array.isArray(entry.tokens) && entry.tokens.length > 0;
+    const hasExclusion = typeof entry.excluded === "string" && entry.excluded.trim().length >= 20;
+    if (hasTokens === hasExclusion) {
+      problems.push(`${name}: declare exactly one of non-empty tokens or a substantive excluded reason`);
+      continue;
+    }
+    if (hasTokens) {
+      for (const token of entry.tokens) {
+        if (typeof token !== "string" || token.length === 0 || !workflowRunText.includes(token)) {
+          problems.push(`${name}: GitHub workflow token missing: ${JSON.stringify(token)}`);
+        }
+      }
+    }
+  }
+
+  for (const name of Object.keys(coverage)) {
+    if (!stepNames.has(name)) problems.push(`${name}: stale GitHub CI coverage entry`);
+  }
+  return problems;
+}
+
+/**
+ * Extracts only executable `run:` command bodies from a workflow source.
+ * Comments, step names, and other prose are deliberately omitted so merely
+ * documenting a command cannot satisfy the parity contract after its step is
+ * removed. Handles scalar commands and YAML literal/folded block commands.
+ */
+export function extractGithubWorkflowRunText(source) {
+  const lines = source.split("\n");
+  const commands = [];
+  for (let index = 0; index < lines.length; index++) {
+    const match = /^(\s*)run:\s*(.*)$/.exec(lines[index]);
+    if (!match) continue;
+
+    const indent = match[1].length;
+    const value = match[2].trim();
+    if (!/^[>|][+-]?$/.test(value)) {
+      commands.push(value);
+      continue;
+    }
+
+    const block = [];
+    while (index + 1 < lines.length) {
+      const next = lines[index + 1];
+      if (next.trim() === "") {
+        block.push("");
+        index++;
+        continue;
+      }
+      const nextIndent = /^\s*/.exec(next)?.[0].length ?? 0;
+      if (nextIndent <= indent) break;
+      block.push(next.trim());
+      index++;
+    }
+    commands.push(block.join("\n"));
+  }
+  return commands.join("\n");
+}
+
+/**
+ * Reads pull-request GitHub Actions workflow YAML files into one searchable
+ * string. Main-only, scheduled, and manual-only workflows cannot satisfy the
+ * parity contract because they do not protect pull requests.
+ */
+export function buildGithubWorkflowText(rootDir) {
+  const workflowsDir = resolve(rootDir, ".github", "workflows");
+  return readdirSync(workflowsDir)
+    .filter((file) => /\.(yml|yaml)$/.test(file))
+    .sort()
+    .map((file) => readFileSync(resolve(workflowsDir, file), "utf8"))
+    .filter((source) => /^\s{2}(?:pull_request|pull_request_target):/m.test(source))
+    .map(extractGithubWorkflowRunText)
+    .join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -197,6 +372,20 @@ function main() {
     console.error("[check-runner-step-sync] FAIL — stale CI_COVERAGE_ALLOWLIST entr(ies):");
     for (const n of stale) console.error(`  ${n} (script removed from package.json, or now runs in the CI sequence)`);
     console.error("  Fix: remove the entry from CI_COVERAGE_ALLOWLIST in scripts/check-runner-step-sync.mjs.");
+  }
+
+  const githubParityProblems = findGithubCiParityProblems(
+    getValidationSteps("check-runner-step-sync"),
+    buildGithubWorkflowText(root),
+  );
+  if (githubParityProblems.length > 0) {
+    failed = true;
+    console.error("[check-runner-step-sync] FAIL — canonical validation step is missing GitHub CI coverage:");
+    for (const problem of githubParityProblems) console.error(`  ${problem}`);
+    console.error(
+      "  Fix: add the portable command to a pull-request GitHub workflow and its token to\n" +
+      "  GITHUB_CI_COVERAGE, OR add a substantive local-only exclusion reason there.",
+    );
   }
 
   // Orphaned check FILES: check-*.{mjs,sh} on disk referenced nowhere.
@@ -241,7 +430,7 @@ function main() {
   if (failed) process.exit(1);
 
   console.log(
-    `[check-runner-step-sync] OK — ${ciSteps.length} shared steps; ` +
+    `[check-runner-step-sync] OK — ${ciSteps.length} shared steps; GitHub parity covered; ` +
     `all check:* scripts covered (${Object.keys(CI_COVERAGE_ALLOWLIST).length} allowlisted); ` +
     `all ${checkFiles.length} check-* files referenced (${Object.keys(ORPHAN_FILE_ALLOWLIST).length} allowlisted).`,
   );

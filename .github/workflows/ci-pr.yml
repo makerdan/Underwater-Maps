@@ -102,16 +102,24 @@ jobs:
       - name: Build shared libs (emit .d.ts for workspace packages)
         run: pnpm run typecheck:libs
 
-      # ── Fast-tier static checks ─────────────────────────────────────────────
-      # Order mirrors the FAST tier in scripts/validation-steps.mjs.
-      # Excluded because they depend on the gitignored .local/ directory, which
-      # never exists in a CI checkout:
-      #   • check:skill-mirror-sync      (reads .local/custom_skills/)
-      #   • fix:failure-gate-stubs       (writes to .local/tasks/)
-      #   • fix:regression-guard-stubs   (writes to .local/tasks/)
-      # The failure-gate + regression-guard checks stay included via the
-      # single `pnpm run verify` step: with --skip-if-no-task they self-skip
-      # when TASK_PLAN_FILE is unset (as in CI).
+      # ── Portable validation guards ──────────────────────────────────────────
+      # The order below mirrors scripts/validation-steps.mjs: fast-tier guards,
+      # then standard-tier checks, then full-tier static checks. Unit suites
+      # follow separately and are not re-run through `pnpm run test:unit`.
+      #
+      # Intentional GitHub exclusions are enforced by
+      # scripts/check-runner-step-sync.mjs:
+      #   • check:skill-mirror-sync      reads gitignored .local/custom_skills/
+      #   • fix:*gate-stubs              writes agent-local .local/tasks/
+      #   • check:stale-lock-cleanup     exercises Replit validation-lock state
+      #   • audit:marker-bbox            needs a live development database
+      #
+      # The non-mutating failure- and regression-gate checks run via `verify`;
+      # --skip-if-no-task makes them safe in a clean GitHub checkout.
+      # check:fixture-freshness and check:port-drift run in the separate
+      # pull-request Drift Detection workflow, which provides the Python
+      # fixture-generator prerequisites. Those workflow tokens are part of the
+      # same enforced parity contract.
 
       - name: typecheck
         run: pnpm run typecheck
@@ -155,11 +163,20 @@ jobs:
       - name: 'check:failure-gate-self-test'
         run: pnpm run check:failure-gate-self-test
 
+      - name: 'check:pre-commit-self-test'
+        run: pnpm run check:pre-commit-self-test
+
+      - name: 'check:regression-guard-self-test'
+        run: pnpm run check:regression-guard-self-test
+
       - name: 'check:skip-count'
         run: pnpm run check:skip-count
 
       - name: 'check:testdb-schema-drift'
         run: pnpm run check:testdb-schema-drift
+
+      - name: 'check:runbutton-noop'
+        run: pnpm run check:runbutton-noop
 
       - name: 'check:docs-stale'
         run: pnpm run check:docs-stale
@@ -172,6 +189,30 @@ jobs:
 
       - name: 'check:font-scale'
         run: pnpm run check:font-scale
+
+      # ── Full-tier static checks ─────────────────────────────────────────────
+      # Fixture freshness and port-drift are intentionally covered by
+      # drift-detection.yml (see the portability note above).
+      - name: 'check:e2e-user-ids'
+        run: pnpm run check:e2e-user-ids
+
+      - name: 'check:e2e-cjs-globals'
+        run: pnpm run check:e2e-cjs-globals
+
+      - name: 'check:e2e-panel-collapse'
+        run: pnpm run check:e2e-panel-collapse
+
+      - name: 'check:ports'
+        run: pnpm run check:ports
+
+      - name: 'check:audit'
+        run: pnpm run check:audit
+
+      - name: 'check:bare-pino-http-mock'
+        run: pnpm run check:bare-pino-http-mock
+
+      - name: 'check:trip-window-raw-units'
+        run: pnpm run check:trip-window-raw-units
 
       # ── Unit suites ─────────────────────────────────────────────────────────
       # api-server is sharded exactly like the local test:unit script (two

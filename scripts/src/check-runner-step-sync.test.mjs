@@ -12,6 +12,10 @@ import {
   buildReferenceText,
   CI_COVERAGE_ALLOWLIST,
   ORPHAN_FILE_ALLOWLIST,
+  GITHUB_CI_COVERAGE,
+  findGithubCiParityProblems,
+  buildGithubWorkflowText,
+  extractGithubWorkflowRunText,
 } from "../check-runner-step-sync.mjs";
 import { getValidationSteps, getStepsForTier, KNOWN_TIERS } from "../validation-steps.mjs";
 
@@ -166,6 +170,72 @@ test("stale allowlist entries are flagged (removed script or now in CI)", () => 
 });
 
 // ---------------------------------------------------------------------------
+// GitHub Actions parity contract
+// ---------------------------------------------------------------------------
+
+test("GitHub parity flags a canonical step with no coverage declaration", () => {
+  const problems = findGithubCiParityProblems([{ name: "check:new-guard" }], "", {});
+  assert.deepEqual(problems, ["check:new-guard: no GitHub CI coverage entry"]);
+});
+
+test("GitHub parity flags a missing workflow token and invalid exclusion contract", () => {
+  const missingToken = findGithubCiParityProblems(
+    [{ name: "check:portable" }],
+    "pnpm run something-else",
+    { "check:portable": { tokens: ["pnpm run check:portable"] } },
+  );
+  assert.deepEqual(
+    missingToken,
+    ['check:portable: GitHub workflow token missing: "pnpm run check:portable"'],
+  );
+
+  const invalidContract = findGithubCiParityProblems(
+    [{ name: "check:bad" }],
+    "",
+    { "check:bad": { tokens: ["pnpm run check:bad"], excluded: "This would make the coverage contract ambiguous." } },
+  );
+  assert.deepEqual(
+    invalidContract,
+    ["check:bad: declare exactly one of non-empty tokens or a substantive excluded reason"],
+  );
+});
+
+test("GitHub parity flags stale declarations and accepts documented local-only exclusions", () => {
+  const problems = findGithubCiParityProblems(
+    [{ name: "check:local-only" }],
+    "",
+    {
+      "check:local-only": { excluded: "Requires Agent-local state that GitHub Actions cannot reproduce safely." },
+      "check:removed": { excluded: "This old entry no longer corresponds to a canonical validation step." },
+    },
+  );
+  assert.deepEqual(problems, ["check:removed: stale GitHub CI coverage entry"]);
+});
+
+test("GitHub workflow extraction counts run commands but not comments or step names", () => {
+  const runText = extractGithubWorkflowRunText(`
+    # pnpm run check:comment-only
+    - name: pnpm run check:name-only
+      run: pnpm run check:scalar
+    - name: Folded command
+      run: >-
+        pnpm run check:block
+        --flag
+  `);
+  assert.match(runText, /pnpm run check:scalar/);
+  assert.match(runText, /pnpm run check:block/);
+  assert.doesNotMatch(runText, /comment-only/);
+  assert.doesNotMatch(runText, /name-only/);
+});
+
+test("GitHub workflow text includes PR run commands and ignores main-only workflows", () => {
+  const workflowText = buildGithubWorkflowText(root);
+  assert.match(workflowText, /pnpm run check:runner-step-sync/);
+  assert.match(workflowText, /pnpm run check:fixture-freshness/);
+  assert.doesNotMatch(workflowText, /DIST_DIR=dist-e2e-\$\{E2E_API_PORT\}/);
+});
+
+// ---------------------------------------------------------------------------
 // Orphaned check-file audit
 // ---------------------------------------------------------------------------
 
@@ -202,6 +272,20 @@ test("all check:* scripts in package.json are covered by the shared step list or
   assert.deepEqual(findUncoveredChecks(pkg, ciSteps), []);
   assert.deepEqual(findStaleAllowlistEntries(pkg, ciSteps), []);
   assert.ok(Object.values(CI_COVERAGE_ALLOWLIST).every((r) => typeof r === "string" && r.length > 10));
+});
+
+test("every canonical validation step has portable GitHub coverage or a documented local-only exclusion", () => {
+  const workflowText = buildGithubWorkflowText(root);
+  assert.ok(workflowText.length > 0, "expected GitHub PR workflow run commands");
+  assert.deepEqual(
+    findGithubCiParityProblems(getValidationSteps("test"), workflowText),
+    [],
+  );
+  assert.ok(
+    Object.values(GITHUB_CI_COVERAGE).every((entry) =>
+      (Array.isArray(entry.tokens) && entry.tokens.length > 0) ||
+      (typeof entry.excluded === "string" && entry.excluded.length >= 20)),
+  );
 });
 
 test("all check-* files on disk are referenced somewhere or allowlisted", () => {
