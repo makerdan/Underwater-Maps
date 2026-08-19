@@ -14,3 +14,6 @@ if git diff --cached --name-only | grep -q "lib/api-spec/openapi.yaml"; then
   git add README.md replit.md
   echo "[pre-commit] README.md and replit.md updated and staged."
 fi
+
+echo "[pre-commit] verifying task-plan gates…"
+pnpm run verify
