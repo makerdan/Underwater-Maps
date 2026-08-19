@@ -31,7 +31,7 @@ import { act, render } from "@testing-library/react";
 import type { Marker, TerrainData } from "@workspace/api-client-react";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
-import { computeSecondaryMeshTransform } from "@/components/NonPrimaryDatasetMeshes";
+import { applyGeoCorrectionToGrid, computeSecondaryMeshTransform } from "@/components/NonPrimaryDatasetMeshes";
 import { lonLatToWorldXZ, lonSpan, WORLD_SIZE } from "@/lib/terrain";
 
 // ---------------------------------------------------------------------------
@@ -76,10 +76,16 @@ vi.mock("three", () => {
 // Capture terrain prop passed to each MarkerSprite invocation.
 // ---------------------------------------------------------------------------
 const capturedTerrains = new Map<string, TerrainData>();
+const capturedEffectiveLonLats = new Map<string, { lon: number; lat: number } | undefined>();
 
 vi.mock("@/components/MarkerSprite", () => ({
-  MarkerSprite: ({ marker, terrain }: { marker: Marker; terrain: TerrainData }) => {
+  MarkerSprite: ({ marker, terrain, effectiveLonLat }: {
+    marker: Marker;
+    terrain: TerrainData;
+    effectiveLonLat?: { lon: number; lat: number };
+  }) => {
     capturedTerrains.set(marker.id, terrain);
+    capturedEffectiveLonLats.set(marker.id, effectiveLonLat);
     return null;
   },
 }));
@@ -87,14 +93,25 @@ vi.mock("@/components/MarkerSprite", () => ({
 // ---------------------------------------------------------------------------
 // Puzzle store stub — MarkerLayer imports usePuzzleStore after the merge.
 // ---------------------------------------------------------------------------
+const puzzleState = {
+  puzzleMode: false,
+  puzzleTransforms: {} as Record<string, { tx: number; ty: number; angleDeg: number }>,
+  overviewTransform: null as {
+    pxPerDeg: number;
+    scale: number;
+    offsetX: number;
+    offsetY: number;
+  } | null,
+  worldGrid: null as TerrainData | null,
+};
+
 vi.mock("@/lib/puzzleStore", () => ({
   usePuzzleStore: (sel: (s: {
     puzzleMode: boolean;
-    puzzleTransforms: Record<string, unknown>;
-    overviewTransform: null;
-    worldGrid: null;
-  }) => unknown) =>
-    sel({ puzzleMode: false, puzzleTransforms: {}, overviewTransform: null, worldGrid: null }),
+    puzzleTransforms: Record<string, { tx: number; ty: number; angleDeg: number }>;
+    overviewTransform: typeof puzzleState.overviewTransform;
+    worldGrid: TerrainData | null;
+  }) => unknown) => sel(puzzleState),
 }));
 
 // ---------------------------------------------------------------------------
@@ -221,6 +238,11 @@ function groupsNamed(container: HTMLElement, name: string): NodeListOf<Element> 
 
 beforeEach(() => {
   capturedTerrains.clear();
+  capturedEffectiveLonLats.clear();
+  puzzleState.puzzleMode = false;
+  puzzleState.puzzleTransforms = {};
+  puzzleState.overviewTransform = null;
+  puzzleState.worldGrid = null;
   useTerrainStore.getState().clear();
   useMarkerLayerStore.getState().clear();
 });
@@ -384,5 +406,54 @@ describe("MarkerLayer — per-dataset terrain grid wiring", () => {
     expect(capturedTerrains.has("m-b")).toBe(false);
     // m-a is still rendered
     expect(capturedTerrains.get("m-a")).toBe(GRID_A);
+  });
+
+  it("keeps a geo-corrected marker at the same world position while puzzle mode stays open", async () => {
+    const correction = { dLon: 2, dLat: -1, angleDeg: 0 };
+    useTerrainStore.getState().setGrids({ activeGrid: GRID_A });
+    useTerrainStore.getState().toggleVisible({ datasetId: "ds-b", source: "preset" });
+    useTerrainStore.getState().setDatasetGrids("ds-b", { activeGrid: GRID_B });
+    useTerrainStore.getState().setDatasetGeoCorrections({ "ds-b": correction });
+
+    const correctedGroup = computeSecondaryMeshTransform(
+      GRID_A,
+      applyGeoCorrectionToGrid(GRID_B, correction),
+      correction,
+    );
+    const toWorldPosition = (effectiveLonLat?: { lon: number; lat: number }) => {
+      const { x, z } = lonLatToWorldXZ(
+        effectiveLonLat?.lon ?? markerB.lon,
+        effectiveLonLat?.lat ?? markerB.lat,
+        GRID_B,
+      );
+      return {
+        x: correctedGroup.cx + correctedGroup.xScale * x,
+        z: correctedGroup.cz + correctedGroup.zScale * z,
+      };
+    };
+
+    const withoutPuzzle = await act(async () => render(<MarkerLayer />));
+    const baselineMarkerPosition = capturedEffectiveLonLats.get("m-b");
+    expect(capturedTerrains.get("m-b")).toBe(GRID_B);
+    const worldPositionWithoutPuzzle = toWorldPosition(baselineMarkerPosition);
+    withoutPuzzle.unmount();
+    capturedTerrains.clear();
+    capturedEffectiveLonLats.clear();
+
+    puzzleState.puzzleMode = true;
+    puzzleState.puzzleTransforms = { "ds-b": { tx: 200, ty: 100, angleDeg: 0 } };
+    puzzleState.overviewTransform = { pxPerDeg: 100, scale: 1, offsetX: 0, offsetY: 0 };
+    puzzleState.worldGrid = makeGrid("world", -10, 15);
+
+    await act(async () => { render(<MarkerLayer />); });
+    const correctedMarkerPosition = capturedEffectiveLonLats.get("m-b");
+    const worldPositionWithPuzzleOpen = toWorldPosition(correctedMarkerPosition);
+
+    // The group transform owns the applied correction. A stale-open puzzle editor
+    // must not also provide an adjusted lon/lat to MarkerSprite.
+    expect(capturedTerrains.get("m-b")).toBe(GRID_B);
+    expect(correctedMarkerPosition).toBeUndefined();
+    expect(worldPositionWithPuzzleOpen.x).toBeCloseTo(worldPositionWithoutPuzzle.x, 8);
+    expect(worldPositionWithPuzzleOpen.z).toBeCloseTo(worldPositionWithoutPuzzle.z, 8);
   });
 });

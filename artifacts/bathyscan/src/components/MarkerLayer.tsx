@@ -278,6 +278,10 @@ export const MarkerLayer: React.FC = () => {
   // Pre-compute puzzle-adjusted positions for all rendered markers in a single
   // pass so each MarkerSprite receives a stable prop (no per-render recalc).
   // Only runs when puzzle mode is active AND the store has all required data.
+  //
+  // An applied geoCorrection is already represented by this dataset's group
+  // transform above. Do not also mirror the still-open puzzle editor into an
+  // individual marker's lon/lat, or the same tile movement is applied twice.
   const puzzleAdjustedPositions = useMemo<Map<string, { lon: number; lat: number }>>(() => {
     const result = new Map<string, { lon: number; lat: number }>();
     if (!puzzleMode || !overviewTransform) return result;
@@ -289,6 +293,7 @@ export const MarkerLayer: React.FC = () => {
 
     for (const m of rendered) {
       if (!m.datasetId) continue;
+      if (visibleDatasets.find((v) => v.datasetId === m.datasetId)?.geoCorrection) continue;
       const xf = puzzleTransforms[m.datasetId];
       if (!xf) continue;
       const og = overviewGridByDatasetId.get(m.datasetId);
