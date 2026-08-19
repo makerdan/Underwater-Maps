@@ -18,6 +18,8 @@ import { Router } from "express";
 import { LatLonQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";
+import { GetWaterTemperatureResponse } from "@workspace/api-zod";
+import { validateProxyResponse } from "../middlewares/validateResponse.js";
 
 const router = Router();
 
@@ -105,7 +107,7 @@ router.get("/water-temperature", asyncHandler(async (req, res): Promise<void> =>
       const json = (await upstream.json()) as MarineResponse;
       const picked = pickCurrentSst(json);
       if (picked) {
-        res.json({
+        res.json(validateProxyResponse(GetWaterTemperatureResponse, {
           available: true,
           lat,
           lon,
@@ -113,7 +115,13 @@ router.get("/water-temperature", asyncHandler(async (req, res): Promise<void> =>
           timestamp: picked.timestamp,
           source: SOURCE_LABEL,
           sourceUrl: SOURCE_URL,
-        });
+        }, {
+          available: false,
+          lat,
+          lon,
+          source: SOURCE_LABEL,
+          sourceUrl: SOURCE_URL,
+        }, "GET /api/water-temperature"));
         return;
       }
     }
@@ -122,13 +130,19 @@ router.get("/water-temperature", asyncHandler(async (req, res): Promise<void> =>
     // fall through to unavailable response
   }
 
-  res.json({
+  res.json(validateProxyResponse(GetWaterTemperatureResponse, {
     available: false,
     lat,
     lon,
     source: SOURCE_LABEL,
     sourceUrl: SOURCE_URL,
-  });
+  }, {
+    available: false,
+    lat,
+    lon,
+    source: SOURCE_LABEL,
+    sourceUrl: SOURCE_URL,
+  }, "GET /api/water-temperature"));
 }));
 
 export default router;

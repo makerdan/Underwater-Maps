@@ -14,12 +14,16 @@ import { Router } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, datasetCatalogTable, userCatalogSavesTable } from "@workspace/db";
-import { FederatedSearchQuerySchema } from "@workspace/api-zod";
+import {
+  FederatedSearchQuerySchema,
+  GetSearchFederatedResponse,
+  GetSearchFederatedSourcesResponse,
+} from "@workspace/api-zod";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
-import { logger } from "../lib/logger.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { invalidateCatalogCache, type CatalogSeedEntry } from "../lib/catalogSeeder.js";
 import { materializeSave, formatSaveRow } from "./catalog-saves.js";
@@ -46,42 +50,6 @@ interface CacheEntry {
 
 const responseCache = new Map<string, CacheEntry>();
 registerCache(() => responseCache.clear());
-
-const FederatedResponseShape = z.object({
-  results: z.array(
-    z.object({
-      id: z.string().min(1),
-      sourceId: z.string().min(1),
-      sourceLabel: z.string().min(1),
-      name: z.string().min(1),
-      description: z.string().nullable(),
-      url: z.string().nullable(),
-      endpointUrl: z.string().nullable(),
-      coverageBbox: z
-        .object({
-          minLon: z.number(),
-          minLat: z.number(),
-          maxLon: z.number(),
-          maxLat: z.number(),
-        })
-        .nullable(),
-      resolutionMMin: z.number().nullable(),
-      resolutionMMax: z.number().nullable(),
-      importable: z.boolean(),
-      importKind: z.string().nullable(),
-    }),
-  ),
-  sources: z.array(
-    z.object({
-      sourceId: z.string().min(1),
-      label: z.string().min(1),
-      status: z.enum(["ok", "error", "timeout"]),
-      resultCount: z.number().int().min(0),
-      tookMs: z.number().min(0),
-      error: z.string().nullable(),
-    }),
-  ),
-});
 
 function parseBbox(bbox: string): FederatedBbox | null {
   if (!bbox) return null;
@@ -126,20 +94,16 @@ router.get("/search/federated", asyncHandler(async (req, res): Promise<void> => 
   const cacheKey = `${q.toLowerCase()}|${queryParsed.data.bbox.trim()}|${[...sourceIds].sort().join(",")}`;
   const cached = responseCache.get(cacheKey);
   if (cached && Date.now() <= cached.expiry) {
-    res.json(cached.response);
+    res.json(validateResponse(GetSearchFederatedResponse, cached.response, "GET /api/search/federated (cache)"));
     return;
   }
   if (cached) responseCache.delete(cacheKey);
 
   const response = await runFederatedSearch(q, bbox, { sourceIds });
 
-  responseCache.set(cacheKey, { response, expiry: Date.now() + CACHE_TTL_MS });
-
-  const _rp = FederatedResponseShape.safeParse(response);
-  if (!_rp.success) {
-    logger.warn({ err: _rp.error }, "GET /api/search/federated — response shape mismatch");
-  }
-  res.json(response);
+  const checked = validateResponse(GetSearchFederatedResponse, response, "GET /api/search/federated");
+  responseCache.set(cacheKey, { response: checked, expiry: Date.now() + CACHE_TTL_MS });
+  res.json(checked);
 }));
 
 // ---------------------------------------------------------------------------
@@ -149,7 +113,11 @@ router.get("/search/federated", asyncHandler(async (req, res): Promise<void> => 
 // as each source finishes, instead of waiting on the slowest upstream.
 
 router.get("/search/federated/sources", asyncHandler(async (_req, res): Promise<void> => {
-  res.json({ sources: listFederatedSources() });
+  res.json(validateResponse(
+    GetSearchFederatedSourcesResponse,
+    { sources: listFederatedSources() },
+    "GET /api/search/federated/sources",
+  ));
 }));
 
 // ---------------------------------------------------------------------------

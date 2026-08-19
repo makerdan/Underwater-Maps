@@ -13,6 +13,8 @@ import { z } from "zod";
 import { fetchStationObsAt } from "../lib/noaaWeatherFetcher.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";
+import { GetWeatherStationObsResponse } from "@workspace/api-zod";
+import { validateProxyResponse } from "../middlewares/validateResponse.js";
 
 const router = Router();
 
@@ -41,13 +43,28 @@ router.get("/weather-station-obs", asyncHandler(async (req, res): Promise<void> 
   try {
     const obs = await fetchStationObsAt(stationId, targetTime);
     if (!obs) {
-      res.json({ available: false });
+      res.json(validateProxyResponse(
+        GetWeatherStationObsResponse,
+        { available: false },
+        { available: false },
+        "GET /api/weather-station-obs",
+      ));
       return;
     }
-    res.json({ available: true, observation: obs });
+    res.json(validateProxyResponse(
+      GetWeatherStationObsResponse,
+      { available: true, observation: obs },
+      { available: false },
+      "GET /api/weather-station-obs",
+    ));
   } catch (err) {
     logger.warn({ err, stationId, time }, "[weather-station-obs] Unexpected error");
-    res.json({ available: false });
+    res.json(validateProxyResponse(
+      GetWeatherStationObsResponse,
+      { available: false },
+      { available: false },
+      "GET /api/weather-station-obs",
+    ));
   }
 }));
 

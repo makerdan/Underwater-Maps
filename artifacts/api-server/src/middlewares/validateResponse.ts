@@ -42,3 +42,23 @@ export function validateResponse<T extends z.ZodTypeAny>(
     throw httpErr;
   }
 }
+
+/**
+ * Validate an upstream-derived response while preserving its documented
+ * unavailable fallback. Proxy payloads must not turn an upstream shape change
+ * into a malformed 2xx response, but they also should not crash the UI.
+ */
+export function validateProxyResponse<T extends z.ZodTypeAny>(
+  schema: T,
+  data: unknown,
+  fallback: z.input<T>,
+  routeLabel: string,
+): z.infer<T> {
+  const result = schema.safeParse(data);
+  if (result.success) return result.data as z.infer<T>;
+  logger.warn(
+    { route: routeLabel, err: result.error },
+    `${routeLabel} — upstream response schema validation failed; using fallback`,
+  );
+  return fallback as z.infer<T>;
+}

@@ -28,6 +28,8 @@ import { fetchMarineConditions } from "../lib/envPackMarine.js";
 import { fetchArgoProfile } from "../lib/argoErddap.js";
 import { findBundledTemperatureProfile } from "../lib/temperatureProfiles.js";
 import type { EnvPack, TemperatureProfilePack } from "../lib/envPack.js";
+import { GetEnvPackResponse } from "@workspace/api-zod";
+import { validateResponse } from "../middlewares/validateResponse.js";
 
 const router = Router();
 
@@ -151,7 +153,7 @@ router.get(
     const cached = packCache.get(key);
     if (cached && now - cached.fetchedAt < ENV_PACK_TTL_MS) {
       res.setHeader("Cache-Control", "public, max-age=1800");
-      res.json(cached.pack);
+      res.json(validateResponse(GetEnvPackResponse, cached.pack, "GET /api/env-pack (cache)"));
       return;
     }
 
@@ -261,7 +263,7 @@ router.get(
     packCache.set(key, { pack, fetchedAt: Date.now() });
 
     res.setHeader("Cache-Control", "public, max-age=1800");
-    res.json(pack);
+    res.json(validateResponse(GetEnvPackResponse, pack, "GET /api/env-pack"));
   }),
 );
 

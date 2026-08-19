@@ -18,6 +18,8 @@ import { fetchWeatherStations, NoaaUnavailableError, type WeatherStation } from 
 import { LatLonQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";
+import { GetWeatherStationsResponse, GetWeatherPackResponse } from "@workspace/api-zod";
+import { validateProxyResponse } from "../middlewares/validateResponse.js";
 
 const WeatherStationsQuerySchema = LatLonQuerySchema.extend({
   radiusMiles: z.coerce
@@ -43,7 +45,16 @@ router.get("/weather-stations", asyncHandler(async (req, res): Promise<void> => 
 
   try {
     const result = await fetchWeatherStations(lat, lon, radiusMiles);
-    res.json(result);
+    const checked = GetWeatherStationsResponse.safeParse(result);
+    if (!checked.success) {
+      logger.warn({ err: checked.error }, "GET /api/weather-stations — upstream response schema validation failed");
+      res.status(503).json({
+        error: "noaa_unavailable",
+        details: "NOAA weather data returned an unusable response. Please try again later.",
+      });
+      return;
+    }
+    res.json(checked.data);
   } catch (err) {
     if (err instanceof NoaaUnavailableError) {
       logger.warn({ err }, "[weather-stations] NOAA unavailable, no cached data");
@@ -77,17 +88,27 @@ router.get("/weather/pack", asyncHandler(async (req, res): Promise<void> => {
   try {
     const result = await fetchWeatherStations(lat, lon, 75);
     const nearest = result.stations[0] ?? null;
-    res.json({
+      res.json(validateProxyResponse(GetWeatherPackResponse, {
       station: nearest?.name ?? null,
       observation: nearest as WeatherStation | null,
-      snapshotAt: new Date().toISOString(),
-    });
+       snapshotAt: new Date(),
+      }, {
+        station: null,
+        observation: null,
+         snapshotAt: new Date(),
+      }, "GET /api/weather/pack"));
   } catch (err) {
     if (err instanceof NoaaUnavailableError) {
-      res.json({ station: null, observation: null, snapshotAt: new Date().toISOString() });
+      res.json(validateProxyResponse(GetWeatherPackResponse,
+        { station: null, observation: null, snapshotAt: new Date() },
+        { station: null, observation: null, snapshotAt: new Date() },
+        "GET /api/weather/pack"));
       return;
     }
-    res.json({ station: null, observation: null, snapshotAt: new Date().toISOString() });
+    res.json(validateProxyResponse(GetWeatherPackResponse,
+      { station: null, observation: null, snapshotAt: new Date() },
+      { station: null, observation: null, snapshotAt: new Date() },
+      "GET /api/weather/pack"));
   }
 }));
 

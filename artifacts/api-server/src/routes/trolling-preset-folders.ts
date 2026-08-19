@@ -11,11 +11,14 @@ import { db, trollingPresetFoldersTable } from "@workspace/db";
 import {
   PostTrollingPresetFoldersBody,
   PatchTrollingPresetFoldersIdBody,
+  GetTrollingPresetFoldersResponse,
+  PatchTrollingPresetFoldersIdResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
+import { validateResponse } from "../middlewares/validateResponse.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,8 +63,11 @@ router.get("/trolling-preset-folders", requireAuth, asyncHandler(async (req, res
     .select()
     .from(trollingPresetFoldersTable)
     .where(eq(trollingPresetFoldersTable.userId, userId));
-  // TODO: no response schema in @workspace/api-zod for this route; add validateResponse when a schema is available
-  res.json(rows.map(folderToJson));
+  res.json(validateResponse(
+    GetTrollingPresetFoldersResponse,
+    rows.map(folderToJson),
+    "GET /api/trolling-preset-folders",
+  ));
 }));
 
 router.post("/trolling-preset-folders", requireAuth, dataMutationRateLimit, validateBody(PostTrollingPresetFoldersBody, "POST /api/trolling-preset-folders"), asyncHandler(async (req, res) => {
@@ -151,7 +157,11 @@ router.patch("/trolling-preset-folders/:id", requireAuth, dataMutationRateLimit,
     res.status(404).json({ error: "not_found", details: "Folder not found" });
     return;
   }
-  res.json(folderToJson(updated));
+   res.json(validateResponse(
+     PatchTrollingPresetFoldersIdResponse,
+     folderToJson(updated),
+     "PATCH /api/trolling-preset-folders/:id",
+   ));
 }));
 
 router.delete("/trolling-preset-folders/:id", requireAuth, dataMutationRateLimit, asyncHandler(async (req, res) => {
