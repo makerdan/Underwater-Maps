@@ -16,8 +16,10 @@ import { useSimulatedDataStore } from "@/lib/simulatedDataStore";
 import { useToast } from "@/hooks/use-toast";
 import { useUiStore } from "@/lib/uiStore";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useReturnFocus } from "@/hooks/useReturnFocus";
 
 export const SimulatedDataConfirmDialog: React.FC = () => {
+  useReturnFocus();
   const pending = useSimulatedDataStore((s) => s.pending);
   const suppressed = useSimulatedDataStore((s) => s.suppressed);
   const setSuppressed = useSimulatedDataStore((s) => s.setSuppressed);
@@ -154,6 +156,8 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
               color: "#94a3b8",
               fontSize: "calc(24px * var(--bs-font-scale, 1))",
               cursor: "pointer",
+             minWidth: 44,
+             minHeight: 44,
             }}
           >
             ×
@@ -279,6 +283,7 @@ function btnStyle(variant: "warning" | "ghost"): React.CSSProperties {
       fontFamily: "inherit",
       fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
       letterSpacing: "0.1em",
+      minHeight: 44,
     };
   }
   return {
@@ -291,5 +296,6 @@ function btnStyle(variant: "warning" | "ghost"): React.CSSProperties {
     fontFamily: "inherit",
     fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
     letterSpacing: "0.1em",
+    minHeight: 44,
   };
 }

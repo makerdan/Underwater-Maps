@@ -180,9 +180,10 @@ export const ReassignMarkersDialog: React.FC<Props> = ({ onClose }) => {
         ref={panelRef}
         style={{
           width: 480,
-          maxWidth: "calc(100vw - 32px)",
-          maxHeight: "82vh",
+           maxWidth: "calc(100vw - 16px)",
+           maxHeight: "calc(100dvh - 16px)",
           overflow: "auto",
+           overscrollBehavior: "contain",
           background: "rgba(2,8,24,0.96)",
           border: "1px solid rgba(0,229,255,0.3)",
           borderRadius: 8,
@@ -229,6 +230,8 @@ export const ReassignMarkersDialog: React.FC<Props> = ({ onClose }) => {
               fontSize: "calc(24px * var(--bs-font-scale, 1))",
               cursor: isReassigning ? "not-allowed" : "pointer",
               opacity: isReassigning ? 0.35 : 1,
+              minWidth: 44,
+              minHeight: 44,
             }}
           >
             ×

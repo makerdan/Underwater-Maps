@@ -214,6 +214,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const [speedKnots, setSpeedKnots] = useState<number>(DEFAULT_SPEED_KNOTS);
   const [isImporting, setIsImporting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isStalled, setIsStalled] = useState(false);
 
   // Escape key closes the dialog — mirrors the backdrop-click guard so the
   // handler is suppressed while an import is in-flight.
@@ -239,6 +240,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const cancelRequestedRef = useRef(false);
   const savedMarkerIdsRef = useRef<string[]>([]);
   const importStartTimeRef = useRef<number | null>(null);
+  const lastImportProgressRef = useRef<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef);
 
@@ -253,6 +255,26 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [isImporting]);
+
+  // A request that never settles must not leave the dialog looking permanently
+  // busy. The existing Cancel import path remains the safe recovery action.
+  useEffect(() => {
+    if (!isImporting) {
+      setIsStalled(false);
+      return;
+    }
+    lastImportProgressRef.current = Date.now();
+    const timer = window.setInterval(() => {
+      if (
+        !isCancelling &&
+        lastImportProgressRef.current != null &&
+        Date.now() - lastImportProgressRef.current >= 30_000
+      ) {
+        setIsStalled(true);
+      }
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [isImporting, isCancelling]);
 
   const bounds = useMemo<Bounds | null>(
     () =>
@@ -425,6 +447,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   const cancelImport = useCallback(async () => {
     cancelRequestedRef.current = true;
     setIsCancelling(true);
+    abortControllerRef.current?.abort();
     const toDelete = [...savedMarkerIdsRef.current];
     savedMarkerIdsRef.current = [];
     for (const id of toDelete) {
@@ -507,6 +530,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       setImportProgress((prev) =>
         prev ? { ...prev, markersDone: prev.markersDone + 1 } : prev,
       );
+      lastImportProgressRef.current = Date.now();
     }
 
     if (cancelRequestedRef.current) {
@@ -559,6 +583,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       setImportProgress((prev) =>
         prev ? { ...prev, routesDone: prev.routesDone + 1 } : prev,
       );
+      lastImportProgressRef.current = Date.now();
     }
 
     if (cancelRequestedRef.current) {
@@ -734,9 +759,10 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         ref={panelRef}
         style={{
           width: 520,
-          maxWidth: "calc(100vw - 32px)",
-          maxHeight: "86vh",
+           maxWidth: "calc(100vw - 16px)",
+           maxHeight: "calc(100dvh - 16px)",
           overflow: "auto",
+           overscrollBehavior: "contain",
           background: "rgba(2,8,24,0.96)",
           border: "1px solid rgba(0,229,255,0.3)",
           borderRadius: 8,
@@ -760,8 +786,10 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               data-testid="gps-import-in-progress-label"
               style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", letterSpacing: "0.08em" }}
             >
-              {isCancelling
+               {isCancelling
                 ? "Cancelling…"
+                 : isStalled
+                   ? "Import stalled — cancel to recover"
                 : importProgress
                   ? importProgress.currentKind === "marker" && importProgress.markersTotal > 0
                     ? `Saving markers… ${importProgress.markersDone} / ${importProgress.markersTotal}`
@@ -791,7 +819,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
           </button>
         </div>
 
-        <div style={{ padding: 14 }}>
+        <div style={{ padding: "12px max(12px, env(safe-area-inset-right)) 16px max(12px, env(safe-area-inset-left))" }}>
           {phase.kind === "pick" && (
             <>
               <p style={{ margin: "0 0 10px", color: "#e2e8f0", lineHeight: 1.5 }}>
@@ -959,7 +987,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                       })()}
                       <button
                         onClick={() => void cancelImport()}
-                        disabled={isCancelling}
+                         disabled={isCancelling}
                         data-testid="gps-import-cancel-btn"
                         style={{
                           ...btnStyle("ghost"),
@@ -967,7 +995,7 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                           opacity: isCancelling ? 0.5 : 1,
                         }}
                       >
-                        Cancel import
+                         {isStalled ? "Cancel and recover" : "Cancel import"}
                       </button>
                     </>
                   );

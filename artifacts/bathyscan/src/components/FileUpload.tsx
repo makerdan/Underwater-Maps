@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useDropzone, type FileRejection } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePostDatasetsUpload } from "@workspace/api-client-react";
@@ -58,6 +58,16 @@ export const FileUpload = () => {
   const [error, setError] = useState<string | null>(null);
   const [gzWarning, setGzWarning] = useState<string | null>(null);
   const [nearLimitWarning, setNearLimitWarning] = useState<string | null>(null);
+  const [uploadStalled, setUploadStalled] = useState(false);
+
+  useEffect(() => {
+    if (!postDatasetsUpload.isPending) {
+      setUploadStalled(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setUploadStalled(true), 30_000);
+    return () => window.clearTimeout(timer);
+  }, [postDatasetsUpload.isPending]);
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -162,7 +172,23 @@ export const FileUpload = () => {
           {postDatasetsUpload.isPending ? (
             <div className="flex flex-col items-center gap-2">
               <Spinner className="w-5 h-5 text-primary" />
-              <p className="text-[18px] text-muted-foreground">Parsing grid...</p>
+              <p className="text-[18px] text-muted-foreground">
+                {uploadStalled ? "Upload appears stalled" : "Parsing grid..."}
+              </p>
+              {uploadStalled && (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    type="button"
+                    className="min-h-11 rounded border border-border px-3 text-[15px] text-foreground"
+                    onClick={() => {
+                      postDatasetsUpload.reset();
+                      setError("Upload cancelled. Choose the file again to retry.");
+                    }}
+                  >
+                    Cancel and retry
+                  </button>
+                </div>
+              )}
               {nearLimitWarning && (
                 <p className="text-[15px] text-amber-500 select-text">
                   ⚠ {nearLimitWarning}

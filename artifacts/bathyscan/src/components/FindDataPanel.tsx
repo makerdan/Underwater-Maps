@@ -53,6 +53,7 @@ import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useToast } from "@/hooks/use-toast";
+import { useReturnFocus } from "@/hooks/useReturnFocus";
 
 
 // ---------------------------------------------------------------------------
@@ -1075,6 +1076,7 @@ interface FindDataPanelProps {
 }
 
 export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
+  useReturnFocus();
   const [tab, setTab] = useState<Tab>("search");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -1661,9 +1663,14 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const panelStyle: React.CSSProperties = isMobile
     ? {
         ...PANEL,
+        top: 0,
+        bottom: 0,
         width: "100%",
         left: 0,
         right: 0,
+        maxWidth: "100vw",
+        height: "100dvh",
+        paddingBottom: "env(safe-area-inset-bottom)",
       }
     : PANEL;
 
@@ -1682,7 +1689,16 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
           }}
         />
       )}
-      <div style={panelStyle} role="dialog" aria-modal="true" aria-label="Find Data panel">
+      <div
+        style={panelStyle}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Find Data panel"
+        data-testid="find-data-panel"
+        onClick={(e) => {
+          if (isMobile && e.target === e.currentTarget) onClose();
+        }}
+      >
       {/* Header */}
       <div style={HEADER}>
         <span style={{ ...TITLE, display: "inline-flex", alignItems: "center", gap: 8 }}>

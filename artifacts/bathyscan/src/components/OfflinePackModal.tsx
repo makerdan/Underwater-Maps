@@ -69,6 +69,17 @@ const STEP_LABELS: Record<PackProgress["step"], string> = {
   saving: "Writing to storage",
 };
 
+const smallButtonStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "1px solid rgba(148,163,184,0.35)",
+  borderRadius: 4,
+  color: "#cbd5e1",
+  padding: "4px 10px",
+  fontFamily: FONT,
+  fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+  cursor: "pointer",
+};
+
 export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   useReturnFocus();
   const [days, setDays] = useState(7);
@@ -87,6 +98,12 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   const [estimatedBytes, setEstimatedBytes] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [idbError, setIdbError] = useState(false);
+  const [areaStalled, setAreaStalled] = useState(false);
+  const [helpStalled, setHelpStalled] = useState(false);
+  const areaCancelledRef = useRef(false);
+  const helpCancelledRef = useRef(false);
+  const areaLastProgressRef = useRef<number | null>(null);
+  const helpLastProgressRef = useRef<number | null>(null);
   /**
    * Bbox derived from the server when `dataset.bbox` is null.
    * `undefined` = derivation in progress; `null` = derivation failed (no location available).
@@ -162,6 +179,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   }, [onClose]);
 
   const handleSaveArea = async (isUpdate = false) => {
+    areaCancelledRef.current = false;
     setAreaPhase("downloading");
     setAreaProgress([]);
     setAreaError(null);
@@ -172,6 +190,8 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
     try {
       const pack = await saveOfflinePack(dataset, days, (p) => {
         setAreaProgress((prev) => {
+          if (areaCancelledRef.current) return prev;
+          areaLastProgressRef.current = Date.now();
           const idx = prev.findIndex((x) => x.step === p.step);
           if (idx >= 0) {
             const next = [...prev];
@@ -181,6 +201,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
           return [...prev, p];
         });
       });
+      if (areaCancelledRef.current) return;
       setSavedPack(pack);
       setAreaPhase("done");
     } catch (err) {
@@ -195,12 +216,15 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   };
 
   const handleSaveHelp = async () => {
+    helpCancelledRef.current = false;
     setHelpPhase("downloading");
     setHelpProgress([]);
     setHelpError(null);
     try {
       const record = await saveHelpPack((p) => {
         setHelpProgress((prev) => {
+          if (helpCancelledRef.current) return prev;
+          helpLastProgressRef.current = Date.now();
           const idx = prev.findIndex((x) => x.index === p.index);
           if (idx >= 0) {
             const next = [...prev];
@@ -210,6 +234,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
           return [...prev, p];
         });
       });
+      if (helpCancelledRef.current) return;
       setHelpStatus({ saved: true, savedAt: record.savedAt, totalBytes: record.totalBytes });
       setHelpPhase("done");
     } catch (err) {
@@ -226,6 +251,45 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   const expLabel = displayPack ? expiresLabel(displayPack.tidePack.tidalExpiresAt) : null;
   const areaDownloading = areaPhase === "downloading";
   const helpDownloading = helpPhase === "downloading";
+
+  useEffect(() => {
+    if (!areaDownloading) {
+      setAreaStalled(false);
+      return;
+    }
+    areaLastProgressRef.current = Date.now();
+    const timer = window.setInterval(() => {
+      if (areaLastProgressRef.current != null && Date.now() - areaLastProgressRef.current >= 30_000) {
+        setAreaStalled(true);
+      }
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [areaDownloading]);
+
+  useEffect(() => {
+    if (!helpDownloading) {
+      setHelpStalled(false);
+      return;
+    }
+    helpLastProgressRef.current = Date.now();
+    const timer = window.setInterval(() => {
+      if (helpLastProgressRef.current != null && Date.now() - helpLastProgressRef.current >= 30_000) {
+        setHelpStalled(true);
+      }
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [helpDownloading]);
+
+  const cancelArea = () => {
+    areaCancelledRef.current = true;
+    setAreaPhase("idle");
+    setAreaError("Save cancelled. You can safely retry.");
+  };
+  const cancelHelp = () => {
+    helpCancelledRef.current = true;
+    setHelpPhase("idle");
+    setHelpError("Download cancelled. You can safely retry.");
+  };
 
   return (
     <div
@@ -251,10 +315,11 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
           background: "#0a1628",
           border: "1px solid rgba(0,229,255,0.2)",
           borderRadius: 8,
-          width: 460,
-          maxWidth: "calc(100vw - 32px)",
-          maxHeight: "calc(100dvh - 48px)",
+           width: "min(460px, calc(100vw - 16px))",
+           maxWidth: "100vw",
+           maxHeight: "calc(100dvh - 16px)",
           overflow: "auto",
+           overscrollBehavior: "contain",
           outline: "none",
           boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
         }}
@@ -502,6 +567,14 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
               {/* Progress steps */}
               {areaPhase === "downloading" && (
                 <div style={{ marginTop: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <span style={{ color: areaStalled ? "#fbbf24" : "#94a3b8", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>
+                      {areaStalled ? "Save appears stalled — retry or cancel safely." : "Saving…"}
+                    </span>
+                    <button type="button" onClick={cancelArea} style={{ ...smallButtonStyle, minHeight: 44 }}>
+                      Cancel
+                    </button>
+                  </div>
                   {(["terrain", "tide", "weather", "markers", "saving"] as const).map((step) => {
                     const prog = areaProgress.find((p) => p.step === step);
                     const isPending = !prog;
@@ -621,6 +694,14 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
 
               {helpPhase === "downloading" && (
                 <div style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <span style={{ color: helpStalled ? "#fbbf24" : "#94a3b8", fontSize: "calc(13.5px * var(--bs-font-scale, 1))" }}>
+                      {helpStalled ? "Download appears stalled — retry or cancel safely." : "Downloading…"}
+                    </span>
+                    <button type="button" onClick={cancelHelp} style={{ ...smallButtonStyle, minHeight: 44 }}>
+                      Cancel
+                    </button>
+                  </div>
                   {helpProgress.map((p) => (
                     <div key={p.index} style={{
                       display: "flex",

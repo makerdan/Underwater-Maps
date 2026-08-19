@@ -36,6 +36,7 @@ import {
   type ExportTrailPoint,
 } from "@/lib/gpsExport";
 import { useToast } from "@/hooks/use-toast";
+import { useReturnFocus } from "@/hooks/useReturnFocus";
 
 interface Props {
   terrain: TerrainData;
@@ -67,11 +68,20 @@ async function fetchAllTrailPoints(trailId: string): Promise<ExportTrailPoint[]>
 }
 
 export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
+  useReturnFocus();
   const { toast } = useToast();
   const [format, setFormat] = useState<ExportFormat>("gpx");
   const [isSerializing, setIsSerializing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef);
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isSerializing) onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isSerializing, onClose]);
 
   const {
     data: markers,
@@ -262,8 +272,9 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
         style={{
           width: 460,
           maxWidth: "calc(100vw - 32px)",
-          maxHeight: "86vh",
+          maxHeight: "calc(100dvh - 24px)",
           overflow: "auto",
+          overscrollBehavior: "contain",
           background: "rgba(2,8,24,0.96)",
           border: "1px solid rgba(0,229,255,0.3)",
           borderRadius: 8,
@@ -290,7 +301,8 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
             ▲ EXPORT GPS
           </span>
           <button
-            onClick={onClose}
+             onClick={isSerializing ? undefined : onClose}
+             disabled={isSerializing}
             aria-label="Close"
             style={{
               background: "none",
@@ -298,6 +310,8 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               color: "#94a3b8",
               fontSize: "calc(24px * var(--bs-font-scale, 1))",
               cursor: "pointer",
+             minWidth: 44,
+             minHeight: 44,
             }}
           >
             ×
@@ -562,7 +576,7 @@ export const GpsExportDialog: React.FC<Props> = ({ terrain, onClose }) => {
               marginTop: 8,
             }}
           >
-            <button onClick={onClose} style={btnStyle("ghost")}>
+          <button onClick={onClose} style={{ ...btnStyle("ghost"), minHeight: 44 }}>
               Cancel
             </button>
             <button
