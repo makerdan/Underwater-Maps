@@ -149,7 +149,7 @@ export function makeApiClientMock(
         return defaultMutationHook;
       if (/^use(Get|Admin|List|Export|HealthCheck)/.test(key))
         return defaultQueryHook;
-      if (/^use(Post|Put|Patch|Delete|Poe|Create|Upload|Finalize|Request|Query)/.test(key))
+      if (/^use(Post|Put|Patch|Delete|Poe|Create|Start|Upload|Finalize|Request|Query)/.test(key))
         return defaultMutationHook;
 
       if (/^get[A-Z].*QueryKey$/.test(key)) {
