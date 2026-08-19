@@ -5319,6 +5319,23 @@ export const AdminPendingUsersCountResponse = zod.object({
 
 
 /**
+ * Admin-only. Sends a clearly labelled sample pending-user notification to every configured admin email address, allowing an operator to verify SMTP delivery without waiting for a real sign-in.
+ * @summary Send a test pending-user notification email
+ */
+export const adminTestNotificationResponseOneRecipientCountMin = 0;
+
+
+
+export const AdminTestNotificationResponse = zod.union([zod.object({
+  "sent": zod.literal(true),
+  "recipientCount": zod.number().min(adminTestNotificationResponseOneRecipientCountMin)
+}),zod.object({
+  "sent": zod.literal(false),
+  "reason": zod.string()
+})])
+
+
+/**
  * @summary Approve a pending or banned user
  */
 export const AdminApproveUserParams = zod.object({

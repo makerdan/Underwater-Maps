@@ -31,7 +31,13 @@ export interface PendingUserInfo {
   clerkUserId: string;
   displayName: string | null;
   email: string | null;
+  /** Makes the email explicitly identify itself as an operator test send. */
+  isTestNotification?: boolean;
 }
+
+export type AdminNotificationSendResult =
+  | { sent: true; recipientCount: number }
+  | { sent: false; reason: string };
 
 /**
  * Read SMTP configuration from env. Returns null when the minimum required
@@ -105,10 +111,15 @@ function buildNewPendingUserEmail(user: PendingUserInfo): {
   const approvalPath = "/settings?tab=account";
   const approvalUrl = appUrl ? `${appUrl}${approvalPath}` : null;
 
-  const subject = `[BathyScan] New user waiting for approval: ${name}`;
+  const notificationIntro = user.isTestNotification
+    ? "This is a test notification. No user is waiting for approval."
+    : "A new user has signed in and is waiting for your approval.";
+  const subject = user.isTestNotification
+    ? "[BathyScan] Test notification: pending-user email delivery"
+    : `[BathyScan] New user waiting for approval: ${name}`;
 
   const text = [
-    "A new user has signed in and is waiting for your approval.",
+    notificationIntro,
     "",
     `  Name:    ${name}`,
     `  Email:   ${email}`,
@@ -125,7 +136,7 @@ function buildNewPendingUserEmail(user: PendingUserInfo): {
 <head><meta charset="UTF-8"><title>${subject}</title></head>
 <body style="font-family:sans-serif;color:#222;max-width:560px;margin:0 auto;padding:24px">
   <h2 style="color:#1a56a0;margin-top:0">New user waiting for approval</h2>
-  <p>A new user has signed in and is waiting for your approval.</p>
+  <p>${notificationIntro}</p>
   <table style="border-collapse:collapse;width:100%;margin:16px 0">
     <tr>
       <td style="padding:6px 12px 6px 0;font-weight:bold;white-space:nowrap;color:#555">Name</td>
@@ -151,7 +162,11 @@ function buildNewPendingUserEmail(user: PendingUserInfo): {
   }
   <hr style="margin:32px 0;border:none;border-top:1px solid #eee">
   <p style="font-size:0.8em;color:#888">
-    This email was sent automatically by BathyScan when a new user signed in.
+    ${
+      user.isTestNotification
+        ? "This email was sent by an administrator to verify BathyScan's SMTP delivery."
+        : "This email was sent automatically by BathyScan when a new user signed in."
+    }
     You are receiving it because you are listed as an admin.
   </p>
 </body>
@@ -164,13 +179,9 @@ function htmlEscape(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/**
- * Notify all admins that a new user is waiting for approval.
- *
- * Best-effort: all errors are caught and logged. This function never throws.
- * The caller's response (403 awaiting_approval) is never blocked.
- */
-export async function notifyAdminsNewPendingUser(user: PendingUserInfo): Promise<void> {
+async function sendPendingUserNotification(
+  user: PendingUserInfo,
+): Promise<AdminNotificationSendResult> {
   try {
     const smtpConfig = readSmtpConfig();
     if (!smtpConfig) {
@@ -178,7 +189,7 @@ export async function notifyAdminsNewPendingUser(user: PendingUserInfo): Promise
         { clerkUserId: user.clerkUserId },
         "[adminEmail] SMTP not configured (SMTP_HOST/SMTP_USER/SMTP_PASS missing) — skipping admin notification",
       );
-      return;
+      return { sent: false, reason: "SMTP is not configured" };
     }
 
     const recipients = await fetchAdminEmails();
@@ -187,7 +198,7 @@ export async function notifyAdminsNewPendingUser(user: PendingUserInfo): Promise
         { clerkUserId: user.clerkUserId },
         "[adminEmail] no admin email addresses resolved — skipping notification",
       );
-      return;
+      return { sent: false, reason: "No admin email recipients are configured" };
     }
 
     const transport = nodemailer.createTransport({
@@ -211,10 +222,38 @@ export async function notifyAdminsNewPendingUser(user: PendingUserInfo): Promise
       { clerkUserId: user.clerkUserId, recipientCount: recipients.length },
       "[adminEmail] admin notification sent for new pending user",
     );
+    return { sent: true, recipientCount: recipients.length };
   } catch (err) {
     logger.warn(
       { clerkUserId: user.clerkUserId, err },
-      "[adminEmail] failed to send admin notification — continuing without email",
+      "[adminEmail] failed to send admin notification",
     );
+    return { sent: false, reason: "SMTP delivery failed" };
   }
+}
+
+/**
+ * Notify all admins that a new user is waiting for approval.
+ *
+ * Best-effort: all errors are caught and logged. This function never throws.
+ * The caller's response (403 awaiting_approval) is never blocked.
+ */
+export async function notifyAdminsNewPendingUser(user: PendingUserInfo): Promise<void> {
+  await sendPendingUserNotification(user);
+}
+
+/**
+ * Send a clearly-labelled sample approval email to every configured admin.
+ *
+ * Unlike the automatic sign-in notification, this result is intended for the
+ * admin route so an operator can immediately see whether SMTP was configured
+ * and accepted the message.
+ */
+export async function sendAdminTestNotification(): Promise<AdminNotificationSendResult> {
+  return sendPendingUserNotification({
+    clerkUserId: "smtp-delivery-test",
+    displayName: "SMTP delivery test",
+    email: null,
+    isTestNotification: true,
+  });
 }

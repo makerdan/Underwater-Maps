@@ -41,6 +41,7 @@ import {
   readSmtpConfig,
   fetchAdminEmails,
   notifyAdminsNewPendingUser,
+  sendAdminTestNotification,
 } from "../adminEmail.js";
 
 // ---------------------------------------------------------------------------
@@ -299,5 +300,45 @@ describe("notifyAdminsNewPendingUser", () => {
     const call = (sendMailMock.mock.calls as unknown[][])[0]![0] as Record<string, string>;
     expect(call.to).toContain("admin1@example.com");
     expect(call.to).toContain("admin2@example.com");
+  });
+});
+
+describe("sendAdminTestNotification", () => {
+  it("reports that SMTP is unconfigured without attempting delivery", async () => {
+    const result = await sendAdminTestNotification();
+
+    expect(result).toEqual({ sent: false, reason: "SMTP is not configured" });
+    expect(createTransportMock).not.toHaveBeenCalled();
+  });
+
+  it("sends a clearly labelled sample email and returns the recipient count", async () => {
+    stubSmtp();
+    vi.stubEnv("ADMIN_USER_IDS", "user_admin1,user_admin2");
+    clerkGetUserMock.mockImplementation((id: string) =>
+      Promise.resolve(makeClerkUser(`${id}@example.com`)),
+    );
+    sendMailMock.mockResolvedValue({ messageId: "test-msg-id" });
+
+    await expect(sendAdminTestNotification()).resolves.toEqual({
+      sent: true,
+      recipientCount: 2,
+    });
+
+    const call = (sendMailMock.mock.calls as unknown[][])[0]![0] as Record<string, string>;
+    expect(call.subject).toMatch(/test notification/i);
+    expect(call.text).toMatch(/test notification/i);
+    expect(call.text).toMatch(/no user is waiting/i);
+  });
+
+  it("returns a safe failure reason when SMTP delivery rejects", async () => {
+    stubSmtp();
+    vi.stubEnv("ADMIN_USER_IDS", "user_admin1");
+    clerkGetUserMock.mockResolvedValue(makeClerkUser("admin@example.com"));
+    sendMailMock.mockRejectedValue(new Error("SMTP connection refused"));
+
+    await expect(sendAdminTestNotification()).resolves.toEqual({
+      sent: false,
+      reason: "SMTP delivery failed",
+    });
   });
 });

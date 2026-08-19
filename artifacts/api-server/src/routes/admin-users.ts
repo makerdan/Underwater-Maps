@@ -9,6 +9,7 @@
  *   POST   /admin/users/:clerkUserId/approve     — set status to approved
  *   POST   /admin/users/:clerkUserId/ban         — set status to banned (+ optional note)
  *   POST   /admin/users/:clerkUserId/restore     — set a banned user back to approved
+ *   POST   /admin/users/test-notification        — verify configured SMTP delivery
  *   DELETE /admin/users/:clerkUserId             — hard-delete the row (user returns
  *                                                  to pending on next login)
  *
@@ -27,6 +28,7 @@ import {
   AdminRestoreUserResponse,
   AdminDeleteUserResponse,
   AdminPendingCountResponse,
+  AdminTestNotificationResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { isAdmin } from "../lib/adminAccess.js";
@@ -34,6 +36,7 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateParams, validateQuery } from "../middlewares/validateBody.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
 import { logger } from "../lib/logger.js";
+import { sendAdminTestNotification } from "../lib/adminEmail.js";
 
 const router = Router();
 
@@ -139,6 +142,27 @@ function toUserRecord(row: UserAccessRow) {
     updatedAt: row.updatedAt.toISOString(),
   };
 }
+
+// ---------------------------------------------------------------------------
+// POST /admin/users/test-notification — verify configured SMTP delivery
+// ---------------------------------------------------------------------------
+
+router.post(
+  "/admin/users/test-notification",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!requireAdminCaller(req, res)) return;
+
+    const result = await sendAdminTestNotification();
+    res.status(200).json(
+      validateResponse(
+        AdminTestNotificationResponse,
+        result,
+        "POST /api/admin/users/test-notification",
+      ),
+    );
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // GET /admin/users/pending-count — lightweight count of pending users

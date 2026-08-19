@@ -31,6 +31,7 @@ import type {
   AdminListUsersParams,
   AdminPendingUsersCount200,
   AdminRestoreUser200,
+  AdminTestNotification200,
   ApiError,
   CatalogSaveBody,
   CatchEntry,
@@ -9027,6 +9028,77 @@ export function useAdminPendingUsersCount<TData = Awaited<ReturnType<typeof admi
 
 
 
+
+export const getAdminTestNotificationUrl = () => {
+
+
+
+
+  return `/api/admin/users/test-notification`
+}
+
+/**
+ * Admin-only. Sends a clearly labelled sample pending-user notification to every configured admin email address, allowing an operator to verify SMTP delivery without waiting for a real sign-in.
+ * @summary Send a test pending-user notification email
+ */
+export const adminTestNotification = async ( options?: RequestInit): Promise<AdminTestNotification200> => {
+
+  return customFetch<AdminTestNotification200>(getAdminTestNotificationUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAdminTestNotificationMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminTestNotification>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminTestNotification>>, TError,void, TContext> => {
+
+const mutationKey = ['adminTestNotification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminTestNotification>>, void> = () => {
+
+
+          return  adminTestNotification(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminTestNotificationMutationResult = NonNullable<Awaited<ReturnType<typeof adminTestNotification>>>
+
+    export type AdminTestNotificationMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Send a test pending-user notification email
+ */
+export const useAdminTestNotification = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminTestNotification>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminTestNotification>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getAdminTestNotificationMutationOptions(options));
+    }
 
 export const getAdminApproveUserUrl = (clerkUserId: string,) => {
 

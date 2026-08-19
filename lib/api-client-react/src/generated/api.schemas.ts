@@ -4701,6 +4701,15 @@ export type AdminPendingUsersCount200 = {
   count: number;
 };
 
+export type AdminTestNotification200 = {
+  sent: true;
+  /** @minimum 0 */
+  recipientCount: number;
+} | {
+  sent: false;
+  reason: string;
+};
+
 export type AdminApproveUser200 = {
   user: UserAccessRecord;
 };

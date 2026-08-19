@@ -4473,6 +4473,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /admin/users/test-notification:
+    post:
+      operationId: adminTestNotification
+      tags: [admin]
+      summary: Send a test pending-user notification email
+      description: >-
+        Admin-only. Sends a clearly labelled sample pending-user notification
+        to every configured admin email address, allowing an operator to
+        verify SMTP delivery without waiting for a real sign-in.
+      responses:
+        "200":
+          description: SMTP delivery outcome
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [sent, recipientCount]
+                    properties:
+                      sent:
+                        type: boolean
+                        enum: [true]
+                      recipientCount:
+                        type: integer
+                        minimum: 0
+                  - type: object
+                    required: [sent, reason]
+                    properties:
+                      sent:
+                        type: boolean
+                        enum: [false]
+                      reason:
+                        type: string
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /admin/users/{clerkUserId}/approve:
     post:
       operationId: adminApproveUser

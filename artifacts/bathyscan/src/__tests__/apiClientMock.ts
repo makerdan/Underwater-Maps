@@ -142,9 +142,10 @@ export function makeApiClientMock(
       // apiClientMockSentinel.test.ts derives the authoritative query/mutation
       // split from @workspace/api-client-react (a hook `useX` is a query iff
       // `getXQueryKey` is exported) and fails if these patterns misclassify.
-      // Admin action hooks (approve/ban/restore/delete a user) are mutations;
-      // this must be checked before the broad `useAdmin` query pattern below.
-      if (/^useAdmin(Approve|Ban|Restore|Delete)/.test(key))
+      // Admin action hooks (approve/ban/restore/delete a user or test SMTP)
+      // are mutations; this must be checked before the broad `useAdmin` query
+      // pattern below.
+      if (/^useAdmin(Approve|Ban|Restore|Delete|TestNotification)/.test(key))
         return defaultMutationHook;
       if (/^use(Get|Admin|List|Export|HealthCheck)/.test(key))
         return defaultQueryHook;

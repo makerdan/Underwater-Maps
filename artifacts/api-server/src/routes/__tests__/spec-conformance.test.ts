@@ -614,6 +614,13 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
     schema: apiZod.AdminPendingCountResponse,
     payloads: [{ count: 3 }, { count: 0 }],
   },
+  AdminTestNotificationResponse: {
+    schema: apiZod.AdminTestNotificationResponse,
+    payloads: [
+      { sent: true, recipientCount: 2 },
+      { sent: false, reason: "SMTP delivery failed" },
+    ],
+  },
   AdminApproveUserResponse: {
     schema: apiZod.AdminApproveUserResponse,
     payloads: [{ user: { ...USER_ACCESS_RECORD, status: "approved" } }],
