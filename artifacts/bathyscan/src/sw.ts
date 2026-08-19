@@ -122,6 +122,25 @@ registerRoute(
   },
 );
 
+// Deferred application chunks (3D rendering, charts, and import tooling) are
+// intentionally excluded from the install-time precache. Caching them after
+// the browser first requests them keeps the initial PWA install small while
+// retaining offline reopening once a signed-in user has used the core map.
+// Same-origin and the `/assets/` path prevent this broad route from caching
+// third-party scripts or API responses.
+registerRoute(
+  ({ request, url }: { request: Request; url: URL }) =>
+    request.destination === "script" &&
+    url.origin === self.location.origin &&
+    /\/assets\/.+\.js$/.test(url.pathname),
+  new CacheFirst({
+    cacheName: `${CACHE_VERSION}-app-assets`,
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 }),
+    ],
+  }),
+);
+
 // Help media: serve from pack cache when available, fall back to network.
 registerRoute(
   ({ url }: { url: URL }) => /\/help\/.+\.(gif|png)$/.test(url.pathname),

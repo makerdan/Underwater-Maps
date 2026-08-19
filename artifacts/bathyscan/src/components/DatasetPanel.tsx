@@ -65,7 +65,6 @@ import { HelpIcon } from "@/components/help/HelpButton";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { GpsImportDialog } from "@/components/GpsImportDialog";
 import { GpsExportDialog } from "@/components/GpsExportDialog";
 import { ReassignMarkersDialog } from "@/components/ReassignMarkersDialog";
 import { SUPPORTED_EXTENSIONS } from "@/components/FileUpload";
@@ -80,6 +79,12 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { resolveOfflineScope } from "@/lib/offlineScopeResolver";
 import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
+
+const GpsImportDialog = React.lazy(() =>
+  import("@/components/GpsImportDialog").then(({ GpsImportDialog: Dialog }) => ({
+    default: Dialog,
+  })),
+);
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -3526,7 +3531,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           )}
 
           {gpsImportOpen && terrain && (
-            <GpsImportDialog terrain={terrain} onClose={() => setGpsImportOpen(false)} />
+            <React.Suspense fallback={null}>
+              <GpsImportDialog terrain={terrain} onClose={() => setGpsImportOpen(false)} />
+            </React.Suspense>
           )}
 
           {gpsExportOpen && terrain && (

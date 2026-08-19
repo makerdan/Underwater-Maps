@@ -17,9 +17,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetDatasets, useGetUserDatasets, getGetDatasetsQueryKey, getGetUserDatasetsQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
 import { AppProvider, useAppState } from "@/lib/context";
-import { registerTestBridge, registerTestCameraPosRef } from "@/lib/testHelpers";
 import { useTerrainStore } from "@/lib/terrainStore";
-import { TourScene } from "@/pages/TourScene";
 import NotFound from "@/pages/not-found";
 import { Settings } from "@/pages/Settings";
 import { HUD } from "@/components/HUD";
@@ -131,6 +129,15 @@ import { MobilePlanTab } from "@/components/mobile/MobilePlanTab";
 import { ClosedForTestingBanner } from "@/components/ClosedForTestingBanner";
 import { isSiteClosed } from "@/lib/siteStatus";
 
+// The 3D renderer pulls in Three.js, React Three Fiber, and the scene-only
+// layers. Keep it behind an async boundary so the signed-in shell, offline
+// notice, and navigation are usable before the renderer finishes downloading.
+// The service worker caches this chunk after first use (see sw.ts), preserving
+// the core offline experience without forcing every PWA install to precache it.
+const TourScene = React.lazy(() =>
+  import("@/pages/TourScene").then(({ TourScene: Scene }) => ({ default: Scene })),
+);
+
 
 function TestBridge(): null {
   const {
@@ -145,16 +152,20 @@ function TestBridge(): null {
   realisticModeRef.current = realisticMode;
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    registerTestBridge(
-      setTerrain,
-      setDatasetId,
-      terrainRef,
-      setRealisticMode,
-      realisticModeRef,
-      setTidalOverlay,
-      setTidalDataOverride,
+    void import("@/lib/testHelpers").then(
+      ({ registerTestBridge, registerTestCameraPosRef }) => {
+        registerTestBridge(
+          setTerrain,
+          setDatasetId,
+          terrainRef,
+          setRealisticMode,
+          realisticModeRef,
+          setTidalOverlay,
+          setTidalDataOverride,
+        );
+        registerTestCameraPosRef(cameraPosRef);
+      },
     );
-    registerTestCameraPosRef(cameraPosRef);
   }, [setTerrain, setDatasetId, setRealisticMode, setTidalOverlay, setTidalDataOverride]);
   return null;
 }
@@ -1357,12 +1368,24 @@ function Main() {
             the parent React tree) degrades to a contained fallback instead
             of white-screening the whole app. */}
         <ErrorBoundary label="the 3D scene">
-          <TourScene
-            tidalData={effectiveTidalData}
-            tidalDataMap={tidalDataMap}
-            tidalOverlay={tidalOverlay}
-            depthLayer={depthLayer}
-          />
+          <React.Suspense
+            fallback={
+              <div
+                role="status"
+                aria-label="Loading 3D map"
+                className="absolute inset-0 flex items-center justify-center bg-[#040810] text-sky-200 font-mono text-sm"
+              >
+                Loading 3D map…
+              </div>
+            }
+          >
+            <TourScene
+              tidalData={effectiveTidalData}
+              tidalDataMap={tidalDataMap}
+              tidalOverlay={tidalOverlay}
+              depthLayer={depthLayer}
+            />
+          </React.Suspense>
         </ErrorBoundary>
 
         {/* HUD + depth scale — pointer-events:none overlay.

@@ -10,8 +10,17 @@ import { MAX_DEPTH_WORLD } from "@/lib/terrain";
 import type { TerrainData } from "@workspace/api-client-react";
 import { DirectionArrowField } from "@/components/DirectionArrowField";
 import { useSettingsStore } from "@/lib/settingsStore";
+import {
+  LAYER_SPEED_ATTENUATE,
+  type DepthLayer,
+} from "@/lib/conditionsDisplay";
 
-export type DepthLayer = "surface" | "mid" | "near-bottom";
+export type { DepthLayer } from "@/lib/conditionsDisplay";
+export {
+  LAYER_COLORS,
+  LAYER_LABEL,
+  LAYER_SPEED_ATTENUATE,
+} from "@/lib/conditionsDisplay";
 
 interface TidalCurrentArrowsProps {
   currentDirection: number;
@@ -50,25 +59,6 @@ export const LAYER_OFFSETS: Record<DepthLayer, number> = {
   surface: 0,
   mid: -MAX_DEPTH_WORLD * 0.4,
   "near-bottom": -MAX_DEPTH_WORLD * 0.8,
-};
-
-export const LAYER_SPEED_ATTENUATE: Record<DepthLayer, number> = {
-  surface: 1.0,
-  mid: 0.6,
-  "near-bottom": 0.25,
-};
-
-/** Distinguishable per-layer colours for the always-on Current overlay. */
-export const LAYER_COLORS: Record<DepthLayer, string> = {
-  surface: "#22d3ee",      // cyan — surface drift
-  mid: "#38bdf8",          // sky blue — mid-water
-  "near-bottom": "#818cf8", // indigo — near-bottom
-};
-
-export const LAYER_LABEL: Record<DepthLayer, string> = {
-  surface: "Surface",
-  mid: "Mid",
-  "near-bottom": "Near-bottom",
 };
 
 export const TidalCurrentArrows: React.FC<TidalCurrentArrowsProps> = ({

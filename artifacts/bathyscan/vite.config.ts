@@ -316,10 +316,16 @@ export default defineConfig({
       base: basePath + "/",
       manifest: false,
       injectManifest: {
-        // The main index chunk (three.js + app code) is over Workbox's
-        // 2 MiB default. Leave headroom for ordinary product growth while
-        // keeping the offline app shell available after first load.
-        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        // The install-time cache is the app shell, not every optional renderer
+        // or data tool. Deferred assets are populated by the CacheFirst route
+        // in src/sw.ts after their first successful use, which keeps offline
+        // reopening intact without inflating the PWA's first download.
+        globIgnores: [
+          "assets/excel-*.js",
+          "assets/GpsImportDialog-*.js",
+          "assets/TourScene-*.js",
+          "assets/three-*.js",
+        ],
       },
       devOptions: {
         enabled: false,
@@ -350,6 +356,20 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Keep large, independently cacheable libraries out of the entry
+        // chunk. TourScene is lazy-loaded from App.tsx, so its renderer chunks
+        // are requested only when the signed-in workspace opens.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("/node_modules/three/")) return "three";
+          if (id.includes("/@clerk/")) return "clerk";
+          if (id.includes("/recharts/")) return "charts";
+          if (id.includes("/exceljs/")) return "excel";
+        },
+      },
+    },
   },
   server: {
     port,

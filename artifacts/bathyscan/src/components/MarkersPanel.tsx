@@ -13,8 +13,13 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
-import { GpsImportDialog } from "@/components/GpsImportDialog";
 import { ReassignMarkersDialog } from "@/components/ReassignMarkersDialog";
+
+const GpsImportDialog = React.lazy(() =>
+  import("@/components/GpsImportDialog").then(({ GpsImportDialog: Dialog }) => ({
+    default: Dialog,
+  })),
+);
 
 const PANEL_WIDTH = 300;
 
@@ -333,10 +338,12 @@ export const MarkersPanel: React.FC = () => {
       </div>
 
       {gpsImportOpen && (
-        <GpsImportDialog
-          terrain={terrain ?? undefined}
-          onClose={() => setGpsImportOpen(false)}
-        />
+        <React.Suspense fallback={null}>
+          <GpsImportDialog
+            terrain={terrain ?? undefined}
+            onClose={() => setGpsImportOpen(false)}
+          />
+        </React.Suspense>
       )}
       {reassignOpen && (
         <ReassignMarkersDialog onClose={() => setReassignOpen(false)} />

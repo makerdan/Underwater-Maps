@@ -16,11 +16,14 @@ import type { TerrainData } from "@workspace/api-client-react";
 import { DirectionArrowField } from "@/components/DirectionArrowField";
 import { DirectionParticleField } from "@/components/DirectionParticleField";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { LAYER_OFFSETS } from "@/components/TidalCurrentArrows";
 import {
-  LAYER_OFFSETS,
+  windColor,
   LAYER_SPEED_ATTENUATE,
   LAYER_COLORS,
-} from "@/components/TidalCurrentArrows";
+} from "@/lib/conditionsDisplay";
+
+export { windColor } from "@/lib/conditionsDisplay";
 
 /**
  * Build a sparse set of (worldX, worldZ) positions sampled from the shoreline
@@ -58,19 +61,6 @@ function shorelineBandPositions(
 function seaSurfaceY(terrain: TerrainData): number {
   const depthRange = (terrain.maxDepth - terrain.minDepth) || 1;
   return (terrain.minDepth / depthRange) * MAX_DEPTH_WORLD;
-}
-
-// ---------------------------------------------------------------------------
-// Beaufort-ish colour ramp for wind speed (knots).
-// ---------------------------------------------------------------------------
-export function windColor(knots: number): string {
-  if (knots < 4) return "#7dd3fc";    // calm — light cyan
-  if (knots < 11) return "#38bdf8";   // light breeze — sky blue
-  if (knots < 17) return "#a3e635";   // moderate — lime
-  if (knots < 22) return "#facc15";   // fresh — yellow
-  if (knots < 28) return "#fb923c";   // strong — orange
-  if (knots < 34) return "#f87171";   // near gale — red
-  return "#e11d48";                    // gale+ — crimson
 }
 
 export const WindOverlay: React.FC = () => {

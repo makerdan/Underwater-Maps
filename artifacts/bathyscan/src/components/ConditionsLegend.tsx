@@ -13,13 +13,13 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { formatSpeedFromKnots, formatWaveHeight, cardinal } from "@/lib/units";
 import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useAppState } from "@/lib/context";
-import { windColor } from "@/components/ConditionsOverlays";
 import { LocationBadge } from "@/components/LocationBadge";
 import {
+  windColor,
   LAYER_COLORS,
   LAYER_LABEL,
   LAYER_SPEED_ATTENUATE,
-} from "@/components/TidalCurrentArrows";
+} from "@/lib/conditionsDisplay";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(0,10,20,0.88)",

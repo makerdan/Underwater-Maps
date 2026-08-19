@@ -2,7 +2,6 @@ import "./lib/suppressThreeClockWarn";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
-import { installTestHelpers } from "./lib/testHelpers";
 import { assertDevAuthBypassSafe, installDevAuthFetchPatch } from "./lib/devAuth";
 import { patchPerformanceMeasure } from "./lib/patchPerformanceMeasure";
 import { startDevHealthWatch } from "./lib/queryClient";
@@ -41,7 +40,9 @@ if (
   import.meta.env.DEV &&
   import.meta.env.VITE_DEV_AUTH_BYPASS === "1"
 ) {
-  installTestHelpers();
+  void import("./lib/testHelpers").then(({ installTestHelpers }) => {
+    installTestHelpers();
+  });
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
