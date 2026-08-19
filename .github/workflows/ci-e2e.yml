@@ -140,13 +140,24 @@ jobs:
       # runner, so /api/catch-photos/upload-url can only 500 here. The
       # test stays in the local suite, where the sidecar is available.
       - name: Run Playwright e2e suite
+        env:
+          PLAYWRIGHT_CI_SUITE: main-full
+          PLAYWRIGHT_CI_RESULTS: test-results/ci-playwright-results.json
         run: >-
           pnpm exec playwright test
-          --reporter=list,html
+          --reporter=list,html,./scripts/ci-playwright-reporter.mjs
           --grep-invert "signed upload"
 
-      - name: Upload Playwright report
-        if: failure()
+      - name: Validate Playwright runtime-skip baseline
+        if: always()
+        run: >-
+          node scripts/check-e2e-runtime-skips.mjs
+          --results test-results/ci-playwright-results.json
+          --baseline tests/e2e/runtime-skip-baseline.json
+          --suite main-full
+
+      - name: Upload Playwright report and runtime outcome
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
@@ -234,9 +245,12 @@ jobs:
       # Keep this list in lockstep with the local test-e2e-palette validation
       # command. Explicit paths ensure this job covers the isolated suite only.
       - name: Run Playwright palette & settings sync suite
+        env:
+          PLAYWRIGHT_CI_SUITE: palette-settings-sync
+          PLAYWRIGHT_CI_RESULTS: test-results/ci-playwright-results.json
         run: >-
           pnpm exec playwright test
-          --reporter=list,html
+          --reporter=list,html,./scripts/ci-playwright-reporter.mjs
           tests/e2e/palette-cross-device-sync.spec.ts
           tests/e2e/onboarding-tour.spec.ts
           tests/e2e/settings-cross-device-sync.spec.ts
@@ -246,8 +260,16 @@ jobs:
           tests/e2e/adaptive-palette.spec.ts
           tests/e2e/overview-puzzle-multiselect.spec.ts
 
-      - name: Upload Playwright palette report
-        if: failure()
+      - name: Validate Playwright runtime-skip baseline
+        if: always()
+        run: >-
+          node scripts/check-e2e-runtime-skips.mjs
+          --results test-results/ci-playwright-results.json
+          --baseline tests/e2e/runtime-skip-baseline.json
+          --suite palette-settings-sync
+
+      - name: Upload Playwright palette report and runtime outcome
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-palette-settings-sync

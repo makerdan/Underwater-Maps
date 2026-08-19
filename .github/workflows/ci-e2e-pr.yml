@@ -108,9 +108,12 @@ jobs:
       # "setup" project before any spec. --grep-invert "signed upload" mirrors
       # the main workflow exclusion (object-storage sidecar not present in CI).
       - name: Run Playwright PR smoke subset
+        env:
+          PLAYWRIGHT_CI_SUITE: pr-smoke
+          PLAYWRIGHT_CI_RESULTS: test-results/ci-playwright-results.json
         run: >-
           pnpm exec playwright test
-          --reporter=list,html
+          --reporter=list,html,./scripts/ci-playwright-reporter.mjs
           --grep-invert "signed upload"
           tests/e2e/smoke.spec.ts
           tests/e2e/terrain-visibility.spec.ts
@@ -120,8 +123,16 @@ jobs:
           tests/e2e/sidebar-modes.spec.ts
           tests/e2e/webgl-smoke.spec.ts
 
-      - name: Upload Playwright report
-        if: failure()
+      - name: Validate Playwright runtime-skip baseline
+        if: always()
+        run: >-
+          node scripts/check-e2e-runtime-skips.mjs
+          --results test-results/ci-playwright-results.json
+          --baseline tests/e2e/runtime-skip-baseline.json
+          --suite pr-smoke
+
+      - name: Upload Playwright report and runtime outcome
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-pr

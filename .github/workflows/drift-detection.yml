@@ -10,7 +10,9 @@ jobs:
   drift:
     name: Six-class drift detection
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Ten recent successful runners completed in 54–112 s; 10 min preserves
+    # cold-cache/setup variance without borrowing Replit-local tier budgets.
+    timeout-minutes: 10
 
     env:
       # Placeholder only — lib/db/src/index.ts throws at module-init time when

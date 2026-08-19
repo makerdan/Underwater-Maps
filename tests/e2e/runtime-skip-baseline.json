@@ -1,0 +1,15 @@
+{
+  "$comment": "GitHub-runner runtime skips only. This is deliberately separate from tests/skip-baseline.json, which counts static source call sites in every environment. Values are the 2026-08-18/19 observed GitHub Actions baseline; lower results must be committed as a deliberate ratchet.",
+  "version": 1,
+  "suites": {
+    "pr-smoke": {
+      "skipped": 0
+    },
+    "main-full": {
+      "skipped": 44
+    },
+    "palette-settings-sync": {
+      "skipped": 0
+    }
+  }
+}

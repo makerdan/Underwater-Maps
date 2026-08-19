@@ -195,7 +195,7 @@ export const GITHUB_SUITE_OVERLAP_EXCLUSIONS = [
     scope: "push",
     command: [
       "pnpm exec playwright test",
-      "--reporter=list,html",
+      "--reporter=list,html,./scripts/ci-playwright-reporter.mjs",
       "tests/e2e/palette-cross-device-sync.spec.ts",
       "tests/e2e/onboarding-tour.spec.ts",
       "tests/e2e/settings-cross-device-sync.spec.ts",

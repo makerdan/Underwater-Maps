@@ -1,7 +1,12 @@
 # E2E conditional-skip audit
 
-Last audited: 2026-07-21 (Task: skipped-test cleanup and skip-count guard).
-Baseline updated 2026-08-18 to 233: `pwa-offline.spec.ts` added the
+Last audited: 2026-08-19. The static call-site baseline is **234**:
+`node scripts/check-skip-count.mjs` finds 0 static unit skips and 234
+conditional `test.skip(` sites under `tests/e2e/`. Runtime GitHub-runner skips
+are measured separately in `runtime-skip-baseline.json`; they must never be
+used to raise this source-level baseline.
+
+Baseline updated 2026-08-18 to 234: `pwa-offline.spec.ts` added the
 "Save Offline full-download flow" describe block with 6 environment-gated
 skips (MY LIBRARY / trigger not rendered when auth bypass or app boot fails —
 category 1; controlling service worker absent, offline-reload page close,
@@ -66,7 +71,7 @@ explaining the gate. None of them are unconditional dead tests.
 ## Prevention
 
 `scripts/check-skip-count.mjs` (run as `check:skip-count` in the fast
-validation tier) records baseline counts in `tests/skip-baseline.json`:
+validation tier) records source-level baseline counts in `tests/skip-baseline.json`:
 
 - static `it.skip` / `test.skip` / `describe.skip` in unit tests (baseline 0), and
 - `test.skip(` call sites in `tests/e2e/` (conditional gates).
@@ -75,3 +80,9 @@ The step fails with a pointed message when either count rises above its
 baseline, so new silent skips surface immediately. When you intentionally add
 a gated skip (with a message and a matching category above, or a new
 documented category), update the baseline in the same commit.
+
+This is not the GitHub runtime-skip ratchet. CI also captures the actual final
+Playwright outcome and skip reasons, then compares its skipped count per
+workflow suite against `tests/e2e/runtime-skip-baseline.json`. A clean lower
+count is a prompt to lower that CI-specific baseline; it never justifies
+raising this static call-site count.
