@@ -5,6 +5,8 @@ import "./index.css";
 import { assertDevAuthBypassSafe, installDevAuthFetchPatch } from "./lib/devAuth";
 import { patchPerformanceMeasure } from "./lib/patchPerformanceMeasure";
 import { startDevHealthWatch } from "./lib/queryClient";
+import { registerSW } from "virtual:pwa-register";
+import { startServiceWorkerRegistration } from "./lib/serviceWorkerReadiness";
 
 // Dev-only proactive API health watch: pings /api/healthz every few seconds
 // so the "API server down" banner appears even before any screen has fetched
@@ -31,6 +33,29 @@ if (import.meta.env.DEV && import.meta.hot) {
 patchPerformanceMeasure();
 assertDevAuthBypassSafe();
 installDevAuthFetchPatch();
+// Explicit registration gives the offline-save path access to registration
+// rejection instead of relying on a later, indistinguishable `.ready`
+// timeout. Importing virtual:pwa-register also tells vite-plugin-pwa not to
+// inject its silent auto-registration script.
+if (import.meta.env.PROD) {
+  startServiceWorkerRegistration(
+    () =>
+      new Promise((resolve, reject) => {
+        try {
+          registerSW({
+            immediate: true,
+            onRegisteredSW: (_scriptUrl, registration) => {
+              if (registration) resolve(registration);
+              else reject(new Error("No service worker registration was returned"));
+            },
+            onRegisterError: reject,
+          });
+        } catch (cause) {
+          reject(cause);
+        }
+      }),
+  );
+}
 // Hard call-site gate: in a production build, `import.meta.env.DEV` is
 // statically replaced with `false`, the whole `if` body becomes dead code,
 // and the `installTestHelpers` import is tree-shaken away — so `__bathyTest`

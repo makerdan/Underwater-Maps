@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/vanillajs" />
 
 /**
  * Project-specific Vite env vars. Merges with the ImportMetaEnv interface

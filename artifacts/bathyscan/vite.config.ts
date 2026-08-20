@@ -272,7 +272,20 @@ if (Number.isNaN(port) || port <= 0) {
 // This matches the artifact's registered previewPath. BASE_PATH remains
 // overridable for alternate hosting environments, but is not required just to
 // produce a deployment bundle.
-const basePath = process.env.BASE_PATH ?? "/";
+//
+// Vite and vite-plugin-pwa both expect a trailing slash. Normalizing here is
+// important because appending "/" to an already-normalized root path produced
+// the invalid `//sw.js` registration URL in generated production assets.
+export function normalizePwaBasePath(value: string | undefined): string {
+  const raw = (value ?? "/").trim();
+  if (raw === "" || raw === "/") return "/";
+  if (!raw.startsWith("/") || raw.startsWith("//")) {
+    throw new Error(`BASE_PATH must be a single-origin path, received "${raw}"`);
+  }
+  return `${raw.replace(/\/+$/, "")}/`;
+}
+
+const basePath = normalizePwaBasePath(process.env.BASE_PATH);
 
 function getBuildHash(): string {
   try {
@@ -308,7 +321,10 @@ export default defineConfig({
       srcDir: "src",
       filename: "sw.ts",
       injectRegister: "auto",
-      base: basePath + "/",
+      // Keep the generated script URL and scope within the artifact's origin
+      // and deployment path. In particular, root is "/" — never "//".
+      base: basePath,
+      scope: basePath,
       manifest: false,
       injectManifest: {
         // The install-time cache is the app shell, not every optional renderer

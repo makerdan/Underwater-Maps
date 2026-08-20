@@ -27,10 +27,15 @@ import {
   saveOfflinePack,
   fetchDatasetBbox,
   estimatePackStorageBytesFromBbox,
+  OFFLINE_PACK_SW_READY_TIMEOUT_MS,
   type OfflinePack,
   type PackProgress,
   type TideHeightPrediction,
 } from "@/lib/offlinePackStore";
+import {
+  __resetServiceWorkerReadinessForTests,
+  startServiceWorkerRegistration,
+} from "@/lib/serviceWorkerReadiness";
 
 // ── helpers ───────────────────────────────────────────────────────────────
 function makeHeightPred(isoTime: string, v: number): TideHeightPrediction {
@@ -76,6 +81,7 @@ function makePack(
 
 beforeEach(() => {
   store.clear();
+  __resetServiceWorkerReadinessForTests();
 });
 
 describe("getOfflineTideValue — height interpolation", () => {
@@ -1390,5 +1396,193 @@ describe("cacheTerrain — reg.active null rejects with descriptive error", () =
 
     const packs = await listOfflinePacks();
     expect(packs).toHaveLength(0);
+  });
+});
+
+// ── Explicit service-worker lifecycle boundary ─────────────────────────────
+//
+// Production starts registration in main.tsx through vite-plugin-pwa's
+// observable callback. These fixtures prove cacheTerrain surfaces each
+// lifecycle state before it starts the separate CACHE_PACK acknowledgement
+// timeout.
+describe("saveOfflinePack — service-worker lifecycle diagnostics", () => {
+  const origNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    __resetServiceWorkerReadinessForTests();
+    if (origNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", origNavigatorDescriptor);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThis as any).navigator;
+    }
+  });
+
+  function setServiceWorker(
+    registration: { active: { postMessage: (message: unknown, ports: unknown[]) => void } | null; installing?: { state: string } | null },
+    controller: unknown = undefined,
+    ready: Promise<unknown> = Promise.resolve(registration),
+  ): void {
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        serviceWorker: {
+          ready,
+          ...(controller !== undefined ? { controller } : {}),
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  function successfulWorker(): {
+    active: { postMessage: (message: unknown, ports: unknown[]) => void };
+  } {
+    return {
+      active: {
+        postMessage: (_message, ports) => {
+          (ports[0] as MessagePort).postMessage({ ok: true });
+        },
+      },
+    };
+  }
+
+  it("surfaces a rejected registration instead of waiting for serviceWorker.ready", async () => {
+    setServiceWorker({ active: null });
+    startServiceWorkerRegistration(() => Promise.reject(new Error("browser policy blocked registration")));
+
+    const events: PackProgress[] = [];
+    await expect(
+      saveOfflinePack(
+        {
+          id: "ds-registration-rejected",
+          name: "Registration Rejected",
+          bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+        },
+        3,
+        (progress) => events.push(progress),
+      ),
+    ).rejects.toThrow(/could not register.*reload bathyscan/i);
+    expect(events.find((progress) => progress.step === "terrain" && progress.error)?.error).toMatch(
+      /could not register.*reload bathyscan/i,
+    );
+  });
+
+  it("reports an activation timeout separately from the CACHE_PACK acknowledgement timeout", async () => {
+    vi.useFakeTimers();
+    const pendingReady = new Promise<unknown>(() => {});
+    const registration = { active: null, installing: { state: "installing" } };
+    setServiceWorker(registration, undefined, pendingReady);
+    startServiceWorkerRegistration(() => Promise.resolve(registration as ServiceWorkerRegistration));
+
+    const result = saveOfflinePack(
+      {
+        id: "ds-activation-timeout",
+        name: "Activation Timeout",
+        bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+      },
+      3,
+      () => {},
+    ).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(OFFLINE_PACK_SW_READY_TIMEOUT_MS + 1);
+
+    await expect(result).resolves.toMatchObject({
+      message: expect.stringMatching(/activation timed out/i),
+    });
+  });
+
+  it("reports a redundant installing worker as an installation failure", async () => {
+    const pendingReady = new Promise<unknown>(() => {});
+    const registration = { active: null, installing: { state: "redundant" } };
+    setServiceWorker(registration, undefined, pendingReady);
+    startServiceWorkerRegistration(() => Promise.resolve(registration as ServiceWorkerRegistration));
+
+    await expect(
+      saveOfflinePack(
+        {
+          id: "ds-installation-failed",
+          name: "Installation Failed",
+          bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+        },
+        3,
+        () => {},
+      ),
+    ).rejects.toThrow(/installation failed.*reload bathyscan/i);
+  });
+
+  it("rejects an inactive registration before sending CACHE_PACK", async () => {
+    const registration = { active: null };
+    setServiceWorker(registration);
+    startServiceWorkerRegistration(() => Promise.resolve(registration as ServiceWorkerRegistration));
+
+    await expect(
+      saveOfflinePack(
+        {
+          id: "ds-inactive-worker",
+          name: "Inactive Worker",
+          bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+        },
+        3,
+        () => {},
+      ),
+    ).rejects.toThrow(/not active yet.*reload bathyscan/i);
+  });
+
+  it("requires a controlling worker before it treats an offline save as valid", async () => {
+    const registration = successfulWorker();
+    setServiceWorker(registration, null);
+    startServiceWorkerRegistration(() => Promise.resolve(registration as ServiceWorkerRegistration));
+
+    await expect(
+      saveOfflinePack(
+        {
+          id: "ds-uncontrolled-worker",
+          name: "Uncontrolled Worker",
+          bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+        },
+        3,
+        () => {},
+      ),
+    ).rejects.toThrow(/not controlled.*reload bathyscan/i);
+  });
+
+  it("saves when registration, activation, control, and CACHE_PACK acknowledgement all succeed", async () => {
+    const registration = successfulWorker();
+    setServiceWorker(registration, registration.active);
+    startServiceWorkerRegistration(() => Promise.resolve(registration as ServiceWorkerRegistration));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/tidal/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              station: "TEST",
+              heightPredictions: [],
+              currentPredictions: [],
+              tidalExpiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(),
+              generatedAt: new Date().toISOString(),
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ station: "TEST", observation: null, snapshotAt: new Date().toISOString() }),
+        });
+      }),
+    );
+
+    const pack = await saveOfflinePack(
+      {
+        id: "ds-ready-worker",
+        name: "Ready Worker",
+        bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+      },
+      3,
+      () => {},
+    );
+    expect(pack.datasetId).toBe("ds-ready-worker");
   });
 });

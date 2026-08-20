@@ -9,6 +9,10 @@ import { get, set, del, keys } from "idb-keyval";
 import type { Marker } from "@workspace/api-client-react";
 import { authorizedFetch } from "./authorizedFetch";
 import { CACHE_PACK_FETCH_TIMEOUT_MS } from "./swMessageHandler";
+import {
+  getControllingServiceWorker,
+  SERVICE_WORKER_READY_TIMEOUT_MS,
+} from "./serviceWorkerReadiness";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const PACK_KEY_PREFIX = "offline-pack-";
@@ -146,40 +150,12 @@ function newId(): string {
 
 // ─── Tell the SW to cache terrain into the persistent pack cache ──────────────
 
-const SERVICE_WORKER_READY_TIMEOUT_MS = 15_000;
 export const OFFLINE_PACK_SW_READY_TIMEOUT_MS = SERVICE_WORKER_READY_TIMEOUT_MS;
 const CUSTOM_DATASET_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
 async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<void> {
-  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
-    throw new Error("Service worker unavailable — cannot save terrain for offline use");
-  }
-
-  const reg = await withTimeout(
-    navigator.serviceWorker.ready,
-    SERVICE_WORKER_READY_TIMEOUT_MS,
-    "Service worker readiness timed out — cannot cache terrain for offline use",
-  );
-  if (!reg.active) {
-    throw new Error("Service worker not active — cannot cache terrain for offline use");
-  }
+  const activeWorker = await getControllingServiceWorker();
 
   // Fetch in the page context so Clerk authorization is applied to private
   // uploaded datasets. Only response data crosses the worker boundary. A
@@ -238,7 +214,7 @@ async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<vo
       if (e.data.ok) resolve();
       else reject(new Error(e.data.error ?? "SW CACHE_PACK failed"));
     };
-    reg.active!.postMessage(
+    activeWorker.postMessage(
       {
         type: "CACHE_PACK",
         terrainUrl,

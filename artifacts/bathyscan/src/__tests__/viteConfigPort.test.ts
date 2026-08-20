@@ -62,3 +62,26 @@ describe.each([
     );
   }, 60_000);
 });
+
+describe("normalizePwaBasePath", () => {
+  async function normalize(basePath: string | undefined): Promise<string> {
+    if (basePath === undefined) delete process.env.BASE_PATH;
+    else process.env.BASE_PATH = basePath;
+    vi.resetModules();
+    const { normalizePwaBasePath } = await import(/* @vite-ignore */ bathyscanConfig);
+    return normalizePwaBasePath(basePath);
+  }
+
+  it.each([
+    [undefined, "/"],
+    ["/", "/"],
+    ["/bathyscan", "/bathyscan/"],
+    ["/bathyscan/", "/bathyscan/"],
+  ])("normalizes %j to %j", async (input, expected) => {
+    await expect(normalize(input)).resolves.toBe(expected);
+  });
+
+  it("rejects paths that could generate an off-origin worker URL", async () => {
+    await expect(normalize("//other-origin")).rejects.toThrow(/single-origin path/i);
+  });
+});

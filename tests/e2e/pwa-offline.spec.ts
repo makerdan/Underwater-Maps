@@ -329,10 +329,10 @@ test.describe("Save Offline full-download flow", () => {
    * Strategy:
    * - Mock GET /api/user/datasets so MY LIBRARY shows one upload card with a
    *   known id (trigger: data-testid="btn-offline-upload-<id>").
-   * - Remove navigator.serviceWorker before app boot so the terrain
-   *   CACHE_PACK step resolves immediately (offlinePackStore guards on
-   *   `"serviceWorker" in navigator`); without this the save would hang on
-   *   `navigator.serviceWorker.ready` in environments with no registered SW.
+   * - Install an active, controlling service-worker stub before app boot. It
+   *   acknowledges CACHE_PACK through the transferred MessagePort so the flow
+   *   exercises the same readiness contract as a real offline save without
+   *   requiring a production worker in the dev-server E2E environment.
    * - Stub the tide / weather / marker endpoints with minimal payloads. The
    *   tide stub is delayed so the "downloading" phase (spinner + progress
    *   counter) stays observable long enough to assert on.
@@ -344,11 +344,19 @@ test.describe("Save Offline full-download flow", () => {
   test("Save Area runs from button click to done state with progress counter", async ({ page }) => {
     // SW stub must be installed before any app code runs.
     await page.addInitScript(() => {
-      try {
-        delete (Navigator.prototype as unknown as Record<string, unknown>)["serviceWorker"];
-      } catch {
-        // Some browsers may refuse — the test skips later if the save hangs.
-      }
+      const activeWorker = {
+        postMessage: (_message: unknown, ports: MessagePort[]) => {
+          ports[0]?.postMessage({ ok: true });
+        },
+      };
+      const serviceWorker = {
+        ready: Promise.resolve({ active: activeWorker }),
+        controller: activeWorker,
+      };
+      Object.defineProperty(Navigator.prototype, "serviceWorker", {
+        configurable: true,
+        get: () => serviceWorker,
+      });
     });
 
     // MY LIBRARY data: one upload with a bbox (so tide/weather steps run).
