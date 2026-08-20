@@ -207,6 +207,31 @@ describe("validateStartupEnv", () => {
     expect(issues.some((i) => i.name === "ZONE_CACHE_MAX_FILES")).toBe(true);
   });
 
+  describe("OpenAI model name overrides", () => {
+    for (const name of [
+      "OPENAI_CLASSIFY_MODEL",
+      "OPENAI_HELP_MODEL",
+      "OPENAI_QUERY_MODEL",
+    ]) {
+      it(`warns when ${name} is set to an empty string`, () => {
+        vi.stubEnv(name, "");
+
+        const issues = validateStartupEnv();
+
+        expect(issues).toEqual([
+          expect.objectContaining({
+            name,
+            problem: "must be a non-empty model name string",
+          }),
+        ]);
+        expect(mockWarn).toHaveBeenCalledWith(
+          expect.objectContaining({ name, valueLength: 0 }),
+          expect.stringContaining(name),
+        );
+      });
+    }
+  });
+
   describe("BUCKET_MONITOR_ADMIN production guard", () => {
     it("throws a critical error when BUCKET_MONITOR_ADMIN=1 and REPLIT_DEPLOYMENT is set", () => {
       vi.stubEnv("BUCKET_MONITOR_ADMIN", "1");

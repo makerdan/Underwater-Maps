@@ -271,6 +271,45 @@ describe("POST /api/query", () => {
     expect(fakeChatCompletionsCreate).not.toHaveBeenCalled();
   });
 
+  it("returns 400 with a validation error when query exceeds 2000 characters", async () => {
+    const res = await request(app)
+      .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", "user-query-too-long")
+      .send({ query: "x".repeat(2001) });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      error: "invalid_request",
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: ["query"] }),
+      ]),
+    });
+    expect(fakePoeCreate).not.toHaveBeenCalled();
+    expect(fakeChatCompletionsCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 with a validation error when topZones exceeds 20 items", async () => {
+    const res = await request(app)
+      .post("/api/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", "user-query-too-many-zones")
+      .send({
+        query: "describe this terrain",
+        context: { topZones: Array.from({ length: 21 }, (_, i) => `zone-${i}`) },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      error: "invalid_request",
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: ["context", "topZones"] }),
+      ]),
+    });
+    expect(fakePoeCreate).not.toHaveBeenCalled();
+    expect(fakeChatCompletionsCreate).not.toHaveBeenCalled();
+  });
+
   it("returns 429 once the per-user rate limit is exceeded and surfaces Retry-After", async () => {
     const userId = "user-query-ratelimit";
     for (let i = 0; i < 20; i++) {
