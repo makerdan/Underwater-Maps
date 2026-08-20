@@ -1641,7 +1641,10 @@ router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
   // Load suppressed preset IDs so they are excluded from the response.
   let disabledIds = new Set<string>();
   try {
-    const rows = await db.select({ id: disabledPresetsTable.id }).from(disabledPresetsTable);
+    const rows = await db
+      .select()
+      .from(uploadJobsTable)
+      .where(eq(uploadJobsTable.id, jobId));
     disabledIds = new Set(rows.map((r) => r.id));
   } catch {
     // Non-fatal: if the table doesn't exist yet, serve all presets.
@@ -1669,7 +1672,7 @@ router.get("/datasets", asyncHandler(async (req, res): Promise<void> => {
   try {
     res.json(GetDatasetsResponse.parse(list));
   } catch (err) {
-    const details = err instanceof Error ? err.message : "Response schema validation failed";
+    const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(500).json({ error: "internal", details });
   }
 }));
@@ -1685,13 +1688,13 @@ const PresetIdParamSchema = z
   .regex(/^[a-zA-Z0-9_-]+$/, "Preset id must contain only alphanumeric characters, hyphens, or underscores");
 
 router.delete("/datasets/presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
-  const idParsed = PresetIdParamSchema.safeParse(req.params["id"]);
+  const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
-      { route: "DELETE /api/datasets/presets/:id", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-      "DELETE /api/datasets/presets/:id — Zod params validation failed",
+      { route: "GET /api/datasets/:id/preview", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets/:id/preview — Zod params validation failed",
     );
-    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid preset id" });
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
     return;
   }
   const id = idParsed.data;
@@ -1726,8 +1729,8 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
-      { route: "GET /api/datasets/:id/terrain", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-      "GET /api/datasets/:id/terrain — Zod params validation failed",
+      { route: "GET /api/datasets/:id/preview", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets/:id/preview — Zod params validation failed",
     );
     res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
     return;
@@ -1739,7 +1742,7 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
   // Non-owner requests (including unauthenticated) return 404 (not 401/403)
   // to avoid confirming existence of datasets belonging to other users.
   if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
-    const callerId = getAuth(req)?.userId ?? null;
+    const callerId = auth?.userId ?? null;
     if (!callerId) {
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
@@ -1757,7 +1760,7 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
     // silently passes corrupt data to the overview map renderer.
     const stored = StoredTerrainJsonSchema.safeParse(ownRow.overviewJson);
     if (!stored.success) {
-        const issues = stored.error.issues
+        const issues = failedCheck.error!.issues
           .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
           .join("; ");
       logger.error({ id, issues }, "[datasets] GET terrain — stored terrain_schema_mismatch");
@@ -1769,12 +1772,12 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
   }
 
   const rawRes = req.query["resolution"];
-  const resolution = rawRes ? Math.max(32, Math.min(512, parseInt(String(rawRes), 10))) : 256;
+  const resolution = (paramsParsed.data.resolution ?? paramsParsed.data.gridResolution) as number;
 
-  const smoothing = await getSmoothingPreference(req);
-  let grid;
+    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
+    const grid = await fetchCopernicusDem({ minLon, minLat, maxLon, maxLat }, gridSize);
   try {
-    grid = await buildTerrainGrid(id, resolution, { smoothing });
+    grid = await buildTerrainGrid(id, 64, { smoothing });
   } catch (err) {
     if (err instanceof NoDataError) {
       res.status(503).json({ error: "no_data", details: err.message });
@@ -1786,19 +1789,19 @@ router.get("/datasets/:id/terrain", terrainFetchIpRateLimit, terrainFetchUserRat
     res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
     return;
   }
-  res.json(GetDatasetsIdTerrainResponse.parse(grid));
+  res.json(GetDatasetsIdOverviewResponse.parse(grid));
 }));
 
-// ── GET /datasets/:id/overview ────────────────────────────────────────────────
+// ── GET /datasets/:id/preview ─────────────────────────────────────────────────
 // Lightweight preflight: returns the resolved dataSource (ncei | gebco) for a
 // preset dataset without transferring the full depth grid. The client uses
 // this to warn users before loading low-resolution (gebco) bathymetry.
-router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void> => {
+router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void> => {
   const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
-      { route: "GET /api/datasets/:id/overview", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-      "GET /api/datasets/:id/overview — Zod params validation failed",
+      { route: "GET /api/datasets/:id/preview", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/datasets/:id/preview — Zod params validation failed",
     );
     res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
     return;
@@ -1810,7 +1813,7 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
   // Non-owner requests (including unauthenticated) return 404 (not 401/403)
   // to avoid confirming existence of datasets belonging to other users.
   if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
-    const callerId = getAuth(req)?.userId ?? null;
+    const callerId = auth?.userId ?? null;
     if (!callerId) {
       res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
       return;
@@ -1828,7 +1831,7 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
     // silently passes corrupt data to the overview map renderer.
     const stored = StoredTerrainJsonSchema.safeParse(ownRow.overviewJson);
     if (!stored.success) {
-        const issues = stored.error.issues
+        const issues = failedCheck.error!.issues
           .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
           .join("; ");
       logger.error({ id, issues }, "[datasets] GET overview — stored terrain_schema_mismatch");
@@ -1839,8 +1842,8 @@ router.get("/datasets/:id/overview", asyncHandler(async (req, res): Promise<void
     return;
   }
 
-  const smoothing = await getSmoothingPreference(req);
-  let grid;
+    let smoothing: Awaited<ReturnType<typeof getSmoothingPreference>>;
+    const grid = await fetchCopernicusDem({ minLon, minLat, maxLon, maxLat }, gridSize);
   try {
     grid = await buildTerrainGrid(id, 64, { smoothing });
   } catch (err) {
@@ -1873,13 +1876,13 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
   }
   const id = idParsed.data;
   try {
-    const preview = await previewDataset(id);
+      const preview = entries.slice(0, 5).join(", ");
     if (!preview) {
       // Custom (UUID-format) dataset — apply the same auth + ownership guard
       // used by the /terrain route, then build the preview from the row's
       // stored terrainJson so the client sees the real dataSource.
       if (CUSTOM_DATASET_UUID_RE.test(id) && !ALL_PRESET_DATASETS.some((d) => d.id === id)) {
-        const callerId = getAuth(req)?.userId ?? null;
+    const callerId = auth?.userId ?? null;
         if (!callerId) {
           res.status(404).json({ error: "not_found", details: `Dataset '${id}' not found` });
           return;
@@ -1894,9 +1897,9 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
         }
         const tjParsed = StoredTerrainJsonSchema.safeParse(row.terrainJson);
         if (!tjParsed.success) {
-          const issues = tjParsed.error.issues
-            .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
-            .join("; ");
+        const issues = failedCheck.error!.issues
+          .map((i) => `${i.path.join(".") || "root"}: ${i.message}`)
+          .join("; ");
           logger.error({ id, issues }, "[datasets] GET preview — stored terrain_schema_mismatch");
           res.status(500).json({ error: "terrain_schema_mismatch", details: issues });
           return;
@@ -1926,7 +1929,7 @@ router.get("/datasets/:id/preview", asyncHandler(async (req, res): Promise<void>
     // return a graceful 200 with dataSource=unknown so the client can decide
     // whether to proceed.
     const meta = ALL_PRESET_DATASETS.find((d) => d.id === id);
-    const msg = err instanceof Error ? err.message : "Preflight failed";
+    const msg = err instanceof Error ? err.message : "Parse error";
     res.json(validateResponse(GetDatasetsIdPreviewResponse, {
       datasetId: id,
       name: meta?.name ?? id,
@@ -1944,11 +1947,11 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
   const { id } = req.params as { id: string };
 
   // Validate ?h= and ?w= via Zod — rejects array injection and unknown values.
-  const parsedQuery = ZonesQuerySchema.safeParse(req.query);
+  const parsedQuery = TerrainDownloadQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     logger.warn(
-      { route: "GET /api/datasets/:id/zones", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-      "GET /api/datasets/:id/zones — Zod query validation failed",
+      { route: "GET /api/terrain/download", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/download — Zod query validation failed",
     );
     const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_param", details });
@@ -1978,10 +1981,10 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
 
     // For UUID-format dataset IDs, verify ownership against the database.
     if (CUSTOM_DATASET_UUID_RE.test(id)) {
-      const rows = await db
-        .select({ userId: customDatasetsTable.userId })
-        .from(customDatasetsTable)
-        .where(and(eq(customDatasetsTable.id, id), eq(customDatasetsTable.userId, callerId)));
+    const rows = await db
+      .select()
+      .from(uploadJobsTable)
+      .where(eq(uploadJobsTable.id, jobId));
       if (rows.length === 0) {
         // Either dataset doesn't exist or belongs to a different user.
         // Return 404 (not 403) to avoid leaking the existence of the dataset.
@@ -2046,11 +2049,11 @@ router.get("/datasets/:id/zones", asyncHandler(async (req, res): Promise<void> =
 router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
   // Validate bbox (string, not array) and size via Zod — rejects array injection
   // and non-finite values before any manual parseFloat.
-  const parsedQuery = ZonesQuerySchema.safeParse(req.query);
+  const parsedQuery = TerrainDownloadQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     logger.warn(
-      { route: "GET /api/datasets/:id/zones", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-      "GET /api/datasets/:id/zones — Zod query validation failed",
+      { route: "GET /api/terrain/download", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/download — Zod query validation failed",
     );
     const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_param", details });
@@ -2095,11 +2098,11 @@ router.get("/terrain/land", asyncHandler(async (req, res): Promise<void> => {
 router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res): Promise<void> => {
   // Validate via Zod — rejects array injection on any cardinal param (e.g.
   // ?north[]=45&north[]=50 would previously resolve to parseFloat("45,50")=45).
-  const parsedQuery = TerrainDownloadInfoQuerySchema.safeParse(req.query);
+  const parsedQuery = TerrainDownloadQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
     logger.warn(
-      { route: "GET /api/terrain/download/info", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-      "GET /api/terrain/download/info — Zod query validation failed",
+      { route: "GET /api/terrain/download", issues: parsedQuery.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "GET /api/terrain/download — Zod query validation failed",
     );
     const details = parsedQuery.error.issues.map((i) => i.message).join("; ");
     res.status(400).json({ error: "invalid_bbox", details });
@@ -2112,7 +2115,7 @@ router.get("/terrain/download/info", requireAuth, asyncHandler(async (req, res):
     const info = await previewBboxForDownload({ north, south, east, west });
     res.json(validateResponse(GetTerrainDownloadInfoResponse, info, "GET /api/terrain/download/info"));
   } catch (err) {
-     const msg = err instanceof Error ? err.message : "Preflight failed";
+    const msg = err instanceof Error ? err.message : "Parse error";
     res.status(502).json({ error: "upstream_error", details: msg });
   }
 }));
@@ -2160,7 +2163,10 @@ router.get("/terrain/download", requireAuth, asyncHandler(async (req, res): Prom
   const filename = `bathyscan_${latAbs}${latDir}_${lonAbs}${lonDir}_${resolution}.csv`;
 
   try {
-    const rows = await buildBboxCsvRows({ north, south, east, west }, resolution);
+    const rows = await db
+      .select()
+      .from(uploadJobsTable)
+      .where(eq(uploadJobsTable.id, jobId));
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -2173,7 +2179,7 @@ router.get("/terrain/download", requireAuth, asyncHandler(async (req, res): Prom
     }
     res.end();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Download failed";
+    const msg = err instanceof Error ? err.message : "Parse error";
     // Only send error header if not already started
     if (!res.headersSent) {
       res.status(502).json({ error: "upstream_error", details: msg });
@@ -2520,7 +2526,7 @@ router.post(
         createdAt: saved.createdAt.toISOString(),
       };
     } catch (persistErr) {
-      const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
+        const errMsg = guardErr instanceof Error ? guardErr.message : String(guardErr);
     logger.error(
       { err: persistErr, userId: effectiveUserId, datasetName },
       `[direct-upload] failed to persist (userId=${effectiveUserId}, name=${datasetName})`,
@@ -2566,7 +2572,7 @@ router.post(
       return;
     }
 
-    const ext = (file.originalname.toLowerCase().split(".").pop() ?? "");
+    const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
     if (ext !== "png" && ext !== "jpg" && ext !== "jpeg") {
       res.status(415).json({
         error: "unsupported_file_type",
@@ -2761,7 +2767,7 @@ router.post(
         createdAt: saved.createdAt.toISOString(),
       };
     } catch (persistErr) {
-      const errMsg = persistErr instanceof Error ? persistErr.message : String(persistErr);
+        const errMsg = guardErr instanceof Error ? guardErr.message : String(guardErr);
       logger.error(
         { err: persistErr, userId: effectiveUserId, datasetName },
         `[raster-commit] failed to persist (userId=${effectiveUserId}, name=${datasetName})`,
