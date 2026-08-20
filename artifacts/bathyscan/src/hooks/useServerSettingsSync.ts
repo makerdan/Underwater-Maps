@@ -367,12 +367,17 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     }
     return () => {
       _hookMountCount--;
-      _consecutiveFlushFailures = 0;
-      _inBackOff = false;
-      _backOffStep = 0;
-      if (_backOffTimerId) {
-        clearTimeout(_backOffTimerId);
-        _backOffTimerId = null;
+      if (_hookMountCount === 0) {
+        _consecutiveFlushFailures = 0;
+        _inBackOff = false;
+        _backOffStep = 0;
+        _pendingDebounce = false;
+        _lastFlushFailed = false;
+        if (_backOffTimerId) {
+          clearTimeout(_backOffTimerId);
+          _backOffTimerId = null;
+        }
+        _notifySyncStatus();
       }
     };
   }, []);

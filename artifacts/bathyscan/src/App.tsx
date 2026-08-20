@@ -104,6 +104,7 @@ import { ConditionsLegend } from "@/components/ConditionsLegend";
 import { ForecastStrip } from "@/components/ForecastStrip";
 import { TripWindowPanel } from "@/components/TripWindowPanel";
 import { SimulatedDataConfirmDialog } from "@/components/SimulatedDataConfirmDialog";
+import { SettingsSyncIndicator } from "@/components/SettingsSyncIndicator";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { initialViewParams } from "@/lib/viewUrl";
 import { resolveDefaultDataset } from "@/lib/defaultMapLoadLogic";
@@ -2609,6 +2610,7 @@ function ClerkProviderWithRoutes() {
           import.meta.env.DEV gate is statically false in production builds,
           so the component and its restart client are tree-shaken away. */}
       {import.meta.env.DEV && <DevApiDownBanner />}
+      <SettingsSyncIndicator />
       <ClerkAuthTokenWirer />
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
