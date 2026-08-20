@@ -38,6 +38,15 @@ describe("production bundle", () => {
     const prevNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
     const root = path.resolve(__dirname, "..", "..");
+    const staleAssetPath = path.join(
+      root,
+      "dist",
+      "public",
+      "assets",
+      "stale-oversized-build-asset.js",
+    );
+    fs.mkdirSync(path.dirname(staleAssetPath), { recursive: true });
+    fs.writeFileSync(staleAssetPath, "x".repeat(2 * 1024 * 1024 + 1));
     let result: RollupOutput | RollupOutput[];
     try {
       result = (await build({
@@ -53,13 +62,21 @@ describe("production bundle", () => {
           minify: true,
           sourcemap: false,
           ssr: false,
-          emptyOutDir: false,
+          // Keep Vite's configured output cleanup enabled. Workbox scans the
+          // output directory after Rollup writes it, so preserved files from a
+          // prior build could otherwise enter this build's precache manifest.
+          emptyOutDir: true,
         },
       })) as RollupOutput | RollupOutput[];
     } finally {
       if (prevNodeEnv === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = prevNodeEnv;
     }
+
+    expect(
+      fs.existsSync(staleAssetPath),
+      "The production build retained a stale asset instead of inspecting only current output",
+    ).toBe(false);
 
     const outputs = Array.isArray(result) ? result : [result];
     const offenders: string[] = [];
