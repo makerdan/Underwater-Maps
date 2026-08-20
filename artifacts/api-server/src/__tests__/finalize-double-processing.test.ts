@@ -59,6 +59,7 @@ const { FakeParseWorker, workerSpawns, dbControl } = vi.hoisted(() => {
   const dbControl = {
     selectResult: [] as unknown[],
     updateReturningResult: [{ id: "winner" }] as unknown[],
+    updateReturningQueue: null as unknown[][] | null,
   };
 
   const selectWhere = () => Promise.resolve(dbControl.selectResult);
@@ -68,7 +69,11 @@ const { FakeParseWorker, workerSpawns, dbControl } = vi.hoisted(() => {
   // and chained with .returning(...) in the finalize guard, so where() must
   // return a thenable that also exposes returning().
   const updateWhere = () => ({
-    returning: () => Promise.resolve(dbControl.updateReturningResult),
+    returning: () => Promise.resolve(
+      dbControl.updateReturningQueue
+        ? (dbControl.updateReturningQueue.shift() ?? [])
+        : dbControl.updateReturningResult,
+    ),
     then: (resolve: (v: unknown[]) => unknown) => Promise.resolve([]).then(resolve),
     catch: (reject: (e: unknown) => unknown) => Promise.resolve([]).catch(reject),
     finally: (fn: () => void) => Promise.resolve([]).finally(fn),
@@ -137,6 +142,7 @@ const AUTH = { "x-mock-clerk-user-id": USER };
 function resetDbDefaults(): void {
   dbControl.selectResult = [];
   dbControl.updateReturningResult = [{ id: "winner" }];
+  dbControl.updateReturningQueue = [[{ id: "winner" }], []];
 }
 
 async function uploadChunk(uploadId: string): Promise<void> {
@@ -235,6 +241,7 @@ describe("POST /datasets/upload/chunk/finalize — double-finalize guard", () =>
     // won). The conditional status-transition UPDATE finds no eligible row,
     // and the follow-up SELECT reports "processing".
     dbControl.updateReturningResult = [];
+    dbControl.updateReturningQueue = null;
     dbControl.selectResult = [{ status: "processing" }];
 
     const res = await finalize(uploadId);

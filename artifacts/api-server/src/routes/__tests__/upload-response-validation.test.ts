@@ -93,6 +93,7 @@ vi.mock("@workspace/db", () => ({
     select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
     insert: () => ({
       values: () => ({
+        onConflictDoNothing: () => Promise.resolve([]),
         onConflictDoUpdate: () => Promise.resolve([]),
         returning: () => Promise.resolve([]),
       }),

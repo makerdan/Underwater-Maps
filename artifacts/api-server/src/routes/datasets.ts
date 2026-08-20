@@ -3268,8 +3268,8 @@ router.post(
     // returns 409 without waiting for the first to finish.
     if (session.finalizing) {
       res.status(409).json({
-        error: "finalize_in_progress",
-        details: "This upload is still being finalized. Retry shortly.",
+        error: "already_processing",
+        details: "This upload has already been handed off. Poll the existing jobId.",
       });
       return;
     }

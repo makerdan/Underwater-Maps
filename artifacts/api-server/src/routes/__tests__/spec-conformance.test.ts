@@ -223,6 +223,10 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
     schema: apiZod.FinalizeChunkedUploadResponse,
     payloads: [{ jobId: "job-abc" }],
   },
+  StartChunkedUploadResponse: {
+    schema: apiZod.StartChunkedUploadResponse,
+    payloads: [{ uploadId: "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" }],
+  },
   RequestGcsUploadUrlResponse: {
     schema: apiZod.RequestGcsUploadUrlResponse,
     payloads: [
@@ -231,6 +235,33 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
         objectKey: "uploads/user-1/file.laz",
       },
     ],
+  },
+  GetEnvPackResponse: {
+    schema: apiZod.GetEnvPackResponse,
+    payloads: [{
+      generatedAt: "2026-08-20T00:00:00.000Z",
+      expiresAt: "2026-09-03T00:00:00.000Z",
+      centerLat: 47.6,
+      centerLon: -122.4,
+      coverageRadiusMiles: 25,
+      tideStations: null,
+      weatherStations: null,
+      marineConditions: {
+        times: ["2026-08-20T00:00:00.000Z"],
+        seaSurfaceTemperatureC: [14.2],
+        waveHeightM: [0.8],
+        waveDirectionDeg: [210],
+      },
+      temperatureProfile: {
+        available: true,
+        samples: [{ depthM: 10, temperatureC: 12.4 }],
+        source: "WOA 2023",
+        sourceUrl: null,
+        timestamp: "2026-08-20T00:00:00.000Z",
+        provider: "NOAA",
+      },
+      warnings: [],
+    }],
   },
 
   // ── Datasets / terrain ─────────────────────────────────────────────────
@@ -717,6 +748,55 @@ const FIXTURES: Record<string, { schema: z.ZodTypeAny; payloads: unknown[] }> = 
         ],
       },
     ],
+  },
+  GetSearchFederatedResponse: {
+    schema: apiZod.GetSearchFederatedResponse,
+    payloads: [{
+      results: [{
+        id: "ncei:puget-1",
+        sourceId: "ncei",
+        sourceLabel: "NOAA NCEI",
+        name: "Puget Sound",
+        description: "Multibeam bathymetry",
+        url: "https://example.test/puget",
+        endpointUrl: "https://example.test/wcs",
+        coverageBbox: { minLon: -123.2, minLat: 47, maxLon: -122.1, maxLat: 48.5 },
+        resolutionMMin: 1,
+        resolutionMMax: 8,
+        importable: true,
+        importKind: "ncei-wcs",
+      }],
+      sources: [{
+        sourceId: "ncei",
+        label: "NOAA NCEI",
+        status: "ok",
+        resultCount: 1,
+        tookMs: 42,
+        error: null,
+      }],
+    }],
+  },
+  GetSearchFederatedSourcesResponse: {
+    schema: apiZod.GetSearchFederatedSourcesResponse,
+    payloads: [{ sources: [{ id: "ncei", label: "NOAA NCEI" }] }],
+  },
+  GetTrollingPresetFoldersResponse: {
+    schema: apiZod.GetTrollingPresetFoldersResponse,
+    payloads: [[{
+      id: "9f8e7d6c-5b4a-4392-8171-605f4e3d2c1b",
+      name: "Morning routes",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      updatedAt: "2026-08-20T00:00:00.000Z",
+    }]],
+  },
+  PatchTrollingPresetFoldersIdResponse: {
+    schema: apiZod.PatchTrollingPresetFoldersIdResponse,
+    payloads: [{
+      id: "9f8e7d6c-5b4a-4392-8171-605f4e3d2c1b",
+      name: "Evening routes",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      updatedAt: "2026-08-20T00:00:00.000Z",
+    }],
   },
 };
 
