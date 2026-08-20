@@ -34,6 +34,22 @@ interface PendingUser {
   createdAt: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isUpscaleCacheStats(value: unknown): value is UpscaleCacheStats {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.hits === "number" &&
+    typeof value.misses === "number" &&
+    typeof value.hitRate === "number" &&
+    typeof value.estimatedCreditsSaved === "number" &&
+    typeof value.creditsPerCall === "number" &&
+    typeof value.generatedAt === "string"
+  );
+}
+
 const S = {
   section: {
     marginBottom: 24,
@@ -223,8 +239,10 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
     try {
       const res = await authorizedFetch(`${basePath}/api/admin/users?status=pending&limit=50`);
       if (!res.ok) { setLoadState("error"); return; }
-      const data = (await res.json()) as { users?: PendingUser[] };
-      setUsers(data.users ?? []);
+      const data: unknown = await res.json();
+      const pendingUsers =
+        isRecord(data) && Array.isArray(data.users) ? data.users : [];
+      setUsers(pendingUsers as PendingUser[]);
       setLoadState("ok");
     } catch {
       setLoadState("error");
@@ -500,7 +518,11 @@ export function AdminPanel() {
           return;
         }
 
-        const data = (await res.json()) as UpscaleCacheStats;
+        const data: unknown = await res.json();
+        if (!isUpscaleCacheStats(data)) {
+          setStatus("error");
+          return;
+        }
         if (!cancelled) {
           setStats(data);
           setStatus("ok");

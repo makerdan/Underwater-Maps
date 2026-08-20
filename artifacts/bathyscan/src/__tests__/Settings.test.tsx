@@ -37,6 +37,17 @@ vi.mock("@/lib/authorizedFetch", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useInfiniteQuery: () => ({
+    data: undefined,
+    isPending: false,
+    isSuccess: false,
+    isError: true,
+    refetch: vi.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
+  }),
+  useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn() }),
 }));
 
 const makeApiClientMock = vi.hoisted(() => {
@@ -90,10 +101,6 @@ vi.mock("@/hooks/useUpscaledHeatmap", () => ({
 const mockToast = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mockToast }),
-}));
-
-vi.mock("@/pages/settings/AdminSection", () => ({
-  AdminSection: () => <div data-testid="admin-section-stub">ADMIN HUB</div>,
 }));
 
 // ---- Imports under test ----
@@ -155,7 +162,10 @@ describe("Settings page", () => {
     adminAccessFetch.mockResolvedValue({ ok: true, status: 200 });
     render(<Settings />);
     fireEvent.click(await screen.findByTestId("settings-nav-admin"));
-    expect(screen.getByTestId("admin-section-stub")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-admin-section")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Admin tools are temporarily unavailable."),
+    ).toBeInTheDocument();
     expect(window.location.search).toContain("tab=admin");
     expect(settingsAuth.user.publicMetadata.role).toBeUndefined();
   });
@@ -164,7 +174,7 @@ describe("Settings page", () => {
     adminAccessFetch.mockResolvedValue({ ok: false, status: 403 });
     window.history.replaceState(null, "", "/settings?tab=admin");
     render(<Settings />);
-    expect(screen.queryByTestId("admin-section-stub")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("settings-admin-section")).not.toBeInTheDocument();
     expect(screen.getByText("QUALITY PRESET")).toBeInTheDocument();
     await waitFor(() =>
       expect(window.location.search).toContain("tab=visuals"),
@@ -181,12 +191,12 @@ describe("Settings page", () => {
     expect(await screen.findByTestId("admin-access-error")).toHaveTextContent(
       /no admin data has been loaded/i,
     );
-    expect(screen.queryByTestId("admin-section-stub")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("settings-admin-section")).not.toBeInTheDocument();
     expect(window.location.search).toContain("tab=admin");
 
     fireEvent.click(screen.getByTestId("admin-access-retry"));
-    expect(await screen.findByTestId("admin-section-stub")).toBeInTheDocument();
-    expect(adminAccessFetch).toHaveBeenCalledTimes(2);
+    expect(await screen.findByTestId("settings-admin-section")).toBeInTheDocument();
+    expect(adminAccessFetch).toHaveBeenCalledTimes(3);
   });
 
   it("renders all section tabs in the sidebar", () => {

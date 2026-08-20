@@ -41,6 +41,7 @@ import { DataStorageSection } from "./settings/DataStorageSection";
 import { AccessibilitySection } from "./settings/AccessibilitySection";
 import { AccountSection } from "./settings/AccountSection";
 import { AdminSection } from "./settings/AdminSection";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 // MOBILE-ONLY: dedicated 2D Chart section (never rendered on desktop)
 import { ChartMapSection } from "./settings/ChartMapSection";
 
@@ -515,7 +516,26 @@ export function Settings() {
             {activeTab === "data-storage" && <DataStorageSection />}
             {activeTab === "accessibility" && <AccessibilitySection />}
             {activeTab === "account" && <AccountSection />}
-            {activeTab === "admin" && isAdminUser && <AdminSection />}
+            {activeTab === "admin" && isAdminUser && (
+              <ErrorBoundary
+                label="the admin settings"
+                fallback={
+                  <section data-testid="admin-section-error">
+                    <div style={S.card}>
+                      <div style={S.cardHeader}>ADMIN SETTINGS UNAVAILABLE</div>
+                      <div style={{ padding: "14px 16px" }}>
+                        <p style={{ ...S.sublabel, marginTop: 0 }}>
+                          Admin tools could not be displayed. Settings remain
+                          available, and you can try again by revisiting this tab.
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                }
+              >
+                <AdminSection />
+              </ErrorBoundary>
+            )}
             {activeTab === "admin" && adminAccess === "error" && (
               <section data-testid="admin-access-error">
                 <div style={S.card}>

@@ -179,6 +179,21 @@ describe("UserAccessSection — list and default tab", () => {
     );
   });
 
+  it("shows an error state for an incomplete successful admin response", async () => {
+    api.adminListUsers.mockResolvedValue({
+      users: null,
+      nextCursor: null,
+    });
+    renderSection();
+    await waitFor(() =>
+      expect(screen.getByTestId("ua-error")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("ua-error")).toHaveTextContent(
+      /failed to load users/i,
+    );
+    expect(screen.queryByTestId("ua-row-user_1")).toBeNull();
+  });
+
   it("Load more appends the next keyset page", async () => {
     api.adminListUsers.mockImplementation(
       (params?: { status?: AdminUserRecord["status"]; cursor?: string }) => {

@@ -36,6 +36,15 @@ export type AdminUserStatus = UserAccessRecordStatus;
 /** Page size for the admin user list (server max is 200, default 50). */
 export const ADMIN_USERS_PAGE_SIZE = 50;
 
+function isAdminUsersPage(value: unknown): value is AdminListUsers200 {
+  if (typeof value !== "object" || value === null) return false;
+  const page = value as { users?: unknown; nextCursor?: unknown };
+  return (
+    Array.isArray(page.users) &&
+    (page.nextCursor === null || typeof page.nextCursor === "string")
+  );
+}
+
 /** Root query key shared by every admin-users list query. */
 export const ADMIN_USERS_ROOT_KEY = ["admin-users"] as const;
 
@@ -53,15 +62,24 @@ export function adminUsersListQueryKey(
 export function useAdminUsersList(status?: AdminUserStatus) {
   return useInfiniteQuery({
     queryKey: adminUsersListQueryKey(status),
-    queryFn: ({ pageParam, signal }) =>
-      adminListUsers(
+    queryFn: async ({ pageParam, signal }) => {
+      const page = await adminListUsers(
         {
           ...(status !== undefined ? { status } : {}),
           limit: ADMIN_USERS_PAGE_SIZE,
           ...(pageParam !== null ? { cursor: pageParam } : {}),
         },
         { signal },
-      ),
+      );
+      // A successful HTTP response can still be malformed (for example when
+      // an older production server returns an incomplete envelope). Convert
+      // that into React Query's visible error state instead of allowing
+      // UserAccessSection to throw while flattening pages during render.
+      if (!isAdminUsersPage(page)) {
+        throw new Error("Invalid admin users response");
+      }
+      return page;
+    },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
