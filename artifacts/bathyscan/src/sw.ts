@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
-import { StaleWhileRevalidate, CacheFirst } from "workbox-strategies";
+import { StaleWhileRevalidate, NetworkFirst, CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 import { handleSwMessage, PACK_TERRAIN_CACHE_NAME } from "./lib/swMessageHandler";
 import { createPackFirstHandler } from "./lib/swPackFirstHandler";
@@ -133,7 +133,7 @@ registerRoute(
     request.destination === "script" &&
     url.origin === self.location.origin &&
     /\/assets\/.+\.js$/.test(url.pathname),
-  new CacheFirst({
+  new NetworkFirst({
     cacheName: `${CACHE_VERSION}-app-assets`,
     plugins: [
       new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 }),

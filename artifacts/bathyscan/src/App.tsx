@@ -128,15 +128,14 @@ import { useIsMobile, useIsMobileImmediate } from "@/hooks/use-mobile";
 import { MobilePlanTab } from "@/components/mobile/MobilePlanTab";
 import { ClosedForTestingBanner } from "@/components/ClosedForTestingBanner";
 import { isSiteClosed } from "@/lib/siteStatus";
+import { loadTourScene, SceneChunkFallback } from "@/lib/dynamicSceneLoader";
 
 // The 3D renderer pulls in Three.js, React Three Fiber, and the scene-only
 // layers. Keep it behind an async boundary so the signed-in shell, offline
 // notice, and navigation are usable before the renderer finishes downloading.
 // The service worker caches this chunk after first use (see sw.ts), preserving
 // the core offline experience without forcing every PWA install to precache it.
-const TourScene = React.lazy(() =>
-  import("@/pages/TourScene").then(({ TourScene: Scene }) => ({ default: Scene })),
-);
+const TourScene = React.lazy(loadTourScene);
 
 
 function TestBridge(): null {
@@ -1370,7 +1369,7 @@ function Main() {
             render error in the Canvas subtree (R3F components rethrow into
             the parent React tree) degrades to a contained fallback instead
             of white-screening the whole app. */}
-        <ErrorBoundary label="the 3D scene">
+        <ErrorBoundary label="the 3D scene" fallback={<SceneChunkFallback />}>
           <React.Suspense
             fallback={
               <div
