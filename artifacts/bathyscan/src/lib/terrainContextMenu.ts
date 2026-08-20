@@ -31,10 +31,33 @@ import { haversineDistance } from "@/lib/geo";
 import { toast } from "@/hooks/use-toast";
 
 function copyToClipboard(text: string): void {
-  if (typeof navigator === "undefined" || !navigator.clipboard) return;
-  navigator.clipboard.writeText(text).catch(() => {
-    // Best-effort; clipboard may be blocked by permissions
-  });
+  const reportFailure = () => {
+    toast({
+      title: "Copy failed",
+      description: "Could not access clipboard. Copy the coordinates manually.",
+      duration: 4000,
+    });
+  };
+
+  if (typeof navigator === "undefined" || !navigator.clipboard) {
+    reportFailure();
+    return;
+  }
+
+  try {
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        toast({
+          title: "Coordinates copied",
+          description: "Coordinates copied to clipboard.",
+          duration: 3000,
+        });
+      })
+      .catch(reportFailure);
+  } catch {
+    reportFailure();
+  }
 }
 
 function copyShareLink(): void {

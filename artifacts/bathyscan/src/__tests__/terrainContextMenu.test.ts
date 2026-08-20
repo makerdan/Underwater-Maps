@@ -1,5 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { TerrainData } from "@workspace/api-client-react";
+
+const mockToast = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks/use-toast", () => ({ toast: mockToast }));
+
 import { useCameraStore } from "@/lib/cameraStore";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
 import { useMeasureStore } from "@/lib/measureStore";
@@ -138,5 +142,89 @@ describe("openCrosshairContextMenu", () => {
       depth: 42,
     });
     expect(useUiStore.getState().markerFormOpen).toBe(true);
+  });
+});
+
+describe("Copy coordinates", () => {
+  const originalClipboard = Object.getOwnPropertyDescriptor(
+    navigator,
+    "clipboard",
+  );
+
+  beforeEach(() => {
+    mockToast.mockClear();
+  });
+
+  afterEach(() => {
+    if (originalClipboard) {
+      Object.defineProperty(navigator, "clipboard", originalClipboard);
+    } else {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  function getCopyCoordinatesItem() {
+    return buildTerrainMenuItems(
+      -122.3331,
+      47.6097,
+      55.4,
+      "ds-1",
+      () => fakeGrid(),
+    ).find((item) => item.label === "Copy coordinates")!;
+  }
+
+  it("confirms a successful copy and preserves the formatted payload", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    getCopyCoordinatesItem().onClick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(writeText).toHaveBeenCalledWith(
+      "lat: 47.60970, lon: -122.33310, depth: 55m",
+    );
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Coordinates copied",
+        description: "Coordinates copied to clipboard.",
+      }),
+    );
+  });
+
+  it("reports rejected clipboard writes without an unhandled rejection", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("Permission denied"));
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    getCopyCoordinatesItem().onClick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Copy failed",
+        description: "Could not access clipboard. Copy the coordinates manually.",
+      }),
+    );
+  });
+
+  it("reports when clipboard access is unavailable", () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: undefined,
+    });
+
+    getCopyCoordinatesItem().onClick();
+
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Copy failed",
+        description: "Could not access clipboard. Copy the coordinates manually.",
+      }),
+    );
   });
 });
