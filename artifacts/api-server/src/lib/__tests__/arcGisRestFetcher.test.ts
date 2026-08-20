@@ -26,18 +26,18 @@ vi.mock("../terrain.js", async () => {
 });
 
 import { arcGisRestFetcher } from "../fetchers/arcGisRest.js";
-import type { FetchStrategy } from "../fetchers/types.js";
+import type { ArcGisRestFetchStrategy, FetchStrategy } from "../fetchers/types.js";
 
 // ---------------------------------------------------------------------------
 // Strategy fixture
 // ---------------------------------------------------------------------------
-const strategy: FetchStrategy = {
+const strategy: ArcGisRestFetchStrategy = {
   kind: "arcgis-rest",
   serviceUrl: "https://services.arcgis.com/fake/FeatureServer/0",
   sourceLabel: "Test ArcGIS Source",
   dataSource: "arcgis-test",
   creditUrl: "https://example.com",
-} as unknown as FetchStrategy;
+};
 
 const bbox = { minLon: -74.1, maxLon: -73.9, minLat: 40.6, maxLat: 40.8 };
 

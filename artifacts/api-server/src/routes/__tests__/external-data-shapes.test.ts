@@ -250,10 +250,10 @@ describe("M-1 · getHighLowEvents — NaN and sentinel heights are dropped", () 
 });
 
 // ---------------------------------------------------------------------------
-// M-2: USGS path source label — must be "estimated", not "usgs"
+// M-2: USGS path must not fabricate a height when the station has no reading.
 // ---------------------------------------------------------------------------
 
-describe("M-2 · USGS path — source labels must be \"estimated\" (data is synthetic)", () => {
+describe("M-2 · USGS path — no station value means explicitly unavailable", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -266,7 +266,7 @@ describe("M-2 · USGS path — source labels must be \"estimated\" (data is synt
     vi.unstubAllGlobals();
   });
 
-  it("returns source='estimated' when a nearby USGS station is found but heights are synthetic", async () => {
+  it("returns unavailable when a nearby USGS station has no gage-height value", async () => {
     fetchSpy = vi.fn().mockImplementation((url: string) => {
       const u = String(url);
       // NOAA station lists — empty so we fall through to freshwater path
@@ -320,11 +320,11 @@ describe("M-2 · USGS path — source labels must be \"estimated\" (data is synt
       "/tidal?lat=35.1&lon=-90.1&waterType=freshwater",
     );
     expect(res.status).toBe(200);
-    expect(res.body.available).toBe(true);
-    // M-2 regression: must NOT say "usgs" — heights are synthetic, not gage data
-    expect(res.body.source).toBe("estimated");
-    expect(res.body.heightsSource).toBe("estimated");
-    expect(res.body.currentsSource).toBe("estimated");
+    expect(res.body).toMatchObject({
+      available: false,
+      source: "unavailable",
+      unavailableReason: "freshwater_no_compatible_observation",
+    });
   });
 });
 

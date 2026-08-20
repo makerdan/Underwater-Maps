@@ -51,14 +51,15 @@ export function createCompleteDbMock<T extends Record<string, unknown>>(mock: T)
       if (typeof property !== "string") return Reflect.get(target, property, receiver);
       if (property in target) return Reflect.get(target, property, receiver);
       if (property.endsWith("Table")) {
-        const table = new Proxy({ __tableName: property }, {
+        const tableTarget: Record<string, string> = { __tableName: property };
+        const table = new Proxy(tableTarget, {
           get(tableTarget, column) {
             if (typeof column !== "string") return undefined;
             if (!(column in tableTarget)) tableTarget[column] = column;
             return tableTarget[column];
           },
         });
-        target[property] = table;
+        Reflect.set(target, property, table);
         return table;
       }
       return undefined;

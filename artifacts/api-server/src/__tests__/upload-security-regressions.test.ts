@@ -386,7 +386,7 @@ describe("H-1: finalize strict DB persist failure", () => {
     const [first, second] = await Promise.all([finalize(), finalize()]);
     expect([first.status, second.status].sort()).toEqual([409, 500]);
     expect([first.body.error, second.body.error]).toEqual(
-      expect.arrayContaining(["finalize_in_progress", "finalize_db_error"]),
+      expect.arrayContaining(["already_processing", "finalize_db_error"]),
     );
     expect(workerSpawnCount.value).toBe(0);
 
@@ -419,7 +419,7 @@ describe("H-1: finalize strict DB persist failure", () => {
 
     const second = await finalize();
     expect(second.status).toBe(409);
-    expect(second.body).toMatchObject({ error: "finalize_in_progress" });
+    expect(second.body).toMatchObject({ error: "already_processing" });
     expect(second.body).not.toHaveProperty("jobId");
 
     resolveTransition([{ id: getUploadSessionForTest(uploadId)?.sessionJobId }]);

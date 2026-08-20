@@ -72,6 +72,38 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
+// Route-recovery smoke coverage
+//
+// These public endpoints intentionally exercise their successful route-family
+// paths. They catch a merge that leaves a handler registered under the wrong
+// path or splices upload/terrain state into the catalog and preview handlers.
+// ---------------------------------------------------------------------------
+
+describe("dataset route-family recovery smoke", () => {
+  it("lists the public preset catalog without touching upload job state", async () => {
+    const res = await request(app).get("/api/datasets");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(expect.any(Array));
+    expect(res.body).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "lake-ray-roberts" })]),
+    );
+  });
+
+  it("returns a preview response for a public preset rather than terrain data", async () => {
+    const res = await request(app).get("/api/datasets/lake-ray-roberts/preview");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      datasetId: "lake-ray-roberts",
+      dataSource: expect.any(String),
+    });
+    expect(res.body).toHaveProperty("bbox");
+    expect(res.body).not.toHaveProperty("depths");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Custom dataset (UUID) auth guards — GET /api/datasets/:id/terrain and
 // GET /api/datasets/:id/overview
 //
