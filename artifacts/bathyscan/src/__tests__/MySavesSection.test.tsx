@@ -819,6 +819,30 @@ describe("MySavesSection — SaveCard ADD/IN VIEW button", () => {
     expect(onAddToView).toHaveBeenCalledWith("ds-ready");
   });
 
+  it.each(["failed", "processing", "queued"] as const)(
+    "does not show ADD for a %s save with a stale datasetId",
+    (status) => {
+      const onAddToView = vi.fn();
+      currentMySaves = [{
+        ...READY_SAVE,
+        id: `save-${status}`,
+        status,
+        datasetId: "stale-dataset-id",
+      }];
+
+      renderWithProviders(
+        <MySavesSection
+          onLoadCatalogSave={mocks.onLoadCatalogSave}
+          onLoadUserDataset={mocks.onLoadUserDataset}
+          onAddToView={onAddToView}
+        />,
+      );
+
+      expect(screen.queryByTestId(`btn-add-to-view-save-save-${status}`)).not.toBeInTheDocument();
+      expect(onAddToView).not.toHaveBeenCalled();
+    },
+  );
+
   it("shows IN VIEW when save's datasetId is in visibleDatasetIds", () => {
     renderWithAddToView({ visibleDatasetIds: new Set(["ds-ready"]) });
     expect(screen.getByTestId("btn-add-to-view-save-save-ready")).toHaveTextContent("IN VIEW");

@@ -394,7 +394,7 @@ const SaveCard: React.FC<{
               >⬇</button>
             </ViewscreenTooltip>
           )}
-          {onAddToView && (() => {
+          {onAddToView && save.status === "ready" && save.datasetId && (() => {
             const isAlreadyInView = visibleDatasetIds?.has(save.datasetId!) ?? false;
             return (
               <ViewscreenTooltip
