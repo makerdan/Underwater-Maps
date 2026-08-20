@@ -72,6 +72,75 @@ interface AnchorDraft {
 }
 
 const EMPTY_DRAFT: AnchorDraft = { imgX: null, imgY: null, lon: "", lat: "" };
+const ANCHOR_EPSILON = 1e-9;
+
+interface AnchorValidation {
+  anchor: CollectionGeoAnchor | null;
+  imageMessage: string;
+  longitudeMessage: string | null;
+  latitudeMessage: string | null;
+}
+
+function coordinateMessage(
+  raw: string,
+  label: "Longitude" | "Latitude",
+  min: number,
+  max: number,
+): { value: number | null; message: string | null } {
+  if (!raw.trim()) return { value: null, message: `${label} is required.` };
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return { value: null, message: `${label} must be a number.` };
+  if (value < min || value > max) {
+    return { value: null, message: `${label} must be between ${min} and ${max}.` };
+  }
+  return { value, message: null };
+}
+
+function validateAnchorDraft(draft: AnchorDraft): AnchorValidation {
+  const longitude = coordinateMessage(draft.lon, "Longitude", -180, 180);
+  const latitude = coordinateMessage(draft.lat, "Latitude", -90, 90);
+  const imagePointValid =
+    Number.isFinite(draft.imgX) &&
+    Number.isFinite(draft.imgY) &&
+    (draft.imgX ?? -1) >= 0 &&
+    (draft.imgY ?? -1) >= 0;
+  const imageMessage = imagePointValid
+    ? `Image point set: (${draft.imgX}, ${draft.imgY}).`
+    : "Image point missing — choose Pin point and click the image.";
+  const anchor =
+    imagePointValid && longitude.value !== null && latitude.value !== null
+      ? { lon: longitude.value, lat: latitude.value, imgX: draft.imgX!, imgY: draft.imgY! }
+      : null;
+  return {
+    anchor,
+    imageMessage,
+    longitudeMessage: longitude.message,
+    latitudeMessage: latitude.message,
+  };
+}
+
+function wrappedLongitudeDifference(a: number, b: number): number {
+  return Math.abs(((a - b + 540) % 360) - 180);
+}
+
+function anchorPairMessage(
+  anchorA: CollectionGeoAnchor | null,
+  anchorB: CollectionGeoAnchor | null,
+): string | null {
+  if (!anchorA || !anchorB) return "Complete both image points and their GPS coordinates to save.";
+  if (
+    Math.hypot(anchorA.imgX - anchorB.imgX, anchorA.imgY - anchorB.imgY) <= ANCHOR_EPSILON
+  ) {
+    return "Image points A and B must be different.";
+  }
+  if (
+    wrappedLongitudeDifference(anchorA.lon, anchorB.lon) <= ANCHOR_EPSILON &&
+    Math.abs(anchorA.lat - anchorB.lat) <= ANCHOR_EPSILON
+  ) {
+    return "GPS coordinates A and B must be different.";
+  }
+  return null;
+}
 
 export const CollectionSettingsSheet: React.FC<{
   collection: DatasetCollection;
@@ -211,6 +280,8 @@ export const CollectionSettingsSheet: React.FC<{
       : EMPTY_DRAFT,
   );
   const [anchorsSaving, setAnchorsSaving] = useState(false);
+  const [anchorSaveStatus, setAnchorSaveStatus] = useState<string | null>(null);
+  const [hasSavedAnchors, setHasSavedAnchors] = useState(() => existingAnchors !== null);
 
   const handlePreviewClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -222,37 +293,50 @@ export const CollectionSettingsSheet: React.FC<{
       const imgY = Math.max(0, Math.round(relY * imgNatural.h));
       if (anchorMode === "A") setDraftA((d) => ({ ...d, imgX, imgY }));
       else setDraftB((d) => ({ ...d, imgX, imgY }));
+      setAnchorSaveStatus(null);
+      setError(null);
       setAnchorMode(null);
     },
     [anchorMode, imgNatural],
   );
 
-  const parseAnchor = (d: AnchorDraft): CollectionGeoAnchor | null => {
-    const lon = Number(d.lon);
-    const lat = Number(d.lat);
-    if (d.imgX === null || d.imgY === null) return null;
-    if (!Number.isFinite(lon) || lon < -180 || lon > 180) return null;
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90) return null;
-    return { lon, lat, imgX: d.imgX, imgY: d.imgY };
-  };
-  const anchorA = parseAnchor(draftA);
-  const anchorB = parseAnchor(draftB);
-  const anchorsComplete = anchorA !== null && anchorB !== null;
+  const validationA = validateAnchorDraft(draftA);
+  const validationB = validateAnchorDraft(draftB);
+  const anchorA = validationA.anchor;
+  const anchorB = validationB.anchor;
+  const pairMessage = anchorPairMessage(anchorA, anchorB);
+  const anchorsComplete = pairMessage === null;
 
   const handleSaveAnchors = useCallback(async () => {
-    if (!anchorA || !anchorB || anchorsSaving) return;
+    if (!anchorA || !anchorB || pairMessage || anchorsSaving) return;
     setAnchorsSaving(true);
     setError(null);
+    setAnchorSaveStatus(null);
     try {
-      await patchUserCollectionsIdMeta(collection.id, { bgGeoAnchors: [anchorA, anchorB] });
-      useSpecialCollectionStore.getState().setBgAnchors(collection.id, [anchorA, anchorB]);
+      const updated = await patchUserCollectionsIdMeta(collection.id, {
+        bgGeoAnchors: [anchorA, anchorB],
+      });
+      const savedAnchors = updated.specialMeta?.bgGeoAnchors;
+      if (!savedAnchors || savedAnchors.length !== 2) {
+        throw new Error("The server did not confirm both saved anchors.");
+      }
+      useSpecialCollectionStore.getState().setBgAnchors(collection.id, savedAnchors);
+      qc.setQueryData<DatasetCollection[]>(getGetUserCollectionsQueryKey(), (previous) =>
+        previous?.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setHasSavedAnchors(true);
+      setAnchorSaveStatus("Anchors saved. The live reference image is now GPS-registered.");
       await invalidate();
-    } catch {
-      setError("Could not save the geo anchors.");
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? `Could not save anchors: ${err.message}. Your points are still here; correct them or retry.`
+          : "Could not save anchors. Your points are still here; correct them or retry.",
+      );
     } finally {
       setAnchorsSaving(false);
     }
-  }, [anchorA, anchorB, anchorsSaving, collection.id, invalidate]);
+  }, [anchorA, anchorB, anchorsSaving, collection.id, invalidate, pairMessage, qc]);
 
   const handleClearAnchors = useCallback(async () => {
     setError(null);
@@ -261,6 +345,8 @@ export const CollectionSettingsSheet: React.FC<{
       useSpecialCollectionStore.getState().setBgAnchors(collection.id, null);
       setDraftA(EMPTY_DRAFT);
       setDraftB(EMPTY_DRAFT);
+      setHasSavedAnchors(false);
+      setAnchorSaveStatus("Anchors cleared. The image will use dataset bounds until new anchors are saved.");
       await invalidate();
     } catch {
       setError("Could not clear the geo anchors.");
@@ -340,9 +426,14 @@ export const CollectionSettingsSheet: React.FC<{
   const renderAnchorRow = (
     label: "A" | "B",
     draft: AnchorDraft,
+    validation: AnchorValidation,
     setDraft: React.Dispatch<React.SetStateAction<AnchorDraft>>,
   ) => (
-    <div className="flex items-center gap-1" style={{ marginBottom: 4, flexWrap: "wrap" }}>
+    <div
+      data-testid={`anchor-row-${label.toLowerCase()}-${collection.id}`}
+      style={{ marginBottom: 8, padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+    >
+      <div className="flex items-center gap-1" style={{ flexWrap: "wrap" }}>
       <button
         data-testid={`btn-pin-anchor-${label.toLowerCase()}-${collection.id}`}
         onClick={() => setAnchorMode((m) => (m === label ? null : label))}
@@ -365,20 +456,66 @@ export const CollectionSettingsSheet: React.FC<{
       <span style={{ color: "#64748b", fontSize: "calc(11px * var(--bs-font-scale, 1))" }}>
         {draft.imgX !== null && draft.imgY !== null ? `(${draft.imgX}, ${draft.imgY})` : "not set"}
       </span>
-      <input
-        data-testid={`input-anchor-${label.toLowerCase()}-lat-${collection.id}`}
-        placeholder="lat"
-        value={draft.lat}
-        onChange={(e) => setDraft((d) => ({ ...d, lat: e.target.value }))}
-        style={anchorFieldStyle}
-      />
-      <input
-        data-testid={`input-anchor-${label.toLowerCase()}-lon-${collection.id}`}
-        placeholder="lon"
-        value={draft.lon}
-        onChange={(e) => setDraft((d) => ({ ...d, lon: e.target.value }))}
-        style={anchorFieldStyle}
-      />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+          gap: 6,
+          marginTop: 5,
+        }}
+      >
+        <label style={{ color: "#94a3b8", fontSize: "calc(11px * var(--bs-font-scale, 1))" }}>
+          Longitude (°)
+          <input
+            data-testid={`input-anchor-${label.toLowerCase()}-lon-${collection.id}`}
+            aria-label={`Anchor ${label} longitude`}
+            type="number"
+            inputMode="decimal"
+            min={-180}
+            max={180}
+            step="any"
+            placeholder="-180 to 180"
+            value={draft.lon}
+            onChange={(e) => {
+              setDraft((d) => ({ ...d, lon: e.target.value }));
+              setAnchorSaveStatus(null);
+              setError(null);
+            }}
+            style={{ ...anchorFieldStyle, width: "100%", display: "block", marginTop: 2 }}
+          />
+        </label>
+        <label style={{ color: "#94a3b8", fontSize: "calc(11px * var(--bs-font-scale, 1))" }}>
+          Latitude (°)
+          <input
+            data-testid={`input-anchor-${label.toLowerCase()}-lat-${collection.id}`}
+            aria-label={`Anchor ${label} latitude`}
+            type="number"
+            inputMode="decimal"
+            min={-90}
+            max={90}
+            step="any"
+            placeholder="-90 to 90"
+            value={draft.lat}
+            onChange={(e) => {
+              setDraft((d) => ({ ...d, lat: e.target.value }));
+              setAnchorSaveStatus(null);
+              setError(null);
+            }}
+            style={{ ...anchorFieldStyle, width: "100%", display: "block", marginTop: 2 }}
+          />
+        </label>
+      </div>
+      <div
+        role="status"
+        data-testid={`anchor-status-${label.toLowerCase()}-${collection.id}`}
+        style={{ marginTop: 4, color: validation.anchor ? "#86efac" : "#fbbf24", fontSize: "calc(10.5px * var(--bs-font-scale, 1))", lineHeight: 1.35 }}
+      >
+        {validation.imageMessage}
+        {validation.longitudeMessage ? ` ${validation.longitudeMessage}` : ""}
+        {validation.latitudeMessage ? ` ${validation.latitudeMessage}` : ""}
+        {validation.anchor ? " GPS coordinates valid." : ""}
+      </div>
     </div>
   );
 
@@ -591,12 +728,31 @@ export const CollectionSettingsSheet: React.FC<{
         {/* (c) Geo anchors */}
         <div style={sectionTitleStyle}>Geo anchors</div>
         <div style={{ color: "#64748b", fontSize: "calc(11.5px * var(--bs-font-scale, 1))", marginBottom: 6 }}>
-          Pin two known points on the image, then enter their lat/lon. The
+          Pin two known points on the image, then enter each point’s longitude
+          followed by latitude. The
           overlay scales and rotates to match. Without anchors the image is
           stretched over the loaded datasets.
         </div>
-        {renderAnchorRow("A", draftA, setDraftA)}
-        {renderAnchorRow("B", draftB, setDraftB)}
+        {renderAnchorRow("A", draftA, validationA, setDraftA)}
+        {renderAnchorRow("B", draftB, validationB, setDraftB)}
+        {pairMessage && (
+          <div
+            data-testid={`anchor-pair-status-${collection.id}`}
+            role="status"
+            style={{ color: "#fbbf24", fontSize: "calc(11px * var(--bs-font-scale, 1))", marginTop: 2 }}
+          >
+            {pairMessage}
+          </div>
+        )}
+        {anchorSaveStatus && (
+          <div
+            data-testid={`anchor-save-status-${collection.id}`}
+            role="status"
+            style={{ color: "#86efac", fontSize: "calc(11px * var(--bs-font-scale, 1))", marginTop: 2 }}
+          >
+            {anchorSaveStatus}
+          </div>
+        )}
         <div className="flex items-center gap-2" style={{ marginTop: 4 }}>
           <button
             data-testid={`btn-save-anchors-${collection.id}`}
@@ -616,7 +772,7 @@ export const CollectionSettingsSheet: React.FC<{
           >
             {anchorsSaving ? "Saving…" : "Save anchors"}
           </button>
-          {existingAnchors && (
+          {hasSavedAnchors && (
             <button
               data-testid={`btn-clear-anchors-${collection.id}`}
               onClick={() => void handleClearAnchors()}

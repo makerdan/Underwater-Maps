@@ -701,6 +701,31 @@ describe("PATCH /api/user/collections/:id/meta", () => {
     expect(res.body.error).toBe("invalid_request");
   });
 
+  it("rejects duplicate image points or duplicate GPS coordinates", async () => {
+    const cid = seedSpecialCollection("user-a", "Alaska 01");
+    const duplicateImage = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({
+        bgGeoAnchors: [
+          { lon: -150, lat: 61, imgX: 10, imgY: 20 },
+          { lon: -149, lat: 62, imgX: 10, imgY: 20 },
+        ],
+      });
+    expect(duplicateImage.status).toBe(400);
+    expect(duplicateImage.body.error).toBe("invalid_geo_anchors");
+
+    const duplicateGps = await request(app)
+      .patch(`/api/user/collections/${cid}/meta`)
+      .send({
+        bgGeoAnchors: [
+          { lon: 180, lat: 61, imgX: 10, imgY: 20 },
+          { lon: -180, lat: 61, imgX: 30, imgY: 40 },
+        ],
+      });
+    expect(duplicateGps.status).toBe(400);
+    expect(duplicateGps.body.error).toBe("invalid_geo_anchors");
+  });
+
   it("rejects an activeRevisionId that references no saved revision", async () => {
     const cid = seedSpecialCollection("user-a", "Alaska 01");
     const res = await request(app)

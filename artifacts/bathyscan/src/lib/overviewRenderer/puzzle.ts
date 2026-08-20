@@ -49,16 +49,27 @@ export function computeBgAnchorAffine(
   const a1 = anchors[0];
   const a2 = anchors[1];
   if (anchors.length !== 2 || !a1 || !a2) return null;
+  const values = [a1.lon, a1.lat, a1.imgX, a1.imgY, a2.lon, a2.lat, a2.imgX, a2.imgY];
+  if (
+    values.some((value) => !Number.isFinite(value)) ||
+    a1.lon < -180 || a1.lon > 180 || a2.lon < -180 || a2.lon > 180 ||
+    a1.lat < -90 || a1.lat > 90 || a2.lat < -90 || a2.lat > 90 ||
+    a1.imgX < 0 || a1.imgY < 0 || a2.imgX < 0 || a2.imgY < 0
+  ) {
+    return null;
+  }
   const px = a2.imgX - a1.imgX;
   const py = a2.imgY - a1.imgY;
   const denom = px * px + py * py;
-  if (denom < 1e-12) return null;
+  if (!Number.isFinite(denom) || denom < 1e-12) return null;
 
   const [q1x, q1y] = lonLatToCanvas(a1.lon, a1.lat, grid, t);
   const [q2x, q2y] = lonLatToCanvas(a2.lon, a2.lat, grid, t);
+  if (![q1x, q1y, q2x, q2y].every(Number.isFinite)) return null;
   const qx = q2x - q1x;
   const qy = q2y - q1y;
-  if (qx * qx + qy * qy < 1e-12) return null;
+  const targetDistanceSquared = qx * qx + qy * qy;
+  if (!Number.isFinite(targetDistanceSquared) || targetDistanceSquared < 1e-12) return null;
 
   // r = q / p (complex division)
   const re = (qx * px + qy * py) / denom;
@@ -67,6 +78,7 @@ export function computeBgAnchorAffine(
   // Matrix [re −im; im re]; translation so p1 → q1.
   const e = q1x - (re * a1.imgX - im * a1.imgY);
   const f = q1y - (im * a1.imgX + re * a1.imgY);
+  if (![re, im, e, f].every(Number.isFinite)) return null;
   return { a: re, b: im, c: -im, d: re, e, f };
 }
 

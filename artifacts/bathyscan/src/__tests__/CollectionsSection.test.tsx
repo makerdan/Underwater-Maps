@@ -38,7 +38,10 @@ const mocks = vi.hoisted(() => ({
   addMemberMutateAsync: vi.fn(),
   removeMemberMutateAsync: vi.fn(),
   deleteDatasetMutateAsync: vi.fn(),
+  patchCollectionMeta: vi.fn(),
+  getCollectionBackground: vi.fn(),
   invalidateQueries: vi.fn(),
+  setQueryData: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -148,6 +151,8 @@ vi.mock(
         isSuccess: false,
         variables: undefined,
       }),
+      patchUserCollectionsIdMeta: mocks.patchCollectionMeta,
+      getUserCollectionsIdBackground: mocks.getCollectionBackground,
     }),
 );
 
@@ -159,7 +164,10 @@ vi.mock("@/lib/clerkCompat", async () => {
 });
 
 vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
+  useQueryClient: () => ({
+    invalidateQueries: mocks.invalidateQueries,
+    setQueryData: mocks.setQueryData,
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -235,7 +243,16 @@ beforeEach(() => {
   mocks.addMemberMutateAsync.mockReset().mockResolvedValue({ id: "mem-new" });
   mocks.removeMemberMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.deleteDatasetMutateAsync.mockReset();
+  mocks.patchCollectionMeta.mockReset().mockImplementation(
+    (_id: string, data: { bgGeoAnchors?: unknown }) =>
+      Promise.resolve({
+        ...COLLECTION_SPECIAL,
+        specialMeta: { ...COLLECTION_SPECIAL.specialMeta, bgGeoAnchors: data.bgGeoAnchors ?? null },
+      }),
+  );
+  mocks.getCollectionBackground.mockReset().mockResolvedValue(new Blob(["reference"], { type: "image/png" }));
   mocks.invalidateQueries.mockReset().mockResolvedValue(undefined);
+  mocks.setQueryData.mockReset();
   useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null, unresolvedMemberNames: [] });
   useUiStore.getState().setOverviewOpen(false);
   useUiStore.getState().setCollectionLoadNotice(null);
@@ -422,6 +439,84 @@ describe("CollectionsSection — special collections", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("collection-settings-sheet-col-sp")).not.toBeInTheDocument();
     });
+  });
+
+  it("pins, validates, retries, and synchronizes two GPS anchors", async () => {
+    const withReferenceImage = {
+      ...COLLECTION_SPECIAL,
+      specialMeta: { ...COLLECTION_SPECIAL.specialMeta, bgImageKey: "collection-bg/col-sp.png" },
+    };
+    currentCollections = [withReferenceImage];
+    useSpecialCollectionStore.setState({
+      active: {
+        collectionId: "col-sp",
+        name: "Alaska 01",
+        bgImage: null,
+        bgImageW: 0,
+        bgImageH: 0,
+        bgOpacity: 0.5,
+        bgGeoAnchors: null,
+        layoutRevisions: [REVISION_1],
+        activeRevisionId: "rev-1",
+      },
+    });
+    mocks.patchCollectionMeta
+      .mockRejectedValueOnce(new Error("Network unavailable"))
+      .mockImplementation((_id: string, data: { bgGeoAnchors?: unknown }) =>
+        Promise.resolve({
+          ...withReferenceImage,
+          specialMeta: { ...withReferenceImage.specialMeta, bgGeoAnchors: data.bgGeoAnchors ?? null },
+        }),
+      );
+    const createObjectUrl = vi.fn(() => "blob:reference-image");
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrl });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+
+    renderWithProviders(<CollectionsSection />);
+    fireEvent.click(screen.getByTestId("btn-collection-settings-col-sp"));
+    const preview = await screen.findByTestId("collection-bg-preview-col-sp");
+    Object.defineProperties(preview, {
+      naturalWidth: { configurable: true, value: 100 },
+      naturalHeight: { configurable: true, value: 100 },
+    });
+    const previewTarget = preview.parentElement!;
+    vi.spyOn(previewTarget, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, right: 100, bottom: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.load(preview);
+
+    expect(screen.getByTestId("anchor-pair-status-col-sp")).toHaveTextContent(/complete both/i);
+    expect(screen.getByTestId("anchor-status-a-col-sp")).toHaveTextContent(/image point missing/i);
+    expect(screen.getByTestId("input-anchor-a-lon-col-sp")).toHaveAttribute("min", "-180");
+    expect(screen.getByTestId("input-anchor-a-lat-col-sp")).toHaveAttribute("max", "90");
+
+    fireEvent.click(screen.getByTestId("btn-pin-anchor-a-col-sp"));
+    fireEvent.click(preview, { clientX: 10, clientY: 20 });
+    fireEvent.click(screen.getByTestId("btn-pin-anchor-b-col-sp"));
+    fireEvent.click(preview, { clientX: 80, clientY: 70 });
+    fireEvent.change(screen.getByTestId("input-anchor-a-lon-col-sp"), { target: { value: "-150.25" } });
+    fireEvent.change(screen.getByTestId("input-anchor-a-lat-col-sp"), { target: { value: "61.5" } });
+    fireEvent.change(screen.getByTestId("input-anchor-b-lon-col-sp"), { target: { value: "-149.75" } });
+    fireEvent.change(screen.getByTestId("input-anchor-b-lat-col-sp"), { target: { value: "61.1" } });
+
+    const save = screen.getByTestId("btn-save-anchors-col-sp");
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await waitFor(() => {
+      expect(screen.getByTestId("collection-settings-error")).toHaveTextContent(/points are still here.*retry/i);
+    });
+    expect(screen.getByTestId("input-anchor-b-lat-col-sp")).toHaveValue(61.1);
+
+    fireEvent.click(save);
+    const expectedAnchors = [
+      { lon: -150.25, lat: 61.5, imgX: 10, imgY: 20 },
+      { lon: -149.75, lat: 61.1, imgX: 80, imgY: 70 },
+    ];
+    await waitFor(() => {
+      expect(mocks.patchCollectionMeta).toHaveBeenLastCalledWith("col-sp", { bgGeoAnchors: expectedAnchors });
+    });
+    expect(screen.getByTestId("anchor-save-status-col-sp")).toHaveTextContent(/live reference image/i);
+    expect(useSpecialCollectionStore.getState().active?.bgGeoAnchors).toEqual(expectedAnchors);
   });
 
   describe("Activate for Puzzle", () => {

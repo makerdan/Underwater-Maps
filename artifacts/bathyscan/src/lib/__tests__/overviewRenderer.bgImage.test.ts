@@ -26,6 +26,13 @@ import type { TerrainData } from "@workspace/api-client-react";
 // 1 degree = 10 canvas px → canvas 100×100, lat 10 at y=0 (north-up).
 const GRID = { minLon: 0, maxLon: 10, minLat: 0, maxLat: 10 } as unknown as TerrainData;
 const T: OverviewTransform = { scale: 1, offsetX: 0, offsetY: 0, pxPerDeg: 10 };
+const PAN_ZOOM_T: OverviewTransform = { scale: 2.4, offsetX: 37, offsetY: -19, pxPerDeg: 7 };
+const ANTIMERIDIAN_GRID = {
+  minLon: 170,
+  maxLon: -170,
+  minLat: 0,
+  maxLat: 10,
+} as unknown as TerrainData;
 
 const anchor = (imgX: number, imgY: number, lon: number, lat: number): BgGeoAnchorPoint => ({
   imgX,
@@ -50,6 +57,10 @@ function makeCtx() {
 }
 
 const IMAGE = {} as CanvasImageSource;
+
+function applyAffine(affine: NonNullable<ReturnType<typeof computeBgAnchorAffine>>, x: number, y: number) {
+  return [affine.a * x + affine.c * y + affine.e, affine.b * x + affine.d * y + affine.f] as const;
+}
 
 describe("computeBgAnchorAffine", () => {
   it("identity mapping when image pixels line up 1:1 with canvas", () => {
@@ -110,6 +121,39 @@ describe("computeBgAnchorAffine", () => {
     expect(y).toBeCloseTo(ey, 9);
   });
 
+  it("pins both GPS anchors after a zoom and pan transform", () => {
+    const anchors = [anchor(25, 80, 2, 8), anchor(245, 135, 8, 3)] as const;
+    const affine = computeBgAnchorAffine(anchors, GRID, PAN_ZOOM_T)!;
+    for (const point of anchors) {
+      const [x, y] = applyAffine(affine, point.imgX, point.imgY);
+      const [targetX, targetY] = lonLatToCanvas(point.lon, point.lat, GRID, PAN_ZOOM_T);
+      expect(x).toBeCloseTo(targetX, 9);
+      expect(y).toBeCloseTo(targetY, 9);
+    }
+  });
+
+  it("maps both points when the anchors are supplied in reverse order", () => {
+    const anchors = [anchor(245, 135, 8, 3), anchor(25, 80, 2, 8)] as const;
+    const affine = computeBgAnchorAffine(anchors, GRID, PAN_ZOOM_T)!;
+    for (const point of anchors) {
+      const [x, y] = applyAffine(affine, point.imgX, point.imgY);
+      const [targetX, targetY] = lonLatToCanvas(point.lon, point.lat, GRID, PAN_ZOOM_T);
+      expect(x).toBeCloseTo(targetX, 9);
+      expect(y).toBeCloseTo(targetY, 9);
+    }
+  });
+
+  it("keeps anchors aligned across the antimeridian", () => {
+    const anchors = [anchor(10, 20, 175, 8), anchor(210, 95, -175, 2)] as const;
+    const affine = computeBgAnchorAffine(anchors, ANTIMERIDIAN_GRID, PAN_ZOOM_T)!;
+    for (const point of anchors) {
+      const [x, y] = applyAffine(affine, point.imgX, point.imgY);
+      const [targetX, targetY] = lonLatToCanvas(point.lon, point.lat, ANTIMERIDIAN_GRID, PAN_ZOOM_T);
+      expect(x).toBeCloseTo(targetX, 9);
+      expect(y).toBeCloseTo(targetY, 9);
+    }
+  });
+
   it("returns null for coincident image points", () => {
     expect(
       computeBgAnchorAffine([anchor(5, 5, 0, 0), anchor(5, 5, 10, 10)], GRID, T),
@@ -120,6 +164,14 @@ describe("computeBgAnchorAffine", () => {
     expect(
       computeBgAnchorAffine([anchor(0, 0, 3, 3), anchor(100, 0, 3, 3)], GRID, T),
     ).toBeNull();
+  });
+
+  it.each([
+    [anchor(Number.NaN, 0, 0, 10), anchor(100, 0, 10, 10)],
+    [anchor(0, 0, 181, 10), anchor(100, 0, 10, 10)],
+    [anchor(-1, 0, 0, 10), anchor(100, 0, 10, 10)],
+  ])("returns null for malformed anchors", (anchors) => {
+    expect(computeBgAnchorAffine(anchors, GRID, T)).toBeNull();
   });
 
   it("returns null unless exactly two anchors are given", () => {
@@ -171,6 +223,23 @@ describe("drawBackgroundImage", () => {
   it("fallback path (no anchors): stretches into the union bbox rect", () => {
     const ctx = makeCtx();
     drawBackgroundImage(ctx, IMAGE, 100, 100, null, BBOXES, GRID, T, 0.5);
+    expect(ctx.transform).not.toHaveBeenCalled();
+    expect(ctx.drawImage).toHaveBeenCalledWith(IMAGE, 0, 0, 100, 100);
+  });
+
+  it("safely uses the bbox fallback for malformed legacy anchors", () => {
+    const ctx = makeCtx();
+    drawBackgroundImage(
+      ctx,
+      IMAGE,
+      100,
+      100,
+      [anchor(Number.NaN, 0, 0, 10), anchor(100, 0, 10, 10)],
+      BBOXES,
+      GRID,
+      T,
+      0.5,
+    );
     expect(ctx.transform).not.toHaveBeenCalled();
     expect(ctx.drawImage).toHaveBeenCalledWith(IMAGE, 0, 0, 100, 100);
   });

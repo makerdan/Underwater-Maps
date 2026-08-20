@@ -26,6 +26,7 @@ import {
   userCatalogSavesTable,
   datasetCatalogTable,
   emptySpecialCollectionMeta,
+  type CollectionGeoAnchor,
   type SpecialCollectionMeta,
   type LayoutRevision,
 } from "@workspace/db";
@@ -45,6 +46,7 @@ import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const CollectionIdParamSchema = z.string().uuid("Collection id must be a valid UUID");
 const MemberIdParamSchema = z.string().uuid("Member id must be a valid UUID");
+const ANCHOR_EPSILON = 1e-9;
 
 /** Max saved layout revisions per special collection — oldest dropped beyond this. */
 export const MAX_LAYOUT_REVISIONS = 20;
@@ -229,6 +231,31 @@ async function loadMembersByCollection(
  */
 function metaOf(row: typeof datasetCollectionsTable.$inferSelect): SpecialCollectionMeta {
   return row.specialMeta ?? emptySpecialCollectionMeta();
+}
+
+/**
+ * A two-point registration can only describe a useful similarity transform
+ * when both image points and both geographic points are distinct. The schema
+ * covers shape/ranges; this protects the semantic invariant before JSONB
+ * persistence, including legacy callers that bypass the settings UI.
+ */
+function hasUsableGeoAnchorPair(anchors: readonly CollectionGeoAnchor[]): boolean {
+  if (anchors.length !== 2) return false;
+  const [a, b] = anchors;
+  if (!a || !b) return false;
+  const values = [a.lon, a.lat, a.imgX, a.imgY, b.lon, b.lat, b.imgX, b.imgY];
+  if (
+    values.some((value) => !Number.isFinite(value)) ||
+    a.lon < -180 || a.lon > 180 || b.lon < -180 || b.lon > 180 ||
+    a.lat < -90 || a.lat > 90 || b.lat < -90 || b.lat > 90 ||
+    a.imgX < 0 || a.imgY < 0 || b.imgX < 0 || b.imgY < 0
+  ) {
+    return false;
+  }
+  if (Math.hypot(a.imgX - b.imgX, a.imgY - b.imgY) <= ANCHOR_EPSILON) return false;
+  // ±180 is the same meridian, so compare longitudes on a wrapped globe.
+  const lonDifference = Math.abs(((a.lon - b.lon + 540) % 360) - 180);
+  return lonDifference > ANCHOR_EPSILON || Math.abs(a.lat - b.lat) > ANCHOR_EPSILON;
 }
 
 function collectionToJson(
@@ -573,6 +600,16 @@ router.patch("/user/collections/:id/meta", requireAuth, dataMutationRateLimit, v
   if (collection.collectionKind !== "special") {
     res.status(400).json({ error: "not_special", details: "Only special collections carry puzzle metadata" });
     return;
+  }
+
+  if (body.bgGeoAnchors !== undefined && body.bgGeoAnchors !== null) {
+    if (!hasUsableGeoAnchorPair(body.bgGeoAnchors)) {
+      res.status(400).json({
+        error: "invalid_geo_anchors",
+        details: "Geo anchors must use two distinct finite image points and GPS coordinates.",
+      });
+      return;
+    }
   }
 
   const meta = metaOf(collection);
