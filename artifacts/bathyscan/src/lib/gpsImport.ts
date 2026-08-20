@@ -14,7 +14,7 @@
  * `parseGpsFile(file)` is the convenience entry point used by the UI.
  */
 import { unzipSync, strFromU8 } from "fflate";
-import ExcelJS from "exceljs";
+import type ExcelJS from "exceljs";
 
 /** Maximum number of points (waypoints + route/track points) per import. */
 export const MAX_IMPORT_POINTS = 5000;
@@ -83,6 +83,12 @@ export interface RawColumnMeta {
   fileType: "csv" | "excel" | "self-describing";
 }
 
+export interface ExcelParseProgress {
+  stage: "reading" | "loading" | "converting";
+  completed: number;
+  total: number;
+}
+
 export interface Bounds {
   minLon: number;
   minLat: number;
@@ -108,6 +114,7 @@ export interface Bounds {
  */
 export async function parseGpsFile(
   file: File,
+  onProgress?: (progress: ExcelParseProgress) => void,
 ): Promise<{ result: ParseResult; meta: RawColumnMeta }> {
   const name = file.name.toLowerCase();
   let result: ParseResult;
@@ -128,7 +135,7 @@ export async function parseGpsFile(
       "Legacy .xls format is not supported — please save as .xlsx and try again.",
     );
   } else if (name.endsWith(".xlsx")) {
-    ({ result, meta } = await parseExcel(file));
+    ({ result, meta } = await parseExcel(file, onProgress));
   } else {
     throw new Error(
       "Unsupported file type. Use .gpx, .kml, .kmz, .csv, or .xlsx.",
@@ -612,6 +619,7 @@ function excelCellToString(cell: ExcelJS.Cell): string {
  */
 export async function parseExcel(
   file: File,
+  onProgress?: (progress: ExcelParseProgress) => void,
 ): Promise<{ result: ParseResult; meta: RawColumnMeta }> {
   if (file.name.toLowerCase().endsWith(".xls")) {
     throw new Error(
@@ -620,6 +628,30 @@ export async function parseExcel(
   }
 
   const data = await file.arrayBuffer();
+  onProgress?.({ stage: "reading", completed: 1, total: 1 });
+
+  // ExcelJS is large and its workbook load is CPU-heavy. Keep it off the UI
+  // thread in browsers, while retaining a synchronous path for jsdom and
+  // environments that do not provide module workers.
+  if (typeof Worker !== "undefined") {
+    return parseExcelInWorker(data, file.name, onProgress);
+  }
+  return parseExcelFromArrayBuffer(data, file.name, onProgress);
+}
+
+export async function parseExcelFromArrayBuffer(
+  data: ArrayBuffer,
+  fileName: string,
+  onProgress?: (progress: ExcelParseProgress) => void,
+): Promise<{ result: ParseResult; meta: RawColumnMeta }> {
+  if (fileName.toLowerCase().endsWith(".xls")) {
+    throw new Error(
+      "Legacy .xls format is not supported — please save as .xlsx and try again.",
+    );
+  }
+  onProgress?.({ stage: "loading", completed: 0, total: 1 });
+  const ExcelJSModule = await import("exceljs");
+  const ExcelJS = ExcelJSModule.default;
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.load(data);
@@ -650,6 +682,11 @@ export async function parseExcel(
       cells.push(excelCellToString(row.getCell(c)));
     }
     rows.push(cells);
+    onProgress?.({
+      stage: "converting",
+      completed: rows.length,
+      total: worksheet.actualRowCount,
+    });
   });
 
   if (rows.length < 2) {
@@ -721,6 +758,38 @@ export async function parseExcel(
 
   const result: ParseResult = { waypoints, routes: [] };
   return { result, meta };
+}
+
+function parseExcelInWorker(
+  data: ArrayBuffer,
+  fileName: string,
+  onProgress?: (progress: ExcelParseProgress) => void,
+): Promise<{ result: ParseResult; meta: RawColumnMeta }> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("./gpsImport.worker.ts", import.meta.url), {
+      type: "module",
+    });
+    worker.onmessage = (
+      event: MessageEvent<
+        | { type: "progress"; progress: ExcelParseProgress }
+        | { type: "result"; result: ParseResult; meta: RawColumnMeta }
+        | { type: "error"; error: string }
+      >,
+    ) => {
+      if (event.data.type === "progress") {
+        onProgress?.(event.data.progress);
+        return;
+      }
+      worker.terminate();
+      if (event.data.type === "result") resolve(event.data);
+      else reject(new Error(event.data.error));
+    };
+    worker.onerror = (event) => {
+      worker.terminate();
+      reject(new Error(event.message || "Excel worker failed"));
+    };
+    worker.postMessage({ data, fileName }, [data]);
+  });
 }
 
 // ---------------------------------------------------------------------------

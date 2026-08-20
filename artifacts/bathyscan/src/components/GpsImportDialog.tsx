@@ -50,6 +50,7 @@ import {
   type ParsedRoute,
   type RawColumnMeta,
   type ColumnAssignment,
+  type ExcelParseProgress,
 } from "@/lib/gpsImport";
 import { ColumnMappingStep } from "@/components/ColumnMappingStep";
 import {
@@ -332,7 +333,15 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
       setPhase({ kind: "parsing", fileName: file.name });
       setImportProgress(null);
       try {
-        const { result, meta } = await parseGpsFile(file);
+        const { result, meta } = await parseGpsFile(file, (progress: ExcelParseProgress) => {
+          setImportProgress({
+            markersDone: progress.completed,
+            markersTotal: progress.total,
+            routesDone: 0,
+            routesTotal: 0,
+            currentKind: "marker",
+          });
+        });
         // Reset heading/speed to dialog defaults on each new file.
         setHeadingDeg(DEFAULT_HEADING_DEG);
         setSpeedKnots(DEFAULT_SPEED_KNOTS);
@@ -849,7 +858,35 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
 
           {phase.kind === "parsing" && (
             <div style={{ padding: "20px 0", textAlign: "center", color: "#e2e8f0" }}>
-              Parsing <strong>{phase.fileName}</strong>…
+              <div data-testid="gps-import-parse-progress" aria-live="polite">
+                Parsing <strong>{phase.fileName}</strong>…
+              </div>
+              {importProgress && (
+                <div
+                  role="progressbar"
+                  aria-valuenow={importProgress.markersDone}
+                  aria-valuemin={0}
+                  aria-valuemax={importProgress.markersTotal}
+                  aria-label="Parsing spreadsheet"
+                  style={{
+                    height: 6,
+                    background: "rgba(0,229,255,0.12)",
+                    borderRadius: 3,
+                    overflow: "hidden",
+                    margin: "16px auto 0",
+                    maxWidth: 320,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${importProgress.markersTotal > 0 ? Math.round((importProgress.markersDone / importProgress.markersTotal) * 100) : 10}%`,
+                      height: "100%",
+                      background: "#00e5ff",
+                      transition: "width 120ms linear",
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
 

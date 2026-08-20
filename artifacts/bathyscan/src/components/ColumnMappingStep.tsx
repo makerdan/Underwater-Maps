@@ -25,12 +25,35 @@ import type { RawColumnMeta, ColumnAssignment } from "@/lib/gpsImport";
 
 const LS_PREFIX = "bathyscan:colmap:";
 
-/** Stable fingerprint of a set of headers — sorted, lower-cased, joined. */
-function headerFingerprint(columns: RawColumnMeta["columns"]): string {
+/** Stable fingerprint of the complete header set — sorted, lower-cased, joined. */
+export function headerFingerprint(columns: RawColumnMeta["columns"]): string {
   return columns
     .map((c) => c.header.trim().toLowerCase())
     .sort()
     .join("|");
+}
+
+/**
+ * Remove assignments that no longer exist in the current file. This is
+ * intentionally checked even when a caller supplies an initial assignment:
+ * browser storage can outlive a later export whose columns were added or
+ * removed.
+ */
+export function sanitizeColumnAssignment(
+  assignment: ColumnAssignment,
+  columns: RawColumnMeta["columns"],
+): { assignment: ColumnAssignment; hadStaleColumns: boolean } {
+  const headers = new Set(columns.map((column) => column.header));
+  let hadStaleColumns = false;
+  const sanitized = { ...assignment };
+  for (const field of Object.keys(sanitized) as (keyof ColumnAssignment)[]) {
+    const value = sanitized[field];
+    if (value !== null && !headers.has(value)) {
+      sanitized[field] = null;
+      hadStaleColumns = true;
+    }
+  }
+  return { assignment: sanitized, hadStaleColumns };
 }
 
 function saveAssignment(fingerprint: string, assignment: ColumnAssignment): void {
@@ -114,16 +137,20 @@ export const ColumnMappingStep: React.FC<Props> = ({
   onBack,
 }) => {
   const fingerprint = useMemo(() => headerFingerprint(meta.columns), [meta.columns]);
+  const restoredAssignment = useMemo(() => {
+    const candidate =
+      initialAssignment != null
+        ? initialAssignment
+        : meta.fileType === "csv" || meta.fileType === "excel"
+          ? loadAssignment(fingerprint)
+          : null;
+    return candidate ? sanitizeColumnAssignment(candidate, meta.columns) : null;
+  }, [fingerprint, initialAssignment, meta.columns, meta.fileType]);
 
-  const [assignment, setAssignment] = useState<ColumnAssignment>(() => {
-    // Priority: explicit initialAssignment → localStorage restore → auto-detected
-    if (initialAssignment != null) return initialAssignment;
-    const saved =
-      meta.fileType === "csv" || meta.fileType === "excel"
-        ? loadAssignment(fingerprint)
-        : null;
-    return saved ?? defaultAssignment(meta);
-  });
+  const [assignment, setAssignment] = useState<ColumnAssignment>(
+    () => restoredAssignment?.assignment ?? defaultAssignment(meta),
+  );
+  const [hadStaleColumns] = useState(() => restoredAssignment?.hadStaleColumns ?? false);
 
   const headers = useMemo(() => meta.columns.map((c) => c.header), [meta.columns]);
 
@@ -191,6 +218,24 @@ export const ColumnMappingStep: React.FC<Props> = ({
           }}
         >
           Assign <strong>Latitude</strong> and <strong>Longitude</strong> columns to continue.
+        </div>
+      )}
+
+      {hadStaleColumns && (
+        <div
+          data-testid="column-mapping-stale-warning"
+          style={{
+            padding: "8px 10px",
+            background: "rgba(251,191,36,0.08)",
+            border: "1px solid rgba(251,191,36,0.3)",
+            borderRadius: 4,
+            color: "#fbbf24",
+            fontSize: "calc(15px * var(--bs-font-scale, 1))",
+            marginBottom: 10,
+          }}
+        >
+          This file&apos;s columns changed since the saved mapping was created. Missing
+          assignments were reset; please review the mapping before continuing.
         </div>
       )}
 

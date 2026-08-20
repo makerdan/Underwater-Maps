@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { zipSync, strToU8 } from "fflate";
 import ExcelJS from "exceljs";
 import {
@@ -443,6 +443,74 @@ describe("parseGpsFile", () => {
     const { result, meta } = await parseGpsFile(xlsxFile);
     expect(result.waypoints).toHaveLength(1);
     expect(meta.columns[0]).toEqual({ header: "lat", mappedAlias: "lat" });
+  });
+
+  it("uses a module worker for XLSX parsing and forwards progress", async () => {
+    const xlsxFile = await makeXlsxFile([
+      ["lat", "lon"],
+      [11.35, 142.5],
+    ]);
+    const postMessage = vi.fn();
+    const terminate = vi.fn();
+    const WorkerMock = vi.fn(function(this: {
+      onmessage: ((event: MessageEvent) => void) | null;
+      onerror: ((event: ErrorEvent) => void) | null;
+      postMessage: typeof postMessage;
+      terminate: typeof terminate;
+    }) {
+      this.onmessage = null;
+      this.onerror = null;
+      this.postMessage = postMessage;
+      this.terminate = terminate;
+    });
+    vi.stubGlobal("Worker", WorkerMock);
+
+    postMessage.mockImplementationOnce(() => {
+      const instance = WorkerMock.mock.instances[0] as unknown as {
+        onmessage: ((event: MessageEvent) => void) | null;
+      };
+      instance.onmessage?.(
+        new MessageEvent("message", {
+          data: {
+            type: "progress",
+            progress: { stage: "converting", completed: 2, total: 2 },
+          },
+        }),
+      );
+      instance.onmessage?.(
+        new MessageEvent("message", {
+          data: {
+            type: "result",
+            result: { waypoints: [{ lat: 11.35, lon: 142.5, source: "waypoint" }], routes: [] },
+            meta: {
+              columns: [
+                { header: "lat", mappedAlias: "lat" },
+                { header: "lon", mappedAlias: "lon" },
+              ],
+              sampleRows: [],
+              allRows: [],
+              fileType: "excel",
+            },
+          },
+        }),
+      );
+    });
+
+    const progress = vi.fn();
+    const { result, meta } = await parseExcel(xlsxFile, progress);
+    expect(WorkerMock).toHaveBeenCalledWith(expect.any(URL), { type: "module" });
+    expect(postMessage).toHaveBeenCalledWith(
+      { data: expect.any(ArrayBuffer), fileName: "test.xlsx" },
+      [expect.any(ArrayBuffer)],
+    );
+    expect(progress).toHaveBeenCalledWith({
+      stage: "converting",
+      completed: 2,
+      total: 2,
+    });
+    expect(result.waypoints).toHaveLength(1);
+    expect(meta.fileType).toBe("excel");
+    vi.unstubAllGlobals();
   });
 
   it("rejects .xls files with clear user-facing error message", async () => {

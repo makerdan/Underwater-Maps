@@ -11,7 +11,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen, fireEvent, within } from "@testing-library/react";
-import { ColumnMappingStep } from "@/components/ColumnMappingStep";
+import {
+  ColumnMappingStep,
+  headerFingerprint,
+} from "@/components/ColumnMappingStep";
 import type { RawColumnMeta, ColumnAssignment } from "@/lib/gpsImport";
 
 // ---------------------------------------------------------------------------
@@ -321,6 +324,48 @@ describe("ColumnMappingStep", () => {
     expect((screen.getByTestId("col-map-select-lat") as HTMLSelectElement).value).toBe("Lat");
     expect((screen.getByTestId("col-map-select-lon") as HTMLSelectElement).value).toBe("Lon");
     expect((screen.getByTestId("col-map-select-name") as HTMLSelectElement).value).toBe("Site");
+  });
+
+  it("resets assignments for columns removed from a changed header set", () => {
+    const onConfirm = vi.fn();
+    render(
+      <ColumnMappingStep
+        meta={makeMeta(["LATI", "LONG", "NEW_COLUMN"])}
+        initialAssignment={{
+          lat: "LATI",
+          lon: "LONG",
+          name: "REMOVED_NAME",
+          depth: null,
+          type: null,
+          notes: null,
+        }}
+        onConfirm={onConfirm}
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("column-mapping-stale-warning")).toBeInTheDocument();
+    expect((screen.getByTestId("col-map-select-name") as HTMLSelectElement).value).toBe("");
+    fireEvent.click(screen.getByTestId("column-mapping-continue"));
+    expect(onConfirm.mock.calls[0]![0]).toMatchObject({
+      lat: "LATI",
+      lon: "LONG",
+      name: null,
+    });
+  });
+
+  it("fingerprints added or removed columns differently even when core headers match", () => {
+    const core = [
+      { header: "lat", mappedAlias: "lat" },
+      { header: "lon", mappedAlias: "lon" },
+      { header: "name", mappedAlias: "name" },
+    ] as RawColumnMeta["columns"];
+    expect(headerFingerprint(core)).not.toBe(
+      headerFingerprint([...core, { header: "notes", mappedAlias: "notes" }]),
+    );
+    expect(headerFingerprint(core)).not.toBe(
+      headerFingerprint(core.filter((column) => column.header !== "name")),
+    );
   });
 
   it("does NOT save assignment to localStorage for self-describing files on confirm", () => {
