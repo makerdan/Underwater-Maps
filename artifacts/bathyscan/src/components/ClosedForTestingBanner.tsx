@@ -1,4 +1,5 @@
 import React from "react";
+import { OVERLAY_Z } from "@/lib/overlayScale";
 
 /**
  * ClosedForTestingBanner — fixed top-of-page amber warning strip shown on the
@@ -19,7 +20,7 @@ export function ClosedForTestingBanner() {
         top: 0,
         left: 0,
         right: 0,
-        zIndex: 60,
+        zIndex: OVERLAY_Z.banner,
         background: "rgba(28, 16, 8, 0.96)",
         borderBottom: "1px solid rgba(251, 191, 36, 0.5)",
         color: "#fbbf24",

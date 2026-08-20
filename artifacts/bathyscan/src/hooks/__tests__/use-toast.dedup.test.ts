@@ -113,4 +113,31 @@ describe("use-toast reducer — ADD_TOAST deduplication (F-019)", () => {
     expect(s3.toasts).toHaveLength(1)
     expect(s3.toasts[0].id).toBe("2")
   })
+
+  it("coalesces within the short window and keeps the latest actionable content", () => {
+    const first = { ...makeToast("1", "Error", "Try again"), dedupeKey: "api:load", addedAt: 1000 }
+    const latest = {
+      ...makeToast("2", "Error", "Try again now", true),
+      dedupeKey: "api:load",
+      addedAt: 1500,
+    }
+    const state = reducer({ toasts: [] }, { type: "ADD_TOAST", toast: first })
+    const updated = reducer(state, { type: "ADD_TOAST", toast: latest })
+
+    expect(updated.toasts).toHaveLength(1)
+    expect(updated.toasts[0]).toMatchObject({
+      id: "1",
+      description: "Try again now",
+      dedupeKey: "api:load",
+    })
+  })
+
+  it("allows the same identity after the deduplication window", () => {
+    const first = { ...makeToast("1", "Error", "Try again"), dedupeKey: "api:load", addedAt: 1000 }
+    const later = { ...makeToast("2", "Error", "Try again", true), dedupeKey: "api:load", addedAt: 4001 }
+    const state = reducer({ toasts: [] }, { type: "ADD_TOAST", toast: first })
+    const updated = reducer(state, { type: "ADD_TOAST", toast: later })
+
+    expect(updated.toasts[0].id).toBe("2")
+  })
 })

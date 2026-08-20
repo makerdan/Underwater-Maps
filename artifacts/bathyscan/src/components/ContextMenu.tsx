@@ -9,6 +9,7 @@ import React, { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import { useContextMenuStore } from "@/lib/contextMenuStore";
+import { OVERLAY_Z } from "@/lib/overlayScale";
 
 const ITEM_HEIGHT = 30;
 const MIN_WIDTH = 220;
@@ -158,7 +159,7 @@ export const ContextMenu: React.FC = () => {
         padding: 4,
         margin: 0,
         listStyle: "none",
-        zIndex: 9999,
+        zIndex: OVERLAY_Z.contextMenu,
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
         fontSize: "calc(16.5px * var(--bs-font-scale, 1))",
         color: "#cbd5e1",

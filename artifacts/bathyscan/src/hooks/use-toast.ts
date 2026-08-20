@@ -7,12 +7,16 @@ import type {
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
+const TOAST_DEDUP_WINDOW = 2_000
 
 type ToasterToast = ToastProps & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  /** Stable identity for coalescing repeated provider/API failures. */
+  dedupeKey?: string
+  addedAt?: number
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -75,18 +79,31 @@ const addToRemoveQueue = (toastId: string) => {
 export const reducer = (state: State, action: Action): State => {
   switch (action.type) {
     case "ADD_TOAST": {
-      // Deduplicate: if a non-dismissed toast with the same title+description
-      // is already in the queue, silently drop the duplicate (F-019).
-      const isDuplicate = state.toasts.some(
+      const now = action.toast.addedAt ?? Date.now()
+      const identity = action.toast.dedupeKey ??
+        `${String(action.toast.title ?? "")}\u0000${String(action.toast.description ?? "")}`
+      const duplicate = state.toasts.find(
         (t) =>
           t.open !== false &&
-          t.title === action.toast.title &&
-          t.description === action.toast.description
+          (t.dedupeKey ??
+            `${String(t.title ?? "")}\u0000${String(t.description ?? "")}`) === identity &&
+          now - (t.addedAt ?? now) <= TOAST_DEDUP_WINDOW
       )
-      if (isDuplicate) return state
+      // Keep the original id (and therefore its dismissal handle), but replace
+      // the contents so a later retry retains the newest actionable details.
+      if (duplicate) {
+        return {
+          ...state,
+          toasts: state.toasts.map((t) =>
+            t.id === duplicate.id
+              ? { ...duplicate, ...action.toast, id: duplicate.id, addedAt: now, open: true }
+              : t
+          ),
+        }
+      }
       return {
         ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
+       toasts: [{ ...action.toast, dedupeKey: identity, addedAt: now }, ...state.toasts].slice(0, TOAST_LIMIT),
       }
     }
 
@@ -176,6 +193,7 @@ function toast({ ...props }: Toast) {
       ...props,
       ...(duration !== undefined ? { duration } : {}),
       id,
+      addedAt: Date.now(),
       open: true,
       onOpenChange: (open) => {
         if (!open) dismiss()

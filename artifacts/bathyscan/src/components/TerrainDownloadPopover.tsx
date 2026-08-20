@@ -15,6 +15,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/lib/clerkCompat";
 import { useToast } from "@/hooks/use-toast";
+import { OVERLAY_Z } from "@/lib/overlayScale";
 import { buildBathyscanDownloadFilename } from "@/lib/gpsExport";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { authorizedFetch } from "@/lib/authorizedFetch";
@@ -177,7 +178,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
         inset: 0,
         background: "rgba(2,8,24,0.65)",
         backdropFilter: "blur(3px)",
-        zIndex: 9100,
+        zIndex: OVERLAY_Z.loader,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

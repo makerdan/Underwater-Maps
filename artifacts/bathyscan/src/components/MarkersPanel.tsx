@@ -14,6 +14,7 @@ import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-reac
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { ReassignMarkersDialog } from "@/components/ReassignMarkersDialog";
+import { OVERLAY_Z } from "@/lib/overlayScale";
 
 const GpsImportDialog = React.lazy(() =>
   import("@/components/GpsImportDialog").then(({ GpsImportDialog: Dialog }) => ({
@@ -162,7 +163,7 @@ export const MarkersPanel: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-          zIndex: 300,
+           zIndex: OVERLAY_Z.drawer,
           overflow: "hidden",
         }}
       >

@@ -26,6 +26,7 @@ import {
   CATCH_SYMBOL_CATEGORIES,
   type CatchSymbol,
 } from "@/lib/catchSymbols";
+import { OVERLAY_Z } from "@/lib/overlayScale";
 const MONO: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
 };
@@ -490,7 +491,7 @@ export const CatchJournalPanel: React.FC = () => {
         width: 340,
         maxHeight: "calc(100vh - 120px)",
         overflowY: "auto",
-        zIndex: 36,
+        zIndex: OVERLAY_Z.drawer,
         background: "rgba(0,10,20,0.95)",
         border: "1px solid rgba(0,229,255,0.3)",
         borderRadius: 4,
@@ -503,7 +504,9 @@ export const CatchJournalPanel: React.FC = () => {
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <span style={{ color: "#22d3ee", fontSize: "calc(17px * var(--bs-font-scale, 1))", fontWeight: 600 }}>
-          🎣 Catch journal — {marker.label}
+          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`Catch journal — ${marker.label}`} aria-label={`Catch journal — ${marker.label}`}>
+            🎣 Catch journal — {marker.label}
+          </span>
         </span>
         <button
           onClick={close}

@@ -54,6 +54,7 @@ import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useToast } from "@/hooks/use-toast";
 import { useReturnFocus } from "@/hooks/useReturnFocus";
+import { OVERLAY_Z } from "@/lib/overlayScale";
 
 
 // ---------------------------------------------------------------------------
@@ -116,7 +117,7 @@ const PANEL: React.CSSProperties = {
   borderLeft: "1px solid rgba(0,229,255,0.12)",
   display: "flex",
   flexDirection: "column",
-  zIndex: 100,
+   zIndex: OVERLAY_Z.drawer,
   fontFamily: "'JetBrains Mono', monospace",
   color: "#cbd5e1",
   pointerEvents: "auto",

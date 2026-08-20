@@ -61,6 +61,7 @@ import {
   type PackRollupStatus,
 } from "@/hooks/useOfflinePackStatus";
 import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
+import { OVERLAY_Z } from "@/lib/overlayScale";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -289,7 +290,7 @@ const SaveCard: React.FC<{
               data-testid={`text-save-name-${save.id}`}
               style={{
                 fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", fontWeight: 600,
-                marginBottom: 1, overflowWrap: "anywhere",
+                marginBottom: 1, minWidth: 0, overflowWrap: "anywhere",
               }}
             >
               {displayName}
@@ -513,7 +514,7 @@ const UploadCard: React.FC<{
             <div
               title={dataset.name}
               data-testid={`text-upload-name-${dataset.id}`}
-              style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", fontWeight: 600, marginBottom: 1, overflowWrap: "anywhere" }}
+              style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#e2e8f0", fontWeight: 600, marginBottom: 1, minWidth: 0, overflowWrap: "anywhere" }}
             >
               {dataset.name}
             </div>
@@ -1675,7 +1676,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
         <div
           role="dialog" aria-label="Confirm delete saved dataset"
           data-testid="confirm-delete-save"
-          style={{ position: "fixed", inset: 0, background: "rgba(0,4,10,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,4,10,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: OVERLAY_Z.dialog }}
           onClick={() => setConfirmDelete(null)}
         >
           <div onClick={(e) => e.stopPropagation()} style={{ background: "rgba(0,12,24,0.98)", border: "1px solid rgba(0,229,255,0.25)", borderRadius: 6, padding: "16px 18px", maxWidth: 340, fontFamily: "'JetBrains Mono', monospace", color: "#cbd5e1" }}>

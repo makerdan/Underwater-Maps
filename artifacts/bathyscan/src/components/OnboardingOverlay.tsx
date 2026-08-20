@@ -19,6 +19,7 @@ import { useUiStore } from "@/lib/uiStore";
 import { requestDatasetSwitch } from "@/lib/simulatedDataStore";
 import { useAppState } from "@/lib/context";
 import { flushServerSync, requestSettingsSync } from "@/hooks/useServerSettingsSync";
+import { OVERLAY_Z } from "@/lib/overlayScale";
 
 /** Catalog ID for the built-in Lake Ray Roberts demo dataset. */
 const DEMO_DATASET_ID = "lake-ray-roberts";
@@ -243,7 +244,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
         style={{
           position: "fixed",
           inset: 0,
-          zIndex: 9000,
+           zIndex: OVERLAY_Z.dialog,
           background: "rgba(2,8,20,0.72)",
           backdropFilter: "blur(2px)",
         }}
@@ -259,7 +260,7 @@ export function OnboardingOverlay({ suppressed = false }: OnboardingOverlayProps
         aria-live="polite"
         style={{
           position: "fixed",
-          zIndex: 9001,
+           zIndex: OVERLAY_Z.dialog + 1,
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
