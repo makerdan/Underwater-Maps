@@ -236,8 +236,9 @@ beforeEach(() => {
   mocks.removeMemberMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.deleteDatasetMutateAsync.mockReset();
   mocks.invalidateQueries.mockReset().mockResolvedValue(undefined);
-  useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null });
+  useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null, unresolvedMemberNames: [] });
   useUiStore.getState().setOverviewOpen(false);
+  useUiStore.getState().setCollectionLoadNotice(null);
 });
 
 // ---------------------------------------------------------------------------
@@ -506,6 +507,30 @@ describe("CollectionsSection — special collections", () => {
         { datasetId: "catalog-1", source: "preset" },
         { datasetId: "upload-2", source: "user" },
       ]);
+      expect(screen.getByTestId("collection-load-warning-col-sp")).toHaveTextContent(
+        "Unavailable puzzle piece: Missing",
+      );
+      expect(useSpecialCollectionStore.getState().unresolvedMemberNames).toEqual(["Missing"]);
+    });
+
+    it("clears the unavailable-member notice on the next complete activation", async () => {
+      const activateCollection = vi.fn();
+      useTerrainStore.setState({ activateCollection });
+      const incompleteCollection = {
+        ...COLLECTION_SPECIAL,
+        id: "col-sp-incomplete",
+        members: [
+          { id: "mem-upload", kind: "dataset", refId: "upload-1", name: "Upload", createdAt: "2024-01-01T00:00:00Z" },
+          { id: "mem-missing", kind: "catalogSave", refId: "save-missing", name: "Missing", createdAt: "2024-01-01T00:00:00Z" },
+        ],
+      };
+      currentCollections = [incompleteCollection, COLLECTION_SPECIAL];
+      renderWithProviders(<CollectionsSection />);
+      fireEvent.click(screen.getByTestId("btn-activate-collection-col-sp-incomplete"));
+      await waitFor(() => expect(screen.getByTestId("collection-load-warning-col-sp-incomplete")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByTestId("btn-activate-collection-col-sp"));
+      await waitFor(() => expect(screen.queryByTestId("collection-load-warning-col-sp-incomplete")).not.toBeInTheDocument());
     });
   });
 

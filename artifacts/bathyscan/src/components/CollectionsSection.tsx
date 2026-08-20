@@ -218,13 +218,15 @@ const CollectionRow: React.FC<{
   onActivate?: () => void;
   /** True while the activate flow is loading datasets. */
   activating?: boolean;
+  /** Names of saved members that were unavailable during the last activation. */
+  unavailableMemberNames?: string[];
   /**
    * Apply-to-3D badge: "applied" (teal) when the 3D scene reflects this
    * collection's saved puzzle layout, "outdated" (amber) when the layout was
    * edited after applying. Null/undefined hides the badge.
    */
   geoBadge?: "applied" | "outdated" | null;
-}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, activating = false, geoBadge = null }) => {
+}> = ({ collection, expanded, onToggle, onRename, onDelete, onRemoveMember, removingMemberIds, onDownloadOffline, offlineRollup = "none", onOpenSettings, onActivate, activating = false, unavailableMemberNames = [], geoBadge = null }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -370,6 +372,15 @@ const CollectionRow: React.FC<{
       {renameError && (
         <div data-testid="collection-rename-error" style={{ padding: "0 26px 4px", color: "#fca5a5", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}>{renameError}</div>
       )}
+      {unavailableMemberNames.length > 0 && (
+        <div
+          data-testid={`collection-load-warning-${collection.id}`}
+          role="status"
+          style={{ padding: "3px 26px 5px", color: "#fbbf24", fontSize: "calc(12px * var(--bs-font-scale, 1))", lineHeight: 1.35 }}
+        >
+          Unavailable puzzle piece{unavailableMemberNames.length === 1 ? "" : "s"}: {unavailableMemberNames.join(", ")}
+        </div>
+      )}
       {expanded && (
         <div style={{ paddingLeft: 26 }}>
           {collection.members.length === 0 ? (
@@ -463,6 +474,8 @@ export const CollectionsSection: React.FC = () => {
   // Freshly-created collection kept as a fallback so the settings sheet can
   // open immediately, before the collections query refetch lands.
   const [createdFallback, setCreatedFallback] = useState<DatasetCollection | null>(null);
+  const collectionLoadNotice = useUiStore((s) => s.collectionLoadNotice);
+  const setCollectionLoadNotice = useUiStore((s) => s.setCollectionLoadNotice);
 
   useEffect(() => { if (creating) createInputRef.current?.focus(); }, [creating]);
 
@@ -547,6 +560,14 @@ export const CollectionsSection: React.FC = () => {
     setActivatingId(c.id);
     try {
       const terrain = useTerrainStore.getState();
+      const unresolvedMemberNames = c.members
+        .filter((m) => !memberDatasetId(m))
+        .map((m) => m.name);
+      setCollectionLoadNotice(
+        unresolvedMemberNames.length > 0
+          ? { collectionId: c.id, memberNames: unresolvedMemberNames }
+          : null,
+      );
       const entries = c.members.flatMap((m) => {
         const datasetId = memberDatasetId(m);
         if (!datasetId) return [];
@@ -558,12 +579,12 @@ export const CollectionsSection: React.FC = () => {
         }];
       });
       terrain.activateCollection(entries);
-      await useSpecialCollectionStore.getState().activateForPuzzle(c);
+      await useSpecialCollectionStore.getState().activateForPuzzle(c, unresolvedMemberNames);
       useUiStore.getState().setOverviewOpen(true);
     } finally {
       setActivatingId(null);
     }
-  }, [activatingId, memberDatasetId]);
+  }, [activatingId, memberDatasetId, setCollectionLoadNotice]);
 
   // Apply-to-3D badge state: which collection's saved layout the 3D scene
   // currently reflects (and whether it has been edited since applying).
@@ -681,6 +702,9 @@ export const CollectionsSection: React.FC = () => {
               onOpenSettings={c.collectionKind === "special" ? () => setSettingsForId(c.id) : undefined}
               onActivate={c.collectionKind === "special" ? () => void handleActivate(c) : undefined}
               activating={activatingId === c.id}
+              unavailableMemberNames={
+                collectionLoadNotice?.collectionId === c.id ? collectionLoadNotice.memberNames : []
+              }
               geoBadge={geoLayout?.collectionId === c.id ? geoLayout.status : null}
             />
           ))}

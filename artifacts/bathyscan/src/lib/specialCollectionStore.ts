@@ -66,9 +66,11 @@ interface SpecialCollectionStore {
   pendingPuzzleOn: number;
   /** Non-null while a puzzle layout is applied to the 3D scene. */
   geoLayout: GeoLayoutState | null;
+  /** Names of collection members that had no materialized dataset at activation. */
+  unresolvedMemberNames: string[];
 
   /** Activate a special collection for puzzle assembly. */
-  activateForPuzzle: (collection: DatasetCollection) => Promise<void>;
+  activateForPuzzle: (collection: DatasetCollection, unresolvedMemberNames?: string[]) => Promise<void>;
   deactivate: () => void;
   /** Queue a layout-revision restore for OverviewMap to consume. */
   requestRestore: (payload: RestorePayload) => void;
@@ -165,14 +167,16 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
   pendingRestore: null,
   pendingPuzzleOn: 0,
   geoLayout: null,
+  unresolvedMemberNames: [],
 
-  activateForPuzzle: async (collection) => {
+  activateForPuzzle: async (collection, unresolvedMemberNames = []) => {
     const gen = ++activationGen;
     const meta = collection.specialMeta;
     const loaded = meta?.bgImageKey ? await loadBgImage(collection.id) : null;
     // Stale continuation: a sign-out, deactivate, or newer activation happened
     // while the image request was in flight. Drop everything.
     if (gen !== activationGen) return;
+    set({ unresolvedMemberNames: [...unresolvedMemberNames] });
     const revisions = meta?.layoutRevisions ?? [];
     const activeRevisionId = meta?.activeRevisionId ?? null;
 
@@ -205,12 +209,12 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
 
   deactivate: () => {
     activationGen++; // invalidate any in-flight activation
-    set({ active: null, pendingRestore: null, geoLayout: null });
+    set({ active: null, pendingRestore: null, geoLayout: null, unresolvedMemberNames: [] });
   },
 
   resetForSignOut: () => {
     activationGen++; // invalidate any in-flight activation (sign-out race)
-    set({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null });
+    set({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null, unresolvedMemberNames: [] });
   },
 
   markGeoLayoutApplied: (collectionId, datasetIds) => {

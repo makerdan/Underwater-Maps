@@ -151,6 +151,9 @@ interface UiStore {
   pendingDropIn: DropInTarget | null;
   setPendingDropIn: (target: DropInTarget | null) => void;
   clearPendingDropIn: () => void;
+  /** Names of saved collection members that could not be materialized on activation. */
+  collectionLoadNotice: { collectionId: string; memberNames: string[] } | null;
+  setCollectionLoadNotice: (notice: { collectionId: string; memberNames: string[] } | null) => void;
   overviewOpen: boolean;
   setOverviewOpen: (open: boolean) => void;
   /** Whether the "What's Here?" summary card is visible. */
@@ -559,6 +562,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     pendingDropIn: null,
     setPendingDropIn: (target) => set({ pendingDropIn: target }),
     clearPendingDropIn: () => set({ pendingDropIn: null }),
+    collectionLoadNotice: null,
+    setCollectionLoadNotice: (notice) => set({ collectionLoadNotice: notice }),
     overviewOpen: false,
     setOverviewOpen: (open) => set({ overviewOpen: open }),
     whatsHereOpen: false,
