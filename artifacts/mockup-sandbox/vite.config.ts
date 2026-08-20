@@ -5,13 +5,11 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { mockupPreviewPlugin } from "./mockupPreviewPlugin";
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+// Canvas is served by the managed artifact on this port. Vite evaluates this
+// config during builds too, so use the artifact value when no preview server
+// environment has been injected.
+const DEFAULT_PORT = 8081;
+const rawPort = process.env.PORT ?? String(DEFAULT_PORT);
 
 const port = Number(rawPort);
 
@@ -19,13 +17,9 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+// Keep the default aligned with the artifact's registered previewPath while
+// allowing managed or local callers to override it.
+const basePath = process.env.BASE_PATH ?? "/__mockup";
 
 export default defineConfig({
   base: basePath,

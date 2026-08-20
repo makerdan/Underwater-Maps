@@ -18,9 +18,15 @@ localPort = 23993
 run = "pnpm --filter @workspace/bathyscan run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/bathyscan", "run", "build" ]
 publicDir = "artifacts/bathyscan/dist/public"
 serve = "static"
+
+[services.production.build]
+args = [ "pnpm", "--filter", "@workspace/bathyscan", "run", "build" ]
+
+[services.production.build.env]
+PORT = "23993"
+BASE_PATH = "/"
 
 [[services.production.rewrites]]
 from = "/*"

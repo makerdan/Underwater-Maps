@@ -257,13 +257,11 @@ function devApiRestartPlugin(): Plugin {
   };
 }
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+// The managed artifact uses this port for its preview service. Keep it as a
+// build-safe default because Vite loads the full config before production
+// builds, even though PORT is only operationally needed by dev/preview.
+const DEFAULT_PORT = 23993;
+const rawPort = process.env.PORT ?? String(DEFAULT_PORT);
 
 const port = Number(rawPort);
 
@@ -271,13 +269,10 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+// This matches the artifact's registered previewPath. BASE_PATH remains
+// overridable for alternate hosting environments, but is not required just to
+// produce a deployment bundle.
+const basePath = process.env.BASE_PATH ?? "/";
 
 function getBuildHash(): string {
   try {

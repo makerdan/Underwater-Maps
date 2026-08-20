@@ -1,8 +1,8 @@
 // @vitest-environment node
 /**
  * Regression tests: both Vite configs (bathyscan and mockup-sandbox) must
- * fail fast with a clear error when PORT is missing or invalid — no
- * fallback values anywhere.
+ * load cleanly without preview-only environment variables, while still
+ * rejecting invalid PORT overrides.
  */
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import path from "path";
@@ -19,10 +19,13 @@ const mockupConfig = path.resolve(
 
 const savedPort = process.env.PORT;
 const savedBasePath = process.env.BASE_PATH;
+const savedNodeEnv = process.env.NODE_ENV;
 
 beforeEach(() => {
   vi.resetModules();
-  process.env.BASE_PATH = "/";
+  delete process.env.PORT;
+  delete process.env.BASE_PATH;
+  process.env.NODE_ENV = "production";
 });
 
 afterAll(() => {
@@ -30,17 +33,19 @@ afterAll(() => {
   else process.env.PORT = savedPort;
   if (savedBasePath === undefined) delete process.env.BASE_PATH;
   else process.env.BASE_PATH = savedBasePath;
+  if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = savedNodeEnv;
 });
 
 describe.each([
-  ["bathyscan", bathyscanConfig],
-  ["mockup-sandbox", mockupConfig],
-])("%s vite.config.ts", (_name, configPath) => {
-  it("throws a clear error when PORT is missing", async () => {
-    delete process.env.PORT;
-    await expect(import(/* @vite-ignore */ configPath)).rejects.toThrow(
-      /PORT environment variable is required/,
-    );
+  ["bathyscan", bathyscanConfig, 23993, "/"],
+  ["mockup-sandbox", mockupConfig, 8081, "/__mockup"],
+])("%s vite.config.ts", (_name, configPath, expectedPort, expectedBase) => {
+  it("uses the artifact defaults when preview variables are absent", async () => {
+    const { default: config } = await import(/* @vite-ignore */ configPath);
+    expect(config.base).toBe(expectedBase);
+    expect(config.server?.port).toBe(expectedPort);
+    expect(config.preview?.port).toBe(expectedPort);
   }, 60_000);
 
   it("throws a clear error when PORT is not a number", async () => {
