@@ -39,6 +39,35 @@ import type { BathyFetchBundle, Bbox, FetchStrategy } from "../lib/fetchers/type
 
 const router = Router();
 
+const TerrainBundleResponseSchema = z.object({
+  depths: z.array(z.number().finite()),
+  topography: z.array(z.number().finite()),
+  hasTopography: z.boolean(),
+  minDepth: z.number().finite(),
+  maxDepth: z.number().finite(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  bbox: z.object({
+    minLon: z.number().finite(),
+    minLat: z.number().finite(),
+    maxLon: z.number().finite(),
+    maxLat: z.number().finite(),
+  }),
+  dataSource: z.string().min(1),
+  label: z.string().min(1),
+  creditUrl: z.string().url().optional(),
+  userId: z.string().min(1).optional(),
+  presetId: z.string().min(1).optional(),
+  fetchedAt: z.string().datetime().optional(),
+}).superRefine((bundle, ctx) => {
+  if (bundle.depths.length !== bundle.width * bundle.height) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["depths"], message: "depths length must match width × height" });
+  }
+  if (bundle.topography.length !== bundle.width * bundle.height) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["topography"], message: "topography length must match width × height" });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // GCS bundle storage helpers
 // ---------------------------------------------------------------------------
@@ -85,7 +114,7 @@ async function writeBundleToGcs(
   });
 }
 
-async function readBundleFromGcs(userId: string, presetId: string): Promise<unknown | null> {
+async function readBundleFromGcs(userId: string, presetId: string): Promise<z.infer<typeof TerrainBundleResponseSchema> | null> {
   try {
     const { bucketName, objectName } = bundlePath(userId, presetId);
     const bucket = objectStorageClient.bucket(bucketName);
@@ -93,7 +122,8 @@ async function readBundleFromGcs(userId: string, presetId: string): Promise<unkn
     const [exists] = await file.exists();
     if (!exists) return null;
     const [contents] = await file.download();
-    return JSON.parse(contents.toString("utf8")) as unknown;
+    const parsed = TerrainBundleResponseSchema.safeParse(JSON.parse(contents.toString("utf8")));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }

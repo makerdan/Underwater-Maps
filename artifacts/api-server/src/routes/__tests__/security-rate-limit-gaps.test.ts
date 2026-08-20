@@ -267,3 +267,30 @@ describe("POST /api/search/federated/save — per-user rate limit (120/min)", ()
     expect(res.headers["x-ratelimit-remaining"]).toBe("0");
   });
 });
+
+describe("privileged mutation guards", () => {
+  it("rejects non-admin global preset suppression", async () => {
+    vi.stubEnv("ADMIN_USER_IDS", "some-other-admin");
+    const res = await request(app)
+      .delete("/api/datasets/presets/glba_main")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", "authenticated-non-admin");
+
+    expect(res.status).toBe(403);
+    expect(res.body).toMatchObject({ error: "forbidden" });
+  });
+
+  it("rate-limits an admin user mutation before the handler runs", async () => {
+    const user = "admin-user-mutation-rl-test";
+    vi.stubEnv("ADMIN_USER_IDS", user);
+    __prefillRateLimitMemory(userKey(user), DATA_MUTATION_MAX, DATA_MUTATION_WINDOW_MS);
+
+    const res = await request(app)
+      .post("/api/admin/users/target-user/approve")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", user);
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ error: "rate_limit" });
+  });
+});

@@ -432,6 +432,22 @@ describe("GET /repos/:owner/:repo/actions/runs — list workflow runs", () => {
     expect(res.body.total_count).toBe(1);
     expect(res.body.workflow_runs).toHaveLength(1);
   });
+
+  it.each([
+    ["invalid status", "?status=not-a-status"],
+    ["oversized page size", "?per_page=101"],
+    ["zero page", "?page=0"],
+    ["oversized page", "?page=1001"],
+    ["non-integer page size", "?per_page=1.5"],
+  ])("returns 400 for %s without calling GitHub", async (_label, query) => {
+    const res = await request(makeApp())
+      .get(`/repos/owner/repo/actions/runs${query}`)
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", E2E_USER);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_params");
+    expect(octokitMock.actions.listWorkflowRunsForRepo).not.toHaveBeenCalled();
+  });
 });
 
 describe("repo-name injection — shell-special characters rejected before GitHub API is called", () => {

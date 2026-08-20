@@ -19,6 +19,13 @@ const GithubOwnerRepoSchema = z.object({
   repo: z.string().min(1, "repo is required").max(100).regex(/^[a-zA-Z0-9_.-]+$/, "repo contains invalid characters"),
 });
 
+const WorkflowRunsQuerySchema = z.object({
+  workflow_id: z.string().trim().min(1).max(256).optional(),
+  status: z.enum(["queued", "in_progress", "completed"]).optional(),
+  per_page: z.coerce.number().int().min(1).max(100).optional(),
+  page: z.coerce.number().int().min(1).max(1000).optional(),
+}).strict();
+
 const PutGithubContentsBody = z.object({
   message: z.string({ required_error: "'message' is required", invalid_type_error: "'message' must be a string" }).min(1, "'message' must not be empty"),
   content: z.string({ required_error: "'content' is required", invalid_type_error: "'content' must be a string" }).min(1, "'content' must not be empty"),
@@ -329,21 +336,18 @@ router.get(
   requireAdmin,
   githubReadRateLimit,
   asyncHandler(async (req, res): Promise<void> => {
-    const params = req.params as Record<string, string>;
-    const owner = params["owner"] as string;
-    const repo = params["repo"] as string;
-    const workflow_id =
-      typeof req.query["workflow_id"] === "string" ? req.query["workflow_id"] : undefined;
-    const status =
-      typeof req.query["status"] === "string"
-        ? (req.query["status"] as "queued" | "in_progress" | "completed")
-        : undefined;
-    const per_page =
-      typeof req.query["per_page"] === "string"
-        ? Number(req.query["per_page"])
-        : undefined;
-    const page =
-      typeof req.query["page"] === "string" ? Number(req.query["page"]) : undefined;
+    const paramsResult = GithubOwnerRepoSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+      res.status(400).json({ error: "invalid_params", details: paramsResult.error.issues[0]?.message ?? "Invalid owner or repo" });
+      return;
+    }
+    const queryResult = WorkflowRunsQuerySchema.safeParse(req.query);
+    if (!queryResult.success) {
+      res.status(400).json({ error: "invalid_params", details: queryResult.error.issues[0]?.message ?? "Invalid workflow query" });
+      return;
+    }
+    const { owner, repo } = paramsResult.data;
+    const { workflow_id, status, per_page, page } = queryResult.data;
 
     let octokit;
     try {

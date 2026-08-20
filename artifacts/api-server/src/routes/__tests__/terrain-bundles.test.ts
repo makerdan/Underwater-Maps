@@ -312,12 +312,38 @@ describe("GET /terrain/bundles/:presetId", () => {
       errorMessage: null,
     }]));
     mockFileExists.mockResolvedValue([true]);
-    const bundleJson = JSON.stringify({ depths: [], label: "Test" });
+    const bundleJson = JSON.stringify({
+      depths: [5],
+      topography: [0],
+      hasTopography: false,
+      minDepth: 5,
+      maxDepth: 5,
+      width: 1,
+      height: 1,
+      bbox: { minLon: -97.15, minLat: 33.3, maxLon: -96.92, maxLat: 33.52 },
+      dataSource: "bundled",
+      label: "Test",
+    });
     mockFileDownload.mockResolvedValue([Buffer.from(bundleJson)]);
 
     const res = await request(app).get("/terrain/bundles/lake-ray-roberts").set("x-e2e-user-id", "bypass-user");
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ label: "Test" });
+  });
+
+  it("returns 404 when stored bundle does not match the response schema", async () => {
+    mockSelect.mockReturnValue(makeChain([{
+      id: "job-1",
+      status: "complete",
+      progressNote: "Done",
+      errorMessage: null,
+    }]));
+    mockFileExists.mockResolvedValue([true]);
+    mockFileDownload.mockResolvedValue([Buffer.from(JSON.stringify({ depths: "corrupt" }))]);
+
+    const res = await request(app).get("/terrain/bundles/lake-ray-roberts").set("x-e2e-user-id", "bypass-user");
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ error: "Bundle file not found in storage" });
   });
 });
 

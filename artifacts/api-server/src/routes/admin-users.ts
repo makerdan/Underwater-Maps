@@ -37,6 +37,7 @@ import { validateBody, validateParams, validateQuery } from "../middlewares/vali
 import { validateResponse } from "../middlewares/validateResponse.js";
 import { logger } from "../lib/logger.js";
 import { sendAdminTestNotification } from "../lib/adminEmail.js";
+import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 
 const router = Router();
 
@@ -150,6 +151,7 @@ function toUserRecord(row: UserAccessRow) {
 router.post(
   "/admin/users/test-notification",
   requireAuth,
+  dataMutationRateLimit,
   asyncHandler(async (req, res) => {
     if (!requireAdminCaller(req, res)) return;
 
@@ -244,6 +246,7 @@ router.get(
 router.post(
   "/admin/users/:clerkUserId/approve",
   requireAuth,
+  dataMutationRateLimit,
   validateParams(AdminUsersParamsSchema, "POST /api/admin/users/:clerkUserId/approve"),
   asyncHandler(async (req, res) => {
     if (!requireAdminCaller(req, res)) return;
@@ -277,6 +280,7 @@ router.post(
 router.post(
   "/admin/users/:clerkUserId/ban",
   requireAuth,
+  dataMutationRateLimit,
   validateParams(AdminUsersParamsSchema, "POST /api/admin/users/:clerkUserId/ban"),
   validateBody(AdminBanUserBodySchema, "POST /api/admin/users/:clerkUserId/ban"),
   asyncHandler(async (req, res) => {
@@ -316,6 +320,7 @@ router.post(
 router.post(
   "/admin/users/:clerkUserId/restore",
   requireAuth,
+  dataMutationRateLimit,
   validateParams(AdminUsersParamsSchema, "POST /api/admin/users/:clerkUserId/restore"),
   asyncHandler(async (req, res) => {
     if (!requireAdminCaller(req, res)) return;
@@ -349,6 +354,7 @@ router.post(
 router.delete(
   "/admin/users/:clerkUserId",
   requireAuth,
+  dataMutationRateLimit,
   validateParams(AdminUsersParamsSchema, "DELETE /api/admin/users/:clerkUserId"),
   asyncHandler(async (req, res) => {
     if (!requireAdminCaller(req, res)) return;
