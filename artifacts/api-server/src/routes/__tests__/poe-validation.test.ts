@@ -196,22 +196,22 @@ describe("POST /api/poe/classify — Zod validation", () => {
     expect(res.body).toMatchObject({ error: "invalid_request" });
   });
 
-  it("accepts an empty depths32 array (does not return 400)", async () => {
+  it("returns 400 when depths32 is not exactly the 32×32 fallback grid", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
-      .send({ gridBase64: "dGVzdA==", depths32: [] });
-    expect(res.status).not.toBe(400);
+      .send({ gridBase64: "data:image/png;base64,dGVzdA==", depths32: [] });
+    expect(res.status).toBe(400);
   });
 
-  it("accepts an empty depthsFull array (does not return 400)", async () => {
+  it("returns 400 when depthsFull is supplied without dimensions", async () => {
     const res = await request(app)
       .post("/api/poe/classify")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
-      .send({ gridBase64: "dGVzdA==", depthsFull: [] });
-    expect(res.status).not.toBe(400);
+      .send({ gridBase64: "data:image/png;base64,dGVzdA==", depthsFull: [] });
+    expect(res.status).toBe(400);
   });
 
   it("does not return 400 when a valid minimal body is sent", async () => {
@@ -219,7 +219,7 @@ describe("POST /api/poe/classify — Zod validation", () => {
       .post("/api/poe/classify")
       .set("x-e2e-bypass-secret", "vitest-test-secret")
       .set("x-e2e-user-id", "user-poe-test")
-      .send({ gridBase64: "dGVzdA==" });
+      .send({ gridBase64: "data:image/png;base64,dGVzdA==" });
     expect(res.status).not.toBe(400);
   });
 

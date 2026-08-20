@@ -6201,10 +6201,20 @@ components:
 
     PoeClassifyRequest:
       type: object
+      description: |
+        Classification accepts PNG or JPEG base64 data URLs only. The complete
+        data URL is limited to 4,000,000 encoded bytes and its decoded image
+        payload is limited to 3,000,000 bytes. Full grids use positive safe
+        integer dimensions up to 512 cells per side and 262,144 cells total;
+        depthsFull must contain exactly widthFull*heightFull finite numbers.
+        depths32 is the optional 1,024-value (32×32) fallback grid and must
+        contain exactly 1,024 finite numbers.
       properties:
         gridBase64:
           type: string
-          description: Base64-encoded PNG data URL of the 256×256 depth grid
+          maxLength: 4000000
+          pattern: '^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/]*={0,2}$'
+          description: Base64-encoded PNG or JPEG data URL; encoded limit 4,000,000 bytes and decoded payload limit 3,000,000 bytes
         waterType:
           type: string
           enum: [saltwater, freshwater]
@@ -6217,8 +6227,11 @@ components:
           description: Client-computed FNV-1a 32-bit hash of the depth grid (8-char hex)
         depths32:
           type: array
+          minItems: 1024
+          maxItems: 1024
           items:
             type: number
+            format: double
           description: |
             Optional 1024-length (32×32 row-major) downsample of the depth grid in metres.
             Used by the server as input for the depth-based fallback classifier when the
@@ -6227,6 +6240,7 @@ components:
           type: array
           items:
             type: number
+            format: double
           description: |
             Optional full-resolution row-major depth grid (length widthFull*heightFull).
             When provided the server may split the area into multiple overlapping 32×32
@@ -6235,9 +6249,13 @@ components:
             collapsed into a single thumbnail.
         widthFull:
           type: integer
+          minimum: 1
+          maximum: 512
           description: Width of `depthsFull` in cells. Required when `depthsFull` is set.
         heightFull:
           type: integer
+          minimum: 1
+          maximum: 512
           description: Height of `depthsFull` in cells. Required when `depthsFull` is set.
       required:
         - gridBase64

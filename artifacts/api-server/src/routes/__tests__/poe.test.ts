@@ -60,9 +60,9 @@ import { globalPoeCache } from "@workspace/poe";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
 import { __resetPoeBreaker, __isPoeBreakersOpen, __clearUpscaleCaches, __clearZoneAndDatasetCaches, __forceOpenPoeBreaker } from "../poe.js";
 
-const GRID_BASE64 = Buffer.from("fake-grid-bytes-for-testing").toString(
+const GRID_BASE64 = `data:image/png;base64,${Buffer.from("fake-grid-bytes-for-testing").toString(
   "base64",
-);
+)}`;
 
 function buildOkResponse() {
   return {
@@ -298,7 +298,7 @@ describe("POST /api/poe/classify", () => {
 
     // Use a uniquely-named base64 + dataset id to ensure no prior test's
     // cache entry contaminates this scenario.
-    const uniqueGrid = Buffer.from("wt-isolation-test-grid").toString("base64");
+    const uniqueGrid = `data:image/png;base64,${Buffer.from("wt-isolation-test-grid").toString("base64")}`;
     const uniqueDsId = "ds-wt-isolation";
     const uniqueHash = "f00dface";
 

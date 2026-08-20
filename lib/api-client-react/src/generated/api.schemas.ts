@@ -38,18 +38,36 @@ export const PoeClassifyRequestWaterType = {
   freshwater: 'freshwater',
 } as const;
 
+/**
+ * Classification accepts PNG or JPEG base64 data URLs only. The complete
+data URL is limited to 4,000,000 encoded bytes and its decoded image
+payload is limited to 3,000,000 bytes. Full grids use positive safe
+integer dimensions up to 512 cells per side and 262,144 cells total;
+depthsFull must contain exactly widthFull*heightFull finite numbers.
+depths32 is the optional 1,024-value (32×32) fallback grid and must
+contain exactly 1,024 finite numbers.
+
+ */
 export interface PoeClassifyRequest {
-  /** Base64-encoded PNG data URL of the 256×256 depth grid */
+  /**
+     * Base64-encoded PNG or JPEG data URL; encoded limit 4,000,000 bytes and decoded payload limit 3,000,000 bytes
+     * @maxLength 4000000
+     * @pattern ^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/]*={0,2}$
+     */
   gridBase64: string;
   waterType?: PoeClassifyRequestWaterType;
   /** Dataset identifier used for cache keying */
   datasetId?: string;
   /** Client-computed FNV-1a 32-bit hash of the depth grid (8-char hex) */
   gridHash?: string;
-  /** Optional 1024-length (32×32 row-major) downsample of the depth grid in metres.
+  /**
+     * Optional 1024-length (32×32 row-major) downsample of the depth grid in metres.
   Used by the server as input for the depth-based fallback classifier when the
   AI call fails. Not used when the AI call succeeds.
-   */
+
+     * @minItems 1024
+     * @maxItems 1024
+     */
   depths32?: number[];
   /** Optional full-resolution row-major depth grid (length widthFull*heightFull).
   When provided the server may split the area into multiple overlapping 32×32
@@ -58,9 +76,17 @@ export interface PoeClassifyRequest {
   collapsed into a single thumbnail.
    */
   depthsFull?: number[];
-  /** Width of `depthsFull` in cells. Required when `depthsFull` is set. */
+  /**
+     * Width of `depthsFull` in cells. Required when `depthsFull` is set.
+     * @minimum 1
+     * @maximum 512
+     */
   widthFull?: number;
-  /** Height of `depthsFull` in cells. Required when `depthsFull` is set. */
+  /**
+     * Height of `depthsFull` in cells. Required when `depthsFull` is set.
+     * @minimum 1
+     * @maximum 512
+     */
   heightFull?: number;
 }
 

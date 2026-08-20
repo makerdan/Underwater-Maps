@@ -1417,15 +1417,83 @@ async function runTiledClassify(opts: {
   };
 }
 
+/**
+ * Classification input budget. Keep these values in sync with the
+ * PoeClassifyRequest schema in lib/api-spec/openapi.yaml.
+ *
+ * The encoded limit is intentionally a little larger than the decoded limit
+ * to account for base64 expansion and the data-URL prefix. The decoded check
+ * is still performed so padding cannot be used to evade the actual byte cap.
+ */
+export const CLASSIFY_MAX_IMAGE_ENCODED_BYTES = 4_000_000;
+export const CLASSIFY_MAX_IMAGE_DECODED_BYTES = 3_000_000;
+export const CLASSIFY_MAX_FULL_GRID_DIMENSION = 512;
+export const CLASSIFY_MAX_FULL_GRID_AREA = 512 * 512;
+export const CLASSIFY_FALLBACK_GRID_LENGTH = TILE_SIZE * TILE_SIZE;
+
+const CLASSIFY_IMAGE_DATA_URL_RE =
+  /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/]*={0,2}$/;
+
+function decodedBase64Bytes(dataUrl: string): number {
+  const comma = dataUrl.indexOf(",");
+  if (comma < 0) return 0;
+  const payload = dataUrl.slice(comma + 1);
+  return Math.floor((payload.length * 3) / 4) - (payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0);
+}
+
+const classifyImageSchema = z.string()
+  .min(1, "gridBase64 is required")
+  .max(CLASSIFY_MAX_IMAGE_ENCODED_BYTES, "gridBase64 exceeds the encoded byte limit")
+  .regex(CLASSIFY_IMAGE_DATA_URL_RE, "gridBase64 must be a base64 PNG or JPEG data URL")
+  .refine(
+    (value) => decodedBase64Bytes(value) <= CLASSIFY_MAX_IMAGE_DECODED_BYTES,
+    "gridBase64 exceeds the decoded byte limit",
+  );
+
+const classifyFiniteDepths = z.number().finite();
+
 const ClassifyBodySchema = z.object({
-  gridBase64: z.string().min(1, "gridBase64 is required"),
+  gridBase64: classifyImageSchema,
   waterType: z.enum(["saltwater", "freshwater"]).optional().default("saltwater"),
   datasetId: z.string().optional(),
   gridHash: z.string().optional(),
-  depths32: z.array(z.number()).optional(),
-  depthsFull: z.array(z.number()).optional(),
-  widthFull: z.number().optional(),
-  heightFull: z.number().optional(),
+  depths32: z.array(classifyFiniteDepths).length(CLASSIFY_FALLBACK_GRID_LENGTH).optional(),
+  depthsFull: z.array(classifyFiniteDepths).optional(),
+  widthFull: z.number().safe().int().positive()
+    .max(CLASSIFY_MAX_FULL_GRID_DIMENSION).optional(),
+  heightFull: z.number().safe().int().positive()
+    .max(CLASSIFY_MAX_FULL_GRID_DIMENSION).optional(),
+}).superRefine((body, ctx) => {
+  const hasFullGrid = body.depthsFull !== undefined;
+  const hasDimensions = body.widthFull !== undefined || body.heightFull !== undefined;
+
+  if (hasFullGrid !== hasDimensions || (hasDimensions && (body.widthFull === undefined || body.heightFull === undefined))) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["depthsFull"],
+      message: "depthsFull, widthFull, and heightFull must be supplied together",
+    });
+    return;
+  }
+
+  if (hasFullGrid && body.widthFull !== undefined && body.heightFull !== undefined) {
+    const fullDepths = body.depthsFull;
+    if (!fullDepths) return;
+    if (body.widthFull * body.heightFull > CLASSIFY_MAX_FULL_GRID_AREA) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["depthsFull"],
+        message: `depthsFull exceeds the maximum grid area of ${CLASSIFY_MAX_FULL_GRID_AREA} cells`,
+      });
+    }
+    if (fullDepths.length !== body.widthFull * body.heightFull) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["depthsFull"],
+        message: "depthsFull length must equal widthFull × heightFull",
+      });
+    }
+  }
 });
 
 router.post("/classify", validateBody(ClassifyBodySchema, "POST /api/poe/classify"), asyncHandler(async (req, res) => {

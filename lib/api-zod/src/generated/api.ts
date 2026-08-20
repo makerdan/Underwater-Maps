@@ -3492,18 +3492,30 @@ export const HealthCheckResponse = zod.object({
  * Sends a depth grid image to Poe AI and returns 1024 zone labels (32×32 coarse grid)
  * @summary Classify terrain zones via AI
  */
+export const poeClassifyBodyGridBase64Max = 4000000;
+
+
+export const poeClassifyBodyGridBase64RegExp = new RegExp('^data:image\\\/(png|jpeg);base64,[A-Za-z0-9+\\\/]\*={0,2}$');
 export const poeClassifyBodyWaterTypeDefault = `saltwater`;
+export const poeClassifyBodyDepths32Min = 1024;
+export const poeClassifyBodyDepths32Max = 1024;
+
+export const poeClassifyBodyWidthFullMax = 512;
+
+export const poeClassifyBodyHeightFullMax = 512;
+
+
 
 export const PoeClassifyBody = zod.object({
-  "gridBase64": zod.string().describe('Base64-encoded PNG data URL of the 256×256 depth grid'),
+  "gridBase64": zod.string().max(poeClassifyBodyGridBase64Max).regex(poeClassifyBodyGridBase64RegExp).describe('Base64-encoded PNG or JPEG data URL; encoded limit 4,000,000 bytes and decoded payload limit 3,000,000 bytes'),
   "waterType": zod.enum(['saltwater', 'freshwater']).default(poeClassifyBodyWaterTypeDefault),
   "datasetId": zod.string().optional().describe('Dataset identifier used for cache keying'),
   "gridHash": zod.string().optional().describe('Client-computed FNV-1a 32-bit hash of the depth grid (8-char hex)'),
-  "depths32": zod.array(zod.number()).optional().describe('Optional 1024-length (32×32 row-major) downsample of the depth grid in metres.\nUsed by the server as input for the depth-based fallback classifier when the\nAI call fails. Not used when the AI call succeeds.\n'),
+  "depths32": zod.array(zod.number()).min(poeClassifyBodyDepths32Min).max(poeClassifyBodyDepths32Max).optional().describe('Optional 1024-length (32×32 row-major) downsample of the depth grid in metres.\nUsed by the server as input for the depth-based fallback classifier when the\nAI call fails. Not used when the AI call succeeds.\n'),
   "depthsFull": zod.array(zod.number()).optional().describe('Optional full-resolution row-major depth grid (length widthFull\*heightFull).\nWhen provided the server may split the area into multiple overlapping 32×32\ntiles, classify each at the existing per-call resolution, and stitch the\nresults so high-resolution datasets preserve detail instead of being\ncollapsed into a single thumbnail.\n'),
-  "widthFull": zod.number().optional().describe('Width of `depthsFull` in cells. Required when `depthsFull` is set.'),
-  "heightFull": zod.number().optional().describe('Height of `depthsFull` in cells. Required when `depthsFull` is set.')
-})
+  "widthFull": zod.number().min(1).max(poeClassifyBodyWidthFullMax).optional().describe('Width of `depthsFull` in cells. Required when `depthsFull` is set.'),
+  "heightFull": zod.number().min(1).max(poeClassifyBodyHeightFullMax).optional().describe('Height of `depthsFull` in cells. Required when `depthsFull` is set.')
+}).describe('Classification accepts PNG or JPEG base64 data URLs only. The complete\ndata URL is limited to 4,000,000 encoded bytes and its decoded image\npayload is limited to 3,000,000 bytes. Full grids use positive safe\ninteger dimensions up to 512 cells per side and 262,144 cells total;\ndepthsFull must contain exactly widthFull\*heightFull finite numbers.\ndepths32 is the optional 1,024-value (32×32) fallback grid and must\ncontain exactly 1,024 finite numbers.\n')
 
 export const PoeClassifyResponse = zod.object({
   "zones": zod.array(zod.string()).describe('Zone labels in row-major order. Length is `coarseWidth\*coarseHeight`,\nwhich defaults to 1024 (32×32) for the single-tile path and grows for\ntiled high-resolution datasets.\n'),
