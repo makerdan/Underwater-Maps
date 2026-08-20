@@ -49,6 +49,7 @@
     "check:e2e-cjs-globals": "bash scripts/check-e2e-cjs-globals.sh",
     "check:fixture-freshness": "bash artifacts/api-server/src/__tests__/fixtures/check-fixture-freshness.sh",
     "check:schema-stale": "node --test scripts/__tests__/check-schema-drift.test.mjs && node scripts/check-schema-drift.mjs",
+    "check:api-route-schema-drift": "node scripts/check-api-route-schema-drift.mjs",
     "check:port-drift": "node scripts/check-port-drift.mjs",
     "check:audit": "node scripts/check-audit.mjs",
     "check:bare-pino-http-mock": "node scripts/check-bare-pino-http-mock.mjs",

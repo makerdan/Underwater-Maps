@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import request from "supertest";
+import { createCompleteDbMock } from "./helpers/api-zod-mock.js";
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 
@@ -46,7 +47,7 @@ vi.mock("@workspace/db", () => {
     }),
   });
 
-  return {
+  return createCompleteDbMock({
     db: { select, delete: del },
     markersTable,
     catchEntriesTable,
@@ -65,10 +66,12 @@ vi.mock("@workspace/db", () => {
     trollingPresetsTable: { __tableName: "trolling_presets" as const },
     gpsTrailsTable: { __tableName: "gps_trails" as const },
     gpsTrailPointsTable: { __tableName: "gps_trail_points" as const },
-  };
+  });
 });
 
-vi.mock("@workspace/api-zod", () => {
+vi.mock("@workspace/api-zod", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/api-zod")>();
+  const { createApiZodMock } = await import("./helpers/api-zod-mock.js");
   const noErr = { issues: [] } as const;
   const uuidParse = (key: string) => ({
     safeParse: (p: Record<string, unknown>) => {
@@ -79,7 +82,7 @@ vi.mock("@workspace/api-zod", () => {
     },
   });
 
-  return {
+  return createApiZodMock(actual, {
     GetMarkersQueryParams: { safeParse: () => ({ success: false, error: noErr }) },
     PostMarkersBody: { safeParse: () => ({ success: false, error: { issues: [], message: "noop" } }) },
     PatchMarkersIdParams: uuidParse("id"),
@@ -164,7 +167,7 @@ vi.mock("@workspace/api-zod", () => {
     GetDatasetsIdPreviewResponse: { parse: (x: unknown) => x },
     GetTerrainDownloadInfoResponse: { parse: (x: unknown) => x },
     GetUploadJobStatusResponse: { parse: (x: unknown) => x },
-  };
+  });
 });
 
 const deletedObjectPaths: string[] = [];

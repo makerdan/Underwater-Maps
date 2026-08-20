@@ -16,6 +16,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+import { createCompleteDbMock } from "./helpers/api-zod-mock.js";
 
 // No factory — Vitest resolves this to src/lib/__mocks__/logger.ts, which
 // provides a recursive child() mock matching real pino behaviour (including
@@ -99,7 +100,7 @@ vi.mock("@workspace/db", () => {
     where: () => Promise.resolve([]),
   });
 
-  return {
+  return createCompleteDbMock({
     db: {
       select,
       insert,
@@ -120,7 +121,7 @@ vi.mock("@workspace/db", () => {
     trollingPresetFoldersTable: {},
     poeUsageLogTable: {},
     pool: {},
-  };
+  });
 });
 
 let currentUserId: string | null = "user-a";
@@ -149,7 +150,8 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("@workspace/api-zod", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@workspace/api-zod")>();
-  return {
+  const { createApiZodMock } = await import("./helpers/api-zod-mock.js");
+  return createApiZodMock(actual, {
     ...actual,
     GetRoutesResponse: { parse: (x: unknown) => x },
     GetRoutesResponseItem: { parse: (x: unknown) => x },
@@ -184,7 +186,7 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
     GetDatasetsIdPreviewResponse: { parse: (x: unknown) => x },
     GetTerrainDownloadInfoResponse: { parse: (x: unknown) => x },
     GetUploadJobStatusResponse: { parse: (x: unknown) => x },
-  };
+  });
 });
 
 import app from "../../app.js";

@@ -19,6 +19,10 @@ import {
   PostDatasetsBboxQueryBody,
   PostTrailsBody,
   DeepHealthCheckResponse,
+  GetRoutesQuerySchema,
+  PostRouteBodySchema,
+  RouteIdParamSchema,
+  PatchRouteBodySchema,
 } from "../index.js";
 
 // ---------------------------------------------------------------------------
@@ -606,6 +610,39 @@ describe("marker label/notes limits — POST and PATCH must be equal", () => {
 
   it("notes max is the same for PostMarkersBody and PatchMarkersIdBody", () => {
     expect(postMarkersBodyNotesMax).toBe(patchMarkersIdBodyNotesMax);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Route-facing schema contract — keep handler validation executable.
+//
+// These are the schemas passed directly to validateQuery/validateParams/
+// validateBody in the route handlers. The assertions deliberately exercise
+// both sides of each boundary so a generated-schema rename or accidental
+// relaxation fails in the api-zod fast tier, before route tests are run.
+// ---------------------------------------------------------------------------
+
+describe("route-facing schemas", () => {
+  it("accepts and rejects the declared routes query shape", () => {
+    expect(GetRoutesQuerySchema.safeParse({ datasetId: "ds-1" }).success).toBe(true);
+    expect(GetRoutesQuerySchema.safeParse({}).success).toBe(false);
+  });
+
+  it("enforces route id and route body contracts", () => {
+    expect(RouteIdParamSchema.safeParse({ id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }).success).toBe(true);
+    expect(RouteIdParamSchema.safeParse({ id: "not-a-uuid" }).success).toBe(false);
+    expect(PostRouteBodySchema.safeParse({
+      datasetId: "ds-1",
+      name: "Morning drift",
+      waypoints: [
+        { lon: -122, lat: 37, depth: 10 },
+        { lon: -122.1, lat: 37.1, depth: 20 },
+      ],
+      totalDistanceM: 100,
+    }).success).toBe(true);
+    expect(PostRouteBodySchema.safeParse({ name: "" }).success).toBe(false);
+    expect(PatchRouteBodySchema.safeParse({ name: "Renamed" }).success).toBe(true);
+    expect(PatchRouteBodySchema.safeParse({ name: "" }).success).toBe(false);
   });
 });
 

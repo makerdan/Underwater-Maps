@@ -175,6 +175,9 @@ jobs:
       - name: 'check:testdb-schema-drift'
         run: pnpm run check:testdb-schema-drift
 
+      - name: 'check:api-route-schema-drift'
+        run: pnpm run check:api-route-schema-drift
+
       - name: 'check:runbutton-noop'
         run: pnpm run check:runbutton-noop
 

@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+import { createCompleteDbMock } from "./helpers/api-zod-mock.js";
 
 // ─── Stateful mock control ─────────────────────────────────────────────────────
 const state: {
@@ -53,7 +54,7 @@ const state: {
   shouldThrowOnMarkerUpdate: false,
 };
 
-vi.mock("@workspace/db", () => ({
+vi.mock("@workspace/db", () => createCompleteDbMock({
   db: {
     select: () => ({
       from: (tbl: Record<string, unknown>) => {
@@ -159,7 +160,8 @@ vi.mock("@workspace/db", () => ({
 
 vi.mock("@workspace/api-zod", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@workspace/api-zod")>();
-  return {
+  const { createApiZodMock } = await import("./helpers/api-zod-mock.js");
+  return createApiZodMock(actual, {
   ...actual,
   GetUserDatasetsResponse: { parse: (x: unknown) => x },
   GetUserDatasetsIdTerrainResponse: { parse: (x: unknown) => x },
@@ -254,7 +256,7 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
   GetDatasetsIdPreviewResponse: { parse: (x: unknown) => x },
   GetTerrainDownloadInfoResponse: { parse: (x: unknown) => x },
   GetUploadJobStatusResponse: { parse: (x: unknown) => x },
-};
+  });
 });
 
 vi.mock("@clerk/express", () => ({

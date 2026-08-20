@@ -13,6 +13,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
+import { createCompleteDbMock } from "./helpers/api-zod-mock.js";
 
 const state = {
   markerRows: [] as Array<{ id: string }>,
@@ -74,7 +75,7 @@ vi.mock("@workspace/db", () => {
     }),
   });
 
-  return {
+  return createCompleteDbMock({
     db: { select, insert, update, delete: del },
     markersTable,
     catchEntriesTable,
@@ -93,13 +94,14 @@ vi.mock("@workspace/db", () => {
     trollingPresetsTable: { __tableName: "trolling_presets" as const },
     gpsTrailsTable: { __tableName: "gps_trails" as const },
     gpsTrailPointsTable: { __tableName: "gps_trail_points" as const },
-  };
+  });
 });
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 
 vi.mock("@workspace/api-zod", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@workspace/api-zod")>();
+  const { createApiZodMock } = await import("./helpers/api-zod-mock.js");
   const noErr = { issues: [] } as const;
   const uuidParse = (key: string) => ({
     safeParse: (p: Record<string, unknown>) => {
@@ -201,7 +203,7 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
     GetTerrainDownloadInfoResponse: { parse: (x: unknown) => x },
     GetUploadJobStatusResponse: { parse: (x: unknown) => x },
   };
-  return { ...actual, ...overrides };
+  return createApiZodMock(actual, overrides);
 });
 
 const aclCalls: Array<{ path: string; owner: string }> = [];

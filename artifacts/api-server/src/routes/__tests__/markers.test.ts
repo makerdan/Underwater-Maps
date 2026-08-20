@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import request from "supertest";
+import { createCompleteDbMock } from "./helpers/api-zod-mock.js";
 
 const state: { throwOnSelect: boolean } = { throwOnSelect: false };
 
@@ -29,7 +30,7 @@ vi.mock("@workspace/db", () => {
     }),
   });
 
-  return {
+  return createCompleteDbMock({
     db: { select },
     markersTable,
     catchEntriesTable: { __tableName: "catch_entries" as const, id: "id", markerId: "markerId", userId: "userId", createdAt: "createdAt", photos: "photos" },
@@ -48,12 +49,14 @@ vi.mock("@workspace/db", () => {
     trollingPresetsTable: { __tableName: "trolling_presets" as const },
     gpsTrailsTable: { __tableName: "gps_trails" as const },
     gpsTrailPointsTable: { __tableName: "gps_trail_points" as const },
-  };
+  });
 });
 
-vi.mock("@workspace/api-zod", () => {
+vi.mock("@workspace/api-zod", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/api-zod")>();
+  const { createApiZodMock } = await import("./helpers/api-zod-mock.js");
   const noErr = { issues: [] } as const;
-  return {
+  return createApiZodMock(actual, {
     GetMarkersQueryParams: {
       safeParse: (q: Record<string, unknown>) =>
         q["datasetId"]
@@ -146,7 +149,7 @@ vi.mock("@workspace/api-zod", () => {
     GetDatasetsIdPreviewResponse: { parse: (x: unknown) => x },
     GetTerrainDownloadInfoResponse: { parse: (x: unknown) => x },
     GetUploadJobStatusResponse: { parse: (x: unknown) => x },
-  };
+  });
 });
 
 vi.mock("@clerk/express", () => ({
