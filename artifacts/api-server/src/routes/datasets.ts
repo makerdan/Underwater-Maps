@@ -1688,13 +1688,15 @@ const PresetIdParamSchema = z
   .min(1)
   .max(128)
   .regex(/^[a-zA-Z0-9_-]+$/, "Preset id must contain only alphanumeric characters, hyphens, or underscores");
-  const idParsed = DatasetIdParamSchema.safeParse(req.params["id"]);
+
+router.delete("/datasets/presets/:id", requireAuth, asyncHandler(async (req, res): Promise<void> => {
+  const idParsed = PresetIdParamSchema.safeParse(req.params["id"]);
   if (!idParsed.success) {
     logger.warn(
-      { route: "GET /api/datasets/:id/preview", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
-      "GET /api/datasets/:id/preview — Zod params validation failed",
+      { route: "DELETE /api/datasets/presets/:id", issues: idParsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+      "DELETE /api/datasets/presets/:id — Zod params validation failed",
     );
-    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid dataset id" });
+    res.status(400).json({ error: "invalid_param", details: idParsed.error.issues[0]?.message ?? "Invalid preset id" });
     return;
   }
   const id = idParsed.data;
