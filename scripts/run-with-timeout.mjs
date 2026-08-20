@@ -122,6 +122,36 @@ function captureLoadContext() {
 }
 
 let breached = false;
+let shuttingDown = false;
+let shutdownTimer;
+
+/**
+ * Stop the detached child process group when this wrapper is interrupted.
+ * Nested timeout wrappers each receive the signal and clean up their own
+ * descendants. Keep this idempotent because SIGTERM/SIGINT can arrive while
+ * the group is already being torn down.
+ */
+function handleShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  clearTimeout(timer);
+  const exitCode = signal === "SIGINT" ? 130 : 143;
+  try {
+    process.kill(-child.pid, "SIGTERM");
+  } catch { /* child group already gone */ }
+  shutdownTimer = setTimeout(() => {
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch { /* child group already gone */ }
+    process.exit(exitCode);
+  }, 10_000);
+  shutdownTimer.unref();
+  child.once("exit", () => process.exit(exitCode));
+}
+
+process.once("SIGTERM", () => handleShutdown("SIGTERM"));
+process.once("SIGINT", () => handleShutdown("SIGINT"));
+
 const timer = setTimeout(() => {
   breached = true;
   const loadCtx = captureLoadContext();
@@ -174,6 +204,8 @@ timer.unref();
 
 child.on("exit", (code, signal) => {
   clearTimeout(timer);
+  if (shutdownTimer) clearTimeout(shutdownTimer);
+  if (shuttingDown) return;
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);
   if (breached) {
     console.error(`[timeout-guard] killed after budget breach (ran ${elapsed}s)`);

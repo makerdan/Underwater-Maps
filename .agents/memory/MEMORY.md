@@ -124,3 +124,5 @@
 - [New route module checklist](new-route-module-checklist.md) — mounting a new api-server router breaks wholesale api-zod mocks (add new exports) and the router-duplicate-route-guard ROUTERS list; sweep both in one pass.
 - [Approval gate bootstrap](approval-gate-bootstrap.md) — an admin-list fix does not rewrite an existing pending row; distinguish admin bypass configuration from the stored development approval state.
 - [Rolldown manual-chunk dependency merging](rolldown-manual-chunk-merging.md) — grouping R3F/Drei manually can absorb shared Three and make the renderer static; verify the emitted entry closure, not chunk names.
+- [PWA bundle guard sees stale dist assets](pwa-bundle-stale-dist.md) — bundle tests preserve dist/public, so Workbox can fail on an obsolete oversized hash even when the current entry is under 2 MiB.
+- [Timeout-wrapper test readiness](timeout-wrapper-test-readiness.md) — nested process cleanup tests need explicit readiness polling under concurrent validation load.

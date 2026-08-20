@@ -49,6 +49,14 @@
     "fileBudgetMs": 60000,
     "runBudgetMs": 120000
   },
+  "scriptsUnit": {
+    "$comment": "Direct budget for the scripts workspace Node test suite, including validation-lock and runner self-tests.",
+    "runBudgetMs": 180000
+  },
+  "rootUnit": {
+    "$comment": "Absolute deadline for the recursive root test:unit command. Package-level guards still enforce their individual budgets inside this window.",
+    "runBudgetMs": 2700000
+  },
   "aggregate": {
     "$comment": "Covers the whole heavy run: preflight standard tier minus test:unit (typecheck ~3 min + lint ~2 min + docs/catalog/schema checks ~1 min) + test:unit for all packages (~25-30 min, no per-step budget — covered here) + e2e-palette + test:e2e. Must be sized above the sum of the covered steps' expected durations. Bump here if clean heavy runs start breaching.",
     "totalBudgetMs": 3000000
