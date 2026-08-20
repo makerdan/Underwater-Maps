@@ -408,4 +408,29 @@ describe("terrainStore multi-dataset", () => {
     expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("d");
     expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("e");
   });
+
+  it("activateCollection admits every supplied member while ordinary selection remains capped", () => {
+    useTerrainStore.getState().activateCollection([
+      { datasetId: "upload-1", source: "user" },
+      { datasetId: "catalog-1", source: "preset" },
+      { datasetId: "upload-2", source: "user" },
+      { datasetId: "catalog-2", source: "preset" },
+      { datasetId: "upload-1", source: "user" },
+    ]);
+    let s = useTerrainStore.getState();
+    expect(s.visibleDatasets.map((v) => v.datasetId)).toEqual([
+      "upload-1", "catalog-1", "upload-2", "catalog-2",
+    ]);
+    expect(s.selectedIds).toEqual(["upload-1", "catalog-1", "upload-2", "catalog-2"]);
+    expect(s.visibleDatasets.map((v) => v.source)).toEqual(["user", "preset", "user", "preset"]);
+
+    useTerrainStore.getState().clear();
+    for (const id of ["a", "b", "c", "d"]) {
+      useTerrainStore.getState().addSelected(id, "preset");
+    }
+    s = useTerrainStore.getState();
+    expect(s.visibleDatasets).toHaveLength(MAX_ACTIVE_DATASETS);
+    expect(s.selectedIds).toHaveLength(4);
+    expect(s.visibleDatasets.map((v) => v.datasetId)).not.toContain("d");
+  });
 });

@@ -547,10 +547,17 @@ export const CollectionsSection: React.FC = () => {
     setActivatingId(c.id);
     try {
       const terrain = useTerrainStore.getState();
-      for (const m of c.members) {
+      const entries = c.members.flatMap((m) => {
         const datasetId = memberDatasetId(m);
-        if (datasetId) terrain.addSelected(datasetId, "user");
-      }
+        if (!datasetId) return [];
+        return [{
+          datasetId,
+          // Uploaded collection members are served by /user/datasets, while
+          // materialized catalog saves use the catalogue/preset endpoints.
+          source: m.kind === "dataset" ? "user" as const : "preset" as const,
+        }];
+      });
+      terrain.activateCollection(entries);
       await useSpecialCollectionStore.getState().activateForPuzzle(c);
       useUiStore.getState().setOverviewOpen(true);
     } finally {

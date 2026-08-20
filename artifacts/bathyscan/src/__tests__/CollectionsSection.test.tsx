@@ -85,6 +85,7 @@ const makeApiClientMock = vi.hoisted(() => {
 // ---------------------------------------------------------------------------
 let currentIsSignedIn = true;
 let currentCollections: unknown[] = [];
+let currentSaves: unknown[] = [];
 
 vi.mock(
   "@workspace/api-client-react",
@@ -92,6 +93,13 @@ vi.mock(
     makeApiClientMock({
       useGetUserCollections: () => ({
         data: currentCollections,
+        isFetching: false,
+        isLoading: false,
+        isPending: false,
+        isError: false,
+      }),
+      useGetDatasetsMySaves: () => ({
+        data: currentSaves,
         isFetching: false,
         isLoading: false,
         isPending: false,
@@ -220,6 +228,7 @@ class FakeApiError extends Error {
 beforeEach(() => {
   currentIsSignedIn = true;
   currentCollections = [];
+  currentSaves = [];
   mocks.createMutateAsync.mockReset().mockResolvedValue({ id: "col-new", name: "New", members: [] });
   mocks.renameMutateAsync.mockReset().mockResolvedValue({});
   mocks.deleteMutateAsync.mockReset().mockResolvedValue(undefined);
@@ -415,14 +424,14 @@ describe("CollectionsSection — special collections", () => {
   });
 
   describe("Activate for Puzzle", () => {
-    const origAddSelected = useTerrainStore.getState().addSelected;
+    const origActivateCollection = useTerrainStore.getState().activateCollection;
     afterEach(() => {
-      useTerrainStore.setState({ addSelected: origAddSelected });
+      useTerrainStore.setState({ activateCollection: origActivateCollection });
     });
 
     it("loads members, opens the Overview, and queues the active revision restore", async () => {
-      const addSelected = vi.fn();
-      useTerrainStore.setState({ addSelected });
+      const activateCollection = vi.fn();
+      useTerrainStore.setState({ activateCollection });
       currentCollections = [COLLECTION_SPECIAL];
       renderWithProviders(<CollectionsSection />);
       fireEvent.click(screen.getByTestId("btn-activate-collection-col-sp"));
@@ -431,8 +440,10 @@ describe("CollectionsSection — special collections", () => {
         expect(useSpecialCollectionStore.getState().pendingRestore).not.toBeNull();
       });
       // (a) every member dataset was loaded,
-      expect(addSelected).toHaveBeenCalledWith("ds-1", "user");
-      expect(addSelected).toHaveBeenCalledWith("ds-2", "user");
+      expect(activateCollection).toHaveBeenCalledWith([
+        { datasetId: "ds-1", source: "user" },
+        { datasetId: "ds-2", source: "user" },
+      ]);
       // (b/d) the collection is active (background overlay source of truth),
       const { active } = useSpecialCollectionStore.getState();
       expect(active?.collectionId).toBe("col-sp");
@@ -442,7 +453,7 @@ describe("CollectionsSection — special collections", () => {
     });
 
     it("REGRESSION GUARD: the queued restore yields both tiles with store and canvas views in lockstep", async () => {
-      useTerrainStore.setState({ addSelected: vi.fn() });
+      useTerrainStore.setState({ activateCollection: vi.fn() });
       currentCollections = [COLLECTION_SPECIAL];
       renderWithProviders(<CollectionsSection />);
       fireEvent.click(screen.getByTestId("btn-activate-collection-col-sp"));
@@ -471,6 +482,30 @@ describe("CollectionsSection — special collections", () => {
       // The group round-trips too.
       expect(restored.groups.size).toBe(1);
       expect([...[...restored.groups.values()][0]!].sort()).toEqual(["ds-1", "ds-2"]);
+    });
+
+    it("loads oversized mixed collections with source-specific endpoints and skips unresolved saves", async () => {
+      const activateCollection = vi.fn();
+      useTerrainStore.setState({ activateCollection });
+      currentCollections = [{
+        ...COLLECTION_SPECIAL,
+        members: [
+          { id: "mem-upload", kind: "dataset", refId: "upload-1", name: "Upload", createdAt: "2024-01-01T00:00:00Z" },
+          { id: "mem-save", kind: "catalogSave", refId: "save-materialized", name: "Catalog", createdAt: "2024-01-01T00:00:00Z" },
+          { id: "mem-missing", kind: "catalogSave", refId: "save-missing", name: "Missing", createdAt: "2024-01-01T00:00:00Z" },
+          { id: "mem-four", kind: "dataset", refId: "upload-2", name: "Upload 2", createdAt: "2024-01-01T00:00:00Z" },
+        ],
+      }];
+      currentSaves = [{ id: "save-materialized", datasetId: "catalog-1" }];
+      renderWithProviders(<CollectionsSection />);
+      fireEvent.click(screen.getByTestId("btn-activate-collection-col-sp"));
+
+      await waitFor(() => expect(activateCollection).toHaveBeenCalled());
+      expect(activateCollection).toHaveBeenCalledWith([
+        { datasetId: "upload-1", source: "user" },
+        { datasetId: "catalog-1", source: "preset" },
+        { datasetId: "upload-2", source: "user" },
+      ]);
     });
   });
 

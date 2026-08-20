@@ -215,6 +215,19 @@ interface TerrainStore {
   addSelected: (datasetId: string, source: DatasetSource, dataUpdatedAt?: string | null) => void;
 
   /**
+   * Activate the complete member set of a Special Collection. Unlike ordinary
+   * selection, this deliberately bypasses the active-dataset cap so every
+   * resolvable member can receive an Overview tile.
+   */
+  activateCollection: (
+    entries: Array<{
+      datasetId: string;
+      source: DatasetSource;
+      dataUpdatedAt?: string | null;
+    }>,
+  ) => void;
+
+  /**
    * Add a dataset to the selected pool WITHOUT activating it.
    * Used by the proximity-mode auto-registration effect so that all datasets
    * are enrolled in the proximity pool but none are activated immediately —
@@ -577,6 +590,42 @@ export const useTerrainStore = create<TerrainStore>((set) => ({
         selectedIds: nextSelectedIds,
         selectedSources: nextSelectedSources,
         multiDatasetMode: true,
+      };
+    }),
+
+  activateCollection: (entries) =>
+    set((prev) => {
+      const seen = new Set<string>();
+      const unique = entries.filter((entry) => {
+        if (!entry.datasetId || seen.has(entry.datasetId)) return false;
+        seen.add(entry.datasetId);
+        return true;
+      });
+      const oldById = new Map(prev.visibleDatasets.map((entry) => [entry.datasetId, entry]));
+      const visibleDatasets = unique.map((entry) => {
+        const previous = oldById.get(entry.datasetId);
+        return {
+          datasetId: entry.datasetId,
+          source: entry.source,
+          activeGrid: previous?.activeGrid ?? null,
+          overviewGrid: previous?.overviewGrid ?? null,
+          dataUpdatedAt: entry.dataUpdatedAt ?? previous?.dataUpdatedAt ?? null,
+          geoCorrection: previous?.geoCorrection ?? null,
+        };
+      });
+      const selectedIds = unique.map((entry) => entry.datasetId);
+      const selectedSources = Object.fromEntries(
+        unique.map((entry) => [entry.datasetId, entry.source]),
+      );
+      return {
+        ...prev,
+        visibleDatasets,
+        selectedIds,
+        selectedSources,
+        multiDatasetMode: true,
+        evictedId: null,
+        autoEvictedId: null,
+        ...syncPrimaryGrids(visibleDatasets),
       };
     }),
 
