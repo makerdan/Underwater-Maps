@@ -9,6 +9,15 @@ export interface CachePackMessage {
   type: "CACHE_PACK";
   terrainUrl: string;
   overviewUrl: string;
+  /**
+   * Optional page-fetched response bodies.  The page supplies these for
+   * authenticated datasets so the SW never needs to receive or persist a
+   * reusable bearer token.
+   */
+  terrainBody?: string;
+  overviewBody?: string;
+  terrainContentType?: string;
+  overviewContentType?: string;
 }
 
 /**
@@ -20,10 +29,14 @@ export interface CachePackMessage {
  * exits early without touching the cache.
  */
 export function isCachePackMessage(data: unknown): data is CachePackMessage {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return false;
+  const value = data as Record<string, unknown>;
   return (
-    typeof data === "object" &&
-    data !== null &&
-    (data as Record<string, unknown>)["type"] === "CACHE_PACK"
+    value["type"] === "CACHE_PACK" &&
+    typeof value["terrainUrl"] === "string" &&
+    typeof value["overviewUrl"] === "string" &&
+    (value["terrainBody"] === undefined || typeof value["terrainBody"] === "string") &&
+    (value["overviewBody"] === undefined || typeof value["overviewBody"] === "string")
   );
 }
 

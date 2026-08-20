@@ -15,6 +15,7 @@ import {
 
 /** The cache name used for persisting offline pack terrain/overview tiles. */
 export const PACK_TERRAIN_CACHE_NAME = "bathyscan-pack-terrain";
+export const CACHE_PACK_FETCH_TIMEOUT_MS = 120_000;
 
 /**
  * Minimal event shape the handler needs — matches ExtendableMessageEvent but
@@ -42,18 +43,46 @@ export function handleCachePackMessage(event: MessageEventLike): void {
       const port = event.ports[0];
       try {
         const cache = await caches.open(PACK_TERRAIN_CACHE_NAME);
+        const fetchResponse = async (
+          url: string,
+          body: string | undefined,
+          contentType: string | undefined,
+        ): Promise<Response> => {
+          if (body !== undefined) {
+            return new Response(body, {
+              status: 200,
+              headers: { "Content-Type": contentType ?? "application/json" },
+            });
+          }
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`${url === raw.terrainUrl ? "Terrain" : "Overview"} HTTP ${response.status}`);
+          }
+          return response;
+        };
+        const [terrain, overview] = await Promise.all([
+          fetchResponse(raw.terrainUrl, raw.terrainBody, raw.terrainContentType),
+          fetchResponse(raw.overviewUrl, raw.overviewBody, raw.overviewContentType),
+        ]);
+        if (!terrain.ok || !overview.ok) {
+          throw new Error("Terrain or overview response was not cacheable");
+        }
         await Promise.all([
-          fetch(raw.terrainUrl).then((r): Promise<void> => {
-            if (r.ok) return cache.put(raw.terrainUrl, r);
-            return Promise.resolve();
-          }),
-          fetch(raw.overviewUrl).then((r): Promise<void> => {
-            if (r.ok) return cache.put(raw.overviewUrl, r);
-            return Promise.resolve();
-          }),
+          cache.put(raw.terrainUrl, terrain.clone?.() ?? terrain),
+          cache.put(raw.overviewUrl, overview.clone?.() ?? overview),
         ]);
         port?.postMessage({ ok: true });
       } catch (err) {
+        // A failed second write must not leave a misleading half-pack behind.
+        try {
+          const cache = await caches.open(PACK_TERRAIN_CACHE_NAME);
+          await Promise.all([
+            cache.delete(raw.terrainUrl),
+            cache.delete(raw.overviewUrl),
+          ]);
+        } catch {
+          // Cleanup is best-effort; preserve the useful original error.
+        }
         port?.postMessage({ ok: false, error: String(err) });
       }
     })(),

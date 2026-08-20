@@ -8,6 +8,7 @@
 import { get, set, del, keys } from "idb-keyval";
 import type { Marker } from "@workspace/api-client-react";
 import { authorizedFetch } from "./authorizedFetch";
+import { CACHE_PACK_FETCH_TIMEOUT_MS } from "./swMessageHandler";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const PACK_KEY_PREFIX = "offline-pack-";
@@ -145,12 +146,73 @@ function newId(): string {
 
 // ─── Tell the SW to cache terrain into the persistent pack cache ──────────────
 
+const SERVICE_WORKER_READY_TIMEOUT_MS = 15_000;
+export const OFFLINE_PACK_SW_READY_TIMEOUT_MS = SERVICE_WORKER_READY_TIMEOUT_MS;
+const CUSTOM_DATASET_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<void> {
-  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
-  const reg = await navigator.serviceWorker.ready;
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+    throw new Error("Service worker unavailable — cannot save terrain for offline use");
+  }
+
+  const reg = await withTimeout(
+    navigator.serviceWorker.ready,
+    SERVICE_WORKER_READY_TIMEOUT_MS,
+    "Service worker readiness timed out — cannot cache terrain for offline use",
+  );
   if (!reg.active) {
     throw new Error("Service worker not active — cannot cache terrain for offline use");
   }
+
+  // Fetch in the page context so Clerk authorization is applied to private
+  // uploaded datasets. Only response data crosses the worker boundary. A
+  // relative-URL parse failure is limited to non-browser test doubles; in a
+  // browser it is never expected and the SW's legacy fetch path remains useful
+  // for older callers.
+  let responsePayload:
+    | {
+        terrainBody: string;
+        overviewBody: string;
+        terrainContentType?: string;
+        overviewContentType?: string;
+      }
+    | undefined;
+  if (CUSTOM_DATASET_UUID_RE.test(terrainUrl.split("/").at(-2) ?? "")) {
+    const [terrainResponse, overviewResponse] = await Promise.all([
+      authorizedFetch(terrainUrl),
+      authorizedFetch(overviewUrl),
+    ]);
+    if (!terrainResponse.ok) throw new Error(`Terrain HTTP ${terrainResponse.status}`);
+    if (!overviewResponse.ok) throw new Error(`Overview HTTP ${overviewResponse.status}`);
+    const [terrainBody, overviewBody] = await Promise.all([
+      typeof terrainResponse.text === "function" ? terrainResponse.text() : Promise.resolve(""),
+      typeof overviewResponse.text === "function" ? overviewResponse.text() : Promise.resolve(""),
+    ]);
+    responsePayload = {
+      terrainBody,
+      overviewBody,
+      terrainContentType: terrainResponse.headers?.get?.("Content-Type") ?? undefined,
+      overviewContentType: overviewResponse.headers?.get?.("Content-Type") ?? undefined,
+    };
+  }
+
   return new Promise<void>((resolve, reject) => {
     // Track whether the SW sent a successful ack before the timeout fires.
     // If the SW is absent (dev build, update race, browser restriction) the
@@ -158,26 +220,33 @@ async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<vo
     // that case masks a real failure — the terrain is never cached and the pack
     // will fail when the device goes offline.  Rejecting instead lets the
     // caller surface a visible warning through onProgress.
-    let ackReceived = false;
+    let settled = false;
 
     const channel = new MessageChannel();
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        channel.port1.close?.();
+        reject(new Error("SW CACHE_PACK timed out — terrain may not be cached for offline use"));
+      }
+    }, CACHE_PACK_FETCH_TIMEOUT_MS);
     channel.port1.onmessage = (e: MessageEvent<{ ok: boolean; error?: string }>) => {
-      ackReceived = true;
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      channel.port1.close?.();
       if (e.data.ok) resolve();
       else reject(new Error(e.data.error ?? "SW CACHE_PACK failed"));
     };
     reg.active!.postMessage(
-      { type: "CACHE_PACK", terrainUrl, overviewUrl },
+      {
+        type: "CACHE_PACK",
+        terrainUrl,
+        overviewUrl,
+        ...responsePayload,
+      },
       [channel.port2],
     );
-    // 2-minute timeout: mobile networks can take well over 10 s to download a
-    // multi-MB terrain JSON.  The previous 10 s budget caused spurious
-    // "timed out" rejections on first downloads over slow connections.
-    setTimeout(() => {
-      if (!ackReceived) {
-        reject(new Error("SW CACHE_PACK timed out — terrain may not be cached for offline use"));
-      }
-    }, 120_000);
   });
 }
 

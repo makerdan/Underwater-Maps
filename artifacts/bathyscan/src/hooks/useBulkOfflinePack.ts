@@ -232,17 +232,21 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
           // ── SW integrity probe ────────────────────────────────────────
           let warning: string | null = null;
           try {
-            const probeRes = await fetch(pack.terrainUrl, {
+            const probeInit: RequestInit = {
               headers: { "x-serve-from-pack": "1" },
               cache: "no-store",
-            });
-            if (!probeRes.ok) {
+            };
+            const [terrainProbe, overviewProbe] = await Promise.all([
+              fetch(pack.terrainUrl, probeInit),
+              fetch(pack.overviewUrl, probeInit),
+            ]);
+            if (!terrainProbe.ok || !overviewProbe.ok) {
               warning =
-                "Cached but unverified — SW may not be active. Terrain may not be available offline.";
+                "Cached but unverified — SW may not be active. Terrain or overview may not be available offline.";
             }
           } catch {
             warning =
-              "Cached but unverified — SW may not be active. Terrain may not be available offline.";
+              "Cached but unverified — SW may not be active. Terrain or overview may not be available offline.";
           }
 
           // ── Tide-expiry warning ────────────────────────────────────────
