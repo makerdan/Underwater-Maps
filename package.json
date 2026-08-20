@@ -7,6 +7,7 @@
     "postinstall": "pnpm --filter @workspace/api-spec run codegen:generate",
     "prepare": "git config core.hooksPath .githooks || true",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "check:production-build": "env -u PORT -u BASE_PATH NODE_ENV=production pnpm run build",
     "typecheck:libs": "tsc --build",
     "check:codegen": "pnpm --filter @workspace/api-spec run check:codegen",
     "check:codegen-stale": "node scripts/check-codegen-stale.mjs",

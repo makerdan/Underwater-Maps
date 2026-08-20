@@ -208,6 +208,9 @@ jobs:
       - name: 'check:ports'
         run: pnpm run check:ports
 
+      - name: 'check:production-build'
+        run: pnpm run check:production-build
+
       - name: 'check:audit'
         run: pnpm run check:audit
 

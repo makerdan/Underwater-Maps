@@ -160,6 +160,7 @@ export const GITHUB_CI_COVERAGE = {
   "check:fixture-freshness": { tokens: ["pnpm run check:fixture-freshness"] },
   "check:ports": { tokens: ["pnpm run check:ports"] },
   "check:port-drift": { tokens: ["pnpm run check:port-drift"] },
+  "check:production-build": { tokens: ["pnpm run check:production-build"] },
   "check:audit": { tokens: ["pnpm run check:audit"] },
   "check:bare-pino-http-mock": { tokens: ["pnpm run check:bare-pino-http-mock"] },
   "check:trip-window-raw-units": { tokens: ["pnpm run check:trip-window-raw-units"] },

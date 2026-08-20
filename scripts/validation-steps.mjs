@@ -139,6 +139,9 @@ export function getValidationSteps(logPrefix) {
     // no resource: pure static analysis of entry-point port wiring (Vite config,
     // API bootstrap, Playwright URLs)
     { name: "check:port-drift", resource: null, cmd: "pnpm run check:port-drift", tiers: FULL },
+    // Root build runs typecheck/codegen before recursively building BathyScan,
+    // the API server, and Canvas, so serialize it with other codegen writers.
+    { name: "check:production-build", resource: "codegen", cmd: "pnpm run check:production-build", tiers: FULL },
     { name: "check:audit", resource: null, cmd: "pnpm run check:audit", tiers: FULL },
     // no resource: pure grep scan, sub-second
     { name: "check:bare-pino-http-mock", resource: null, cmd: "pnpm run check:bare-pino-http-mock", tiers: FULL },
