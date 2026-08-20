@@ -433,6 +433,14 @@ describe("mn-dnr-bathy source", () => {
     expect(DATASET_SOURCE_PRIORITY["fw-mille-lacs-lake-mn"]?.[0]).toBe("mn-dnr-bathy");
   });
 
+  it.each([
+    ["fw-leech-lake-mn", "Leech Lake"],
+    ["fw-red-lake-mn", "Red Lake"],
+    ["fw-lake-of-the-woods-mn", "Lake of the Woods"],
+  ])("is the top-ranked source for %s (%s)", (datasetId) => {
+    expect(DATASET_SOURCE_PRIORITY[datasetId]?.[0]).toBe("mn-dnr-bathy");
+  });
+
   it("fw-lake-minnetonka-mn falls back to usgs-3dep then gebco", () => {
     const priority = DATASET_SOURCE_PRIORITY["fw-lake-minnetonka-mn"] ?? [];
     expect(priority).toContain("usgs-3dep");

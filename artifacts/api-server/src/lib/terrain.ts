@@ -1030,9 +1030,9 @@ export const DATASET_SOURCE_PRIORITY: Record<string, BathymetrySourceId[]> = {
   // ---------------------------------------------------------------------------
   "fw-lake-minnetonka-mn": ["mn-dnr-bathy", "usgs-3dep", "gebco"],
   "fw-mille-lacs-lake-mn": ["mn-dnr-bathy", "usgs-3dep", "gebco"],
-  "fw-leech-lake-mn": ["usgs-3dep", "gebco"],
-  "fw-red-lake-mn": ["usgs-3dep", "gebco"],
-  "fw-lake-of-the-woods-mn": ["usgs-3dep", "gebco"],
+  "fw-leech-lake-mn": ["mn-dnr-bathy", "usgs-3dep", "gebco"],
+  "fw-red-lake-mn": ["mn-dnr-bathy", "usgs-3dep", "gebco"],
+  "fw-lake-of-the-woods-mn": ["mn-dnr-bathy", "usgs-3dep", "gebco"],
   "fw-lake-winnebago-wi": ["usgs-3dep", "gebco"],
   "fw-gull-lake-mi": ["usgs-3dep", "gebco"],
   // ---------------------------------------------------------------------------

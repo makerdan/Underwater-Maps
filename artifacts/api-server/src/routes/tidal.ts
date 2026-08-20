@@ -590,8 +590,8 @@ const TIDAL_RESULT_ESTIMATED_TTL_MS = 2 * 60 * 1000;
 const freshwaterResultCache = new Map<string, { body: TidalResponse; ts: number }>();
 /** How long freshwater cache entries remain "fresh" before re-fetching (10 min). */
 const FRESHWATER_RESULT_TTL_MS = 10 * 60 * 1000;
-/** How long a stale freshwater entry can be served as a fallback (2 hours). */
-const FRESHWATER_STALE_TTL_MS = 2 * 60 * 60 * 1000;
+/** How long a stale freshwater entry can be served as a fallback (30 minutes). */
+const FRESHWATER_STALE_TTL_MS = 30 * 60 * 1000;
 
 registerCache(() => {
   tidalResultCache.clear();

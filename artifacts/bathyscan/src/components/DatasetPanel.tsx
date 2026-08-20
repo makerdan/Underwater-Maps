@@ -196,6 +196,42 @@ const CYAN: React.CSSProperties = {
   textShadow: "0 0 6px rgba(0,229,255,0.5)",
 };
 
+const BathymetryAttribution: React.FC<{ dataSource?: string }> = ({ dataSource }) => {
+  const credit =
+    dataSource === "nysdec"
+      ? {
+          label: "NYSDEC Lake Bathymetry",
+          href: "https://data.gis.ny.gov/datasets/bff954401b5641a2a920482532b7a0ae_0/about",
+        }
+      : dataSource === "mn-dnr"
+        ? {
+            label: "MN DNR Lake Bathymetry",
+            href: "https://www.dnr.state.mn.us/lakefind/index.html",
+          }
+        : null;
+  if (!credit) return null;
+  return (
+    <div
+      data-testid="bathymetry-agency-attribution"
+      style={{
+        padding: "4px 10px 6px",
+        color: "#94a3b8",
+        fontSize: "calc(12px * var(--bs-font-scale, 1))",
+      }}
+    >
+      Source:{" "}
+      <a
+        href={credit.href}
+        target="_blank"
+        rel="noreferrer"
+        style={{ color: "#7dd3fc", textDecoration: "underline" }}
+      >
+        {credit.label}
+      </a>
+    </div>
+  );
+};
+
 function formatEta(seconds: number | null): string | null {
   if (seconds === null || seconds <= 0) return null;
   if (seconds < 5) return "Almost done…";
@@ -3024,6 +3060,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
           }}>
             <WaterTypeToggle />
           </div>
+          <BathymetryAttribution dataSource={terrain?.dataSource} />
           {/* ── MY LIBRARY section (preset datasets + user library) ── */}
           <div style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}>
             <div style={{ display: "flex", alignItems: "center" }}>

@@ -516,6 +516,49 @@ describe("GET /tidal?waterType=freshwater", () => {
     expect(res.body.slack).toBeUndefined();
   });
 
+  it("serves the last USGS reading as stale data during a brief outage", async () => {
+    vi.useFakeTimers();
+    try {
+      const gage = {
+        value: {
+          timeSeries: [{
+            sourceInfo: {
+              siteName: "Wisconsin River at Portage, WI",
+              siteCode: [{ value: "05407000" }],
+              geoLocation: { geogLocation: { latitude: 43.5422, longitude: -89.47 } },
+            },
+            values: [{ value: [{ value: "4.23" }] }],
+          }],
+        },
+      };
+      fetchSpy.mockResolvedValueOnce(jsonResponse({ stations: [] }))
+        .mockResolvedValueOnce(jsonResponse({ stations: [] }))
+        .mockResolvedValueOnce(jsonResponse(gage));
+
+      const app = makeApp();
+      const warm = await request(app).get(
+        "/tidal?lat=43.55&lon=-89.47&datetime=2026-07-20T12:00:00Z&waterType=freshwater",
+      );
+      expect(warm.body).toMatchObject({ available: true, source: "usgs", tideHeight: 4.23 });
+
+      vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+      fetchSpy.mockRejectedValue(new Error("USGS outage"));
+      const stale = await request(app).get(
+        "/tidal?lat=43.55&lon=-89.47&datetime=2026-07-20T12:00:00Z&waterType=freshwater",
+      );
+      expect(stale.status).toBe(200);
+      expect(stale.body).toMatchObject({
+        available: true,
+        source: "usgs",
+        tideHeight: 4.23,
+        isStale: true,
+      });
+      expect(stale.body.cachedAt).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("uses compatible NOAA observations without synthesizing missing freshwater fields", async () => {
     const station = {
       id: "9087088",

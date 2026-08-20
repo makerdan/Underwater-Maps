@@ -168,6 +168,26 @@ describe("arcGisRestFetcher.probe — ArcGIS JSON shape validation", () => {
     expect(consoleSpy).not.toHaveBeenCalled();
   });
 
+  it.each(["NYSDEC Lake Bathymetry", "MN DNR Lake Bathymetry"])(
+    "returns a graceful error for %s when ArcGIS is unavailable",
+    async (sourceLabel) => {
+      vi.stubGlobal("fetch", makeHttpError(503));
+      const result = await arcGisRestFetcher.probe({ ...strategy, sourceLabel }, bbox);
+      expect(result).toMatchObject({ available: false, title: sourceLabel });
+      expect(result.error).toMatch(/HTTP 503/);
+    },
+  );
+
+  it.each(["NYSDEC Lake Bathymetry", "MN DNR Lake Bathymetry"])(
+    "returns a graceful error for %s when ArcGIS returns malformed JSON",
+    async (sourceLabel) => {
+      vi.stubGlobal("fetch", makeJsonBadParse());
+      const result = await arcGisRestFetcher.probe({ ...strategy, sourceLabel }, bbox);
+      expect(result).toMatchObject({ available: false, title: sourceLabel });
+      expect(result.error).toMatch(/invalid JSON/i);
+    },
+  );
+
   it("returns available:false on network/transport failure", async () => {
     vi.stubGlobal("fetch", makeNetworkError("Failed to connect"));
 
