@@ -139,4 +139,61 @@ describe("specialCollectionStore — in-flight activation races", () => {
 
     expect(useSpecialCollectionStore.getState().active).toBeNull();
   });
+
+  it("falls back to HTMLImageElement when createImageBitmap rejects a valid reference image", async () => {
+    const originalImage = globalThis.Image;
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    class FallbackImage {
+      naturalWidth = 320;
+      naturalHeight = 180;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+
+    Object.defineProperty(globalThis, "Image", {
+      configurable: true,
+      value: FallbackImage,
+    });
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:test-reference"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    (globalThis as { createImageBitmap?: unknown }).createImageBitmap = vi.fn(async () => {
+      throw new Error("ImageBitmap decode unavailable");
+    });
+
+    try {
+      const activation = useSpecialCollectionStore
+        .getState()
+        .activateForPuzzle(makeCollection("fallback-image"));
+      deferredFetch.resolvers[0]!(new Blob(["image"], { type: "image/png" }));
+      await activation;
+
+      const active = useSpecialCollectionStore.getState().active;
+      expect(active?.bgImageW).toBe(320);
+      expect(active?.bgImageH).toBe(180);
+    } finally {
+      Object.defineProperty(globalThis, "Image", {
+        configurable: true,
+        value: originalImage,
+      });
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: originalCreateObjectUrl,
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: originalRevokeObjectUrl,
+      });
+    }
+  });
 });

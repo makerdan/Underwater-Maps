@@ -56,6 +56,8 @@ import { usePaletteSuggestionStore } from "../hooks/usePaletteSuggestion";
 import { useShallowSuggestionStore } from "../hooks/useShallowSuggestion";
 import { worldXZToLonLat, buildTerrainGeometry, worldYToMetres } from "./terrain";
 import { callRegisteredResetCamera } from "./resetCameraRegistry";
+import { useSpecialCollectionStore } from "./specialCollectionStore";
+import { usePuzzleStore } from "./puzzleStore";
 import { applyCameraSpawn } from "./cameraSpawn";
 import {
   hasPendingOrInFlightSettingsSync,
@@ -874,6 +876,20 @@ export interface BathyTestApi {
    * `setPuzzleSelection` calls) to confirm the bridge is wired.
    */
   isPuzzleBridgeReady: () => boolean;
+  /**
+   * Snapshot the active special-collection registration as consumed by the
+   * live OverviewMap. The intentionally small, serialisable grid shape lets
+   * browser tests verify the two anchors remain registered while the map is
+   * zoomed and panned, without exposing the decoded reference image itself.
+   */
+  getActiveSpecialCollectionOverlay: () => {
+    collectionId: string;
+    anchors: Array<{ lon: number; lat: number; imgX: number; imgY: number }>;
+    imageReady: boolean;
+    puzzleMode: boolean;
+    transform: { scale: number; offsetX: number; offsetY: number; pxPerDeg: number };
+    grid: { minLon: number; maxLon: number; minLat: number; maxLat: number };
+  } | null;
 }
 
 declare global {
@@ -1741,5 +1757,27 @@ export function installTestHelpers(): void {
     createPuzzleGroup: (ids) => _puzzleCreateGroup?.(ids) ?? "",
     getPuzzleGroups: () => _puzzleGetGroups?.() ?? {},
     isPuzzleBridgeReady: () => _puzzleBridgeReady,
+    getActiveSpecialCollectionOverlay: () => {
+      const active = useSpecialCollectionStore.getState().active;
+      const { puzzleMode, overviewTransform, worldGrid } = usePuzzleStore.getState();
+      // OverviewMap only publishes a synthetic worldGrid for multi-dataset
+      // views; its live draw loop falls back to terrainStore.overviewGrid for
+      // a single loaded dataset. Mirror that production fallback here.
+      const grid = worldGrid ?? useTerrainStore.getState().overviewGrid;
+      if (!active || !active.bgGeoAnchors || !overviewTransform || !grid) return null;
+      return {
+        collectionId: active.collectionId,
+        anchors: active.bgGeoAnchors.map(({ lon, lat, imgX, imgY }) => ({ lon, lat, imgX, imgY })),
+        imageReady: active.bgImage !== null && active.bgImageW > 0 && active.bgImageH > 0,
+        puzzleMode,
+        transform: { ...overviewTransform },
+        grid: {
+          minLon: grid.minLon,
+          maxLon: grid.maxLon,
+          minLat: grid.minLat,
+          maxLat: grid.maxLat,
+        },
+      };
+    },
   };
 }

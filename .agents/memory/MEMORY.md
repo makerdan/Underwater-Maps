@@ -127,3 +127,4 @@
 - [PWA bundle guard sees stale dist assets](pwa-bundle-stale-dist.md) — bundle tests preserve dist/public, so Workbox can fail on an obsolete oversized hash even when the current entry is under 2 MiB.
 - [Timeout-wrapper test readiness](timeout-wrapper-test-readiness.md) — nested process cleanup tests need explicit readiness polling under concurrent validation load.
 - [API route test mock fallback](api-route-test-mock-fallback.md) — wrap stateful route-test overrides in complete schema/table fallbacks so app-wide mounts cannot crash unrelated suites.
+- [Reference image decode fallback](reference-image-decode-fallback.md) — `createImageBitmap` can reject valid uploaded images in constrained Chromium; preserve the HTMLImageElement decode fallback.

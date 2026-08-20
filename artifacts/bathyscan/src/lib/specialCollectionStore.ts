@@ -109,8 +109,15 @@ async function loadBgImage(
     const blob = await getUserCollectionsIdBackground(collectionId);
     if (!(blob instanceof Blob) || blob.size === 0) return null;
     if (typeof createImageBitmap === "function") {
-      const bmp = await createImageBitmap(blob);
-      return { img: bmp, w: bmp.width, h: bmp.height };
+      try {
+        const bmp = await createImageBitmap(blob);
+        return { img: bmp, w: bmp.width, h: bmp.height };
+      } catch {
+        // Some otherwise-capable browsers reject specific image decodes via
+        // createImageBitmap (notably in constrained/headless renderers).
+        // Continue to the HTMLImageElement path below before declaring the
+        // saved reference unusable.
+      }
     }
     // jsdom / older browsers: HTMLImageElement + object URL.
     const url = URL.createObjectURL(blob);

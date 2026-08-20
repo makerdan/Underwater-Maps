@@ -326,7 +326,6 @@ export const CollectionSettingsSheet: React.FC<{
       );
       setHasSavedAnchors(true);
       setAnchorSaveStatus("Anchors saved. The live reference image is now GPS-registered.");
-      await invalidate();
     } catch (err) {
       setError(
         err instanceof Error && err.message
@@ -336,22 +335,24 @@ export const CollectionSettingsSheet: React.FC<{
     } finally {
       setAnchorsSaving(false);
     }
-  }, [anchorA, anchorB, anchorsSaving, collection.id, invalidate, pairMessage, qc]);
+  }, [anchorA, anchorB, anchorsSaving, collection.id, pairMessage, qc]);
 
   const handleClearAnchors = useCallback(async () => {
     setError(null);
     try {
-      await patchUserCollectionsIdMeta(collection.id, { bgGeoAnchors: null });
+      const updated = await patchUserCollectionsIdMeta(collection.id, { bgGeoAnchors: null });
       useSpecialCollectionStore.getState().setBgAnchors(collection.id, null);
+      qc.setQueryData<DatasetCollection[]>(getGetUserCollectionsQueryKey(), (previous) =>
+        previous?.map((item) => (item.id === updated.id ? updated : item)),
+      );
       setDraftA(EMPTY_DRAFT);
       setDraftB(EMPTY_DRAFT);
       setHasSavedAnchors(false);
       setAnchorSaveStatus("Anchors cleared. The image will use dataset bounds until new anchors are saved.");
-      await invalidate();
     } catch {
       setError("Could not clear the geo anchors.");
     }
-  }, [collection.id, invalidate]);
+  }, [collection.id, qc]);
 
   // ---- Revision list ------------------------------------------------------
   const revisions = [...(meta?.layoutRevisions ?? [])].sort((a, b) =>
