@@ -477,6 +477,19 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
     // Run fix-stub (idempotent if already run)
     runScript(["--fix-stub"], e2eDir);
 
+    const missingSectionContent = readFileSync(join(e2eTasksDir, MISSING_SECTION), "utf8");
+    assert.ok(
+      missingSectionContent.includes("## Pre-existing failures to ignore") &&
+        missingSectionContent.includes("## Validation"),
+      "missing-section repair must append both required sections",
+    );
+
+    const normalizedWhyContent = readFileSync(join(e2eTasksDir, ANGLE_BRACKET_WHY), "utf8");
+    assert.ok(
+      normalizedWhyContent.includes("**Why:** <replace with one-line justification>"),
+      "legacy Why repair must replace the non-standard placeholder with the canonical one",
+    );
+
     for (const name of [MISSING_SECTION, ANGLE_BRACKET_WHY, BAD_TIER, COMPLIANT]) {
       const content = readFileSync(join(e2eTasksDir, name), "utf8");
       assert.ok(
@@ -539,6 +552,67 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
     assert.deepEqual(result, { content: original, changed: false });
     assert.equal(readFileSync(noValidation, "utf8"), original);
     rmSync(noValidation, { force: true });
+  });
+
+  it("insertValidationLine returns changed content with changed=true when the section is present", () => {
+    const original = [
+      "# Plan with validation",
+      "",
+      "## Validation",
+      "**Command:** `test-standard`",
+      "**Do not escalate:** Run exactly this command.",
+      "",
+      "## Relevant files",
+      "scripts/check-failure-gate.mjs",
+    ].join("\n");
+
+    const result = insertValidationLine(
+      "ignored-by-pure-helper.md",
+      original,
+      "**Why:** Covers the focused failure-gate contract tests.",
+      "**Command:**",
+    );
+
+    assert.equal(result.changed, true);
+    assert.notEqual(result.content, original);
+    assert.match(
+      result.content,
+      /\*\*Command:\*\* `test-standard`\n\*\*Why:\*\* Covers the focused failure-gate contract tests\.\n/,
+    );
+  });
+
+  it("--fix-stub reports and persists each missing Validation line it inserts", () => {
+    const missingLines = join(e2eTasksDir, "e2e-missing-validation-lines.md");
+    const original = [
+      "# Plan with incomplete validation",
+      "",
+      "## Pre-existing failures to ignore",
+      "None known.",
+      "",
+      "## Validation",
+      "**Command:** `test-standard`",
+    ].join("\n");
+    writeFileSync(missingLines, original, "utf8");
+
+    const result = runScript(["--fix-stub"], e2eDir);
+    assert.equal(
+      result.status,
+      0,
+      `expected --fix-stub to repair missing Validation lines, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+    assert.match(
+      result.stderr,
+      new RegExp(`inserted "\\*\\*Why:\\*\\*" into Validation section`),
+    );
+    assert.match(
+      result.stderr,
+      new RegExp(`inserted "\\*\\*Do not escalate:\\*\\*" into Validation section`),
+    );
+
+    const repaired = readFileSync(missingLines, "utf8");
+    assert.match(repaired, /\*\*Why:\*\* <replace with one-line justification>/);
+    assert.match(repaired, /\*\*Do not escalate:\*\* Run exactly this command\./);
+    rmSync(missingLines, { force: true });
   });
 
   it("strict check reports the angle-bracket-why file as a violation", () => {
