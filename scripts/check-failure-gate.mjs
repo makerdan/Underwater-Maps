@@ -34,10 +34,11 @@
  *       **Do not escalate:** line
  */
 
-import { readdir, readFile, appendFile, writeFile } from "fs/promises";
+import { readdir, readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join, resolve } from "path";
 import { pathToFileURL } from "url";
+import { writeFileSync } from "fs";
 import { VALIDATION_COMMANDS } from "./register-validation-commands.mjs";
 
 const TASKS_DIR = ".local/tasks";
@@ -255,7 +256,22 @@ if (TASK_PLAN_FILE) {
 // Inserts immediately after the line that starts with insertAfterMarker
 // (scanned within the section); falls back to right after ## Validation.
 // ---------------------------------------------------------------------------
-export async function insertValidationLine(filePath, content, fixLine, insertAfterMarker) {
+export function insertValidationLine(
+  filePathOrContent,
+  contentOrFixLine,
+  fixLineOrInsertAfterMarker,
+  legacyInsertAfterMarker,
+) {
+  // Keep the historical exported signature
+  // (filePath, content, fixLine, insertAfterMarker) for callers and tests.
+  // The file path is intentionally ignored: patching is performed by the
+  // caller's single final write, not by this pure transformation helper.
+  const content =
+    legacyInsertAfterMarker === undefined ? filePathOrContent : contentOrFixLine;
+  const fixLine =
+    legacyInsertAfterMarker === undefined ? contentOrFixLine : fixLineOrInsertAfterMarker;
+  const insertAfterMarker =
+    legacyInsertAfterMarker === undefined ? fixLineOrInsertAfterMarker : legacyInsertAfterMarker;
   const lines = content.split("\n");
   // Find the ## Validation heading
   const valIdx = lines.findIndex((l) => l.trimEnd() === "## Validation");
@@ -280,7 +296,6 @@ export async function insertValidationLine(filePath, content, fixLine, insertAft
     ...lines.slice(insertAt),
   ];
   const newContent = newLines.join("\n");
-  await writeFile(filePath, newContent, "utf8");
   return { content: newContent, changed: true };
 }
 
@@ -385,58 +400,40 @@ for (const file of files) {
     });
 
     if (fixStub) {
-      // Append stubs for entirely missing sections
-      if (missingSections.length > 0) {
-        for (const section of missingSections) {
-          try {
-            await appendFile(filePath, section.stub, "utf8");
-            // Re-read content after patching so subsequent fixes see the update
-            content = await readFile(filePath, "utf8");
-            console.warn(
-              `check-failure-gate [--fix-stub] ⚠ patched "${file}" — appended stub for "${section.heading}".`,
-            );
-          } catch (err) {
-            console.error(
-              `check-failure-gate — failed to patch "${file}" with "${section.heading}": ${err.message}`,
-            );
-          }
-        }
+      // Build the complete patch from the content read above, then write it once.
+      // Keeping all mutations in memory prevents a concurrent editor's changes
+      // from being lost between append and rewrite operations.
+      let patchedContent = content;
+
+      for (const section of missingSections) {
+        patchedContent += section.stub;
+        console.warn(
+          `check-failure-gate [--fix-stub] ⚠ patched "${file}" — appended stub for "${section.heading}".`,
+        );
       }
 
       // Insert lines that are entirely absent from the Validation section.
       // Lines with an invalid value (absent=false) are NOT auto-fixed — the
       // agent must correct the value manually.
-      const absentIssues = validationLineIssues.filter((i) => i.absent);
-      if (absentIssues.length > 0) {
-        for (const { rvl } of absentIssues) {
-          try {
-            const result = await insertValidationLine(
-              filePath,
-              content,
-              rvl.fixLine,
-              rvl.insertAfterMarker,
-            );
-            content = result.content;
-            if (result.changed) {
-              console.warn(
-                `check-failure-gate [--fix-stub] ⚠ patched "${file}" — inserted "${rvl.marker}" into Validation section.`,
-              );
-            } else {
-              const entry = nonCompliant.find((e) => e.file === file);
-              entry?._patchFailures.push(
-                `could not insert "${rvl.marker}" because the ## Validation section was not found`,
-              );
-              console.error(
-                `check-failure-gate — could not insert "${rvl.marker}" into "${file}": ## Validation section not found`,
-              );
-            }
-          } catch (err) {
-            const entry = nonCompliant.find((e) => e.file === file);
-            entry?._patchFailures.push(`failed to insert "${rvl.marker}": ${err.message}`);
-            console.error(
-              `check-failure-gate — failed to insert "${rvl.marker}" into "${file}": ${err.message}`,
-            );
-          }
+      for (const { rvl } of validationLineIssues.filter((i) => i.absent)) {
+        const result = insertValidationLine(
+          patchedContent,
+          rvl.fixLine,
+          rvl.insertAfterMarker,
+        );
+        if (result.changed) {
+          patchedContent = result.content;
+          console.warn(
+            `check-failure-gate [--fix-stub] ⚠ patched "${file}" — inserted "${rvl.marker}" into Validation section.`,
+          );
+        } else {
+          const entry = nonCompliant.find((e) => e.file === file);
+          entry?._patchFailures.push(
+            `could not insert "${rvl.marker}" because the ## Validation section was not found`,
+          );
+          console.error(
+            `check-failure-gate — could not insert "${rvl.marker}" into "${file}": ## Validation section not found`,
+          );
         }
       }
 
@@ -453,26 +450,32 @@ for (const file of files) {
         "**Why:** Placeholder — review before running this task",
       ];
       if (WHY_STANDARD_PLACEHOLDER) {
-        const reReadLines = content.split("\n");
-        const reValIdx = reReadLines.findIndex((l) => l.trimEnd() === "## Validation");
-        if (reValIdx !== -1) {
-          let changed = false;
-          for (let i = reValIdx + 1; i < reReadLines.length; i++) {
-            if (reReadLines[i].startsWith("## ")) break;
-            const trimmed = reReadLines[i].trimStart();
+        const patchedLines = patchedContent.split("\n");
+        const patchedValIdx = patchedLines.findIndex((l) => l.trimEnd() === "## Validation");
+        if (patchedValIdx !== -1) {
+          for (let i = patchedValIdx + 1; i < patchedLines.length; i++) {
+            if (patchedLines[i].startsWith("## ")) break;
+            const trimmed = patchedLines[i].trimStart();
             if (NON_STANDARD_WHY_PREFIXES.some((p) => trimmed.startsWith(p))) {
-              reReadLines[i] = WHY_STANDARD_PLACEHOLDER;
-              changed = true;
+              patchedLines[i] = WHY_STANDARD_PLACEHOLDER;
+              patchedContent = patchedLines.join("\n");
               console.warn(
                 `check-failure-gate [--fix-stub] ⚠ patched "${file}" — normalised non-standard **Why:** placeholder to canonical form.`,
               );
               break;
             }
           }
-          if (changed) {
-            content = reReadLines.join("\n");
-            await writeFile(filePath, content, "utf8");
-          }
+        }
+      }
+
+      if (patchedContent !== content) {
+        try {
+          writeFileSync(filePath, patchedContent, "utf8");
+        } catch (err) {
+          console.error(`check-failure-gate — failed to patch "${file}": ${err.message}`);
+          const entry = nonCompliant.find((e) => e.file === file);
+          entry.writeFailed = true;
+          entry._patchFailures.push(`failed to write patched file: ${err.message}`);
         }
       }
     }
@@ -493,10 +496,12 @@ for (const {
   unfilledPlaceholders,
   missingValidationLines,
   _patchFailures = [],
+  writeFailed,
 } of nonCompliant) {
   const hasMissing = !fixStub && missingSections.length > 0;
   const hasMissingLines = !fixStub && missingValidationLines.length > 0;
   if (
+    !writeFailed &&
     !hasMissing &&
     !hasMissingLines &&
     unfilledPlaceholders.length === 0 &&
@@ -508,8 +513,13 @@ for (const {
       ...missingValidationLines.map((m) => `line: ${m}`),
     ].join(", ");
     console.log(`  ✓ ${file} (patched by --fix-stub: ${patchDetails})`);
-  } else if (fixStub && _patchFailures.length > 0) {
-    console.log(`  ✗ ${file} — ${_patchFailures.join("; ")}`);
+  } else if (writeFailed || (fixStub && _patchFailures.length > 0)) {
+    console.log(
+      `  ✗ ${file} — ${[
+        ...(writeFailed ? ["failed to write patched file"] : []),
+        ..._patchFailures,
+      ].join("; ")}`,
+    );
   } else if (fixStub && unfilledPlaceholders.length > 0) {
     // In --fix-stub mode, unfilled placeholders cannot be auto-corrected — they
     // require manual intervention. Report them as warnings rather than errors so
@@ -531,7 +541,7 @@ for (const {
 }
 
 const trueNonCompliant = nonCompliant.filter(
-  ({ missingSections, unfilledPlaceholders, _validationLineIssues, _patchFailures = [] }) => {
+  ({ missingSections, unfilledPlaceholders, _validationLineIssues, _patchFailures = [], writeFailed }) => {
     const issues = _validationLineIssues || [];
     const unfixableIssues = issues.filter((i) => !i.absent);
     // In --fix-stub mode: absent lines and missing sections are auto-inserted
@@ -542,6 +552,7 @@ const trueNonCompliant = nonCompliant.filter(
     // In strict mode: ALL issues cause exit 1 — missing sections, unfilled
     // placeholders, absent required lines, and invalid tier values.
     return (
+      writeFailed ||
       (!fixStub && missingSections.length > 0) ||
       (!fixStub && unfilledPlaceholders.length > 0) ||
       (!fixStub && issues.some((i) => i.absent)) ||

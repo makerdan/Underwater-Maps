@@ -20,7 +20,7 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -72,6 +72,44 @@ before(() => {
   sandbox = mkdtempSync(join(tmpdir(), "cfgt-test-"));
   tasksDir = join(sandbox, ".local", "tasks");
   mkdirSync(tasksDir, { recursive: true });
+});
+
+// ---------------------------------------------------------------------------
+// (e) --fix-stub write failures
+// ---------------------------------------------------------------------------
+
+describe("--fix-stub: a failed patch write is non-compliant", () => {
+  let writeFailureDir;
+
+  before(() => {
+    writeFailureDir = mkdtempSync(join(tmpdir(), "cfgt-write-failure-"));
+    const filePath = join(writeFailureDir, "write-failure.md");
+    writeFileSync(filePath, "# Plan without required sections\n", "utf8");
+    // The test runner owns this file, so removing write permission reliably
+    // makes the final patch write throw EACCES after the read succeeds.
+    chmodSync(filePath, 0o444);
+  });
+
+  after(() => {
+    rmSync(writeFailureDir, { recursive: true, force: true });
+  });
+
+  it("exits 1 and names the affected file when the patch write throws", () => {
+    const filePath = join(writeFailureDir, "write-failure.md");
+    const result = runScript(["--fix-stub"], writeFailureDir, {
+      TASK_PLAN_FILE: filePath,
+    });
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert.equal(
+      result.status,
+      1,
+      `expected --fix-stub to exit 1 after a write failure, got ${result.status}\n${output}`,
+    );
+    assert.ok(
+      output.includes("write-failure.md"),
+      `expected the affected file name in the write failure output\n${output}`,
+    );
+  });
 });
 
 after(() => {
