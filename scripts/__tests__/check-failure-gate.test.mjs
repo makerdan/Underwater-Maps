@@ -828,4 +828,24 @@ describe("--fix-stub: unreadable plan files are hard failures", () => {
       `expected read failure diagnostic to name ${unreadablePlanPath}\nstderr: ${result.stderr}`,
     );
   });
+
+  it("archive scanning also exits 1 and reports the underlying read error", () => {
+    const result = runScript(["--fix-stub"], unreadableDir);
+    const archivePlanPath = ".local/tasks/unreadable-plan.md";
+    assert.equal(
+      result.status,
+      1,
+      `expected archive --fix-stub to exit 1 for unreadable plan, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+    assert.match(
+      result.stderr,
+      new RegExp(`could not read "${archivePlanPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`),
+      `expected archive read failure diagnostic to name ${archivePlanPath}\nstderr: ${result.stderr}`,
+    );
+    assert.match(
+      result.stderr,
+      /EISDIR|directory/i,
+      `expected archive read failure diagnostic to include the underlying error\nstderr: ${result.stderr}`,
+    );
+  });
 });
