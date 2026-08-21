@@ -15,7 +15,7 @@
  *   --fix-stub    For each plan file missing the section entirely, append a
  *                 minimal N/A stub that is itself compliant ("predates mandate").
  *                 Files that already have the section are never touched.
- *                 Always exits 0; safe to run unconditionally.
+ *                 Exits 1 if a plan cannot be read or patched.
  *   --stubs-only  Skip the missing-section check; only report unfilled
  *                 placeholder text in existing ## Regression Guard sections.
  *                 Used to grandfather archives of older plan files that were
@@ -62,6 +62,8 @@ function isPlaceholder(text) {
   return false;
 }
 
+const MIN_NA_REASON_WORDS = 5;
+
 // ---------------------------------------------------------------------------
 // Check a single plan file's ## Regression Guard section.
 // Returns { compliant: true } or { compliant: false, reason: string }.
@@ -71,8 +73,20 @@ function checkSection(sectionLines) {
   const lines = sectionLines.map((l) => l.trimStart()).filter((l) => l !== "");
 
   // (A) Self-satisfying declaration
-  if (lines.some((l) => l.startsWith("**Self-satisfying**"))) {
-    return { compliant: true };
+  const selfSatisfyingLine = lines.find((l) =>
+    l.startsWith("**Self-satisfying**"),
+  );
+  if (selfSatisfyingLine) {
+    const description = selfSatisfyingLine
+      .slice("**Self-satisfying**".length)
+      .trim();
+    if (description.length > 0) {
+      return { compliant: true };
+    }
+    return {
+      compliant: false,
+      reason: "**Self-satisfying** must include a description",
+    };
   }
 
   // (B) N/A declaration
@@ -83,10 +97,13 @@ function checkSection(sectionLines) {
       return { compliant: false, reason: "has **N/A** but missing **Why N/A:** line" };
     }
     const value = whyNALine.slice("**Why N/A:**".length).trim();
-    if (isPlaceholder(value)) {
+    if (
+      isPlaceholder(value) ||
+      value.split(/\s+/u).filter(Boolean).length < MIN_NA_REASON_WORDS
+    ) {
       return {
         compliant: false,
-        reason: `**Why N/A:** contains placeholder text: "${value}"`,
+        reason: `**Why N/A:** must contain at least ${MIN_NA_REASON_WORDS} words of meaningful content`,
       };
     }
     return { compliant: true };
@@ -137,7 +154,7 @@ function extractSection(allLines) {
 
   const sectionLines = [];
   for (let i = headingIdx + 1; i < allLines.length; i++) {
-    if (allLines[i].startsWith("## ")) break;
+    if (allLines[i].trimStart().startsWith("## ")) break;
     sectionLines.push(allLines[i]);
   }
   return sectionLines;
@@ -248,6 +265,8 @@ if (TASK_PLAN_FILE) {
 // ---------------------------------------------------------------------------
 const compliant = []; // file names
 const nonCompliant = []; // { file, reason, patched? }
+let readFailed = false;
+let patchFailed = false;
 
 for (const file of files) {
   const filePath = resolveFilePath(file);
@@ -255,6 +274,7 @@ for (const file of files) {
   try {
     content = await readFile(filePath, "utf8");
   } catch (err) {
+    readFailed = true;
     console.error(
       `check-regression-guard — could not read "${filePath}": ${err.message}`,
     );
@@ -280,6 +300,7 @@ for (const file of files) {
         );
         compliant.push(file); // stub is compliant (valid N/A)
       } catch (patchErr) {
+        patchFailed = true;
         console.error(
           `check-regression-guard — failed to patch "${file}": ${patchErr.message}`,
         );
@@ -324,12 +345,13 @@ console.log(
     (nonCompliant.length === 0 ? " ✓" : ""),
 );
 
-// --fix-stub is documented as "always exits 0; safe to run unconditionally".
+// --fix-stub is safe to run unconditionally for valid, readable plans, but
+// unreadable or unpatchable files must still fail rather than silently pass.
 // Its job is only to insert stubs for missing sections; files with existing
 // but unfilled sections are reported but do not cause a non-zero exit here —
 // a subsequent strict-mode run is expected to catch those.
 if (fixStub) {
-  process.exit(0);
+  process.exit(readFailed || patchFailed ? 1 : 0);
 }
 
 if (nonCompliant.length > 0) {

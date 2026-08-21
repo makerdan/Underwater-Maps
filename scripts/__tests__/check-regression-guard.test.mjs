@@ -96,6 +96,18 @@ describe("self-satisfying declaration", () => {
       `expected exit 0, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
   });
+
+  it("fails when **Self-satisfying** has no description", () => {
+    const dir = makeTasksDir("self-satisfying-bare");
+    writePlan(dir, "task-a-bare.md", planWith("**Self-satisfying**\n"));
+
+    const result = run(dir);
+    assert.equal(
+      result.status,
+      1,
+      `expected bare marker to fail\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -186,6 +198,56 @@ describe("Why N/A with placeholder text", () => {
       result.status,
       1,
       `expected exit 1 for FILL IN placeholder\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("fails when **Why N/A:** contains only a placeholder dash", () => {
+    const dir = makeTasksDir("na-placeholder-dash");
+    writePlan(dir, "task-d4.md", planWith("**N/A**\n**Why N/A:** -\n"));
+
+    const result = run(dir);
+    assert.equal(
+      result.status,
+      1,
+      `expected short N/A reason to fail\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+
+  it("passes when **Why N/A:** has a specific multi-word reason", () => {
+    const dir = makeTasksDir("na-valid-long-reason");
+    writePlan(
+      dir,
+      "task-d5.md",
+      planWith("**N/A**\n**Why N/A:** The fix removes the feature entirely.\n"),
+    );
+
+    const result = run(dir);
+    assert.equal(
+      result.status,
+      0,
+      `expected meaningful N/A reason to pass\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Indented section headings must terminate the Regression Guard section.
+// ---------------------------------------------------------------------------
+
+describe("section boundary detection", () => {
+  it("stops at an indented ## heading", () => {
+    const dir = makeTasksDir("indented-section-boundary");
+    writePlan(
+      dir,
+      "task-indented-heading.md",
+      "# Task Plan\n\n## Regression Guard\n**N/A**\n  ## Steps\n**Why N/A:** -\n",
+    );
+
+    const result = run(dir);
+    assert.equal(
+      result.status,
+      1,
+      `expected indented heading to end the section and expose missing Why N/A\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
   });
 });
@@ -708,6 +770,30 @@ describe("--fix-stub idempotency on a fully-filled plan", () => {
     assert.ok(
       !result.stdout.includes("patched"),
       `stdout must not claim the file was patched\nstdout: ${result.stdout}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// --fix-stub must fail when a plan cannot be read.
+// ---------------------------------------------------------------------------
+
+describe("--fix-stub unreadable plans", () => {
+  it("exits non-zero and names a plan that cannot be read", () => {
+    const dir = makeTasksDir("fixstub-unreadable");
+    // A directory with an .md suffix is returned by readdir but readFile()
+    // rejects it with EISDIR on every supported test platform, including root.
+    mkdirSync(join(dir, ".local", "tasks", "unreadable.md"));
+
+    const result = run(dir, ["--fix-stub"]);
+    assert.equal(
+      result.status,
+      1,
+      `expected --fix-stub to fail for unreadable plan\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+    assert.ok(
+      (result.stdout + result.stderr).includes("unreadable.md"),
+      `diagnostic should name the unreadable plan\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
   });
 });
