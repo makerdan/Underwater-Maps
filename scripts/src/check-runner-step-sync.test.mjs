@@ -16,6 +16,7 @@ import {
   findGithubCiParityProblems,
   buildGithubWorkflowText,
   extractGithubWorkflowRunText,
+  extractGithubWorkflowRunCommands,
   findE2eDatabaseBootstrapProblems,
   isSupportedLocalOnlyExclusion,
   getGithubWorkflowScopes,
@@ -451,6 +452,37 @@ test("duplicate targeted unit and browser runs are flagged within the same event
   );
 });
 
+test("browser suite detection normalizes pnpm exec, quotes, and continuations", () => {
+  const workflows = [{
+    file: "ci.yml",
+    scopes: ["pull-request"],
+    commands: [
+      "pnpm exec playwright test",
+      "pnpm exec playwright test \\\n        \"tests/e2e/smoke.spec.ts\"",
+    ],
+  }];
+  const problems = findRedundantStandaloneSuiteRuns(workflows, []);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].suite, "browser");
+});
+
+test("workflow comment lines containing Playwright are not executable commands", () => {
+  const commands = extractGithubWorkflowRunCommands(`
+    # playwright test tests/e2e/comment.spec.ts
+    - name: Comment only
+      run: echo "# playwright test"
+  `);
+  assert.deepEqual(commands, ['echo "# playwright test"']);
+  assert.deepEqual(
+    findRedundantStandaloneSuiteRuns([{
+      file: "ci.yml",
+      scopes: ["pull-request"],
+      commands,
+    }], []),
+    [],
+  );
+});
+
 test("real E2E workflows preserve the fresh-database bootstrap contract", () => {
   const workflowsDir = resolve(root, ".github", "workflows");
   const prWorkflow = readFileSync(
@@ -601,4 +633,16 @@ test("all check-* files on disk are referenced somewhere or allowlisted", () => 
   assert.deepEqual(findOrphanCheckFiles(checkFiles, refText), []);
   assert.deepEqual(findStaleOrphanAllowlistEntries(checkFiles, refText), []);
   assert.ok(Object.values(ORPHAN_FILE_ALLOWLIST).every((r) => typeof r === "string" && r.length > 10));
+});
+
+test("unreadable reference files produce a named diagnostic and continue", () => {
+  const diagnostics = [];
+  const text = buildReferenceText(
+    resolve(root, "missing-test-root"),
+    resolve(root, "scripts"),
+    (filePath, error) => diagnostics.push({ filePath, error }),
+  );
+  assert.equal(typeof text, "string");
+  assert.ok(diagnostics.some(({ filePath }) => filePath.endsWith("missing-test-root/package.json")));
+  assert.ok(diagnostics.every(({ error }) => error instanceof Error));
 });

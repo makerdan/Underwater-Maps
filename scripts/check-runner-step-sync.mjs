@@ -241,8 +241,15 @@ export function findStaleOrphanAllowlistEntries(checkFiles, referenceText, allow
 /**
  * Enumerates check-*.{mjs,sh} files in scripts/ (bare filenames).
  */
-export function listCheckFiles(scriptsDir) {
-  return readdirSync(scriptsDir)
+export function listCheckFiles(scriptsDir, onReadError = () => {}) {
+  let files;
+  try {
+    files = readdirSync(scriptsDir);
+  } catch (error) {
+    onReadError(scriptsDir, error);
+    return [];
+  }
+  return files
     .filter((f) => /^check-.*\.(mjs|sh)$/.test(f))
     .sort();
 }
@@ -259,15 +266,23 @@ export function listCheckFiles(scriptsDir) {
  * *different* local name (e.g. SKIP_DIRS) built by spreading IGNORED_DIRS:
  *   const SKIP_DIRS = new Set([...IGNORED_DIRS, "build", ...]);
  */
-export function findLocalIgnoredDirsDeclarations(scriptsDir) {
+export function findLocalIgnoredDirsDeclarations(scriptsDir, onReadError = () => {}) {
   const RE = /^\s*const IGNORED_DIRS\s*=/m;
-  return readdirSync(scriptsDir)
+  let files;
+  try {
+    files = readdirSync(scriptsDir);
+  } catch (error) {
+    onReadError(scriptsDir, error);
+    return [];
+  }
+  return files
     .filter((f) => /^check-.*\.mjs$/.test(f))
     .filter((f) => {
       let src;
       try {
         src = readFileSync(resolve(scriptsDir, f), "utf8");
-      } catch {
+      } catch (error) {
+        onReadError(resolve(scriptsDir, f), error);
         return false;
       }
       return RE.test(src);
@@ -281,26 +296,41 @@ export function findLocalIgnoredDirsDeclarations(scriptsDir) {
  * Check files themselves are excluded as sources so a check file cannot
  * "cover" itself (or another orphan) merely by mentioning it in a comment.
  */
-export function buildReferenceText(rootDir, scriptsDir) {
-  const parts = [readFileSync(resolve(rootDir, "package.json"), "utf8")];
-  try {
-    parts.push(readFileSync(resolve(rootDir, ".replit"), "utf8"));
-  } catch {
-    // .replit may not exist in stripped-down environments; skip
-  }
-  const workflowsDir = resolve(rootDir, ".github", "workflows");
-  try {
-    for (const file of readdirSync(workflowsDir)) {
-      if (!/\.(yml|yaml)$/.test(file)) continue;
-      parts.push(readFileSync(resolve(workflowsDir, file), "utf8"));
+export function buildReferenceText(rootDir, scriptsDir, onReadError = () => {}) {
+  const parts = [];
+  const readOptionalFile = (filePath) => {
+    try {
+      return readFileSync(filePath, "utf8");
+    } catch (error) {
+      onReadError(filePath, error);
+      return null;
     }
-  } catch {
-    // GitHub workflows may not exist in stripped-down environments; skip
+  };
+  const packageJson = readOptionalFile(resolve(rootDir, "package.json"));
+  if (packageJson !== null) parts.push(packageJson);
+
+  const readDirectory = (directory) => {
+    try {
+      return readdirSync(directory);
+    } catch (error) {
+      onReadError(directory, error);
+      return [];
+    }
+  };
+
+  const replit = readOptionalFile(resolve(rootDir, ".replit"));
+  if (replit !== null) parts.push(replit);
+  const workflowsDir = resolve(rootDir, ".github", "workflows");
+  for (const file of readDirectory(workflowsDir)) {
+      if (!/\.(yml|yaml)$/.test(file)) continue;
+      const workflow = readOptionalFile(resolve(workflowsDir, file));
+      if (workflow !== null) parts.push(workflow);
   }
-  for (const f of readdirSync(scriptsDir)) {
+  for (const f of readDirectory(scriptsDir)) {
     if (/^check-/.test(f)) continue;
     if (!/\.(mjs|sh)$/.test(f)) continue;
-    parts.push(readFileSync(resolve(scriptsDir, f), "utf8"));
+    const script = readOptionalFile(resolve(scriptsDir, f));
+    if (script !== null) parts.push(script);
   }
   return parts.join("\n");
 }
@@ -565,24 +595,33 @@ export function getGithubWorkflowScopes(source) {
  * step names are excluded through extractGithubWorkflowRunText(), so prose
  * cannot make a command look covered.
  */
-export function readGithubWorkflowRuns(rootDir) {
+export function readGithubWorkflowRuns(rootDir, onReadError = () => {}) {
   const workflowsDir = resolve(rootDir, ".github", "workflows");
+  let files;
   try {
-    return readdirSync(workflowsDir)
-      .filter((file) => /\.(yml|yaml)$/.test(file))
-      .sort()
-      .map((file) => {
-        const source = readFileSync(resolve(workflowsDir, file), "utf8");
-        return {
-          file,
-          scopes: getGithubWorkflowScopes(source),
-          commands: extractGithubWorkflowRunCommands(source)
-            .filter((command) => command.trim().length > 0),
-        };
-      });
-  } catch {
+    files = readdirSync(workflowsDir);
+  } catch (error) {
+    onReadError(workflowsDir, error);
     return [];
   }
+  const workflows = [];
+  for (const file of files.filter((entry) => /\.(yml|yaml)$/.test(entry)).sort()) {
+    const filePath = resolve(workflowsDir, file);
+    let source;
+    try {
+      source = readFileSync(filePath, "utf8");
+    } catch (error) {
+      onReadError(filePath, error);
+      continue;
+    }
+    workflows.push({
+      file,
+      scopes: getGithubWorkflowScopes(source),
+      commands: extractGithubWorkflowRunCommands(source)
+        .filter((command) => command.trim().length > 0),
+    });
+  }
+  return workflows;
 }
 
 /**
@@ -590,8 +629,8 @@ export function readGithubWorkflowRuns(rootDir) {
  * string. Main-only, scheduled, and manual-only workflows cannot satisfy the
  * parity contract because they do not protect pull requests.
  */
-export function buildGithubWorkflowText(rootDir) {
-  return readGithubWorkflowRuns(rootDir)
+export function buildGithubWorkflowText(rootDir, onReadError = () => {}) {
+  return readGithubWorkflowRuns(rootDir, onReadError)
     .filter((workflow) => workflow.scopes.includes("pull-request"))
     .flatMap((workflow) => workflow.commands)
     .join("\n");
@@ -626,24 +665,39 @@ export function findE2eDatabaseBootstrapProblems(
   return problems;
 }
 
+function normalizeSuiteCommand(command) {
+  return command
+    .replace(/\\\s*\n/g, " ")
+    .split("\n")
+    .filter((line) => !/^\s*#/.test(line))
+    .join(" ")
+    .replace(/["']/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\bpnpm\s+exec\s+/g, "")
+    .trim();
+}
+
 function isBrowserDiscoveryCommand(command) {
-  return /\bplaywright\s+test\b/.test(command) &&
-    !isTargetedBrowserCommand(command);
+  const normalized = normalizeSuiteCommand(command);
+  return /\bplaywright\s+test\b/.test(normalized) &&
+    !isTargetedBrowserCommand(normalized);
 }
 
 function isTargetedBrowserCommand(command) {
-  return /\bplaywright\s+test\b/.test(command) &&
+  const normalized = normalizeSuiteCommand(command);
+  return /\bplaywright\s+test\b/.test(normalized) &&
     (
-      /\btests\/e2e\/[^\s'"]+\.spec\.[cm]?[jt]sx?\b/.test(command) ||
-      /(?:^|\s)(?:--grep|--project|--last-failed)(?:=|\s)/.test(command)
+      /\btests\/e2e\/[^\s]+\.spec\.[cm]?[jt]sx?\b/.test(normalized) ||
+      /(?:^|\s)(?:--grep|--project|--last-failed)(?:=|\s)/.test(normalized)
     );
 }
 
 function containsTestFile(command) {
-  return /\b[^\s'"]+(?:\.test|\.spec)\.[cm]?[jt]sx?\b/.test(command);
+  return /\b[^\s]+(?:\.test|\.spec)\.[cm]?[jt]sx?\b/.test(normalizeSuiteCommand(command));
 }
 
 function isUnitDiscoveryCommand(command) {
+  command = normalizeSuiteCommand(command);
   if (isTargetedUnitCommand(command)) return false;
   return /\bpnpm(?:\s+-r)?\s+run\s+test:unit\b/.test(command) ||
     /\bpnpm\s+--filter\s+\S+\s+run\s+test:unit\b/.test(command) ||
@@ -651,6 +705,7 @@ function isUnitDiscoveryCommand(command) {
 }
 
 function isTargetedUnitCommand(command) {
+  command = normalizeSuiteCommand(command);
   const invokesUnitRunner =
     /\b(?:vitest\s+run|node\s+--(?:import\s+\S+\s+)?test)\b/.test(command) ||
     /\bpnpm(?:\s+--filter\s+\S+)?\s+run\s+test:unit\b/.test(command);
@@ -748,10 +803,35 @@ export function findSuiteOverlapExclusionProblems(
 // ---------------------------------------------------------------------------
 
 function main() {
-  const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
-  const ciSteps = getValidationSteps("check-runner-step-sync").map((s) => s.name);
-
   let failed = false;
+  const reportReadError = (filePath, error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    const severity = error?.code === "ENOENT" ? "WARN" : "FAIL";
+    console.error(
+      `check-runner-step-sync: cannot read ${filePath}: ${message} (${severity})`,
+    );
+    if (severity === "FAIL") failed = true;
+  };
+  const readRequiredFile = (filePath) => {
+    try {
+      return readFileSync(filePath, "utf8");
+    } catch (error) {
+      reportReadError(filePath, error);
+      return null;
+    }
+  };
+
+  let pkg = {};
+  const packagePath = resolve(root, "package.json");
+  const packageSource = readRequiredFile(packagePath);
+  if (packageSource !== null) {
+    try {
+      pkg = JSON.parse(packageSource);
+    } catch (error) {
+      reportReadError(packagePath, new Error(`invalid JSON: ${error.message}`));
+    }
+  }
+  const ciSteps = getValidationSteps("check-runner-step-sync").map((s) => s.name);
 
   const uncovered = findUncoveredChecks(pkg, ciSteps);
   if (uncovered.length > 0) {
@@ -776,7 +856,7 @@ function main() {
 
   const githubParityProblems = findGithubCiParityProblems(
     getValidationSteps("check-runner-step-sync"),
-    buildGithubWorkflowText(root),
+    buildGithubWorkflowText(root, reportReadError),
     GITHUB_CI_COVERAGE,
     pkg.scripts,
   );
@@ -790,12 +870,15 @@ function main() {
     );
   }
 
+  const e2ePrWorkflow = readRequiredFile(
+    resolve(root, ".github", "workflows", "ci-e2e-pr.yml"),
+  ) ?? "";
+  const e2eMainWorkflow = readRequiredFile(
+    resolve(root, ".github", "workflows", "ci-e2e.yml"),
+  ) ?? "";
   const e2eBootstrapProblems = findE2eDatabaseBootstrapProblems(
-    readFileSync(
-      resolve(root, ".github", "workflows", "ci-e2e-pr.yml"),
-      "utf8",
-    ),
-    readFileSync(resolve(root, ".github", "workflows", "ci-e2e.yml"), "utf8"),
+    e2ePrWorkflow,
+    e2eMainWorkflow,
   );
   if (e2eBootstrapProblems.length > 0) {
     failed = true;
@@ -809,7 +892,7 @@ function main() {
     );
   }
 
-  const workflowRuns = readGithubWorkflowRuns(root);
+  const workflowRuns = readGithubWorkflowRuns(root, reportReadError);
   const redundantSuiteRuns = findRedundantStandaloneSuiteRuns(workflowRuns);
   if (redundantSuiteRuns.length > 0) {
     failed = true;
@@ -835,8 +918,8 @@ function main() {
   }
 
   // Orphaned check FILES: check-*.{mjs,sh} on disk referenced nowhere.
-  const checkFiles = listCheckFiles(__dirname);
-  const referenceText = buildReferenceText(root, __dirname);
+  const checkFiles = listCheckFiles(__dirname, reportReadError);
+  const referenceText = buildReferenceText(root, __dirname, reportReadError);
 
   const orphans = findOrphanCheckFiles(checkFiles, referenceText);
   if (orphans.length > 0) {
@@ -860,7 +943,7 @@ function main() {
 
   // Guard: no check script may re-declare a local IGNORED_DIRS constant.
   // All walkers must import it from scripts/lib/ignored-dirs.mjs instead.
-  const ignoredDirsViolators = findLocalIgnoredDirsDeclarations(__dirname);
+  const ignoredDirsViolators = findLocalIgnoredDirsDeclarations(__dirname, reportReadError);
   if (ignoredDirsViolators.length > 0) {
     failed = true;
     console.error("[check-runner-step-sync] FAIL — check script(s) re-declare a local IGNORED_DIRS instead of importing from scripts/lib/ignored-dirs.mjs:");
