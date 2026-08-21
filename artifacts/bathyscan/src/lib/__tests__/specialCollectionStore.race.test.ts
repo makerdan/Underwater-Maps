@@ -155,17 +155,20 @@ describe("specialCollectionStore — in-flight activation races", () => {
       }
     }
 
+    const mockCreateObjectURL = vi.fn(() => "blob:test-reference");
+    const mockRevokeObjectURL = vi.fn();
+
     Object.defineProperty(globalThis, "Image", {
       configurable: true,
       value: FallbackImage,
     });
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
-      value: vi.fn(() => "blob:test-reference"),
+      value: mockCreateObjectURL,
     });
     Object.defineProperty(URL, "revokeObjectURL", {
       configurable: true,
-      value: vi.fn(),
+      value: mockRevokeObjectURL,
     });
     (globalThis as { createImageBitmap?: unknown }).createImageBitmap = vi.fn(async () => {
       throw new Error("ImageBitmap decode unavailable");
@@ -181,6 +184,72 @@ describe("specialCollectionStore — in-flight activation races", () => {
       const active = useSpecialCollectionStore.getState().active;
       expect(active?.bgImageW).toBe(320);
       expect(active?.bgImageH).toBe(180);
+      // Object URL must be released even on a successful decode — the browser
+      // has already decoded the image data into the HTMLImageElement.
+      expect(mockRevokeObjectURL).toHaveBeenCalledWith("blob:test-reference");
+    } finally {
+      Object.defineProperty(globalThis, "Image", {
+        configurable: true,
+        value: originalImage,
+      });
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: originalCreateObjectUrl,
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: originalRevokeObjectUrl,
+      });
+    }
+  });
+
+  it("fallback HTMLImageElement decode failure: object URL is released and bgImage stays null", async () => {
+    const originalImage = globalThis.Image;
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+
+    class FailingImage {
+      naturalWidth = 0;
+      naturalHeight = 0;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      set src(_value: string) {
+        queueMicrotask(() => this.onerror?.());
+      }
+    }
+
+    const mockCreateObjectURL = vi.fn(() => "blob:failing-reference");
+    const mockRevokeObjectURL = vi.fn();
+
+    Object.defineProperty(globalThis, "Image", {
+      configurable: true,
+      value: FailingImage,
+    });
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: mockCreateObjectURL,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: mockRevokeObjectURL,
+    });
+    (globalThis as { createImageBitmap?: unknown }).createImageBitmap = vi.fn(async () => {
+      throw new Error("ImageBitmap decode unavailable");
+    });
+
+    try {
+      const activation = useSpecialCollectionStore
+        .getState()
+        .activateForPuzzle(makeCollection("fallback-fail"));
+      deferredFetch.resolvers[0]!(new Blob(["bad"], { type: "image/png" }));
+      await activation;
+
+      const active = useSpecialCollectionStore.getState().active;
+      // Image failed to decode — bgImage must remain null.
+      expect(active?.bgImage).toBeNull();
+      // Object URL must be released even when the decode fails.
+      expect(mockRevokeObjectURL).toHaveBeenCalledWith("blob:failing-reference");
     } finally {
       Object.defineProperty(globalThis, "Image", {
         configurable: true,

@@ -127,8 +127,10 @@ async function loadBgImage(
       img.onerror = () => resolve(false);
       img.src = url;
     });
+    // Always release the object URL — the browser has decoded the image data
+    // into the HTMLImageElement by this point and no longer needs the blob ref.
+    URL.revokeObjectURL(url);
     if (!ok) {
-      URL.revokeObjectURL(url);
       return null;
     }
     return { img, w: img.naturalWidth, h: img.naturalHeight };
