@@ -24,7 +24,7 @@
 import type { PoolClient } from "pg";
 import { db, pool, weatherStationCacheTable } from "@workspace/db";
 import { lt } from "drizzle-orm";
-import { fetchWeatherStations } from "./noaaWeatherFetcher.js";
+import { environmentalObservations } from "../domains/environmental/service.js";
 import { logger } from "./logger.js";
 
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
@@ -120,7 +120,7 @@ async function runRefreshCycle(): Promise<void> {
       continue;
     }
     try {
-      await fetchWeatherStations(parsed.lat, parsed.lon, parsed.radiusMiles);
+      await environmentalObservations.weather.stations(parsed.lat, parsed.lon, parsed.radiusMiles);
       logger.info(
         { cacheKey: row.cacheKey },
         "[weather-refresher] Refreshed cache row",

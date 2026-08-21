@@ -14,7 +14,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { fetchWeatherStations, NoaaUnavailableError, type WeatherStation } from "../lib/noaaWeatherFetcher.js";
+import { environmentalObservations, NoaaUnavailableError, type WeatherStation } from "../domains/environmental/service.js";
 import { LatLonQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";
@@ -44,7 +44,7 @@ router.get("/weather-stations", asyncHandler(async (req, res): Promise<void> => 
   const { lat, lon, radiusMiles } = parsed.data;
 
   try {
-    const result = await fetchWeatherStations(lat, lon, radiusMiles);
+    const result = await environmentalObservations.weather.stations(lat, lon, radiusMiles);
     const checked = GetWeatherStationsResponse.safeParse(result);
     if (!checked.success) {
       logger.warn({ err: checked.error }, "GET /api/weather-stations — upstream response schema validation failed");
@@ -86,7 +86,7 @@ router.get("/weather/pack", asyncHandler(async (req, res): Promise<void> => {
   const { lat, lon } = parsed.data;
 
   try {
-    const result = await fetchWeatherStations(lat, lon, 75);
+    const result = await environmentalObservations.weather.stations(lat, lon, 75);
     const nearest = result.stations[0] ?? null;
       res.json(validateProxyResponse(GetWeatherPackResponse, {
       station: nearest?.name ?? null,

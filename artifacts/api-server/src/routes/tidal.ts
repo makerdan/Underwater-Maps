@@ -23,6 +23,11 @@ import {
   GetTidalScheduleResponse,
   GetTidalPackResponse,
 } from "@workspace/api-zod";
+import {
+  currentPeak,
+  tideStationList,
+  waterLevelEvents,
+} from "../domains/environmental/service.js";
 
 /**
  * Map a Zod query-validation error onto the tidal routes' legacy
@@ -306,13 +311,13 @@ function pickNearest(
 }
 
 async function getNearestHeightsStation(lat: number, lon: number): Promise<NoaaStation | null> {
-  const data = await getStationList("waterlevels");
+  const data = await tideStationList("waterlevels");
   if (!data) return null;
   return pickNearest(data, lat, lon, 100);
 }
 
 async function getNearestCurrentsStation(lat: number, lon: number): Promise<NoaaStation | null> {
-  const data = await getStationList("currentpredictions");
+  const data = await tideStationList("currentpredictions");
   if (!data) return null;
   // Currents fields are much more localized than heights, so restrict to 50 km.
   return pickNearest(data, lat, lon, 50);
@@ -653,8 +658,8 @@ router.get("/tidal", asyncHandler(async (req, res): Promise<void> => {
 
   // And fetch each station's predictions in parallel as well.
   const [heightsEvents, currentsPeak] = await Promise.all([
-    heightsStation ? getHighLowEvents(heightsStation.id, refTime) : Promise.resolve(null),
-    currentsStation ? getCurrentsPeak(currentsStation.id, refTime) : Promise.resolve(null),
+    heightsStation ? waterLevelEvents(heightsStation.id, refTime) : Promise.resolve(null),
+    currentsStation ? currentPeak(currentsStation.id, refTime) : Promise.resolve(null),
   ]);
 
   if (waterType === "freshwater") {
@@ -820,7 +825,7 @@ router.get("/tidal/schedule", asyncHandler(async (req, res): Promise<void> => {
   if (station) {
     // Fetch enough margin on either side so slack-window detection at
     // the edges still has a bracket.
-    events = await getHighLowEvents(station.id, startTime, 1, days + 1);
+    events = await waterLevelEvents(station.id, startTime, 1, days + 1);
     if (events && events.length > 0) {
       source = "noaa";
       stationName = station.name;

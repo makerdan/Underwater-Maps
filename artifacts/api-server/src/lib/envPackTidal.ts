@@ -6,8 +6,8 @@
  * the tides route so no redundant HTTP requests are made.
  */
 
-import { getStationList, haversineKm } from "../routes/tidal.js";
-import { getTidePredictions, getStationDatums } from "../routes/tides.js";
+import { tideDatums, tidePredictions, tideStationList } from "../domains/environmental/service.js";
+import { haversineKm } from "../routes/tidal.js";
 import { logger } from "./logger.js";
 import type { TideStationPack } from "./envPack.js";
 
@@ -31,7 +31,7 @@ export async function fetchTideStationsInRadius(
   days: number,
   now = new Date(),
 ): Promise<TideStationPack[] | null> {
-  const stations = await getStationList("waterlevels");
+  const stations = await tideStationList("waterlevels");
   if (stations === null) return null;
 
   const radiusKm = radiusMiles * 1.60934;
@@ -49,8 +49,8 @@ export async function fetchTideStationsInRadius(
   const results = await Promise.allSettled(
     nearby.map(async ({ s, km }) => {
       const [predResult, datums] = await Promise.all([
-        getTidePredictions(s.id, now),
-        getStationDatums(s.id),
+        tidePredictions(s.id, now),
+        tideDatums(s.id),
       ]);
 
       if (!predResult) {

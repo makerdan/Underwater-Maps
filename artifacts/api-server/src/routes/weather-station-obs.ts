@@ -10,7 +10,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { fetchStationObsAt } from "../lib/noaaWeatherFetcher.js";
+import { environmentalObservations } from "../domains/environmental/service.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";
 import { GetWeatherStationObsResponse } from "@workspace/api-zod";
@@ -41,7 +41,7 @@ router.get("/weather-station-obs", asyncHandler(async (req, res): Promise<void> 
   const targetTime = new Date(time);
 
   try {
-    const obs = await fetchStationObsAt(stationId, targetTime);
+     const obs = await environmentalObservations.weather.stationAt(stationId, targetTime);
     if (!obs) {
       res.json(validateProxyResponse(
         GetWeatherStationObsResponse,

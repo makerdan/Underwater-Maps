@@ -131,4 +131,5 @@
 - [PWA service-worker base normalization](pwa-service-worker-base-normalization.md) — never append `/` to an already-root base; emitted `//sw.js` becomes cross-origin and leaves `serviceWorker.ready` pending.
 - [Offline cache rollback fences](offline-cache-rollback-fences.md) — cache rollback snapshots need per-URL ownership fencing so an older cancelled save cannot restore over a newer retry.
 - [Nested router guard prefixes](express-nested-router-guard-prefixes.md) — aggregate Express route guards need explicit mount prefixes; nested layer internals do not reliably expose them.
+- [Environmental observation boundary](environmental-observation-boundary.md) — weather, tide, marine temperature, and profile callers use one facade while adapters retain behavior.
 - [Validation-lock detached lifecycle](validation-lock-unref-lifecycle.md) — an unref'd detached child still needs a referenced lifecycle handle until its exit event.

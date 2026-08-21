@@ -10,7 +10,7 @@
  *      nearby stations share the same NWS grid cell area).
  */
 
-import { fetchWeatherStations } from "./noaaWeatherFetcher.js";
+import { environmentalObservations } from "../domains/environmental/service.js";
 import { logger } from "./logger.js";
 import type { WeatherStationPack, WeatherHourlyForecastPeriod } from "./envPack.js";
 
@@ -116,9 +116,9 @@ export async function fetchWeatherStationPacks(
   lon: number,
   radiusMiles: number,
 ): Promise<WeatherStationPack[] | null> {
-  let stationsResult: Awaited<ReturnType<typeof fetchWeatherStations>>;
+  let stationsResult: Awaited<ReturnType<typeof environmentalObservations.weather.stations>>;
   try {
-    stationsResult = await fetchWeatherStations(lat, lon, radiusMiles);
+    stationsResult = await environmentalObservations.weather.stations(lat, lon, radiusMiles);
   } catch {
     // NoaaUnavailableError or any other error — treat as unavailable.
     logger.warn({ lat, lon, radiusMiles }, "[envPackWeather] fetchWeatherStations failed");

@@ -26,7 +26,7 @@ import { fetchTideStationsInRadius } from "../lib/envPackTidal.js";
 import { fetchWeatherStationPacks } from "../lib/envPackWeather.js";
 import { fetchMarineConditions } from "../lib/envPackMarine.js";
 import { fetchArgoProfile } from "../lib/argoErddap.js";
-import { findBundledTemperatureProfile } from "../lib/temperatureProfiles.js";
+import { environmentalObservations } from "../domains/environmental/service.js";
 import type { EnvPack, TemperatureProfilePack } from "../lib/envPack.js";
 import { GetEnvPackResponse } from "@workspace/api-zod";
 import { validateResponse } from "../middlewares/validateResponse.js";
@@ -101,7 +101,7 @@ async function fetchTemperatureProfile(
 ): Promise<TemperatureProfilePack> {
   // Try bundled WOA profile first, then Argo.
   for (const { name, fetchFn } of [
-    { name: "woa", fetchFn: () => findBundledTemperatureProfile(lat, lon, null) },
+    { name: "woa", fetchFn: () => environmentalObservations.temperature.bundledProfile(lat, lon, null) },
     { name: "argo", fetchFn: () => fetchArgoProfile(lat, lon) },
   ]) {
     try {

@@ -19,11 +19,8 @@ import {
   GetTidesStationIdResponse,
   GetTidesStationIdDatumsResponse,
 } from "@workspace/api-zod";
-import {
-  getStationList,
-  haversineKm,
-  type NoaaStation,
-} from "./tidal.js";
+import { tideStationList } from "../domains/environmental/service.js";
+import { haversineKm, type NoaaStation } from "./tidal.js";
 
 const router = Router();
 
@@ -51,7 +48,7 @@ export async function findNearestTideStation(
   lat: number,
   lon: number,
 ): Promise<NearestTideStation | null> {
-  const stations = await getStationList("waterlevels");
+  const stations = await tideStationList("waterlevels");
   if (!stations || stations.length === 0) return null;
   let nearest: NoaaStation | null = null;
   let nearestKm = Infinity;

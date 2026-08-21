@@ -20,70 +20,13 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";
 import { GetWaterTemperatureResponse } from "@workspace/api-zod";
 import { validateProxyResponse } from "../middlewares/validateResponse.js";
+import { fetchCurrentSst, pickCurrentSst } from "../domains/environmental/service.js";
 
 const router = Router();
 
-const MARINE_BASE = "https://marine-api.open-meteo.com/v1/marine";
 const SOURCE_LABEL = "Open-Meteo Marine API (sea-surface temperature)";
 const SOURCE_URL = "https://open-meteo.com/en/docs/marine-weather-api";
-
-async function fetchWithTimeout(url: string, timeoutMs = 6000): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { signal: controller.signal });
-  } finally {
-    clearTimeout(id);
-  }
-}
-
-interface MarineResponse {
-  hourly?: {
-    time?: string[];
-    sea_surface_temperature?: (number | null)[];
-  };
-}
-
-/**
- * Pick the sample from `hourly` whose timestamp matches the current UTC hour,
- * falling back to the most recent finite sample available.
- */
-export function pickCurrentSst(
-  json: MarineResponse,
-  now: Date = new Date(),
-): { sst: number; timestamp: string } | null {
-  const times = json.hourly?.time ?? [];
-  const ssts = json.hourly?.sea_surface_temperature ?? [];
-  if (times.length === 0 || ssts.length === 0) return null;
-
-  const target = new Date(now);
-  target.setUTCMinutes(0, 0, 0);
-  const targetIso = target.toISOString().slice(0, 13); // YYYY-MM-DDTHH
-
-  let exactIdx = -1;
-  let lastFiniteIdx = -1;
-  for (let i = 0; i < times.length; i++) {
-    const t = times[i];
-    const v = ssts[i];
-    if (typeof v !== "number" || !Number.isFinite(v)) continue;
-    lastFiniteIdx = i;
-    if (typeof t === "string" && t.slice(0, 13) === targetIso) {
-      exactIdx = i;
-      break;
-    }
-  }
-
-  const idx = exactIdx !== -1 ? exactIdx : lastFiniteIdx;
-  if (idx === -1) return null;
-
-  const sstRaw = ssts[idx] as number;
-  const timeRaw = times[idx];
-  const tsDate = typeof timeRaw === "string" ? new Date(`${timeRaw}Z`) : target;
-  return {
-    sst: Math.round(sstRaw * 100) / 100,
-    timestamp: tsDate.toISOString(),
-  };
-}
+export { pickCurrentSst };
 
 router.get("/water-temperature", asyncHandler(async (req, res): Promise<void> => {
   const parsed = LatLonQuerySchema.safeParse(req.query);
@@ -101,12 +44,8 @@ router.get("/water-temperature", asyncHandler(async (req, res): Promise<void> =>
   res.setHeader("Cache-Control", "public, max-age=1800");
 
   try {
-    const url = `${MARINE_BASE}?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature&forecast_days=1&timezone=UTC`;
-    const upstream = await fetchWithTimeout(url, 6000);
-    if (upstream.ok) {
-      const json = (await upstream.json()) as MarineResponse;
-      const picked = pickCurrentSst(json);
-      if (picked) {
+    const picked = await fetchCurrentSst(lat, lon);
+    if (picked) {
         res.json(validateProxyResponse(GetWaterTemperatureResponse, {
           available: true,
           lat,
@@ -123,7 +62,6 @@ router.get("/water-temperature", asyncHandler(async (req, res): Promise<void> =>
           sourceUrl: SOURCE_URL,
         }, "GET /api/water-temperature"));
         return;
-      }
     }
   } catch (err) {
     logger.error({ err, lat, lon }, "[water-temperature] Open-Meteo fetch failed");

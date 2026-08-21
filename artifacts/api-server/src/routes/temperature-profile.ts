@@ -25,8 +25,8 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { findBundledTemperatureProfile } from "../lib/temperatureProfiles";
 import { fetchArgoProfile } from "../lib/argoErddap";
+import { environmentalObservations } from "../domains/environmental/service.js";
 import { LatLonQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { logger } from "../lib/logger.js";
@@ -87,7 +87,7 @@ export type TemperatureProfileProvider = (
 export const profileProviders: TemperatureProfileProvider[] = [
   // 1. Per-dataset / nearby bundled WOA climatology casts.
   ({ lat, lon, datasetId }) =>
-    findBundledTemperatureProfile(lat, lon, datasetId ?? null),
+    environmentalObservations.temperature.bundledProfile(lat, lon, datasetId ?? null),
   // 2. Live Argo float lookup via Ifremer ERDDAP.
   ({ lat, lon }) => fetchArgoProfile(lat, lon),
   // 3. (future) Copernicus Marine reanalysis
