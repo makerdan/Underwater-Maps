@@ -60,20 +60,30 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 const localDir = resolve(root, ".local");
 
-const POLL_INTERVAL_MS = Number(process.env.VALIDATION_LOCK_POLL_MS || 1_000);
-const TIMEOUT_MS = Number(process.env.VALIDATION_LOCK_TIMEOUT_MS || 3 * 60 * 60 * 1000);
-const HEARTBEAT_MS = Number(process.env.VALIDATION_LOCK_HEARTBEAT_MS || 30_000);
+function readPositiveTimingEnv(name, defaultValue) {
+  const raw = process.env[name] ?? String(defaultValue);
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    console.error(`validation-lock: invalid value for ${name}: '${raw}'`);
+    process.exit(1);
+  }
+  return value;
+}
+
+const POLL_INTERVAL_MS = readPositiveTimingEnv("VALIDATION_LOCK_POLL_MS", 1_000);
+const TIMEOUT_MS = readPositiveTimingEnv("VALIDATION_LOCK_TIMEOUT_MS", 3 * 60 * 60 * 1000);
+const HEARTBEAT_MS = readPositiveTimingEnv("VALIDATION_LOCK_HEARTBEAT_MS", 30_000);
 // Lowered from 5 min to 60 s to shrink the PID-reuse window: if a lock holder
 // is SIGKILLed and its PID is immediately reused by an unrelated OS process,
 // pidAlive(holderPid) returns true and this stale-heartbeat fallback is the
 // only reclaim path.  60 s keeps the false-live window acceptably short while
 // still tolerating brief system pauses.  Override via env var for CI machines
 // with exceptionally long scheduling pauses.
-const STALE_HEARTBEAT_MS = Number(process.env.VALIDATION_LOCK_STALE_HEARTBEAT_MS || 60_000);
-const MAX_HOLD_MS = Number(process.env.VALIDATION_LOCK_MAX_HOLD_MS || 2 * 60 * 60 * 1000);
+const STALE_HEARTBEAT_MS = readPositiveTimingEnv("VALIDATION_LOCK_STALE_HEARTBEAT_MS", 60_000);
+const MAX_HOLD_MS = readPositiveTimingEnv("VALIDATION_LOCK_MAX_HOLD_MS", 2 * 60 * 60 * 1000);
 // How long a higher-priority waiter must have been queued before lower-priority
 // waiters yield to it on their next poll tick.
-const PRIORITY_GRACE_MS = Number(process.env.VALIDATION_LOCK_PRIORITY_GRACE_MS || 2_000);
+const PRIORITY_GRACE_MS = readPositiveTimingEnv("VALIDATION_LOCK_PRIORITY_GRACE_MS", 2_000);
 
 // ---------------------------------------------------------------------------
 // Argument parsing
@@ -91,7 +101,11 @@ const commandLabel = command.join(" ");
 let resource = "global";
 let priority = 5;
 for (let i = 0; i < lockArgs.length; i++) {
-  if (lockArgs[i] === "--resource" && lockArgs[i + 1] !== undefined) {
+  if (lockArgs[i] === "--resource") {
+    if (lockArgs[i + 1] === undefined || lockArgs[i + 1].startsWith("--")) {
+      console.error("Usage: validation-lock.mjs --resource requires a non-empty name.");
+      process.exit(1);
+    }
     resource = lockArgs[++i];
   } else if (lockArgs[i] === "--priority" && lockArgs[i + 1] !== undefined) {
     priority = Math.max(1, Math.min(9, Number(lockArgs[++i]) || 5));
@@ -100,6 +114,12 @@ for (let i = 0; i < lockArgs.length; i++) {
 
 // Sanitise resource name for use in file/env paths (alphanumeric + hyphen only).
 const safeResource = resource.replace(/[^a-zA-Z0-9-]/g, "-");
+if (!safeResource || !/[a-zA-Z0-9]/.test(safeResource)) {
+  console.error(
+    "Usage: validation-lock.mjs --resource requires a value containing at least one alphanumeric character.",
+  );
+  process.exit(1);
+}
 const resourceUpper = safeResource.toUpperCase().replace(/-/g, "_");
 
 // Lock file: override via env (for tests) or derive from resource name.
@@ -127,6 +147,16 @@ function pidAlive(pid) {
   } catch (err) {
     return err.code === "EPERM";
   }
+}
+
+function shellQuoteArgument(argument) {
+  // shell:true is required for reentrant commands, but Node passes argument
+  // values through the shell. Quote values such as `node -e process.exit(0)`
+  // while preserving standalone shell operators for callers that provide
+  // them as command arguments.
+  if (/^(?:&&|\|\||\||[<>]{1,2}|;)$/.test(argument)) return argument;
+  if (/^[a-zA-Z0-9_./:=,@%+-]+$/.test(argument)) return argument;
+  return `'${argument.replaceAll("'", "'\\''")}'`;
 }
 
 function readLockInfo() {
@@ -330,7 +360,12 @@ async function acquireWithTimeout() {
 // Main
 // ---------------------------------------------------------------------------
 
-mkdirSync(lockDir, { recursive: true });
+try {
+  mkdirSync(lockDir, { recursive: true });
+} catch (err) {
+  console.error(`validation-lock: cannot create lock directory '${lockDir}': ${err.message}`);
+  process.exit(1);
+}
 
 // Reentrancy check: if an ancestor wrapper already holds this named resource,
 // running the command directly avoids a deadlock. The holder exports
@@ -348,7 +383,11 @@ if (Number.isInteger(heldPid) && heldPid > 0 && heldPid !== process.pid && pidAl
   console.log(
     `[validation-lock] lock already held by ancestor pid ${heldPid} (resource="${resource}") — running reentrantly: ${commandLabel}`,
   );
-  const child = spawn(command[0], command.slice(1), { stdio: "inherit" });
+  const child = spawn(
+    command[0],
+    command.slice(1).map(shellQuoteArgument),
+    { shell: true, stdio: "inherit" },
+  );
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(sig, () => {
       if (child.exitCode === null && child.signalCode === null) {

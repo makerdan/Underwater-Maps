@@ -43,6 +43,14 @@ if (positional.length === 0) {
   process.exit(1);
 }
 
+if (positional.length > 1) {
+  console.error(
+    "run-locked-tier: expected exactly one plan file argument.\n" +
+      "Usage: node scripts/run-locked-tier.mjs [--dry-run] <plan-file>",
+  );
+  process.exit(1);
+}
+
 const planFile = positional[0];
 
 // ---------------------------------------------------------------------------
