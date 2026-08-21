@@ -43,7 +43,7 @@ export function validateBody<T extends z.ZodTypeAny>(
         sanitizeZodIssue(i as unknown as Record<string, unknown>),
       );
       const sanitizedDetails = parsed.error.issues
-        .map((i) => `${(i.path ?? []).join(".") || "(root)"}: ${i.code}`)
+        .map((i) => `${(i.path ?? []).join(".") || "(root)"}: ${i.message}`)
         .join("; ");
       logger.warn(
         { route: routeLabel, issues: logIssues },

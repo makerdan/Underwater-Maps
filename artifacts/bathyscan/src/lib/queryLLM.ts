@@ -9,6 +9,19 @@ import { z } from "zod";
 
 import { authorizedFetch } from "./authorizedFetch";
 
+/**
+ * Thrown by queryLLM when the API rejects the request because the question
+ * or conversation context is too large for the AI provider's context window.
+ * The terrain-guide UI catches this specifically to show an actionable
+ * "shorten your question" message instead of the generic failure banner.
+ */
+export class QueryTooLongError extends Error {
+  constructor(details?: string) {
+    super(details ?? "Query too long");
+    this.name = "QueryTooLongError";
+  }
+}
+
 export interface QueryContext {
   datasetName: string;
   waterType?: "saltwater" | "freshwater";
@@ -56,6 +69,13 @@ export async function queryLLM(
   });
 
   if (!resp.ok) {
+    if (resp.status === 400) {
+      let body: { error?: string; details?: string } | null = null;
+      try { body = await resp.json() as { error?: string; details?: string }; } catch { /* ignore parse error */ }
+      if (body?.error === "invalid_request") {
+        throw new QueryTooLongError(body?.details);
+      }
+    }
     const text = await resp.text().catch(() => "Unknown error");
     throw new Error(`Query failed: ${resp.status} ${text}`);
   }

@@ -12,7 +12,7 @@
  * Query history (last 10) is persisted in localStorage.
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { queryLLM, type QueryContext } from "@/lib/queryLLM";
+import { queryLLM, QueryTooLongError, type QueryContext } from "@/lib/queryLLM";
 import { executeTool, type ToolOptions } from "@/lib/queryTools";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useTerrainStore } from "@/lib/terrainStore";
@@ -164,6 +164,17 @@ export function QueryPanel({ open, onClose, setDatasetId }: QueryPanelProps) {
       // Ignore AbortError — the user cancelled intentionally or navigated away.
       if (err instanceof Error && err.name === "AbortError") {
         setResult(null);
+        return;
+      }
+      // Prompt-size validation — the API rejected the request before calling
+      // the AI provider because the question or conversation context was too
+      // large.  Show an actionable message rather than the generic failure.
+      // Use name-based detection so the check survives module-boundary
+      // differences between the real class and test mocks.
+      if (err instanceof Error && err.name === "QueryTooLongError") {
+        setResult(
+          "Your question or conversation context is too long. Please shorten your question and try again.",
+        );
         return;
       }
       setResult(err instanceof Error ? err.message : "Query failed. Please try again.");
