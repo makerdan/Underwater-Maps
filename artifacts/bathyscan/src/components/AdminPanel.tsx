@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { UserAccessSection } from "@/components/admin/UserAccessSection";
+import { useToast } from "@/hooks/use-toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
   AdminListUsersResponse,
@@ -240,6 +241,7 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
   const [approveErrors, setApproveErrors] = useState<Map<string, string>>(new Map());
   const [denyingIds, setDenyingIds] = useState<Set<string>>(new Set());
   const [denyErrors, setDenyErrors] = useState<Map<string, string>>(new Map());
+  const { toast } = useToast();
   const cancelledRef = useRef(false);
 
   useEffect(() => () => {
@@ -247,6 +249,7 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
   }, []);
 
   const load = useCallback(async () => {
+    setLoadState("loading");
     try {
       const res = await authorizedFetch(`${basePath}/api/admin/users?status=pending&limit=50`);
       if (cancelledRef.current) return;
@@ -292,12 +295,13 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       // Remove the approved user from the local list immediately.
       setUsers((prev) => prev.filter((u) => u.clerkUserId !== clerkUserId));
+      toast({ title: "User approved" });
     } catch {
       setApproveErrors((prev) => new Map(prev).set(clerkUserId, "Approval failed — try again"));
     } finally {
       setApprovingIds((prev) => { const s = new Set(prev); s.delete(clerkUserId); return s; });
     }
-  }, []);
+  }, [toast]);
 
   const handleDeny = useCallback(async (clerkUserId: string) => {
     setDenyingIds((prev) => new Set(prev).add(clerkUserId));
@@ -310,12 +314,13 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       // Remove the denied user from the list immediately, matching approve UX.
       setUsers((prev) => prev.filter((u) => u.clerkUserId !== clerkUserId));
+      toast({ title: "User access denied" });
     } catch {
       setDenyErrors((prev) => new Map(prev).set(clerkUserId, "Deny failed — try again"));
     } finally {
       setDenyingIds((prev) => { const s = new Set(prev); s.delete(clerkUserId); return s; });
     }
-  }, []);
+  }, [toast]);
 
   if (adminStatus === "loading") return null;
   if (adminStatus === "forbidden") return null;
@@ -343,11 +348,11 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
           </span>
         )}
       </div>
-        {loadState === "ok" && totalCount !== null && users.length < totalCount && (
-          <div style={{ ...S.note, marginTop: -6, marginBottom: 10 }}>
-            Showing {users.length} of {totalCount} — see User Access tab for full list.
-          </div>
-        )}
+      {loadState === "ok" && totalCount !== null && users.length < totalCount && (
+        <div style={{ ...S.note, marginTop: -6, marginBottom: 10 }}>
+          Showing {users.length} of {totalCount} — see User Access tab for full list.
+        </div>
+      )}
 
       {loadState === "loading" && (
         <>
@@ -357,7 +362,24 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
       )}
 
       {loadState === "error" && (
-        <div style={S.error}>Failed to load pending users.</div>
+        <>
+          <div style={S.error}>Failed to load pending users.</div>
+          <button
+            data-testid="pending-approvals-retry"
+            onClick={() => void load()}
+            style={{
+              ...S.cardTitle,
+              background: "none",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 3,
+              padding: "5px 10px",
+              marginTop: 10,
+              cursor: "pointer",
+            }}
+          >
+            RETRY
+          </button>
+        </>
       )}
 
       {loadState === "ok" && users.length === 0 && (
@@ -517,7 +539,26 @@ function SkillDownloadCard({ adminStatus }: { adminStatus: "loading" | "ok" | "f
             {downloadState === "downloading" ? "DOWNLOADING…" : "DOWNLOAD FAILURE GATE SKILL"}
           </button>
           {downloadState === "error" && (
-            <div style={{ ...S.error, marginTop: 8 }}>Download failed. Check server logs.</div>
+            <>
+              <div style={{ ...S.error, marginTop: 8 }}>
+                Failed to download — please try again. If this keeps failing, the package may be missing from this deployment.
+              </div>
+              <button
+                data-testid="admin-skill-download-retry"
+                onClick={() => void handleDownload()}
+                style={{
+                  ...S.cardTitle,
+                  background: "none",
+                  border: "1px solid rgba(0,229,255,0.25)",
+                  borderRadius: 3,
+                  padding: "5px 10px",
+                  marginTop: 10,
+                  cursor: "pointer",
+                }}
+              >
+                RETRY
+              </button>
+            </>
           )}
         </>
       )}
@@ -532,6 +573,7 @@ function SkillDownloadCard({ adminStatus }: { adminStatus: "loading" | "ok" | "f
 export function AdminPanel() {
   const [stats, setStats] = useState<UpscaleCacheStats | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "forbidden" | "error">("loading");
+  const [adminProbeAttempt, setAdminProbeAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -566,22 +608,14 @@ export function AdminPanel() {
 
     void load();
     return () => { cancelled = true; };
-  }, []);
+  }, [adminProbeAttempt]);
 
   return (
     <div style={S.section}>
       <div style={S.title}>Admin</div>
 
       {/* Pending Approvals — shown whenever admin status is known (not loading/forbidden) */}
-      <ErrorBoundary
-        fallback={
-          <div style={{ ...S.card, marginBottom: 12 }}>
-            <div style={S.error}>Pending approvals could not be loaded.</div>
-          </div>
-        }
-      >
-        <PendingApprovalsCard adminStatus={status} />
-      </ErrorBoundary>
+      <PendingApprovalsCard adminStatus={status} />
 
       {status === "loading" && <SkeletonCard />}
 
@@ -594,6 +628,21 @@ export function AdminPanel() {
       {status === "error" && (
         <div style={S.card}>
           <div style={S.error}>Admin tools are temporarily unavailable.</div>
+          <button
+            data-testid="admin-stats-retry"
+            onClick={() => setAdminProbeAttempt((attempt) => attempt + 1)}
+            style={{
+              ...S.cardTitle,
+              background: "none",
+              border: "1px solid rgba(0,229,255,0.25)",
+              borderRadius: 3,
+              padding: "5px 10px",
+              marginTop: 10,
+              cursor: "pointer",
+            }}
+          >
+            RETRY
+          </button>
         </div>
       )}
 

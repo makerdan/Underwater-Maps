@@ -10,11 +10,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const authorizedFetchMock = vi.fn<(...args: unknown[]) => Promise<Response>>();
+const toastMock = vi.fn();
 
 vi.mock("@/lib/authorizedFetch", () => ({
   authorizedFetch: (...args: unknown[]) => authorizedFetchMock(...args),
 }));
 vi.mock("@/lib/blobDownload", () => ({ triggerBlobDownload: vi.fn() }));
+vi.mock("@/hooks/use-toast", () => ({
+  useToast: () => ({ toast: toastMock }),
+}));
 
 // Use a vi.fn() so individual tests can swap to a crashing implementation.
 const UserAccessSectionImpl = vi.hoisted(() =>
@@ -155,6 +159,18 @@ describe("AdminPanel — pending approvals badge after batch actions", () => {
     const calledUrls = authorizedFetchMock.mock.calls.map((c) => String(c[0]));
     expect(calledUrls.some((u) => u.includes("/approve"))).toBe(true);
     expect(calledUrls.some((u) => u.includes("/ban"))).toBe(true);
+  });
+
+  it("shows a success toast after approving a pending user", async () => {
+    mockRoutes([makeUser(1)]);
+    render(<AdminPanel />);
+
+    const row = await screen.findByTestId("pending-user-row");
+    fireEvent.click(within(row).getByTestId("approve-user-btn"));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith({ title: "User approved" }),
+    );
   });
 });
 
