@@ -15,8 +15,13 @@ vi.mock("@/lib/authorizedFetch", () => ({
   authorizedFetch: (...args: unknown[]) => authorizedFetchMock(...args),
 }));
 vi.mock("@/lib/blobDownload", () => ({ triggerBlobDownload: vi.fn() }));
+
+// Use a vi.fn() so individual tests can swap to a crashing implementation.
+const UserAccessSectionImpl = vi.hoisted(() =>
+  vi.fn(() => <div data-testid="user-access-stub" />),
+);
 vi.mock("@/components/admin/UserAccessSection", () => ({
-  UserAccessSection: () => <div data-testid="user-access-stub" />,
+  UserAccessSection: () => UserAccessSectionImpl(),
 }));
 
 import { AdminPanel } from "@/components/AdminPanel";
@@ -74,6 +79,8 @@ function mockRoutes(pending: TestPendingUser[]) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Restore default stub in case a test swapped it to a crashing implementation.
+  UserAccessSectionImpl.mockImplementation(() => <div data-testid="user-access-stub" />);
 });
 
 describe("AdminPanel — pending approvals badge after batch actions", () => {
@@ -174,5 +181,43 @@ describe("AdminPanel — pending approvals badge after batch actions", () => {
     const calledUrls = authorizedFetchMock.mock.calls.map((c) => String(c[0]));
     expect(calledUrls.some((u) => u.includes("/approve"))).toBe(true);
     expect(calledUrls.some((u) => u.includes("/ban"))).toBe(true);
+  });
+});
+
+describe("AdminPanel — per-card ErrorBoundary regression", () => {
+  it("UserAccessSection render error shows per-card fallback without crashing other cards", async () => {
+    // Suppress React 19's concurrent-rendering recovery error logs AND the
+    // window-level error event that React dispatches even when an ErrorBoundary
+    // has caught the original error.
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const suppressWindowError = (e: Event) => { e.preventDefault(); };
+    window.addEventListener("error", suppressWindowError);
+
+    mockRoutes([]);
+    // Use mockImplementation (not Once): React 19 may re-render synchronously
+    // after the concurrent attempt, consuming a Once-mock before the
+    // ErrorBoundary has committed its fallback.
+    UserAccessSectionImpl.mockImplementation(() => {
+      throw new Error("simulated UserAccessSection render crash");
+    });
+
+    render(<AdminPanel />);
+
+    // Per-card fallback must appear once the admin status resolves.
+    await waitFor(() =>
+      expect(
+        screen.getByText("User access table could not be loaded."),
+      ).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    // Other cards must still be present.
+    expect(screen.getByText("Email Delivery Verification")).toBeInTheDocument();
+    expect(screen.getByText("Skill Download")).toBeInTheDocument();
+
+    // Explicitly restore stub; beforeEach also resets it, but be explicit.
+    UserAccessSectionImpl.mockImplementation(() => <div data-testid="user-access-stub" />);
+    window.removeEventListener("error", suppressWindowError);
+    consoleError.mockRestore();
   });
 });

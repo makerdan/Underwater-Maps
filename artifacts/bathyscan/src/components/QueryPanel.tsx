@@ -12,7 +12,7 @@
  * Query history (last 10) is persisted in localStorage.
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { queryLLM, QueryTooLongError, type QueryContext } from "@/lib/queryLLM";
+import { queryLLM, type QueryContext } from "@/lib/queryLLM";
 import { executeTool, type ToolOptions } from "@/lib/queryTools";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { useTerrainStore } from "@/lib/terrainStore";

@@ -220,7 +220,13 @@ const S = {
 };
 
 function StatusBadge({ status }: { status: AdminUserStatus }) {
-  const { color, border } = BADGE_COLORS[status];
+  // Guard against unexpected runtime values (e.g. new status values from a
+  // future API version) — return a neutral badge rather than throwing.
+  const colors = BADGE_COLORS[status] ?? {
+    color: "rgba(226,232,240,0.5)",
+    border: "rgba(226,232,240,0.25)",
+  };
+  const { color, border } = colors;
   return (
     <span style={{ ...S.badge, color, border: `1px solid ${border}` }}>
       {status}

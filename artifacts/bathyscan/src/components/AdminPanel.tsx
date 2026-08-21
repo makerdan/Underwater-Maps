@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { UserAccessSection } from "@/components/admin/UserAccessSection";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -235,17 +236,26 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
   const [denyingIds, setDenyingIds] = useState<Set<string>>(new Set());
   const [denyErrors, setDenyErrors] = useState<Map<string, string>>(new Map());
 
+  // Track unmount so stale async updates do not trigger state changes after
+  // the card has been removed from the tree.
+  const cancelledRef = useRef(false);
+  useEffect(() => {
+    return () => { cancelledRef.current = true; };
+  }, []);
+
   const load = useCallback(async () => {
     try {
       const res = await authorizedFetch(`${basePath}/api/admin/users?status=pending&limit=50`);
+      if (cancelledRef.current) return;
       if (!res.ok) { setLoadState("error"); return; }
       const data: unknown = await res.json();
+      if (cancelledRef.current) return;
       const pendingUsers =
         isRecord(data) && Array.isArray(data.users) ? data.users : [];
       setUsers(pendingUsers as PendingUser[]);
       setLoadState("ok");
     } catch {
-      setLoadState("error");
+      if (!cancelledRef.current) setLoadState("error");
     }
   }, []);
 
@@ -541,7 +551,15 @@ export function AdminPanel() {
       <div style={S.title}>Admin</div>
 
       {/* Pending Approvals — shown whenever admin status is known (not loading/forbidden) */}
-      <PendingApprovalsCard adminStatus={status} />
+      <ErrorBoundary
+        fallback={
+          <div style={{ ...S.card, marginBottom: 12 }}>
+            <div style={S.error}>Pending approvals could not be loaded.</div>
+          </div>
+        }
+      >
+        <PendingApprovalsCard adminStatus={status} />
+      </ErrorBoundary>
 
       {status === "loading" && <SkeletonCard />}
 
@@ -560,7 +578,17 @@ export function AdminPanel() {
       {/* User approval management — mounted only after a protected server
           endpoint confirms admin access, so no other admin requests are made
           for a forbidden caller. */}
-      {status === "ok" && <UserAccessSection />}
+      {status === "ok" && (
+        <ErrorBoundary
+          fallback={
+            <div style={{ ...S.card, marginTop: 12 }}>
+              <div style={S.error}>User access table could not be loaded.</div>
+            </div>
+          }
+        >
+          <UserAccessSection />
+        </ErrorBoundary>
+      )}
 
       {status === "ok" && stats && (
         <div style={{ ...S.card, marginTop: 12 }}>
@@ -597,7 +625,22 @@ export function AdminPanel() {
 
       {status === "ok" && (
         <>
-          <EmailDeliveryCard />
+          <ErrorBoundary
+            fallback={
+              <div style={{ ...S.card, marginTop: 12 }}>
+                <div style={S.error}>Email delivery section could not be loaded.</div>
+              </div>
+            }
+          >
+            <EmailDeliveryCard />
+          </ErrorBoundary>
+          <ErrorBoundary
+            fallback={
+              <div style={{ ...S.card, marginTop: 12 }}>
+                <div style={S.error}>Operational stats could not be loaded.</div>
+              </div>
+            }
+          >
           <OperationalCard
             title="Dataset Bucket Status"
             endpoint="/api/admin/bucket-monitor"
@@ -627,10 +670,21 @@ export function AdminPanel() {
               return count > 0 ? `${count} active usage bucket${count === 1 ? "" : "s"}.` : "";
             }}
           />
+          </ErrorBoundary>
         </>
       )}
 
-      {status === "ok" && <SkillDownloadCard adminStatus={status} />}
+      {status === "ok" && (
+        <ErrorBoundary
+          fallback={
+            <div style={{ ...S.card, marginTop: 12 }}>
+              <div style={S.error}>Skill download could not be loaded.</div>
+            </div>
+          }
+        >
+          <SkillDownloadCard adminStatus={status} />
+        </ErrorBoundary>
+      )}
     </div>
   );
 }

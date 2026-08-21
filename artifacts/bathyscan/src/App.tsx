@@ -2269,6 +2269,68 @@ function HomeRoute() {
   );
 }
 
+/**
+ * Fallback shown when the Settings component tree crashes at the top level
+ * (outside the inner AdminSection boundary).  Preserves the dark background
+ * so the user never sees a white flash; the Back button exits without a reload.
+ */
+function SettingsOuterFallback() {
+  return (
+    <div
+      data-testid="settings-outer-error-fallback"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100vh",
+        background: "#040810",
+        color: "#e2e8f0",
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        gap: 16,
+        padding: "0 24px",
+        textAlign: "center",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "calc(12px * var(--bs-font-scale, 1))",
+          color: "#94a3b8",
+          letterSpacing: "0.08em",
+        }}
+      >
+        Settings could not be displayed.
+      </div>
+      <div
+        style={{
+          fontSize: "calc(9px * var(--bs-font-scale, 1))",
+          color: "rgba(148,163,184,0.55)",
+          letterSpacing: "0.06em",
+        }}
+      >
+        Reload to try again.
+      </div>
+      <button
+        onClick={() => window.history.back()}
+        style={{
+          background: "transparent",
+          border: "1px solid rgba(0,229,255,0.35)",
+          borderRadius: 3,
+          color: "#00e5ff",
+          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+          fontSize: "calc(9px * var(--bs-font-scale, 1))",
+          letterSpacing: "0.12em",
+          padding: "5px 16px",
+          cursor: "pointer",
+          marginTop: 4,
+        }}
+      >
+        GO BACK
+      </button>
+    </div>
+  );
+}
+
 // Exported for the route-level access-gate regression test
 // (settingsRouteAccessGate.test.tsx).
 export function SettingsRoute() {
@@ -2291,11 +2353,19 @@ export function SettingsRoute() {
           <ServerSettingsSyncMount />
           <PaletteSuggestionMount />
           <ShallowDatasetBanner />
-          <Settings />
+          <ErrorBoundary fallback={<SettingsOuterFallback />}>
+            <Settings />
+          </ErrorBoundary>
         </AccessGate>
       </Show>
       <Show when="signed-out">
-        {isMobileSettings ? <Settings /> : <LandingPage />}
+        {isMobileSettings ? (
+          <ErrorBoundary fallback={<SettingsOuterFallback />}>
+            <Settings />
+          </ErrorBoundary>
+        ) : (
+          <LandingPage />
+        )}
       </Show>
     </QueryClientProvider>
   );
