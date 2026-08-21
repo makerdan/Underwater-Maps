@@ -74,6 +74,22 @@ describe("computeResultBbox", () => {
       maxLat: 11.0,
     });
   });
+
+  it("preserves a short result bbox across the antimeridian", () => {
+    const result: ParseResult = {
+      waypoints: [
+        { lat: 10, lon: 179, source: "waypoint" },
+        { lat: 11, lon: -179, source: "waypoint" },
+      ],
+      routes: [],
+    };
+    expect(computeResultBbox(result)).toEqual({
+      minLon: 179,
+      minLat: 10,
+      maxLon: -179,
+      maxLat: 11,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -121,5 +137,18 @@ describe("bboxIntersects", () => {
   it("is symmetric", () => {
     const other: Bounds = { minLon: -95, minLat: 43, maxLon: -91, maxLat: 46 };
     expect(bboxIntersects(base, other)).toBe(bboxIntersects(other, base));
+  });
+
+  it("intersects symmetrically when either box crosses the antimeridian", () => {
+    const crossing = { minLon: 170, minLat: -5, maxLon: -170, maxLat: 5 };
+    const eastern = { minLon: 175, minLat: -2, maxLon: 179, maxLat: 2 };
+    const western = { minLon: -179, minLat: -2, maxLon: -175, maxLat: 2 };
+    const outside = { minLon: -20, minLat: -2, maxLon: 20, maxLat: 2 };
+    expect(bboxIntersects(crossing, eastern)).toBe(true);
+    expect(bboxIntersects(eastern, crossing)).toBe(true);
+    expect(bboxIntersects(crossing, western)).toBe(true);
+    expect(bboxIntersects(western, crossing)).toBe(true);
+    expect(bboxIntersects(crossing, outside)).toBe(false);
+    expect(bboxIntersects(outside, crossing)).toBe(false);
   });
 });

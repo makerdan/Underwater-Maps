@@ -633,6 +633,35 @@ describe("partitionByBounds", () => {
     expect(isInBounds(142.45, 11.30, bounds)).toBe(true);
     expect(isInBounds(142.44, 11.30, bounds)).toBe(false);
   });
+
+  it("accepts both sides of the antimeridian and rejects the long way around", () => {
+    const crossing = { minLon: 170, minLat: -10, maxLon: -170, maxLat: 10 };
+    expect(isInBounds(175, 0, crossing)).toBe(true);
+    expect(isInBounds(-175, 0, crossing)).toBe(true);
+    expect(isInBounds(0, 0, crossing)).toBe(false);
+  });
+
+  it("trims routes using the short crossing arc", () => {
+    const crossing = { minLon: 170, minLat: -10, maxLon: -170, maxLat: 10 };
+    const result: ParseResult = {
+      waypoints: [],
+      routes: [{
+        name: "Date line",
+        source: "route",
+        points: [
+          { lat: 0, lon: 175 },
+          { lat: 1, lon: 0 },
+          { lat: 2, lon: -175 },
+        ],
+      }],
+    };
+    const part = partitionByBounds(result, crossing);
+    expect(part.inside.routes[0]?.points).toEqual([
+      { lat: 0, lon: 175 },
+      { lat: 2, lon: -175 },
+    ]);
+    expect(part.outsideRoutePoints).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -801,7 +801,11 @@ export function isInBounds(
   lat: number,
   b: Bounds,
 ): boolean {
-  return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  const lonInBounds =
+    b.minLon <= b.maxLon
+      ? lon >= b.minLon && lon <= b.maxLon
+      : lon >= b.minLon || lon <= b.maxLon;
+  return lonInBounds && lat >= b.minLat && lat <= b.maxLat;
 }
 
 /**
@@ -868,25 +872,26 @@ export function partitionByBounds(
  * in a ParseResult. Returns null when the result contains no points at all.
  */
 export function computeResultBbox(result: ParseResult): Bounds | null {
-  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  const longitudes: number[] = [];
+  let minLat = Infinity, maxLat = -Infinity;
   let hasAny = false;
   for (const w of result.waypoints) {
-    if (w.lon < minLon) minLon = w.lon;
+    longitudes.push(w.lon);
     if (w.lat < minLat) minLat = w.lat;
-    if (w.lon > maxLon) maxLon = w.lon;
     if (w.lat > maxLat) maxLat = w.lat;
     hasAny = true;
   }
   for (const r of result.routes) {
     for (const p of r.points) {
-      if (p.lon < minLon) minLon = p.lon;
+      longitudes.push(p.lon);
       if (p.lat < minLat) minLat = p.lat;
-      if (p.lon > maxLon) maxLon = p.lon;
       if (p.lat > maxLat) maxLat = p.lat;
       hasAny = true;
     }
   }
-  return hasAny ? { minLon, minLat, maxLon, maxLat } : null;
+  if (!hasAny) return null;
+  const { minLon, maxLon } = shortestLongitudeBounds(longitudes);
+  return { minLon, minLat, maxLon, maxLat };
 }
 
 /**
@@ -894,11 +899,11 @@ export function computeResultBbox(result: ParseResult): Bounds | null {
  * overlap so a single-point result on the boundary of a save is still matched.
  */
 export function bboxIntersects(a: Bounds, b: Bounds): boolean {
-  return (
-    a.minLon <= b.maxLon &&
-    a.maxLon >= b.minLon &&
-    a.minLat <= b.maxLat &&
-    a.maxLat >= b.minLat
+  if (a.minLat > b.maxLat || a.maxLat < b.minLat) return false;
+  return longitudeIntervals(a).some(([aMin, aMax]) =>
+    longitudeIntervals(b).some(
+      ([bMin, bMax]) => aMin <= bMax && aMax >= bMin,
+    ),
   );
 }
 
@@ -915,6 +920,43 @@ function isFiniteCoord(lat: number, lon: number): boolean {
     lon >= -180 &&
     lon <= 180
   );
+}
+
+/** Return the shortest closed longitude arc containing every longitude. */
+function shortestLongitudeBounds(longitudes: number[]): {
+  minLon: number;
+  maxLon: number;
+} {
+  if (longitudes.length === 1) {
+    return { minLon: longitudes[0]!, maxLon: longitudes[0]! };
+  }
+
+  const sorted = [...longitudes].sort((a, b) => a - b);
+  let largestGap = -1;
+  let largestGapIndex = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    const current = sorted[i]!;
+    const next = i + 1 < sorted.length ? sorted[i + 1]! : sorted[0]! + 360;
+    const gap = next - current;
+    if (gap > largestGap) {
+      largestGap = gap;
+      largestGapIndex = i;
+    }
+  }
+
+  const minLon = sorted[(largestGapIndex + 1) % sorted.length]!;
+  const maxLon = sorted[largestGapIndex]!;
+  return { minLon, maxLon };
+}
+
+/** Split a longitude bbox into non-crossing intervals for symmetric overlap. */
+function longitudeIntervals(b: Bounds): [number, number][] {
+  return b.minLon <= b.maxLon
+    ? [[b.minLon, b.maxLon]]
+    : [
+        [b.minLon, 180],
+        [-180, b.maxLon],
+      ];
 }
 
 function textOf(el: Element, tag: string): string | null {

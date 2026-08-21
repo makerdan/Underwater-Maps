@@ -1696,14 +1696,20 @@ interface PreviewMapProps {
 }
 
 const PreviewMap: React.FC<PreviewMapProps> = ({ original, bounds }) => {
+  const mapLongitude = useCallback(
+    (lon: number) => (bounds.minLon > bounds.maxLon && lon < bounds.minLon ? lon + 360 : lon),
+    [bounds],
+  );
+
   // Compute drawing bounds = dataset bbox union all points, with a 5% pad on
   // each side so points right on the edge are visible.
   const viewBox = useMemo(() => {
     let minLon = bounds.minLon;
-    let maxLon = bounds.maxLon;
+    let maxLon = bounds.minLon > bounds.maxLon ? bounds.maxLon + 360 : bounds.maxLon;
     let minLat = bounds.minLat;
     let maxLat = bounds.maxLat;
     const visit = (lon: number, lat: number) => {
+      lon = mapLongitude(lon);
       if (lon < minLon) minLon = lon;
       if (lon > maxLon) maxLon = lon;
       if (lat < minLat) minLat = lat;
@@ -1728,7 +1734,7 @@ const PreviewMap: React.FC<PreviewMapProps> = ({ original, bounds }) => {
       minLat: minLat - padLat,
       maxLat: maxLat + padLat,
     };
-  }, [original, bounds]);
+  }, [original, bounds, mapLongitude]);
 
   const innerW = MAP_WIDTH - MAP_PAD * 2;
   const innerH = MAP_HEIGHT - MAP_PAD * 2;
@@ -1737,12 +1743,13 @@ const PreviewMap: React.FC<PreviewMapProps> = ({ original, bounds }) => {
 
   const project = useCallback(
     (lon: number, lat: number): [number, number] => {
+      lon = mapLongitude(lon);
       const x = MAP_PAD + ((lon - viewBox.minLon) / lonSpan) * innerW;
       // SVG Y grows downward; latitude grows upward → flip.
       const y = MAP_PAD + (1 - (lat - viewBox.minLat) / latSpan) * innerH;
       return [x, y];
     },
-    [viewBox, lonSpan, latSpan, innerW, innerH],
+    [viewBox, lonSpan, latSpan, innerW, innerH, mapLongitude],
   );
 
   const [bx1, by1] = project(bounds.minLon, bounds.maxLat);
