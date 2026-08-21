@@ -47,9 +47,21 @@ try {
     ["--filter", "@workspace/api-spec", "run", "codegen:generate"],
     { stdio: "inherit", cwd: root, shell: false },
   );
+  if (genResult.error != null) {
+    throw new Error(
+      `check:codegen-stale — failed to spawn codegen:generate: ${genResult.error.message}`,
+    );
+  }
+  if (genResult.signal != null) {
+    throw new Error(
+      `check:codegen-stale — codegen:generate was terminated by signal ${genResult.signal}.`,
+    );
+  }
   if (genResult.status !== 0) {
-    console.error("check:codegen-stale — codegen:generate failed; cannot determine staleness.");
-    process.exit(1);
+    throw new Error(
+      `check:codegen-stale — codegen:generate failed with exit code ${genResult.status}; ` +
+        "cannot determine staleness.",
+    );
   }
 
   // ---------------------------------------------------------------------------

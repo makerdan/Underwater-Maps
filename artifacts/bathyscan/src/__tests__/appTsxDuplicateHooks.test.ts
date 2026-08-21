@@ -37,7 +37,8 @@ const MIN_LINES = 500;
 const MIN_HOOKS = 10;
 
 /** Regex to count hook declarations (same as HOOK_DECL_RE but applied globally). */
-const HOOK_COUNT_RE = /^\s*const\s+\w+\s*=\s*use[A-Z]/gm;
+const HOOK_COUNT_RE =
+  /^\s*(?:const|let|var)\s+(?:\w+|\[[^\]\n]+\]|\{[^}\n]+\})\s*=\s*use[A-Z]\w*\s*(?:<[^>\n]+>\s*)?\(/gm;
 
 /** Walk a directory tree and return all .tsx paths not under __tests__ dirs. */
 function collectTsxFiles(dir: string): string[] {
@@ -101,6 +102,11 @@ const SCANNED_FILES: string[] = [
   "components/TidePanel.tsx",
   "components/WeatherPanel.tsx",
   "components/ZoneOverlay.tsx",
+  "components/AdminPanel.tsx",
+  "components/ManualConditionsForm.tsx",
+  "components/admin/UserAccessSection.tsx",
+  "components/mobile/MobileChartShell.tsx",
+  "pages/settings/AccountSection.tsx",
 ];
 
 const SRC_DIR = path.resolve(__dirname, "..");

@@ -40,7 +40,8 @@ const MIN_LINES = 500;
 const MIN_HOOKS = 10;
 
 /** Regex to count hook declarations (mirrors HOOK_COUNT_RE in the test file). */
-const HOOK_COUNT_RE = /^\s*const\s+\w+\s*=\s*use[A-Z]/gm;
+const HOOK_COUNT_RE =
+  /^\s*(?:const|let|var)\s+(?:\w+|\[[^\]\n]+\]|\{[^}\n]+\})\s*=\s*use[A-Z]\w*\s*(?:<[^>\n]+>\s*)?\(/gm;
 
 // ---------------------------------------------------------------------------
 // Parse SCANNED_FILES from the test source

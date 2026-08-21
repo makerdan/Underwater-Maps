@@ -125,6 +125,20 @@ function relToRepo(file) {
   return path.relative(repoRoot, file).split(path.sep).join("/");
 }
 
+function patternAppliesToFile(pattern, file, scanRoot) {
+  if (!pattern.onlyUnder) return true;
+  if (usingCustomRoots) {
+    const relativePath = path.relative(scanRoot, file).split(path.sep).join("/");
+    return pattern.onlyUnder.some((allowedPath) =>
+      relativePath === allowedPath || relativePath.startsWith(`${allowedPath}/`),
+    );
+  }
+  const relativePath = relToRepo(file);
+  return pattern.onlyUnder.some((allowedPath) =>
+    relativePath === allowedPath || relativePath.startsWith(`${allowedPath}/`),
+  );
+}
+
 const violations = [];
 
 for (const root of roots) {
@@ -134,11 +148,7 @@ for (const root of roots) {
     const lines = fs.readFileSync(file, "utf8").split("\n");
     lines.forEach((line, idx) => {
       for (const pattern of PATTERNS) {
-        if (
-          !usingCustomRoots &&
-          pattern.onlyUnder &&
-          !pattern.onlyUnder.some((p) => rel === p || rel.startsWith(`${p}/`))
-        ) {
+        if (!patternAppliesToFile(pattern, file, root)) {
           continue;
         }
         if (pattern.re.test(line)) {
