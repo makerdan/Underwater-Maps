@@ -151,9 +151,22 @@ function isStaleForReclaim(info, now) {
 function tryAcquire() {
   try {
     const fd = openSync(lockFile, "wx");
-    try { writeSync(fd, `${process.pid}\n${Date.now()}\n`); } catch { /* best-effort */ }
-    closeSync(fd);
-    return true;
+    try {
+      writeSync(fd, `${process.pid}\n${Date.now()}\n`);
+      closeSync(fd);
+      return { acquired: true };
+    } catch (err) {
+      try { closeSync(fd); } catch { /* close failure cannot leave the fd open intentionally */ }
+      try {
+        unlinkSync(lockFile);
+      } catch (unlinkErr) {
+        if (unlinkErr.code !== "ENOENT") {
+          console.error(`[validation-lock] failed to remove corrupt lock file ${lockFile}: ${unlinkErr.message}`);
+        }
+      }
+      console.error(`[validation-lock] failed to write lock file ${lockFile}: ${err.message}`);
+      return { acquired: false, reason: "write-failed" };
+    }
   } catch (err) {
     if (err.code !== "EEXIST") throw err;
     try {
@@ -198,7 +211,7 @@ function tryAcquire() {
         }
       }
     } catch { /* lock vanished between open and read — just retry */ }
-    return false;
+    return { acquired: false, reason: "held" };
   }
 }
 
@@ -285,7 +298,7 @@ async function acquireWithTimeout() {
   let logged = false;
   try {
     while (true) {
-      if (!shouldYieldToPriorityWaiter() && tryAcquire()) {
+      if (!shouldYieldToPriorityWaiter() && tryAcquire().acquired) {
         deregisterWaiter();
         return;
       }

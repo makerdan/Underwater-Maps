@@ -92,6 +92,35 @@ test("acquires lock, runs command, propagates exit code, releases lock", async (
   assert.equal(existsSync(lockFile), false);
 });
 
+test("write failure cleans up the partial lock and does not acquire it", async () => {
+  const lockFile = freshLockFile();
+  const preload = join(workDir, `write-failure-preload-${lockCounter++}.mjs`);
+  writeFileSync(preload, `
+    import fs from "node:fs";
+    import { syncBuiltinESMExports } from "node:module";
+    fs.writeSync = () => {
+      const error = new Error("No space left on device");
+      error.code = "ENOSPC";
+      throw error;
+    };
+    syncBuiltinESMExports();
+  `);
+
+  const run = runLock({
+    lockFile,
+    env: {
+      NODE_OPTIONS: `--import ${preload}`,
+      VALIDATION_LOCK_TIMEOUT_MS: "100",
+      VALIDATION_LOCK_POLL_MS: "10",
+    },
+  });
+  const res = await run.done;
+
+  assert.equal(res.code, 3, "a failed lock write must never run the wrapped command");
+  assert.match(res.stderr, /failed to write lock file .*No space left on device/);
+  assert.equal(existsSync(lockFile), false, "partial lock file must be removed after write failure");
+});
+
 test("second process queues behind holder and runs after release", async () => {
   const lockFile = freshLockFile();
   const marker = join(workDir, "queue-marker.txt");
