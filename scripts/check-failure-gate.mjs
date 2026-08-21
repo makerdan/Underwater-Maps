@@ -35,7 +35,7 @@
  */
 
 import { readdir, readFile } from "fs/promises";
-import { existsSync, renameSync, unlinkSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, renameSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { pathToFileURL } from "url";
 import { VALIDATION_COMMANDS } from "./register-validation-commands.mjs";
@@ -306,13 +306,17 @@ export function writeFileAtomically(
   content,
   {
     write = writeFileSync,
+    stat = statSync,
+    chmod = chmodSync,
     rename = renameSync,
     unlink = unlinkSync,
   } = {},
 ) {
   const temporaryPath = `${filePath}.tmp-${process.pid}`;
   try {
+    const originalMode = stat(filePath).mode & 0o7777;
     write(temporaryPath, content, "utf8");
+    chmod(temporaryPath, originalMode);
     rename(temporaryPath, filePath);
   } catch (error) {
     try {

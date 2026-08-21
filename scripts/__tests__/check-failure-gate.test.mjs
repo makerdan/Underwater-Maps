@@ -20,7 +20,7 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -131,6 +131,42 @@ describe("--fix-stub: a failed patch write is non-compliant", () => {
       original,
       "a failed replacement must not modify the original plan",
     );
+  });
+
+  it("preserves the original permission bits after replacing the plan", () => {
+    const filePath = join(writeFailureDir, "permissions.md");
+    const original = "# Original plan\n";
+    const patched = `${original}\npatched`;
+    writeFileSync(filePath, original, { encoding: "utf8", mode: 0o640 });
+    const originalMode = statSync(filePath).mode & 0o7777;
+
+    writeFileAtomically(filePath, patched);
+
+    assert.equal(readFileSync(filePath, "utf8"), patched);
+    assert.equal(
+      statSync(filePath).mode & 0o7777,
+      originalMode,
+      "an atomic replacement must retain the original plan permission bits",
+    );
+  });
+
+  it("keeps the original content and mode when applying temp-file permissions fails", () => {
+    const filePath = join(writeFailureDir, "permission-failure.md");
+    const original = "# Original plan\n";
+    writeFileSync(filePath, original, { encoding: "utf8", mode: 0o640 });
+    const originalMode = statSync(filePath).mode & 0o7777;
+
+    assert.throws(
+      () =>
+        writeFileAtomically(filePath, `${original}\npatched`, {
+          chmod() {
+            throw new Error("simulated chmod failure");
+          },
+        }),
+      /simulated chmod failure/,
+    );
+    assert.equal(readFileSync(filePath, "utf8"), original);
+    assert.equal(statSync(filePath).mode & 0o7777, originalMode);
   });
 });
 
