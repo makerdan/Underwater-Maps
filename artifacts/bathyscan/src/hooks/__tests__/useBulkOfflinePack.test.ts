@@ -281,6 +281,34 @@ describe("useBulkOfflinePack — cancellation", () => {
     // DS_B and DS_C should never have been processed
     expect(mockSaveOfflinePack).toHaveBeenCalledTimes(1);
   });
+
+  it("aborts the active pack and leaves no row stuck in saving", async () => {
+    let receivedSignal: AbortSignal | undefined;
+    mockSaveOfflinePack.mockImplementation(
+      (_ds: typeof DS_A, _d: number, _onP: (p: unknown) => void, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          receivedSignal = signal;
+          signal?.addEventListener(
+            "abort",
+            () => reject(Object.assign(new Error("cancelled"), { name: "AbortError" })),
+            { once: true },
+          );
+        }),
+    );
+
+    const { result } = renderHook(() => useBulkOfflinePack([DS_A, DS_B]));
+    act(() => { void result.current.start(); });
+    await waitFor(() => expect(result.current.phase).toBe("running"));
+    await waitFor(() => expect(receivedSignal).toBeDefined());
+
+    act(() => { result.current.cancel(); });
+
+    await waitFor(() => expect(result.current.phase).toBe("cancelled"));
+    expect(receivedSignal?.aborted).toBe(true);
+    expect(result.current.rows[0]?.status).toBe("paused");
+    expect(result.current.rows[1]?.status).toBe("pending");
+    expect(mockSaveOfflinePack).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("useBulkOfflinePack — mid-batch network loss pauses", () => {
@@ -389,6 +417,25 @@ describe("useBulkOfflinePack — cancel during preflight", () => {
 
     // No row-state mutations after cancel — rows stay empty (never initialised).
     expect(result.current.rows).toHaveLength(0);
+  });
+
+  it("cancels promptly while the existing-pack lookup is stalled", async () => {
+    let resolveExisting!: (packs: []) => void;
+    mockListOfflinePacks
+      .mockResolvedValueOnce([])
+      .mockImplementationOnce(() => new Promise<[]>((resolve) => { resolveExisting = resolve; }));
+
+    const { result } = renderHook(() => useBulkOfflinePack([DS_A]));
+    act(() => { void result.current.start(); });
+    await waitFor(() => expect(mockListOfflinePacks).toHaveBeenCalledTimes(2));
+
+    act(() => { result.current.cancel(); });
+    await waitFor(() => expect(result.current.phase).toBe("cancelled"));
+    expect(mockSaveOfflinePack).not.toHaveBeenCalled();
+
+    // The abandoned IDB promise may settle later, but it cannot revive this run.
+    await act(async () => { resolveExisting([]); });
+    expect(result.current.phase).toBe("cancelled");
   });
 });
 

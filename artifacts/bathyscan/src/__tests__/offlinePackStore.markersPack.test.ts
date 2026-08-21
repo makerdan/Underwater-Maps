@@ -286,6 +286,9 @@ describe("saveOfflinePack — rollback includes marker URL", () => {
       () => {},
     ).catch(() => {});
 
+    await vi.waitFor(() =>
+      expect(findMessage<{ type: string; markersUrl?: string }>("DELETE_PACK_CACHE")).toBeDefined(),
+    );
     const msg = findMessage<{ type: string; markersUrl?: string }>("DELETE_PACK_CACHE");
     expect(msg).toBeDefined();
     expect(msg?.markersUrl).toBe("/api/markers?datasetId=ds-rollback");

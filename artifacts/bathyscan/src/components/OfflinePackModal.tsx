@@ -101,7 +101,12 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   const [areaStalled, setAreaStalled] = useState(false);
   const [helpStalled, setHelpStalled] = useState(false);
   const areaCancelledRef = useRef(false);
+  const areaAbortControllerRef = useRef<AbortController | null>(null);
+  const areaRunIdRef = useRef(0);
+  const areaPreviousPackRef = useRef<OfflinePack | null>(null);
   const helpCancelledRef = useRef(false);
+  const helpAbortControllerRef = useRef<AbortController | null>(null);
+  const helpRunIdRef = useRef(0);
   const areaLastProgressRef = useRef<number | null>(null);
   const helpLastProgressRef = useRef<number | null>(null);
   /**
@@ -179,6 +184,12 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
   }, [onClose]);
 
   const handleSaveArea = async (isUpdate = false) => {
+    // State updates are asynchronous, so a ref guard is needed for rapid
+    // double-clicks before `areaPhase` has re-rendered as "downloading".
+    if (areaAbortControllerRef.current) return;
+    const runId = ++areaRunIdRef.current;
+    const abortController = new AbortController();
+    areaAbortControllerRef.current = abortController;
     areaCancelledRef.current = false;
     setAreaPhase("downloading");
     setAreaProgress([]);
@@ -186,11 +197,18 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
     // Capture the current existing pack before clearing it so we can restore
     // it if the update fails — the user's old pack may still be valid.
     const prevExistingPack = isUpdate ? existingPack : null;
+    areaPreviousPackRef.current = prevExistingPack;
     if (isUpdate) setExistingPack(null);
     try {
       const pack = await saveOfflinePack(dataset, days, (p) => {
         setAreaProgress((prev) => {
-          if (areaCancelledRef.current) return prev;
+          if (
+            areaCancelledRef.current ||
+            abortController.signal.aborted ||
+            areaRunIdRef.current !== runId
+          ) {
+            return prev;
+          }
           areaLastProgressRef.current = Date.now();
           const idx = prev.findIndex((x) => x.step === p.step);
           if (idx >= 0) {
@@ -200,11 +218,24 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
           }
           return [...prev, p];
         });
-      });
-      if (areaCancelledRef.current) return;
+      }, abortController.signal);
+      if (
+        areaCancelledRef.current ||
+        abortController.signal.aborted ||
+        areaRunIdRef.current !== runId
+      ) {
+        return;
+      }
       setSavedPack(pack);
       setAreaPhase("done");
     } catch (err) {
+      if (
+        areaCancelledRef.current ||
+        abortController.signal.aborted ||
+        areaRunIdRef.current !== runId
+      ) {
+        return;
+      }
       setAreaError(err instanceof Error ? err.message : "Download failed");
       setAreaPhase("error");
       // Restore the previously valid pack so the user knows their old pack is
@@ -212,10 +243,18 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
       if (isUpdate && prevExistingPack) {
         setExistingPack(prevExistingPack);
       }
+    } finally {
+      if (areaRunIdRef.current === runId) {
+        areaAbortControllerRef.current = null;
+      }
     }
   };
 
   const handleSaveHelp = async () => {
+    if (helpAbortControllerRef.current) return;
+    const runId = ++helpRunIdRef.current;
+    const abortController = new AbortController();
+    helpAbortControllerRef.current = abortController;
     helpCancelledRef.current = false;
     setHelpPhase("downloading");
     setHelpProgress([]);
@@ -223,7 +262,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
     try {
       const record = await saveHelpPack((p) => {
         setHelpProgress((prev) => {
-          if (helpCancelledRef.current) return prev;
+          if (helpCancelledRef.current || abortController.signal.aborted || helpRunIdRef.current !== runId) return prev;
           helpLastProgressRef.current = Date.now();
           const idx = prev.findIndex((x) => x.index === p.index);
           if (idx >= 0) {
@@ -233,13 +272,16 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
           }
           return [...prev, p];
         });
-      });
-      if (helpCancelledRef.current) return;
+      }, abortController.signal);
+      if (helpCancelledRef.current || abortController.signal.aborted || helpRunIdRef.current !== runId) return;
       setHelpStatus({ saved: true, savedAt: record.savedAt, totalBytes: record.totalBytes });
       setHelpPhase("done");
     } catch (err) {
+      if (helpCancelledRef.current || abortController.signal.aborted || helpRunIdRef.current !== runId) return;
       setHelpError(err instanceof Error ? err.message : "Help download failed");
       setHelpPhase("error");
+    } finally {
+      if (helpRunIdRef.current === runId) helpAbortControllerRef.current = null;
     }
   };
 
@@ -282,11 +324,22 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
 
   const cancelArea = () => {
     areaCancelledRef.current = true;
+    areaAbortControllerRef.current?.abort();
+    areaAbortControllerRef.current = null;
+    // Invalidating the run id prevents late callbacks from a non-cooperating
+    // browser primitive from changing a retry's UI state.
+    areaRunIdRef.current += 1;
+    if (areaPreviousPackRef.current) {
+      setExistingPack(areaPreviousPackRef.current);
+    }
     setAreaPhase("idle");
     setAreaError("Save cancelled. You can safely retry.");
   };
   const cancelHelp = () => {
     helpCancelledRef.current = true;
+    helpAbortControllerRef.current?.abort();
+    helpAbortControllerRef.current = null;
+    helpRunIdRef.current += 1;
     setHelpPhase("idle");
     setHelpError("Download cancelled. You can safely retry.");
   };

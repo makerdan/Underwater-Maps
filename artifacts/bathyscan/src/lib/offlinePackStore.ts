@@ -151,11 +151,147 @@ function newId(): string {
 // ─── Tell the SW to cache terrain into the persistent pack cache ──────────────
 
 export const OFFLINE_PACK_SW_READY_TIMEOUT_MS = SERVICE_WORKER_READY_TIMEOUT_MS;
+export const OFFLINE_PACK_AUXILIARY_TIMEOUT_MS = 5_000;
 const CUSTOM_DATASET_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<void> {
-  const activeWorker = await getControllingServiceWorker();
+function cancellationError(): Error {
+  const error = new Error("Offline pack save cancelled");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw cancellationError();
+}
+
+function awaitAbortable<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+  onLateResolve?: (value: T) => void,
+): Promise<T> {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(cancellationError());
+    };
+    if (signal.aborted) {
+      onAbort();
+      void promise.catch(() => undefined);
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        if (settled) {
+          onLateResolve?.(value);
+          return;
+        }
+        settled = true;
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
+function awaitWithDeadline<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      fn();
+    };
+    const onAbort = () => settle(() => reject(cancellationError()));
+    const timer = setTimeout(
+      () => settle(() => reject(new Error(timeoutMessage))),
+      timeoutMs,
+    );
+    if (signal?.aborted) {
+      onAbort();
+      void promise.catch(() => undefined);
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => settle(() => resolve(value)),
+      (error) => settle(() => reject(error)),
+    );
+  });
+}
+
+function waitForWorkerMessage(
+  activeWorker: ServiceWorker,
+  message: unknown,
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => settle(() => reject(new Error(timeoutMessage))), timeoutMs);
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      channel.port1.onmessage = null;
+      channel.port1.close?.();
+      channel.port2.close?.();
+    };
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      fn();
+    };
+    const onAbort = () => settle(() => reject(cancellationError()));
+    channel.port1.onmessage = (event: MessageEvent<{ ok: boolean; error?: string }>) => {
+      if (event.data.ok) settle(resolve);
+      else settle(() => reject(new Error(event.data.error ?? "Service worker request failed")));
+    };
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    try {
+      activeWorker.postMessage(message, [channel.port2]);
+    } catch (error) {
+      settle(() => reject(error));
+    }
+  });
+}
+
+async function cacheTerrain(
+  terrainUrl: string,
+  overviewUrl: string,
+  transactionId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const activeWorker = await getControllingServiceWorker(signal);
+  throwIfAborted(signal);
 
   // Fetch in the page context so Clerk authorization is applied to private
   // uploaded datasets. Only response data crosses the worker boundary. A
@@ -172,15 +308,17 @@ async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<vo
     | undefined;
   if (CUSTOM_DATASET_UUID_RE.test(terrainUrl.split("/").at(-2) ?? "")) {
     const [terrainResponse, overviewResponse] = await Promise.all([
-      authorizedFetch(terrainUrl),
-      authorizedFetch(overviewUrl),
+      authorizedFetch(terrainUrl, { signal }),
+      authorizedFetch(overviewUrl, { signal }),
     ]);
+    throwIfAborted(signal);
     if (!terrainResponse.ok) throw new Error(`Terrain HTTP ${terrainResponse.status}`);
     if (!overviewResponse.ok) throw new Error(`Overview HTTP ${overviewResponse.status}`);
     const [terrainBody, overviewBody] = await Promise.all([
       typeof terrainResponse.text === "function" ? terrainResponse.text() : Promise.resolve(""),
       typeof overviewResponse.text === "function" ? overviewResponse.text() : Promise.resolve(""),
     ]);
+    throwIfAborted(signal);
     responsePayload = {
       terrainBody,
       overviewBody,
@@ -189,67 +327,44 @@ async function cacheTerrain(terrainUrl: string, overviewUrl: string): Promise<vo
     };
   }
 
-  return new Promise<void>((resolve, reject) => {
-    // Track whether the SW sent a successful ack before the timeout fires.
-    // If the SW is absent (dev build, update race, browser restriction) the
-    // MessageChannel port will never receive a message.  Resolving silently in
-    // that case masks a real failure — the terrain is never cached and the pack
-    // will fail when the device goes offline.  Rejecting instead lets the
-    // caller surface a visible warning through onProgress.
-    let settled = false;
-
-    const channel = new MessageChannel();
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        channel.port1.close?.();
-        reject(new Error("SW CACHE_PACK timed out — terrain may not be cached for offline use"));
-      }
-    }, CACHE_PACK_FETCH_TIMEOUT_MS);
-    channel.port1.onmessage = (e: MessageEvent<{ ok: boolean; error?: string }>) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      channel.port1.close?.();
-      if (e.data.ok) resolve();
-      else reject(new Error(e.data.error ?? "SW CACHE_PACK failed"));
-    };
-    activeWorker.postMessage(
-      {
-        type: "CACHE_PACK",
-        terrainUrl,
-        overviewUrl,
-        ...responsePayload,
-      },
-      [channel.port2],
-    );
-  });
+  return waitForWorkerMessage(
+    activeWorker,
+    { type: "CACHE_PACK", terrainUrl, overviewUrl, transactionId, ...responsePayload },
+    signal,
+    CACHE_PACK_FETCH_TIMEOUT_MS,
+    "SW CACHE_PACK timed out — terrain may not be cached for offline use",
+  );
 }
 
 // ─── Tell the SW to cache a pre-fetched marker response (persistent cache) ────
 
-async function cachePackMarkers(markersUrl: string, body: string): Promise<void> {
+async function cachePackMarkers(
+  markersUrl: string,
+  body: string,
+  transactionId?: string,
+  signal?: AbortSignal,
+): Promise<void> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
-  const reg = await navigator.serviceWorker.ready.catch(() => null);
-  if (!reg?.active) return;
-  return new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const channel = new MessageChannel();
-    channel.port1.onmessage = (e: MessageEvent<{ ok: boolean; error?: string }>) => {
-      settled = true;
-      if (e.data.ok) resolve();
-      else reject(new Error(e.data.error ?? "SW CACHE_PACK_MARKERS failed"));
-    };
-    reg.active!.postMessage(
-      { type: "CACHE_PACK_MARKERS", markersUrl, body },
-      [channel.port2],
+  let reg: ServiceWorkerRegistration;
+  try {
+    reg = await awaitWithDeadline(
+      navigator.serviceWorker.ready,
+      OFFLINE_PACK_SW_READY_TIMEOUT_MS,
+      "Service worker readiness timed out while caching markers",
+      signal,
     );
-    // Outdated SW without the handler never replies — markers are best-effort,
-    // so the caller catches this rejection and continues the save.
-    setTimeout(() => {
-      if (!settled) reject(new Error("SW CACHE_PACK_MARKERS timed out"));
-    }, 5000);
-  });
+  } catch (error) {
+    throwIfAborted(signal);
+    throw error;
+  }
+  if (!reg?.active) return;
+  return waitForWorkerMessage(
+    reg.active,
+    { type: "CACHE_PACK_MARKERS", markersUrl, body, ...(transactionId ? { transactionId } : {}) },
+    signal,
+    OFFLINE_PACK_AUXILIARY_TIMEOUT_MS,
+    "SW CACHE_PACK_MARKERS timed out",
+  );
 }
 
 // ─── Tell the SW to remove cached terrain entries (rollback on pack failure) ──
@@ -258,26 +373,55 @@ async function deletePackCache(
   terrainUrl: string,
   overviewUrl: string,
   markersUrl?: string,
+  transactionId?: string,
 ): Promise<void> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
-  const reg = await navigator.serviceWorker.ready.catch(() => null);
+  const reg = await awaitWithDeadline(
+    navigator.serviceWorker.ready,
+    OFFLINE_PACK_SW_READY_TIMEOUT_MS,
+    "Service worker readiness timed out while cleaning offline pack cache",
+  ).catch(() => null);
   if (!reg?.active) return;
-  return new Promise<void>((resolve) => {
-    const channel = new MessageChannel();
-    // Resolve regardless of outcome — this is best-effort cleanup.
-    channel.port1.onmessage = () => resolve();
-    reg.active!.postMessage(
-      {
-        type: "DELETE_PACK_CACHE",
-        terrainUrl,
-        overviewUrl,
-        ...(markersUrl !== undefined ? { markersUrl } : {}),
-      },
-      [channel.port2],
-    );
-    // If the SW never responds (e.g. outdated SW without the handler), don't block.
-    setTimeout(resolve, 5000);
+  await waitForWorkerMessage(
+    reg.active,
+    {
+      type: "DELETE_PACK_CACHE",
+      terrainUrl,
+      overviewUrl,
+      ...(markersUrl !== undefined ? { markersUrl } : {}),
+      ...(transactionId !== undefined ? { transactionId } : {}),
+    },
+    undefined,
+    OFFLINE_PACK_AUXILIARY_TIMEOUT_MS,
+    "SW DELETE_PACK_CACHE timed out",
+  ).catch(() => undefined);
+}
+
+async function commitPackCache(
+  transactionId: string,
+  terrainUrl: string,
+  overviewUrl: string,
+  markersUrl: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  const reg = await awaitWithDeadline(
+    navigator.serviceWorker.ready,
+    OFFLINE_PACK_SW_READY_TIMEOUT_MS,
+    "Service worker readiness timed out while committing offline pack cache",
+    signal,
+  ).catch((_error) => {
+    throwIfAborted(signal);
+    return null;
   });
+  if (!reg?.active) return;
+  await waitForWorkerMessage(
+    reg.active,
+    { type: "COMMIT_PACK_CACHE", transactionId, terrainUrl, overviewUrl, markersUrl },
+    signal,
+    OFFLINE_PACK_AUXILIARY_TIMEOUT_MS,
+    "SW COMMIT_PACK_CACHE timed out",
+  ).catch(() => undefined);
 }
 
 // ─── saveOfflinePack ──────────────────────────────────────────────────────────
@@ -297,9 +441,11 @@ async function deletePackCache(
  */
 export async function fetchDatasetBbox(
   datasetId: string,
+  signal?: AbortSignal,
 ): Promise<{ minLon: number; maxLon: number; minLat: number; maxLat: number } | null> {
   try {
-    const res = await authorizedFetch(`${API_BASE}/api/datasets/${datasetId}/preview`);
+    const res = await authorizedFetch(`${API_BASE}/api/datasets/${datasetId}/preview`, { signal });
+    throwIfAborted(signal);
     if (!res.ok) return null;
     const data = (await res.json()) as {
       bbox?: { minLon: number; maxLon: number; minLat: number; maxLat: number } | null;
@@ -317,6 +463,7 @@ export async function fetchDatasetBbox(
     }
     return bbox;
   } catch {
+    throwIfAborted(signal);
     return null;
   }
 }
@@ -331,6 +478,7 @@ export async function saveOfflinePack(
   },
   days: number,
   onProgress: (p: PackProgress) => void,
+  signal?: AbortSignal,
 ): Promise<OfflinePack> {
   // When no bbox was supplied (or it was explicitly null), attempt to derive one
   // from the server — the /preview endpoint extracts it from stored terrain JSON
@@ -338,7 +486,8 @@ export async function saveOfflinePack(
   // stub behaviour applies: tide/weather fetches are skipped and the pack stores
   // null-station stubs with a visible warning.
   const resolvedBbox =
-    dataset.bbox != null ? dataset.bbox : await fetchDatasetBbox(dataset.id);
+    dataset.bbox != null ? dataset.bbox : await fetchDatasetBbox(dataset.id, signal);
+  throwIfAborted(signal);
   const hasBbox = resolvedBbox != null;
   const centerLat = resolvedBbox
     ? (resolvedBbox.minLat + resolvedBbox.maxLat) / 2
@@ -349,17 +498,35 @@ export async function saveOfflinePack(
 
   const terrainUrl = `${API_BASE}/api/datasets/${dataset.id}/terrain`;
   const overviewUrl = `${API_BASE}/api/datasets/${dataset.id}/overview`;
+  const transactionId = newId();
+  let persistedPackKey: string | null = null;
 
+  const progress = (p: PackProgress) => {
+    if (!signal?.aborted) onProgress(p);
+  };
+  let terrainAttempted = false;
   // Step 1: cache terrain
-  onProgress({ step: "terrain", label: "Downloading terrain — may take a minute on slow connections…", done: false });
+  progress({ step: "terrain", label: "Downloading terrain — may take a minute on slow connections…", done: false });
+  terrainAttempted = true;
   try {
-    await cacheTerrain(terrainUrl, overviewUrl);
+    await cacheTerrain(terrainUrl, overviewUrl, transactionId, signal);
   } catch (err) {
+    if (terrainAttempted) {
+      // Cleanup has its own deadline but never delays the error the user needs
+      // to see (or a cancellation retry). The transaction snapshot lets this
+      // restore a pre-existing pack even when it completes after the UI settles.
+      void deletePackCache(
+        terrainUrl,
+        overviewUrl,
+        markersUrlForDataset(dataset.id),
+        transactionId,
+      ).catch(() => undefined);
+    }
     const msg = err instanceof Error ? err.message : "SW CACHE_PACK failed";
-    onProgress({ step: "terrain", label: msg, done: true, error: msg });
+    progress({ step: "terrain", label: msg, done: true, error: msg });
     throw err;
   }
-  onProgress({ step: "terrain", label: "Terrain cached", done: true });
+  progress({ step: "terrain", label: "Terrain cached", done: true });
 
   // Steps 2–4: wrapped in a try/catch so any failure after terrain is cached
   // triggers best-effort cleanup of the orphaned Cache Storage entries.
@@ -378,21 +545,24 @@ export async function saveOfflinePack(
         tidalExpiresAt: nowIso,
         generatedAt: nowIso,
       };
-      onProgress({ step: "tide", label: tideMsg, done: true, error: tideMsg });
+      progress({ step: "tide", label: tideMsg, done: true, error: tideMsg });
     } else {
-      onProgress({ step: "tide", label: "Fetching tide predictions…", done: false });
+      progress({ step: "tide", label: "Fetching tide predictions…", done: false });
       try {
         const tideRes = await fetch(
           `${API_BASE}/api/tidal/pack?lat=${centerLat}&lon=${centerLon}&days=${days}`,
+          { signal },
         );
+        throwIfAborted(signal);
         if (!tideRes.ok) throw new Error(`HTTP ${tideRes.status}`);
         tidePack = (await tideRes.json()) as TidePack;
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to fetch tide predictions";
-        onProgress({ step: "tide", label: msg, done: true, error: msg });
+        throwIfAborted(signal);
+        progress({ step: "tide", label: msg, done: true, error: msg });
         throw err;
       }
-      onProgress({ step: "tide", label: "Tide predictions saved", done: true });
+      progress({ step: "tide", label: "Tide predictions saved", done: true });
     }
 
     // Step 3: fetch weather pack (best-effort — does not throw)
@@ -401,22 +571,25 @@ export async function saveOfflinePack(
       // No location — skip the remote fetch and store a null-station stub.
       const weatherMsg = "No location — weather unavailable";
       weatherPack = { station: null, observation: null, snapshotAt: new Date().toISOString() };
-      onProgress({ step: "weather", label: weatherMsg, done: true, error: weatherMsg });
+      progress({ step: "weather", label: weatherMsg, done: true, error: weatherMsg });
     } else {
-      onProgress({ step: "weather", label: "Fetching weather snapshot…", done: false });
+      progress({ step: "weather", label: "Fetching weather snapshot…", done: false });
       let weatherDone = false;
       try {
         const weatherRes = await fetch(
           `${API_BASE}/api/weather/pack?lat=${centerLat}&lon=${centerLon}`,
+          { signal },
         );
+        throwIfAborted(signal);
         if (!weatherRes.ok) throw new Error(`HTTP ${weatherRes.status}`);
         weatherPack = (await weatherRes.json()) as WeatherPack;
       } catch {
+        throwIfAborted(signal);
         // Weather is best-effort — create a minimal pack if it fails, but tell
         // the caller so the UI can surface the omission rather than showing a
         // silent success followed by an empty weather panel when offline.
         weatherPack = { station: null, observation: null, snapshotAt: new Date().toISOString() };
-        onProgress({
+        progress({
           step: "weather",
           label: "Weather unavailable — pack saved without weather data",
           done: true,
@@ -425,12 +598,12 @@ export async function saveOfflinePack(
       }
       if (!weatherDone) {
         if (weatherPack.station !== null || weatherPack.observation !== null) {
-          onProgress({ step: "weather", label: "Weather snapshot saved", done: true });
+          progress({ step: "weather", label: "Weather snapshot saved", done: true });
         } else {
           // A 200 response with both fields null means no station is nearby or NOAA
           // is temporarily unavailable.  Always emit a terminal done event so the
           // progress row never stays frozen on "Fetching weather snapshot…".
-          onProgress({
+          progress({
             step: "weather",
             label: "Weather unavailable — no station nearby",
             done: true,
@@ -442,13 +615,15 @@ export async function saveOfflinePack(
     // Step 4: fetch markers assigned to this dataset (best-effort — does not throw).
     // /api/markers is behind requireAuth, so the fetch must carry the Clerk
     // Bearer token via authorizedFetch (a plain fetch silently 401s).
-    onProgress({ step: "markers", label: "Fetching markers…", done: false });
+    throwIfAborted(signal);
+    progress({ step: "markers", label: "Fetching markers…", done: false });
     const markersUrl = markersUrlForDataset(dataset.id);
     let markersPack: Marker[] = [];
     let markersBytes = 0;
     let markersFetched = false;
     try {
-      const markersRes = await authorizedFetch(markersUrl);
+      const markersRes = await authorizedFetch(markersUrl, { signal });
+      throwIfAborted(signal);
       if (!markersRes.ok) throw new Error(`HTTP ${markersRes.status}`);
       const markersBody = await markersRes.text();
       const parsed: unknown = JSON.parse(markersBody);
@@ -461,8 +636,8 @@ export async function saveOfflinePack(
       // Failure here keeps the markers in the IDB record but surfaces a
       // warning label — the save itself never rolls back on marker errors.
       try {
-        await cachePackMarkers(markersUrl, markersBody);
-        onProgress({
+        await cachePackMarkers(markersUrl, markersBody, transactionId, signal);
+        progress({
           step: "markers",
           label:
             markersPack.length > 0
@@ -471,19 +646,21 @@ export async function saveOfflinePack(
           done: true,
         });
       } catch {
-        onProgress({
+        throwIfAborted(signal);
+        progress({
           step: "markers",
           label: "Markers saved to pack, but offline cache could not be updated",
           done: true,
         });
       }
     } catch {
+      throwIfAborted(signal);
       // Markers are best-effort — same policy as weather. Store an empty
       // list and continue rather than failing the whole pack.
       markersPack = [];
       markersBytes = 0;
       if (!markersFetched) {
-        onProgress({
+        progress({
           step: "markers",
           label: "Markers unavailable — pack saved without markers",
           done: true,
@@ -492,7 +669,8 @@ export async function saveOfflinePack(
     }
 
     // Step 5: save to IndexedDB
-    onProgress({ step: "saving", label: "Writing to storage…", done: false });
+    throwIfAborted(signal);
+    progress({ step: "saving", label: "Writing to storage…", done: false });
     const id = newId();
     const pack: OfflinePack = {
       id,
@@ -518,25 +696,53 @@ export async function saveOfflinePack(
           : estimateFromPredictions(tidePack)) + markersBytes,
     };
 
+    const packKey = `${PACK_KEY_PREFIX}${id}`;
     try {
-      await set(`${PACK_KEY_PREFIX}${id}`, pack);
+      await awaitAbortable(
+        set(packKey, pack),
+        signal,
+        () => void del(packKey).catch(() => undefined),
+      );
+      persistedPackKey = packKey;
+      throwIfAborted(signal);
     } catch (idbErr) {
+      if (signal?.aborted) {
+        await del(packKey).catch(() => undefined);
+        throw cancellationError();
+      }
       const raw = idbErr instanceof Error ? idbErr.message : "Storage write failed";
       const userMsg = `Could not save to device storage: ${raw}`;
-      onProgress({ step: "saving", label: userMsg, done: true, error: userMsg });
+      progress({ step: "saving", label: userMsg, done: true, error: userMsg });
       throw new Error(userMsg);
     }
 
-    onProgress({ step: "saving", label: "Saved to device", done: true });
+    await commitPackCache(
+      transactionId,
+      terrainUrl,
+      overviewUrl,
+      markersUrlForDataset(dataset.id),
+      signal,
+    );
+    throwIfAborted(signal);
+    progress({ step: "saving", label: "Saved to device", done: true });
     notifyPackListeners();
     return pack;
   } catch (err) {
+    if (signal?.aborted && persistedPackKey) {
+      await del(persistedPackKey).catch(() => undefined);
+    }
     // Any failure after terrain was successfully cached — remove the orphaned
     // Cache Storage entries (including any cached marker response) so
     // re-saving always starts clean.
-    await deletePackCache(terrainUrl, overviewUrl, markersUrlForDataset(dataset.id)).catch(() => {
-      // Best-effort; never mask the original error.
-    });
+    // Best-effort rollback is deliberately detached from the save result:
+    // service-worker readiness or an acknowledgement may be unavailable while
+    // the original fetch/IDB error still needs to reach the UI immediately.
+    void deletePackCache(
+      terrainUrl,
+      overviewUrl,
+      markersUrlForDataset(dataset.id),
+      transactionId,
+    ).catch(() => undefined);
     throw err;
   }
 }

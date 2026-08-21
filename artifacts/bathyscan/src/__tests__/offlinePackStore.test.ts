@@ -34,6 +34,7 @@ import {
 } from "@/lib/offlinePackStore";
 import {
   __resetServiceWorkerReadinessForTests,
+  getControllingServiceWorker,
   startServiceWorkerRegistration,
 } from "@/lib/serviceWorkerReadiness";
 
@@ -1584,5 +1585,153 @@ describe("saveOfflinePack — service-worker lifecycle diagnostics", () => {
       () => {},
     );
     expect(pack.datasetId).toBe("ds-ready-worker");
+  });
+});
+
+// ── Cancellation contract ──────────────────────────────────────────────────
+
+describe("saveOfflinePack — cancellation", () => {
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (originalNavigator) {
+      Object.defineProperty(globalThis, "navigator", originalNavigator);
+    }
+  });
+
+  function installWorker(replyToCachePack: boolean): void {
+    vi.stubGlobal("MessageChannel", function (this: unknown) {
+      const port1 = { onmessage: null as ((event: MessageEvent) => void) | null, close: vi.fn() };
+      const port2 = { port1, close: vi.fn() };
+      return { port1, port2 };
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      writable: true,
+      value: {
+        serviceWorker: {
+          ready: Promise.resolve({
+            active: {
+              postMessage: (
+                message: { type: string },
+                ports: { port1: { onmessage: ((event: MessageEvent) => void) | null } }[],
+              ) => {
+                if (message.type === "CACHE_PACK" && !replyToCachePack) return;
+                queueMicrotask(() => ports[0]?.port1.onmessage?.({ data: { ok: true } } as MessageEvent));
+              },
+            },
+          }),
+        },
+      },
+    });
+  }
+
+  it("aborts an in-flight CACHE_PACK wait without writing a late record", async () => {
+    installWorker(false);
+    const controller = new AbortController();
+    const progress = vi.fn();
+    const pending = saveOfflinePack(
+      {
+        id: "cancel-worker-wait",
+        name: "Cancelled worker wait",
+        bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+      },
+      3,
+      progress,
+      controller.signal,
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(await listOfflinePacks()).toEqual([]);
+    expect(progress).not.toHaveBeenCalledWith(
+      expect.objectContaining({ step: "saving", label: "Saved to device" }),
+    );
+  });
+
+  it("passes its signal to tide requests and stops before IndexedDB after abort", async () => {
+    installWorker(true);
+    const controller = new AbortController();
+    let tideSignal: AbortSignal | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init?: RequestInit) => {
+        tideSignal = init?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+            { once: true },
+          );
+        });
+      }),
+    );
+
+    const pending = saveOfflinePack(
+      {
+        id: "cancel-tide-fetch",
+        name: "Cancelled tide fetch",
+        bbox: { minLon: -70, maxLon: -69, minLat: 42, maxLat: 43 },
+      },
+      3,
+      () => undefined,
+      controller.signal,
+    );
+
+    await vi.waitFor(() => expect(tideSignal).toBe(controller.signal));
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(await listOfflinePacks()).toEqual([]);
+  });
+});
+
+describe("service-worker readiness — cancellation", () => {
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+
+  afterEach(() => {
+    __resetServiceWorkerReadinessForTests();
+    if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
+  });
+
+  it("preserves AbortError while registration is still pending", async () => {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: { serviceWorker: { ready: new Promise(() => {}) } },
+    });
+    startServiceWorkerRegistration(() => new Promise(() => {}));
+    const controller = new AbortController();
+    const pending = getControllingServiceWorker(controller.signal);
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("removes activation listeners when cancellation interrupts readiness", async () => {
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
+    const installing = {
+      state: "installing",
+      addEventListener,
+      removeEventListener,
+    } as unknown as ServiceWorker;
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: { serviceWorker: { ready: new Promise(() => {}) } },
+    });
+    startServiceWorkerRegistration(() =>
+      Promise.resolve({ installing } as unknown as ServiceWorkerRegistration),
+    );
+    const controller = new AbortController();
+    const pending = getControllingServiceWorker(controller.signal);
+    await vi.waitFor(() => expect(addEventListener).toHaveBeenCalledWith("statechange", expect.any(Function)));
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(removeEventListener).toHaveBeenCalledWith("statechange", expect.any(Function));
   });
 });

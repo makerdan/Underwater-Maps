@@ -18,6 +18,8 @@ export interface CachePackMessage {
   overviewBody?: string;
   terrainContentType?: string;
   overviewContentType?: string;
+  /** Page-generated id used to restore a prior pack if this save rolls back. */
+  transactionId?: string;
 }
 
 /**
@@ -46,6 +48,7 @@ export interface CachePackMarkersMessage {
   markersUrl: string;
   /** Serialized JSON response body for the marker list. */
   body: string;
+  transactionId?: string;
 }
 
 /**
@@ -74,6 +77,8 @@ export interface DeletePackCacheMessage {
    * into offline packs — the handler must treat it as optional.
    */
   markersUrl?: string;
+  /** When present, restore entries backed up for this in-flight save. */
+  transactionId?: string;
 }
 
 /**
@@ -87,5 +92,25 @@ export function isDeletePackCacheMessage(data: unknown): data is DeletePackCache
     typeof data === "object" &&
     data !== null &&
     (data as Record<string, unknown>)["type"] === "DELETE_PACK_CACHE"
+  );
+}
+
+export interface CommitPackCacheMessage {
+  type: "COMMIT_PACK_CACHE";
+  transactionId: string;
+  terrainUrl: string;
+  overviewUrl: string;
+  markersUrl: string;
+}
+
+export function isCommitPackCacheMessage(data: unknown): data is CommitPackCacheMessage {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    (data as Record<string, unknown>)["type"] === "COMMIT_PACK_CACHE" &&
+    typeof (data as Record<string, unknown>)["transactionId"] === "string" &&
+    typeof (data as Record<string, unknown>)["terrainUrl"] === "string" &&
+    typeof (data as Record<string, unknown>)["overviewUrl"] === "string" &&
+    typeof (data as Record<string, unknown>)["markersUrl"] === "string"
   );
 }

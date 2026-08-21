@@ -129,3 +129,4 @@
 - [API route test mock fallback](api-route-test-mock-fallback.md) — wrap stateful route-test overrides in complete schema/table fallbacks so app-wide mounts cannot crash unrelated suites.
 - [Reference image decode fallback](reference-image-decode-fallback.md) — `createImageBitmap` can reject valid uploaded images in constrained Chromium; preserve the HTMLImageElement decode fallback.
 - [PWA service-worker base normalization](pwa-service-worker-base-normalization.md) — never append `/` to an already-root base; emitted `//sw.js` becomes cross-origin and leaves `serviceWorker.ready` pending.
+- [Offline cache rollback fences](offline-cache-rollback-fences.md) — cache rollback snapshots need per-URL ownership fencing so an older cancelled save cannot restore over a newer retry.

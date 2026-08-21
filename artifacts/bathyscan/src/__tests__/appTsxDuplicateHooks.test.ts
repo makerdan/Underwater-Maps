@@ -81,6 +81,7 @@ const SCANNED_FILES: string[] = [
   "components/TrailRecorder.tsx",
   "components/DriftPath.tsx",
   "components/FindDataPanel.tsx",
+  "components/OfflinePackModal.tsx",
   "components/GpsImportDialog.tsx",
   "components/HabitatPanel.tsx",
   "components/HUD.tsx",

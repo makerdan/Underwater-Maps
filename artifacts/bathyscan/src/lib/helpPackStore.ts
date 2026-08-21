@@ -11,6 +11,21 @@ import { type HelpArticle } from "./helpContent";
 
 const HELP_PACK_KEY = "offline-help-pack";
 export const HELP_CACHE_NAME = "bathyscan-pack-help";
+let helpSaveVersion = 0;
+let helpMutationTail: Promise<void> = Promise.resolve();
+
+async function withHelpMutation<T>(action: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const tail = new Promise<void>((resolve) => { release = resolve; });
+  const previous = helpMutationTail;
+  helpMutationTail = tail;
+  await previous;
+  try {
+    return await action();
+  } finally {
+    release();
+  }
+}
 
 const HELP_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -200,48 +215,92 @@ export async function saveHelpPack(
  */
 export async function saveHelpPack(
   onProgress: (p: HelpPackProgress) => void,
+  signal?: AbortSignal,
 ): Promise<HelpPackRecord>;
 export async function saveHelpPack(
   articlesOrOnProgress: HelpArticle[] | ((p: HelpPackProgress) => void),
-  onProgressArg?: (p: HelpPackProgress) => void,
+  onProgressArg?: ((p: HelpPackProgress) => void) | AbortSignal,
   basePath?: string,
+  signalArg?: AbortSignal,
 ): Promise<HelpPackRecord> {
+  const saveVersion = ++helpSaveVersion;
   const legacy = typeof articlesOrOnProgress === "function";
-  const onProgress = legacy ? articlesOrOnProgress : onProgressArg!;
+  const onProgress = legacy ? articlesOrOnProgress : onProgressArg as (p: HelpPackProgress) => void;
+  const signal = legacy ? onProgressArg as AbortSignal | undefined : signalArg;
   const urls = legacy
     ? [...HELP_ASSETS]
     : extractHelpMediaUrls(articlesOrOnProgress, basePath);
   const fingerprint = computeManifestFingerprint(urls);
   const cache = await caches.open(HELP_CACHE_NAME);
+  const previousRecord = await get<HelpPackRecord>(HELP_PACK_KEY);
   const assetRecords: HelpAssetRecord[] = [];
+  const previousEntries = new Map<string, Response | undefined>();
   const total = urls.length;
 
-  for (let i = 0; i < total; i++) {
-    const url = urls[i]!;
-    const assetName = url.split("/").pop() ?? url;
-    onProgress({ assetName, index: i + 1, total, done: false });
-    try {
-      const response = await fetch(url, { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const clone = response.clone();
-      const buf = await clone.arrayBuffer();
-      await cache.put(url, response);
-      assetRecords.push({ url, sizeBytes: buf.byteLength });
-      onProgress({ assetName, index: i + 1, total, done: true });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Download failed";
-      onProgress({ assetName, index: i + 1, total, done: true, error: msg });
-    }
-  }
-
-  const record: HelpPackRecord = {
-    savedAt: new Date().toISOString(),
-    assets: assetRecords,
-    totalBytes: assetRecords.reduce((sum, a) => sum + a.sizeBytes, 0),
-    fingerprint,
+  const throwIfAborted = () => {
+    if (!signal?.aborted && saveVersion === helpSaveVersion) return;
+    const error = new Error("Help download cancelled");
+    error.name = "AbortError";
+    throw error;
   };
-  await set(HELP_PACK_KEY, record);
-  return record;
+  try {
+    for (let i = 0; i < total; i++) {
+      throwIfAborted();
+      const url = urls[i]!;
+      const assetName = url.split("/").pop() ?? url;
+      onProgress({ assetName, index: i + 1, total, done: false });
+      try {
+        const response = await fetch(url, { cache: "no-store", signal });
+        throwIfAborted();
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const clone = response.clone();
+        const buf = await clone.arrayBuffer();
+        throwIfAborted();
+        if (!previousEntries.has(url)) {
+          previousEntries.set(url, await cache.match(url));
+        }
+        await withHelpMutation(async () => {
+          throwIfAborted();
+          await cache.put(url, response);
+        });
+        throwIfAborted();
+        assetRecords.push({ url, sizeBytes: buf.byteLength });
+        onProgress({ assetName, index: i + 1, total, done: true });
+      } catch (err) {
+        if (signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
+        const msg = err instanceof Error ? err.message : "Download failed";
+        onProgress({ assetName, index: i + 1, total, done: true, error: msg });
+      }
+    }
+
+    throwIfAborted();
+    const record: HelpPackRecord = {
+      savedAt: new Date().toISOString(),
+      assets: assetRecords,
+      totalBytes: assetRecords.reduce((sum, a) => sum + a.sizeBytes, 0),
+      fingerprint,
+    };
+    await withHelpMutation(async () => {
+      throwIfAborted();
+      await set(HELP_PACK_KEY, record);
+    });
+    throwIfAborted();
+    return record;
+  } catch (error) {
+    if (signal?.aborted) {
+      await withHelpMutation(async () => {
+        // A new save owns all cache and IDB state as soon as it starts.
+        if (saveVersion !== helpSaveVersion) return;
+        await Promise.all([...previousEntries].map(async ([url, previous]) => {
+          if (previous) await cache.put(url, previous);
+          else await cache.delete(url);
+        }));
+        if (previousRecord) await set(HELP_PACK_KEY, previousRecord);
+        else await del(HELP_PACK_KEY);
+      });
+    }
+    throw error;
+  }
 }
 
 export async function deleteHelpPack(): Promise<void> {

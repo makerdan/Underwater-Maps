@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { OfflinePackModal } from "@/components/OfflinePackModal";
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
@@ -121,5 +121,46 @@ describe("OfflinePackModal — IDB unavailable error state", () => {
 
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText(/Could not load packs/i)).toBeNull();
+  });
+});
+
+describe("OfflinePackModal — aborting an area save", () => {
+  beforeEach(() => {
+    offlinePackMock.listOfflinePacks.mockResolvedValue([]);
+    offlinePackMock.estimatePackStorageBytes.mockResolvedValue(0);
+    helpPackMock.getHelpPackStatus.mockResolvedValue({ saved: false });
+  });
+
+  it("aborts the active save and lets a retry start without late UI success", async () => {
+    const signals: AbortSignal[] = [];
+    offlinePackMock.saveOfflinePack.mockImplementation(
+      (_dataset: unknown, _days: number, _progress: unknown, signal: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signals.push(signal);
+          signal.addEventListener(
+            "abort",
+            () => reject(Object.assign(new Error("cancelled"), { name: "AbortError" })),
+            { once: true },
+          );
+        }),
+    );
+
+    render(<OfflinePackModal dataset={dataset} onClose={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save Area" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Save Area" }));
+    await waitFor(() => expect(signals).toHaveLength(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(signals[0]?.aborted).toBe(true));
+    expect(screen.getByText(/Save cancelled\. You can safely retry/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("area-pack-done")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save Area" }));
+    });
+    await waitFor(() => expect(signals).toHaveLength(2));
+    expect(signals[1]?.aborted).toBe(false);
   });
 });

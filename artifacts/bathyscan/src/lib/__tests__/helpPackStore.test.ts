@@ -316,6 +316,38 @@ describe("saveHelpPack — success path", () => {
     const totals = onProgress.mock.calls.map((c) => (c[0] as HelpPackProgress).total);
     expect(new Set(totals)).toEqual(new Set([3]));
   });
+
+  it("aborts the active fetch without writing a late help record", async () => {
+    const cache = {
+      match: vi.fn().mockResolvedValue(undefined),
+      put: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(true),
+    };
+    vi.stubGlobal("caches", { open: vi.fn().mockResolvedValue(cache) });
+    let receivedSignal: AbortSignal | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          receivedSignal = init?.signal ?? undefined;
+          init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("cancelled"), { name: "AbortError" })), { once: true });
+        }),
+      ),
+    );
+    const controller = new AbortController();
+    const pending = saveHelpPack(
+      [makeArticle({ body: "![a](/help/a.png)" })],
+      vi.fn(),
+      "",
+      controller.signal,
+    );
+    await vi.waitFor(() => expect(receivedSignal).toBe(controller.signal));
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(idbSet).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
 });
 
 describe("saveHelpPack — partial failure", () => {

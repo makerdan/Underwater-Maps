@@ -38,16 +38,56 @@ function readinessError(
   return new ServiceWorkerReadinessError(reason, message);
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, error: Error): Promise<T> {
+function abortError(): Error {
+  const error = new Error("Operation cancelled");
+  error.name = "AbortError";
+  return error;
+}
+
+function isAbortError(cause: unknown): boolean {
+  return cause instanceof Error && cause.name === "AbortError";
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  error: Error,
+  signal?: AbortSignal,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(error), timeoutMs);
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(abortError());
+    };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    }, timeoutMs);
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
     promise.then(
       (value) => {
-        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        cleanup();
         resolve(value);
       },
       (cause) => {
-        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        cleanup();
         reject(cause);
       },
     );
@@ -82,6 +122,7 @@ function registrationFailure(cause: unknown): ServiceWorkerReadinessError {
 function waitForActivation(
   serviceWorker: ServiceWorkerContainer,
   registration: ServiceWorkerRegistration | undefined,
+  signal?: AbortSignal,
 ): Promise<ServiceWorkerRegistration> {
   const installingWorker = registration?.installing;
   if (!installingWorker) return serviceWorker.ready;
@@ -101,9 +142,12 @@ function waitForActivation(
   }
 
   return new Promise<ServiceWorkerRegistration>((resolve, reject) => {
+    let settled = false;
     const onStateChange = () => {
+      if (settled) return;
       if (installingWorker.state !== "redundant") return;
       cleanup();
+      settled = true;
       reject(
         readinessError(
           "installation",
@@ -111,14 +155,32 @@ function waitForActivation(
         ),
       );
     };
-    const cleanup = () => installingWorker.removeEventListener("statechange", onStateChange);
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(abortError());
+    };
+    const cleanup = () => {
+      installingWorker.removeEventListener("statechange", onStateChange);
+      signal?.removeEventListener("abort", onAbort);
+    };
     installingWorker.addEventListener("statechange", onStateChange);
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
     serviceWorker.ready.then(
       (readyRegistration) => {
+        if (settled) return;
+        settled = true;
         cleanup();
         resolve(readyRegistration);
       },
       (cause) => {
+        if (settled) return;
+        settled = true;
         cleanup();
         reject(cause);
       },
@@ -131,7 +193,7 @@ function waitForActivation(
  * acknowledgement is deliberately *not* part of this function: it has its
  * own timeout after lifecycle readiness succeeds.
  */
-export async function getControllingServiceWorker(): Promise<ServiceWorker> {
+export async function getControllingServiceWorker(signal?: AbortSignal): Promise<ServiceWorker> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
     throw readinessError(
       "unsupported",
@@ -151,8 +213,10 @@ export async function getControllingServiceWorker(): Promise<ServiceWorker> {
           "registration-timeout",
           "Service worker registration timed out. Reload BathyScan and retry saving offline.",
         ),
+        signal,
       );
     } catch (cause) {
+      if (isAbortError(cause)) throw cause;
       if (cause instanceof ServiceWorkerReadinessError) throw cause;
       throw registrationFailure(cause);
     }
@@ -161,14 +225,16 @@ export async function getControllingServiceWorker(): Promise<ServiceWorker> {
   let readyRegistration: ServiceWorkerRegistration;
   try {
     readyRegistration = await withTimeout(
-      waitForActivation(serviceWorker, registration),
+      waitForActivation(serviceWorker, registration, signal),
       SERVICE_WORKER_READY_TIMEOUT_MS,
       readinessError(
         "activation-timeout",
         "Service worker activation timed out. Reload BathyScan and retry saving offline.",
       ),
+        signal,
     );
   } catch (cause) {
+    if (isAbortError(cause)) throw cause;
     if (cause instanceof ServiceWorkerReadinessError) throw cause;
     throw registrationFailure(cause);
   }

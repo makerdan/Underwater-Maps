@@ -176,6 +176,16 @@ describe("saveOfflinePack — IDB set() failure", () => {
       () => {},
     ).catch(() => {});
 
+    await vi.waitFor(() =>
+      expect(
+        swMessages.find(
+          (m): m is { type: string } =>
+            typeof m === "object" &&
+            m !== null &&
+            (m as Record<string, unknown>)["type"] === "DELETE_PACK_CACHE",
+        ),
+      ).toBeDefined(),
+    );
     const deleteMsg = swMessages.find(
       (m): m is { type: string } =>
         typeof m === "object" &&
@@ -198,6 +208,16 @@ describe("saveOfflinePack — IDB set() failure", () => {
       () => {},
     ).catch(() => {});
 
+    await vi.waitFor(() =>
+      expect(
+        swMessages.find(
+          (m): m is { type: string; terrainUrl: string; overviewUrl: string } =>
+            typeof m === "object" &&
+            m !== null &&
+            (m as Record<string, unknown>)["type"] === "DELETE_PACK_CACHE",
+        ),
+      ).toBeDefined(),
+    );
     const deleteMsg = swMessages.find(
       (m): m is { type: string; terrainUrl: string; overviewUrl: string } =>
         typeof m === "object" &&

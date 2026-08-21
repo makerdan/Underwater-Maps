@@ -2,9 +2,9 @@
  * useBulkOfflinePack — batch-saves every selected dataset for offline use.
  *
  * Datasets are processed sequentially (never in parallel) to avoid overwhelming
- * storage and network.  Cancellation flips a ref flag that is checked between
- * iterations; the in-flight saveOfflinePack call for the current dataset
- * always completes normally.
+ * storage and network. Cancellation aborts the active single-pack operation,
+ * while a per-run signal prevents its late callbacks from mutating a resumed
+ * or retried batch.
  *
  * Mid-batch network loss pauses the batch between iterations.  Call resume()
  * to continue from where the batch left off.
@@ -105,13 +105,40 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
   const abortControllerRef = useRef<AbortController | null>(null);
   /** The row index to resume from after a network-loss pause. */
   const resumeIndexRef = useRef(0);
+  /** Dataset currently being saved, used to clear its visible saving state on cancel. */
+  const activeRowIdRef = useRef<string | null>(null);
+
+  const awaitWithAbort = useCallback(<T,>(promise: Promise<T>, signal: AbortSignal): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const onAbort = () => {
+        signal.removeEventListener("abort", onAbort);
+        const error = new Error("Operation cancelled");
+        error.name = "AbortError";
+        reject(error);
+      };
+      if (signal.aborted) return onAbort();
+      signal.addEventListener("abort", onAbort, { once: true });
+      promise.then(
+        (value) => {
+          signal.removeEventListener("abort", onAbort);
+          resolve(value);
+        },
+        (error) => {
+          signal.removeEventListener("abort", onAbort);
+          reject(error);
+        },
+      );
+    }),
+  []);
 
   // ── Quota helper ─────────────────────────────────────────────────────────
 
-  const refreshQuota = useCallback(async () => {
+  const refreshQuota = useCallback(async (signal?: AbortSignal) => {
     if (typeof navigator === "undefined" || !("storage" in navigator)) return;
     try {
-      const est = await navigator.storage.estimate();
+      const estimatePromise = navigator.storage.estimate();
+      const est = signal ? await awaitWithAbort(estimatePromise, signal) : await estimatePromise;
+      if (signal?.aborted) return;
       if (est.usage != null && est.quota != null) {
         setStorageQuota({ used: est.usage, total: est.quota });
         const remaining = est.quota - est.usage;
@@ -127,7 +154,7 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
     } catch {
       // Storage estimate not supported in this environment.
     }
-  }, []);
+  }, [awaitWithAbort]);
 
   // ── Toggle force-update ──────────────────────────────────────────────────
 
@@ -154,6 +181,7 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
       initialRows: BulkRow[],
       forceIds: Set<string>,
       tideDays: number,
+      signal: AbortSignal,
     ) => {
       // Keep a local mirror of rows so we can read the latest status without
       // relying on the stale closure from the previous render cycle.
@@ -167,7 +195,7 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
 
       for (let i = startIndex; i < localRows.length; i++) {
         // ── Cancellation check ─────────────────────────────────────────────
-        if (cancelRef.current) {
+        if (cancelRef.current || signal.aborted) {
           setPhase("cancelled");
           return;
         }
@@ -208,6 +236,7 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
 
         // ── Mark saving ───────────────────────────────────────────────────
         patchLocal(ds.id, { status: "saving", progress: [] });
+        activeRowIdRef.current = ds.id;
         setRows((prev) =>
           prev.map((r) =>
             r.dataset.id === ds.id ? { ...r, status: "saving", progress: [] } : r,
@@ -216,6 +245,7 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
 
         try {
           const pack = await saveOfflinePack(ds, tideDays, (p) => {
+            if (signal.aborted || cancelRef.current) return;
             setRows((prev) =>
               prev.map((r) => {
                 if (r.dataset.id !== ds.id) return r;
@@ -227,7 +257,18 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
                 return { ...r, progress: newProgress };
               }),
             );
-          });
+          }, signal);
+
+          if (signal.aborted || cancelRef.current) {
+            patchLocal(ds.id, { status: "paused", progress: [] });
+            setRows((prev) =>
+              prev.map((r) =>
+                r.dataset.id === ds.id ? { ...r, status: "paused", progress: [] } : r,
+              ),
+            );
+            setPhase("cancelled");
+            return;
+          }
 
           // ── SW integrity probe ────────────────────────────────────────
           let warning: string | null = null;
@@ -237,8 +278,8 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
               cache: "no-store",
             };
             const [terrainProbe, overviewProbe] = await Promise.all([
-              fetch(pack.terrainUrl, probeInit),
-              fetch(pack.overviewUrl, probeInit),
+              fetch(pack.terrainUrl, { ...probeInit, signal }),
+              fetch(pack.overviewUrl, { ...probeInit, signal }),
             ]);
             if (!terrainProbe.ok || !overviewProbe.ok) {
               warning =
@@ -247,6 +288,16 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
           } catch {
             warning =
               "Cached but unverified — SW may not be active. Terrain or overview may not be available offline.";
+          }
+          if (signal.aborted || cancelRef.current) {
+            patchLocal(ds.id, { status: "paused", progress: [] });
+            setRows((prev) =>
+              prev.map((r) =>
+                r.dataset.id === ds.id ? { ...r, status: "paused", progress: [] } : r,
+              ),
+            );
+            setPhase("cancelled");
+            return;
           }
 
           // ── Tide-expiry warning ────────────────────────────────────────
@@ -266,6 +317,16 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
             ),
           );
         } catch (err) {
+          if (signal.aborted || cancelRef.current) {
+            patchLocal(ds.id, { status: "paused", progress: [] });
+            setRows((prev) =>
+              prev.map((r) =>
+                r.dataset.id === ds.id ? { ...r, status: "paused", progress: [] } : r,
+              ),
+            );
+            setPhase("cancelled");
+            return;
+          }
           // Row failure does NOT abort the rest of the batch.
           const msg = err instanceof Error ? err.message : "Failed to save pack";
           patchLocal(ds.id, { status: "error", error: msg });
@@ -275,8 +336,13 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
             ),
           );
         }
+        activeRowIdRef.current = null;
       }
 
+      if (signal.aborted || cancelRef.current) {
+        setPhase("cancelled");
+        return;
+      }
       setPhase("done");
 
       // Refresh quota after the batch completes.
@@ -284,7 +350,9 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
         try {
           const est = await navigator.storage.estimate();
           if (est.usage != null && est.quota != null) {
+          if (!signal.aborted && !cancelRef.current) {
             setStorageQuota({ used: est.usage, total: est.quota });
+          }
           }
         } catch {
           // ignore
@@ -308,8 +376,34 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
     // (b) IDB availability probe.
     if (signal.aborted) return false;
     try {
-      await listOfflinePacks();
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const onAbort = () => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener("abort", onAbort);
+          const error = new Error("Operation cancelled");
+          error.name = "AbortError";
+          reject(error);
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        listOfflinePacks().then(
+          () => {
+            if (settled) return;
+            settled = true;
+            signal.removeEventListener("abort", onAbort);
+            resolve();
+          },
+          (error) => {
+            if (settled) return;
+            settled = true;
+            signal.removeEventListener("abort", onAbort);
+            reject(error);
+          },
+        );
+      });
     } catch (e) {
+      if (signal.aborted) return false;
       setPreflightError(
         `Storage unavailable — ${e instanceof Error ? e.message : "IndexedDB not accessible"}`,
       );
@@ -318,7 +412,7 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
 
     // (c) Quota check (advisory — sets quotaWarning, does not return false).
     if (signal.aborted) return false;
-    await refreshQuota();
+    await refreshQuota(signal);
 
     return true;
   }, [refreshQuota]);
@@ -361,8 +455,12 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
       // mean all packs are re-downloaded even when valid ones already exist.
       let existingPacks: OfflinePack[] = [];
       try {
-        existingPacks = await listOfflinePacks();
+        existingPacks = await awaitWithAbort(listOfflinePacks(), ac.signal);
       } catch (e) {
+        if (ac.signal.aborted || cancelRef.current) {
+          setPhase("cancelled");
+          return;
+        }
         setPreflightError(
           `Cannot check existing packs — ${e instanceof Error ? e.message : "storage unavailable"}. Try closing and reopening the panel.`,
         );
@@ -390,51 +488,57 @@ export function useBulkOfflinePack(datasets: BulkDataset[]): UseBulkOfflinePackR
       const forceIds = new Set(forceUpdateIds);
       const tideDays = days;
 
-      await runBatch(0, initialRows, forceIds, tideDays);
+      await runBatch(0, initialRows, forceIds, tideDays, ac.signal);
     } finally {
       abortControllerRef.current = null;
       runningRef.current = false;
     }
-  }, [datasets, forceUpdateIds, days, runPreflight, runBatch]);
+  }, [datasets, forceUpdateIds, days, runPreflight, runBatch, awaitWithAbort]);
 
   // ── cancel ───────────────────────────────────────────────────────────────
 
   const cancel = useCallback(() => {
     cancelRef.current = true;
-    // Abort any in-flight runPreflight so its async steps return early.
+    // The same controller owns preflight, the active save, and its integrity
+    // probe, so cancellation cannot leave a late save racing a retry.
     abortControllerRef.current?.abort();
-    // If currently paused (not iterating), set phase immediately.
-    setPhase((prev) => (prev === "paused" ? "cancelled" : prev));
+    const activeId = activeRowIdRef.current;
+    setRows((prev) =>
+      prev.map((row) =>
+        row.dataset.id === activeId && row.status === "saving"
+          ? { ...row, status: "paused", progress: [] }
+          : row,
+      ),
+    );
+    setPhase((prev) => (prev === "running" || prev === "paused" ? "cancelled" : prev));
   }, []);
 
   // ── resume ───────────────────────────────────────────────────────────────
 
   const resume = useCallback(() => {
+    if (runningRef.current || cancelRef.current) return;
+    let restoredRows: BulkRow[] = [];
     setPhase((prev) => {
       if (prev !== "paused") return prev;
-
       cancelRef.current = false;
-
-      // We need to read the current rows and re-launch the batch.
-      // Since setState callback can't be async, we schedule via setRows.
-      setRows((currentRows) => {
-        const restored = currentRows.map((r) =>
-          r.status === "paused" ? { ...r, status: "pending" as RowStatus } : r,
-        );
-
-        const forceIds = new Set(forceUpdateIds);
-        const tideDays = days;
-        const idx = resumeIndexRef.current;
-
-        // Kick off the batch outside the setState synchronously.
-        void Promise.resolve().then(() =>
-          runBatch(idx, restored, forceIds, tideDays),
-        );
-
-        return restored;
-      });
-
       return "running";
+    });
+    setRows((currentRows) => {
+      restoredRows = currentRows.map((r) =>
+        r.status === "paused" ? { ...r, status: "pending" as RowStatus } : r,
+      );
+      return restoredRows;
+    });
+    if (restoredRows.length === 0) return;
+    runningRef.current = true;
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
+    const forceIds = new Set(forceUpdateIds);
+    const tideDays = days;
+    const idx = resumeIndexRef.current;
+    void runBatch(idx, restoredRows, forceIds, tideDays, ac.signal).finally(() => {
+      if (abortControllerRef.current === ac) abortControllerRef.current = null;
+      runningRef.current = false;
     });
   }, [forceUpdateIds, days, runBatch]);
 

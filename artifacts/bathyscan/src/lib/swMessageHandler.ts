@@ -10,12 +10,115 @@
 import {
   isCachePackMessage,
   isCachePackMarkersMessage,
+  isCommitPackCacheMessage,
   isDeletePackCacheMessage,
 } from "./swHelpers";
 
 /** The cache name used for persisting offline pack terrain/overview tiles. */
 export const PACK_TERRAIN_CACHE_NAME = "bathyscan-pack-terrain";
+export const PACK_TERRAIN_TRANSACTION_CACHE_NAME = "bathyscan-pack-terrain-transactions";
 export const CACHE_PACK_FETCH_TIMEOUT_MS = 120_000;
+const cacheMutationTails = new Map<string, Promise<void>>();
+
+function transactionCacheKey(transactionId: string, url: string): string {
+  return new URL(
+    `/__bathyscan-pack-transaction__/${encodeURIComponent(transactionId)}/${encodeURIComponent(url)}`,
+    "https://bathyscan.invalid",
+  ).href;
+}
+
+function transactionOwnerKey(url: string): string {
+  return new URL(
+    `/__bathyscan-pack-transaction-owner__/${encodeURIComponent(url)}`,
+    "https://bathyscan.invalid",
+  ).href;
+}
+
+async function withCacheUrlLocks<T>(urls: string[], action: () => Promise<T>): Promise<T> {
+  const keys = [...new Set(urls)].sort();
+  let release!: () => void;
+  const tail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const predecessors = keys.map((key) => cacheMutationTails.get(key) ?? Promise.resolve());
+  for (const key of keys) cacheMutationTails.set(key, tail);
+  await Promise.all(predecessors);
+  try {
+    return await action();
+  } finally {
+    release();
+    for (const key of keys) {
+      if (cacheMutationTails.get(key) === tail) cacheMutationTails.delete(key);
+    }
+  }
+}
+
+async function transactionOwnsEntry(transactionId: string | undefined, url: string): Promise<boolean> {
+  if (!transactionId) return true;
+  const transactionCache = await caches.open(PACK_TERRAIN_TRANSACTION_CACHE_NAME);
+  const owner = typeof transactionCache.match === "function"
+    ? await transactionCache.match(transactionOwnerKey(url))
+    : undefined;
+  return (await owner?.text?.()) === transactionId;
+}
+
+async function backupExistingEntry(
+  cache: Cache,
+  transactionId: string | undefined,
+  url: string,
+): Promise<void> {
+  if (!transactionId) return;
+  const transactionCache = await caches.open(PACK_TERRAIN_TRANSACTION_CACHE_NAME);
+  const existing = typeof cache.match === "function" ? await cache.match(url) : undefined;
+  await transactionCache.put(
+    transactionCacheKey(transactionId, url),
+    existing?.clone?.() ?? existing ?? new Response(null, { headers: { "x-bathyscan-empty": "1" } }),
+  );
+  await transactionCache.put(transactionOwnerKey(url), new Response(transactionId));
+}
+
+async function restoreOrDeleteEntry(
+  cache: Cache,
+  transactionId: string | undefined,
+  url: string,
+): Promise<void> {
+  if (!transactionId) {
+    await cache.delete(url);
+    return;
+  }
+  const transactionCache = await caches.open(PACK_TERRAIN_TRANSACTION_CACHE_NAME);
+  const key = transactionCacheKey(transactionId, url);
+  const backup = typeof transactionCache.match === "function"
+    ? await transactionCache.match(key)
+    : undefined;
+  // A newer save owns this URL now. Discard our snapshot but never let an old
+  // rollback overwrite (or delete) that newer pack.
+  const owner = typeof transactionCache.match === "function"
+    ? await transactionCache.match(transactionOwnerKey(url))
+    : undefined;
+  const ownsUrl = (await owner?.text?.()) === transactionId;
+  if (!backup || !ownsUrl) {
+    await transactionCache.delete(key);
+    return;
+  }
+  if (backup.headers.get("x-bathyscan-empty") === "1") {
+    await cache.delete(url);
+  } else {
+    await cache.put(url, backup.clone?.() ?? backup);
+  }
+  await transactionCache.delete(key);
+}
+
+async function discardTransactionEntry(transactionId: string, url: string): Promise<void> {
+  const transactionCache = await caches.open(PACK_TERRAIN_TRANSACTION_CACHE_NAME);
+  await transactionCache.delete(transactionCacheKey(transactionId, url));
+  const owner = typeof transactionCache.match === "function"
+    ? await transactionCache.match(transactionOwnerKey(url))
+    : undefined;
+  if ((await owner?.text?.()) === transactionId) {
+    await transactionCache.delete(transactionOwnerKey(url));
+  }
+}
 
 /**
  * Minimal event shape the handler needs — matches ExtendableMessageEvent but
@@ -60,6 +163,14 @@ export function handleCachePackMessage(event: MessageEventLike): void {
           }
           return response;
         };
+        // Snapshot before fetching or writing. A failed fetch must leave the
+        // existing pack alone, and a later rollback needs the original values.
+        await withCacheUrlLocks([raw.terrainUrl, raw.overviewUrl], () =>
+          Promise.all([
+            backupExistingEntry(cache, raw.transactionId, raw.terrainUrl),
+            backupExistingEntry(cache, raw.transactionId, raw.overviewUrl),
+          ]),
+        );
         const [terrain, overview] = await Promise.all([
           fetchResponse(raw.terrainUrl, raw.terrainBody, raw.terrainContentType),
           fetchResponse(raw.overviewUrl, raw.overviewBody, raw.overviewContentType),
@@ -67,19 +178,30 @@ export function handleCachePackMessage(event: MessageEventLike): void {
         if (!terrain.ok || !overview.ok) {
           throw new Error("Terrain or overview response was not cacheable");
         }
-        await Promise.all([
-          cache.put(raw.terrainUrl, terrain.clone?.() ?? terrain),
-          cache.put(raw.overviewUrl, overview.clone?.() ?? overview),
-        ]);
+        await withCacheUrlLocks([raw.terrainUrl, raw.overviewUrl], async () => {
+          const ownsBoth = await Promise.all([
+            transactionOwnsEntry(raw.transactionId, raw.terrainUrl),
+            transactionOwnsEntry(raw.transactionId, raw.overviewUrl),
+          ]);
+          if (!ownsBoth.every(Boolean)) {
+            throw new Error("Offline cache save was superseded by a newer attempt");
+          }
+          await Promise.all([
+            cache.put(raw.terrainUrl, terrain.clone?.() ?? terrain),
+            cache.put(raw.overviewUrl, overview.clone?.() ?? overview),
+          ]);
+        });
         port?.postMessage({ ok: true });
       } catch (err) {
         // A failed second write must not leave a misleading half-pack behind.
         try {
           const cache = await caches.open(PACK_TERRAIN_CACHE_NAME);
-          await Promise.all([
-            cache.delete(raw.terrainUrl),
-            cache.delete(raw.overviewUrl),
-          ]);
+          await withCacheUrlLocks([raw.terrainUrl, raw.overviewUrl], () =>
+            Promise.all([
+              restoreOrDeleteEntry(cache, raw.transactionId, raw.terrainUrl),
+              restoreOrDeleteEntry(cache, raw.transactionId, raw.overviewUrl),
+            ]),
+          );
         } catch {
           // Cleanup is best-effort; preserve the useful original error.
         }
@@ -108,12 +230,20 @@ export function handleCachePackMarkersMessage(event: MessageEventLike): void {
       const port = event.ports[0];
       try {
         const cache = await caches.open(PACK_TERRAIN_CACHE_NAME);
-        await cache.put(
-          raw.markersUrl,
-          new Response(raw.body, {
-            headers: { "Content-Type": "application/json" },
-          }),
+        await withCacheUrlLocks([raw.markersUrl], () =>
+          backupExistingEntry(cache, raw.transactionId, raw.markersUrl),
         );
+        await withCacheUrlLocks([raw.markersUrl], async () => {
+          if (!(await transactionOwnsEntry(raw.transactionId, raw.markersUrl))) {
+            throw new Error("Offline marker cache save was superseded by a newer attempt");
+          }
+          await cache.put(
+            raw.markersUrl,
+            new Response(raw.body, {
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        });
         port?.postMessage({ ok: true });
       } catch (err) {
         port?.postMessage({ ok: false, error: String(err) });
@@ -139,16 +269,40 @@ export function handleDeletePackCacheMessage(event: MessageEventLike): void {
       const port = event.ports[0];
       try {
         const cache = await caches.open(PACK_TERRAIN_CACHE_NAME);
-        const deletions = [
-          cache.delete(raw.terrainUrl),
-          cache.delete(raw.overviewUrl),
-        ];
+        const urls = [raw.terrainUrl, raw.overviewUrl];
         // Optional — messages from app versions before markers were bundled
         // into offline packs omit this field.
         if (typeof raw.markersUrl === "string") {
-          deletions.push(cache.delete(raw.markersUrl));
+          urls.push(raw.markersUrl);
         }
-        await Promise.all(deletions);
+        await withCacheUrlLocks(
+          urls,
+          () => Promise.all(urls.map((url) => restoreOrDeleteEntry(cache, raw.transactionId, url))),
+        );
+        port?.postMessage({ ok: true });
+      } catch (err) {
+        port?.postMessage({ ok: false, error: String(err) });
+      }
+    })(),
+  );
+}
+
+/** Discards rollback snapshots after IndexedDB has durably committed a pack. */
+export function handleCommitPackCacheMessage(event: MessageEventLike): void {
+  const raw: unknown = event.data;
+  if (!isCommitPackCacheMessage(raw)) return;
+  event.waitUntil(
+    (async () => {
+      const port = event.ports[0];
+      try {
+        await withCacheUrlLocks(
+          [raw.terrainUrl, raw.overviewUrl, raw.markersUrl],
+          () => Promise.all([
+            discardTransactionEntry(raw.transactionId, raw.terrainUrl),
+            discardTransactionEntry(raw.transactionId, raw.overviewUrl),
+            discardTransactionEntry(raw.transactionId, raw.markersUrl),
+          ]),
+        );
         port?.postMessage({ ok: true });
       } catch (err) {
         port?.postMessage({ ok: false, error: String(err) });
@@ -165,4 +319,5 @@ export function handleSwMessage(event: MessageEventLike): void {
   handleCachePackMessage(event);
   handleCachePackMarkersMessage(event);
   handleDeletePackCacheMessage(event);
+  handleCommitPackCacheMessage(event);
 }

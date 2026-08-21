@@ -11,7 +11,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { handleCachePackMessage, PACK_TERRAIN_CACHE_NAME } from "@/lib/swMessageHandler";
+import {
+  handleCachePackMessage,
+  handleCommitPackCacheMessage,
+  PACK_TERRAIN_CACHE_NAME,
+} from "@/lib/swMessageHandler";
 
 function makeEvent(data: unknown): {
   data: unknown;
@@ -97,5 +101,70 @@ describe("handleCachePackMessage — valid CACHE_PACK message proceeds to caches
     await event.waitUntil.mock.calls[0][0];
 
     expect(cachesOpenMock).toHaveBeenCalledWith(PACK_TERRAIN_CACHE_NAME);
+  });
+
+  it("does not let a cancelled older transaction overwrite a committed retry", async () => {
+    const packEntries = new Map<string, Response>();
+    const transactionEntries = new Map<string, Response>();
+    const makeCache = (entries: Map<string, Response>) => ({
+      match: async (url: string) => entries.get(url)?.clone(),
+      put: async (url: string, response: Response) => {
+        entries.set(url, response.clone());
+      },
+      delete: async (url: string) => entries.delete(url),
+    });
+    const packCache = makeCache(packEntries);
+    const transactionCache = makeCache(transactionEntries);
+    cachesOpenMock.mockImplementation((name: string) =>
+      Promise.resolve(name === PACK_TERRAIN_CACHE_NAME ? packCache : transactionCache),
+    );
+
+    const deferredFetches: ((response: Response) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            deferredFetches.push(resolve);
+          }),
+      ),
+    );
+    const terrainUrl = "/api/datasets/race/terrain";
+    const overviewUrl = "/api/datasets/race/overview";
+    const older = makeEvent({
+      type: "CACHE_PACK",
+      terrainUrl,
+      overviewUrl,
+      transactionId: "older",
+    });
+    handleCachePackMessage(older);
+    await vi.waitFor(() => expect(deferredFetches).toHaveLength(2));
+
+    const retry = makeEvent({
+      type: "CACHE_PACK",
+      terrainUrl,
+      overviewUrl,
+      terrainBody: "retry-terrain",
+      overviewBody: "retry-overview",
+      transactionId: "retry",
+    });
+    handleCachePackMessage(retry);
+    await retry.waitUntil.mock.calls[0][0];
+
+    const commit = makeEvent({
+      type: "COMMIT_PACK_CACHE",
+      terrainUrl,
+      overviewUrl,
+      markersUrl: "/api/markers?datasetId=race",
+      transactionId: "retry",
+    });
+    handleCommitPackCacheMessage(commit);
+    await commit.waitUntil.mock.calls[0][0];
+
+    deferredFetches.forEach((resolve) => resolve(new Response("older-response")));
+    await older.waitUntil.mock.calls[0][0];
+
+    expect(await packEntries.get(terrainUrl)?.text()).toBe("retry-terrain");
+    expect(await packEntries.get(overviewUrl)?.text()).toBe("retry-overview");
   });
 });
