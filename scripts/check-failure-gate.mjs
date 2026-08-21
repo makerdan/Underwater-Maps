@@ -35,10 +35,9 @@
  */
 
 import { readdir, readFile } from "fs/promises";
-import { existsSync } from "fs";
+import { existsSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { pathToFileURL } from "url";
-import { writeFileSync } from "fs";
 import { VALIDATION_COMMANDS } from "./register-validation-commands.mjs";
 
 const TASKS_DIR = ".local/tasks";
