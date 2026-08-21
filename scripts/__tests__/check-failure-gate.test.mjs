@@ -733,3 +733,41 @@ describe("single-file mode: TASK_PLAN_FILE points at a missing file", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// (e) Read failures must never be suppressed by --fix-stub
+// ---------------------------------------------------------------------------
+
+describe("--fix-stub: unreadable plan files are hard failures", () => {
+  let unreadableDir;
+  let unreadablePlanPath;
+
+  before(() => {
+    unreadableDir = mkdtempSync(join(tmpdir(), "cfgt-unreadable-"));
+    // A directory with an .md suffix is included by archive scanning, but
+    // readFile() reliably fails with EISDIR in every test environment,
+    // including containers running the tests as root.
+    unreadablePlanPath = join(unreadableDir, ".local", "tasks", "unreadable-plan.md");
+    mkdirSync(unreadablePlanPath, { recursive: true });
+  });
+
+  after(() => {
+    rmSync(unreadableDir, { recursive: true, force: true });
+  });
+
+  it("exits 1 and names the unreadable file", () => {
+    const result = runScript(["--fix-stub"], unreadableDir, {
+      TASK_PLAN_FILE: unreadablePlanPath,
+    });
+    assert.equal(
+      result.status,
+      1,
+      `expected --fix-stub to exit 1 for unreadable plan, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+    assert.match(
+      result.stderr,
+      new RegExp(`could not read "${unreadablePlanPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`),
+      `expected read failure diagnostic to name ${unreadablePlanPath}\nstderr: ${result.stderr}`,
+    );
+  });
+});

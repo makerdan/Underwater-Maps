@@ -307,7 +307,7 @@ const isMain =
 
 if (isMain) {
 const compliant = [];
-const nonCompliant = []; // { file, missingSections[], unfilledPlaceholders[], missingValidationLines[] }
+const nonCompliant = []; // { file, readFailed?, missingSections[], unfilledPlaceholders[], missingValidationLines[] }
 
 for (const file of files) {
   const filePath = resolveFilePath(file);
@@ -318,6 +318,7 @@ for (const file of files) {
     console.error(`check-failure-gate — could not read "${filePath}": ${err.message}`);
     nonCompliant.push({
       file,
+      readFailed: true,
       missingSections: REQUIRED_SECTIONS.map((s) => s.heading),
       unfilledPlaceholders: [],
       missingValidationLines: [],
@@ -541,9 +542,13 @@ for (const {
 }
 
 const trueNonCompliant = nonCompliant.filter(
-  ({ missingSections, unfilledPlaceholders, _validationLineIssues, _patchFailures = [], writeFailed }) => {
+  ({ readFailed, missingSections, unfilledPlaceholders, _validationLineIssues, _patchFailures = [], writeFailed }) => {
     const issues = _validationLineIssues || [];
     const unfixableIssues = issues.filter((i) => !i.absent);
+    // A file that could not be inspected is never safe to treat as compliant.
+    // This must remain a hard failure in --fix-stub mode: no patch can be
+    // trusted when the source content was unreadable.
+    if (readFailed) return true;
     // In --fix-stub mode: absent lines and missing sections are auto-inserted
     // (exit 0 after patching); unfilled placeholders and invalid tier values
     // cannot be auto-fixed but --fix-stub still exits 0 so the pipeline can
