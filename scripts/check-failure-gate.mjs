@@ -35,7 +35,7 @@
  */
 
 import { readdir, readFile } from "fs/promises";
-import { existsSync, writeFileSync } from "fs";
+import { existsSync, renameSync, unlinkSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { pathToFileURL } from "url";
 import { VALIDATION_COMMANDS } from "./register-validation-commands.mjs";
@@ -298,6 +298,33 @@ export function insertValidationLine(
   return { content: newContent, changed: true };
 }
 
+// Write the completed patch beside the original, then replace the original in
+// one rename. If writing the temporary file fails (including after writing
+// only part of its contents), the original plan is never touched.
+export function writeFileAtomically(
+  filePath,
+  content,
+  {
+    write = writeFileSync,
+    rename = renameSync,
+    unlink = unlinkSync,
+  } = {},
+) {
+  const temporaryPath = `${filePath}.tmp-${process.pid}`;
+  try {
+    write(temporaryPath, content, "utf8");
+    rename(temporaryPath, filePath);
+  } catch (error) {
+    try {
+      unlink(temporaryPath);
+    } catch {
+      // The temporary file may not have been created. Preserve the original
+      // write error, which is the actionable failure for the caller.
+    }
+    throw error;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Check each file
 // ---------------------------------------------------------------------------
@@ -470,7 +497,7 @@ for (const file of files) {
 
       if (patchedContent !== content) {
         try {
-          writeFileSync(filePath, patchedContent, "utf8");
+          writeFileAtomically(filePath, patchedContent);
         } catch (err) {
           console.error(`check-failure-gate — failed to patch "${file}": ${err.message}`);
           const entry = nonCompliant.find((e) => e.file === file);
