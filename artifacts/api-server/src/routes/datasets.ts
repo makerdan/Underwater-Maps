@@ -3,8 +3,6 @@ import * as zlib from "zlib";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { Worker } from "worker_threads";
-import { fileURLToPath } from "url";
 import multer from "multer";
 import { eq, and, inArray, or, lt, isNull } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
@@ -44,7 +42,6 @@ import {
   previewDataset,
   previewBboxForDownload,
   buildBboxCsvRows,
-  type TerrainGrid,
 } from "../lib/terrain.js";
 import { parseUploadedFile } from "../lib/uploadParsers.js";
 import { parsePdfContourFile, PdfStageError, PdfRasterOnlyError, type PdfDepthUnit } from "../lib/pdfContour.js";
@@ -80,6 +77,12 @@ import {
   type UploadSession,
   type UploadJobState,
 } from "../domains/upload/service.js";
+import {
+  runTerrainParseWorker,
+  type TerrainParseWorkerInput,
+  type TerrainParseWorkerResult,
+  processTerrainPoints,
+} from "../domains/terrain/service.js";
 import {
   recordExtensionDuration as _recordExtensionDuration,
   updateProgressWithEta,
@@ -991,17 +994,6 @@ async function streamGunzipToFile(
 //   src/index.ts          → dist/index.mjs           (the main bundle)
 //   src/lib/parseWorker.ts → dist/lib/parseWorker.mjs (the worker bundle)
 // ---------------------------------------------------------------------------
-const PARSE_WORKER_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "lib",
-  "parseWorker.mjs",
-);
-
-interface ParseWorkerResult {
-  terrain: TerrainGrid;
-  overview: TerrainGrid;
-}
-
 /**
  * Spawns a dedicated worker thread to run the CPU-intensive parse + gridPoints
  * steps for a single upload job.  The main HTTP thread is never blocked: only
@@ -1026,72 +1018,10 @@ interface ParseWorkerResult {
  *                   Used by the NOAA tar.gz router.
  * @param onProgress Callback invoked with each progress milestone.
  */
-export function runParseWorker(params: {
-  filePath: string;
-  fileName: string;
-  resolution: number;
-  gridId: string;
-  datasetName: string;
-  smoothing: boolean;
-  prePoints?: { lon: number; lat: number; depth: number }[];
-  onProgress: (progress: number) => void;
-}): Promise<ParseWorkerResult> {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-
-    const worker = new Worker(PARSE_WORKER_PATH, {
-      workerData: {
-        filePath: params.filePath,
-        fileName: params.fileName,
-        resolution: params.resolution,
-        gridId: params.gridId,
-        datasetName: params.datasetName,
-        smoothing: params.smoothing,
-        prePoints: params.prePoints,
-      },
-    });
-
-    worker.on("message", (msg: { type: string; progress?: number; terrain?: unknown; overview?: unknown; message?: string }) => {
-      if (msg.type === "progress" && typeof msg.progress === "number") {
-        params.onProgress(msg.progress);
-      } else if (msg.type === "result") {
-        if (settled) return;
-        settled = true;
-        // Worker posts result then exits naturally; terminate() ensures cleanup
-        // even if the worker is still winding down when we resolve.
-        worker.terminate().catch((terminateErr: unknown) => {
-          logger.warn({ err: terminateErr }, "worker terminate error");
-        });
-        resolve({ terrain: msg.terrain as ParseWorkerResult["terrain"], overview: msg.overview as ParseWorkerResult["overview"] });
-      } else if (msg.type === "error" && typeof msg.message === "string") {
-        if (settled) return;
-        settled = true;
-        // Terminate explicitly — the worker may still be running if it posted
-        // the error via parentPort but hasn't exited its event loop yet.
-        worker.terminate().catch((terminateErr: unknown) => {
-          logger.warn({ err: terminateErr }, "worker terminate error");
-        });
-        reject(new Error(msg.message));
-      }
-    });
-
-    worker.on("error", (err) => {
-      if (settled) return;
-      settled = true;
-      // An uncaught exception in the worker thread: terminate to guarantee the
-      // OS thread is reclaimed, since it may not exit on its own after an error.
-      worker.terminate().catch((terminateErr: unknown) => {
-        logger.warn({ err: terminateErr }, "worker terminate error");
-      });
-      reject(err);
-    });
-
-    worker.on("exit", (code) => {
-      if (settled) return;
-      settled = true;
-      reject(new Error(`Parse worker exited unexpectedly with code ${code}`));
-    });
-  });
+export function runParseWorker(
+  params: TerrainParseWorkerInput,
+): Promise<TerrainParseWorkerResult> {
+  return runTerrainParseWorker(params);
 }
 
 async function processUploadJob(
@@ -2317,7 +2247,13 @@ router.post(
     const effectiveUserId = (req as AuthenticatedRequest).clerkUserId;
     const gridId = crypto.randomUUID();
 
-    const terrain = gridPoints(points, resolution, gridId, datasetName, { smoothing });
+    const { terrain, overview } = processTerrainPoints({
+      points,
+      resolution,
+      gridId,
+      datasetName,
+      smoothing,
+    });
 
   const MAX_NODATA_PERCENT = 70;
     const coveragePercent = terrain.coveragePercent ?? 100;
@@ -2335,8 +2271,6 @@ router.post(
     });
     return;
   }
-
-    const overview = gridPoints(points, 64, gridId, datasetName, { smoothing });
 
     // Validate gridPoints output before DB write — prevents silent corrupt rows
     // if the gridder's output shape ever drifts from StoredTerrainJson.

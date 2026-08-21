@@ -29,13 +29,13 @@ import { objectStorageClient } from "../lib/objectStorage.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import { getCatalogEntries } from "../lib/catalogSeeder.js";
 import { deriveCatalogFetchStrategy } from "../lib/catalogFetchStrategy.js";
-import { getFetcher } from "../lib/fetchers/index.js";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody, validateParams } from "../middlewares/validateBody.js";
 import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { logger } from "../lib/logger.js";
 import type { BathyFetchBundle, Bbox, FetchStrategy } from "../lib/fetchers/types.js";
+import { fetchTerrainBundle } from "../domains/terrain/service.js";
 
 const router = Router();
 
@@ -271,8 +271,7 @@ async function runBundleJob(
       .set({ status: "running", progressNote: "Fetching bathymetry data…" })
       .where(eq(terrainBundleJobsTable.id, jobId));
 
-    const fetcher = getFetcher(target.fetchStrategy);
-    const bundle = await fetcher.fetch(target.fetchStrategy, target.bbox, 256);
+    const bundle = await fetchTerrainBundle(target.fetchStrategy, target.bbox);
 
     await db
       .update(terrainBundleJobsTable)
