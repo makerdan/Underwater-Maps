@@ -36,7 +36,8 @@
 
 import { readdir, readFile, appendFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
+import { pathToFileURL } from "url";
 import { VALIDATION_COMMANDS } from "./register-validation-commands.mjs";
 
 const TASKS_DIR = ".local/tasks";
@@ -254,11 +255,13 @@ if (TASK_PLAN_FILE) {
 // Inserts immediately after the line that starts with insertAfterMarker
 // (scanned within the section); falls back to right after ## Validation.
 // ---------------------------------------------------------------------------
-async function insertValidationLine(filePath, content, fixLine, insertAfterMarker) {
+export async function insertValidationLine(filePath, content, fixLine, insertAfterMarker) {
   const lines = content.split("\n");
   // Find the ## Validation heading
   const valIdx = lines.findIndex((l) => l.trimEnd() === "## Validation");
-  if (valIdx === -1) return content; // no Validation section — nothing to insert
+  if (valIdx === -1) {
+    return { content, changed: false }; // no Validation section — nothing to insert
+  }
 
   // Look for insertAfterMarker within the section (before the next ## heading)
   let insertAfter = -1;
@@ -278,12 +281,16 @@ async function insertValidationLine(filePath, content, fixLine, insertAfterMarke
   ];
   const newContent = newLines.join("\n");
   await writeFile(filePath, newContent, "utf8");
-  return newContent;
+  return { content: newContent, changed: true };
 }
 
 // ---------------------------------------------------------------------------
 // Check each file
 // ---------------------------------------------------------------------------
+const isMain =
+  process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+
+if (isMain) {
 const compliant = [];
 const nonCompliant = []; // { file, missingSections[], unfilledPlaceholders[], missingValidationLines[] }
 
@@ -374,6 +381,7 @@ for (const file of files) {
       missingValidationLines: validationLineIssues.map((i) => i.reason),
       // Store raw issue objects for fix-stub (need rvl + absent flag)
       _validationLineIssues: validationLineIssues,
+      _patchFailures: [],
     });
 
     if (fixStub) {
@@ -402,11 +410,29 @@ for (const file of files) {
       if (absentIssues.length > 0) {
         for (const { rvl } of absentIssues) {
           try {
-            content = await insertValidationLine(filePath, content, rvl.fixLine, rvl.insertAfterMarker);
-            console.warn(
-              `check-failure-gate [--fix-stub] ⚠ patched "${file}" — inserted "${rvl.marker}" into Validation section.`,
+            const result = await insertValidationLine(
+              filePath,
+              content,
+              rvl.fixLine,
+              rvl.insertAfterMarker,
             );
+            content = result.content;
+            if (result.changed) {
+              console.warn(
+                `check-failure-gate [--fix-stub] ⚠ patched "${file}" — inserted "${rvl.marker}" into Validation section.`,
+              );
+            } else {
+              const entry = nonCompliant.find((e) => e.file === file);
+              entry?._patchFailures.push(
+                `could not insert "${rvl.marker}" because the ## Validation section was not found`,
+              );
+              console.error(
+                `check-failure-gate — could not insert "${rvl.marker}" into "${file}": ## Validation section not found`,
+              );
+            }
           } catch (err) {
+            const entry = nonCompliant.find((e) => e.file === file);
+            entry?._patchFailures.push(`failed to insert "${rvl.marker}": ${err.message}`);
             console.error(
               `check-failure-gate — failed to insert "${rvl.marker}" into "${file}": ${err.message}`,
             );
@@ -461,16 +487,29 @@ console.log(`\ncheck-failure-gate — scanned ${files.length} plan file(s) in ${
 for (const f of compliant) {
   console.log(`  ✓ ${f}`);
 }
-for (const { file, missingSections, unfilledPlaceholders, missingValidationLines } of nonCompliant) {
+for (const {
+  file,
+  missingSections,
+  unfilledPlaceholders,
+  missingValidationLines,
+  _patchFailures = [],
+} of nonCompliant) {
   const hasMissing = !fixStub && missingSections.length > 0;
   const hasMissingLines = !fixStub && missingValidationLines.length > 0;
-  if (!hasMissing && !hasMissingLines && unfilledPlaceholders.length === 0) {
+  if (
+    !hasMissing &&
+    !hasMissingLines &&
+    unfilledPlaceholders.length === 0 &&
+    _patchFailures.length === 0
+  ) {
     // patched by --fix-stub (or invalid tier in fix-stub mode — noted in patch details)
     const patchDetails = [
       ...missingSections.map((s) => `section: ${s}`),
       ...missingValidationLines.map((m) => `line: ${m}`),
     ].join(", ");
     console.log(`  ✓ ${file} (patched by --fix-stub: ${patchDetails})`);
+  } else if (fixStub && _patchFailures.length > 0) {
+    console.log(`  ✗ ${file} — ${_patchFailures.join("; ")}`);
   } else if (fixStub && unfilledPlaceholders.length > 0) {
     // In --fix-stub mode, unfilled placeholders cannot be auto-corrected — they
     // require manual intervention. Report them as warnings rather than errors so
@@ -492,7 +531,7 @@ for (const { file, missingSections, unfilledPlaceholders, missingValidationLines
 }
 
 const trueNonCompliant = nonCompliant.filter(
-  ({ missingSections, unfilledPlaceholders, _validationLineIssues }) => {
+  ({ missingSections, unfilledPlaceholders, _validationLineIssues, _patchFailures = [] }) => {
     const issues = _validationLineIssues || [];
     const unfixableIssues = issues.filter((i) => !i.absent);
     // In --fix-stub mode: absent lines and missing sections are auto-inserted
@@ -506,7 +545,8 @@ const trueNonCompliant = nonCompliant.filter(
       (!fixStub && missingSections.length > 0) ||
       (!fixStub && unfilledPlaceholders.length > 0) ||
       (!fixStub && issues.some((i) => i.absent)) ||
-      (!fixStub && unfixableIssues.length > 0)
+      (!fixStub && unfixableIssues.length > 0) ||
+      _patchFailures.length > 0
     );
   },
 );
@@ -543,3 +583,4 @@ console.log(
   `\ncheck-failure-gate — ${passCount}/${files.length} file(s) compliant.${patchedCount > 0 ? ` (${patchedCount} patched)` : ""} ✓`,
 );
 process.exit(0);
+}

@@ -24,6 +24,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "nod
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
+import { insertValidationLine } from "../check-failure-gate.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const scriptPath = resolve(__dirname, "..", "check-failure-gate.mjs");
@@ -397,6 +398,51 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
       1,
       `expected strict check to exit 1 after --fix-stub, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
+  });
+
+  it("a plan without ## Validation is never reported as successfully line-patched", () => {
+    const noValidation = join(e2eTasksDir, "e2e-no-validation-regression.md");
+    const original = [
+      "# Plan without validation",
+      "",
+      "## Steps",
+      "Do the work.",
+    ].join("\n");
+    writeFileSync(noValidation, original, "utf8");
+
+    const result = runScript([], e2eDir);
+    assert.equal(result.status, 1, "missing ## Validation must remain non-compliant");
+    assert.ok(
+      result.stdout.includes("e2e-no-validation-regression.md"),
+      `expected the file to remain in the violation output\nstdout: ${result.stdout}`,
+    );
+    assert.ok(
+      !result.stdout.includes('inserted "**'),
+      `must not report a missing-section file as line-patched\nstdout: ${result.stdout}`,
+    );
+    assert.equal(
+      readFileSync(noValidation, "utf8"),
+      original,
+      "a strict check must not modify a plan missing ## Validation",
+    );
+    rmSync(noValidation, { force: true });
+  });
+
+  it("insertValidationLine returns unchanged content with changed=false when the section is absent", async () => {
+    const noValidation = join(e2eTasksDir, "e2e-helper-no-validation.md");
+    const original = ["# Plan without validation", "", "## Steps", "Do the work."].join("\n");
+    writeFileSync(noValidation, original, "utf8");
+
+    const result = await insertValidationLine(
+      noValidation,
+      original,
+      "**Why:** Should not be inserted",
+      "**Command:**",
+    );
+
+    assert.deepEqual(result, { content: original, changed: false });
+    assert.equal(readFileSync(noValidation, "utf8"), original);
+    rmSync(noValidation, { force: true });
   });
 
   it("strict check reports the angle-bracket-why file as a violation", () => {
