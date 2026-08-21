@@ -6,7 +6,7 @@
  *       count in the inline message
  *   (b) syncedSnapshot / lastSyncedAt never written to the store on import
  *   (c) export payload contains only DEFAULT_SETTINGS keys + version
- *   (d) export button re-enables after triggerBlobDownload throws
+ *   (d) export button re-enables after triggerBlobDownload throws and successful exports confirm
  *   (e) flushServerSync rejection shows "Saved locally — cloud sync failed"
  *   (f) oversize files rejected before reading
  *   (g) import disabled while signed out (button + hint)
@@ -146,6 +146,7 @@ describe("export settings", () => {
     vi.mocked(triggerBlobDownload).mockImplementation(() => undefined);
     fireEvent.click(btn);
     expect(triggerBlobDownload).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("export-settings-msg")).toHaveTextContent("✓ Downloaded");
   });
 });
 
@@ -309,6 +310,37 @@ describe("export all data", () => {
     fireEvent.click(screen.getByTestId("export-all-btn"));
 
     await waitFor(() => expect(triggerBlobDownload).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId("export-settings-msg")).toHaveTextContent("✓ Downloaded");
+  });
+
+  it("clears a local export error before an export-all retry starts", async () => {
+    vi.mocked(triggerBlobDownload).mockImplementationOnce(() => {
+      throw new Error("local export failed");
+    });
+    render(<AccountSection />);
+    fireEvent.click(screen.getByTestId("export-settings-btn"));
+    expect(await screen.findByTestId("export-settings-msg")).toHaveTextContent(/export failed/i);
+
+    let resolveFetch: (value: Response) => void = () => undefined;
+    vi.mocked(authorizedFetch).mockReturnValue(
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    fireEvent.click(screen.getByTestId("export-all-btn"));
+
+    expect(screen.queryByTestId("export-settings-msg")).not.toBeInTheDocument();
+    expect(screen.getByTestId("export-all-btn")).toHaveTextContent("EXPORTING…");
+
+    await act(async () => {
+      resolveFetch({
+        ok: true,
+        blob: async () => new Blob(["exported-data"]),
+      } as unknown as Response);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("export-settings-msg")).toHaveTextContent("✓ Downloaded"),
+    );
   });
 });
 

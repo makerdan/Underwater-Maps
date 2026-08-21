@@ -63,6 +63,21 @@ export function AccountSection() {
   // Single in-flight sign-out guard: double-clicks must not issue concurrent
   // Clerk signOut() calls. A ref (not state) so the guard is synchronous.
   const signOutInFlightRef = useRef(false);
+  const exportMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearExportMsgTimer = () => {
+    if (exportMsgTimerRef.current !== null) {
+      clearTimeout(exportMsgTimerRef.current);
+      exportMsgTimerRef.current = null;
+    }
+  };
+  const showExportSuccess = () => {
+    clearExportMsgTimer();
+    setExportMsg("✓ Downloaded");
+    exportMsgTimerRef.current = setTimeout(() => {
+      exportMsgTimerRef.current = null;
+      setExportMsg(null);
+    }, 3000);
+  };
 
   // The pending marker-deletion timer, kept in a ref so unmount cleanup and
   // the sign-out watcher can cancel it without depending on render state.
@@ -80,6 +95,10 @@ export function AccountSection() {
       if (deleteTimerRef.current !== null) {
         clearTimeout(deleteTimerRef.current);
         deleteTimerRef.current = null;
+      }
+      if (exportMsgTimerRef.current !== null) {
+        clearTimeout(exportMsgTimerRef.current);
+        exportMsgTimerRef.current = null;
       }
     };
   }, []);
@@ -103,6 +122,7 @@ export function AccountSection() {
       const payload = buildSettingsExport(useSettingsStore.getState());
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       triggerBlobDownload(blob, `bathyscan-settings-${Date.now()}.json`);
+      showExportSuccess();
     } catch {
       setExportMsg("✗ Export failed — could not create the settings file");
       toast({ title: "Failed to export settings", variant: "destructive", duration: 5000 });
@@ -112,6 +132,8 @@ export function AccountSection() {
   };
 
   const handleExportAll = async () => {
+    clearExportMsgTimer();
+    setExportMsg(null);
     setExportingAll(true);
     // Capture the account this export belongs to; if the signed-in user
     // changes while the request is in flight, the download is aborted.
@@ -127,7 +149,9 @@ export function AccountSection() {
         return;
       }
       triggerBlobDownload(blob, `bathyscan-export-${Date.now()}.json`);
+      showExportSuccess();
     } catch {
+      setExportMsg("✗ Export failed — could not download your data");
       toast({ title: "Export failed", variant: "destructive", duration: 5000 });
     } finally {
       setExportingAll(false);
@@ -248,11 +272,27 @@ export function AccountSection() {
     try {
       await signOut();
     } catch {
-      // The account and its data are already gone — do NOT invite a retry.
+      // The account and its data are already gone — do not invite deletion retry.
       setAccountDeleteMsg(
-        "✓ Account deleted. Sign-out failed — please close this tab. Do not retry deletion.",
+        "✓ Account deleted. Sign-out failed — retry sign-out below. Do not retry deletion.",
       );
       setDeletingAccount(false);
+    }
+  };
+
+  const handleRetrySignOut = async () => {
+    if (signOutInFlightRef.current) return;
+    signOutInFlightRef.current = true;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } catch {
+      setAccountDeleteMsg(
+        "✓ Account deleted. Sign-out failed again — retry sign-out or reload the page. Do not retry deletion.",
+      );
+    } finally {
+      signOutInFlightRef.current = false;
+      setSigningOut(false);
     }
   };
 
@@ -506,6 +546,42 @@ export function AccountSection() {
               }}
             >
               {accountDeleteMsg}
+              {accountDeleted && (
+                <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
+                  <button
+                    type="button"
+                    data-testid="retry-sign-out-btn"
+                    onClick={() => void handleRetrySignOut()}
+                    disabled={signingOut}
+                    style={{
+                      ...S.dangerBtn,
+                      padding: "4px 10px",
+                      fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                      cursor: signingOut ? "default" : "pointer",
+                    }}
+                  >
+                    {signingOut ? "SIGNING OUT…" : "RETRY SIGN-OUT"}
+                  </button>
+                  <a
+                    href="#"
+                    data-testid="reload-page-link"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      window.location.reload();
+                    }}
+                    style={{
+                      display: "inline-block",
+                      color: "#94a3b8",
+                      textDecoration: "underline",
+                      fontSize: "calc(10px * var(--bs-font-scale, 1))",
+                      cursor: "pointer",
+                      fontFamily: FONT,
+                    }}
+                  >
+                    Reload page
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>

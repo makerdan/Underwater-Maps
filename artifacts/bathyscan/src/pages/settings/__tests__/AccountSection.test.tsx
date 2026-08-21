@@ -15,7 +15,7 @@
  *   - Sign-out button: disabled while in flight, single in-flight call,
  *     inline error on Clerk rejection
  *   - DELETE ACCOUNT split error paths: network failure, 401/403, 5xx,
- *     and delete-success + sign-out-failure (button removed from DOM)
+ *     and delete-success + sign-out-failure with sign-out recovery
  *   - The personal Account section never renders the admin dashboard
  */
 import React from "react";
@@ -390,7 +390,7 @@ describe("AccountSection — DELETE ACCOUNT split error paths", () => {
     expect(screen.getByTestId("delete-account-btn")).toBeEnabled();
   });
 
-  it("delete succeeds but sign-out fails: 'Account deleted' message, delete button removed, local state cleared", async () => {
+  it("delete succeeds but sign-out fails: restores sign-out recovery, removes delete button, and clears local state", async () => {
     vi.mocked(authorizedFetch).mockResolvedValueOnce({ ok: true, status: 200 } as Response);
     const signOut = vi.fn().mockRejectedValue(new Error("clerk down"));
     vi.mocked(useClerk).mockImplementation(() => ({ signOut }) as unknown as UseClerkReturn);
@@ -398,10 +398,12 @@ describe("AccountSection — DELETE ACCOUNT split error paths", () => {
     render(<AccountSection />);
     fireEvent.click(screen.getByTestId("delete-account-btn"));
     expect(await screen.findByTestId("account-delete-msg")).toHaveTextContent(
-      /Account deleted\. Sign-out failed.*Do not retry deletion/,
+      /Account deleted\. Sign-out failed.*retry sign-out.*Do not retry deletion/i,
     );
     // The account is gone — no re-delete button may be offered.
     expect(screen.queryByTestId("delete-account-btn")).not.toBeInTheDocument();
+    expect(screen.getByTestId("retry-sign-out-btn")).toBeEnabled();
+    expect(screen.getByTestId("reload-page-link")).toHaveTextContent("Reload page");
     // Local persisted state was cleared before the sign-out attempt.
     expect(vi.mocked(performSignOutCleanup)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(performSignOutCleanup).mock.invocationCallOrder[0]).toBeLessThan(
