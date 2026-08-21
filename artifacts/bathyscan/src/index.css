@@ -437,30 +437,33 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
     display: none;
   }
 
-  /* Stack sidebar on top of content instead of beside it */
+  /* Stack sidebar on top of content instead of beside it. The layout clips
+     its own bounds while the sidebar keeps an independent tab-strip scroll. */
   .bs-settings-layout {
     flex-direction: column !important;
     width: 100%;
+    overflow: clip;
   }
 
-  /* Sidebar becomes a wrapping two-column tab grid. Every section remains
+  /* Sidebar becomes a single horizontal tab strip. Every section remains
      reachable without making the page itself horizontally scroll. */
   .bs-settings-sidebar {
     width: 100% !important;
     border-right: none !important;
     border-bottom: 1px solid rgba(0, 229, 255, 0.1);
-    padding: 6px 0 !important;
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow: hidden;
+    padding: 0 !important;
+    display: flex !important;
+    flex-wrap: nowrap;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
   }
   .bs-settings-sidebar button {
-    min-width: 0 !important;
+    flex: 0 0 auto;
+    min-width: max-content !important;
     min-height: 44px !important;
-    width: 100%;
+    width: auto !important;
     padding: 8px 10px;
-    overflow-wrap: anywhere;
-    white-space: normal;
+    white-space: nowrap;
   }
 
   .bs-settings-row {

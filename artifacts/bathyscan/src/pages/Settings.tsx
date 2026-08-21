@@ -540,17 +540,57 @@ export function Settings() {
           </div>
         )}
 
-        {/* Two-column layout */}
-        <div style={S.layout} className="bs-settings-layout">
+        {/* Two-column layout on desktop; a stacked tab strip + content pane on phones. */}
+        <div
+          style={{
+            ...S.layout,
+            flexDirection: isMobile ? "column" : "row",
+            // Keep the layout from clipping the sidebar's independently
+            // scrollable tab strip at phone widths.
+            overflow: isMobile ? "clip" : undefined,
+          }}
+          className="bs-settings-layout"
+        >
           {/* Sidebar */}
-          <nav style={S.sidebar} className="bs-settings-sidebar" aria-label="Settings sections">
+          <nav
+            style={{
+              ...S.sidebar,
+              ...(isMobile
+                ? {
+                    width: "100%",
+                    display: "flex",
+                    overflowX: "auto",
+                    overflowY: "hidden",
+                    borderRight: "none",
+                    borderBottom: "1px solid var(--bs-s-border, rgba(0,229,255,0.1))",
+                    padding: 0,
+                    WebkitOverflowScrolling: "touch",
+                  }
+                : {}),
+            }}
+            className="bs-settings-sidebar"
+            aria-label="Settings sections"
+          >
             {/* MOBILE-ONLY: phone tab strip includes the "2D Chart" tab;
                 desktop always renders the original NAV_TABS unchanged. */}
             {visibleTabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => handleTabSelect(t.id)}
-                style={S.navItem(activeTab === t.id)}
+                style={{
+                  ...S.navItem(activeTab === t.id),
+                  ...(isMobile
+                    ? {
+                        width: "auto",
+                        flex: "0 0 auto",
+                        whiteSpace: "nowrap",
+                        borderLeft: "none",
+                        borderBottom: activeTab === t.id
+                          ? "2px solid var(--bs-s-accent, #00e5ff)"
+                          : "2px solid transparent",
+                      }
+                    : {}),
+                }}
                 data-nav-active={activeTab === t.id ? "true" : "false"}
                 data-testid={`settings-nav-${t.id}`}
                 aria-current={activeTab === t.id ? "page" : undefined}
@@ -562,7 +602,19 @@ export function Settings() {
           </nav>
 
           {/* Content */}
-          <div style={S.content} className="bs-settings-content">
+          <div
+            style={{
+              ...S.content,
+              ...(isMobile
+                ? {
+                    width: "100%",
+                    maxHeight: "none",
+                    padding: "20px 16px",
+                  }
+                : {}),
+            }}
+            className="bs-settings-content"
+          >
             {activeTab === "general" && <GeneralSection />}
             {activeTab === "visuals" && <VisualsSection />}
             {activeTab === "palette" && <PaletteSection />}
