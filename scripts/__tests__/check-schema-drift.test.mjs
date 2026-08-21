@@ -21,6 +21,7 @@ import {
   readFileSync,
   existsSync,
   rmSync,
+  chmodSync,
 } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,11 +53,12 @@ function makeFakeRepo(name) {
   return repo;
 }
 
-function runScript(repo) {
+function runScript(repo, env = {}) {
   try {
     const stdout = execFileSync("node", [join(repo, "scripts", "check-schema-drift.mjs")], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, ...env },
     });
     return { status: 0, stdout, stderr: "" };
   } catch (err) {
@@ -197,5 +199,37 @@ describe("cleanupGenerated is idempotent", () => {
     writeFileSync(journalFile, "original");
     cleanupGenerated([], journalFile, undefined);
     assert.equal(readFileSync(journalFile, "utf8"), "original");
+  });
+});
+
+describe("schema drift cleanup", () => {
+  it("restores an existing snapshot rewritten by drizzle-kit", () => {
+    const repo = makeFakeRepo("rewritten-snapshot");
+    const drizzleDir = join(repo, "lib", "db", "drizzle");
+    const metaDir = join(drizzleDir, "meta");
+    mkdirSync(metaDir, { recursive: true });
+
+    const journalPath = join(metaDir, "_journal.json");
+    const snapshotPath = join(metaDir, "0000_snapshot.json");
+    const originalSnapshot = '{"id":"original"}\n';
+    writeFileSync(journalPath, JSON.stringify({ entries: [] }));
+    writeFileSync(snapshotPath, originalSnapshot);
+
+    const binDir = join(repo, "bin");
+    const fakePnpm = join(binDir, "pnpm");
+    mkdirSync(binDir, { recursive: true });
+    writeFileSync(
+      fakePnpm,
+      '#!/bin/sh\nprintf \'{"id":"rewritten"}\\n\' > "$REWRITE_TARGET"\n',
+    );
+    chmodSync(fakePnpm, 0o755);
+
+    const result = runScript(repo, {
+      PATH: `${binDir}:${process.env.PATH}`,
+      REWRITE_TARGET: snapshotPath,
+    });
+
+    assert.equal(result.status, 0, `expected success, got ${result.status}\n${result.stderr}`);
+    assert.equal(readFileSync(snapshotPath, "utf8"), originalSnapshot);
   });
 });

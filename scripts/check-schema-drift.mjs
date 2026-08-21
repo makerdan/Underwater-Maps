@@ -84,13 +84,22 @@ export function listDirOrThrow(dir) {
 }
 
 /**
- * Cleanup for Guard 2: remove any files drizzle-kit generate created and
- * restore the journal from the backup string. Idempotent — safe to call
- * with an empty `created` list and safe to call more than once (rmSync
- * uses force:true; the journal write simply re-writes the same content).
+ * Cleanup for Guard 2: remove any files drizzle-kit generate created, restore
+ * modified pre-existing files, and restore the journal from the backup string.
+ * Idempotent — safe to call with an empty `created` list and safe to call more
+ * than once.
  */
-export function cleanupGenerated(created, journalFile, journalBackup) {
+export function cleanupGenerated(created, journalFile, journalBackup, originalFiles = new Map()) {
   for (const f of created) rmSync(f, { force: true });
+  for (const [file, originalContent] of originalFiles) {
+    let currentContent;
+    try {
+      currentContent = readFileSync(file, "utf8");
+    } catch (err) {
+      if (err?.code !== "ENOENT") throw err;
+    }
+    if (currentContent !== originalContent) writeFileSync(file, originalContent);
+  }
   if (typeof journalBackup === "string") {
     writeFileSync(journalFile, journalBackup);
   }
@@ -243,6 +252,8 @@ function runDriftCheck() {
     );
     process.exit(1);
   }
+  const originalFiles = new Map();
+  for (const file of before) originalFiles.set(file, readFileSync(file, "utf8"));
 
   let generateFailed = false;
   let created = [];
@@ -269,7 +280,7 @@ function runDriftCheck() {
   } finally {
     // Always clean up — even on an unexpected throw above — so an aborted
     // run never leaves generated files behind or a corrupted journal.
-    cleanupGenerated(created, journalPath, journalBackup);
+    cleanupGenerated(created, journalPath, journalBackup, originalFiles);
   }
 
   if (generateFailed) process.exit(1);
