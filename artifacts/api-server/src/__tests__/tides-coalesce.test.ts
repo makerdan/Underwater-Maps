@@ -12,7 +12,7 @@ import {
   getStationDatums,
   __clearTidesPredictionsCacheForTests,
   __clearTidesDatumsCacheForTests,
-} from "../routes/tides.js";
+} from "../domains/environmental/providers/noaaTides.js";
 
 const realFetch = globalThis.fetch;
 
