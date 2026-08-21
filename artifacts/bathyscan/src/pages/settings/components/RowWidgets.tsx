@@ -14,32 +14,101 @@ export function clampSlider(v: number, min: number, max: number, fallback: numbe
   return Math.min(max, Math.max(min, n));
 }
 
+/**
+ * Subtle inline badge shown on 3D-reactive controls while a terrain load is in
+ * flight. Signals that the change will be applied once the current load
+ * completes rather than immediately re-triggering a scene rebuild mid-load.
+ */
+export const APPLIES_AFTER_LOAD_BADGE = (
+  <span
+    data-testid="applies-after-load-badge"
+    style={{
+      display: "inline-block",
+      fontSize: "calc(9px * var(--bs-font-scale, 1))",
+      letterSpacing: "0.06em",
+      color: "#94a3b8",
+      background: "rgba(148,163,184,0.08)",
+      border: "1px solid rgba(148,163,184,0.22)",
+      borderRadius: 3,
+      padding: "1px 6px",
+      marginTop: 3,
+      userSelect: "none",
+    }}
+  >
+    ⟳ applies after load
+  </span>
+);
+
+/**
+ * Debounce delay (ms) for slider onChange callbacks. Rapid drag events update
+ * the local display immediately, but the store setter — which may trigger an
+ * expensive 3D scene rebuild — fires only after the user pauses.
+ */
+const SLIDER_DEBOUNCE_MS = 150;
+
 export function SliderRow({
-  label, value, min, max, step, format, onChange, sublabel, disabled,
+  label, value, min, max, step, format, onChange, sublabel, disabled, badge,
 }: {
   label: string; value: number; min: number; max: number; step: number;
   format?: (v: number) => string; onChange: (v: number) => void; sublabel?: string;
   disabled?: boolean;
+  /** Optional inline badge rendered below the sublabel (e.g. "applies after load"). */
+  badge?: React.ReactNode;
 }) {
   const fmt = format ?? ((v) => String(v));
   const inputId = `slider-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
+  // Local display state for smooth dragging. The expensive `onChange` callback
+  // (which may trigger a 3D scene rebuild) is debounced — the slider thumb
+  // and value readout update instantly, but the store setter fires only after
+  // the user stops dragging.
+  const [localValue, setLocalValue] = useState(value);
+  const draggingRef = useRef(false);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync external prop changes (reset, server sync) when not actively dragging.
+  useEffect(() => {
+    if (!draggingRef.current) {
+      setLocalValue(value);
+    }
+  }, [value]);
+
+  // Clean up any pending timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current !== null) clearTimeout(debounceTimerRef.current);
+    };
+  }, []);
+
+  const handleChange = (newVal: number) => {
+    draggingRef.current = true;
+    setLocalValue(newVal);
+    if (debounceTimerRef.current !== null) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      draggingRef.current = false;
+      debounceTimerRef.current = null;
+      onChange(newVal);
+    }, SLIDER_DEBOUNCE_MS);
+  };
+
   return (
     <div style={S.row} className="bs-settings-row">
       <div>
         <label htmlFor={inputId} style={S.label}>{label}</label>
         {sublabel && <div style={S.sublabel}>{sublabel}</div>}
+        {badge}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <input
           id={inputId}
-          type="range" min={min} max={max} step={step} value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
+          type="range" min={min} max={max} step={step} value={localValue}
+          onChange={(e) => handleChange(Number(e.target.value))}
           style={S.slider}
           disabled={disabled}
           aria-disabled={disabled || undefined}
         />
         <span style={{ color: "#00e5ff", fontSize: "calc(10px * var(--bs-font-scale, 1))", minWidth: 48, textAlign: "right" }}>
-          {fmt(value)}
+          {fmt(localValue)}
         </span>
       </div>
     </div>
@@ -47,15 +116,18 @@ export function SliderRow({
 }
 
 export function ToggleRow({
-  label, value, onChange, sublabel,
+  label, value, onChange, sublabel, badge,
 }: {
   label: string; value: boolean; onChange: (v: boolean) => void; sublabel?: string;
+  /** Optional inline badge rendered below the sublabel (e.g. "applies after load"). */
+  badge?: React.ReactNode;
 }) {
   return (
     <div style={S.row} className="bs-settings-row">
       <div>
         <div style={S.label}>{label}</div>
         {sublabel && <div style={S.sublabel}>{sublabel}</div>}
+        {badge}
       </div>
       <Toggle value={value} onChange={onChange} aria-label={label} />
     </div>

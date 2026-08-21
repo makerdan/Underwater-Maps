@@ -2,12 +2,13 @@ import React, { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
 import { useUiStore } from "@/lib/uiStore";
+import { useTerrainStore } from "@/lib/terrainStore";
 import { useIntertidal } from "@/lib/useIntertidal";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import { S } from "./styles";
 import { SectionTitle } from "./components/SectionTitle";
 import { SectionActionsRow } from "./components/SyncContext";
-import { SliderRow, ToggleRow, SelectRow, ColorRow, clampSlider } from "./components/RowWidgets";
+import { SliderRow, ToggleRow, SelectRow, ColorRow, clampSlider, APPLIES_AFTER_LOAD_BADGE } from "./components/RowWidgets";
 import { Select } from "./components/Toggle";
 
 function formatFt(v: number): string {
@@ -142,6 +143,18 @@ export function VisualsSection() {
   // the 3D scene stale until the next hydration.
   const setShowNodataBoundaryViaUi = useUiStore((s) => s.setShowNodataBoundary);
 
+  // Detect whether a terrain load is currently in flight. When a dataset has
+  // been promoted (primaryDatasetId is set) but its full-res grid hasn't
+  // arrived yet (activeGrid is null), heavy 3D-reactive settings changes would
+  // trigger a redundant scene rebuild mid-load. Show an "applies after load"
+  // badge on those controls instead of suppressing the change entirely —
+  // the value is still committed immediately so it takes effect once the grid
+  // lands, without any extra work on the user's part.
+  const isTerrainLoading = useTerrainStore(
+    (ts) => ts.primaryDatasetId !== null && ts.activeGrid === null,
+  );
+  const loadingBadge = isTerrainLoading ? APPLIES_AFTER_LOAD_BADGE : null;
+
   // Antialiasing is baked into the WebGL context at page load; capture the
   // value the live context was created with so the reload hint only shows
   // when the displayed value differs from the active runtime state.
@@ -238,6 +251,7 @@ export function VisualsSection() {
           value={s.enableMarineSnow}
           onChange={s.setEnableMarineSnow}
           sublabel="Floating particles around the camera"
+          badge={loadingBadge}
         />
         {s.enableMarineSnow && (
           <div className="bs-settings-row" style={{ ...S.row, paddingLeft: 28, background: "rgba(0,229,255,0.02)" }}>
@@ -278,6 +292,7 @@ export function VisualsSection() {
                 ? "Scale is exaggerated — not true-to-life"
                 : "Vertical stretch applied to terrain"
             }
+            badge={loadingBadge}
           />
           <ToggleRow
             label="Smooth terrain spikes"
@@ -290,6 +305,7 @@ export function VisualsSection() {
             value={s.showWaterSurface}
             onChange={s.setShowWaterSurface}
             sublabel="Translucent sea-level plane over the bathymetry. Colour tracks the active water type. Turn off for dry cross-section views."
+            badge={loadingBadge}
           />
           <ToggleRow
             label="Show survey-gap boundary rings"
@@ -368,6 +384,7 @@ export function VisualsSection() {
             format={(v) => v.toFixed(3)}
             onChange={(v) => s.setFogDensity(clampSlider(v, 0.004, 0.030, DEFAULT_SETTINGS.fogDensity))}
             sublabel="Exponential underwater haze"
+            badge={loadingBadge}
           />
           <ColorRow
             label="Fog Color"
