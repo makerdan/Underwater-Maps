@@ -117,6 +117,7 @@ vi.mock("../lib/substrateGrid.js", () => ({
 
 import app from "../../app.js";
 import { __resetRateLimitMemory } from "../../middlewares/rateLimit.js";
+import { getPoeClient } from "@workspace/poe";
 
 let currentUserId: string | null = "user-poe-test";
 
@@ -125,6 +126,7 @@ beforeEach(() => {
   vi.stubEnv("E2E_AUTH_BYPASS", "1");
   vi.stubEnv("RATE_LIMIT_BACKEND", "memory");
   __resetRateLimitMemory();
+  vi.mocked(getPoeClient).mockClear();
 });
 
 afterEach(() => {
@@ -344,6 +346,82 @@ describe("POST /api/poe/query — Zod validation", () => {
       .send({ userMessage: "hello", history: oversized });
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 when userMessage exceeds the documented limit", async () => {
+    const res = await request(app)
+      .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", "user-poe-test")
+      .send({ userMessage: "a".repeat(2_001) });
+    expect(res.status).toBe(400);
+    expect(res.body.details).toContain("userMessage");
+    expect(getPoeClient).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for oversized history content before provider creation", async () => {
+    const res = await request(app)
+      .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", "user-poe-test")
+      .send({ userMessage: "hello", history: [{ role: "user", content: "a".repeat(2_001) }] });
+    expect(res.status).toBe(400);
+    expect(res.body.details).toContain("history.0.content");
+    expect(getPoeClient).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for unsupported terrain context fields", async () => {
+    const res = await request(app)
+      .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", "user-poe-test")
+      .send({ userMessage: "hello", context: { datasetName: "Lake", unsupported: "x" } });
+    expect(res.status).toBe(400);
+    expect(res.body.details).toContain("context");
+    expect(getPoeClient).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when the retained final ten-history prompt exceeds the aggregate budget", async () => {
+    const history = Array.from({ length: 10 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: "a".repeat(1_600),
+    }));
+    const res = await request(app)
+      .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", "user-poe-test")
+      .send({ userMessage: "hello", history });
+    expect(res.status).toBe(400);
+    expect(res.body.details).toContain("final retained prompt");
+    expect(getPoeClient).not.toHaveBeenCalled();
+  });
+
+  it("accepts a concise context and a ten-entry history window", async () => {
+    const history = Array.from({ length: 10 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `turn ${i}`,
+    }));
+    const res = await request(app)
+      .post("/api/poe/query")
+      .set("x-e2e-bypass-secret", "vitest-test-secret")
+      .set("x-e2e-user-id", "user-poe-test")
+      .send({
+        userMessage: "what is the depth here?",
+        history,
+        context: {
+          datasetName: "Lake Superior",
+          waterType: "freshwater",
+          minDepth: 2,
+          maxDepth: 300,
+          lon: -88,
+          lat: 47,
+          cameraDepth: 42,
+          zoneName: "deep basin",
+        },
+        previousResponseId: "resp_previous",
+      });
+    expect(res.status).not.toBe(400);
+    expect(getPoeClient).toHaveBeenCalledTimes(1);
   });
 
   it("does not return 400 when a valid minimal body is sent", async () => {

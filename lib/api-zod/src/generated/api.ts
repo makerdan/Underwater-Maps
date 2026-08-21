@@ -3534,14 +3534,43 @@ export const PoeClassifyResponse = zod.object({
  * Interprets a user message and returns tool calls and/or a text response
  * @summary Natural language terrain query
  */
+export const poeQueryBodyUserMessageMax = 2000;
+
+export const poeQueryBodyContextDatasetNameMax = 200;
+
+export const poeQueryBodyContextLonMin = -180;
+export const poeQueryBodyContextLonMax = 180;
+
+export const poeQueryBodyContextLatMin = -90;
+export const poeQueryBodyContextLatMax = 90;
+
+export const poeQueryBodyContextZoneNameMax = 200;
+
+export const poeQueryBodyHistoryItemContentMax = 2000;
+
+export const poeQueryBodyHistoryMax = 50;
+
+export const poeQueryBodyPreviousResponseIdMax = 200;
+
+
+
 export const PoeQueryBody = zod.object({
-  "userMessage": zod.string().describe('The user\'s natural language query'),
-  "context": zod.record(zod.string(), zod.unknown()).optional().describe('Terrain context (datasetName, waterType, minDepth, maxDepth, lon, lat, cameraDepth, zoneName)'),
+  "userMessage": zod.string().min(1).max(poeQueryBodyUserMessageMax).describe('The user\'s natural language query'),
+  "context": zod.object({
+  "datasetName": zod.string().max(poeQueryBodyContextDatasetNameMax).optional(),
+  "waterType": zod.enum(['saltwater', 'freshwater']).optional(),
+  "minDepth": zod.number().optional(),
+  "maxDepth": zod.number().optional(),
+  "lon": zod.number().min(poeQueryBodyContextLonMin).max(poeQueryBodyContextLonMax).optional(),
+  "lat": zod.number().min(poeQueryBodyContextLatMin).max(poeQueryBodyContextLatMax).optional(),
+  "cameraDepth": zod.number().optional(),
+  "zoneName": zod.string().max(poeQueryBodyContextZoneNameMax).optional()
+}).optional().describe('Terrain context. The final retained prompt (system context, current message, and the last 10 history entries) is limited to 16000 characters.'),
   "history": zod.array(zod.object({
-  "role": zod.string(),
-  "content": zod.string()
-})).optional().describe('Last N conversation turns (server clips to 10)'),
-  "previousResponseId": zod.string().optional().describe('Poe response ID for multi-turn context chaining')
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().max(poeQueryBodyHistoryItemContentMax)
+})).max(poeQueryBodyHistoryMax).optional().describe('Last N conversation turns (server clips to 10)'),
+  "previousResponseId": zod.string().max(poeQueryBodyPreviousResponseIdMax).optional().describe('Poe response ID for multi-turn context chaining')
 })
 
 export const PoeQueryResponse = zod.object({

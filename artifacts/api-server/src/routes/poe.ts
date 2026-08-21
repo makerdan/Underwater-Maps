@@ -2116,19 +2116,74 @@ const PoeHistoryEntrySchema = z.object({
   role: z.enum(["user", "assistant"], {
     errorMap: () => ({ message: 'history[].role must be "user" or "assistant"' }),
   }),
-  content: z.string(),
+  content: z.string().max(2_000, "history[].content must not exceed 2000 characters"),
 });
 
+/** Limits apply before a Poe client is created or a retry is attempted. */
+export const POE_QUERY_MAX_USER_MESSAGE_CHARS = 2_000;
+export const POE_QUERY_MAX_HISTORY_ENTRIES = 50;
+export const POE_QUERY_MAX_HISTORY_CONTENT_CHARS = 2_000;
+export const POE_QUERY_RETAINED_HISTORY_ENTRIES = 10;
+export const POE_QUERY_MAX_RESPONSE_ID_CHARS = 200;
+export const POE_QUERY_MAX_PROMPT_CHARS = 16_000;
+
+const PoeQueryContextSchema = z.object({
+  datasetName: z.string().max(200),
+  waterType: z.enum(["saltwater", "freshwater"]),
+  minDepth: z.number().finite(),
+  maxDepth: z.number().finite(),
+  lon: z.number().finite().min(-180).max(180),
+  lat: z.number().finite().min(-90).max(90),
+  cameraDepth: z.number().finite(),
+  zoneName: z.string().max(200),
+}).strict("context contains an unsupported field");
+
+type PoeQueryContext = z.infer<typeof PoeQueryContextSchema>;
+
+function buildPoeQuerySystemPrompt(context?: PoeQueryContext): string {
+  return context
+    ? `You are BathyScan's AI guide for underwater terrain exploration. Dataset: "${context.datasetName ?? "Unknown"}". Water type: ${context.waterType ?? "saltwater"}. Depth range: ${context.minDepth ?? 0}m to ${context.maxDepth ?? 0}m. Camera position: lon ${context.lon ?? 0}, lat ${context.lat ?? 0}, depth ${context.cameraDepth ?? 0}m. Zone: "${context.zoneName ?? "unknown"}". When the user asks to navigate, highlight zones, filter depths, change the view, or adjust settings — call the appropriate tool. Answer geological questions directly in text. Be concise and scientific.`
+    : "You are BathyScan's AI terrain guide. Help the user explore and understand the seafloor terrain.";
+}
+
+function getPoeQueryPromptChars(
+  userMessage: string,
+  history: Array<{ role: string; content: string }>,
+  context?: PoeQueryContext,
+): number {
+  const retainedHistory = history.slice(-POE_QUERY_RETAINED_HISTORY_ENTRIES);
+  return (
+    buildPoeQuerySystemPrompt(context).length +
+    userMessage.length +
+    retainedHistory.reduce((total, entry) => total + entry.role.length + entry.content.length, 0)
+  );
+}
+
 const PoeQueryBodySchema = z.object({
-  userMessage: z.string().min(1, "userMessage is required"),
-  context: z.record(z.unknown()).optional(),
+  userMessage: z.string().min(1, "userMessage is required").max(
+    POE_QUERY_MAX_USER_MESSAGE_CHARS,
+    `userMessage must not exceed ${POE_QUERY_MAX_USER_MESSAGE_CHARS} characters`,
+  ),
+  context: PoeQueryContextSchema.optional(),
   history: z
     .array(PoeHistoryEntrySchema, { invalid_type_error: "history must be an array" })
-    .max(50, "history must not exceed 50 entries")
+    .max(POE_QUERY_MAX_HISTORY_ENTRIES, `history must not exceed ${POE_QUERY_MAX_HISTORY_ENTRIES} entries`)
     .optional()
     .default([]),
-  previousResponseId: z.string().optional(),
+  previousResponseId: z.string().max(
+    POE_QUERY_MAX_RESPONSE_ID_CHARS,
+    `previousResponseId must not exceed ${POE_QUERY_MAX_RESPONSE_ID_CHARS} characters`,
+  ).optional(),
   includeTools: z.boolean().optional().default(true),
+}).superRefine((body, refinementContext) => {
+  const promptChars = getPoeQueryPromptChars(body.userMessage, body.history, body.context);
+  if (promptChars > POE_QUERY_MAX_PROMPT_CHARS) {
+    refinementContext.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["userMessage"],
+      message: `final retained prompt must not exceed ${POE_QUERY_MAX_PROMPT_CHARS} characters`,
+    });
+  }
 });
 
 router.post("/query", validateBody(PoeQueryBodySchema, "POST /api/poe/query"), asyncHandler(async (req, res) => {
@@ -2136,9 +2191,7 @@ router.post("/query", validateBody(PoeQueryBodySchema, "POST /api/poe/query"), a
 
   const { userMessage, context, history, previousResponseId, includeTools } = res.locals.parsedBody;
 
-  const systemPrompt = context
-    ? `You are BathyScan's AI guide for underwater terrain exploration. Dataset: "${context["datasetName"] ?? "Unknown"}". Water type: ${context["waterType"] ?? "saltwater"}. Depth range: ${context["minDepth"] ?? 0}m to ${context["maxDepth"] ?? 0}m. Camera position: lon ${context["lon"] ?? 0}, lat ${context["lat"] ?? 0}, depth ${context["cameraDepth"] ?? 0}m. Zone: "${context["zoneName"] ?? "unknown"}". When the user asks to navigate, highlight zones, filter depths, change the view, or adjust settings — call the appropriate tool. Answer geological questions directly in text. Be concise and scientific.`
-    : "You are BathyScan's AI terrain guide. Help the user explore and understand the seafloor terrain.";
+  const systemPrompt = buildPoeQuerySystemPrompt(context);
 
   try {
     const client = getPoeClient();

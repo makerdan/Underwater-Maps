@@ -146,24 +146,70 @@ export interface ToolCall {
   id?: string;
 }
 
+export type PoeQueryRequestContextWaterType = typeof PoeQueryRequestContextWaterType[keyof typeof PoeQueryRequestContextWaterType];
+
+
+export const PoeQueryRequestContextWaterType = {
+  saltwater: 'saltwater',
+  freshwater: 'freshwater',
+} as const;
+
 /**
- * Terrain context (datasetName, waterType, minDepth, maxDepth, lon, lat, cameraDepth, zoneName)
+ * Terrain context. The final retained prompt (system context, current message, and the last 10 history entries) is limited to 16000 characters.
  */
-export type PoeQueryRequestContext = { [key: string]: unknown };
+export type PoeQueryRequestContext = {
+  /** @maxLength 200 */
+  datasetName?: string;
+  waterType?: PoeQueryRequestContextWaterType;
+  minDepth?: number;
+  maxDepth?: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  lon?: number;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  lat?: number;
+  cameraDepth?: number;
+  /** @maxLength 200 */
+  zoneName?: string;
+};
+
+export type PoeQueryRequestHistoryItemRole = typeof PoeQueryRequestHistoryItemRole[keyof typeof PoeQueryRequestHistoryItemRole];
+
+
+export const PoeQueryRequestHistoryItemRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
 
 export type PoeQueryRequestHistoryItem = {
-  role: string;
+  role: PoeQueryRequestHistoryItemRole;
+  /** @maxLength 2000 */
   content: string;
 };
 
 export interface PoeQueryRequest {
-  /** The user's natural language query */
+  /**
+     * The user's natural language query
+     * @minLength 1
+     * @maxLength 2000
+     */
   userMessage: string;
-  /** Terrain context (datasetName, waterType, minDepth, maxDepth, lon, lat, cameraDepth, zoneName) */
+  /** Terrain context. The final retained prompt (system context, current message, and the last 10 history entries) is limited to 16000 characters. */
   context?: PoeQueryRequestContext;
-  /** Last N conversation turns (server clips to 10) */
+  /**
+     * Last N conversation turns (server clips to 10)
+     * @maxItems 50
+     */
   history?: PoeQueryRequestHistoryItem[];
-  /** Poe response ID for multi-turn context chaining */
+  /**
+     * Poe response ID for multi-turn context chaining
+     * @maxLength 200
+     */
   previousResponseId?: string;
 }
 
