@@ -185,6 +185,13 @@ const S = {
     marginBottom: 6,
   } as React.CSSProperties,
 
+  noteCounter: {
+    fontSize: "calc(8px * var(--bs-font-scale, 1))",
+    color: "rgba(226,232,240,0.45)",
+    marginBottom: 6,
+    letterSpacing: "0.06em",
+  } as React.CSSProperties,
+
   note: {
     fontSize: "calc(8px * var(--bs-font-scale, 1))",
     color: "rgba(226,232,240,0.3)",
@@ -321,7 +328,7 @@ export function UserAccessSection() {
       return (
         <div style={S.confirmBox} data-testid={`ua-confirm-ban-${id}`}>
           <div style={S.confirmText}>Ban this user? Optional note:</div>
-          <input
+          <textarea
             style={S.noteInput}
             data-testid={`ua-ban-note-${id}`}
             value={banNote}
@@ -329,6 +336,20 @@ export function UserAccessSection() {
             placeholder="Reason (optional)"
             onChange={(e) => setBanNote(e.target.value)}
           />
+          <div
+            data-testid={`ua-ban-note-counter-${id}`}
+            style={{
+              ...S.noteCounter,
+              color:
+                banNote.length >= 1900
+                  ? "#f87171"
+                  : banNote.length >= 1500
+                    ? "#fbbf24"
+                    : S.noteCounter.color,
+            }}
+          >
+            {banNote.length} / 2000
+          </div>
           <button
             style={{ ...S.actionBtn, ...S.dangerBtn }}
             data-testid={`ua-confirm-ban-fire-${id}`}

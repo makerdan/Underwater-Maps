@@ -16,6 +16,10 @@ import { authorizedFetch } from "@/lib/authorizedFetch";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { UserAccessSection } from "@/components/admin/UserAccessSection";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import {
+  AdminListUsersResponse,
+  AdminPendingUsersCountResponse,
+} from "@workspace/api-zod";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -230,17 +234,16 @@ function EmailDeliveryCard() {
 
 function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" | "forbidden" | "error" }) {
   const [users, setUsers] = useState<PendingUser[]>([]);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ok" | "error">("loading");
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
   const [approveErrors, setApproveErrors] = useState<Map<string, string>>(new Map());
   const [denyingIds, setDenyingIds] = useState<Set<string>>(new Set());
   const [denyErrors, setDenyErrors] = useState<Map<string, string>>(new Map());
-
-  // Track unmount so stale async updates do not trigger state changes after
-  // the card has been removed from the tree.
   const cancelledRef = useRef(false);
-  useEffect(() => {
-    return () => { cancelledRef.current = true; };
+
+  useEffect(() => () => {
+    cancelledRef.current = true;
   }, []);
 
   const load = useCallback(async () => {
@@ -250,18 +253,32 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
       if (!res.ok) { setLoadState("error"); return; }
       const data: unknown = await res.json();
       if (cancelledRef.current) return;
-      const pendingUsers =
-        isRecord(data) && Array.isArray(data.users) ? data.users : [];
-      setUsers(pendingUsers as PendingUser[]);
+      const parsed = AdminListUsersResponse.safeParse(data);
+      if (!parsed.success) {
+        setLoadState("error");
+        return;
+      }
+      setUsers(parsed.data.users);
+      setTotalCount(null);
       setLoadState("ok");
     } catch {
-      if (!cancelledRef.current) setLoadState("error");
+      setLoadState("error");
     }
   }, []);
 
   useEffect(() => {
     if (adminStatus !== "ok") return;
     void load();
+    void (async () => {
+      try {
+        const res = await authorizedFetch(`${basePath}/api/admin/users/pending-count`);
+        if (!res.ok) return;
+        const parsed = AdminPendingUsersCountResponse.safeParse(await res.json());
+        if (parsed.success) setTotalCount(parsed.data.count);
+      } catch {
+        // The list remains useful when the optional total-count request fails.
+      }
+    })();
   }, [adminStatus, load]);
 
   const handleApprove = useCallback(async (clerkUserId: string) => {
@@ -326,6 +343,11 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
           </span>
         )}
       </div>
+        {loadState === "ok" && totalCount !== null && users.length < totalCount && (
+          <div style={{ ...S.note, marginTop: -6, marginBottom: 10 }}>
+            Showing {users.length} of {totalCount} — see User Access tab for full list.
+          </div>
+        )}
 
       {loadState === "loading" && (
         <>
@@ -625,63 +647,45 @@ export function AdminPanel() {
 
       {status === "ok" && (
         <>
-          <ErrorBoundary
-            fallback={
-              <div style={{ ...S.card, marginTop: 12 }}>
-                <div style={S.error}>Email delivery section could not be loaded.</div>
-              </div>
-            }
-          >
+          <ErrorBoundary fallback={<div style={{ ...S.card, marginTop: 12 }}><div style={S.error}>Email delivery section could not be loaded.</div></div>}>
             <EmailDeliveryCard />
           </ErrorBoundary>
-          <ErrorBoundary
-            fallback={
-              <div style={{ ...S.card, marginTop: 12 }}>
-                <div style={S.error}>Operational stats could not be loaded.</div>
-              </div>
-            }
-          >
-          <OperationalCard
-            title="Dataset Bucket Status"
-            endpoint="/api/admin/bucket-monitor"
-            describe={(data) => {
-              const counts = data.counts as Record<string, unknown> | undefined;
-              return counts
-                ? Object.entries(counts).map(([name, value]) => `${name}: ${String(value)}`).join(" · ")
-                : "";
-            }}
-          />
-          <OperationalCard
-            title="Large Dataset Changes"
-            endpoint="/api/admin/large-datasets-diff"
-            describe={(data) => {
-              const changed = typeof data.changedCount === "number" ? data.changedCount : 0;
-              const missing = typeof data.unimportedCount === "number" ? data.unimportedCount : 0;
-              return changed + missing > 0
-                ? `${changed} changed · ${missing} not yet imported`
-                : "No changed or unimported large datasets.";
-            }}
-          />
-          <OperationalCard
-            title="Rate Limit Activity"
-            endpoint="/api/admin/rate-limit/usage"
-            describe={(data) => {
-              const count = typeof data.count === "number" ? data.count : 0;
-              return count > 0 ? `${count} active usage bucket${count === 1 ? "" : "s"}.` : "";
-            }}
-          />
+          <ErrorBoundary fallback={<div style={{ ...S.card, marginTop: 12 }}><div style={S.error}>Operational stats could not be loaded.</div></div>}>
+            <OperationalCard
+              title="Dataset Bucket Status"
+              endpoint="/api/admin/bucket-monitor"
+              describe={(data) => {
+                const counts = data.counts as Record<string, unknown> | undefined;
+                return counts
+                  ? Object.entries(counts).map(([name, value]) => `${name}: ${String(value)}`).join(" · ")
+                  : "";
+              }}
+            />
+            <OperationalCard
+              title="Large Dataset Changes"
+              endpoint="/api/admin/large-datasets-diff"
+              describe={(data) => {
+                const changed = typeof data.changedCount === "number" ? data.changedCount : 0;
+                const missing = typeof data.unimportedCount === "number" ? data.unimportedCount : 0;
+                return changed + missing > 0
+                  ? `${changed} changed · ${missing} not yet imported`
+                  : "No changed or unimported large datasets.";
+              }}
+            />
+            <OperationalCard
+              title="Rate Limit Activity"
+              endpoint="/api/admin/rate-limit/usage"
+              describe={(data) => {
+                const count = typeof data.count === "number" ? data.count : 0;
+                return count > 0 ? `${count} active usage bucket${count === 1 ? "" : "s"}.` : "";
+              }}
+            />
           </ErrorBoundary>
         </>
       )}
 
       {status === "ok" && (
-        <ErrorBoundary
-          fallback={
-            <div style={{ ...S.card, marginTop: 12 }}>
-              <div style={S.error}>Skill download could not be loaded.</div>
-            </div>
-          }
-        >
+        <ErrorBoundary fallback={<div style={{ ...S.card, marginTop: 12 }}><div style={S.error}>Skill download could not be loaded.</div></div>}>
           <SkillDownloadCard adminStatus={status} />
         </ErrorBoundary>
       )}

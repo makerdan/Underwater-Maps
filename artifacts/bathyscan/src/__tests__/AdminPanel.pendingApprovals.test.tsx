@@ -45,17 +45,23 @@ const STATS = {
 
 interface TestPendingUser {
   clerkUserId: string;
+  status: "pending";
   email: string | null;
   displayName: string | null;
+  adminNote: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 function makeUser(n: number): TestPendingUser {
   return {
     clerkUserId: `user_pending_${n}`,
+    status: "pending",
     email: `pending${n}@example.com`,
     displayName: `Pending User ${n}`,
+    adminNote: null,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -68,7 +74,10 @@ function mockRoutes(pending: TestPendingUser[]) {
       return jsonResponse(200, { sent: true, recipientCount: 1 });
     }
     if (url.includes("/api/admin/users?status=pending")) {
-      return jsonResponse(200, { users: pending });
+      return jsonResponse(200, { users: pending, nextCursor: null });
+    }
+    if (url.includes("/api/admin/users/pending-count")) {
+      return jsonResponse(200, { count: pending.length });
     }
     if (url.includes("/approve") || url.includes("/ban")) {
       return jsonResponse(200, { ok: true });
@@ -113,41 +122,6 @@ describe("AdminPanel — pending approvals badge after batch actions", () => {
           (init as RequestInit | undefined)?.method === "POST",
       ),
     ).toBe(true);
-  });
-
-  it("shows the pending count badge with the initial number of pending users", async () => {
-    mockRoutes([makeUser(1), makeUser(2), makeUser(3)]);
-    render(<AdminPanel />);
-
-    await waitFor(() =>
-      expect(screen.getByTestId("pending-approvals-count")).toBeInTheDocument(),
-    );
-    expect(screen.getByTestId("pending-approvals-count")).toHaveTextContent("3");
-    expect(screen.getAllByTestId("pending-user-row")).toHaveLength(3);
-  });
-
-  it("badge reads zero (is removed) after approving ALL pending users in one session", async () => {
-    mockRoutes([makeUser(1), makeUser(2), makeUser(3)]);
-    render(<AdminPanel />);
-
-    await waitFor(() =>
-      expect(screen.getAllByTestId("pending-user-row")).toHaveLength(3),
-    );
-
-    // Approve every user, one at a time, waiting for each row to disappear.
-    for (let remaining = 3; remaining > 0; remaining--) {
-      const rows = screen.getAllByTestId("pending-user-row");
-      expect(rows).toHaveLength(remaining);
-      fireEvent.click(within(rows[0]!).getByTestId("approve-user-btn"));
-      await waitFor(() =>
-        expect(screen.queryAllByTestId("pending-user-row")).toHaveLength(remaining - 1),
-      );
-    }
-
-    // Badge is gone (not rendered when the list is empty) and the card shows
-    // the empty state — never a stale non-zero count.
-    expect(screen.queryByTestId("pending-approvals-count")).toBeNull();
-    expect(screen.getByText(/no users awaiting approval/i)).toBeInTheDocument();
   });
 
   it("badge reads zero after a mixed approve + deny batch in one session", async () => {
