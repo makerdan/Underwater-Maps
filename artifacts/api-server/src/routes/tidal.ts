@@ -28,6 +28,11 @@ import {
   tideStationList,
   waterLevelEvents,
 } from "../domains/environmental/service.js";
+import {
+  refreshStationLists,
+  getPredictionWindow,
+  getCurrentPredictionWindow,
+} from "../domains/environmental/providers/noaaTides.js";
 
 /**
  * Map a Zod query-validation error onto the tidal routes' legacy
@@ -563,7 +568,7 @@ router.post(
       res.status(403).json({ error: "forbidden", details: "Admin access required" });
       return;
     }
-    const cleared = stationListsCache.size;
+    const cleared = refreshStationLists();
     stationListsCache.clear();
     stationListsFailureCache.clear();
     tidalResultCache.clear();
@@ -960,24 +965,7 @@ router.get("/tidal/pack", asyncHandler(async (req, res): Promise<void> => {
   if (heightsStation) {
     stationId = heightsStation.id;
     stationName = heightsStation.name;
-    try {
-      const begin = toNoaaDateStr(now);
-      const endDate = new Date(endMs);
-      const end = toNoaaDateStr(endDate);
-      const url =
-        `${NOAA_BASE}/api/prod/datagetter?station=${heightsStation.id}&product=predictions` +
-        `&datum=MLLW&time_zone=GMT&units=metric&format=json&interval=6` +
-        `&begin_date=${begin}&end_date=${end}`;
-      const resp = await fetchJson<{
-        predictions?: Array<{ t: string; v: string }>;
-      }>(url);
-      heightPredictions = (resp.predictions ?? []).map((p) => ({
-        t: new Date(p.t.replace(" ", "T") + "Z").toISOString(),
-        v: parseFloat(p.v),
-      }));
-    } catch (err) {
-      logger.warn({ err }, "[tidal/pack] Failed to fetch height predictions");
-    }
+    heightPredictions = await getPredictionWindow(heightsStation.id, now, days);
   }
 
   // If no NOAA station, synthesize from hi/lo events
@@ -996,46 +984,7 @@ router.get("/tidal/pack", asyncHandler(async (req, res): Promise<void> => {
   // Fetch current predictions
   let currentPredictions: TideCurrentPrediction[] = [];
   if (currentsStation) {
-    try {
-      const begin = toNoaaDateStr(now);
-      const endDate = new Date(endMs);
-      const end = toNoaaDateStr(endDate);
-      const url =
-        `${NOAA_BASE}/api/prod/datagetter?station=${currentsStation.id}&product=currents_predictions` +
-        `&time_zone=GMT&units=metric&format=json&interval=MAX_SLACK` +
-        `&begin_date=${begin}&end_date=${end}`;
-      // The real NOAA shape wraps the array in a { cp: [...] } envelope —
-      // matching getCurrentsPeak's type (line 434). Typing it as a direct
-      // array causes `resp.current_predictions` to be the truthy object
-      // {cp:[…]}, so ?? [] never fires, and `for (const cp of entries)` throws
-      // "entries is not iterable", silently leaving currentPredictions = [].
-      const resp = await fetchJson<{
-        current_predictions?: {
-          cp?: Array<{
-            Time: string;
-            Velocity_Major?: string | number;
-            Speed?: string | number;
-            Direction?: string | number;
-            meanFloodDir?: string | number;
-            Type?: string;
-          }>;
-        };
-      }>(url);
-      const entries = resp.current_predictions?.cp ?? [];
-      for (const cp of entries) {
-        const rawSpeed =
-          cp.Speed != null ? cp.Speed : cp.Velocity_Major != null ? cp.Velocity_Major : null;
-        const speedKnots = rawSpeed != null ? Math.abs(parseFloat(String(rawSpeed))) : 0;
-        const dir = cp.Direction != null ? parseFloat(String(cp.Direction)) : 0;
-        currentPredictions.push({
-          t: new Date((cp.Time as string).replace(" ", "T") + "Z").toISOString(),
-          speed: Number.isFinite(speedKnots) ? speedKnots : 0,
-          dir: Number.isFinite(dir) ? dir : 0,
-        });
-      }
-    } catch (err) {
-      logger.warn({ err }, "[tidal/pack] Failed to fetch current predictions");
-    }
+    currentPredictions = await getCurrentPredictionWindow(currentsStation.id, now, days);
   }
 
   const tidalExpiresAt = new Date(endMs).toISOString();

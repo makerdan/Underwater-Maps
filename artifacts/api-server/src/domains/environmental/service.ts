@@ -16,6 +16,13 @@ import {
 } from "../../lib/noaaWeatherFetcher.js";
 import { findBundledTemperatureProfile } from "../../lib/temperatureProfiles.js";
 import type { TemperatureProfilePayload } from "../../routes/temperature-profile.js";
+import {
+  getStationList,
+  getTidePredictions,
+  getStationDatums,
+  getHighLowEvents,
+  getCurrentsPeak,
+} from "./providers/noaaTides.js";
 
 export type { WeatherStation, WeatherStationsResult, TemperatureProfilePayload };
 export { NoaaUnavailableError };
@@ -39,26 +46,17 @@ export const environmentalObservations = {
   },
 };
 
-/**
- * Tide adapters are loaded lazily because the legacy NOAA tide fetchers still
- * live alongside their route handlers. This keeps the route → service
- * dependency one-way at module initialization while the provider extraction
- * proceeds incrementally.
- */
 export async function tideStationList(
   type: "waterlevels" | "currentpredictions",
 ) {
-  const { getStationList } = await import("../../routes/tidal.js");
   return getStationList(type);
 }
 
 export async function tidePredictions(stationId: string, now?: Date) {
-  const { getTidePredictions } = await import("../../routes/tides.js");
   return getTidePredictions(stationId, now);
 }
 
 export async function tideDatums(stationId: string) {
-  const { getStationDatums } = await import("../../routes/tides.js");
   return getStationDatums(stationId);
 }
 
@@ -68,12 +66,10 @@ export async function waterLevelEvents(
   beforeDays?: number,
   afterDays?: number,
 ) {
-  const { getHighLowEvents } = await import("../../routes/tidal.js");
   return getHighLowEvents(stationId, refTime, beforeDays, afterDays);
 }
 
 export async function currentPeak(stationId: string, refTime: Date) {
-  const { getCurrentsPeak } = await import("../../routes/tidal.js");
   return getCurrentsPeak(stationId, refTime);
 }
 

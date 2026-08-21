@@ -19,8 +19,8 @@ import {
   GetTidesStationIdResponse,
   GetTidesStationIdDatumsResponse,
 } from "@workspace/api-zod";
-import { tideStationList } from "../domains/environmental/service.js";
-import { haversineKm, type NoaaStation } from "./tidal.js";
+import { tideStationList, tidePredictions, tideDatums } from "../domains/environmental/service.js";
+import { haversineKm, type NoaaStation } from "../domains/environmental/providers/noaaTides.js";
 
 const router = Router();
 
@@ -315,7 +315,7 @@ router.get(
       });
       return;
     }
-    const result = await getTidePredictions(stationId);
+    const result = await tidePredictions(stationId);
     if (!result) {
       res.status(502).json({
         error: "noaa_unavailable",
@@ -339,7 +339,7 @@ router.get(
       });
       return;
     }
-    const result = await getStationDatums(stationId);
+    const result = await tideDatums(stationId);
     if (!result) {
       res.status(502).json({
         error: "noaa_unavailable",

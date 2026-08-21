@@ -7,7 +7,11 @@
  */
 
 import { tideDatums, tidePredictions, tideStationList } from "../domains/environmental/service.js";
-import { haversineKm } from "../routes/tidal.js";
+import {
+  haversineKm,
+  getPredictionWindow,
+  getCurrentPredictionWindow,
+} from "../domains/environmental/providers/noaaTides.js";
 import { logger } from "./logger.js";
 import type { TideStationPack } from "./envPack.js";
 
@@ -95,3 +99,5 @@ export async function fetchTideStationsInRadius(
   }
   return packs;
 }
+
+export { getPredictionWindow, getCurrentPredictionWindow };
