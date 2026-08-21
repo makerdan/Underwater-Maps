@@ -25,19 +25,17 @@ import { validateBody } from "../middlewares/validateBody.js";
 import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
 import { registerCache } from "../lib/cacheRegistry.js";
-import { invalidateCatalogCache, type CatalogSeedEntry } from "../lib/catalogSeeder.js";
+import { catalogService, type CatalogSeedEntry } from "../domains/catalog-search/catalog-service.js";
 import { materializeSave, formatSaveRow } from "./catalog-saves.js";
 import {
   AreaRequestContextSchema,
   applyAreaRequestGrouping,
 } from "../lib/areaRequestFolders.js";
 import {
-  runFederatedSearch,
-  listFederatedSources,
-  deriveImportability,
+  federatedSearchService,
   type FederatedBbox,
   type FederatedSearchResponse,
-} from "../lib/federatedSearch/index.js";
+} from "../domains/catalog-search/federated-search-service.js";
 
 const router = Router();
 
@@ -99,7 +97,7 @@ router.get("/search/federated", asyncHandler(async (req, res): Promise<void> => 
   }
   if (cached) responseCache.delete(cacheKey);
 
-  const response = await runFederatedSearch(q, bbox, { sourceIds });
+  const response = await federatedSearchService.run(q, bbox, { sourceIds });
 
   const checked = validateResponse(GetSearchFederatedResponse, response, "GET /api/search/federated");
   responseCache.set(cacheKey, { response: checked, expiry: Date.now() + CACHE_TTL_MS });
@@ -115,7 +113,7 @@ router.get("/search/federated", asyncHandler(async (req, res): Promise<void> => 
 router.get("/search/federated/sources", asyncHandler(async (_req, res): Promise<void> => {
   res.json(validateResponse(
     GetSearchFederatedSourcesResponse,
-    { sources: listFederatedSources() },
+    { sources: federatedSearchService.listSources() },
     "GET /api/search/federated/sources",
   ));
 }));
@@ -176,7 +174,7 @@ router.post(
     // strategy server-side from the endpoint URL + bbox (the same single
     // source of truth the search results use for the badge).
     const upstreamId = r.id.includes(":") ? r.id.slice(r.id.indexOf(":") + 1) : r.id;
-    const { importable, importKind } = deriveImportability({
+    const { importable, importKind } = federatedSearchService.deriveImportability({
       id: upstreamId,
       endpointUrl,
       coverageBbox,
@@ -237,7 +235,7 @@ router.post(
         },
       });
 
-    invalidateCatalogCache();
+    catalogService.invalidate();
 
     // Idempotent: return the existing save if one already exists.
     const existing = await db

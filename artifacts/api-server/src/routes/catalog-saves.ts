@@ -50,10 +50,9 @@ import {
   PatchDatasetsMySavesIdMoveResponse,
 } from "@workspace/api-zod";
 import {
-  getCatalogEntries,
-  searchCatalog,
+  catalogService,
   type CatalogSeedEntry,
-} from "../lib/catalogSeeder.js";
+} from "../domains/catalog-search/catalog-service.js";
 import { createRateLimit } from "../middlewares/rateLimit.js";
 import {
   AreaRequestContextSchema,
@@ -235,7 +234,7 @@ router.get("/datasets/catalog", catalogReadRateLimit, asyncHandler(async (req, r
   const rawDataType = req.query["dataType"] as string | undefined;
   const rawWaterType = req.query["waterType"] as string | undefined;
 
-  const entries = await getCatalogEntries();
+  const entries = await catalogService.getEntries();
 
   const filtered = entries.filter((e) => {
     if (rawDataType && e.dataType !== rawDataType) return false;
@@ -261,7 +260,7 @@ router.get("/datasets/catalog/search", catalogReadRateLimit, asyncHandler(async 
   }
   const { dataType, waterType, minLon, minLat, maxLon, maxLat } = queryParsed.data;
 
-  const results = await searchCatalog({
+  const results = await catalogService.search({
     dataType,
     waterType,
     minLon,
@@ -377,7 +376,7 @@ router.post("/datasets/bbox-query", catalogReadRateLimit, validateBody(BboxQuery
     return;
   }
 
-  const results = await searchCatalog({
+  const results = await catalogService.search({
     dataType,
     waterType,
     minLon: west,
@@ -476,7 +475,7 @@ router.post("/datasets/point-radius-query", catalogReadRateLimit, validateBody(P
     return;
   }
 
-  const results = await searchCatalog({
+  const results = await catalogService.search({
     dataType,
     waterType,
     minLon: west,
@@ -537,7 +536,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
   const catalogId = idParsed.data;
 
   // Validate the catalog entry exists
-  const entries = await getCatalogEntries();
+  const entries = await catalogService.getEntries();
   const entry = entries.find((e) => e.id === catalogId) ?? null;
   if (!entry) {
     res.status(404).json({ error: "not_found", details: `Catalog entry '${catalogId}' not found` });
@@ -1291,7 +1290,7 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, dataMutationRateLimit, 
     return;
   }
 
-  const entries = await getCatalogEntries();
+  const entries = await catalogService.getEntries();
   const entry = entries.find((e) => e.id === row.catalogId) ?? null;
   if (!entry) {
     res.status(404).json({
@@ -1363,7 +1362,7 @@ router.get("/datasets/my-saves", requireAuth, asyncHandler(async (req, res): Pro
     .from(userCatalogSavesTable)
     .where(eq(userCatalogSavesTable.userId, userId));
 
-  const entries = await getCatalogEntries();
+  const entries = await catalogService.getEntries();
   const entryMap = new Map(entries.map((e) => [e.id, e]));
 
   // Bulk-fetch terrain bboxes for saves backed by a materialized custom
@@ -1430,7 +1429,7 @@ router.get("/datasets/my-saves/:id/status", requireAuth, asyncHandler(async (req
     return;
   }
 
-  const entries = await getCatalogEntries();
+  const entries = await catalogService.getEntries();
   const entry = entries.find((e) => e.id === statusRow.catalogId) ?? null;
   res.json(validateResponse(GetDatasetsMySavesIdStatusResponse, formatSaveRow(statusRow, entry), "GET /api/datasets/my-saves/:id/status"));
 }));
@@ -1582,7 +1581,7 @@ router.patch("/datasets/my-saves/:id/rename", requireAuth, dataMutationRateLimit
     return;
   }
 
-  const entries = await getCatalogEntries();
+  const entries = await catalogService.getEntries();
   const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
   res.json(validateResponse(PatchDatasetsMySavesIdRenameResponse, formatSaveRow(updated, entry), "PATCH /api/datasets/my-saves/:id/rename"));
 }));
@@ -1634,7 +1633,7 @@ router.patch("/datasets/my-saves/:id/move", requireAuth, dataMutationRateLimit, 
     return;
   }
 
-  const entries = await getCatalogEntries();
+  const entries = await catalogService.getEntries();
   const entry = entries.find((e) => e.id === updated.catalogId) ?? null;
   res.json(validateResponse(PatchDatasetsMySavesIdMoveResponse, formatSaveRow(updated, entry), "PATCH /api/datasets/my-saves/:id/move"));
 }));

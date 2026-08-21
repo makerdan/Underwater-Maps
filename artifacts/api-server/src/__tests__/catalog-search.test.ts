@@ -29,6 +29,10 @@ import {
   normalizedLakeIdBase,
   type CatalogSeedEntry,
 } from "../lib/catalogSeeder.js";
+import {
+  federatedSearchService,
+  type FederatedConnector,
+} from "../domains/catalog-search/index.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -246,6 +250,57 @@ describe("searchCatalog", () => {
     expect(ids).toContain("noaa-efh-alaska-sablefish");
     expect(ids).toContain("noaa-efh-alaska-arrowtooth");
     expect(results.every((r) => r.dataType === "habitat")).toBe(true);
+  });
+});
+
+describe("catalog-search domain", () => {
+  it("preserves valid results when one federated provider fails", async () => {
+    const healthyCatalog: FederatedConnector = {
+      id: "healthy-catalog",
+      label: "Healthy catalog",
+      async search() {
+        return [{
+          id: "healthy-catalog:lake",
+          sourceId: "healthy-catalog",
+          sourceLabel: "Healthy catalog",
+          name: "Lake Result",
+          description: null,
+          url: null,
+          endpointUrl: null,
+          coverageBbox: null,
+          resolutionMMin: null,
+          resolutionMMax: null,
+          importable: false,
+          importKind: null,
+        }];
+      },
+    };
+    const failingProvider: FederatedConnector = {
+      id: "failing-provider",
+      label: "Failing provider",
+      async search() {
+        throw new Error("upstream unavailable");
+      },
+    };
+
+    const response = await federatedSearchService.run("lake", null, {
+      connectors: [healthyCatalog, failingProvider],
+      timeoutMs: 100,
+    });
+
+    expect(response.results.map((result) => result.id)).toEqual(["healthy-catalog:lake"]);
+    expect(response.sources).toEqual([
+      expect.objectContaining({
+        sourceId: "healthy-catalog",
+        status: "ok",
+        resultCount: 1,
+      }),
+      expect.objectContaining({
+        sourceId: "failing-provider",
+        status: "error",
+        resultCount: 0,
+      }),
+    ]);
   });
 });
 

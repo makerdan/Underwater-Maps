@@ -52,7 +52,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
-import { invalidateCatalogCache, type CatalogSeedEntry } from "../lib/catalogSeeder.js";
+import { catalogService, type CatalogSeedEntry } from "../domains/catalog-search/catalog-service.js";
 import { materializeSave, formatSaveRow } from "./catalog-saves.js";
 import {
   AreaRequestContextSchema,
@@ -703,7 +703,7 @@ router.post("/ncei/save", requireAuth, dataMutationRateLimit, validateBody(NceiS
     });
 
   // Bust in-memory cache so getCatalogEntries() picks up the new row.
-  invalidateCatalogCache();
+  catalogService.invalidate();
 
   // Idempotent: return existing save if one already exists (any status).
   const existing = await db
