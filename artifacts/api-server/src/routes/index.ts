@@ -1,78 +1,38 @@
 import { Router, type IRouter } from "express";
-import healthRouter from "./health";
-import poeRouter from "./poe";
-import datasetsRouter from "./datasets";
-import markersRouter from "./markers";
-import catchesRouter from "./catches";
-import objectsRouter from "./objects";
-import settingsRouter from "./settings";
-import userDatasetsRouter from "./user-datasets";
-import foldersRouter from "./folders";
-import collectionsRouter from "./collections";
-import tidalRouter from "./tidal";
-import tidesRouter from "./tides";
-import queryRouter from "./query";
-import trailsRouter from "./trails";
-import meRouter from "./me";
-import substrateRouter from "./substrate";
-import efhRouter from "./efh";
-import intertidalSpotsRouter from "./intertidal-spots";
-import catalogSavesRouter from "./catalog-saves";
-import surfaceConditionsRouter from "./surface-conditions";
-import trollingPresetsRouter from "./trolling-presets";
-import trollingPresetFoldersRouter from "./trolling-preset-folders";
-import waterTemperatureRouter from "./water-temperature";
-import temperatureProfileRouter from "./temperature-profile";
-import routesRouter from "./routes";
-import weatherStationsRouter from "./weather-stations";
-import weatherStationObsRouter from "./weather-station-obs";
-import rawsStationsRouter from "./raws-stations";
-import rawsWeatherRouter from "./raws-weather";
-import nceiRouter from "./ncei";
-import searchFederatedRouter from "./search-federated";
-import adminRouter from "./admin";
-import adminUsersRouter from "./admin-users";
-import githubRouter from "./github";
-import terrainBundlesRouter from "./terrain-bundles";
-import envPackRouter from "./env-pack";
+import { uploadDomain } from "../domains/upload/index.js";
+import { terrainDomain } from "../domains/terrain/index.js";
+import { catalogSearchDomain } from "../domains/catalog-search/index.js";
+import { environmentalDomain } from "../domains/environmental/index.js";
+import { platformDomain } from "../domains/platform/index.js";
+
+/**
+ * The API composition root.
+ *
+ * Domain routers own the route groups and are mounted exactly once here.
+ * Cross-cutting middleware belongs in app.ts; startup and shutdown lifecycle
+ * belongs in index.ts. Keeping those responsibilities separate lets a domain
+ * move to a separate service later without changing URL ownership today.
+ */
+export const API_DOMAINS = [
+  platformDomain,
+  uploadDomain,
+  terrainDomain,
+  catalogSearchDomain,
+  environmentalDomain,
+] as const;
+
+/** Stable source-directory keys used by structural checks and tooling. */
+export const API_DOMAIN_KEYS = [
+  "platform",
+  "upload",
+  "terrain",
+  "catalog-search",
+  "environmental",
+] as const;
 
 const router: IRouter = Router();
-
-router.use(healthRouter);
-router.use("/poe", poeRouter);
-router.use(datasetsRouter);
-router.use(markersRouter);
-router.use(catchesRouter);
-router.use(objectsRouter);
-router.use(settingsRouter);
-router.use(userDatasetsRouter);
-router.use(foldersRouter);
-router.use(collectionsRouter);
-router.use(tidalRouter);
-router.use(tidesRouter);
-router.use(queryRouter);
-router.use(trailsRouter);
-router.use(meRouter);
-router.use(substrateRouter);
-router.use(efhRouter);
-router.use(intertidalSpotsRouter);
-router.use(catalogSavesRouter);
-router.use(surfaceConditionsRouter);
-router.use(trollingPresetsRouter);
-router.use(trollingPresetFoldersRouter);
-router.use(waterTemperatureRouter);
-router.use(temperatureProfileRouter);
-router.use(routesRouter);
-router.use(weatherStationsRouter);
-router.use(weatherStationObsRouter);
-router.use(rawsStationsRouter);
-router.use(rawsWeatherRouter);
-router.use(nceiRouter);
-router.use(searchFederatedRouter);
-router.use(adminRouter);
-router.use(adminUsersRouter);
-router.use("/github", githubRouter);
-router.use(terrainBundlesRouter);
-router.use(envPackRouter);
+for (const domain of API_DOMAINS) {
+  router.use(domain.router);
+}
 
 export default router;

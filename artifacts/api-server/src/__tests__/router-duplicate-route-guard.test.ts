@@ -54,7 +54,13 @@ vi.mock("@clerk/shared/keys", () => ({
 
 import fs from "node:fs";
 import path from "node:path";
-import { findDuplicateRoutes, countRoutes } from "./helpers/routeGuard.js";
+import {
+  findDuplicateRoutes,
+  countRoutes,
+  countRoutesDeep,
+  findDuplicateRoutesAcross,
+} from "./helpers/routeGuard.js";
+import { API_DOMAINS, API_DOMAIN_KEYS } from "../routes/index.js";
 
 import healthRouter from "../routes/health.js";
 import poeRouter from "../routes/poe.js";
@@ -154,16 +160,37 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
       path.join(__dirname, "..", "routes", "index.ts"),
       "utf8",
     );
-    const mounted = [...indexSrc.matchAll(/from\s+["']\.\/([\w-]+)["']/g)]
+    const mounted = [...indexSrc.matchAll(/from\s+["']\.\.\/domains\/([^/]+)\/index\.js["']/g)]
       .map((m) => m[1])
-      .filter((n) => n !== "index");
-    const covered = new Set(ROUTERS.map(([name]) => name));
-    const missing = mounted.filter((n) => !covered.has(n!));
+      .filter(Boolean);
+    const missing = mounted.filter(
+      (n) => !API_DOMAIN_KEYS.includes(n as (typeof API_DOMAIN_KEYS)[number]),
+    );
     expect(
       missing,
-      `Router module(s) imported in routes/index.ts but missing from the duplicate-route ` +
-        `guard: ${missing.join(", ")}. Add them to the ROUTERS list in ` +
-        `src/__tests__/router-duplicate-route-guard.test.ts.`,
+      `Domain module(s) imported in routes/index.ts but missing from the composition ` +
+        `inventory: ${missing.join(", ")}. Add them to API_DOMAINS.`,
+    ).toEqual([]);
+    expect(mounted.sort()).toEqual([...API_DOMAIN_KEYS].sort());
+  });
+
+  it.each(API_DOMAINS)("$name domain is composed", (domain) => {
+    expect(countRoutesDeep(domain.router)).toBeGreaterThan(0);
+  });
+
+  it("composed API router contains each endpoint exactly once", async () => {
+    const { default: apiRouter } = await import("../routes/index.js");
+    expect(countRoutesDeep(apiRouter)).toBeGreaterThan(0);
+    expect(countRoutesDeep(apiRouter)).toBe(
+      ROUTERS.reduce((total, [, router]) => total + countRoutes(router), 0),
+    );
+    expect(
+      findDuplicateRoutesAcross(
+        ROUTERS.map(([name, router]) => [
+          router,
+          name === "poe" ? "/poe" : name === "github" ? "/github" : "",
+        ]),
+      ),
     ).toEqual([]);
   });
 });

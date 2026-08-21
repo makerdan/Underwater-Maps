@@ -67,3 +67,85 @@ export function countRoutes(router: unknown): number {
   if (stack === null) return 0;
   return stack.filter((layer) => layer.route).length;
 }
+
+/**
+ * Counts route layers through nested domain routers. Express stores a mounted
+ * router as a middleware layer, so the shallow helpers above cannot prove that
+ * the composed API router still owns the expected route surface.
+ */
+export function countRoutesDeep(router: unknown): number {
+  const stack = getRouterStack(router);
+  if (stack === null) return 0;
+
+  return stack.reduce((total, layer) => {
+    if (layer.route) return total + 1;
+    const nested = (layer as { handle?: unknown }).handle;
+    return total + (nested && getRouterStack(nested) ? countRoutesDeep(nested) : 0);
+  }, 0);
+}
+
+export function findDuplicateRoutesDeep(router: unknown): string[] {
+  const stack = getRouterStack(router);
+  if (stack === null) {
+    throw new Error(
+      "Router has no layer stack array — Express internals changed? Update routeGuard.ts.",
+    );
+  }
+
+  const seen = new Map<string, number>();
+  const visit = (current: unknown, prefix = ""): void => {
+    const currentStack = getRouterStack(current);
+    if (currentStack === null) return;
+    for (const layer of currentStack) {
+      if (layer.route) {
+        const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
+        for (const path of paths) {
+          for (const method of Object.keys(layer.route.methods).filter(
+            (candidate) => layer.route?.methods[candidate],
+          )) {
+            const key = `${method.toUpperCase()} ${prefix}${path}`;
+            seen.set(key, (seen.get(key) ?? 0) + 1);
+          }
+        }
+      } else if ((layer as { handle?: unknown }).handle) {
+        // Express exposes the mount path on Layer.path. Older Express
+        // versions omit it; in that case the nested router has no prefix.
+        const mountPath = (layer as { path?: unknown }).path;
+        visit(
+          (layer as { handle: unknown }).handle,
+          prefix + (typeof mountPath === "string" ? mountPath : ""),
+        );
+      }
+    }
+  };
+  visit(router);
+
+  return [...seen.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([key, count]) => `${key} (registered ${count}×)`);
+}
+
+export function findDuplicateRoutesAcross(
+  routers: ReadonlyArray<readonly [router: unknown, prefix?: string]>,
+): string[] {
+  const seen = new Map<string, number>();
+  for (const [router, prefix = ""] of routers) {
+    const stack = getRouterStack(router);
+    if (stack === null) continue;
+    for (const layer of stack) {
+      if (!layer.route) continue;
+      const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
+      for (const path of paths) {
+        for (const method of Object.keys(layer.route.methods).filter(
+          (candidate) => layer.route?.methods[candidate],
+        )) {
+          const key = `${method.toUpperCase()} ${prefix}${path}`;
+          seen.set(key, (seen.get(key) ?? 0) + 1);
+        }
+      }
+    }
+  }
+  return [...seen.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([key, count]) => `${key} (registered ${count}×)`);
+}

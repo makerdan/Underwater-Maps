@@ -130,3 +130,4 @@
 - [Reference image decode fallback](reference-image-decode-fallback.md) — `createImageBitmap` can reject valid uploaded images in constrained Chromium; preserve the HTMLImageElement decode fallback.
 - [PWA service-worker base normalization](pwa-service-worker-base-normalization.md) — never append `/` to an already-root base; emitted `//sw.js` becomes cross-origin and leaves `serviceWorker.ready` pending.
 - [Offline cache rollback fences](offline-cache-rollback-fences.md) — cache rollback snapshots need per-URL ownership fencing so an older cancelled save cannot restore over a newer retry.
+- [Nested router guard prefixes](express-nested-router-guard-prefixes.md) — aggregate Express route guards need explicit mount prefixes; nested layer internals do not reliably expose them.

@@ -2,15 +2,19 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { pool, db } from "@workspace/db";
 import { sql } from "drizzle-orm";
-import { seedDatasetCatalog } from "./lib/catalogSeeder.js";
 import { startBucketMonitor } from "./lib/bucketMonitor.js";
-import { startWeatherCacheRefresher } from "./lib/weatherCacheRefresher.js";
-import { startUploadCleanupJob } from "./lib/uploadCleanupJob.js";
 import { startOrphanedPhotosCleanupJob } from "./lib/orphanedPhotosCleanupJob.js";
 import { startRateLimitPruneJob } from "./lib/rateLimitPruneJob.js";
-import { recoverStaleUploadJobs, cleanupStaleChunks, loadCalibrationFromDb } from "./routes/datasets.js";
-import { recoverStaleTerrainBundleJobs } from "./routes/terrain-bundles.js";
 import { checkRasterExtractorDeps } from "./lib/pdfContourRaster.js";
+import {
+  cleanupRecoveredUploads,
+  loadUploadCalibration,
+  recoverUploads,
+  startUploadCleanup,
+} from "./domains/upload/index.js";
+import { recoverTerrainJobs } from "./domains/terrain/index.js";
+import { seedCatalog } from "./domains/catalog-search/index.js";
+import { startEnvironmentalRefresh } from "./domains/environmental/index.js";
 import type * as http from "http";
 
 // ---------------------------------------------------------------------------
@@ -210,22 +214,22 @@ function startServer(port: number): void {
 
     // Load per-extension upload duration history so ETA estimates are seeded
     // from the very first job after a restart (non-critical; errors are caught).
-    void loadCalibrationFromDb().catch((calibErr: unknown) => {
+    void loadUploadCalibration().catch((calibErr: unknown) => {
       logger.warn({ err: calibErr }, "Calibration load failed (non-critical)");
     });
 
     // Reconstruct durable upload ownership before deleting orphaned temp files.
     // Cleanup is skipped if recovery could not query the DB: without a complete
     // ownership set, deleting by filename could destroy resumable uploads.
-    void recoverStaleUploadJobs()
+    void recoverUploads()
       .then(async (recovered) => {
         if (!recovered) {
           logger.warn("Upload chunk cleanup skipped because recovery did not complete");
           return;
         }
-        await cleanupStaleChunks();
+        await cleanupRecoveredUploads();
         try {
-          stopUploadCleanupJob = startUploadCleanupJob();
+          stopUploadCleanupJob = startUploadCleanup();
         } catch (err) {
           logger.error({ err }, "[startup] startUploadCleanupJob failed");
         }
@@ -237,12 +241,12 @@ function startServer(port: number): void {
     // Reset terrain bundle jobs left in "running" by the previous process and
     // re-dispatch all pending jobs (duplicate-dispatch protected in the route
     // module; non-critical, errors are caught).
-    void recoverStaleTerrainBundleJobs().catch((bundleErr: unknown) => {
+    void recoverTerrainJobs().catch((bundleErr: unknown) => {
       logger.warn({ err: bundleErr }, "Terrain bundle job recovery failed (non-critical)");
     });
 
     // Seed the dataset discovery catalog on startup (idempotent).
-    void seedDatasetCatalog().catch((seedErr: unknown) => {
+    void seedCatalog().catch((seedErr: unknown) => {
       logger.warn({ err: seedErr }, "Catalog seed failed (non-critical)");
     });
 
@@ -260,7 +264,7 @@ function startServer(port: number): void {
     // Also prunes rows older than 24 hours that no one is actively requesting.
     // The returned stop function is stored so the SIGTERM handler can await it.
     try {
-      stopWeatherCacheRefresher = startWeatherCacheRefresher();
+      stopWeatherCacheRefresher = startEnvironmentalRefresh();
     } catch (err) {
       logger.error({ err }, "[startup] startWeatherCacheRefresher failed");
     }
