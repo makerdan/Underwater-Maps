@@ -14,7 +14,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, openSync, closeSync,
-  unlinkSync, utimesSync, rmSync,
+  unlinkSync, utimesSync, rmSync, chmodSync,
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -184,8 +184,26 @@ test("reports and propagates non-ENOENT directory read errors", () => {
     (thrown) => thrown === error,
   );
   assert.deepEqual(diagnostics, [
-    "clean-stale-validation-locks: cannot read lock directory — EACCES: permission denied",
+    "clean-stale-validation-locks: cannot read lock directory /unreadable-lock-dir — EACCES: permission denied",
   ]);
+});
+
+test("CLI exits non-zero and reports the directory when lock directory cannot be read", () => {
+  const dir = makeDir();
+  const scriptPath = join(process.cwd(), "scripts", "clean-stale-validation-locks.mjs");
+  try {
+    chmodSync(dir, 0o000);
+    const result = spawnSync(process.execPath, [scriptPath, dir], {
+      encoding: "utf8",
+    });
+
+    assert.notEqual(result.status, 0, "directory read failure must fail the CLI");
+    assert.match(result.stderr, /EACCES/);
+    assert.match(result.stderr, new RegExp(dir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  } finally {
+    chmodSync(dir, 0o700);
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // ---------------------------------------------------------------------------

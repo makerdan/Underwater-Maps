@@ -119,7 +119,7 @@ export function cleanStaleValidationLocks(dir, opts = {}) {
     }
     const code = err?.code ?? "UNKNOWN";
     const message = err instanceof Error ? err.message : String(err);
-    errorLog(`clean-stale-validation-locks: cannot read lock directory — ${code}: ${message}`);
+    errorLog(`clean-stale-validation-locks: cannot read lock directory ${dir} — ${code}: ${message}`);
     throw err;
   }
 
@@ -187,7 +187,7 @@ const isMain =
   process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const here = dirname(fileURLToPath(import.meta.url));
-  const localDir = resolve(here, "..", ".local");
+  const localDir = process.argv[2] ? resolve(process.argv[2]) : resolve(here, "..", ".local");
   const { removed, kept } = cleanStaleValidationLocks(localDir);
   console.log(
     `[clean-stale-locks] done — removed ${removed.length} stale lock(s), kept ${kept.length} live lock(s).`,
