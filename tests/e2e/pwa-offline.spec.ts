@@ -315,6 +315,141 @@ test.describe("Offline network-abort scenario", () => {
   });
 });
 
+// ── Shared route-mock helpers ─────────────────────────────────────────────────
+
+/**
+ * Install the minimal API route stubs required to render the MY LIBRARY
+ * section with one upload card and to satisfy tide / weather / marker
+ * requests during an offline-pack save. Shared by both the success and
+ * failure / retry test suites.
+ *
+ * @param tideDelayMs  Extra delay on the /api/tidal/pack stub (default 0).
+ *                     Set to ~800 ms in the success test so the downloading
+ *                     phase is observable; keep at 0 in failure tests where
+ *                     the SW check rejects before any tide request is made.
+ */
+async function stubOfflineRoutes(
+  page: import("@playwright/test").Page,
+  uploadId: string,
+  uploadName: string,
+  uploadBbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+  tideDelayMs = 0,
+): Promise<void> {
+  await page.route("**/api/user/datasets", (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    return route.fulfill({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify([
+        {
+          id: uploadId,
+          name: uploadName,
+          minDepth: 15,
+          maxDepth: 320,
+          folderId: null,
+          bbox: uploadBbox,
+          createdAt: "2024-06-01T00:00:00.000Z",
+        },
+      ]),
+    });
+  });
+  await page.route("**/api/datasets/my-saves*", (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    return route.fulfill({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify([]),
+    });
+  });
+  await page.route("**/api/user/folders*", (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    return route.fulfill({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify([]),
+    });
+  });
+  await page.route(`**/api/datasets/${uploadId}/preview`, (route) =>
+    route.fulfill({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        datasetId: uploadId,
+        name: uploadName,
+        bbox: uploadBbox,
+        dataSource: "real",
+      }),
+    }),
+  );
+  await page.route("**/api/tidal/pack*", async (route) => {
+    if (tideDelayMs > 0) await new Promise((r) => setTimeout(r, tideDelayMs));
+    const now = new Date();
+    return route.fulfill({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        station: "e2e-test-station",
+        heightPredictions: [{ t: now.toISOString(), v: 1.2 }],
+        currentPredictions: [],
+        tidalExpiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        generatedAt: now.toISOString(),
+      }),
+    });
+  });
+  await page.route("**/api/weather/pack*", (route) =>
+    route.fulfill({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ station: null, observation: null, snapshotAt: new Date().toISOString() }),
+    }),
+  );
+  await page.route("**/api/markers*", (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    return route.fulfill({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify([]),
+    });
+  });
+}
+
+/**
+ * Navigate to BASE, wait for MY LIBRARY to appear, expand it, and locate the
+ * save-offline trigger for `uploadId`. Returns false and calls test.skip()
+ * when the environment is not signed-in or the card did not render.
+ */
+async function openLibraryTrigger(
+  page: import("@playwright/test").Page,
+  uploadId: string,
+): Promise<boolean> {
+  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+
+  const libraryToggle = page.locator('button:has-text("MY LIBRARY")').first();
+  const libraryVisible = await libraryToggle
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!libraryVisible) {
+    test.skip(true, "MY LIBRARY section not visible — app did not load or user not signed in");
+    return false;
+  }
+  if ((await libraryToggle.getAttribute("aria-expanded")) === "false") {
+    await libraryToggle.dispatchEvent("click");
+  }
+
+  const trigger = page.getByTestId(`btn-offline-upload-${uploadId}`);
+  const triggerVisible = await trigger
+    .waitFor({ state: "visible", timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!triggerVisible) {
+    test.skip(true, "Save-offline trigger not found — MY LIBRARY upload card did not render");
+    return false;
+  }
+  await trigger.dispatchEvent("click");
+  return true;
+}
+
 // ── Save Offline full-download flow ──────────────────────────────────────────
 
 const OFFLINE_UPLOAD_ID = "pwa-offline-e2e-upload-001";
@@ -359,124 +494,11 @@ test.describe("Save Offline full-download flow", () => {
       });
     });
 
-    // MY LIBRARY data: one upload with a bbox (so tide/weather steps run).
-    await page.route("**/api/user/datasets", (route) => {
-      if (route.request().method() !== "GET") return route.continue();
-      return route.fulfill({
-        status: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify([
-          {
-            id: OFFLINE_UPLOAD_ID,
-            name: OFFLINE_UPLOAD_NAME,
-            minDepth: 15,
-            maxDepth: 320,
-            folderId: null,
-            bbox: OFFLINE_UPLOAD_BBOX,
-            createdAt: "2024-06-01T00:00:00.000Z",
-          },
-        ]),
-      });
-    });
-    await page.route("**/api/datasets/my-saves*", (route) => {
-      if (route.request().method() !== "GET") return route.continue();
-      return route.fulfill({
-        status: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify([]),
-      });
-    });
-    await page.route("**/api/user/folders*", (route) => {
-      if (route.request().method() !== "GET") return route.continue();
-      return route.fulfill({
-        status: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify([]),
-      });
-    });
+    // Tide stub delayed so the downloading phase (progress counter) is observable.
+    await stubOfflineRoutes(page, OFFLINE_UPLOAD_ID, OFFLINE_UPLOAD_NAME, OFFLINE_UPLOAD_BBOX, 800);
 
-    // Bbox derivation fallback (used only when the card carries no bbox).
-    await page.route(`**/api/datasets/${OFFLINE_UPLOAD_ID}/preview`, (route) =>
-      route.fulfill({
-        status: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          datasetId: OFFLINE_UPLOAD_ID,
-          name: OFFLINE_UPLOAD_NAME,
-          bbox: OFFLINE_UPLOAD_BBOX,
-          dataSource: "real",
-        }),
-      }),
-    );
-
-    // Tide pack — delayed so the downloading state is observable.
-    await page.route("**/api/tidal/pack*", async (route) => {
-      await new Promise((r) => setTimeout(r, 800));
-      const now = new Date();
-      return route.fulfill({
-        status: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          station: "e2e-test-station",
-          heightPredictions: [{ t: now.toISOString(), v: 1.2 }],
-          currentPredictions: [],
-          tidalExpiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          generatedAt: now.toISOString(),
-        }),
-      });
-    });
-
-    // Weather pack — minimal "no station nearby" payload.
-    await page.route("**/api/weather/pack*", (route) =>
-      route.fulfill({
-        status: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          station: null,
-          observation: null,
-          snapshotAt: new Date().toISOString(),
-        }),
-      }),
-    );
-
-    // Markers — empty list.
-    await page.route("**/api/markers*", (route) => {
-      if (route.request().method() !== "GET") return route.continue();
-      return route.fulfill({
-        status: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify([]),
-      });
-    });
-
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
-
-    // MY LIBRARY section (sidebar, Explore mode). Skip on cold environments
-    // where the sidebar never renders (not signed in / app failed to boot).
-    const libraryToggle = page.locator('button:has-text("MY LIBRARY")').first();
-    const libraryVisible = await libraryToggle
-      .waitFor({ state: "visible", timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!libraryVisible) {
-      test.skip(true, "MY LIBRARY section not visible — app did not load or user not signed in");
-      return;
-    }
-    if ((await libraryToggle.getAttribute("aria-expanded")) === "false") {
-      await libraryToggle.dispatchEvent("click");
-    }
-
-    // Save-offline trigger for the mocked upload card.
-    const trigger = page.getByTestId(`btn-offline-upload-${OFFLINE_UPLOAD_ID}`);
-    const triggerVisible = await trigger
-      .waitFor({ state: "visible", timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!triggerVisible) {
-      test.skip(true, "Save-offline trigger not found — MY LIBRARY upload card did not render");
-      return;
-    }
-    await trigger.dispatchEvent("click");
+    const opened = await openLibraryTrigger(page, OFFLINE_UPLOAD_ID);
+    if (!opened) return;
 
     // The offline pack modal opens.
     const modal = page.getByRole("dialog", { name: "Save offline" });
@@ -549,5 +571,152 @@ test.describe("Save Offline full-download flow", () => {
       return;
     }
     await expect(cachedBadges.first()).toBeVisible();
+  });
+});
+
+// ── Service-worker readiness failure and retry ────────────────────────────────
+
+const FAILURE_UPLOAD_ID = "pwa-offline-e2e-failure-001";
+const FAILURE_UPLOAD_NAME = "Failure Retry Survey";
+const FAILURE_UPLOAD_BBOX = { minLon: -135.5, minLat: 59.4, maxLon: -135.4, maxLat: 59.5 };
+
+test.describe("Service-worker readiness failure and retry", () => {
+  /**
+   * Production-like browser regression checks that verify:
+   *
+   * 1. When the service worker has not yet activated (reg.active is null),
+   *    the UI surfaces a classified, human-readable error immediately rather
+   *    than hanging until a 15-second timeout fires. The "Retry Save Area"
+   *    button replaces the "Save Area" button, proving the modal entered the
+   *    error phase.
+   *
+   * 2. A subsequent retry with a working service worker stub completes
+   *    successfully, confirming the retry path exercises the same readiness
+   *    contract as a real first-install scenario.
+   *
+   * Both tests keep service-worker support enabled in the page (unlike the
+   * existing offline-event tests, which deliberately remove it). They exercise
+   * getControllingServiceWorker() through the real offlinePackStore path.
+   */
+  test.beforeEach(async ({ resetPanelCollapse }) => {
+    void resetPanelCollapse;
+  });
+
+  test("classified error appears when service worker is not active (reg.active null)", async ({ page }) => {
+    // SW stub: ready resolves with active: null, simulating a first-install
+    // page load where the service worker is still installing.  The error must
+    // arrive quickly (before any 15-second timeout) because waitForActivation
+    // falls through to serviceWorker.ready when there is no installing worker,
+    // and our ready promise resolves synchronously.
+    await page.addInitScript(() => {
+      const failingRegistration = { active: null };
+      Object.defineProperty(Navigator.prototype, "serviceWorker", {
+        configurable: true,
+        get: () => ({
+          ready: Promise.resolve(failingRegistration),
+          controller: null,
+        }),
+      });
+    });
+
+    await stubOfflineRoutes(page, FAILURE_UPLOAD_ID, FAILURE_UPLOAD_NAME, FAILURE_UPLOAD_BBOX);
+
+    const opened = await openLibraryTrigger(page, FAILURE_UPLOAD_ID);
+    if (!opened) return;
+
+    const modal = page.getByRole("dialog", { name: "Save offline" });
+    await expect(modal).toBeVisible({ timeout: 5_000 });
+
+    const saveAreaBtn = modal.locator('button:has-text("Save Area")').first();
+    await expect(saveAreaBtn).toBeVisible({ timeout: 5_000 });
+    await saveAreaBtn.dispatchEvent("click");
+
+    // The modal must enter the error phase — the button label switches to
+    // "Retry Save Area" and the error message text is rendered inline.
+    // This assertion proves the error is classified (via ServiceWorkerReadinessError)
+    // and surfaced to the user quickly, not after a 15-second timeout.
+    const retryBtn = modal.locator('button:has-text("Retry Save Area")');
+    await expect(retryBtn).toBeVisible({ timeout: 10_000 });
+
+    // The error text must mention the service worker so the user knows what
+    // to do — not a generic "Download failed" fallback.
+    await expect(modal.getByText(/service worker/i).first()).toBeVisible({ timeout: 3_000 });
+  });
+
+  test("retry succeeds after service worker becomes available", async ({ page }) => {
+    // Phase-switchable SW stub.  Starts with active: null so the first Save
+    // Area attempt fails.  After the failure is asserted we flip
+    // window.__swPhase to 'ready' so the retry sees an active, controlling
+    // worker and completes successfully.
+    //
+    // The getter is re-evaluated on every call to navigator.serviceWorker, so
+    // the window variable is read at the moment getControllingServiceWorker
+    // consults ready — no stale closure capture.
+    await page.addInitScript(() => {
+      // Initialise control variable before any page script runs.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).__swPhase = "failing";
+
+      const activeWorker = {
+        postMessage: (_msg: unknown, ports: MessagePort[]) => {
+          ports[0]?.postMessage({ ok: true });
+        },
+      };
+
+      Object.defineProperty(Navigator.prototype, "serviceWorker", {
+        configurable: true,
+        get: () => ({
+          get ready() {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if ((window as any).__swPhase === "ready") {
+              return Promise.resolve({ active: activeWorker });
+            }
+            return Promise.resolve({ active: null });
+          },
+          get controller() {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return (window as any).__swPhase === "ready" ? activeWorker : null;
+          },
+        }),
+      });
+    });
+
+    // No tide delay: the first attempt fails before the tide request is made.
+    await stubOfflineRoutes(page, FAILURE_UPLOAD_ID, FAILURE_UPLOAD_NAME, FAILURE_UPLOAD_BBOX);
+
+    const opened = await openLibraryTrigger(page, FAILURE_UPLOAD_ID);
+    if (!opened) return;
+
+    const modal = page.getByRole("dialog", { name: "Save offline" });
+    await expect(modal).toBeVisible({ timeout: 5_000 });
+
+    // First attempt — fails because __swPhase is still "failing".
+    const saveAreaBtn = modal.locator('button:has-text("Save Area")').first();
+    await expect(saveAreaBtn).toBeVisible({ timeout: 5_000 });
+    await saveAreaBtn.dispatchEvent("click");
+
+    const retryBtn = modal.locator('button:has-text("Retry Save Area")');
+    const errorReached = await retryBtn
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!errorReached) {
+      test.skip(true, "Error state not reached — SW stub may not be installed correctly in this environment");
+      return;
+    }
+
+    // Switch the SW stub to the working state before retrying.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await page.evaluate(() => { (window as any).__swPhase = "ready"; });
+
+    // Retry — should now succeed end-to-end.
+    await retryBtn.dispatchEvent("click");
+
+    const done = page.getByTestId("area-pack-done");
+    await expect(done).toBeVisible({ timeout: 20_000 });
+    await expect(done).toContainText("Saved");
+
+    // The retry button must be gone once the pack is saved.
+    await expect(retryBtn).not.toBeVisible();
   });
 });

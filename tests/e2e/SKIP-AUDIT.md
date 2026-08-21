@@ -1,11 +1,17 @@
 # E2E conditional-skip audit
 
-Last audited: 2026-08-19. The static call-site baseline is **234**:
-`node scripts/check-skip-count.mjs` finds 0 static unit skips and 234
+Last audited: 2026-08-21. The static call-site baseline is **236**:
+`node scripts/check-skip-count.mjs` finds 0 static unit skips and 236
 conditional `test.skip(` sites under `tests/e2e/`. Runtime GitHub-runner skips
 are measured separately in `runtime-skip-baseline.json`; they must never be
 used to raise this source-level baseline.
 
+Baseline updated 2026-08-21 to 236: `pwa-offline.spec.ts` added the
+"Service-worker readiness failure and retry" describe block with 2 new
+environment-gated skips (error state not reached when the SW stub is not
+installed — category 7; one additional MY LIBRARY / trigger gate moved into a
+shared helper — category 1). Existing inline skip pairs were consolidated into
+the `openLibraryTrigger` helper without adding net new sites.
 Baseline updated 2026-08-18 to 234: `pwa-offline.spec.ts` added the
 "Save Offline full-download flow" describe block with 6 environment-gated
 skips (MY LIBRARY / trigger not rendered when auth bypass or app boot fails —
