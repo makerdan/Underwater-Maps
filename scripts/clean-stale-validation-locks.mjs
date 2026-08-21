@@ -88,6 +88,8 @@ function isStaleLockInfo({ pid, mtimeMs }, now) {
  *   log?: (msg: string) => void,
  *   now?: number,
  *   mutexTimeoutMs?: number,
+ *   readdirSync?: (dir: string) => string[], // test hook for directory read errors
+ *   errorLog?: (msg: string) => void,
  *   onBeforeReclaim?: (name: string) => void,  // test hook: fires between the
  *     // outside-mutex staleness screen and the atomic reclaim, to simulate a
  *     // concurrent reclaim-and-reacquire interleaving deterministically
@@ -95,12 +97,20 @@ function isStaleLockInfo({ pid, mtimeMs }, now) {
  */
 export function cleanStaleValidationLocks(dir, opts = {}) {
   const log = opts.log ?? console.log;
+  const errorLog = opts.errorLog ?? console.error;
+  const readDir = opts.readdirSync ?? readdirSync;
   const now = opts.now ?? Date.now();
   let entries;
   try {
-    entries = readdirSync(dir);
-  } catch {
-    return { removed: [], kept: [] }; // no .local dir yet — nothing to clean
+    entries = readDir(dir);
+  } catch (err) {
+    if (err?.code === "ENOENT") {
+      return { removed: [], kept: [] }; // no .local dir yet — nothing to clean
+    }
+    const code = err?.code ?? "UNKNOWN";
+    const message = err instanceof Error ? err.message : String(err);
+    errorLog(`clean-stale-validation-locks: cannot read lock directory — ${code}: ${message}`);
+    throw err;
   }
 
   const removed = [];

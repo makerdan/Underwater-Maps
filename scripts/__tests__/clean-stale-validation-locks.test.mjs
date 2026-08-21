@@ -153,6 +153,26 @@ test("returns empty result when the directory does not exist", () => {
   assert.deepEqual(kept, []);
 });
 
+test("reports and propagates non-ENOENT directory read errors", () => {
+  const diagnostics = [];
+  const error = Object.assign(new Error("permission denied"), { code: "EACCES" });
+
+  assert.throws(
+    () =>
+      cleanStaleValidationLocks("/unreadable-lock-dir", {
+        ...silent,
+        readdirSync: () => {
+          throw error;
+        },
+        errorLog: (message) => diagnostics.push(message),
+      }),
+    (thrown) => thrown === error,
+  );
+  assert.deepEqual(diagnostics, [
+    "clean-stale-validation-locks: cannot read lock directory — EACCES: permission denied",
+  ]);
+});
+
 // ---------------------------------------------------------------------------
 // TOCTOU regression: cleanup inspects a stale lock while a concurrent waiter
 // reclaims it and a NEW wrapper acquires a replacement lock at the same
