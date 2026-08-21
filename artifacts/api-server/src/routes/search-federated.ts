@@ -26,7 +26,7 @@ import { dataMutationRateLimit } from "../middlewares/dataMutationRateLimit.js";
 import { validateResponse } from "../middlewares/validateResponse.js";
 import { registerCache } from "../lib/cacheRegistry.js";
 import { catalogService, type CatalogSeedEntry } from "../domains/catalog-search/catalog-service.js";
-import { materializeSave, formatSaveRow } from "./catalog-saves.js";
+import { catalogSaveService } from "../domains/catalog-search/save-service.js";
 import {
   AreaRequestContextSchema,
   applyAreaRequestGrouping,
@@ -249,7 +249,7 @@ router.post(
       );
 
     if (existing.length > 0 && existing[0]) {
-      res.status(200).json(formatSaveRow(existing[0], entry));
+      res.status(200).json(catalogSaveService.formatSaveRow(existing[0], entry));
       return;
     }
 
@@ -271,9 +271,9 @@ router.post(
       if (groupFolderId && created.folderId == null) created.folderId = groupFolderId;
     }
 
-    void materializeSave(created.id, userId, entry);
+    void catalogSaveService.materializeSave(created.id, userId, entry);
 
-    res.status(201).json(formatSaveRow(created, entry));
+    res.status(201).json(catalogSaveService.formatSaveRow(created, entry));
   }),
 );
 

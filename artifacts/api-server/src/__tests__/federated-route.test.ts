@@ -93,14 +93,16 @@ vi.mock("@workspace/db", () => ({
 }));
 
 const materializeSaveMock = vi.hoisted(() => vi.fn());
-vi.mock("../routes/catalog-saves.js", () => ({
-  materializeSave: materializeSaveMock,
-  formatSaveRow: (row: Record<string, unknown>, entry: { id: string; name: string }) => ({
-    id: row["id"],
-    catalogId: entry.id,
-    name: entry.name,
-    status: row["status"],
-  }),
+vi.mock("../domains/catalog-search/save-service.js", () => ({
+  catalogSaveService: {
+    materializeSave: materializeSaveMock,
+    formatSaveRow: (row: Record<string, unknown>, entry: { id: string; name: string }) => ({
+      id: row["id"],
+      catalogId: entry.id,
+      name: entry.name,
+      status: row["status"],
+    }),
+  },
 }));
 
 // requireAuth falls through to Clerk's getAuth() when the bypass header is
@@ -113,6 +115,8 @@ vi.mock("@clerk/express", () => ({
 const invalidateCatalogCacheMock = vi.hoisted(() => vi.fn());
 vi.mock("../lib/catalogSeeder.js", () => ({
   invalidateCatalogCache: invalidateCatalogCacheMock,
+  getCatalogEntries: vi.fn(async () => []),
+  searchCatalog: vi.fn(async () => []),
 }));
 
 const { default: searchFederatedRouter } = await import("../routes/search-federated.js");
