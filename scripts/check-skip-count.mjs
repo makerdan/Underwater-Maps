@@ -52,11 +52,28 @@ const E2E_SKIP_RE = /\btest\.skip\(/g;
 
 // IGNORED_DIRS is imported from ./lib/ignored-dirs.mjs — do not re-declare locally.
 
+let hadErrors = false;
+
+function warnWalkError(operation, path, err) {
+  if (err?.code === "ENOENT") {
+    console.warn(
+      `[check-skip-count] WARN — could not ${operation} ${path}: ${err.message}; skipping this entry.`,
+    );
+    return;
+  }
+  hadErrors = true;
+  console.error(
+    `[check-skip-count] WARN — could not ${operation} ${path}: ${err?.message ?? err}; ` +
+      `the skip count may be incomplete.`,
+  );
+}
+
 function* walk(dir) {
   let entries;
   try {
     entries = readdirSync(dir);
-  } catch {
+  } catch (err) {
+    warnWalkError("read directory", dir, err);
     return;
   }
   for (const name of entries) {
@@ -65,7 +82,8 @@ function* walk(dir) {
     let st;
     try {
       st = statSync(p);
-    } catch {
+    } catch (err) {
+      warnWalkError("stat", p, err);
       continue;
     }
     if (st.isDirectory()) yield* walk(p);
@@ -78,6 +96,9 @@ function* walk(dir) {
  * skipped — one bad file must not abort counting for all the others.
  */
 export function countMatches(files, re) {
+  // String#match only returns the first match for a non-global regex; clone it
+  // with `g` so every skip site is counted regardless of the caller's flags.
+  const matchRe = re.flags.includes("g") ? re : new RegExp(re.source, `${re.flags}g`);
   const perFile = [];
   let total = 0;
   for (const f of files) {
@@ -90,7 +111,7 @@ export function countMatches(files, re) {
       );
       continue;
     }
-    const n = (text.match(re) ?? []).length;
+    const n = (text.match(matchRe) ?? []).length;
     if (n > 0) {
       perFile.push({ file: f, count: n });
       total += n;
@@ -166,6 +187,7 @@ export function findMissingScanRoots(rootDir, dirs) {
 }
 
 function main() {
+  hadErrors = false;
   const missingRoots = findMissingScanRoots(root, [...UNIT_DIRS, E2E_DIR]);
   if (missingRoots.length > 0) {
     for (const d of missingRoots) {
@@ -191,6 +213,14 @@ function main() {
     [...walk(resolve(root, d))].filter((f) => UNIT_FILE_RE.test(f)),
   );
   const e2eFiles = [...walk(resolve(root, E2E_DIR))].filter((f) => E2E_FILE_RE.test(f));
+
+  if (hadErrors) {
+    console.error(
+      "[check-skip-count] FAIL — could not inspect one or more scan entries; " +
+        "refusing to compare a partial skip count.",
+    );
+    process.exit(1);
+  }
 
   const unit = countMatches(unitFiles, UNIT_SKIP_RE);
   const e2e = countMatches(e2eFiles, E2E_SKIP_RE);
