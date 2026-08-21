@@ -45,6 +45,21 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 // MOBILE-ONLY: dedicated 2D Chart section (never rendered on desktop)
 import { ChartMapSection } from "./settings/ChartMapSection";
 
+type CloudState = "saving" | "conflict" | "error" | "synced";
+
+function deriveCloudState(
+  syncStatus: ReturnType<typeof getSettingsSyncStatus>,
+  anyDirty: boolean,
+): CloudState {
+  return syncStatus.conflictDetected && !syncStatus.syncing
+    ? "conflict"
+    : syncStatus.lastSyncFailed && !syncStatus.syncing
+      ? "error"
+      : anyDirty || syncStatus.syncing
+        ? "saving"
+        : "synced";
+}
+
 // ─── Tab ↔ URL search-param helpers ──────────────────────────────────────────
 // The active tab is mirrored to `?tab=<id>` so specific sections are linkable
 // and a refresh restores the section. Unknown or missing values fall back to
@@ -187,14 +202,23 @@ export function Settings() {
     subscribeSettingsSyncStatus,
     getSettingsSyncStatus,
   );
-  const cloudState: "saving" | "conflict" | "error" | "synced" =
-    syncStatus.conflictDetected && !syncStatus.syncing
-      ? "conflict"
-      : syncStatus.lastSyncFailed && !syncStatus.syncing
-        ? "error"
-        : anyDirty || syncStatus.syncing
-          ? "saving"
-          : "synced";
+  // Read the module-level status directly for the first render. This keeps a
+  // failed save visible when Settings is remounted before the external-store
+  // subscription has delivered its first update.
+  const initialSyncStatusRef = useRef<ReturnType<typeof getSettingsSyncStatus> | null>(null);
+  const isInitialRenderRef = useRef(true);
+  if (initialSyncStatusRef.current === null) {
+    initialSyncStatusRef.current = getSettingsSyncStatus();
+  }
+  useEffect(() => {
+    isInitialRenderRef.current = false;
+  }, []);
+  const cloudState = deriveCloudState(
+    isInitialRenderRef.current
+      ? initialSyncStatusRef.current
+      : syncStatus,
+    anyDirty,
+  );
 
   const syncCtx = React.useMemo(
     () => ({ flush: flushSync, isSignedIn: !!isSignedIn }),

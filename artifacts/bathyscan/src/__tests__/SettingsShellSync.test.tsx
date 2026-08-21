@@ -136,6 +136,14 @@ describe("Settings sync-status indicator", () => {
     expect(el).toHaveTextContent(/synced to cloud/i);
   });
 
+  it("shows 'save failed' on the first render when a previous save failed", () => {
+    syncControl.state.snapshot = { syncing: false, lastSyncFailed: true };
+    render(<Settings />);
+    const el = screen.getByTestId("topbar-sync-status");
+    expect(el).toHaveAttribute("data-sync-state", "error");
+    expect(el).toHaveTextContent(/save failed/i);
+  });
+
   it("shows 'saving…' when the store is dirty", () => {
     render(<Settings />);
     makeDirty();
