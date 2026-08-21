@@ -17,6 +17,7 @@ const deferredFetch = vi.hoisted(() => {
   } = { resolvers: [], calls: [] };
   return state;
 });
+const bitmapClose = vi.hoisted(() => vi.fn());
 
 vi.mock("@workspace/api-client-react", () => ({
   getUserCollectionsIdBackground: vi.fn((collectionId: string) => {
@@ -39,8 +40,9 @@ beforeEach(() => {
   (globalThis as Record<string, unknown>).createImageBitmap = vi.fn(async () => ({
     width: 640,
     height: 480,
-    close: () => {},
+    close: bitmapClose,
   }));
+  bitmapClose.mockClear();
   useSpecialCollectionStore.setState({ active: null, pendingRestore: null, pendingPuzzleOn: 0 });
 });
 
@@ -138,6 +140,40 @@ describe("specialCollectionStore — in-flight activation races", () => {
     await reload;
 
     expect(useSpecialCollectionStore.getState().active).toBeNull();
+  });
+
+  it("deactivate closes the decoded reference ImageBitmap before clearing it", async () => {
+    const activation = useSpecialCollectionStore.getState().activateForPuzzle(makeCollection("col-1"));
+    deferredFetch.resolvers[0]!(new Blob(["x"], { type: "image/png" }));
+    await activation;
+
+    useSpecialCollectionStore.getState().deactivate();
+
+    expect(bitmapClose).toHaveBeenCalledOnce();
+  });
+
+  it("resetForSignOut closes the decoded reference ImageBitmap before clearing it", async () => {
+    const activation = useSpecialCollectionStore.getState().activateForPuzzle(makeCollection("col-1"));
+    deferredFetch.resolvers[0]!(new Blob(["x"], { type: "image/png" }));
+    await activation;
+
+    useSpecialCollectionStore.getState().resetForSignOut();
+
+    expect(bitmapClose).toHaveBeenCalledOnce();
+  });
+
+  it("reloadBgImage closes the previous ImageBitmap before installing the replacement", async () => {
+    const activation = useSpecialCollectionStore.getState().activateForPuzzle(makeCollection("col-1"));
+    deferredFetch.resolvers[0]!(new Blob(["old"], { type: "image/png" }));
+    await activation;
+    bitmapClose.mockClear();
+
+    const reload = useSpecialCollectionStore.getState().reloadBgImage("col-1");
+    deferredFetch.resolvers[1]!(new Blob(["new"], { type: "image/png" }));
+    await reload;
+
+    expect(bitmapClose).toHaveBeenCalledOnce();
+    expect(useSpecialCollectionStore.getState().active?.bgImage).not.toBeNull();
   });
 
   it("falls back to HTMLImageElement when createImageBitmap rejects a valid reference image", async () => {

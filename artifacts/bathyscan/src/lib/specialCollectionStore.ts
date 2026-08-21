@@ -171,6 +171,13 @@ export function __getActivationGen(): number {
   return activationGen;
 }
 
+/** Release GPU-backed image resources without affecting HTMLImageElement fallbacks. */
+function closeImageBitmap(image: CanvasImageSource | null): void {
+  if (!image) return;
+  const bitmap = image as CanvasImageSource & { close?: () => void };
+  bitmap.close?.();
+}
+
 export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, get) => ({
   active: null,
   pendingRestore: null,
@@ -218,11 +225,13 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
 
   deactivate: () => {
     activationGen++; // invalidate any in-flight activation
+    closeImageBitmap(get().active?.bgImage ?? null);
     set({ active: null, pendingRestore: null, geoLayout: null, unresolvedMemberNames: [] });
   },
 
   resetForSignOut: () => {
     activationGen++; // invalidate any in-flight activation (sign-out race)
+    closeImageBitmap(get().active?.bgImage ?? null);
     set({ active: null, pendingRestore: null, pendingPuzzleOn: 0, geoLayout: null, unresolvedMemberNames: [] });
   },
 
@@ -311,12 +320,15 @@ export const useSpecialCollectionStore = create<SpecialCollectionStore>((set, ge
     set((s) =>
       s.active?.collectionId === collectionId
         ? {
-            active: {
-              ...s.active,
-              bgImage: loaded?.img ?? null,
-              bgImageW: loaded?.w ?? 0,
-              bgImageH: loaded?.h ?? 0,
-            },
+            active: (() => {
+              closeImageBitmap(s.active.bgImage);
+              return {
+                ...s.active,
+                bgImage: loaded?.img ?? null,
+                bgImageW: loaded?.w ?? 0,
+                bgImageH: loaded?.h ?? 0,
+              };
+            })(),
           }
         : {},
     );
