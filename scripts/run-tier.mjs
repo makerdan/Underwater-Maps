@@ -29,7 +29,7 @@
  *   tierStandard → 20 min
  *   aggregate    → 45 min (reused for "full")
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
@@ -328,20 +328,155 @@ console.log(`\n[run-tier] tier="${tier}" priority=${tierPriority} — running ${
 const overallStart = Date.now();
 const timings = [];
 
-for (const step of steps) {
-  const loopNow = Date.now();
-  console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
-  const { exitCode, startMs } = runStep(step, tierPriority);
-  const secs = ((Date.now() - startMs) / 1000).toFixed(1);
-  timings.push({ name: step.name, secs });
-  console.log(`[run-tier] ■ step "${step.name}" finished in ${secs}s (exit ${exitCode})`);
-  if (exitCode !== 0) {
-    printSummary();
-    process.exit(exitCode);
+if (tier === "full") {
+  await runFullTier();
+} else {
+  for (const step of steps) {
+    const loopNow = Date.now();
+    console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
+    const { exitCode, startMs } = runStep(step, tierPriority);
+    recordStep(step, exitCode, startMs);
+    if (exitCode !== 0) {
+      printSummary();
+      process.exit(exitCode);
+    }
   }
 }
 
 printSummary();
+
+/**
+ * The full static tier is commonly run by a managed validation lifecycle that
+ * is shorter than its local timeout budget.  Typecheck/codegen must remain
+ * first, but the inexpensive checks after it can safely run alongside the
+ * unit suite.  The checks after test:unit stay serial and therefore still
+ * run after unit validation, even when the unit suite fails.
+ */
+async function runFullTier() {
+  const unitIndex = steps.findIndex((step) => step.name === "test:unit");
+  if (unitIndex === -1) {
+    // Keep --skip test:unit useful for ad-hoc callers and the heavy-run
+    // preflight, even though the normal full tier always includes the step.
+    for (const step of steps) {
+      const loopNow = Date.now();
+      console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
+      const { exitCode, startMs } = runStep(step, tierPriority);
+      recordStep(step, exitCode, startMs);
+      if (exitCode !== 0) {
+        process.exitCode = exitCode;
+        break;
+      }
+    }
+    return;
+  }
+
+  let firstFailure = 0;
+  const preUnitSteps = steps.slice(0, unitIndex);
+  for (const step of preUnitSteps.filter((candidate) => candidate.name === "typecheck")) {
+    const loopNow = Date.now();
+    console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
+    const { exitCode, startMs } = runStep(step, tierPriority);
+    recordStep(step, exitCode, startMs);
+    if (exitCode !== 0) firstFailure ||= exitCode;
+  }
+
+  // These steps can write the same plan file, and the strict checks depend on
+  // their output. Keep this small safety chain serial while the rest overlaps
+  // with test:unit below.
+  const serializedPreUnitNames = new Set([
+    "fix:failure-gate-stubs",
+    "check:failure-gate",
+    "fix:regression-guard-stubs",
+    "check:regression-guard",
+  ]);
+  for (const step of preUnitSteps.filter(
+    (candidate) => serializedPreUnitNames.has(candidate.name),
+  )) {
+    const loopNow = Date.now();
+    console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
+    const { exitCode, startMs } = runStep(step, tierPriority);
+    recordStep(step, exitCode, startMs);
+    if (exitCode !== 0) firstFailure ||= exitCode;
+  }
+
+  const parallelSteps = [
+    steps[unitIndex],
+    ...preUnitSteps.filter(
+      (step) =>
+        step.name !== "typecheck" && !serializedPreUnitNames.has(step.name),
+    ),
+  ];
+  console.log(
+    `\n[run-tier] overlapping ${parallelSteps.length} pre-unit step(s) with "test:unit"; ` +
+      "post-unit safeguards remain ordered after unit validation",
+  );
+  const parallelResults = await Promise.all(
+    parallelSteps.map((step) => runStepAsync(step, tierPriority)),
+  );
+  for (const result of parallelResults) {
+    recordStep(result.step, result.exitCode, result.startMs);
+    if (result.exitCode !== 0) firstFailure ||= result.exitCode;
+  }
+
+  for (const step of steps.slice(unitIndex + 1)) {
+    const loopNow = Date.now();
+    console.log(`\n[run-tier] ▶ step "${step.name}" starting (total elapsed ${((loopNow - overallStart) / 1000).toFixed(0)}s)`);
+    const { exitCode, startMs } = runStep(step, tierPriority);
+    recordStep(step, exitCode, startMs);
+    if (exitCode !== 0) firstFailure ||= exitCode;
+  }
+  if (firstFailure) process.exitCode = firstFailure;
+}
+
+function recordStep(step, exitCode, startMs) {
+  const secs = ((Date.now() - startMs) / 1000).toFixed(1);
+  timings.push({ name: step.name, secs });
+  console.log(`[run-tier] ■ step "${step.name}" finished in ${secs}s (exit ${exitCode})`);
+}
+
+/**
+ * Async counterpart to runStep(), used only for the safe pre-unit overlap.
+ * It mirrors the same resource-lock command and post-lock timing stamp.
+ */
+function runStepAsync(step, tierPriority) {
+  const stampFile = join(
+    tmpdir(),
+    `run-tier-async-step-start-${process.pid}-${step.name.replace(/[^a-zA-Z0-9-]/g, "-")}.txt`,
+  );
+  rmSync(stampFile, { force: true });
+  const spawnStart = Date.now();
+  const lockArgs = step.resource
+    ? [
+        lockScript,
+        "--resource", step.resource,
+        "--priority", String(tierPriority),
+        "--",
+        process.execPath, resolve(__dirname, "run-tier.mjs"),
+        "--step", step.name,
+      ]
+    : null;
+  const command = lockArgs ? process.execPath : step.cmd;
+  const args = lockArgs ? lockArgs : [];
+  console.log(`\n[run-tier] ▶ step "${step.name}" starting concurrently`);
+
+  return new Promise((resolveResult) => {
+    const child = spawn(command, args, {
+      shell: !lockArgs,
+      stdio: "inherit",
+      env: { ...process.env, VALIDATION_STEP_START_FILE: stampFile },
+    });
+    child.once("exit", (code) => {
+      let startMs = spawnStart;
+      try {
+        const stamped = Number(readFileSync(stampFile, "utf8").trim());
+        if (Number.isFinite(stamped) && stamped >= spawnStart) startMs = stamped;
+      } catch { /* child died before writing — use spawn time */ }
+      rmSync(stampFile, { force: true });
+      resolveResult({ step, exitCode: code ?? 1, startMs });
+    });
+    child.once("error", () => resolveResult({ step, exitCode: 1, startMs: spawnStart }));
+  });
+}
 
 function printSummary() {
   console.log(`\n[run-tier] tier="${tier}" step timing summary:`);
