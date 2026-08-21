@@ -105,6 +105,8 @@ export function Settings() {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<Tab>(readTabFromUrl);
   const [savedMsg, setSavedMsg] = useState(false);
+  const [backSaveError, setBackSaveError] = useState(false);
+  const [backSaveRetrying, setBackSaveRetrying] = useState(false);
   const authLoaded = isLoaded !== false;
   const [adminAccess, setAdminAccess] = useState<
     "checking" | "allowed" | "denied" | "error"
@@ -239,14 +241,7 @@ export function Settings() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [shouldGuard]);
 
-  const handleBack = useCallback(async () => {
-    if (shouldGuard) {
-      try {
-        await flushSync();
-      } catch {
-        // Swallow — user can retry via the sync indicator or section Save.
-      }
-    }
+  const navigateBack = useCallback(() => {
     // Return to wherever Settings was opened from (dataset page, deep link,
     // another view). Fall back to the app root only when this is the first
     // history entry (e.g. a direct /settings navigation in a fresh tab).
@@ -255,7 +250,30 @@ export function Settings() {
     } else {
       setLocation(basePath + "/");
     }
-  }, [shouldGuard, flushSync, setLocation]);
+  }, [setLocation]);
+
+  const handleBack = useCallback(async () => {
+    if (shouldGuard) {
+      setBackSaveRetrying(true);
+      try {
+        await flushSync();
+      } catch {
+        // Keep the user on Settings so the unsaved changes are not silently
+        // discarded. The explicit actions below let them retry or acknowledge
+        // leaving without saving.
+        setBackSaveError(true);
+        setBackSaveRetrying(false);
+        return;
+      }
+      setBackSaveRetrying(false);
+    }
+    navigateBack();
+  }, [shouldGuard, flushSync, navigateBack]);
+
+  const handleLeaveWithoutSaving = useCallback(() => {
+    setBackSaveError(false);
+    navigateBack();
+  }, [navigateBack]);
 
   const handleTabSelect = useCallback(
     (next: Tab) => {
@@ -320,6 +338,41 @@ export function Settings() {
           >
             SETTINGS
           </span>
+          {backSaveError && (
+            <span
+              data-testid="settings-back-save-error"
+              role="alert"
+              aria-live="assertive"
+              style={{
+                color: "#f87171",
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 8,
+                fontSize: "calc(9px * var(--bs-font-scale, 1))",
+                letterSpacing: "0.05em",
+              }}
+            >
+              <span>Couldn't save — check your connection.</span>
+              <button
+                type="button"
+                data-testid="settings-leave-anyway-btn"
+                onClick={handleLeaveWithoutSaving}
+                style={S.topbarActionButton}
+              >
+                Leave anyway
+              </button>
+              <button
+                type="button"
+                data-testid="settings-stay-retry-btn"
+                onClick={() => void handleBack()}
+                disabled={backSaveRetrying}
+                style={S.topbarActionButton}
+              >
+                {backSaveRetrying ? "Retrying…" : "Stay & retry"}
+              </button>
+            </span>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: "calc(9px * var(--bs-font-scale, 1))" }} className="bs-settings-topbar-actions">
             <label
               style={{

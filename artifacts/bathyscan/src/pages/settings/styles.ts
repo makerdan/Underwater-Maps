@@ -24,6 +24,18 @@ export const S = {
     flexShrink: 0,
   } as React.CSSProperties,
 
+  topbarActionButton: {
+    background: "rgba(0,229,255,0.04)",
+    border: "1px solid rgba(0,229,255,0.3)",
+    borderRadius: 3,
+    color: "#00e5ff",
+    cursor: "pointer",
+    fontFamily: FONT,
+    fontSize: "inherit",
+    letterSpacing: "0.05em",
+    padding: "4px 8px",
+  } as React.CSSProperties,
+
   layout: {
     display: "flex",
     flex: 1,

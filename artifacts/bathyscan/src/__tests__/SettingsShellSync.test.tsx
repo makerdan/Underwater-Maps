@@ -251,6 +251,47 @@ describe("Settings tab URL round-trip", () => {
 });
 
 describe("Settings back-button navigation", () => {
+  it("stays on Settings after a failed save and offers explicit retry or leave actions", async () => {
+    const backSpy = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    window.history.pushState(null, "", "/settings");
+    syncControl.flushServerSync.mockRejectedValueOnce(new Error("offline"));
+    render(<Settings />);
+    makeDirty();
+
+    fireEvent.click(screen.getByTestId("settings-back-btn"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("settings-back-save-error")).toHaveTextContent(
+        "Couldn't save — check your connection.",
+      ),
+    );
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(mockSetLocation).not.toHaveBeenCalled();
+    expect(screen.getByTestId("settings-leave-anyway-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-stay-retry-btn")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("settings-stay-retry-btn"));
+    await waitFor(() => expect(backSpy).toHaveBeenCalledTimes(1));
+
+    backSpy.mockRestore();
+  });
+
+  it("requires acknowledgement before leaving after a failed save", async () => {
+    const backSpy = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    window.history.pushState(null, "", "/settings");
+    syncControl.flushServerSync.mockRejectedValueOnce(new Error("offline"));
+    render(<Settings />);
+    makeDirty();
+
+    fireEvent.click(screen.getByTestId("settings-back-btn"));
+    await waitFor(() => expect(screen.getByTestId("settings-back-save-error")).toBeVisible());
+
+    fireEvent.click(screen.getByTestId("settings-leave-anyway-btn"));
+    expect(backSpy).toHaveBeenCalledTimes(1);
+
+    backSpy.mockRestore();
+  });
+
   it("uses history.back() when there is a previous history entry", async () => {
     const backSpy = vi.spyOn(window.history, "back").mockImplementation(() => {});
     // Grow the history stack past the initial entry.
