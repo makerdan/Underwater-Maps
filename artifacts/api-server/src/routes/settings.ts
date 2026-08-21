@@ -350,6 +350,17 @@ router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(asy
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   const body = (req.body ?? {}) as Record<string, unknown>;
+
+  // Extract the client's last-known server version (ISO timestamp from a
+  // previous PUT or GET response's __updatedAt field). When present, we
+  // compare it against the stored __updatedAt to detect concurrent edits from
+  // other devices. The field is excluded from the extras/schema paths below
+  // so it is never persisted in the stored settings JSON.
+  // Absent on the very first PUT ever, or when the client deliberately omits
+  // it to force an overwrite (e.g. user chose "Overwrite" on the conflict prompt).
+  const clientVersion =
+    typeof body.__clientVersion === "string" ? body.__clientVersion : undefined;
+
   const parsed = PutSettingsBody.safeParse(body);
   if (!parsed.success) {
     const safeIssues = parsed.error.issues.map((i) =>
@@ -439,7 +450,7 @@ router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(asy
     // sync timestamp and we overwrite it unconditionally below, so accepting a
     // client-supplied value would let a client inject a future timestamp and
     // break cross-device hydration ordering.
-    if (!schemaKeys.has(k) && k !== "__updatedAt") extras[k] = v;
+    if (!schemaKeys.has(k) && k !== "__updatedAt" && k !== "__clientVersion") extras[k] = v;
   }
 
   const EXTRA_KEY_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
@@ -501,6 +512,31 @@ router.put("/settings", requireAuth, settingsMutationRateLimit, asyncHandler(asy
     throw selectErr;
   }
   const stored = (existing?.settings ?? {}) as Record<string, unknown>;
+
+  // ── Concurrent-edit conflict detection ───────────────────────────────────
+  // If the client supplied its last-known server version AND the stored row
+  // has a strictly newer __updatedAt, another device has saved since this
+  // client last synced. Reject with 409 so the client can present a merge
+  // prompt ("Reload to get their changes, or Overwrite with yours") rather
+  // than silently clobbering the other device's edits.
+  // When __clientVersion is absent the check is skipped (first PUT ever, or
+  // the user explicitly chose to overwrite by omitting the version field).
+  if (clientVersion !== undefined) {
+    const storedUpdatedAt =
+      typeof stored.__updatedAt === "string" ? stored.__updatedAt : undefined;
+    if (storedUpdatedAt !== undefined && storedUpdatedAt > clientVersion) {
+      logger.warn(
+        { userId, clientVersion, storedUpdatedAt },
+        "PUT /api/settings — 409 conflict: stored version is newer than client version",
+      );
+      res.status(409).json({
+        error: "conflict",
+        details: "Settings were updated by another device since your last sync.",
+        storedVersion: storedUpdatedAt,
+      });
+      return;
+    }
+  }
 
   // ── Freshwater band-limit guard ───────────────────────────────────────────
   // When the client switches waterType from "freshwater" → "saltwater" and

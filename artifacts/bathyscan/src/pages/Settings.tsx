@@ -187,12 +187,14 @@ export function Settings() {
     subscribeSettingsSyncStatus,
     getSettingsSyncStatus,
   );
-  const cloudState: "saving" | "error" | "synced" =
-    syncStatus.lastSyncFailed && !syncStatus.syncing
-      ? "error"
-      : anyDirty || syncStatus.syncing
-        ? "saving"
-        : "synced";
+  const cloudState: "saving" | "conflict" | "error" | "synced" =
+    syncStatus.conflictDetected && !syncStatus.syncing
+      ? "conflict"
+      : syncStatus.lastSyncFailed && !syncStatus.syncing
+        ? "error"
+        : anyDirty || syncStatus.syncing
+          ? "saving"
+          : "synced";
 
   const syncCtx = React.useMemo(
     () => ({ flush: flushSync, isSignedIn: !!isSignedIn }),
@@ -329,6 +331,61 @@ export function Settings() {
                 style={{ color: "#fbbf24", letterSpacing: "0.1em" }}
               >
                 saving…
+              </span>
+            )}
+            {isSignedIn && !savedMsg && cloudState === "conflict" && (
+              <span
+                data-testid="topbar-sync-status"
+                data-sync-state="conflict"
+                style={{
+                  color: "#fb923c",
+                  letterSpacing: "0.1em",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                ⚠ conflict
+                <button
+                  data-testid="topbar-conflict-reload"
+                  title="Another device saved newer settings — reload to apply them"
+                  onClick={() => window.location.reload()}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    color: "#00e5ff",
+                    cursor: "pointer",
+                    fontFamily: FONT,
+                    fontSize: "inherit",
+                    letterSpacing: "0.1em",
+                    textDecoration: "underline",
+                  }}
+                >
+                  reload
+                </button>
+                <button
+                  data-testid="topbar-conflict-overwrite"
+                  title="Keep your current settings and overwrite the other device's changes"
+                  onClick={() => {
+                    void flushSync().catch(() => {
+                      /* stays in error state; the user can retry */
+                    });
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    color: "#00e5ff",
+                    cursor: "pointer",
+                    fontFamily: FONT,
+                    fontSize: "inherit",
+                    letterSpacing: "0.1em",
+                    textDecoration: "underline",
+                  }}
+                >
+                  overwrite
+                </button>
               </span>
             )}
             {isSignedIn && !savedMsg && cloudState === "error" && (

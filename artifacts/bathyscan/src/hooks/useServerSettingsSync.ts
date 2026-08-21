@@ -124,6 +124,40 @@ let _backOffStep = 0;
 let _backOffTimerId: ReturnType<typeof setTimeout> | null = null;
 const BACK_OFF_DELAYS = [30_000, 60_000, 120_000] as const;
 
+// ─── Conflict helpers ─────────────────────────────────────────────────────────
+// Duck-type check for ApiError with status 409. Avoids importing the class
+// directly (it is not re-exported from @workspace/api-client-react's index).
+function _isConflictError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    typeof (err as Record<string, unknown>).status === "number" &&
+    (err as Record<string, unknown>).status === 409
+  );
+}
+
+function _showConflictToast(): void {
+  let toastDismiss: (() => void) | null = null;
+  const handleReload = () => {
+    toastDismiss?.();
+    window.location.reload();
+  };
+  const { dismiss } = toast({
+    title: "Settings updated on another device",
+    description:
+      "Another device saved newer settings. Tap \u2018Reload\u2019 to apply them, " +
+      "or tap \u2018Overwrite\u2019 in the Settings bar to keep your current changes.",
+    variant: "destructive",
+    duration: 12_000,
+    action: createElement(
+      ToastAction as ElementType,
+      { altText: "Reload to merge", onClick: handleReload },
+      "Reload",
+    ),
+  });
+  toastDismiss = dismiss;
+}
+
 // Forward declaration — implemented below after _flush is declared.
 function _retryNow(): void {
   _inBackOff = false;
@@ -221,6 +255,15 @@ let _ackedZoneRev = 0;
 // silently dropped / is waiting on a retry".
 let _lastFlushFailed = false;
 
+// True when the server rejected a PUT with 409 (another device saved a newer
+// version since this client last synced). While set:
+//   - scheduleSync() still queues changes so they are not lost.
+//   - The topbar shows a "Conflict" indicator with "Reload" and "Overwrite" actions.
+//   - The next flush() deliberately omits __clientVersion so the server accepts
+//     the write unconditionally (the user chose "Overwrite").
+// Cleared on any successful PUT or on sign-out.
+let _conflictDetected = false;
+
 // ─── Sync status subscription (Settings header indicator) ────────────────────
 // A minimal external-store contract (subscribe + cached snapshot) so React
 // components can render the live sync state via useSyncExternalStore without
@@ -235,11 +278,18 @@ export type SettingsSyncStatus = {
    * landed since.
    */
   lastSyncFailed: boolean;
+  /**
+   * True when the server rejected a PUT with 409: another device saved a
+   * newer settings version since this client's last sync. The Settings topbar
+   * surfaces "Reload to merge" and "Overwrite" actions while this is set.
+   */
+  conflictDetected: boolean;
 };
 
 let _syncStatusSnapshot: SettingsSyncStatus = {
   syncing: false,
   lastSyncFailed: false,
+  conflictDetected: false,
 };
 const _syncStatusListeners = new Set<() => void>();
 
@@ -247,11 +297,16 @@ function _notifySyncStatus(): void {
   const syncing = _pendingDebounce || _flushInFlight > 0;
   if (
     syncing === _syncStatusSnapshot.syncing &&
-    _lastFlushFailed === _syncStatusSnapshot.lastSyncFailed
+    _lastFlushFailed === _syncStatusSnapshot.lastSyncFailed &&
+    _conflictDetected === _syncStatusSnapshot.conflictDetected
   ) {
     return;
   }
-  _syncStatusSnapshot = { syncing, lastSyncFailed: _lastFlushFailed };
+  _syncStatusSnapshot = {
+    syncing,
+    lastSyncFailed: _lastFlushFailed,
+    conflictDetected: _conflictDetected,
+  };
   for (const listener of Array.from(_syncStatusListeners)) listener();
 }
 
@@ -373,6 +428,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
         _backOffStep = 0;
         _pendingDebounce = false;
         _lastFlushFailed = false;
+        _conflictDetected = false;
         if (_backOffTimerId) {
           clearTimeout(_backOffTimerId);
           _backOffTimerId = null;
@@ -424,6 +480,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
     // The clears above fire the store subscriptions and bump the edit revs;
     // realign the acked revs so the next sign-in's hydration isn't blocked
     // by phantom "dirty" state.
+    _conflictDetected = false;
     queueMicrotask(() => {
       _ackedSettingsRev = _settingsEditRev;
       _ackedPanelRev = _panelEditRev;
@@ -653,6 +710,16 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       const panelRevAtFlush = _panelEditRev;
       const zoneRevAtFlush = _zoneEditRev;
       const data = buildPayload();
+      // Include the client's last-known server version for conflict detection.
+      // The server compares this against the stored __updatedAt and rejects
+      // with 409 if another device saved a newer version since this client
+      // last synced. We deliberately omit the field when _conflictDetected is
+      // true — that means the user chose "Overwrite", so we skip the check and
+      // force the write through regardless of server state.
+      const lastSyncedAt = useSettingsStore.getState().lastSyncedAt;
+      if (lastSyncedAt && !_conflictDetected) {
+        data.__clientVersion = lastSyncedAt;
+      }
       const resp = await saveSettingsAsync({
         data: data as Parameters<typeof saveSettingsAsync>[0]["data"],
       });
@@ -669,7 +736,18 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       _consecutiveFlushFailures = 0;
       _backOffStep = 0;
       _lastFlushFailed = false;
+      _conflictDetected = false;
       } catch (err) {
+        // 409 Conflict: another device saved a newer version since this client's
+        // last sync. Show a prompt so the user can reload (get server changes)
+        // or overwrite (force-save their local state). Do NOT enter back-off —
+        // this is not a transient network failure, it's an intentional rejection.
+        if (_isConflictError(err)) {
+          _conflictDetected = true;
+          _lastFlushFailed = true;
+          _showConflictToast();
+          throw err;
+        }
         // Record the failure so hasUnackedSettingsEdits() reports dirty state
         // even after _flushInFlight is cleared — a fast 4xx (e.g. 429) must
         // not look identical to "already synced" from the outside.
