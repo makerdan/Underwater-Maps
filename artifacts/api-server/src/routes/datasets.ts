@@ -74,8 +74,12 @@ import {
   TerrainDownloadInfoQuerySchema,
 } from "./schemas.js";
 import { substrateFingerprintForDataset } from "../lib/substrateGrid.js";
-import { registerCache } from "../lib/cacheRegistry.js";
 import { logger } from "../lib/logger.js";
+import {
+  uploadState,
+  type UploadSession,
+  type UploadJobState,
+} from "../domains/upload/service.js";
 import {
   recordExtensionDuration as _recordExtensionDuration,
   updateProgressWithEta,
@@ -142,47 +146,7 @@ export function validateTerrainForDb(terrain: unknown, context: string): StoredT
 // ─── Chunked-upload session + job stores ──────────────────────────────────────
 // Sessions: keyed by uploadId, created on the first chunk, used to enforce
 // that only the originating user can send subsequent chunks, finalize, or poll.
-interface UploadSession {
-  userId: string;
-  /** True while chunk 0 is moving to disk and its durable row is being created. */
-  initializing?: boolean;
-  /** Whether this process created the session or restored it from upload_jobs. */
-  source?: "live" | "rehydrated";
-  /** Durable lifecycle state mirrored from upload_jobs. */
-  lifecycleStatus?: "uploading" | "queued" | "processing" | "done" | "error";
-  /** Expected chunk count once chunk 0 establishes it. */
-  totalChunks?: number;
-  /**
-   * True while a finalize is in-flight (set synchronously before any await so
-   * concurrent requests see it immediately and return 409 without racing).
-   */
-  finalizing?: boolean;
-  /** Set when finalize has been called; prevents double-processing the same upload. */
-  activeJobId?: string;
-  /**
-   * Pre-generated UUID created on chunk 0 and persisted to the DB as an
-   * "uploading" row.  Reused as the finalize jobId so the same DB row
-   * transitions uploading → queued → processing → done without spawning a
-   * second row per upload.
-   */
-  sessionJobId?: string;
-  /**
-   * Epoch ms of the last request that touched this session (chunk received,
-   * status polled, or finalize attempted).  Used by
-   * sweepStaleUploadSessions() to evict abandoned sessions after
-   * ABANDONED_UPLOAD_THRESHOLD_MS of inactivity.
-   */
-  lastActivityAt: number;
-  /**
-   * True when this session was created by POST /api/datasets/upload/start (the
-   * server-owned uploadId endpoint).  Chunk-submit and finalize reject sessions
-   * that are not server-issued so that a client-supplied UUID can never hijack
-   * the upload pipeline.
-   */
-  serverIssued?: boolean;
-}
-const uploadSessions = new Map<string, UploadSession>();
-registerCache(() => uploadSessions.clear());
+const uploadSessions = uploadState.sessions;
 
 // ─── Chunked-upload processing concurrency gate ────────────────────────────────
 // Mirrors the GCS path's withProcessSlot so that large-file (chunked) uploads
@@ -207,72 +171,7 @@ async function withChunkProcessSlot<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-interface JobState {
-  status: "queued" | "processing" | "done" | "error";
-  progress: number;
-  error?: string;
-  datasetId?: string;
-  userId: string; // enforced on poll — only the owner can read job status
-  /**
-   * Epoch ms used by sweepStaleUploadSessions() to evict terminal
-   * (done/error) job entries from memory after
-   * ABANDONED_UPLOAD_THRESHOLD_MS. Refreshed on each sweep while the job is
-   * still queued/processing so active jobs are never evicted mid-flight.
-   */
-  lastActivityAt?: number;
-  /** Count of archive entries intentionally skipped (unsupported formats). */
-  skippedCount?: number;
-  /** Unique file extensions of skipped entries, e.g. [".sid.gz", ".pdf"]. */
-  skippedFormats?: string[];
-  /** Raw sounding points extracted from the archive (0 for substrate-only). */
-  soundingCount?: number;
-  /** Substrate annotation points extracted from the archive. */
-  substrateCount?: number;
-  /**
-   * Human-readable warnings from the parser about non-canonical column names
-   * that were auto-resolved via synonym matching (e.g. "long" → "lon").
-   * Only present when at least one non-canonical synonym was matched.
-   */
-  parseWarnings?: string[];
-  /**
-   * Wall-clock timestamps (Date.now() ms) recorded at each progress milestone.
-   * Used to compute a rolling progress-per-ms rate for ETA estimation.
-   * Up to 5 entries are retained — enough to span the full milestone range.
-   */
-  stageTimestamps?: Array<{ progress: number; ts: number }>;
-  /**
-   * Estimated seconds remaining, derived from the milestone rate.
-   * null = not yet calculable (fewer than 2 milestones recorded).
-   * Omitted once the job reaches a terminal state (done / error).
-   */
-  eta?: number | null;
-  /**
-   * Assembled file size in bytes, recorded after streamChunksToFile.
-   * Used as a proxy for remaining parsing/gridding work in the pre-40% window:
-   * larger files typically take longer to parse and grid, so we apply a scale
-   * factor that grows with file size.
-   */
-  fileBytes?: number;
-  /**
-   * ISO-serializable timestamp of the most recent progress milestone.
-   * Persisted to DB so the DB-fallback path (after a server restart) can
-   * include `currentStageStartedAt` in status responses even when the
-   * in-memory job map is empty.
-   */
-  stageStartedAt?: Date | null;
-  /**
-   * Lowercase file extension (e.g. ".laz", ".gz", ".nc") derived from the
-   * uploaded filename.  Used as the key into the per-file-type calibration
-   * table so historical throughput can seed the first ETA estimate.
-   */
-  fileExt?: string;
-  /**
-   * Wall-clock timestamp (Date.now() ms) when processUploadJob entered the
-   * "processing" state.  Combined with the completion timestamp to record the
-   * total job duration in the per-extension calibration table.
-   */
-  jobStartedAt?: number;
-}
+type JobState = UploadJobState;
 
 // ─── Per-file-type throughput calibration — DB persistence layer ──────────────
 // Pure calibration logic (ring buffer, median, ETA blending) lives in
@@ -372,8 +271,7 @@ export function scheduleCalibrationPersistForTest(ext: string): void {
   schedulePersistCalibrationEntry(ext);
 }
 
-const uploadJobs = new Map<string, JobState>();
-registerCache(() => uploadJobs.clear());
+const uploadJobs = uploadState.jobs;
 
 /**
  * Chunk-upload metadata persisted to the DB alongside each job row.
@@ -2765,15 +2663,9 @@ router.post(
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = (req as AuthenticatedRequest).clerkUserId;
-    const uploadId = crypto.randomUUID();
-    // Pre-register the session so chunk-0 can verify it was server-issued.
-    uploadSessions.set(uploadId, {
-      userId,
-      serverIssued: true,
-      source: "live",
-      lifecycleStatus: "uploading",
-      lastActivityAt: Date.now(),
-    });
+    // The upload domain owns the server-issued ownership chain; this route only
+    // serializes its identifier into the HTTP response.
+    const uploadId = uploadState.startSession(userId);
     res.json(validateResponse(StartChunkedUploadResponse, { uploadId }, "POST /api/datasets/upload/start"));
   }),
 );
