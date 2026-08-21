@@ -367,7 +367,7 @@ if (Number.isInteger(heldPid) && heldPid > 0 && heldPid !== process.pid && pidAl
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(sig, () => {
       if (child && child.exitCode === null && child.signalCode === null) {
-        try { child.kill(sig); } catch { /* already gone */ }
+        try { process.kill(-child.pid, sig); } catch { /* process group already gone */ }
       }
       deregisterWaiter();
       releaseLock();
@@ -397,9 +397,16 @@ if (Number.isInteger(heldPid) && heldPid > 0 && heldPid !== process.pid && pidAl
 
   child = spawn(command[0], command.slice(1), {
     stdio: "inherit",
+    detached: true,
     env: childEnv,
   });
+  child.unref();
+  // An unref'd ChildProcess no longer keeps the event loop alive by itself.
+  // Keep this lock holder alive until the explicit exit handler can release
+  // the lock; otherwise the detached process group would be orphaned.
+  const childLifecycleTimer = setInterval(() => {}, 60_000);
   child.on("exit", (code, signal) => {
+    clearInterval(childLifecycleTimer);
     releaseLock();
     if (signal) process.exit(1);
     process.exit(code ?? 1);
