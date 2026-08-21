@@ -95,13 +95,28 @@ test("removes a lock whose recorded holder pid is dead", () => {
 test("keeps an unparsable lock file that is recent (possible in-flight write)", () => {
   const dir = makeDir();
   try {
-    const path = writeLock(dir, "validation-lock-codegen.lock", "not-a-pid\n");
+    const path = writeLock(dir, "validation-lock-codegen.lock", `not-a-pid\n${Date.now()}\n`);
 
     const { removed, kept } = cleanStaleValidationLocks(dir, silent);
 
     assert.deepEqual(removed, []);
     assert.deepEqual(kept, ["validation-lock-codegen.lock"]);
     assert.ok(existsSync(path));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("reclaims a lock missing its acquire-time line even when its pid is alive", () => {
+  const dir = makeDir();
+  try {
+    const path = writeLock(dir, "validation-lock-codegen.lock", `${process.pid}\n`);
+
+    const { removed, kept } = cleanStaleValidationLocks(dir, silent);
+
+    assert.deepEqual(removed, ["validation-lock-codegen.lock"]);
+    assert.deepEqual(kept, []);
+    assert.ok(!existsSync(path));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -290,6 +305,58 @@ test("reclaimStaleLock refuses a generation it did not inspect", () => {
     });
     assert.equal(outcome, "changed");
     assert.ok(existsSync(path), "mismatched generation must never be unlinked");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("atomic reclaim recheck uses the cleaner's injected clock", () => {
+  const dir = makeDir();
+  try {
+    const mtimeMs = Date.now() + UNPARSABLE_STALE_MS + 10_000;
+    const path = writeLock(dir, "validation-lock-global.lock", `not-a-pid\n${Date.now()}\n`);
+    const mtime = new Date(mtimeMs);
+    utimesSync(path, mtime, mtime);
+
+    const result = cleanStaleValidationLocks(dir, {
+      ...silent,
+      now: mtimeMs + UNPARSABLE_STALE_MS + 1,
+      onBeforeReclaim: () => {
+        // Keep the file unchanged; the injected clock makes it stale.
+      },
+    });
+
+    assert.deepEqual(result.removed, ["validation-lock-global.lock"]);
+    assert.ok(!existsSync(path));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("continues processing locks after a per-lock hook error", () => {
+  const dir = makeDir();
+  try {
+    const first = "validation-lock-global.lock";
+    const second = "validation-lock-unit-cpu.lock";
+    writeLock(dir, first, `${deadPid()}\n${Date.now()}\n`);
+    const secondPath = writeLock(dir, second, `${deadPid()}\n${Date.now()}\n`);
+    const diagnostics = [];
+
+    const result = cleanStaleValidationLocks(dir, {
+      ...silent,
+      errorLog: (message) => diagnostics.push(message),
+      onBeforeReclaim: (name) => {
+        if (name === first) throw new Error("test hook failure");
+      },
+    });
+
+    assert.deepEqual(result.removed, [second]);
+    assert.deepEqual(result.kept, []);
+    assert.ok(existsSync(join(dir, first)));
+    assert.ok(!existsSync(secondPath));
+    assert.deepEqual(diagnostics, [
+      `clean-stale-locks: error processing ${first}: test hook failure`,
+    ]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -119,7 +119,8 @@ export function releaseReclaimMutex(lockFile) {
  * The caller has already inspected the lock outside the mutex and believes
  * it is stale; `expectedRaw` is the exact raw contents it inspected and
  * `isStillStale` re-evaluates the staleness condition on a fresh read taken
- * inside the mutex (receives `{ pid, acquiredAt, mtimeMs, raw }`).
+ * inside the mutex (receives `{ pid, acquiredAt, mtimeMs, raw }` and the
+ * caller-supplied `now` value).
  *
  * @returns {"reclaimed"|"changed"|"gone"|"busy"}
  *   reclaimed — the inspected lock generation was stale and has been removed
@@ -127,7 +128,12 @@ export function releaseReclaimMutex(lockFile) {
  *   gone      — the lock vanished on its own (holder released / other reclaimer)
  *   busy      — could not obtain the reclaim mutex in time; NOT removed
  */
-export function reclaimStaleLock(lockFile, { expectedRaw, isStillStale, mutexTimeoutMs } = {}) {
+export function reclaimStaleLock(lockFile, {
+  expectedRaw,
+  isStillStale,
+  mutexTimeoutMs,
+  now = Date.now(),
+} = {}) {
   if (typeof expectedRaw !== "string" || typeof isStillStale !== "function") {
     throw new Error("reclaimStaleLock: expectedRaw (string) and isStillStale (function) are required");
   }
@@ -148,7 +154,7 @@ export function reclaimStaleLock(lockFile, { expectedRaw, isStillStale, mutexTim
     const lines = raw.split("\n");
     const pid = Number(lines[0]?.trim());
     const acquiredAt = Number(lines[1]?.trim());
-    if (!isStillStale({ pid, acquiredAt, mtimeMs, raw })) return "changed";
+    if (!isStillStale({ pid, acquiredAt, mtimeMs, raw }, now)) return "changed";
     try {
       unlinkSync(lockFile);
     } catch {

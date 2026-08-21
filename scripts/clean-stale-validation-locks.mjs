@@ -80,6 +80,16 @@ function isStaleLockInfo({ pid, mtimeMs }, now) {
 }
 
 /**
+ * Lock files have a two-line format: holder PID, then acquire-time epoch.
+ * A missing or non-numeric acquire time is malformed regardless of PID
+ * liveness and must be reclaimed.
+ */
+function isMalformedLock(raw) {
+  const acquireLine = raw.split("\n")[1]?.trim();
+  return !acquireLine || Number.isNaN(Number(acquireLine));
+}
+
+/**
  * Scan `dir` for validation lock files and remove only those whose recorded
  * holder is provably gone. Returns { removed, kept } filename arrays.
  *
@@ -117,47 +127,54 @@ export function cleanStaleValidationLocks(dir, opts = {}) {
   const kept = [];
   for (const name of entries) {
     if (!LOCK_FILE_RE.test(name)) continue;
-    const path = join(dir, name);
-
-    // Screening pass (outside the mutex): cheap read to find candidates.
-    let raw;
-    let holderPid;
-    let mtimeMs;
     try {
-      raw = readFileSync(path, "utf8");
-      holderPid = Number(raw.split("\n")[0]?.trim());
-      mtimeMs = statSync(path).mtimeMs;
-    } catch {
-      continue; // lock released/vanished between readdir and read — done
-    }
+      const path = join(dir, name);
 
-    if (!isStaleLockInfo({ pid: holderPid, mtimeMs }, now)) {
-      kept.push(name);
-      log(
-        Number.isInteger(holderPid) && holderPid > 0
-          ? `[clean-stale-locks] keeping ${name} — holder pid ${holderPid} is alive`
-          : `[clean-stale-locks] keeping ${name} — holder pid unreadable but file is recent`,
-      );
-      continue;
-    }
+      // Screening pass (outside the mutex): cheap read to find candidates.
+      let raw;
+      let holderPid;
+      let mtimeMs;
+      try {
+        raw = readFileSync(path, "utf8");
+        holderPid = Number(raw.split("\n")[0]?.trim());
+        mtimeMs = statSync(path).mtimeMs;
+      } catch {
+        continue; // lock released/vanished between readdir and read — done
+      }
 
-    opts.onBeforeReclaim?.(name);
+      if (!isMalformedLock(raw) && !isStaleLockInfo({ pid: holderPid, mtimeMs }, now)) {
+        kept.push(name);
+        log(
+          Number.isInteger(holderPid) && holderPid > 0
+            ? `[clean-stale-locks] keeping ${name} — holder pid ${holderPid} is alive`
+            : `[clean-stale-locks] keeping ${name} — holder pid unreadable but file is recent`,
+        );
+        continue;
+      }
 
-    // Atomic verify-then-unlink: under the per-lock-file reclaim mutex,
-    // re-verify the pathname still holds the exact generation we screened
-    // (byte-identical contents) and that it is still stale. A replacement
-    // lock acquired by a live wrapper in the meantime is left untouched.
-    const outcome = reclaimStaleLock(path, {
-      expectedRaw: raw,
-      isStillStale: (fresh) => isStaleLockInfo(fresh, Date.now()),
-      mutexTimeoutMs: opts.mutexTimeoutMs,
-    });
-    if (outcome === "reclaimed") {
-      removed.push(name);
-      log(`[clean-stale-locks] removed ${name} — stale (holder pid ${holderPid || "unreadable"} gone)`);
-    } else {
-      kept.push(name);
-      log(`[clean-stale-locks] keeping ${name} — reclaim outcome "${outcome}" (lock changed hands, vanished, or reclaim mutex busy)`);
+      opts.onBeforeReclaim?.(name);
+
+      // Atomic verify-then-unlink: under the per-lock-file reclaim mutex,
+      // re-verify the pathname still holds the exact generation we screened
+      // (byte-identical contents) and that it is still stale. A replacement
+      // lock acquired by a live wrapper in the meantime is left untouched.
+      const outcome = reclaimStaleLock(path, {
+        expectedRaw: raw,
+        now,
+        isStillStale: (fresh, recheckNow) =>
+          isMalformedLock(fresh.raw) || isStaleLockInfo(fresh, recheckNow),
+        mutexTimeoutMs: opts.mutexTimeoutMs,
+      });
+      if (outcome === "reclaimed") {
+        removed.push(name);
+        log(`[clean-stale-locks] removed ${name} — stale (holder pid ${holderPid || "unreadable"} gone)`);
+      } else {
+        kept.push(name);
+        log(`[clean-stale-locks] keeping ${name} — reclaim outcome "${outcome}" (lock changed hands, vanished, or reclaim mutex busy)`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errorLog(`clean-stale-locks: error processing ${name}: ${message}`);
     }
   }
   return { removed, kept };
