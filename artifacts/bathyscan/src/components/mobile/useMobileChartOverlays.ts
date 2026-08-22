@@ -51,6 +51,8 @@ export interface MobileChartOverlays {
   efhEnabled: boolean;
   /** Bbox-clipped, visibility-filtered EFH features ([] when off/empty). */
   efhFeatures: EfhFeature[];
+  /** Persisted native ShoreZone/AOOS habitat features ([] when off/empty). */
+  savedHabitatFeatures: SubstrateFeature[];
   /** True when substrate colour mode is on. */
   substrateEnabled: boolean;
   substrateFeatures: SubstrateFeature[];
@@ -101,7 +103,7 @@ export function useMobileChartOverlays(): MobileChartOverlays {
   // ── EFH ──────────────────────────────────────────────────────────────────
   // Embedded polygons (user-saved EFH datasets) are preferred; preset
   // datasets with the hasEfh flag fetch from /efh — same rule as desktop.
-  const embeddedEfhPolygons = overviewGrid?.habitatPolygons ?? null;
+  const embeddedHabitatPolygons = overviewGrid?.habitatPolygons ?? null;
   const { data: datasets } = useGetDatasets(
     { waterType },
     { query: { queryKey: getGetDatasetsQueryKey({ waterType }) } },
@@ -118,27 +120,45 @@ export function useMobileChartOverlays(): MobileChartOverlays {
       query: {
         // MOBILE-ONLY gating difference: also require the toggle, so phones
         // don't pay for EFH payloads the user never switched on.
-        enabled: efhOverlayEnabled && hasEfh && !embeddedEfhPolygons,
+        enabled: efhOverlayEnabled && hasEfh && !embeddedHabitatPolygons,
         staleTime: 60_000,
         queryKey: getGetEfhQueryKey({ datasetId: datasetId ?? "" }),
       },
     },
   );
-  const efhFeatures = useMemo<EfhFeature[]>(() => {
-    if (!efhOverlayEnabled || !overviewGrid) return [];
-    const raw = (embeddedEfhPolygons?.features ?? efhData?.features ?? []) as EfhFeature[];
-    if (raw.length === 0) return [];
-    return getVisibleEfhFeatures(
-      raw,
-      {
-        minLon: overviewGrid.minLon,
-        maxLon: overviewGrid.maxLon,
-        minLat: overviewGrid.minLat,
-        maxLat: overviewGrid.maxLat,
+  const { efhFeatures, savedHabitatFeatures } = useMemo(() => {
+    if (!efhOverlayEnabled || !overviewGrid) {
+      return { efhFeatures: [], savedHabitatFeatures: [] };
+    }
+    const raw = (embeddedHabitatPolygons?.features ?? efhData?.features ?? []) as Array<
+      EfhFeature | SubstrateFeature
+    >;
+    const native = raw.filter(
+      (feature) => {
+        const properties = feature.properties as unknown as Record<string, unknown>;
+        return !properties.species && !!properties.substrate;
       },
-      hiddenEfhSpecies,
-    );
-  }, [efhOverlayEnabled, overviewGrid, embeddedEfhPolygons, efhData, hiddenEfhSpecies]);
+    ) as SubstrateFeature[];
+    const efh = raw.filter(
+      (feature) => {
+        const properties = feature.properties as unknown as Record<string, unknown>;
+        return !!properties.species && !!properties.commonName;
+      },
+    ) as EfhFeature[];
+    return {
+      efhFeatures: getVisibleEfhFeatures(
+        efh,
+        {
+          minLon: overviewGrid.minLon,
+          maxLon: overviewGrid.maxLon,
+          minLat: overviewGrid.minLat,
+          maxLat: overviewGrid.maxLat,
+        },
+        hiddenEfhSpecies,
+      ),
+      savedHabitatFeatures: native,
+    };
+  }, [efhOverlayEnabled, overviewGrid, embeddedHabitatPolygons, efhData, hiddenEfhSpecies]);
 
   // ── Substrate ────────────────────────────────────────────────────────────
   const { data: substrateCollection } = useGetSubstrate(datasetId ?? "", {
@@ -203,6 +223,7 @@ export function useMobileChartOverlays(): MobileChartOverlays {
     habitatSpecies: activeSpecies,
     efhEnabled: efhOverlayEnabled,
     efhFeatures,
+    savedHabitatFeatures,
     substrateEnabled: substrateColorMode,
     substrateFeatures,
     hiddenSubstrateClasses,

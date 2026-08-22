@@ -471,6 +471,9 @@ export const MobileChartView: React.FC<MobileChartViewProps> = ({ onOpenPicker }
         if (ov.efhEnabled && ov.efhFeatures.length > 0) {
           renderEfhOverlay(ctx, ov.efhFeatures, grid, t);
         }
+        if (ov.efhEnabled && ov.savedHabitatFeatures.length > 0) {
+          renderSubstrateOverlay(ctx, ov.savedHabitatFeatures, grid, t);
+        }
         if (ov.substrateEnabled && ov.substrateFeatures.length > 0) {
           renderSubstrateOverlay(ctx, ov.substrateFeatures, grid, t, null, ov.hiddenSubstrateClasses);
         }

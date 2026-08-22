@@ -77,6 +77,13 @@ const apiFixtures = vi.hoisted(() => ({
       coordinates: [[[-122.6, 47.4], [-122.4, 47.4], [-122.4, 47.6], [-122.6, 47.6], [-122.6, 47.4]]],
     },
   },
+  savedHabitatFeature: {
+    properties: { substrate: "eelgrass", color: "#22c55e" },
+    geometry: {
+      type: "Polygon",
+      coordinates: [[[-122.8, 47.2], [-122.2, 47.2], [-122.2, 47.8], [-122.8, 47.8], [-122.8, 47.2]]],
+    },
+  },
   intertidalFeature: {
     properties: { unitId: "u1", tidepoolScore: 55, beachcombingScore: 5 },
     geometry: {
@@ -277,6 +284,36 @@ describe("mobile Analyze overlays render on the 2D chart (no 3D scene mounted)",
     expect(screen.getByTestId("mobile-legend-efh")).toBeTruthy();
     expect(screen.getByTestId("mobile-legend-substrate")).toBeTruthy();
     expect(screen.getByTestId("mobile-legend-intertidal")).toBeTruthy();
+  });
+
+  it("renders saved native habitat with its color without treating it as EFH species data", async () => {
+    useTerrainStore.setState({
+      overviewGrid: {
+        ...makeGrid(),
+        habitatPolygons: {
+          type: "FeatureCollection",
+          features: [{
+            type: "Feature",
+            ...apiFixtures.savedHabitatFeature,
+          }],
+        },
+      } as unknown as TerrainData,
+    });
+    useUiStore.setState({ efhOverlayEnabled: true });
+
+    render(<MobileChartView onOpenPicker={() => {}} />);
+
+    await waitFor(() => expect(renderSubstrateOverlay).toHaveBeenCalled());
+
+    const substrateArgs = (renderSubstrateOverlay as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]!;
+    expect(substrateArgs[1]).toEqual([{
+      type: "Feature",
+      ...apiFixtures.savedHabitatFeature,
+    }]);
+    expect(renderEfhOverlay).not.toHaveBeenCalled();
+    expect(screen.getByTestId("mobile-legend-saved-habitat")).toBeTruthy();
+    expect(screen.queryByTestId("mobile-legend-efh")).toBeNull();
   });
 });
 

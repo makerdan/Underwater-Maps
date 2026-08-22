@@ -75,6 +75,7 @@ export const MobileAnalyzeLegend: React.FC<{ overlays: MobileChartOverlays }> = 
     habitatSpecies,
     efhEnabled,
     efhFeatures,
+    savedHabitatFeatures,
     substrateEnabled,
     substrateFeatures,
     hiddenSubstrateClasses,
@@ -84,11 +85,12 @@ export const MobileAnalyzeLegend: React.FC<{ overlays: MobileChartOverlays }> = 
 
   const habitatActive = habitatScores !== null && habitatSpecies !== null;
   const efhActive = efhEnabled && efhFeatures.length > 0;
+  const savedHabitatActive = efhEnabled && savedHabitatFeatures.length > 0;
   const substrateActive = substrateEnabled && substrateFeatures.length > 0;
   // Band shows when datums resolve; pins when the hotspots toggle is on.
   const intertidalActive = intertidalEnabled || mhwFt !== null;
 
-  if (!habitatActive && !efhActive && !substrateActive && !intertidalActive) return null;
+  if (!habitatActive && !efhActive && !savedHabitatActive && !substrateActive && !intertidalActive) return null;
 
   const efhPairs = uniqueColors(
     efhFeatures.map((f) => [
@@ -98,6 +100,15 @@ export const MobileAnalyzeLegend: React.FC<{ overlays: MobileChartOverlays }> = 
   );
   const efhSpeciesCount = new Set(
     efhFeatures.map((f) => f.properties.commonName ?? f.properties.species ?? ""),
+  ).size;
+  const savedHabitatPairs = uniqueColors(
+    savedHabitatFeatures.map((f) => [
+      f.properties.substrate,
+      f.properties.color ?? "#e2d5a0",
+    ]),
+  );
+  const savedHabitatClassCount = new Set(
+    savedHabitatFeatures.map((f) => f.properties.substrate),
   ).size;
 
   const substratePairs = uniqueColors(
@@ -159,6 +170,14 @@ export const MobileAnalyzeLegend: React.FC<{ overlays: MobileChartOverlays }> = 
           label="EFH"
           swatches={efhPairs}
           extra={Math.max(0, efhSpeciesCount - efhPairs.length)}
+        />
+      )}
+      {savedHabitatActive && (
+        <Pill
+          testid="mobile-legend-saved-habitat"
+          label="HABITAT"
+          swatches={savedHabitatPairs}
+          extra={Math.max(0, savedHabitatClassCount - savedHabitatPairs.length)}
         />
       )}
       {intertidalActive && (

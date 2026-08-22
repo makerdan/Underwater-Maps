@@ -376,7 +376,15 @@ export const OverlaysToolsPanel: React.FC = () => {
     const seen = new Map<string, string>();
     for (const f of activeEfhFeatures) {
       const { commonName, color } = f.properties;
-      if (commonName && color && !seen.has(commonName)) seen.set(commonName, color);
+      const properties = f.properties as unknown as { species?: string; substrate?: string };
+      if (
+        (properties.species || !properties.substrate) &&
+        commonName &&
+        color &&
+        !seen.has(commonName)
+      ) {
+        seen.set(commonName, color);
+      }
     }
     return Array.from(seen.entries());
   }, [activeEfhFeatures]);
