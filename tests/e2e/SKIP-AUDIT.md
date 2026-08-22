@@ -1,11 +1,16 @@
 # E2E conditional-skip audit
 
-Last audited: 2026-08-21. The static call-site baseline is **236**:
-`node scripts/check-skip-count.mjs` finds 0 static unit skips and 236
+Last audited: 2026-08-22. The static call-site baseline is **238**:
+`node scripts/check-skip-count.mjs` finds 0 static unit skips and 238
 conditional `test.skip(` sites under `tests/e2e/`. Runtime GitHub-runner skips
 are measured separately in `runtime-skip-baseline.json`; they must never be
 used to raise this source-level baseline.
 
+Baseline updated 2026-08-22 to 238: `coordinate-search.spec.ts` added two
+explicit FIND DATA visibility gates ("user is not signed in or app did not
+load"), matching category 1 (auth bypass inactive / landing page shown).
+These skips protect the coordinate-search flow from producing misleading
+failures when the signed-in shell is unavailable.
 Baseline updated 2026-08-21 to 236: `pwa-offline.spec.ts` added the
 "Service-worker readiness failure and retry" describe block with 2 new
 environment-gated skips (error state not reached when the SW stub is not
