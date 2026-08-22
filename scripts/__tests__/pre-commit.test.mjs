@@ -201,7 +201,7 @@ test("an incomplete regression guard rejects the commit after the failure gate p
   );
   assert.match(result.stdout, /check-regression-guard — single-file mode/);
   assert.match(result.stdout, /invalid-regression-guard\.md/);
-  assert.match(result.stdout, /Why N\/A.*placeholder text/);
+  assert.match(result.stdout, /Why N\/A.*at least 5 words/);
 });
 
 test("the OpenAPI staged-file path regenerates and stages both documentation files", (t) => {
