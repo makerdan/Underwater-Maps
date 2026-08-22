@@ -385,6 +385,34 @@ body.bs-daylight .bs-settings-page [data-nav-active="true"] {
     height: auto !important;
     padding: 8px 12px !important;
     gap: 6px;
+    align-content: flex-start;
+  }
+
+  .overview-map-header > span:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .overview-map-header > span:nth-child(2) {
+    order: 3;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .overview-map-header-controls {
+    flex: 1 1 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px !important;
+  }
+
+  .overview-map-header-controls > * {
+    flex: 0 0 auto;
+  }
+
+  .overview-map-header-controls > *:last-child {
+    margin-left: auto;
   }
 
   /* Query panel: full width keyboard-friendly */

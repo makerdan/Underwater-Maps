@@ -230,6 +230,7 @@ export const OverviewMap: React.FC = () => {
 
   // --- Canvas ref ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overviewRootRef = useRef<HTMLDivElement>(null);
 
   // --- Stable refs (no React state — updated imperatively in event handlers / rAF) ---
   const bitmapRef = useRef<HTMLCanvasElement | null>(null);
@@ -383,6 +384,43 @@ export const OverviewMap: React.FC = () => {
   // movement, no data updates, no mouse interaction, no GPS/trail pulse).
   const dirtyRef = useRef(true);
 
+  // Keep the backing store in the same coordinate system as the measured
+  // overlay.  This is deliberately imperative: resizing must not wait for a
+  // React render or leave the SVG/hit-test layer using the old dimensions.
+  useEffect(() => {
+    const root = overviewRootRef.current;
+    const canvas = canvasRef.current;
+    if (!root || !canvas) return;
+
+    const resize = () => {
+      const width = Math.max(1, Math.round(root.clientWidth || window.innerWidth));
+      const height = Math.max(1, Math.round(root.clientHeight || window.innerHeight));
+      if (canvas.width === width && canvas.height === height) return;
+
+      const dx = (width - canvas.width) / 2;
+      const dy = (height - canvas.height) / 2;
+      canvas.width = width;
+      canvas.height = height;
+      if (transformRef.current) {
+        transformRef.current = { ...transformRef.current, offsetX: transformRef.current.offsetX + dx, offsetY: transformRef.current.offsetY + dy };
+        setSvgTransform({ ...transformRef.current });
+      }
+      fitAnimRef.current = null;
+      dirtyRef.current = true;
+    };
+
+    resize();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
+    observer?.observe(root);
+    window.addEventListener("resize", resize);
+    window.addEventListener("orientationchange", resize);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("orientationchange", resize);
+    };
+  }, []);
+
   // Fit-to-data animation state. Set by handleFitToData; consumed and cleared
   // by the rAF loop once the tween completes.
   const fitAnimRef = useRef<{
@@ -396,6 +434,9 @@ export const OverviewMap: React.FC = () => {
   const isDraggingRef = useRef(false);
   const hasDraggedRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ distance: number; scale: number; centerX: number; centerY: number } | null>(null);
+  const suppressMouseUntilRef = useRef(0);
 
   // Mouse position (canvas-relative, −1 means outside)
   const mousePosRef = useRef({ x: -1, y: -1 });
@@ -2843,6 +2884,7 @@ export const OverviewMap: React.FC = () => {
     if (!canvas) return;
 
     const handleMouseDown = (e: MouseEvent) => {
+      if (suppressMouseUntilRef.current > performance.now()) return;
       // Puzzle mode — intercept left-button for tile hit-test and drag setup.
       if (puzzleModeRef.current && e.button === 0) {
         const rect = canvas.getBoundingClientRect();
@@ -3884,12 +3926,98 @@ export const OverviewMap: React.FC = () => {
     const handlePointerCancel = () => {
       dragRectRef.current = null;
       isDraggingRef.current = false;
+      activePointersRef.current.clear();
+      pinchRef.current = null;
+      puzzleDragSubModeRef.current = null;
+      puzzleHandleEdgeRef.current = null;
+      puzzleRotateActuallyDraggedRef.current = false;
+      hasDraggedRef.current = false;
+      canvas.style.cursor = "crosshair";
       dirtyRef.current = true;
+    };
+
+    const handlePointerDown = (e: PointerEvent) => {
+      e.preventDefault();
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      canvas.setPointerCapture?.(e.pointerId);
+      if (activePointersRef.current.size === 2) {
+        const points = [...activePointersRef.current.values()];
+        const first = points[0]!;
+        const second = points[1]!;
+        const centerX = (first.x + second.x) / 2 - canvas.getBoundingClientRect().left;
+        const centerY = (first.y + second.y) / 2 - canvas.getBoundingClientRect().top;
+        pinchRef.current = {
+          distance: Math.hypot(second.x - first.x, second.y - first.y),
+          scale: transformRef.current?.scale ?? 1,
+          centerX,
+          centerY,
+        };
+        dragRectRef.current = null;
+        isDraggingRef.current = false;
+        puzzleDragSubModeRef.current = null;
+        dirtyRef.current = true;
+        return;
+      }
+      handleMouseDown(e as unknown as MouseEvent);
+      // Browsers may synthesize a mousedown after pointerdown.  Ignore only
+      // that compatibility event; pointer-driven input above must still enter
+      // the normal puzzle/select/pan setup path.
+      suppressMouseUntilRef.current = performance.now() + 500;
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const tracked = activePointersRef.current.get(e.pointerId);
+      if (!tracked) return;
+      tracked.x = e.clientX;
+      tracked.y = e.clientY;
+      const points = [...activePointersRef.current.values()];
+      if (points.length >= 2 && pinchRef.current && transformRef.current && overviewGrid) {
+        e.preventDefault();
+        const first = points[0]!;
+        const second = points[1]!;
+        const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+        const ratio = distance / Math.max(1, pinchRef.current.distance);
+        const nextScale = Math.max(0.5, Math.min(20, pinchRef.current.scale * ratio));
+        const actualRatio = nextScale / transformRef.current.scale;
+        const { centerX, centerY } = pinchRef.current;
+        fitAnimRef.current = null;
+        transformRef.current = clampTransform(
+          {
+            ...transformRef.current,
+            scale: nextScale,
+            offsetX: centerX + (transformRef.current.offsetX - centerX) * actualRatio,
+            offsetY: centerY + (transformRef.current.offsetY - centerY) * actualRatio,
+          },
+          worldGridRef.current ?? overviewGrid,
+          canvas.width,
+          canvas.height,
+        );
+        dirtyRef.current = true;
+        return;
+      }
+      handleMouseMove(e as unknown as MouseEvent);
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      activePointersRef.current.delete(e.pointerId);
+      canvas.releasePointerCapture?.(e.pointerId);
+      if (pinchRef.current) {
+        if (activePointersRef.current.size < 2) pinchRef.current = null;
+        if (activePointersRef.current.size === 0) {
+          handleMouseUp();
+          hasDraggedRef.current = false;
+        }
+        return;
+      }
+      handleMouseUp();
     };
 
     canvas.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
+    canvas.addEventListener("pointerdown", handlePointerDown, { passive: false });
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("pointercancel", handlePointerCancel);
     canvas.addEventListener("mouseleave", handleMouseLeave);
     canvas.addEventListener("wheel", handleWheel, { passive: false });
@@ -3900,6 +4028,9 @@ export const OverviewMap: React.FC = () => {
       canvas.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      canvas.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerCancel);
       canvas.removeEventListener("mouseleave", handleMouseLeave);
       canvas.removeEventListener("wheel", handleWheel);
@@ -3913,6 +4044,7 @@ export const OverviewMap: React.FC = () => {
   // ---------------------------------------------------------------------------
   return (
     <div
+      ref={overviewRootRef}
       style={{
         position: "absolute",
         inset: 0,
@@ -3928,7 +4060,7 @@ export const OverviewMap: React.FC = () => {
         data-testid="overview-map-canvas"
         width={window.innerWidth}
         height={window.innerHeight}
-        style={{ width: "100%", height: "100%", cursor: "crosshair", display: "block" }}
+        style={{ width: "100%", height: "100%", cursor: "crosshair", display: "block", touchAction: "none" }}
       />
 
       {/* Retry button — appears after the 15 s load-failure timeout so the
@@ -4565,7 +4697,7 @@ export const OverviewMap: React.FC = () => {
         </span>
 
         {/* GPS controls */}
-        <div style={{ display: "flex", gap: 6, alignItems: "center", pointerEvents: "auto" }}>
+        <div className="overview-map-header-controls" style={{ display: "flex", gap: 6, alignItems: "center", pointerEvents: "auto" }}>
           {gpsError && (
             <span style={{ color: "#ef4444", fontSize: "calc(12px * var(--bs-font-scale, 1))", fontFamily: "'JetBrains Mono', monospace", maxWidth: 180 }}>
               ⚠ {gpsError}
@@ -5774,6 +5906,7 @@ export const OverviewMap: React.FC = () => {
 
           <ViewscreenTooltip label="Close the overview map (O)" side="bottom">
           <button
+            data-testid="overview-close"
             onClick={() => setOverviewOpen(false)}
             style={{
               pointerEvents: "auto",
