@@ -17,13 +17,12 @@ import { test, expect, type Page } from "./fixtures";
  * `__bathyTest.getPuzzleGroups`. This mirrors the pattern used in
  * `overview-puzzle-rotation.spec.ts`.
  *
- * "Phantom" tile IDs (strings that are not visible datasets) are used alongside
- * the real seeded tile to reach the ≥2 threshold for the GROUP button without
- * needing two real loaded datasets.
+ * The test bridge exposes two deterministic visible dataset IDs so group state
+ * is exercised against the same visibility contract as production.
  */
 
 const OVERLAY_HEADER = ".overview-map-header";
-const PHANTOM_ID = "phantom-tile-for-group-test";
+const SECONDARY_ID = "e2e-puzzle-secondary";
 
 async function ensureSignedInOrSkip(page: Page): Promise<boolean> {
   const canvas = page.locator("canvas").first();
@@ -111,6 +110,22 @@ async function selectPrimaryTileViaBridge(page: Page): Promise<string | null> {
   });
 }
 
+async function seedPuzzleVisibleDatasets(page: Page): Promise<void> {
+  await page.evaluate((secondaryId) => {
+    const api = (window as unknown as {
+      __bathyTest?: {
+        setVisibleDatasets?: (
+          items: Array<{ datasetId: string; name: string; source: "preset" | "user" }>,
+        ) => void;
+      };
+    }).__bathyTest;
+    api?.setVisibleDatasets?.([
+      { datasetId: "e2e-test", name: "E2E Test Dataset", source: "preset" },
+      { datasetId: secondaryId, name: "E2E Puzzle Secondary", source: "preset" },
+    ]);
+  }, SECONDARY_ID);
+}
+
 /**
  * Read the current puzzle groups snapshot from the bridge.
  */
@@ -158,6 +173,7 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
         { timeout: 5_000 },
       )
       .catch(() => {});
+    await seedPuzzleVisibleDatasets(page);
   });
 
   // ---------------------------------------------------------------------------
@@ -188,8 +204,7 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
       return;
     }
 
-    // Expand selection to include the real tile plus a phantom ID (simulates
-    // shift-clicking a second tile without needing two real loaded datasets).
+    // Expand selection to include both deterministic visible test tiles.
     const selected = await page.evaluate(
       ([realId, phantomId]) => {
         const api = (window as unknown as {
@@ -202,7 +217,7 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
         if (!ok) return null;
         return api?.getPuzzleSelectedId?.() ?? null;
       },
-      [primaryId, PHANTOM_ID],
+      [primaryId, SECONDARY_ID],
     );
 
     // If the bridge lost its registration between calls, skip rather than fail.
@@ -254,7 +269,7 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
         }).__bathyTest;
         api?.setPuzzleSelection?.([realId, phantomId]);
       },
-      [primaryId, PHANTOM_ID],
+      [primaryId, SECONDARY_ID],
     );
 
     await expect(page.getByTestId("overview-puzzle-group")).toBeVisible({ timeout: 3_000 });
@@ -270,7 +285,7 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
           const entries = Object.values(groups);
           if (entries.length !== 1) return false;
           const members = entries[0]!;
-          return members.includes(primaryId) && members.includes(PHANTOM_ID);
+          return members.includes(primaryId) && members.includes(SECONDARY_ID);
         },
         { timeout: 3_000 },
       )
@@ -301,13 +316,13 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
 
     // Create a group via the bridge directly (bypasses the GROUP button UI).
     const groupId = await page.evaluate(
-      ([realPhantom, secondPhantom]) => {
+      ([firstId, secondId]) => {
         const api = (window as unknown as {
           __bathyTest?: { createPuzzleGroup?: (ids: string[]) => string };
         }).__bathyTest;
-        return api?.createPuzzleGroup?.([realPhantom, secondPhantom]) ?? "";
+        return api?.createPuzzleGroup?.([firstId, secondId]) ?? "";
       },
-      [PHANTOM_ID, "phantom-tile-b"],
+      ["e2e-test", SECONDARY_ID],
     );
 
     // If the bridge lost its registration, skip rather than produce a confusing
@@ -324,8 +339,8 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
     const groups = await getPuzzleGroups(page);
     expect(Object.keys(groups)).toHaveLength(1);
     const members = groups[groupId] ?? [];
-    expect(members).toContain(PHANTOM_ID);
-    expect(members).toContain("phantom-tile-b");
+    expect(members).toContain("e2e-test");
+    expect(members).toContain(SECONDARY_ID);
   });
 
   // ---------------------------------------------------------------------------
@@ -339,9 +354,9 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
     // Pre-seed sessionStorage BEFORE the page navigates so the OverviewMap
     // hydration effect reads the stored data on mount.
     const PRESET_TRANSFORMS: [string, { tx: number; ty: number; angleDeg: number }][] = [
-      ["e2e-synthetic", { tx: 42, ty: -17, angleDeg: 90 }],
+      ["e2e-test", { tx: 42, ty: -17, angleDeg: 90 }],
     ];
-    const PRESET_GROUPS: [string, string[]][] = [["group-1", ["e2e-synthetic", PHANTOM_ID]]];
+    const PRESET_GROUPS: [string, string[]][] = [["group-1", ["e2e-test", SECONDARY_ID]]];
 
     // Reload with pre-seeded storage (addInitScript runs before page scripts).
     await page.addInitScript(
@@ -366,6 +381,7 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
         timeout: 5_000,
       })
       .catch(() => {});
+    await seedPuzzleVisibleDatasets(page);
 
     await openOverview(page);
     const entered = await enterPuzzleMode(page);
@@ -381,11 +397,11 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
       return;
     }
 
-    // Transform for "e2e-synthetic" must be hydrated from sessionStorage.
+    // Transform for the primary visible test tile must be hydrated from sessionStorage.
     await expect
       .poll(
         async () => {
-          const xf = await getPuzzleTransform(page, "e2e-synthetic");
+          const xf = await getPuzzleTransform(page, "e2e-test");
           return xf !== null && xf.tx === 42 && xf.ty === -17 && xf.angleDeg === 90;
         },
         { timeout: 3_000 },
@@ -400,8 +416,8 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
           const members = groups["group-1"];
           return (
             Array.isArray(members) &&
-            members.includes("e2e-synthetic") &&
-            members.includes(PHANTOM_ID)
+            members.includes("e2e-test") &&
+            members.includes(SECONDARY_ID)
           );
         },
         { timeout: 3_000 },
@@ -438,7 +454,7 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
         }).__bathyTest;
         api?.createPuzzleGroup?.([id, phantom]);
       },
-      [primaryId, PHANTOM_ID],
+      [primaryId, SECONDARY_ID],
     );
 
     // Confirm the group exists before resetting.
@@ -456,11 +472,16 @@ test.describe("BathyScan — Overview Puzzle multi-select and groups", () => {
       .poll(async () => Object.keys(await getPuzzleGroups(page)).length === 0, { timeout: 3_000 })
       .toBe(true);
 
-    // sessionStorage keys must be absent after reset.
+    // The reset must clear per-tile transforms as well as groups.
+    await expect.poll(() => getPuzzleTransform(page, primaryId), { timeout: 3_000 }).toBe(null);
+
+    // Both storage layers must be absent after reset.
     const storageCleared = await page.evaluate(() => {
       return (
         sessionStorage.getItem("bathyscan:puzzleTransforms") === null &&
-        sessionStorage.getItem("bathyscan:puzzleGroups") === null
+        sessionStorage.getItem("bathyscan:puzzleGroups") === null &&
+        localStorage.getItem("bathyscan:puzzleTransforms") === null &&
+        localStorage.getItem("bathyscan:puzzleGroups") === null
       );
     });
     expect(storageCleared).toBe(true);

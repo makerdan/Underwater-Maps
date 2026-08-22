@@ -787,7 +787,17 @@ export const OverviewMap: React.FC = () => {
   }, []);
 
   // Prune group memberships when datasets are unloaded from the viewer.
+  // During the initial app load, visibleDatasets can briefly be empty while
+  // persisted puzzle state has already hydrated. Do not mistake that loading
+  // window for an unload; once visibility has been observed, empty is a real
+  // state and groups are pruned normally.
+  const hasObservedVisibleDatasetsRef = useRef(false);
   useEffect(() => {
+    if (visibleDatasets.length > 0) {
+      hasObservedVisibleDatasetsRef.current = true;
+    } else if (!hasObservedVisibleDatasetsRef.current) {
+      return;
+    }
     const aliveIds = new Set(visibleDatasets.map((v) => v.datasetId));
     setPuzzleGroups((prev) => {
       const next = new Map<string, Set<string>>();
