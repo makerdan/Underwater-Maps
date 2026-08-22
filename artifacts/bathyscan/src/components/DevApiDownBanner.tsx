@@ -82,7 +82,7 @@ export function DevApiDownBanner() {
       role="alert"
       aria-live="assertive"
       data-testid="dev-api-down-banner"
-      className="fixed inset-x-0 top-7 z-[9998] flex flex-wrap items-center justify-center gap-3 min-h-9 py-1 px-3 bg-red-950/95 backdrop-blur-sm border-b border-red-800/60 text-red-200 text-[18px] font-mono select-none"
+      className="fixed inset-x-0 top-7 z-[9998] flex flex-wrap items-center justify-center gap-3 min-h-9 py-1 px-3 bg-red-950/95 backdrop-blur-sm border-b border-red-800/60 text-red-200 text-[18px] font-mono select-text"
     >
       <span className="font-semibold text-red-300">DEV</span>
       <span>{bannerMessage}</span>

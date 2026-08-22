@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useOfflineStore } from "@/lib/offlineStore";
+import { CopyButton } from "@/components/ui/CopyButton";
 
 const OFFLINE_IDENTITY_KEY = "bathyscan-offline-identity-v1";
 
@@ -60,7 +61,7 @@ export function OfflineReadOnlyBanner() {
       role="alert"
       aria-live="polite"
       data-testid="offline-read-only-banner"
-      className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-2 h-9 bg-amber-950/95 backdrop-blur-sm border-b border-amber-700/50 text-amber-300 text-[18px] font-medium select-none px-4"
+      className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-2 h-9 bg-amber-950/95 backdrop-blur-sm border-b border-amber-700/50 text-amber-300 text-[18px] font-medium select-text px-4"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       <svg
@@ -88,6 +89,10 @@ export function OfflineReadOnlyBanner() {
         {name ? ` (${name})` : ""}.{" "}
         Changes will sync when you reconnect.
       </span>
+      <CopyButton
+        text={`You're offline — viewing your saved data${name ? ` (${name})` : ""}. Changes will sync when you reconnect.`}
+        className="text-amber-300/70 hover:text-amber-200"
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useOfflineStore } from "@/lib/offlineStore";
 import { authorizedFetch } from "@/lib/authorizedFetch";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 const apiBase = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -144,7 +145,7 @@ export const HelpQA: React.FC = () => {
         </div>
       )}
 
-      {error && <div className="help-qa-error">{error}</div>}
+      {error && <ErrorMessage message={error} className="help-qa-error" />}
 
       <form
         className="help-qa-form"

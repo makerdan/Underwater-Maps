@@ -28,6 +28,7 @@ import {
   type CachedDataset,
 } from "./constants";
 import { EnvOfflineSection } from "./EnvOfflineSection";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 const errorTextStyle: React.CSSProperties = {
   fontSize: "calc(10px * var(--bs-font-scale, 1))",
@@ -296,7 +297,7 @@ export function DataStorageSection() {
         <div style={{ padding: "12px 16px" }}>
           {cacheLoadError ? (
             <div data-testid="cache-load-error" style={errorTextStyle}>
-              Failed to load cached data.
+              <ErrorMessage message="Failed to load cached data." />
               <button data-testid="retry-cache-load" onClick={() => void refresh()} style={retryBtnStyle}>
                 Retry
               </button>
@@ -338,7 +339,7 @@ export function DataStorageSection() {
             ))
           )}
           {entryError && (
-            <div data-testid="clear-entry-error" style={{ ...errorTextStyle, marginTop: 8 }}>{entryError}</div>
+            <ErrorMessage data-testid="clear-entry-error" message={entryError} style={{ ...errorTextStyle, marginTop: 8 }} />
           )}
           {cached.length > 0 && !cacheLoadError && (
             <>
@@ -363,7 +364,7 @@ export function DataStorageSection() {
             </>
           )}
           {clearAllError && (
-            <div data-testid="clear-all-error" style={{ ...errorTextStyle, marginTop: 8 }}>{clearAllError}</div>
+            <ErrorMessage data-testid="clear-all-error" message={clearAllError} style={{ ...errorTextStyle, marginTop: 8 }} />
           )}
           {clearAllNote && (
             <div data-testid="clear-all-note" style={{ marginTop: 8, fontSize: "calc(10px * var(--bs-font-scale, 1))", color: "#fbbf24" }}>
@@ -400,7 +401,7 @@ export function DataStorageSection() {
         <div style={{ padding: "12px 16px" }}>
           {upscaleLoadError ? (
             <div data-testid="upscale-load-error" style={{ ...errorTextStyle, marginBottom: 10 }}>
-              Failed to load cache info.
+              <ErrorMessage message="Failed to load cache info." />
               <button data-testid="retry-upscale-load" onClick={() => void refreshUpscaleInfo()} style={retryBtnStyle}>
                 Retry
               </button>
@@ -419,7 +420,7 @@ export function DataStorageSection() {
             </div>
           )}
           {upscaleClearError && (
-            <div data-testid="upscale-clear-error" style={{ ...errorTextStyle, marginBottom: 8 }}>{upscaleClearError}</div>
+            <ErrorMessage data-testid="upscale-clear-error" message={upscaleClearError} style={{ ...errorTextStyle, marginBottom: 8 }} />
           )}
           <button
             data-testid="clear-upscale-cache-btn"
@@ -446,7 +447,7 @@ export function DataStorageSection() {
           </div>
           {packsLoadError ? (
             <div data-testid="packs-load-error" style={errorTextStyle}>
-              Failed to load offline packs.
+              <ErrorMessage message="Failed to load offline packs." />
               <button data-testid="retry-packs-load" onClick={() => void refreshPacks()} style={retryBtnStyle}>
                 Retry
               </button>
@@ -505,7 +506,7 @@ export function DataStorageSection() {
             })
           )}
           {packDeleteError && (
-            <div data-testid="pack-delete-error" style={{ ...errorTextStyle, marginTop: 8 }}>{packDeleteError}</div>
+            <ErrorMessage data-testid="pack-delete-error" message={packDeleteError} style={{ ...errorTextStyle, marginTop: 8 }} />
           )}
         </div>
       </div>
@@ -522,7 +523,7 @@ export function DataStorageSection() {
           <div style={{ padding: "12px 16px" }}>
             {packsLoadError ? (
               <div data-testid="help-load-error" style={errorTextStyle}>
-                Failed to load help pack status.
+                <ErrorMessage message="Failed to load help pack status." />
                 <button data-testid="retry-help-load" onClick={() => void refreshPacks()} style={retryBtnStyle}>
                   Retry
                 </button>
@@ -548,7 +549,7 @@ export function DataStorageSection() {
                   {helpClearing ? "…" : "REMOVE"}
                 </button>
                 {helpDeleteError && (
-                  <div data-testid="help-delete-error" style={{ ...errorTextStyle, marginTop: 8 }}>{helpDeleteError}</div>
+                  <ErrorMessage data-testid="help-delete-error" message={helpDeleteError} style={{ ...errorTextStyle, marginTop: 8 }} />
                 )}
               </div>
             ) : null}

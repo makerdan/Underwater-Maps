@@ -12,14 +12,14 @@ interface CopyButtonProps {
 }
 
 export function CopyButton({ text, className }: CopyButtonProps) {
-  const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
 
   const handleCopy = useCallback(async () => {
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setStatus("copied");
+      setTimeout(() => setStatus("idle"), 1500);
     } catch {
       // Fallback for environments without clipboard API
       try {
@@ -30,12 +30,13 @@ export function CopyButton({ text, className }: CopyButtonProps) {
         document.body.appendChild(ta);
         ta.focus();
         ta.select();
-        document.execCommand("copy");
+        if (!document.execCommand("copy")) throw new Error("Clipboard copy was rejected");
         document.body.removeChild(ta);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        setStatus("copied");
+        setTimeout(() => setStatus("idle"), 1500);
       } catch {
-        // silently ignore if clipboard is entirely unavailable
+        setStatus("failed");
+        setTimeout(() => setStatus("idle"), 2000);
       }
     }
   }, [text]);
@@ -43,7 +44,8 @@ export function CopyButton({ text, className }: CopyButtonProps) {
   return (
     <button
       type="button"
-      aria-label={copied ? "Copied!" : "Copy error text"}
+      aria-label={status === "copied" ? "Copied!" : status === "failed" ? "Copy failed" : "Copy error text"}
+      aria-live="polite"
       onClick={handleCopy}
       className={cn(
         "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs",
@@ -51,11 +53,13 @@ export function CopyButton({ text, className }: CopyButtonProps) {
         className,
       )}
     >
-      {copied ? (
+      {status === "copied" ? (
         <>
           <Check className="h-3 w-3" />
           <span>Copied!</span>
         </>
+      ) : status === "failed" ? (
+        <span>Copy failed</span>
       ) : (
         <>
           <Copy className="h-3 w-3" />

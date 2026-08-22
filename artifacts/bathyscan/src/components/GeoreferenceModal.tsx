@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useReturnFocus } from "@/hooks/useReturnFocus";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import {
   usePostUserDatasetsIdGeoref,
   getGetUserDatasetsQueryKey,
@@ -228,7 +229,10 @@ export const GeoreferenceModal: React.FC<Props> = ({ dataset, onClose, onSuccess
           {imgError && (
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
               <span style={{ fontSize: "calc(42px * var(--bs-font-scale, 1))" }}>⚠️</span>
-              <span style={{ fontSize: "calc(18px * var(--bs-font-scale, 1))", color: "#f87171", textAlign: "center", maxWidth: 320 }}>{imgError}</span>
+              <ErrorMessage
+                message={imgError}
+                style={{ fontSize: "calc(18px * var(--bs-font-scale, 1))", color: "#f87171", textAlign: "center", maxWidth: 320 }}
+              />
               <span style={{ fontSize: "calc(16.5px * var(--bs-font-scale, 1))", color: "#64748b" }}>
                 The raster image may have exceeded the 20 MB storage cap, or was not captured during upload.
               </span>

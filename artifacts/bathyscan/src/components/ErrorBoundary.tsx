@@ -1,4 +1,5 @@
 import React from "react";
+import { CopyButton } from "@/components/ui/CopyButton";
 
 interface Props {
   /** Short label used in the fallback message (e.g. "dataset library"). */
@@ -91,22 +92,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
             >
               Try again
             </button>
-            <button
-              onClick={() => {
-                void navigator.clipboard.writeText(debugText).catch(() => undefined);
-              }}
-              style={{
-                fontSize: "calc(15px * var(--bs-font-scale, 1))",
-                color: "#94a3b8",
-                background: "transparent",
-                border: "1px solid rgba(148,163,184,0.3)",
-                borderRadius: 3,
-                padding: "1px 6px",
-                cursor: "pointer",
-              }}
-            >
-              Copy error details
-            </button>
+            <CopyButton
+              text={debugText}
+              className="text-slate-400 border border-slate-400/30"
+            />
           </div>
           <details style={{ marginTop: 2 }}>
             <summary

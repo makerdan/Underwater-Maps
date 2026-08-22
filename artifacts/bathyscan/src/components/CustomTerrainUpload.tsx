@@ -10,6 +10,7 @@ import { useClassificationStore } from "@/lib/classificationStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useZoneOverlayStore } from "@/lib/zoneOverlayStore";
 import { useOfflineStore } from "@/lib/offlineStore";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -175,7 +176,10 @@ export const CustomTerrainUpload: React.FC = () => {
             letterSpacing: "0.1em",
           }}
         >
-          Upload unavailable offline
+          <ErrorMessage
+            message="Upload unavailable offline"
+            className="text-center"
+          />
         </div>
       ) : (
         <>
@@ -235,7 +239,7 @@ export const CustomTerrainUpload: React.FC = () => {
                   up to 50 MB{isSignedIn ? " · auto-saved to your account" : ""}
                 </div>
                 {uploadError && (
-                  <div style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 6 }}>⚠ {uploadError}</div>
+                  <ErrorMessage message={`⚠ ${uploadError}`} style={{ fontSize: "calc(15px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 6 }} />
                 )}
               </>
             )}

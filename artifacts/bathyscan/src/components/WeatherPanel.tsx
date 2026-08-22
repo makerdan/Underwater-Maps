@@ -37,6 +37,7 @@ import { LocationBadge } from "@/components/LocationBadge";
 import { formatSpeedFromKnots, formatWaveHeight, cardinal } from "@/lib/units";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 // Undo window for "soft" trolling-preset deletes (ms). The preset is hidden
 // from the list immediately and the actual DELETE only fires when the
@@ -1015,7 +1016,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
                 style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 8px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em", whiteSpace: "nowrap" }}
               >SAVE</button>
             </div>
-            {planError && <div style={{ color: "#f87171", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}>{planError}</div>}
+            {planError && <ErrorMessage message={planError} style={{ color: "#f87171", fontSize: "calc(12px * var(--bs-font-scale, 1))" }} />}
 
             {/* Plans list */}
             {savedDriftPlans.length === 0 ? (
@@ -1599,7 +1600,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               >+ FOLDER</button>
             </div>
             {folderError && (
-              <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 2 }}>{folderError}</div>
+              <ErrorMessage message={folderError} style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 2 }} />
             )}
 
             {/* Save-preset controls */}
@@ -1635,7 +1636,7 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               >SAVE</button>
             </div>
             {presetError && (
-              <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 2, userSelect: "text" }}>{presetError}</div>
+              <ErrorMessage message={presetError} style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 2 }} />
             )}
           </div>
 

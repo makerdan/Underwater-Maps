@@ -6,6 +6,7 @@
  * in freshwater mode when the backend has no USGS / GLERL station in range.
  */
 import React from "react";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -18,8 +19,9 @@ export const DataUnavailable: React.FC<DataUnavailableProps> = ({
   message,
   "data-testid": testId = "data-unavailable",
 }) => (
-  <div
+  <ErrorMessage
     data-testid={testId}
+    message={message}
     style={{
       display: "inline-flex",
       alignItems: "center",
@@ -36,6 +38,5 @@ export const DataUnavailable: React.FC<DataUnavailableProps> = ({
     }}
   >
     <span aria-hidden="true">◌</span>
-    <span>{message}</span>
-  </div>
+  </ErrorMessage>
 );

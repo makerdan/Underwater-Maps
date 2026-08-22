@@ -11,6 +11,7 @@
  * Independent of the marker system; dismiss via the × button.
  */
 import React from "react";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { authorizedFetch } from "@/lib/authorizedFetch";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { useQueryClient } from "@tanstack/react-query";
@@ -671,7 +672,7 @@ export const DepthProfilePanel: React.FC = () => {
                 }}
               />
               {saveError && (
-                <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171" }}>{saveError}</div>
+                <ErrorMessage message={saveError} style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#f87171" }} />
               )}
               <div style={{ display: "flex", gap: 4 }}>
                 <button

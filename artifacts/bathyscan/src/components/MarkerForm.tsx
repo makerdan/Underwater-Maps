@@ -21,6 +21,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { HelpIcon } from "@/components/help/HelpButton";
 import { formatDepth } from "@/lib/units";
 import { useToast } from "@/hooks/use-toast";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -639,7 +640,7 @@ export const MarkerForm: React.FC = () => {
             }}
           />
           {labelError && (
-            <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#ef4444", marginTop: 3 }}>⚠ {labelError}</div>
+              <ErrorMessage message={`⚠ ${labelError}`} style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#ef4444", marginTop: 3 }} />
           )}
           <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#1e293b", marginTop: 2, textAlign: "right" }}>
             {label.length}/{MARKER_LABEL_MAX}
@@ -738,7 +739,7 @@ export const MarkerForm: React.FC = () => {
               }}
             />
             {notesError && (
-              <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#ef4444", marginTop: 3 }}>⚠ {notesError}</div>
+              <ErrorMessage message={`⚠ ${notesError}`} style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#ef4444", marginTop: 3 }} />
             )}
             <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: notes.length >= MARKER_NOTES_MAX - 50 ? "#f59e0b" : "#475569", textAlign: "right" }}>
               {notes.length}/{MARKER_NOTES_MAX}

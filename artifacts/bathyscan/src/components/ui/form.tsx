@@ -12,6 +12,7 @@ import {
 
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
+import { CopyButton } from "@/components/ui/CopyButton"
 
 const Form = FormProvider
 
@@ -152,14 +153,16 @@ const FormMessage = React.forwardRef<
   }
 
   return (
-    <p
+    <div
       ref={ref}
       id={formMessageId}
-      className={cn("text-[0.8rem] font-medium text-destructive", className)}
+      role="alert"
+      className={cn("relative flex items-center gap-2 text-[0.8rem] font-medium text-destructive select-text", className)}
       {...props}
     >
-      {body}
-    </p>
+      <span>{body}</span>
+      <CopyButton text={String(body)} className="shrink-0" />
+    </div>
   )
 })
 FormMessage.displayName = "FormMessage"

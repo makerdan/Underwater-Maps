@@ -88,6 +88,7 @@ import { waterLabels } from "@/lib/waterLabels";
 import { useServerSettingsSync, requestSettingsSync } from "@/hooks/useServerSettingsSync";
 import { useCrossTabSync } from "@/hooks/useCrossTabSync";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { AccessGate } from "@/components/AccessGate";
 import { useDriftStore } from "@/lib/driftStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
@@ -1229,10 +1230,11 @@ function Main() {
           role="status"
           aria-live="polite"
           aria-label="You are offline"
-          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-red-950/90 backdrop-blur-sm border-b border-red-800/40 text-red-400 text-[16.5px] font-mono tracking-wide select-none pointer-events-none"
+          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-red-950/90 backdrop-blur-sm border-b border-red-800/40 text-red-400 text-[16.5px] font-mono tracking-wide select-text pointer-events-auto"
           style={{ paddingTop: "env(safe-area-inset-top)" }}
         >
           ● You're offline
+          <CopyButton text="You're offline" className="text-red-300/70 hover:text-red-200" />
         </div>
       )}
 
@@ -1249,7 +1251,7 @@ function Main() {
           role="status"
           aria-live="polite"
           aria-label="Connecting to server"
-          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-sky-950/90 backdrop-blur-sm border-b border-sky-800/40 text-sky-400 text-[16.5px] font-mono tracking-wide select-none pointer-events-none"
+           className="absolute inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 h-7 bg-sky-950/90 backdrop-blur-sm border-b border-sky-800/40 text-sky-400 text-[16.5px] font-mono tracking-wide select-text pointer-events-auto"
           style={{ paddingTop: "env(safe-area-inset-top)" }}
         >
           <svg
@@ -1274,7 +1276,7 @@ function Main() {
           aria-live="assertive"
           aria-label="Service unavailable"
           data-testid="service-unavailable-banner"
-          className="absolute inset-x-0 top-0 z-[200] flex items-center justify-between gap-2 px-3 h-9 bg-amber-950/90 backdrop-blur-sm border-b border-amber-700/40 text-amber-400 text-[13.5px] font-mono tracking-wide select-none"
+           className="absolute inset-x-0 top-0 z-[200] flex items-center justify-between gap-2 px-3 h-9 bg-amber-950/90 backdrop-blur-sm border-b border-amber-700/40 text-amber-400 text-[13.5px] font-mono tracking-wide select-text"
           style={{ paddingTop: "env(safe-area-inset-top)" }}
         >
           {/* spacer so the message stays centred when buttons are present */}
@@ -1284,6 +1286,10 @@ function Main() {
             <span>Service unavailable</span>
           </span>
           <span className="flex items-center gap-1 shrink-0">
+            <CopyButton
+              text="Service unavailable"
+              className="text-amber-400/70 hover:text-amber-300"
+            />
             <button
               type="button"
               onClick={() => window.location.reload()}
@@ -2549,10 +2555,14 @@ function SessionExpiredBanner() {
     <div
       role="alert"
       aria-live="assertive"
-      className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-3 h-9 bg-amber-950/95 backdrop-blur-sm border-b border-amber-800/50 text-amber-300 text-[18px] font-medium select-none"
+      className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-3 h-9 bg-amber-950/95 backdrop-blur-sm border-b border-amber-800/50 text-amber-300 text-[18px] font-medium select-text"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       Session expired — please reload to continue
+      <CopyButton
+        text="Session expired — please reload to continue"
+        className="text-amber-300/70 hover:text-amber-200"
+      />
       <button
         onClick={() => window.location.reload()}
         className="ml-2 px-2 py-0.5 bg-amber-700 hover:bg-amber-600 rounded text-[16.5px] text-white transition-colors"

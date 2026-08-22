@@ -5,6 +5,7 @@ import { usePostDatasetsUpload } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useAuth } from "@/lib/clerkCompat";
 import { Spinner } from "@/components/ui/spinner";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 /**
  * FileUpload — Drop-zone for bathymetric file uploads.
@@ -190,16 +191,8 @@ export const FileUpload = () => {
                   </button>
                 </div>
               )}
-              {nearLimitWarning && (
-                <p className="text-[15px] text-amber-500 select-text">
-                  ⚠ {nearLimitWarning}
-                </p>
-              )}
-              {gzWarning && (
-                <p className="text-[15px] text-amber-400 select-text">
-                  ⚠ {gzWarning}
-                </p>
-              )}
+              {nearLimitWarning && <ErrorMessage message={`⚠ ${nearLimitWarning}`} className="text-[15px] text-amber-500" />}
+              {gzWarning && <ErrorMessage message={`⚠ ${gzWarning}`} className="text-[15px] text-amber-400" />}
             </div>
           ) : !isSignedIn ? (
             <>
@@ -217,17 +210,9 @@ export const FileUpload = () => {
               <p style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", marginTop: 4 }}>
                 {SUPPORTED_EXTENSIONS}
               </p>
-              {nearLimitWarning && (
-                <p className="text-[15px] text-amber-500 mt-2 select-text">
-                  ⚠ {nearLimitWarning}
-                </p>
-              )}
-              {gzWarning && (
-                <p className="text-[15px] text-amber-400 mt-2 select-text">
-                  ⚠ {gzWarning}
-                </p>
-              )}
-              {error && <p className="text-[15px] text-destructive mt-2 select-text">{error}</p>}
+              {nearLimitWarning && <ErrorMessage message={`⚠ ${nearLimitWarning}`} className="mt-2 text-[15px] text-amber-500" />}
+              {gzWarning && <ErrorMessage message={`⚠ ${gzWarning}`} className="mt-2 text-[15px] text-amber-400" />}
+              {error && <ErrorMessage message={error} className="mt-2 text-[15px] text-destructive" />}
             </>
           )}
         </div>

@@ -19,6 +19,7 @@ import { OVERLAY_Z } from "@/lib/overlayScale";
 import { buildBathyscanDownloadFilename } from "@/lib/gpsExport";
 import { triggerBlobDownload } from "@/lib/blobDownload";
 import { authorizedFetch } from "@/lib/authorizedFetch";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -299,7 +300,7 @@ export const TerrainDownloadPopover: React.FC<Props> = ({ bbox, onClose }) => {
               {infoLoading ? (
                 <div style={{ color: "#94a3b8" }}>probing…</div>
               ) : infoError ? (
-                <div style={{ color: "#f87171", fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>{infoError}</div>
+                <ErrorMessage message={infoError} style={{ color: "#f87171", fontSize: "calc(15px * var(--bs-font-scale, 1))" }} />
               ) : info ? (
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <span

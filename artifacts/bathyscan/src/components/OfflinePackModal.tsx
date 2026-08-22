@@ -25,6 +25,7 @@ import {
 } from "@/lib/helpPackStore";
 import { formatBytes } from "@/lib/formatBytes";
 import { Spinner } from "@/components/Spinner";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 const FONT = "'JetBrains Mono', 'Fira Code', monospace";
 
@@ -423,7 +424,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
             fontSize: "calc(15px * var(--bs-font-scale, 1))",
             color: "#fca5a5",
           }}>
-            ⚠ Could not load offline pack data — {loadError}
+            <ErrorMessage message={`⚠ Could not load offline pack data — ${loadError}`} />
           </div>
         )}
 
@@ -797,7 +798,7 @@ export const OfflinePackModal: React.FC<Props> = ({ dataset, onClose }) => {
                   color: "#fca5a5",
                   marginBottom: 8,
                 }}>
-                  {helpError}
+                  <ErrorMessage message={helpError} />
                 </div>
               )}
 
