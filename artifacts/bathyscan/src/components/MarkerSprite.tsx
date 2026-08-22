@@ -88,6 +88,16 @@ export const MarkerSprite: React.FC<Props> = ({ marker, terrain, showLabel = tru
 
   return (
     <group userData={{ markerId: marker.id }}>
+      {marker.geometry?.kind === "area" && (
+        <mesh
+          position={[x, bottomY + 0.03, z]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          userData={{ markerArea: true }}
+        >
+          <ringGeometry args={[0.48, 0.58, marker.geometry.shape === "circle" ? 32 : 6]} />
+          <meshBasicMaterial color={color} transparent opacity={0.65} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      )}
       {/* Outer glow cylinder — wide, very transparent, additive blending */}
       <mesh position={[x, midY, z]}>
         <cylinderGeometry args={[0.18, 0.18, poleHeight, 8]} />

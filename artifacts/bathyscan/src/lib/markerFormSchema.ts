@@ -32,4 +32,24 @@ export const markerFormSchema = z.object({
   notes: markerNotesSchema.optional().default(""),
 });
 
+export const markerAreaSchema = z.discriminatedUnion("shape", [
+  z.object({
+    shape: z.literal("circle"),
+    center: z.object({ lon: z.number().finite(), lat: z.number().finite() }),
+    radiusM: z.number().finite().gt(0).max(100000),
+  }),
+  z.object({
+    shape: z.literal("polygon"),
+    vertices: z.array(z.object({ lon: z.number().finite(), lat: z.number().finite() })).min(3).max(100),
+  }),
+]);
+
+/** The fishing guide is intentionally a heuristic, not a biological rule. */
+export const SALMON_GUIDE_MIN_FT = 20;
+export const SALMON_GUIDE_MAX_FT = 100;
+export function salmonGuideRange(units: "metric" | "imperial"): { min: number; max: number; label: string } {
+  if (units === "imperial") return { min: 20, max: 100, label: "20–100 ft" };
+  return { min: 6.096, max: 30.48, label: "6.1–30.5 m" };
+}
+
 export type MarkerFormInput = z.infer<typeof markerFormSchema>;

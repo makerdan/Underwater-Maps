@@ -15,6 +15,8 @@ import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { ReassignMarkersDialog } from "@/components/ReassignMarkersDialog";
 import { OVERLAY_Z } from "@/lib/overlayScale";
+import { MARKER_COLOR } from "@/lib/markerConstants";
+import { MarkerIcon } from "@/lib/markerIcons";
 
 const GpsImportDialog = React.lazy(() =>
   import("@/components/GpsImportDialog").then(({ GpsImportDialog: Dialog }) => ({
@@ -48,11 +50,12 @@ const MarkerRow: React.FC<MarkerRowProps> = ({ label, lat, lon, depth, type }) =
       gap: 2,
     }}
   >
-    <div style={{ color: "#e2e8f0", fontSize: "calc(14px * var(--bs-font-scale, 1))", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <div style={{ color: "#e2e8f0", fontSize: "calc(14px * var(--bs-font-scale, 1))", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
+        <MarkerIcon type={type} size={15} color={MARKER_COLOR[type] ?? "#e2e8f0"} />
       {label}
     </div>
     <div style={{ color: "#64748b", fontSize: "calc(12.5px * var(--bs-font-scale, 1))", letterSpacing: "0.04em" }}>
-      {type} &bull; {lat.toFixed(4)}, {lon.toFixed(4)} &bull; {depth.toFixed(1)} m
+       {type} &bull; {lat.toFixed(4)}, {lon.toFixed(4)} &bull; {depth.toFixed(1)} m
     </div>
   </div>
 );

@@ -35,6 +35,8 @@ import { MarkerIcon } from "@/lib/markerIcons";
 const CATEGORY_SUBLABELS: Record<MarkerCategory, string> = {
   freshwater: "Freshwater species symbols",
   saltwater: "Saltwater species symbols",
+  salmon: "Salmon, schools, and species variants",
+  bottomfish: "Fishing targets: flatfish, rockfish, cod, and related species",
   natural: "Always available in both modes",
   mariner: "Standard mariner symbols — always available",
   special: "Basics available everywhere",

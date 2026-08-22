@@ -48,7 +48,7 @@ import {
 } from "@/lib/markerConstants";
 import { MarkerIcon } from "@/lib/markerIcons";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
-import { markerLabelSchema, markerNotesSchema, MARKER_LABEL_MAX, MARKER_NOTES_MAX } from "@/lib/markerFormSchema";
+import { markerLabelSchema, markerNotesSchema, markerAreaSchema, salmonGuideRange, MARKER_LABEL_MAX, MARKER_NOTES_MAX } from "@/lib/markerFormSchema";
 import { useMarkerEditStore } from "@/lib/markerEditStore";
 import { useCatchJournalStore } from "@/lib/catchJournalStore";
 
@@ -91,6 +91,14 @@ export const MarkerForm: React.FC = () => {
   const [poleColour, setPoleColour] = useState(DEPTH_POLE_DEFAULT_COLOUR);
   // Edit mode: optional corrected depth (metres). Undefined means "don't patch depth".
   const [editDepth, setEditDepth] = useState<string>("");
+  type AreaShape = "circle" | "polygon";
+  type AreaPoint = { lon: number; lat: number };
+  const [placementMode, setPlacementMode] = useState<"point" | "area">("point");
+  const [areaShape, setAreaShape] = useState<AreaShape>("circle");
+  const [areaRadius, setAreaRadius] = useState("50");
+  const [areaVertices, setAreaVertices] = useState<AreaPoint[]>([]);
+  const [areaConfirmOpen, setAreaConfirmOpen] = useState(false);
+  const areaConfirmRef = useRef(false);
 
   // In edit mode: populate from the stored marker.
   // In create mode: reset when GPS changes, honouring one-shot prefill.
@@ -113,6 +121,17 @@ export const MarkerForm: React.FC = () => {
         candidateType !== undefined &&
         MARKER_TYPES.some((t) => t.value === candidateType);
       setMarkerType(isValidType ? candidateType! : (MarkerInputType.custom as MarkerTypeValue));
+      const geometry = editMarker.geometry as { kind?: string; shape?: AreaShape; center?: AreaPoint; radiusM?: number; vertices?: AreaPoint[] } | null | undefined;
+      if (geometry?.kind === "area") {
+        setPlacementMode("area");
+        setAreaShape(geometry.shape ?? "circle");
+        setAreaRadius(String(geometry.radiusM ?? 50));
+        setAreaVertices(geometry.vertices ?? []);
+      } else {
+        setPlacementMode("point");
+        setAreaShape("circle");
+        setAreaVertices([]);
+      }
       if (editMarker.type === "depth_pole" && editMarker.notes) {
         try {
           const parsed = JSON.parse(editMarker.notes) as { colour?: string };
@@ -163,7 +182,7 @@ export const MarkerForm: React.FC = () => {
       isDirtyRef.current = false;
       return;
     }
-    let dirty = label !== editMarker.label || markerType !== editMarker.type;
+    let dirty = label !== editMarker.label || markerType !== editMarker.type || placementMode !== (editMarker.geometry?.kind === "area" ? "area" : "point");
     if (!dirty) {
       if (markerType === "depth_pole") {
         let savedColour = DEPTH_POLE_DEFAULT_COLOUR;
@@ -181,6 +200,12 @@ export const MarkerForm: React.FC = () => {
     if (!dirty) {
       const savedDepth = editMarker.depth !== undefined && editMarker.depth !== null ? String(editMarker.depth) : "";
       dirty = editDepth !== savedDepth;
+    }
+    if (!dirty && placementMode === "area") {
+      const g = editMarker.geometry as { shape?: AreaShape; radiusM?: number; vertices?: AreaPoint[] } | null | undefined;
+      dirty = areaShape !== g?.shape || (areaShape === "circle"
+        ? areaRadius !== String(g?.radiusM ?? "")
+        : JSON.stringify(areaVertices) !== JSON.stringify(g?.vertices ?? []));
     }
     isDirtyRef.current = dirty;
   });
@@ -245,6 +270,11 @@ export const MarkerForm: React.FC = () => {
 
     // Guard against double-submit while a mutation is in-flight.
     if (postMarkers.isPending || patchMarker.isPending) return;
+    if (placementMode === "area" && !areaConfirmRef.current) {
+      setAreaConfirmOpen(true);
+      return;
+    }
+    areaConfirmRef.current = false;
 
     const labelResult = markerLabelSchema.safeParse(label);
     if (!labelResult.success) {
@@ -266,6 +296,18 @@ export const MarkerForm: React.FC = () => {
       notesForBody = notesResult.data.length > 0 ? notesResult.data : null;
     }
 
+    let geometry: { version: 1; kind: "point" } | { version: 1; kind: "area"; shape: "circle"; center: AreaPoint; radiusM: number } | { version: 1; kind: "area"; shape: "polygon"; vertices: AreaPoint[] } | undefined;
+    if (placementMode === "area") {
+      const parsedArea = markerAreaSchema.safeParse(areaShape === "circle"
+        ? { shape: "circle", center: { lon: displayGps?.lon ?? 0, lat: displayGps?.lat ?? 0 }, radiusM: Number(areaRadius) }
+        : { shape: "polygon", vertices: areaVertices });
+      if (!parsedArea.success) {
+        setNotesError(areaShape === "polygon" ? "Add at least 3 distinct vertices." : "Area radius must be greater than zero.");
+        return;
+      }
+      geometry = { version: 1, kind: "area", ...parsedArea.data } as typeof geometry;
+    }
+
     // ── Edit mode ────────────────────────────────────────────────────────────
     if (isEditMode && editMarker) {
       // Only include depth in the PATCH body when the user has changed it and
@@ -284,6 +326,7 @@ export const MarkerForm: React.FC = () => {
             type: markerType as MarkerInputType,
             notes: notesForBody,
             ...(patchDepth !== undefined ? { depth: patchDepth } : {}),
+              ...(placementMode === "area" && geometry ? { geometry } : {}),
           },
         },
         {
@@ -330,6 +373,7 @@ export const MarkerForm: React.FC = () => {
       type: markerType as MarkerInputType,
       label: labelResult.data,
       notes: notesForBody,
+      ...(geometry ? { geometry } : {}),
     };
 
     if (!isOnline) {
@@ -431,6 +475,27 @@ export const MarkerForm: React.FC = () => {
       </AlertDialogContent>
     </AlertDialog>
   );
+  const areaConfirmation = (
+    <AlertDialog open={areaConfirmOpen} onOpenChange={setAreaConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Save this fishing area?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This {areaShape} covers {areaShape === "circle" ? `${Number(areaRadius) || 0} m radius` : `${areaVertices.length} vertices`}.
+            The centroid and footprint will be used for navigation. Depth guidance is a heuristic.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep editing</AlertDialogCancel>
+          <AlertDialogAction onClick={() => {
+            areaConfirmRef.current = true;
+            setAreaConfirmOpen(false);
+            document.querySelector<HTMLFormElement>(".marker-form-panel form")?.requestSubmit();
+          }}>Save area</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 
   // In edit mode use the stored marker's coordinates; in create mode use GPS.
   const displayGps = isEditMode && editMarker
@@ -438,10 +503,32 @@ export const MarkerForm: React.FC = () => {
     : gps;
 
   const selectedType = visibleMarkerTypes.find((t) => t.value === markerType);
+  const guide = salmonGuideRange(units === "metric" ? "metric" : "imperial");
+  const isSalmon = markerType === "salmon" || markerType.endsWith("_salmon") || markerType === "school_salmon";
+  const addPolygonVertex = () => {
+    if (!displayGps || areaVertices.length >= 100) return;
+    const i = areaVertices.length;
+    const offset = 0.0002 * (i + 1);
+    setAreaVertices((v) => [...v, { lon: displayGps.lon + offset, lat: displayGps.lat + (i % 2 ? offset : -offset) }]);
+  };
+  const drawAreaPoint = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (areaShape !== "polygon" || !displayGps || areaVertices.length >= 100) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(120, e.clientX - rect.left));
+    const y = Math.max(0, Math.min(60, e.clientY - rect.top));
+    // The compact review surface is centred on the drop point. A 120px-wide
+    // surface represents roughly a 240m square; this is a visual capture aid,
+    // while the persisted payload remains ordinary lon/lat coordinates.
+    const metresPerPixel = 2;
+    const latOffset = ((30 - y) * metresPerPixel) / 111_320;
+    const lonOffset = ((x - 60) * metresPerPixel) / (111_320 * Math.max(0.2, Math.cos(displayGps.lat * Math.PI / 180)));
+    setAreaVertices((v) => [...v, { lon: displayGps.lon + lonOffset, lat: displayGps.lat + latOffset }]);
+  };
 
   return (
     <>
     {discardDialog}
+    {areaConfirmation}
     <div className="marker-form-panel" style={PANEL}>
       {/* Header */}
       <div
@@ -541,6 +628,66 @@ export const MarkerForm: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit}>
+        <div style={{ padding: "8px 14px 4px", borderBottom: "1px solid rgba(0,229,255,0.08)" }}>
+          <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", color: "#64748b", marginBottom: 5 }}>PLACEMENT</div>
+          <div style={{ display: "flex", gap: 5 }}>
+            {(["point", "area"] as const).map((mode) => (
+              <button key={mode} type="button" onClick={() => { setPlacementMode(mode); if (mode === "point") setAreaVertices([]); }}
+                aria-pressed={placementMode === mode}
+                style={{ flex: 1, padding: "5px 4px", borderRadius: 3, border: `1px solid ${placementMode === mode ? "#00e5ff" : "rgba(0,229,255,0.15)"}`, background: placementMode === mode ? "rgba(0,229,255,0.12)" : "transparent", color: placementMode === mode ? "#00e5ff" : "#94a3b8", fontFamily: "inherit", cursor: "pointer" }}>
+                {mode === "point" ? "● POINT" : "◎ AREA"}
+              </button>
+            ))}
+          </div>
+          {placementMode === "area" && (
+            <div style={{ marginTop: 7, color: "#94a3b8", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>
+              <div style={{ display: "flex", gap: 5, marginBottom: 5 }}>
+                {(["circle", "polygon"] as const).map((shape) => (
+                  <button key={shape} type="button" onClick={() => setAreaShape(shape)} aria-pressed={areaShape === shape}
+                    style={{ padding: "3px 6px", border: "1px solid rgba(0,229,255,0.18)", background: areaShape === shape ? "rgba(0,229,255,0.12)" : "transparent", color: areaShape === shape ? "#67e8f9" : "#64748b", borderRadius: 3, fontFamily: "inherit" }}>
+                    {shape === "circle" ? "CIRCLE" : "POLYGON"}
+                  </button>
+                ))}
+                {areaShape === "circle" ? (
+                  <input aria-label="Area radius in metres" type="number" min={1} max={100000} value={areaRadius} onChange={(e) => setAreaRadius(e.target.value)} style={{ width: 72, background: "rgba(0,229,255,0.04)", color: "#e2e8f0", border: "1px solid rgba(0,229,255,0.18)", borderRadius: 3, padding: "3px 5px", fontFamily: "inherit" }} />
+                ) : (
+                  <button type="button" onClick={addPolygonVertex} style={{ padding: "3px 6px", border: "1px solid rgba(0,229,255,0.18)", background: "transparent", color: "#67e8f9", borderRadius: 3, fontFamily: "inherit" }}>+ VERTEX</button>
+                )}
+              </div>
+              <div data-testid="area-summary">◎ {areaShape === "circle" ? `radius ${Number(areaRadius) || 0} m` : `${areaVertices.length} vertices`} · centroid {displayGps ? `${displayGps.lat.toFixed(3)}, ${displayGps.lon.toFixed(3)}` : "—"}</div>
+              <svg
+                data-testid="area-drawing-surface"
+                viewBox="0 0 120 60"
+                role="img"
+                aria-label="Draw fishing area"
+                onPointerDown={drawAreaPoint}
+                style={{ display: "block", width: "100%", height: 60, marginTop: 5, border: "1px solid rgba(0,229,255,0.16)", background: "rgba(0,229,255,0.03)", touchAction: "none", cursor: areaShape === "polygon" ? "crosshair" : "default" }}
+              >
+                <line x1="60" y1="0" x2="60" y2="60" stroke="rgba(0,229,255,0.12)" />
+                <line x1="0" y1="30" x2="120" y2="30" stroke="rgba(0,229,255,0.12)" />
+                {areaShape === "circle" && <circle cx="60" cy="30" r={Math.max(3, Math.min(27, (Number(areaRadius) || 0) / 4))} fill="rgba(0,229,255,0.12)" stroke="#00e5ff" strokeDasharray="3 2" />}
+                {areaShape === "polygon" && areaVertices.length > 0 && (
+                  <polygon
+                    points={areaVertices.map((v) => {
+                      const cos = Math.max(0.2, Math.cos((displayGps?.lat ?? 0) * Math.PI / 180));
+                      return `${60 + ((v.lon - (displayGps?.lon ?? 0)) * 111320 * cos) / 2},${30 - ((v.lat - (displayGps?.lat ?? 0)) * 111320) / 2}`;
+                    }).join(" ")}
+                    fill="rgba(0,229,255,0.14)" stroke="#00e5ff" strokeDasharray="3 2"
+                  />
+                )}
+                <circle cx="60" cy="30" r="2" fill="#fb923c" />
+              </svg>
+              {areaShape === "polygon" && areaVertices.length > 0 && <button type="button" onClick={() => setAreaVertices((v) => v.slice(0, -1))} style={{ marginTop: 4, padding: 0, border: 0, background: "none", color: "#fbbf24", fontFamily: "inherit", cursor: "pointer" }}>↶ UNDO</button>}
+              <button type="button" onClick={() => setAreaVertices([])} style={{ margin: "4px 0 0 10px", padding: 0, border: 0, background: "none", color: "#f87171", fontFamily: "inherit", cursor: "pointer" }}>CLEAR</button>
+            </div>
+          )}
+        </div>
+        {isSalmon && (
+          <div data-testid="salmon-depth-guide" style={{ margin: "7px 14px 2px", padding: "6px 8px", border: "1px solid rgba(251,146,60,0.3)", borderRadius: 3, color: "#fdba74", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>
+            Salmon depth guide: typical {guide.label}. Heuristic only — not a hard biological rule.
+            {displayGps?.depth != null && <span style={{ display: "block", color: "#cbd5e1", marginTop: 2 }}>Current context: {formatDepth(displayGps.depth, { units })}</span>}
+          </div>
+        )}
         {/* Type selector — categorised scrollable picker */}
         <div style={{ padding: "9px 14px 4px" }}>
           <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", color: "#64748b", marginBottom: 5 }}>

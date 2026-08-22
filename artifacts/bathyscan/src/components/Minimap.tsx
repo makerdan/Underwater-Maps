@@ -349,6 +349,15 @@ function drawMarkerDots(
     const icon = peekMarkerIconImage(m.type, color, MARKER_ICON_SRC_PX);
 
     if (icon) {
+      if (m.geometry?.kind === "area") {
+        ctx.beginPath();
+        ctx.arc(px, py, m.geometry.shape === "circle" ? Math.max(7, Math.min(24, m.geometry.radiusM / 8)) : 9, 0, Math.PI * 2);
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.55;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       // Custom SVG symbol on a dark backing disc for contrast.
       ctx.beginPath();
       ctx.arc(px, py, MARKER_ICON_DRAW_PX / 2 + 2, 0, Math.PI * 2);

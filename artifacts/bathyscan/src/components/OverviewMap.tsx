@@ -4513,6 +4513,9 @@ export const OverviewMap: React.FC = () => {
               const r = Math.max(3.5, Math.min(9, svgTransform.scale * 1.8));
               return (
                 <g key={`mk-${m.id}`} pointerEvents="none" filter="url(#ov-marker-glow)">
+                  {m.geometry?.kind === "area" && (
+                    <circle cx={cx} cy={cy} r={r + (m.geometry.shape === "circle" ? Math.max(7, Math.min(24, m.geometry.radiusM / 8)) : 10)} fill={`${colour}12`} stroke={colour} strokeWidth={1.2} strokeDasharray="3 2" opacity={0.7} />
+                  )}
                   <circle cx={cx} cy={cy} r={r + 2.5} fill="#020818" stroke={colour} strokeWidth={1} opacity={0.85} />
                   {/* Custom SVG symbol, scaled from its 24x24 viewBox to fit the disc */}
                   <g

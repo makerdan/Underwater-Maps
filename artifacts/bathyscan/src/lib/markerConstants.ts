@@ -13,6 +13,8 @@
 export type MarkerCategory =
   | "freshwater"
   | "saltwater"
+  | "salmon"
+  | "bottomfish"
   | "natural"
   | "mariner"
   | "special"
@@ -21,6 +23,8 @@ export type MarkerCategory =
 export const MARKER_CATEGORY_LABELS: Record<MarkerCategory, string> = {
   freshwater: "FRESHWATER",
   saltwater:  "SALTWATER",
+  salmon:     "SALMON TARGETS",
+  bottomfish: "BOTTOMFISH",
   natural:    "NATURAL WORLD",
   mariner:    "MARINER",
   special:    "SPECIAL",
@@ -51,10 +55,15 @@ export const FRESHWATER_MARKER_TYPES = [
 ] as const;
 
 /** Saltwater species — shown only in saltwater exploration mode. */
-export const SALTWATER_MARKER_TYPES = [
+export const SALMON_MARKER_TYPES = [
   { value: "silver_salmon",      label: "Silver Salmon",       color: "#cbd5e1", icon: "◈", category: "saltwater" },
   { value: "chinook_salmon",     label: "Chinook Salmon",      color: "#f97316", icon: "◈", category: "saltwater" },
   { value: "pink_salmon",        label: "Pink Salmon",         color: "#f9a8d4", icon: "◈", category: "saltwater" },
+  { value: "school_salmon",      label: "Salmon (School)",     color: "#fdba74", icon: "≋", category: "saltwater" },
+] as const;
+
+/** Saltwater bottomfish targets are grouped so anglers can scan them quickly. */
+export const BOTTOMFISH_MARKER_TYPES = [
   { value: "halibut",            label: "Pacific Halibut",     color: "#38bdf8", icon: "◈", category: "saltwater" },
   { value: "turbot",             label: "Turbot",              color: "#a78bfa", icon: "◈", category: "saltwater" },
   { value: "black_rockfish",     label: "Black Rockfish",      color: "#64748b", icon: "◆", category: "saltwater" },
@@ -64,10 +73,14 @@ export const SALTWATER_MARKER_TYPES = [
   { value: "dungeness_crab",     label: "Dungeness Crab",      color: "#dc2626", icon: "✶", category: "saltwater" },
   { value: "prawn_shrimp",       label: "Prawn / Shrimp",      color: "#f87171", icon: "✶", category: "saltwater" },
   { value: "octopus",            label: "Octopus",             color: "#a855f7", icon: "✶", category: "saltwater" },
-  { value: "school_salmon",      label: "Salmon (School)",     color: "#fdba74", icon: "≋", category: "saltwater" },
   { value: "school_rockfish",    label: "Rockfish (School)",   color: "#93a6bd", icon: "≋", category: "saltwater" },
   { value: "lingcod",            label: "Lingcod",             color: "#16a34a", icon: "◈", category: "saltwater" },
   { value: "sole",               label: "Sole",                color: "#d4a373", icon: "◈", category: "saltwater" },
+] as const;
+
+export const SALTWATER_MARKER_TYPES = [
+  ...SALMON_MARKER_TYPES,
+  ...BOTTOMFISH_MARKER_TYPES,
 ] as const;
 
 /** Natural-world features — always available in both exploration modes. */
@@ -210,7 +223,13 @@ export function getMarkerPickerSections(
       ? { category: "freshwater", label: MARKER_CATEGORY_LABELS.freshwater, types: FRESHWATER_MARKER_TYPES }
       : { category: "saltwater", label: MARKER_CATEGORY_LABELS.saltwater, types: SALTWATER_MARKER_TYPES };
   return [
-    species,
+    ...(waterType === "saltwater"
+      ? [
+          { category: "salmon" as const, label: MARKER_CATEGORY_LABELS.salmon, types: SALMON_MARKER_TYPES },
+          { category: "bottomfish" as const, label: MARKER_CATEGORY_LABELS.bottomfish, types: BOTTOMFISH_MARKER_TYPES },
+        ]
+      : [species]),
+    ...(waterType === "saltwater" ? [] : []),
     { category: "natural", label: MARKER_CATEGORY_LABELS.natural, types: NATURAL_WORLD_MARKER_TYPES },
     { category: "mariner", label: MARKER_CATEGORY_LABELS.mariner, types: MARINER_MARKER_TYPES },
     { category: "special", label: MARKER_CATEGORY_LABELS.special, types: SPECIAL_MARKER_TYPES },

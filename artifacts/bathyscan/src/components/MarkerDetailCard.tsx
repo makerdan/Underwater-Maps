@@ -45,6 +45,7 @@ export const MarkerDetailCard: React.FC = () => {
 
   const color = MARKER_COLOR[marker.type] ?? "#e2e8f0";
   const createdAt = marker.createdAt ? new Date(marker.createdAt) : null;
+  const area = marker.geometry?.kind === "area" ? marker.geometry : null;
 
   return (
     <div
@@ -92,7 +93,13 @@ export const MarkerDetailCard: React.FC = () => {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>
         <span style={{ color: "#94a3b8" }}>TYPE</span>
-        <span style={{ color: "#cbd5e1" }}>{marker.type}</span>
+        <span style={{ color: "#cbd5e1" }}>{marker.type}{area ? " · AREA TARGET" : ""}</span>
+        {area && (
+          <>
+            <span style={{ color: "#94a3b8" }}>FOOTPRINT</span>
+            <span style={{ color: "#67e8f9" }}>{area.shape === "circle" ? `Circle · ${area.radiusM} m radius` : `Polygon · ${area.vertices.length} vertices`}</span>
+          </>
+        )}
         <span style={{ color: "#94a3b8" }}>LON</span>
         <span style={{ color: "#00e5ff" }}>{marker.lon.toFixed(5)}°</span>
         <span style={{ color: "#94a3b8" }}>LAT</span>
