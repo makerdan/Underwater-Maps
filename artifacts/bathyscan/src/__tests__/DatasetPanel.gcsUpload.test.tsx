@@ -331,6 +331,29 @@ function makeFakeFile(name: string, type: string, fakeSize: number): File {
   return file;
 }
 
+function mockXhrSuccess() {
+  const original = globalThis.XMLHttpRequest;
+  const loadListeners: Array<() => void> = [];
+  const xhr = {
+    open: vi.fn(),
+    setRequestHeader: vi.fn(),
+    upload: { addEventListener: vi.fn() },
+    addEventListener: vi.fn((event: string, handler: () => void) => {
+      if (event === "load") loadListeners.push(handler);
+    }),
+    send: vi.fn(() => {
+      setTimeout(() => {
+        (xhr as unknown as { status: number }).status = 200;
+        loadListeners.forEach((handler) => handler());
+      }, 0);
+    }),
+    status: 200,
+    readyState: 4,
+  };
+  globalThis.XMLHttpRequest = vi.fn(() => xhr) as unknown as typeof XMLHttpRequest;
+  return () => { globalThis.XMLHttpRequest = original; };
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("DatasetPanel — gcsUploadFile Authorization header", () => {
@@ -483,5 +506,54 @@ describe("DatasetPanel — gcsUploadFile Authorization header", () => {
     // Second call used the fresh token.
     const secondHeaders = new Headers(presignedCalls[1]![1]?.headers as HeadersInit);
     expect(secondHeaders.get("authorization")).toBe("Bearer fresh-token-after-refresh");
+  });
+
+  it("uses a fresh token for job-status polling after the initial token expires", async () => {
+    vi.useFakeTimers();
+    const restoreXhr = mockXhrSuccess();
+    authMock.getAuthToken
+      .mockResolvedValueOnce("upload-token")
+      .mockResolvedValueOnce("stale-poll-token")
+      .mockResolvedValueOnce("fresh-poll-token");
+    authMock.hasAuthTokenGetter.mockReturnValue(true);
+
+    const fetchSpy = vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          uploadUrl: "https://storage.googleapis.com/bucket/pending/survey.csv?sig=ok",
+          objectKey: "pending/survey.csv",
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: "Unauthorized" }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: "done", datasetId: "dataset-after-refresh" }),
+      } as Response);
+
+    render(<DatasetPanel />);
+    await act(async () => {
+      dropzoneMock.trigger([makeFakeFile("survey.csv", "text/csv", 60 * 1024 * 1024)]);
+      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+
+    const pollCalls = fetchSpy.mock.calls.filter(([url]) =>
+      typeof url === "string" && url.includes("gcs-job-status"),
+    );
+    expect(pollCalls).toHaveLength(2);
+    expect(new Headers(pollCalls[0]![1]?.headers as HeadersInit).get("authorization"))
+      .toBe("Bearer stale-poll-token");
+    expect(new Headers(pollCalls[1]![1]?.headers as HeadersInit).get("authorization"))
+      .toBe("Bearer fresh-poll-token");
+
+    restoreXhr();
+    vi.useRealTimers();
   });
 });

@@ -1876,14 +1876,43 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
     // objectKey so we resolve exactly the right dataset, even if another
     // upload finishes concurrently.
     const pollIntervalId = setInterval(() => {
-      void fetch(`${API_BASE}/api/datasets/upload/gcs-job-status?objectKey=${encodeURIComponent(objectKey)}`, {
-        headers: authHeader,
-      })
+      // Do not close over the token captured for the presigned-URL request.
+      // Long-running processing can outlive a short-lived Clerk token.
+      const pollWithCurrentAuth = async (): Promise<Response> => {
+        const currentToken = await getAuthToken();
+        const currentAuthHeader: Record<string, string> = currentToken
+          ? { Authorization: `Bearer ${currentToken}` }
+          : {};
+        const pollUrl = `${API_BASE}/api/datasets/upload/gcs-job-status?objectKey=${encodeURIComponent(objectKey)}`;
+        const response = await fetch(pollUrl, { headers: currentAuthHeader });
+
+        if (response.status !== 401 || !hasAuthTokenGetter()) {
+          return response;
+        }
+
+        // Clerk may have rotated the token between getAuthToken() and fetch().
+        // Re-read it once and retry only the auth failure; other errors retain
+        // the existing transient polling behavior.
+        const refreshedToken = await getAuthToken();
+        if (!refreshedToken) {
+          throw new Error("Authentication required. Please sign in and try again.");
+        }
+        return fetch(pollUrl, {
+          headers: { Authorization: `Bearer ${refreshedToken}` },
+        });
+      };
+
+      void pollWithCurrentAuth()
         .then((r) => {
           // Check r.ok before calling r.json() — a non-2xx response with a
           // non-JSON body (e.g. HTML error page) would throw an unhandled
           // parse error rather than flowing to the .catch transient-error path.
-          if (!r.ok) throw new Error(`Poll failed: HTTP ${r.status}`);
+          if (!r.ok) {
+            if (r.status === 401 && hasAuthTokenGetter()) {
+              throw new Error("Authentication required. Please sign in and try again.");
+            }
+            throw new Error(`Poll failed: HTTP ${r.status}`);
+          }
           // Use .catch(() => null) so a malformed 2xx body (non-JSON or empty)
           // produces null rather than throwing into the .catch transient handler.
           // The second .then validates the shape before accessing any fields.
@@ -2063,7 +2092,17 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
             });
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          if (gcsUnmountedRef.current) return;
+          if (err instanceof Error && err.message.startsWith("Authentication required.")) {
+            clearInterval(pollIntervalId);
+            gcsPollIntervalRef.current = null;
+            clearTimeout(gcsWatchdogTimeoutRef.current ?? undefined);
+            gcsWatchdogTimeoutRef.current = null;
+            setGcsPhase("error");
+            setGcsError(err.message);
+            return;
+          }
           // Transient network error — keep polling
         });
     }, 10_000);
