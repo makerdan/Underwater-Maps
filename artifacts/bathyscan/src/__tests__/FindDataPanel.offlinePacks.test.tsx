@@ -84,6 +84,8 @@ let mockPacks: OfflinePack[] = [];
 
 /** Spy so tests can assert how many times listOfflinePacks was called. */
 const mockListOfflinePacks = vi.fn(async () => mockPacks);
+const mockRequestDatasetSwitch = vi.hoisted(() => vi.fn());
+const mockSetDatasetId = vi.hoisted(() => vi.fn());
 
 // ---------------------------------------------------------------------------
 // vi.mock declarations
@@ -116,7 +118,7 @@ vi.mock("@/lib/offlinePackStore", () => ({
 vi.mock("@/lib/context", () => ({
   useAppState: () => ({
     datasetId: null,
-    setDatasetId: vi.fn(),
+    setDatasetId: mockSetDatasetId,
     setPendingExternalUserDatasetId: vi.fn(),
     setCatalogSourcedAt: vi.fn(),
   }),
@@ -141,7 +143,7 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("@/lib/simulatedDataStore", () => ({
-  requestDatasetSwitch: vi.fn(),
+  requestDatasetSwitch: mockRequestDatasetSwitch,
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -226,6 +228,8 @@ describe("FindDataPanel — offline pack fallback", () => {
   beforeEach(() => {
     onClose.mockClear();
     mockListOfflinePacks.mockClear();
+    mockRequestDatasetSwitch.mockReset();
+    mockSetDatasetId.mockClear();
     mockIsOnline = true;
     mockPacks = [];
   });
@@ -333,5 +337,28 @@ describe("FindDataPanel — offline pack fallback", () => {
     expect(
       screen.getByText("Type a query to discover datasets"),
     ).toBeInTheDocument();
+  });
+
+  it("closes the panel before applying a confirmed offline pack switch", async () => {
+    mockIsOnline = false;
+    mockPacks = [PACK_A];
+    await act(async () => { renderPanel(); });
+    await waitFor(() => {
+      expect(screen.getByTestId("offline-pack-view-ds-alpha")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("offline-pack-view-ds-alpha"));
+
+    expect(mockRequestDatasetSwitch).toHaveBeenCalledTimes(1);
+    const { onConfirm } = mockRequestDatasetSwitch.mock.calls[0]![0] as {
+      onConfirm: () => void;
+    };
+    onConfirm();
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mockSetDatasetId).toHaveBeenCalledWith("ds-alpha");
+    expect(onClose.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSetDatasetId.mock.invocationCallOrder[0]!,
+    );
   });
 });

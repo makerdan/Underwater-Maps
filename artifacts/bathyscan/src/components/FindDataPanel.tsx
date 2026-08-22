@@ -1196,8 +1196,8 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       void requestDatasetSwitch({
         datasetId: pack.datasetId,
         onConfirm: () => {
-          setDatasetId(pack.datasetId);
           onClose();
+          setDatasetId(pack.datasetId);
         },
       });
     },
@@ -1661,9 +1661,9 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
       void requestDatasetSwitch({
         datasetId: presetDatasetId,
         onConfirm: () => {
+          onClose();
           setDatasetId(presetDatasetId);
           setCatalogSourcedAt({ forDatasetId: presetDatasetId, date: createdAt });
-          onClose();
         },
       });
     },

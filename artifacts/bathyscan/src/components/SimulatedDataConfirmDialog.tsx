@@ -86,6 +86,12 @@ export const SimulatedDataConfirmDialog: React.FC = () => {
       : null;
 
   function handleConfirm() {
+    // Close Find Data before handing control back to the switch caller. This
+    // is important for callers whose preflight opened this dialog while the
+    // panel was mounted: the caller may update terrain state synchronously,
+    // so relying on its callback to close the panel leaves the handoff order
+    // nondeterministic.
+    setFindDataPanelOpen(false);
     onConfirm();
   }
 

@@ -78,8 +78,9 @@ describe("SimulatedDataConfirmDialog", () => {
     expect(useUiStore.getState().findDataPanelOpen).toBe(false);
   });
 
-  it("Load anyway calls onConfirm without flipping suppression", () => {
+  it("Load anyway closes Find Data and calls onConfirm without flipping suppression", () => {
     const { onConfirm, onCancel } = openPending();
+    useUiStore.setState({ ...useUiStore.getState(), findDataPanelOpen: true });
     render(<SimulatedDataConfirmDialog />);
     act(() => {
       fireEvent.click(screen.getByTestId("simulated-data-confirm"));
@@ -87,6 +88,7 @@ describe("SimulatedDataConfirmDialog", () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onCancel).not.toHaveBeenCalled();
     expect(useSimulatedDataStore.getState().suppressed).toBe(false);
+    expect(useUiStore.getState().findDataPanelOpen).toBe(false);
   });
 
   it("toggling 'Don't ask again this session' persists to sessionStorage", () => {
