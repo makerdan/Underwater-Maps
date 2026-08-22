@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -167,11 +167,17 @@ function expandWithGroupMembers(
  * compared against the last saved/restored signature to detect unsaved
  * changes before switching server layout revisions.
  */
-function layoutSignatureOf(transforms: ReadonlyMap<string, PuzzleTransform>): string {
+function layoutSignatureOf(
+  transforms: ReadonlyMap<string, PuzzleTransform>,
+  groups: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+): string {
   const entries = [...transforms.entries()]
     .map(([id, xf]) => [id, xf.tx, xf.ty, xf.angleDeg, !!xf.locked, xf.annotation ?? ""] as const)
     .sort((a, b) => (a[0] < b[0] ? -1 : 1));
-  return JSON.stringify(entries);
+  const groupEntries = [...groups.values()]
+    .map((members) => [...members].sort())
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return JSON.stringify({ entries, groups: groupEntries });
 }
 export const OverviewMap: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
@@ -567,7 +573,8 @@ export const OverviewMap: React.FC = () => {
   useEffect(() => { setPuzzleStoreMode(puzzleMode); }, [puzzleMode, setPuzzleStoreMode]);
 
   // Brief "saved" flash state — true for ~1500 ms after the user clicks SAVE.
-  const [puzzleSaved, setPuzzleSaved] = useState(false);
+  const [puzzleSaveStatus, setPuzzleSaveStatus] = useState<"idle" | "saved" | "failed">("idle");
+  const puzzleSaved = puzzleSaveStatus === "saved";
 
   // Layout preset save form — inline text input that appears below the toolbar.
   const [puzzleLayoutFormOpen, setPuzzleLayoutFormOpen] = useState(false);
@@ -620,6 +627,9 @@ export const OverviewMap: React.FC = () => {
       } catch {
         // Ignore quota / security errors silently.
       }
+    } else {
+      try { sessionStorage.removeItem("bathyscan:puzzleTransforms"); } catch { /* unavailable */ }
+      try { localStorage.removeItem("bathyscan:puzzleTransforms"); } catch { /* unavailable */ }
     }
 
     // Convert pixel-space puzzle transforms to geographic offsets so the
@@ -678,7 +688,7 @@ export const OverviewMap: React.FC = () => {
   // Hydrate puzzle transforms on mount. Prefer sessionStorage (more recent
   // within the same tab session) and fall back to localStorage so arrangements
   // survive a full browser restart / tab close.
-  useEffect(() => {
+  useLayoutEffect(() => {
     try {
       const raw =
         sessionStorage.getItem("bathyscan:puzzleTransforms") ??
@@ -739,13 +749,16 @@ export const OverviewMap: React.FC = () => {
       } catch {
         // Ignore quota / security errors silently.
       }
+    } else {
+      try { sessionStorage.removeItem("bathyscan:puzzleGroups"); } catch { /* unavailable */ }
+      try { localStorage.removeItem("bathyscan:puzzleGroups"); } catch { /* unavailable */ }
     }
   }, [puzzleGroups]);
 
   // Hydrate puzzle groups on mount. Prefer sessionStorage (more recent within
   // the same tab session) and fall back to localStorage so groups survive a
   // full browser restart / tab close.
-  useEffect(() => {
+  useLayoutEffect(() => {
     try {
       const raw =
         sessionStorage.getItem("bathyscan:puzzleGroups") ??
@@ -850,13 +863,16 @@ export const OverviewMap: React.FC = () => {
     setPuzzleLayouts(next);
     setPuzzleLayoutFormOpen(false);
     setPuzzleLayoutNameInput("");
-    setPuzzleSaved(true);
-    setTimeout(() => setPuzzleSaved(false), 1500);
+    setPuzzleSaveStatus("saved");
+    setTimeout(() => setPuzzleSaveStatus("idle"), 3000);
   }, [puzzleLayouts, setPuzzleLayouts]);
 
   // Signature of the current layout — compared against the last saved/restored
   // signature to detect unsaved changes before switching revisions.
   const lastAppliedLayoutSigRef = useRef<string | null>(null);
+  const [pendingRevisionDeletes, setPendingRevisionDeletes] = useState<Set<string>>(new Set());
+  const pendingRevisionDeletesRef = useRef(new Set<string>());
+  const revisionRestoreRequestRef = useRef(0);
 
   /**
    * Save the current layout (tiles incl. locked + annotation, and groups) as a
@@ -889,11 +905,14 @@ export const OverviewMap: React.FC = () => {
         groups,
       });
       useSpecialCollectionStore.getState().appendRevision(active.collectionId, revision);
-      lastAppliedLayoutSigRef.current = layoutSignatureOf(puzzleTransformsRef.current);
+      lastAppliedLayoutSigRef.current = layoutSignatureOf(
+        puzzleTransformsRef.current,
+        puzzleGroupsRef.current,
+      );
       setPuzzleLayoutFormOpen(false);
       setPuzzleLayoutNameInput("");
-      setPuzzleSaved(true);
-      setTimeout(() => setPuzzleSaved(false), 1500);
+      setPuzzleSaveStatus("saved");
+      setTimeout(() => setPuzzleSaveStatus("idle"), 3000);
     } catch {
       toast({
         title: "Save failed",
@@ -907,10 +926,12 @@ export const OverviewMap: React.FC = () => {
   }, [serverLayoutSaving]);
 
   /** Restore a server layout revision, confirming first if unsaved changes exist. */
-  const restoreServerRevision = useCallback((rev: LayoutRevision) => {
+  const restoreServerRevision = useCallback(async (rev: LayoutRevision) => {
     const active = useSpecialCollectionStore.getState().active;
     if (!active) return;
-    const sig = layoutSignatureOf(puzzleTransformsRef.current);
+    const previousRevisionId = active.activeRevisionId;
+    const restoreRequest = ++revisionRestoreRequestRef.current;
+    const sig = layoutSignatureOf(puzzleTransformsRef.current, puzzleGroupsRef.current);
     if (
       lastAppliedLayoutSigRef.current !== null &&
       sig !== lastAppliedLayoutSigRef.current &&
@@ -930,29 +951,63 @@ export const OverviewMap: React.FC = () => {
       })),
       groups: rev.groups.map((g) => [...g.datasetIds]),
     });
-    // Persist the active-revision choice (fire-and-forget; UI already updated).
-    patchUserCollectionsIdMeta(active.collectionId, { activeRevisionId: rev.id }).catch(() => {});
     useSpecialCollectionStore.setState((s) =>
       s.active?.collectionId === active.collectionId
         ? { active: { ...s.active, activeRevisionId: rev.id } }
         : {},
     );
     setLayoutsDropdownOpen(false);
+    try {
+      await patchUserCollectionsIdMeta(active.collectionId, { activeRevisionId: rev.id });
+    } catch {
+      // The local layout remains useful, but must not be presented as a
+      // durable active-revision choice when the metadata write was rejected.
+      useSpecialCollectionStore.setState((s) =>
+        s.active?.collectionId === active.collectionId &&
+        s.active.activeRevisionId === rev.id &&
+        revisionRestoreRequestRef.current === restoreRequest
+          ? { active: { ...s.active, activeRevisionId: previousRevisionId } }
+          : {},
+      );
+      toast({
+        title: "Revision restore partly failed",
+        description: "The layout was restored locally, but the active revision could not be saved. Please try again.",
+        variant: "destructive",
+        duration: 6000,
+      });
+    }
   }, []);
 
   /** Delete a server layout revision. */
   const deleteServerRevision = useCallback(async (rev: LayoutRevision) => {
     const active = useSpecialCollectionStore.getState().active;
     if (!active) return;
+    if (pendingRevisionDeletesRef.current.has(rev.id)) return;
+    if (typeof window !== "undefined" && !window.confirm(`Delete layout revision "${rev.name}"?`)) return;
+    const collectionId = active.collectionId;
+    pendingRevisionDeletesRef.current.add(rev.id);
+    setPendingRevisionDeletes((current) => new Set(current).add(rev.id));
     try {
-      await deleteUserCollectionsIdLayoutRevisionId(active.collectionId, rev.id);
-      useSpecialCollectionStore.getState().removeRevision(active.collectionId, rev.id);
+      await deleteUserCollectionsIdLayoutRevisionId(collectionId, rev.id);
+      useSpecialCollectionStore.getState().removeRevision(collectionId, rev.id);
+      toast({
+        title: "Revision deleted",
+        description: `"${rev.name}" was deleted.`,
+        duration: 3000,
+      });
     } catch {
       toast({
         title: "Delete failed",
-        description: "Could not delete the layout revision. Please try again.",
+        description: "The revision was not deleted. Check your connection and try again.",
         variant: "destructive",
         duration: 4000,
+      });
+    } finally {
+      pendingRevisionDeletesRef.current.delete(rev.id);
+      setPendingRevisionDeletes((current) => {
+        const next = new Set(current);
+        next.delete(rev.id);
+        return next;
       });
     }
   }, []);
@@ -1049,7 +1104,7 @@ export const OverviewMap: React.FC = () => {
     setPuzzleGroups(restored.groups);
     setPuzzleSelectedIds(new Set(), null);
     dirtyRef.current = true;
-    lastAppliedLayoutSigRef.current = layoutSignatureOf(restored.transforms);
+    lastAppliedLayoutSigRef.current = layoutSignatureOf(restored.transforms, restored.groups);
     useSpecialCollectionStore.getState().consumeRestore();
   }, [spcPendingRestore, setPuzzleSelectedIds]);
 
@@ -1082,7 +1137,7 @@ export const OverviewMap: React.FC = () => {
       useSpecialCollectionStore.getState().markGeoLayoutOutdated();
     }
     prevPuzzleTransformsFor3DRef.current = puzzleTransforms;
-  }, [puzzleTransforms]);
+  }, [puzzleTransforms, puzzleGroups.size]);
 
   /**
    * Confirmed Apply-to-3D: convert the saved layout revision into geographic
@@ -1550,13 +1605,14 @@ export const OverviewMap: React.FC = () => {
     [visibleDatasets],
   );
 
-  // True when at least one tile has been moved/rotated — controls Reset button.
+  // True when the puzzle has any non-default state — controls Reset button.
   const hasPuzzleTransforms = useMemo(() => {
+    if (puzzleGroups.size > 0) return true;
     for (const v of puzzleTransforms.values()) {
       if (v.tx !== 0 || v.ty !== 0 || v.angleDeg !== 0 || v.flipH || v.flipV) return true;
     }
     return false;
-  }, [puzzleTransforms]);
+  }, [puzzleTransforms, puzzleGroups.size]);
   // Only hit /efh for preset datasets — user-saved EFH datasets have polygons
   // already embedded in overviewGrid.habitatPolygons.
   const { data: efhData } = useGetEfh(
@@ -5113,10 +5169,10 @@ export const OverviewMap: React.FC = () => {
                   setPuzzleSelectedIds(new Set(), null);
                   setPuzzleGroups(new Map());
                   puzzleGroupCounterRef.current = 0;
-                  sessionStorage.removeItem("bathyscan:puzzleTransforms");
-                  sessionStorage.removeItem("bathyscan:puzzleGroups");
-                  localStorage.removeItem("bathyscan:puzzleTransforms");
-                  localStorage.removeItem("bathyscan:puzzleGroups");
+                   try { sessionStorage.removeItem("bathyscan:puzzleTransforms"); } catch { /* unavailable */ }
+                   try { sessionStorage.removeItem("bathyscan:puzzleGroups"); } catch { /* unavailable */ }
+                   try { localStorage.removeItem("bathyscan:puzzleTransforms"); } catch { /* unavailable */ }
+                   try { localStorage.removeItem("bathyscan:puzzleGroups"); } catch { /* unavailable */ }
                   dirtyRef.current = true;
                 }}
                 style={{
@@ -5145,16 +5201,27 @@ export const OverviewMap: React.FC = () => {
                 data-testid="overview-puzzle-save"
                 aria-label="Save puzzle tile positions to this session"
                 onClick={() => {
-                  try {
+                   let saved = false;
+                   try {
                     sessionStorage.setItem(
                       "bathyscan:puzzleTransforms",
                       JSON.stringify([...puzzleTransforms.entries()]),
                     );
+                     saved = true;
                   } catch {
-                    // Ignore quota errors silently.
+                     // Storage can be disabled or reject writes (quota/private
+                     // browsing). Do not show success when that happens.
                   }
-                  setPuzzleSaved(true);
-                  setTimeout(() => setPuzzleSaved(false), 1500);
+                    setPuzzleSaveStatus(saved ? "saved" : "failed");
+                    if (!saved) {
+                      toast({
+                        title: "Session save unavailable",
+                        description: "Your layout is still visible, but browser storage rejected the save. Keep this tab open or try again after enabling site storage.",
+                        variant: "destructive",
+                        duration: 6000,
+                      });
+                    }
+                    setTimeout(() => setPuzzleSaveStatus("idle"), saved ? 3000 : 6000);
                 }}
                 style={{
                   background: puzzleSaved ? "rgba(34,197,94,0.22)" : "rgba(20,184,166,0.12)",
@@ -5171,7 +5238,7 @@ export const OverviewMap: React.FC = () => {
                   transition: "background 0.15s, border-color 0.15s, color 0.15s",
                 }}
               >
-                {puzzleSaved ? "✓ SAVED" : "✦ SAVE"}
+                {puzzleSaved ? "✓ SAVED" : puzzleSaveStatus === "failed" ? "⚠ SAVE FAILED" : "✦ SAVE"}
               </button>
             </ViewscreenTooltip>
           )}
@@ -5270,7 +5337,7 @@ export const OverviewMap: React.FC = () => {
                       >
                         <button
                           data-testid={`overview-puzzle-revision-restore-${rev.id}`}
-                          onClick={() => restoreServerRevision(rev)}
+                          onClick={() => void restoreServerRevision(rev)}
                           title={`Restore revision "${rev.name}"`}
                           style={{
                             flex: 1,
@@ -5296,6 +5363,7 @@ export const OverviewMap: React.FC = () => {
                           data-testid={`overview-puzzle-revision-delete-${rev.id}`}
                           aria-label={`Delete revision ${rev.name}`}
                           onClick={() => void deleteServerRevision(rev)}
+                          disabled={pendingRevisionDeletes.has(rev.id)}
                           title="Delete this revision"
                           style={{
                             background: "transparent",
@@ -5303,7 +5371,8 @@ export const OverviewMap: React.FC = () => {
                             color: "#f87171",
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: "calc(11px * var(--bs-font-scale, 1))",
-                            cursor: "pointer",
+                            cursor: pendingRevisionDeletes.has(rev.id) ? "wait" : "pointer",
+                            opacity: pendingRevisionDeletes.has(rev.id) ? 0.5 : 1,
                             padding: "2px 4px",
                             flexShrink: 0,
                           }}
