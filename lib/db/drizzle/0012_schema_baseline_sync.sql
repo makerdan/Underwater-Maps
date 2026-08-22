@@ -26,6 +26,7 @@ CREATE TABLE "markers" (
 	"label" text NOT NULL,
 	"notes" text,
 	"user_id" text NOT NULL,
+"geometry" jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

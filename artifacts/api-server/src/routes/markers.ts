@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, eq, sql, isNull, gte, lte, or } from "drizzle-orm";
-import { db, markersTable, catchCountersTable, catchEntriesTable, datasetCatalogTable, customDatasetsTable } from "@workspace/db";
+import { db, markersTable, catchCountersTable, catchEntriesTable, datasetCatalogTable, customDatasetsTable, type MarkerGeometry } from "@workspace/db";
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody, GetMarkersResponse, GetMarkersResponseItem, PatchMarkersIdResponse, DeleteMarkersMineResponse } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -14,6 +14,70 @@ import { ALL_PRESET_DATASETS, BUNDLED_COVERAGE_BBOXES } from "../lib/terrain.js"
 
 const LABEL_MAX = 200;
 const NOTES_MAX = 2000;
+const MAX_POLYGON_VERTICES = 100;
+const MAX_DRIFT_WAYPOINTS = 10_000;
+
+type GeometryCoordinate = { lon: number; lat: number };
+
+function geometryCoordinates(geometry: MarkerGeometry | null | undefined): GeometryCoordinate[] {
+  if (!geometry || geometry.kind === "point") return [];
+  if (geometry.kind === "area") {
+    return geometry.shape === "circle" ? [geometry.center] : geometry.vertices;
+  }
+  return geometry.waypoints;
+}
+
+/** Semantic checks not expressible in the OpenAPI schema (cross-field rules). */
+export function validateMarkerGeometry(geometry: MarkerGeometry | null | undefined): string | null {
+  if (geometry == null || geometry.kind === "point") return null;
+  const coords = geometryCoordinates(geometry);
+  if (coords.some((p) => !Number.isFinite(p.lon) || !Number.isFinite(p.lat))) {
+    return "geometry coordinates must be finite numbers";
+  }
+  if (geometry.kind === "area") {
+    if (geometry.shape === "circle" && !geometry.center) return "area circle requires center";
+    if (geometry.shape === "polygon" && !geometry.vertices) return "area polygon requires vertices";
+    if (geometry.shape === "circle" && (!Number.isFinite(geometry.radiusM) || geometry.radiusM <= 0)) {
+      return "area circle radiusM must be greater than zero";
+    }
+    if (geometry.shape === "polygon") {
+      if (geometry.vertices.length < 3 || geometry.vertices.length > MAX_POLYGON_VERTICES) {
+        return `area polygon must contain 3-${MAX_POLYGON_VERTICES} vertices`;
+      }
+      const unique = new Set(geometry.vertices.map((p) => `${p.lon},${p.lat}`));
+      if (unique.size < 3) return "area polygon must contain at least three unique vertices";
+      const twiceArea = geometry.vertices.reduce((sum, p, i, points) => {
+        const next = points[(i + 1) % points.length]!;
+        return sum + p.lon * next.lat - next.lon * p.lat;
+      }, 0);
+      if (Math.abs(twiceArea) < 1e-12) return "area polygon must not be degenerate";
+    }
+    if (geometry.depthBand && geometry.depthBand.min > geometry.depthBand.max) {
+      return "geometry depthBand.min must be less than or equal to max";
+    }
+  } else {
+    if (!geometry.waypoints || !geometry.summary) return "drift requires waypoints and summary";
+    if (geometry.waypoints.length < 2 || geometry.waypoints.length > MAX_DRIFT_WAYPOINTS) {
+      return `drift must contain 2-${MAX_DRIFT_WAYPOINTS} waypoints`;
+    }
+    if (geometry.summary.minDepth > geometry.summary.maxDepth) {
+      return "drift summary minDepth must be less than or equal to maxDepth";
+    }
+    if (geometry.summary.distanceM < 0 || geometry.summary.durationS < 0) {
+      return "drift summary distanceM and durationS must be non-negative";
+    }
+    const start = new Date(geometry.summary.startAt).getTime();
+    const end = new Date(geometry.summary.endAt).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+      return "drift summary endAt must be on or after startAt";
+    }
+  }
+  return null;
+}
+
+function geometryJson(geometry: MarkerGeometry | null | undefined): MarkerGeometry | null {
+  return geometry == null ? null : JSON.parse(JSON.stringify(geometry)) as MarkerGeometry;
+}
 
 /** UUID shape of the custom_datasets primary key. Non-UUID ids must never be
  *  queried against that column — Postgres throws
@@ -147,7 +211,7 @@ router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /a
 }));
 
 router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMarkersBody, "POST /api/markers"), asyncHandler(async (req, res): Promise<void> => {
-  const { datasetId, lon, lat, depth, type = "custom", label, notes, quickCatch, conditions } = res.locals.parsedBody;
+  const { datasetId, lon, lat, depth, type = "custom", label, notes, quickCatch, conditions, geometry } = res.locals.parsedBody;
   const userId = (req as AuthenticatedRequest).clerkUserId;
 
   // Semantic validation — return 422 Unprocessable Entity for out-of-range values.
@@ -173,6 +237,11 @@ router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMar
     res.status(422).json({ error: "validation_error", field: "notes", message: `notes must be at most ${NOTES_MAX} characters` });
     return;
   }
+  const geometryError = validateMarkerGeometry(geometry);
+  if (geometryError) {
+    res.status(422).json({ error: "validation_error", field: "geometry", message: geometryError });
+    return;
+  }
 
   // Dataset bbox guard — only when a datasetId is provided.
   if (datasetId != null) {
@@ -181,7 +250,7 @@ router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMar
       res.status(404).json({ error: "not_found", message: "Dataset not found" });
       return;
     }
-    if (resolution.kind === "bbox" && !isInsideBbox(lon, lat, resolution.bbox)) {
+    if (resolution.kind === "bbox" && [{ lon, lat }, ...geometryCoordinates(geometry)].some((p) => !isInsideBbox(p.lon, p.lat, resolution.bbox))) {
       res.status(422).json({ error: "validation_error", message: "Marker coordinates are outside the dataset's coverage area" });
       return;
     }
@@ -225,6 +294,7 @@ router.post("/markers", requireAuth, dataMutationRateLimit, validateBody(PostMar
       userId,
       catchSeq,
       conditions: conditionsJson,
+      geometry: geometryJson(geometry),
     })
     .returning();
 
@@ -258,6 +328,11 @@ router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(
       return;
     }
   }
+  const geometryError = validateMarkerGeometry(updateData.geometry);
+  if (geometryError) {
+    res.status(422).json({ error: "validation_error", field: "geometry", message: geometryError });
+    return;
+  }
 
   // Dataset bbox guard — only when the request body explicitly supplies a
   // datasetId (non-null). Patching only label/notes/depth leaves this field
@@ -282,16 +357,22 @@ router.patch("/markers/:id", requireAuth, dataMutationRateLimit, validateParams(
       }
       const lon = (updateData as { lon?: number }).lon ?? existing.lon;
       const lat = (updateData as { lat?: number }).lat ?? existing.lat;
-      if (!isInsideBbox(lon, lat, resolution.bbox)) {
+      const geometryPoints = "geometry" in updateData
+        ? geometryCoordinates(updateData.geometry).concat([{ lon, lat }])
+        : [{ lon, lat }];
+      if (geometryPoints.some((p) => !isInsideBbox(p.lon, p.lat, resolution.bbox))) {
         res.status(422).json({ error: "validation_error", message: "Marker coordinates are outside the dataset's coverage area" });
         return;
       }
     }
   }
 
+  const persistedUpdateData = "geometry" in updateData
+    ? { ...updateData, geometry: geometryJson(updateData.geometry) }
+    : updateData;
   const [updated] = await db
     .update(markersTable)
-    .set(updateData)
+    .set(persistedUpdateData)
     .where(and(eq(markersTable.id, id), eq(markersTable.userId, userId)))
     .returning();
 

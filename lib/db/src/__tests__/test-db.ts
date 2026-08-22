@@ -191,6 +191,7 @@ export async function createTestDb(): Promise<TestContext> {
       user_id    text NOT NULL,
       catch_seq  integer,
       conditions jsonb,
+      geometry jsonb,
       created_at timestamp NOT NULL DEFAULT now()
     );
   `);

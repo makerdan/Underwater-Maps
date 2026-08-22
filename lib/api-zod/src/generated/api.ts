@@ -1341,6 +1341,55 @@ export const GetMarkersQueryParams = zod.object({
   "maxLon": zod.coerce.number().min(getMarkersQueryMaxLonMin).max(getMarkersQueryMaxLonMax).optional().describe('East bound for bounds query (required when datasetId is absent)')
 })
 
+export const getMarkersResponseGeometryOneTwoCenterLonMin = -180;
+export const getMarkersResponseGeometryOneTwoCenterLonMax = 180;
+
+export const getMarkersResponseGeometryOneTwoCenterLatMin = -90;
+export const getMarkersResponseGeometryOneTwoCenterLatMax = 90;
+
+export const getMarkersResponseGeometryOneTwoRadiusMExclusiveMin = 0;
+export const getMarkersResponseGeometryOneTwoRadiusMMax = 100000;
+
+export const getMarkersResponseGeometryOneTwoDepthBandMinMin = 0;
+
+export const getMarkersResponseGeometryOneTwoDepthBandMaxMin = 0;
+
+export const getMarkersResponseGeometryOneThreeVerticesItemLonMin = -180;
+export const getMarkersResponseGeometryOneThreeVerticesItemLonMax = 180;
+
+export const getMarkersResponseGeometryOneThreeVerticesItemLatMin = -90;
+export const getMarkersResponseGeometryOneThreeVerticesItemLatMax = 90;
+
+export const getMarkersResponseGeometryOneThreeVerticesMin = 3;
+export const getMarkersResponseGeometryOneThreeVerticesMax = 100;
+
+export const getMarkersResponseGeometryOneThreeDepthBandMinMin = 0;
+
+export const getMarkersResponseGeometryOneThreeDepthBandMaxMin = 0;
+
+export const getMarkersResponseGeometryOneFourWaypointsItemOneLonMin = -180;
+export const getMarkersResponseGeometryOneFourWaypointsItemOneLonMax = 180;
+
+export const getMarkersResponseGeometryOneFourWaypointsItemOneLatMin = -90;
+export const getMarkersResponseGeometryOneFourWaypointsItemOneLatMax = 90;
+
+export const getMarkersResponseGeometryOneFourWaypointsItemTwoDepthMin = 0;
+
+export const getMarkersResponseGeometryOneFourWaypointsMin = 2;
+export const getMarkersResponseGeometryOneFourWaypointsMax = 10000;
+
+export const getMarkersResponseGeometryOneFourSummaryDistanceMMin = 0;
+export const getMarkersResponseGeometryOneFourSummaryDistanceMMax = 100000000;
+
+export const getMarkersResponseGeometryOneFourSummaryDurationSMin = 0;
+export const getMarkersResponseGeometryOneFourSummaryDurationSMax = 315576000;
+
+export const getMarkersResponseGeometryOneFourSummaryMinDepthMin = 0;
+
+export const getMarkersResponseGeometryOneFourSummaryMaxDepthMin = 0;
+
+
+
 export const GetMarkersResponseItem = zod.object({
   "id": zod.string().describe('UUID primary key'),
   "datasetId": zod.string().nullable().describe('Dataset this marker belongs to; null for unassigned (dataset-free) markers'),
@@ -1368,6 +1417,53 @@ export const GetMarkersResponseItem = zod.object({
   "weatherObservedAt": zod.string().nullish().describe('ISO timestamp of the cached weather observation'),
   "weatherSource": zod.enum(['pack', 'unavailable'])
 }).describe('Frozen snapshot of conditions at the moment a quick-drop marker was created. Every data field is nullable — missing sources never block a drop; each source field records where the value came from.\n').nullish().describe('Frozen conditions snapshot captured at quick-drop time; null when not a quick-drop marker'),
+  "geometry": zod.union([zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['point'])
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['area']),
+  "shape": zod.enum(['circle']),
+  "center": zod.object({
+  "lon": zod.number().min(getMarkersResponseGeometryOneTwoCenterLonMin).max(getMarkersResponseGeometryOneTwoCenterLonMax),
+  "lat": zod.number().min(getMarkersResponseGeometryOneTwoCenterLatMin).max(getMarkersResponseGeometryOneTwoCenterLatMax)
+}),
+  "radiusM": zod.number().gt(getMarkersResponseGeometryOneTwoRadiusMExclusiveMin).max(getMarkersResponseGeometryOneTwoRadiusMMax),
+  "depthBand": zod.object({
+  "min": zod.number().min(getMarkersResponseGeometryOneTwoDepthBandMinMin),
+  "max": zod.number().min(getMarkersResponseGeometryOneTwoDepthBandMaxMin)
+}).optional()
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['area']),
+  "shape": zod.enum(['polygon']),
+  "vertices": zod.array(zod.object({
+  "lon": zod.number().min(getMarkersResponseGeometryOneThreeVerticesItemLonMin).max(getMarkersResponseGeometryOneThreeVerticesItemLonMax),
+  "lat": zod.number().min(getMarkersResponseGeometryOneThreeVerticesItemLatMin).max(getMarkersResponseGeometryOneThreeVerticesItemLatMax)
+})).min(getMarkersResponseGeometryOneThreeVerticesMin).max(getMarkersResponseGeometryOneThreeVerticesMax),
+  "depthBand": zod.object({
+  "min": zod.number().min(getMarkersResponseGeometryOneThreeDepthBandMinMin),
+  "max": zod.number().min(getMarkersResponseGeometryOneThreeDepthBandMaxMin)
+}).optional()
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['drift']),
+  "waypoints": zod.array(zod.object({
+  "lon": zod.number().min(getMarkersResponseGeometryOneFourWaypointsItemOneLonMin).max(getMarkersResponseGeometryOneFourWaypointsItemOneLonMax),
+  "lat": zod.number().min(getMarkersResponseGeometryOneFourWaypointsItemOneLatMin).max(getMarkersResponseGeometryOneFourWaypointsItemOneLatMax)
+}).and(zod.object({
+  "recordedAt": zod.coerce.date(),
+  "depth": zod.number().min(getMarkersResponseGeometryOneFourWaypointsItemTwoDepthMin)
+}))).min(getMarkersResponseGeometryOneFourWaypointsMin).max(getMarkersResponseGeometryOneFourWaypointsMax),
+  "summary": zod.object({
+  "distanceM": zod.number().min(getMarkersResponseGeometryOneFourSummaryDistanceMMin).max(getMarkersResponseGeometryOneFourSummaryDistanceMMax),
+  "durationS": zod.number().min(getMarkersResponseGeometryOneFourSummaryDurationSMin).max(getMarkersResponseGeometryOneFourSummaryDurationSMax),
+  "startAt": zod.coerce.date(),
+  "endAt": zod.coerce.date(),
+  "minDepth": zod.number().min(getMarkersResponseGeometryOneFourSummaryMinDepthMin),
+  "maxDepth": zod.number().min(getMarkersResponseGeometryOneFourSummaryMaxDepthMin)
+})
+})]).nullish().describe('Versioned area or drift geometry; null for legacy point markers'),
   "createdAt": zod.coerce.date(),
   "userId": zod.string().optional().describe('Clerk user ID of the user who created this marker')
 })
@@ -1389,6 +1485,54 @@ export const postMarkersBodyLabelMax = 200;
 export const postMarkersBodyNotesMax = 2000;
 
 export const postMarkersBodyQuickCatchDefault = false;
+export const postMarkersBodyGeometryOneTwoCenterLonMin = -180;
+export const postMarkersBodyGeometryOneTwoCenterLonMax = 180;
+
+export const postMarkersBodyGeometryOneTwoCenterLatMin = -90;
+export const postMarkersBodyGeometryOneTwoCenterLatMax = 90;
+
+export const postMarkersBodyGeometryOneTwoRadiusMExclusiveMin = 0;
+export const postMarkersBodyGeometryOneTwoRadiusMMax = 100000;
+
+export const postMarkersBodyGeometryOneTwoDepthBandMinMin = 0;
+
+export const postMarkersBodyGeometryOneTwoDepthBandMaxMin = 0;
+
+export const postMarkersBodyGeometryOneThreeVerticesItemLonMin = -180;
+export const postMarkersBodyGeometryOneThreeVerticesItemLonMax = 180;
+
+export const postMarkersBodyGeometryOneThreeVerticesItemLatMin = -90;
+export const postMarkersBodyGeometryOneThreeVerticesItemLatMax = 90;
+
+export const postMarkersBodyGeometryOneThreeVerticesMin = 3;
+export const postMarkersBodyGeometryOneThreeVerticesMax = 100;
+
+export const postMarkersBodyGeometryOneThreeDepthBandMinMin = 0;
+
+export const postMarkersBodyGeometryOneThreeDepthBandMaxMin = 0;
+
+export const postMarkersBodyGeometryOneFourWaypointsItemOneLonMin = -180;
+export const postMarkersBodyGeometryOneFourWaypointsItemOneLonMax = 180;
+
+export const postMarkersBodyGeometryOneFourWaypointsItemOneLatMin = -90;
+export const postMarkersBodyGeometryOneFourWaypointsItemOneLatMax = 90;
+
+export const postMarkersBodyGeometryOneFourWaypointsItemTwoDepthMin = 0;
+
+export const postMarkersBodyGeometryOneFourWaypointsMin = 2;
+export const postMarkersBodyGeometryOneFourWaypointsMax = 10000;
+
+export const postMarkersBodyGeometryOneFourSummaryDistanceMMin = 0;
+export const postMarkersBodyGeometryOneFourSummaryDistanceMMax = 100000000;
+
+export const postMarkersBodyGeometryOneFourSummaryDurationSMin = 0;
+export const postMarkersBodyGeometryOneFourSummaryDurationSMax = 315576000;
+
+export const postMarkersBodyGeometryOneFourSummaryMinDepthMin = 0;
+
+export const postMarkersBodyGeometryOneFourSummaryMaxDepthMin = 0;
+
+
 
 export const PostMarkersBody = zod.object({
   "datasetId": zod.string().nullish().describe('Dataset this marker belongs to. Pass null for dataset-free (unassigned) markers.'),
@@ -1415,7 +1559,54 @@ export const PostMarkersBody = zod.object({
   "tempC": zod.number().nullish(),
   "weatherObservedAt": zod.string().nullish().describe('ISO timestamp of the cached weather observation'),
   "weatherSource": zod.enum(['pack', 'unavailable'])
-}).describe('Frozen snapshot of conditions at the moment a quick-drop marker was created. Every data field is nullable — missing sources never block a drop; each source field records where the value came from.\n').nullish().describe('Optional frozen conditions snapshot captured at drop time')
+}).describe('Frozen snapshot of conditions at the moment a quick-drop marker was created. Every data field is nullable — missing sources never block a drop; each source field records where the value came from.\n').nullish().describe('Optional frozen conditions snapshot captured at drop time'),
+  "geometry": zod.union([zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['point'])
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['area']),
+  "shape": zod.enum(['circle']),
+  "center": zod.object({
+  "lon": zod.number().min(postMarkersBodyGeometryOneTwoCenterLonMin).max(postMarkersBodyGeometryOneTwoCenterLonMax),
+  "lat": zod.number().min(postMarkersBodyGeometryOneTwoCenterLatMin).max(postMarkersBodyGeometryOneTwoCenterLatMax)
+}),
+  "radiusM": zod.number().gt(postMarkersBodyGeometryOneTwoRadiusMExclusiveMin).max(postMarkersBodyGeometryOneTwoRadiusMMax),
+  "depthBand": zod.object({
+  "min": zod.number().min(postMarkersBodyGeometryOneTwoDepthBandMinMin),
+  "max": zod.number().min(postMarkersBodyGeometryOneTwoDepthBandMaxMin)
+}).optional()
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['area']),
+  "shape": zod.enum(['polygon']),
+  "vertices": zod.array(zod.object({
+  "lon": zod.number().min(postMarkersBodyGeometryOneThreeVerticesItemLonMin).max(postMarkersBodyGeometryOneThreeVerticesItemLonMax),
+  "lat": zod.number().min(postMarkersBodyGeometryOneThreeVerticesItemLatMin).max(postMarkersBodyGeometryOneThreeVerticesItemLatMax)
+})).min(postMarkersBodyGeometryOneThreeVerticesMin).max(postMarkersBodyGeometryOneThreeVerticesMax),
+  "depthBand": zod.object({
+  "min": zod.number().min(postMarkersBodyGeometryOneThreeDepthBandMinMin),
+  "max": zod.number().min(postMarkersBodyGeometryOneThreeDepthBandMaxMin)
+}).optional()
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['drift']),
+  "waypoints": zod.array(zod.object({
+  "lon": zod.number().min(postMarkersBodyGeometryOneFourWaypointsItemOneLonMin).max(postMarkersBodyGeometryOneFourWaypointsItemOneLonMax),
+  "lat": zod.number().min(postMarkersBodyGeometryOneFourWaypointsItemOneLatMin).max(postMarkersBodyGeometryOneFourWaypointsItemOneLatMax)
+}).and(zod.object({
+  "recordedAt": zod.coerce.date(),
+  "depth": zod.number().min(postMarkersBodyGeometryOneFourWaypointsItemTwoDepthMin)
+}))).min(postMarkersBodyGeometryOneFourWaypointsMin).max(postMarkersBodyGeometryOneFourWaypointsMax),
+  "summary": zod.object({
+  "distanceM": zod.number().min(postMarkersBodyGeometryOneFourSummaryDistanceMMin).max(postMarkersBodyGeometryOneFourSummaryDistanceMMax),
+  "durationS": zod.number().min(postMarkersBodyGeometryOneFourSummaryDurationSMin).max(postMarkersBodyGeometryOneFourSummaryDurationSMax),
+  "startAt": zod.coerce.date(),
+  "endAt": zod.coerce.date(),
+  "minDepth": zod.number().min(postMarkersBodyGeometryOneFourSummaryMinDepthMin),
+  "maxDepth": zod.number().min(postMarkersBodyGeometryOneFourSummaryMaxDepthMin)
+})
+})]).nullish()
 })
 
 
@@ -1441,6 +1632,53 @@ export const patchMarkersIdBodyNotesMax = 2000;
 
 export const patchMarkersIdBodyDepthMin = 0;
 
+export const patchMarkersIdBodyGeometryOneTwoCenterLonMin = -180;
+export const patchMarkersIdBodyGeometryOneTwoCenterLonMax = 180;
+
+export const patchMarkersIdBodyGeometryOneTwoCenterLatMin = -90;
+export const patchMarkersIdBodyGeometryOneTwoCenterLatMax = 90;
+
+export const patchMarkersIdBodyGeometryOneTwoRadiusMExclusiveMin = 0;
+export const patchMarkersIdBodyGeometryOneTwoRadiusMMax = 100000;
+
+export const patchMarkersIdBodyGeometryOneTwoDepthBandMinMin = 0;
+
+export const patchMarkersIdBodyGeometryOneTwoDepthBandMaxMin = 0;
+
+export const patchMarkersIdBodyGeometryOneThreeVerticesItemLonMin = -180;
+export const patchMarkersIdBodyGeometryOneThreeVerticesItemLonMax = 180;
+
+export const patchMarkersIdBodyGeometryOneThreeVerticesItemLatMin = -90;
+export const patchMarkersIdBodyGeometryOneThreeVerticesItemLatMax = 90;
+
+export const patchMarkersIdBodyGeometryOneThreeVerticesMin = 3;
+export const patchMarkersIdBodyGeometryOneThreeVerticesMax = 100;
+
+export const patchMarkersIdBodyGeometryOneThreeDepthBandMinMin = 0;
+
+export const patchMarkersIdBodyGeometryOneThreeDepthBandMaxMin = 0;
+
+export const patchMarkersIdBodyGeometryOneFourWaypointsItemOneLonMin = -180;
+export const patchMarkersIdBodyGeometryOneFourWaypointsItemOneLonMax = 180;
+
+export const patchMarkersIdBodyGeometryOneFourWaypointsItemOneLatMin = -90;
+export const patchMarkersIdBodyGeometryOneFourWaypointsItemOneLatMax = 90;
+
+export const patchMarkersIdBodyGeometryOneFourWaypointsItemTwoDepthMin = 0;
+
+export const patchMarkersIdBodyGeometryOneFourWaypointsMin = 2;
+export const patchMarkersIdBodyGeometryOneFourWaypointsMax = 10000;
+
+export const patchMarkersIdBodyGeometryOneFourSummaryDistanceMMin = 0;
+export const patchMarkersIdBodyGeometryOneFourSummaryDistanceMMax = 100000000;
+
+export const patchMarkersIdBodyGeometryOneFourSummaryDurationSMin = 0;
+export const patchMarkersIdBodyGeometryOneFourSummaryDurationSMax = 315576000;
+
+export const patchMarkersIdBodyGeometryOneFourSummaryMinDepthMin = 0;
+
+export const patchMarkersIdBodyGeometryOneFourSummaryMaxDepthMin = 0;
+
 
 
 export const PatchMarkersIdBody = zod.object({
@@ -1448,8 +1686,104 @@ export const PatchMarkersIdBody = zod.object({
   "label": zod.string().min(1).max(patchMarkersIdBodyLabelMax).optional(),
   "type": zod.enum(['fish', 'shipwreck', 'coral', 'vent', 'custom', 'depth_pole', 'log', 'vegetation', 'sample', 'bass', 'trout', 'pike', 'walleye', 'crayfish', 'salmon', 'tuna', 'halibut', 'shark', 'swordfish', 'rockfish', 'cod', 'mahi_mahi', 'grouper', 'snapper', 'crab', 'lobster', 'shrimp', 'krill', 'jellyfish', 'octopus', 'squid', 'sea_urchin', 'starfish', 'sea_turtle', 'school_herring', 'school_sardine', 'school_mackerel', 'school_tuna', 'school_anchovy', 'catfish', 'crappie', 'bluegill', 'sunfish', 'carp', 'yellow_perch', 'muskie', 'largemouth_bass', 'smallmouth_bass', 'channel_catfish', 'freshwater_shrimp', 'freshwater_crab', 'snapping_turtle', 'bullfrog', 'beaver_dam', 'lily_pad', 'cattail', 'reed_bed', 'submerged_grass', 'spring', 'school_perch', 'school_bluegill', 'school_bass', 'school_crappie', 'school_carp', 'sand_bass', 'lake_trout', 'perch', 'rainbow_trout', 'silver_salmon', 'chinook_salmon', 'pink_salmon', 'turbot', 'black_rockfish', 'yelloweye_rockfish', 'dog_shark', 'dungeness_crab', 'prawn_shrimp', 'school_salmon', 'school_rockfish', 'lingcod', 'sole', 'multiple_logs', 'multiple_fish', 'submerged_rock', 'land', 'red_light', 'green_light', 'red_buoy', 'green_buoy', 'rock', 'clam', 'clam_beach', 'cool_rocks', 'rock_beach', 'brushpile', 'anchorage', 'hazard_rock', 'marina', 'boat_ramp', 'fuel_dock', 'diver_down', 'no_anchor', 'channel_marker', 'daymark']).optional(),
   "notes": zod.string().max(patchMarkersIdBodyNotesMax).nullish(),
-  "depth": zod.number().min(patchMarkersIdBodyDepthMin).optional().describe('Depth in metres (positive = below surface). Must be finite and ≥ 0.')
+  "depth": zod.number().min(patchMarkersIdBodyDepthMin).optional().describe('Depth in metres (positive = below surface). Must be finite and ≥ 0.'),
+  "geometry": zod.union([zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['point'])
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['area']),
+  "shape": zod.enum(['circle']),
+  "center": zod.object({
+  "lon": zod.number().min(patchMarkersIdBodyGeometryOneTwoCenterLonMin).max(patchMarkersIdBodyGeometryOneTwoCenterLonMax),
+  "lat": zod.number().min(patchMarkersIdBodyGeometryOneTwoCenterLatMin).max(patchMarkersIdBodyGeometryOneTwoCenterLatMax)
+}),
+  "radiusM": zod.number().gt(patchMarkersIdBodyGeometryOneTwoRadiusMExclusiveMin).max(patchMarkersIdBodyGeometryOneTwoRadiusMMax),
+  "depthBand": zod.object({
+  "min": zod.number().min(patchMarkersIdBodyGeometryOneTwoDepthBandMinMin),
+  "max": zod.number().min(patchMarkersIdBodyGeometryOneTwoDepthBandMaxMin)
+}).optional()
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['area']),
+  "shape": zod.enum(['polygon']),
+  "vertices": zod.array(zod.object({
+  "lon": zod.number().min(patchMarkersIdBodyGeometryOneThreeVerticesItemLonMin).max(patchMarkersIdBodyGeometryOneThreeVerticesItemLonMax),
+  "lat": zod.number().min(patchMarkersIdBodyGeometryOneThreeVerticesItemLatMin).max(patchMarkersIdBodyGeometryOneThreeVerticesItemLatMax)
+})).min(patchMarkersIdBodyGeometryOneThreeVerticesMin).max(patchMarkersIdBodyGeometryOneThreeVerticesMax),
+  "depthBand": zod.object({
+  "min": zod.number().min(patchMarkersIdBodyGeometryOneThreeDepthBandMinMin),
+  "max": zod.number().min(patchMarkersIdBodyGeometryOneThreeDepthBandMaxMin)
+}).optional()
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['drift']),
+  "waypoints": zod.array(zod.object({
+  "lon": zod.number().min(patchMarkersIdBodyGeometryOneFourWaypointsItemOneLonMin).max(patchMarkersIdBodyGeometryOneFourWaypointsItemOneLonMax),
+  "lat": zod.number().min(patchMarkersIdBodyGeometryOneFourWaypointsItemOneLatMin).max(patchMarkersIdBodyGeometryOneFourWaypointsItemOneLatMax)
+}).and(zod.object({
+  "recordedAt": zod.coerce.date(),
+  "depth": zod.number().min(patchMarkersIdBodyGeometryOneFourWaypointsItemTwoDepthMin)
+}))).min(patchMarkersIdBodyGeometryOneFourWaypointsMin).max(patchMarkersIdBodyGeometryOneFourWaypointsMax),
+  "summary": zod.object({
+  "distanceM": zod.number().min(patchMarkersIdBodyGeometryOneFourSummaryDistanceMMin).max(patchMarkersIdBodyGeometryOneFourSummaryDistanceMMax),
+  "durationS": zod.number().min(patchMarkersIdBodyGeometryOneFourSummaryDurationSMin).max(patchMarkersIdBodyGeometryOneFourSummaryDurationSMax),
+  "startAt": zod.coerce.date(),
+  "endAt": zod.coerce.date(),
+  "minDepth": zod.number().min(patchMarkersIdBodyGeometryOneFourSummaryMinDepthMin),
+  "maxDepth": zod.number().min(patchMarkersIdBodyGeometryOneFourSummaryMaxDepthMin)
 })
+})]).nullish()
+})
+
+export const patchMarkersIdResponseGeometryOneTwoCenterLonMin = -180;
+export const patchMarkersIdResponseGeometryOneTwoCenterLonMax = 180;
+
+export const patchMarkersIdResponseGeometryOneTwoCenterLatMin = -90;
+export const patchMarkersIdResponseGeometryOneTwoCenterLatMax = 90;
+
+export const patchMarkersIdResponseGeometryOneTwoRadiusMExclusiveMin = 0;
+export const patchMarkersIdResponseGeometryOneTwoRadiusMMax = 100000;
+
+export const patchMarkersIdResponseGeometryOneTwoDepthBandMinMin = 0;
+
+export const patchMarkersIdResponseGeometryOneTwoDepthBandMaxMin = 0;
+
+export const patchMarkersIdResponseGeometryOneThreeVerticesItemLonMin = -180;
+export const patchMarkersIdResponseGeometryOneThreeVerticesItemLonMax = 180;
+
+export const patchMarkersIdResponseGeometryOneThreeVerticesItemLatMin = -90;
+export const patchMarkersIdResponseGeometryOneThreeVerticesItemLatMax = 90;
+
+export const patchMarkersIdResponseGeometryOneThreeVerticesMin = 3;
+export const patchMarkersIdResponseGeometryOneThreeVerticesMax = 100;
+
+export const patchMarkersIdResponseGeometryOneThreeDepthBandMinMin = 0;
+
+export const patchMarkersIdResponseGeometryOneThreeDepthBandMaxMin = 0;
+
+export const patchMarkersIdResponseGeometryOneFourWaypointsItemOneLonMin = -180;
+export const patchMarkersIdResponseGeometryOneFourWaypointsItemOneLonMax = 180;
+
+export const patchMarkersIdResponseGeometryOneFourWaypointsItemOneLatMin = -90;
+export const patchMarkersIdResponseGeometryOneFourWaypointsItemOneLatMax = 90;
+
+export const patchMarkersIdResponseGeometryOneFourWaypointsItemTwoDepthMin = 0;
+
+export const patchMarkersIdResponseGeometryOneFourWaypointsMin = 2;
+export const patchMarkersIdResponseGeometryOneFourWaypointsMax = 10000;
+
+export const patchMarkersIdResponseGeometryOneFourSummaryDistanceMMin = 0;
+export const patchMarkersIdResponseGeometryOneFourSummaryDistanceMMax = 100000000;
+
+export const patchMarkersIdResponseGeometryOneFourSummaryDurationSMin = 0;
+export const patchMarkersIdResponseGeometryOneFourSummaryDurationSMax = 315576000;
+
+export const patchMarkersIdResponseGeometryOneFourSummaryMinDepthMin = 0;
+
+export const patchMarkersIdResponseGeometryOneFourSummaryMaxDepthMin = 0;
+
+
 
 export const PatchMarkersIdResponse = zod.object({
   "id": zod.string().describe('UUID primary key'),
@@ -1478,6 +1812,53 @@ export const PatchMarkersIdResponse = zod.object({
   "weatherObservedAt": zod.string().nullish().describe('ISO timestamp of the cached weather observation'),
   "weatherSource": zod.enum(['pack', 'unavailable'])
 }).describe('Frozen snapshot of conditions at the moment a quick-drop marker was created. Every data field is nullable — missing sources never block a drop; each source field records where the value came from.\n').nullish().describe('Frozen conditions snapshot captured at quick-drop time; null when not a quick-drop marker'),
+  "geometry": zod.union([zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['point'])
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['area']),
+  "shape": zod.enum(['circle']),
+  "center": zod.object({
+  "lon": zod.number().min(patchMarkersIdResponseGeometryOneTwoCenterLonMin).max(patchMarkersIdResponseGeometryOneTwoCenterLonMax),
+  "lat": zod.number().min(patchMarkersIdResponseGeometryOneTwoCenterLatMin).max(patchMarkersIdResponseGeometryOneTwoCenterLatMax)
+}),
+  "radiusM": zod.number().gt(patchMarkersIdResponseGeometryOneTwoRadiusMExclusiveMin).max(patchMarkersIdResponseGeometryOneTwoRadiusMMax),
+  "depthBand": zod.object({
+  "min": zod.number().min(patchMarkersIdResponseGeometryOneTwoDepthBandMinMin),
+  "max": zod.number().min(patchMarkersIdResponseGeometryOneTwoDepthBandMaxMin)
+}).optional()
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['area']),
+  "shape": zod.enum(['polygon']),
+  "vertices": zod.array(zod.object({
+  "lon": zod.number().min(patchMarkersIdResponseGeometryOneThreeVerticesItemLonMin).max(patchMarkersIdResponseGeometryOneThreeVerticesItemLonMax),
+  "lat": zod.number().min(patchMarkersIdResponseGeometryOneThreeVerticesItemLatMin).max(patchMarkersIdResponseGeometryOneThreeVerticesItemLatMax)
+})).min(patchMarkersIdResponseGeometryOneThreeVerticesMin).max(patchMarkersIdResponseGeometryOneThreeVerticesMax),
+  "depthBand": zod.object({
+  "min": zod.number().min(patchMarkersIdResponseGeometryOneThreeDepthBandMinMin),
+  "max": zod.number().min(patchMarkersIdResponseGeometryOneThreeDepthBandMaxMin)
+}).optional()
+}),zod.object({
+  "version": zod.literal(1),
+  "kind": zod.enum(['drift']),
+  "waypoints": zod.array(zod.object({
+  "lon": zod.number().min(patchMarkersIdResponseGeometryOneFourWaypointsItemOneLonMin).max(patchMarkersIdResponseGeometryOneFourWaypointsItemOneLonMax),
+  "lat": zod.number().min(patchMarkersIdResponseGeometryOneFourWaypointsItemOneLatMin).max(patchMarkersIdResponseGeometryOneFourWaypointsItemOneLatMax)
+}).and(zod.object({
+  "recordedAt": zod.coerce.date(),
+  "depth": zod.number().min(patchMarkersIdResponseGeometryOneFourWaypointsItemTwoDepthMin)
+}))).min(patchMarkersIdResponseGeometryOneFourWaypointsMin).max(patchMarkersIdResponseGeometryOneFourWaypointsMax),
+  "summary": zod.object({
+  "distanceM": zod.number().min(patchMarkersIdResponseGeometryOneFourSummaryDistanceMMin).max(patchMarkersIdResponseGeometryOneFourSummaryDistanceMMax),
+  "durationS": zod.number().min(patchMarkersIdResponseGeometryOneFourSummaryDurationSMin).max(patchMarkersIdResponseGeometryOneFourSummaryDurationSMax),
+  "startAt": zod.coerce.date(),
+  "endAt": zod.coerce.date(),
+  "minDepth": zod.number().min(patchMarkersIdResponseGeometryOneFourSummaryMinDepthMin),
+  "maxDepth": zod.number().min(patchMarkersIdResponseGeometryOneFourSummaryMaxDepthMin)
+})
+})]).nullish().describe('Versioned area or drift geometry; null for legacy point markers'),
   "createdAt": zod.coerce.date(),
   "userId": zod.string().optional().describe('Clerk user ID of the user who created this marker')
 })

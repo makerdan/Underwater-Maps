@@ -176,6 +176,13 @@
       "when": 1787023550128,
       "tag": "0024_add_user_access",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787433893521,
+      "tag": "0025_sturdy_frightful_four",
+      "breakpoints": true
     }
   ]
 }

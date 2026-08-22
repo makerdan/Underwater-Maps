@@ -20,6 +20,8 @@ export const markersTable = pgTable("markers", {
   catchSeq: integer("catch_seq"),
   /** Frozen conditions snapshot captured at quick-drop time. */
   conditions: jsonb("conditions").$type<Record<string, unknown>>(),
+  /** Versioned geometry; null preserves legacy point-marker semantics. */
+  geometry: jsonb("geometry").$type<MarkerGeometry>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("markers_user_id_idx").on(table.userId),
@@ -42,3 +44,36 @@ export const insertMarkerSchema = createInsertSchema(markersTable).omit({
 });
 export type InsertMarker = z.infer<typeof insertMarkerSchema>;
 export type Marker = typeof markersTable.$inferSelect;
+
+export type MarkerCoordinate = { lon: number; lat: number };
+export type MarkerDepthBand = { min: number; max: number };
+export type MarkerGeometry =
+  | { version: 1; kind: "point" }
+  | {
+      version: 1;
+      kind: "area";
+      shape: "circle";
+      center: MarkerCoordinate;
+      radiusM: number;
+      depthBand?: MarkerDepthBand;
+    }
+  | {
+      version: 1;
+      kind: "area";
+      shape: "polygon";
+      vertices: MarkerCoordinate[];
+      depthBand?: MarkerDepthBand;
+    }
+  | {
+      version: 1;
+      kind: "drift";
+      waypoints: Array<MarkerCoordinate & { recordedAt: string; depth: number }>;
+      summary: {
+        distanceM: number;
+        durationS: number;
+        startAt: string;
+        endAt: string;
+        minDepth: number;
+        maxDepth: number;
+      };
+    };

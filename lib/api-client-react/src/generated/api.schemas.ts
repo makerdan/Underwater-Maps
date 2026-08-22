@@ -2314,6 +2314,132 @@ export interface MarkerConditions {
   weatherSource: MarkerConditionsWeatherSource;
 }
 
+export type MarkerAreaCircleVersion = typeof MarkerAreaCircleVersion[keyof typeof MarkerAreaCircleVersion];
+
+
+export const MarkerAreaCircleVersion = {
+  NUMBER_1: 1,
+} as const;
+
+export type MarkerAreaCircleKind = typeof MarkerAreaCircleKind[keyof typeof MarkerAreaCircleKind];
+
+
+export const MarkerAreaCircleKind = {
+  area: 'area',
+} as const;
+
+export type MarkerAreaCircleShape = typeof MarkerAreaCircleShape[keyof typeof MarkerAreaCircleShape];
+
+
+export const MarkerAreaCircleShape = {
+  circle: 'circle',
+} as const;
+
+export interface MarkerCoordinate {
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  lon: number;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  lat: number;
+}
+
+export interface MarkerDepthBand {
+  /** @minimum 0 */
+  min: number;
+  /** @minimum 0 */
+  max: number;
+}
+
+export interface MarkerAreaCircle {
+  version: MarkerAreaCircleVersion;
+  kind: MarkerAreaCircleKind;
+  shape: MarkerAreaCircleShape;
+  center: MarkerCoordinate;
+  /**
+     * @maximum 100000
+     * @exclusiveMinimum 0
+     */
+  radiusM: number;
+  depthBand?: MarkerDepthBand;
+}
+
+export type MarkerAreaPolygonVersion = typeof MarkerAreaPolygonVersion[keyof typeof MarkerAreaPolygonVersion];
+
+
+export const MarkerAreaPolygonVersion = {
+  NUMBER_1: 1,
+} as const;
+
+export type MarkerAreaPolygonKind = typeof MarkerAreaPolygonKind[keyof typeof MarkerAreaPolygonKind];
+
+
+export const MarkerAreaPolygonKind = {
+  area: 'area',
+} as const;
+
+export type MarkerAreaPolygonShape = typeof MarkerAreaPolygonShape[keyof typeof MarkerAreaPolygonShape];
+
+
+export const MarkerAreaPolygonShape = {
+  polygon: 'polygon',
+} as const;
+
+export interface MarkerAreaPolygon {
+  version: MarkerAreaPolygonVersion;
+  kind: MarkerAreaPolygonKind;
+  shape: MarkerAreaPolygonShape;
+  /**
+     * @minItems 3
+     * @maxItems 100
+     */
+  vertices: MarkerCoordinate[];
+  depthBand?: MarkerDepthBand;
+}
+
+export type MarkerDriftWaypoint = MarkerCoordinate & {
+  recordedAt: string;
+  /** @minimum 0 */
+  depth: number;
+};
+
+export interface MarkerDriftSummary {
+  /**
+     * @minimum 0
+     * @maximum 100000000
+     */
+  distanceM: number;
+  /**
+     * @minimum 0
+     * @maximum 315576000
+     */
+  durationS: number;
+  startAt: string;
+  endAt: string;
+  /** @minimum 0 */
+  minDepth: number;
+  /** @minimum 0 */
+  maxDepth: number;
+}
+
+export type MarkerGeometry = {
+  version: 1;
+  kind: 'point';
+} | MarkerAreaCircle | MarkerAreaPolygon | {
+  version: 1;
+  kind: 'drift';
+  /**
+     * @minItems 2
+     * @maxItems 10000
+     */
+  waypoints: MarkerDriftWaypoint[];
+  summary: MarkerDriftSummary;
+};
+
 export interface Marker {
   /** UUID primary key */
   id: string;
@@ -2330,6 +2456,8 @@ export interface Marker {
   catchSeq?: number | null;
   /** Frozen conditions snapshot captured at quick-drop time; null when not a quick-drop marker */
   conditions?: MarkerConditions | null;
+  /** Versioned area or drift geometry; null for legacy point markers */
+  geometry?: MarkerGeometry | null;
   createdAt: string;
   /** Clerk user ID of the user who created this marker */
   userId?: string;
@@ -3634,6 +3762,7 @@ export interface MarkerPatch {
      * @minimum 0
      */
   depth?: number;
+  geometry?: MarkerGeometry | null;
 }
 
 export type MarkerInputType = typeof MarkerInputType[keyof typeof MarkerInputType];
@@ -3773,6 +3902,7 @@ export interface MarkerInput {
   quickCatch?: boolean;
   /** Optional frozen conditions snapshot captured at drop time */
   conditions?: MarkerConditions | null;
+  geometry?: MarkerGeometry | null;
 }
 
 export type SavedRouteWaypointsItem = {
