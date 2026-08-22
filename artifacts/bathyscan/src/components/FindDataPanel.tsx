@@ -55,6 +55,8 @@ import { HelpIcon } from "@/components/help/HelpButton";
 import { useToast } from "@/hooks/use-toast";
 import { useReturnFocus } from "@/hooks/useReturnFocus";
 import { OVERLAY_Z } from "@/lib/overlayScale";
+import { CatalogResultFilters } from "@/components/CatalogResultFilters";
+import { filterCatalogResults, EMPTY_CATALOG_RESULT_FILTERS, type CatalogResultFilters as CatalogFilters } from "@/lib/catalogResultFilters";
 
 
 // ---------------------------------------------------------------------------
@@ -1082,6 +1084,7 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [dataTypeFilter, setDataTypeFilter] = useState<string>("");
+  const [resultFilters, setResultFilters] = useState<CatalogFilters>(EMPTY_CATALOG_RESULT_FILTERS);
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1245,9 +1248,15 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
 
   // Client-side intertidal filter — the API doesn't know about this category,
   // so we narrow down the raw results ourselves when that chip is active.
-  const searchResults = dataTypeFilter === "intertidal"
-    ? rawSearchResults.filter((e) => INTERTIDAL_CATALOG_IDS.has(e.id))
-    : rawSearchResults;
+  const searchResults = useMemo(() => {
+    const filtered = filterCatalogResults(rawSearchResults, {
+      ...resultFilters,
+      type: dataTypeFilter === "intertidal" ? "" : dataTypeFilter,
+    });
+    return dataTypeFilter === "intertidal"
+      ? filtered.filter((e) => INTERTIDAL_CATALOG_IDS.has(e.id))
+      : filtered;
+  }, [rawSearchResults, resultFilters, dataTypeFilter]);
 
   // My Saves — polled to keep savedCatalogIds current and to feed handleSaveFolderResponse
   const {
@@ -1790,6 +1799,13 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                 </ViewscreenTooltip>
               ))}
             </div>
+            <CatalogResultFilters
+              filters={{ ...resultFilters, type: dataTypeFilter === "intertidal" ? "" : dataTypeFilter }}
+              onChange={(next) => {
+                setResultFilters(next);
+                setDataTypeFilter(next.type);
+              }}
+            />
             {!isOnline && (
               <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", marginTop: 4 }}>
                 Offline — results unavailable
@@ -1886,7 +1902,9 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
               <>
                 {searchResults.length === 0 && !isSearching && (
                   <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", paddingTop: 32 }}>
-                    {debouncedQuery
+                    {rawSearchResults.length > 0
+                      ? "Data was found, but the current filters hide every result."
+                      : debouncedQuery
                       ? "No results found — try different keywords"
                       : "Type a query to discover datasets"}
                   </div>
@@ -1902,6 +1920,11 @@ export const FindDataPanel: React.FC<FindDataPanelProps> = ({ onClose }) => {
                     }}
                   >
                     Sign in to save catalog datasets to your account.
+                  </div>
+                )}
+                {rawSearchResults.length > 0 && (
+                  <div data-testid="find-data-result-count" style={{ fontSize: "calc(11px * var(--bs-font-scale, 1))", color: "#64748b", marginBottom: 6, letterSpacing: "0.06em" }}>
+                    Showing {searchResults.length} of {rawSearchResults.length} results
                   </div>
                 )}
                 {searchResults.map((entry) => {

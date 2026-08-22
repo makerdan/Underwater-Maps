@@ -129,6 +129,8 @@ import { usePuzzleStore, type PuzzleTransform } from "@/lib/puzzleStore";
 import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
 import { computeSnapAdjustment, type SnapEdgeSeg, type SnapRect } from "@/lib/puzzleSnap";
 import { buildRestoredPuzzleState, applyDragTranslation } from "@/lib/puzzleRestore";
+import { CatalogResultFilters } from "@/components/CatalogResultFilters";
+import { filterCatalogResults, EMPTY_CATALOG_RESULT_FILTERS, type CatalogResultFilters as CatalogFilters } from "@/lib/catalogResultFilters";
 
 interface TooltipState {
   visible: boolean;
@@ -6988,6 +6990,11 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
   savedIds,
   savingIds,
 }) => {
+  const [filters, setFilters] = useState<CatalogFilters>(EMPTY_CATALOG_RESULT_FILTERS);
+  const filteredResults = useMemo(
+    () => results ? filterCatalogResults(results, filters) : null,
+    [results, filters],
+  );
   const widthDeg = bbox.east - bbox.west;
   const heightDeg = bbox.north - bbox.south;
   // Approximate km dimensions using Haversine along the bbox midlines.
@@ -7146,6 +7153,11 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
         data-testid="overview-bbox-results"
         style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px", minHeight: 0 }}
       >
+        <CatalogResultFilters
+          filters={filters}
+          onChange={setFilters}
+          testId="overview-result-filters"
+        />
         {results === null && !loading && !error && (
           <div style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
             Click "Request bathymetry" to see matching datasets.
@@ -7156,7 +7168,12 @@ const BboxQueryPanel: React.FC<BboxQueryPanelProps> = ({
             No datasets cover this area.
           </div>
         )}
-        {results && results.map((entry) => {
+        {results && results.length > 0 && filteredResults?.length === 0 && (
+          <div data-testid="overview-filtered-empty" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
+            Data was found, but the current filters hide every result.
+          </div>
+        )}
+        {filteredResults?.map((entry) => {
           const saved = savedIds.has(entry.id);
           const saving = savingIds.has(entry.id);
           return (
