@@ -428,6 +428,7 @@ for (const file of files) {
       // Store raw issue objects for fix-stub (need rvl + absent flag)
       _validationLineIssues: validationLineIssues,
       _patchFailures: [],
+      patchChanged: false,
     });
 
     if (fixStub) {
@@ -502,6 +503,8 @@ for (const file of files) {
       if (patchedContent !== content) {
         try {
           writeFileAtomically(filePath, patchedContent);
+          const entry = nonCompliant.find((e) => e.file === file);
+          entry.patchChanged = true;
         } catch (err) {
           console.error(`check-failure-gate — failed to patch "${file}": ${err.message}`);
           const entry = nonCompliant.find((e) => e.file === file);
@@ -519,7 +522,7 @@ for (const file of files) {
 console.log(`\ncheck-failure-gate — scanned ${files.length} plan file(s) in ${scanDescription}:\n`);
 
 for (const f of compliant) {
-  console.log(`  ✓ ${f}`);
+  console.log(`  ✓ ${f} — unchanged (already compliant)`);
 }
 for (const {
   file,
@@ -528,9 +531,18 @@ for (const {
   missingValidationLines,
   _patchFailures = [],
   writeFailed,
+  _validationLineIssues = [],
+  patchChanged = false,
 } of nonCompliant) {
   const hasMissing = !fixStub && missingSections.length > 0;
   const hasMissingLines = !fixStub && missingValidationLines.length > 0;
+  const manualReasons = [
+    ...missingSections.map(
+      (section) => `new "${section}" stub contains placeholders requiring review`,
+    ),
+    ...unfilledPlaceholders.map((p) => `unfilled stub placeholder "${p}"`),
+    ..._validationLineIssues.filter((i) => !i.absent).map((i) => i.reason),
+  ];
   if (
     !writeFailed &&
     !hasMissing &&
@@ -538,12 +550,23 @@ for (const {
     unfilledPlaceholders.length === 0 &&
     _patchFailures.length === 0
   ) {
-    // patched by --fix-stub (or invalid tier in fix-stub mode — noted in patch details)
+    // This is a successful repair, not an unchanged compliant file.
     const patchDetails = [
       ...missingSections.map((s) => `section: ${s}`),
       ...missingValidationLines.map((m) => `line: ${m}`),
     ].join(", ");
-    console.log(`  ✓ ${file} (patched by --fix-stub: ${patchDetails})`);
+    if (patchChanged) {
+      console.log(
+        `  ✓ ${file} — changed (patched by --fix-stub: ${patchDetails})` +
+          (manualReasons.length > 0
+            ? `; manual repair required: ${manualReasons.join("; ")}`
+            : ""),
+      );
+    } else {
+      console.log(
+        `  ⚠ ${file} — manual repair required: ${manualReasons.join("; ")}`,
+      );
+    }
   } else if (writeFailed || (fixStub && _patchFailures.length > 0)) {
     console.log(
       `  ✗ ${file} — ${[
@@ -551,12 +574,13 @@ for (const {
         ..._patchFailures,
       ].join("; ")}`,
     );
-  } else if (fixStub && unfilledPlaceholders.length > 0) {
-    // In --fix-stub mode, unfilled placeholders cannot be auto-corrected — they
-    // require manual intervention. Report them as warnings rather than errors so
-    // --fix-stub can still exit 0 (the strict check will catch them on next run).
-    const reasons = [`unfilled stub placeholder(s) require manual fix: ${unfilledPlaceholders.map((p) => `"${p}"`).join(", ")}`];
-    console.log(`  ⚠ ${file} — ${reasons.join("; ")}`);
+  } else if (fixStub && manualReasons.length > 0) {
+    // In --fix-stub mode, invalid values and unfilled placeholders cannot be
+    // auto-corrected. Report them as warnings so the fix pass can still exit 0;
+    // the strict check will catch them on the next run.
+    console.log(
+      `  ⚠ ${file} — manual repair required: ${manualReasons.join("; ")}`,
+    );
   } else {
     const reasons = [];
     if (hasMissing) reasons.push(`missing section(s): ${missingSections.join(", ")}`);

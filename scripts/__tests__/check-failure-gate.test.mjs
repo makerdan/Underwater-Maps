@@ -473,6 +473,45 @@ describe("end-to-end pipeline: --fix-stub then strict", () => {
     );
   });
 
+  it("--fix-stub distinguishes changed, unchanged, and manual-repair files", () => {
+    const changedPlan = writePlan(
+      e2eTasksDir,
+      "e2e-changed.md",
+      [
+        "# Task with incomplete validation",
+        "",
+        "## Pre-existing failures to ignore",
+        "None known.",
+        "",
+        "## Validation",
+        "**Command:** `test-standard`",
+        "**Do not escalate:** Run exactly this command.",
+      ].join("\n"),
+    );
+    const result = runScript(["--fix-stub"], e2eDir);
+    assert.match(
+      result.stdout,
+      /e2e-changed\.md — changed \(patched by --fix-stub:/,
+      "a file that receives a patch must be reported as changed",
+    );
+    assert.match(
+      result.stdout,
+      /e2e-compliant\.md — unchanged \(already compliant\)/,
+      "an already compliant file must be reported as unchanged",
+    );
+    assert.match(
+      result.stdout,
+      /e2e-angle-bracket-why\.md — manual repair required:/,
+      "an unfilled placeholder must be reported as requiring manual repair",
+    );
+    assert.match(
+      result.stdout,
+      /e2e-bad-tier\.md — manual repair required:.*deploy-now/,
+      "an invalid tier must be reported as requiring manual repair",
+    );
+    rmSync(changedPlan, { force: true });
+  });
+
   it("after --fix-stub all files have a ## Validation section", () => {
     // Run fix-stub (idempotent if already run)
     runScript(["--fix-stub"], e2eDir);
