@@ -561,6 +561,7 @@ vi.mock("@workspace/api-zod", async (importOriginal) => {
 
 vi.mock("../../lib/catalogSeeder.js", () => ({
   seedDatasetCatalog: async () => {},
+  invalidateCatalogCache: () => {},
   getCatalogEntries: async () => [
     H.CATALOG_ENTRY,
     H.GEBCO_CATALOG_ENTRY,

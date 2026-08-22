@@ -279,6 +279,7 @@ export const OverviewMap: React.FC = () => {
   const substrateLegendLayoutRef = useRef<ReturnType<typeof renderSubstrateLegend>>(null);
   const hiddenEfhSpeciesRef = useRef<ReadonlySet<string>>(new Set());
   const efhLegendLayoutRef = useRef<EfhLegendLayout | null>(null);
+  const embeddedHabitatFeaturesRef = useRef<SubstrateFeature[]>([]);
 
   // Weather station refs (read in rAF loop without React re-render)
   const weatherStationPinsRef = useRef<WeatherStationPin[]>([]);
@@ -1626,14 +1627,24 @@ export const OverviewMap: React.FC = () => {
   // views show identical polygon sets.
   const activeEfhFeatures = useMemo(() => {
     const raw = embeddedEfhPolygons?.features ?? efhData?.features ?? [];
-    if (!overviewGrid) return raw;
-    return filterEfhByBbox(raw, {
+    const efhFeatures = raw.filter((f) =>
+      Boolean(f.properties.species && f.properties.commonName && f.properties.fmp),
+    );
+    if (!overviewGrid) return efhFeatures as EfhFeature[];
+    return filterEfhByBbox(efhFeatures as EfhFeature[], {
       minLon: overviewGrid.minLon,
       maxLon: overviewGrid.maxLon,
       minLat: overviewGrid.minLat,
       maxLat: overviewGrid.maxLat,
     });
   }, [embeddedEfhPolygons, efhData, overviewGrid]);
+  useEffect(() => {
+    const raw = embeddedEfhPolygons?.features ?? [];
+    embeddedHabitatFeaturesRef.current = raw
+      .filter((f) => !f.properties.species && !!f.properties.substrate)
+      .map((f) => f as unknown as SubstrateFeature);
+    dirtyRef.current = true;
+  }, [embeddedEfhPolygons]);
   useEffect(() => {
     efhFeaturesRef.current = activeEfhFeatures;
     dirtyRef.current = true;
@@ -2820,6 +2831,20 @@ export const OverviewMap: React.FC = () => {
         efhLegendLayoutRef.current = null;
       }
 
+      // Saved ShoreZone/AOOS habitat uses the native substrate styling rather
+      // than the EFH species legend/detail panel. It is enabled by the same
+      // habitat-overlay switch because it is part of the saved habitat layer.
+      if (showEfhRef.current && embeddedHabitatFeaturesRef.current.length > 0 && shouldDrawOverlayAtScale(t.scale)) {
+        renderSubstrateOverlay(
+          ctx,
+          embeddedHabitatFeaturesRef.current,
+          worldGrid,
+          t,
+          null,
+          new Set(),
+        );
+      }
+
       // Substrate overlay (CMECS-coloured polygons + legend) — mirrors the
       // 3D SubstrateLayer so anglers can see the gravel / sand / mud zones
       // when planning from the top-down view.
@@ -3719,7 +3744,10 @@ export const OverviewMap: React.FC = () => {
         );
         const hit = hitTestEfh(lon, lat, visibleEfh);
         if (hit) {
-          useUiStore.getState().setSelectedEfh(hit.properties);
+          if (hit.properties.species && hit.properties.commonName && hit.properties.fmp &&
+              hit.properties.depthRangeM && hit.properties.habitatDescription) {
+            useUiStore.getState().setSelectedEfh(hit.properties as import("@workspace/api-client-react").EfhSpeciesProperties);
+          }
           return;
         }
       }

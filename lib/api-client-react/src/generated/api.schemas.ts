@@ -1601,28 +1601,33 @@ export const TerrainDataHabitatPolygonsFeaturesItemType = {
 
 export type TerrainDataHabitatPolygonsFeaturesItemGeometry = { [key: string]: unknown };
 
-export interface EfhSpeciesProperties {
-  /** Scientific species name (snake_case) */
-  species: string;
-  commonName: string;
-  /** Fishery Management Plan name */
-  fmp: string;
-  /** [minDepth, maxDepth] in metres */
-  depthRangeM: number[];
-  habitatDescription: string;
-  /** Life stages covered by this Essential Fish Habitat polygon (e.g. "Juveniles & Adults") */
-  lifeStage?: string;
-  /** Seasonality / temporal window for this Essential Fish Habitat designation (e.g. "Year-round", "Spawning Feb–Apr") */
-  season?: string;
-  source: string;
-  creditUrl: string;
-  /** Suggested hex color for rendering */
-  color: string;
-}
+/**
+ * Properties for either NOAA EFH species polygons or bundled
+ShoreZone/AOOS intertidal habitat polygons. EFH fields are optional
+here because saved non-EFH habitat retains its native fields.
+
+ */
+export interface SavedHabitatFeatureProperties {
+  species?: string;
+  commonName?: string;
+  fmp?: string;
+  depthRangeM?: number[];
+  habitatDescription?: string;
+  source?: string;
+  creditUrl?: string;
+  color?: string;
+  unitId?: string;
+  substrate?: string;
+  shoreZoneClass?: string;
+  cmecsCode?: string;
+  tidepoolScore?: number | null;
+  beachcombingScore?: number | null;
+  [key: string]: unknown;
+ }
 
 export type TerrainDataHabitatPolygonsFeaturesItem = {
   type: TerrainDataHabitatPolygonsFeaturesItemType;
-  properties: EfhSpeciesProperties;
+  properties: SavedHabitatFeatureProperties;
   geometry: TerrainDataHabitatPolygonsFeaturesItemGeometry;
 };
 
@@ -2572,6 +2577,25 @@ export interface SubstrateFeatureCollection {
   metadata?: SubstrateFeatureCollectionMetadata;
 }
 
+export interface EfhSpeciesProperties {
+  /** Scientific species name (snake_case) */
+  species: string;
+  commonName: string;
+  /** Fishery Management Plan name */
+  fmp: string;
+  /** [minDepth, maxDepth] in metres */
+  depthRangeM: number[];
+  habitatDescription: string;
+  /** Life stages covered by this Essential Fish Habitat polygon (e.g. "Juveniles & Adults") */
+  lifeStage?: string;
+  /** Seasonality / temporal window for this Essential Fish Habitat designation (e.g. "Year-round", "Spawning Feb–Apr") */
+  season?: string;
+  source: string;
+  creditUrl: string;
+  /** Suggested hex color for rendering */
+  color: string;
+}
+
 export type EfhFeatureType = typeof EfhFeatureType[keyof typeof EfhFeatureType];
 
 
@@ -2583,7 +2607,7 @@ export type EfhFeatureGeometry = { [key: string]: unknown };
 
 export interface EfhFeature {
   type: EfhFeatureType;
-  properties: EfhSpeciesProperties;
+  properties: SavedHabitatFeatureProperties;
   geometry: EfhFeatureGeometry;
 }
 

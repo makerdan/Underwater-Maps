@@ -7615,7 +7615,7 @@ components:
                     type: string
                     enum: [Feature]
                   properties:
-                    $ref: "#/components/schemas/EfhSpeciesProperties"
+                    $ref: "#/components/schemas/SavedHabitatFeatureProperties"
                   geometry:
                     type: object
                     additionalProperties: true
@@ -8688,7 +8688,7 @@ components:
           type: string
           enum: [Feature]
         properties:
-          $ref: "#/components/schemas/EfhSpeciesProperties"
+          $ref: "#/components/schemas/SavedHabitatFeatureProperties"
         geometry:
           type: object
           additionalProperties: true
@@ -8713,6 +8713,31 @@ components:
       required:
         - type
         - features
+
+    SavedHabitatFeatureProperties:
+      type: object
+      description: |
+        Properties for either NOAA EFH species polygons or bundled
+        ShoreZone/AOOS intertidal habitat polygons. EFH fields are optional
+        here because saved non-EFH habitat retains its native fields.
+      properties:
+        species: { type: string }
+        commonName: { type: string }
+        fmp: { type: string }
+        depthRangeM:
+          type: array
+          items: { type: number }
+        habitatDescription: { type: string }
+        source: { type: string }
+        creditUrl: { type: string }
+        color: { type: string }
+        unitId: { type: string }
+        substrate: { type: string }
+        shoreZoneClass: { type: string }
+        cmecsCode: { type: string }
+        tidepoolScore: { type: number, nullable: true }
+        beachcombingScore: { type: number, nullable: true }
+      additionalProperties: true
 
     FederatedSearchResult:
       type: object

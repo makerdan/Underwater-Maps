@@ -31,6 +31,7 @@ import {
   getGetDatasetsQueryKey,
   type EfhSpeciesProperties,
   type EfhFeature,
+  type SavedHabitatFeatureProperties,
 } from "@workspace/api-client-react";
 import { useSettingsStore } from "@/lib/settingsStore";
 import type { ThreeEvent } from "@react-three/fiber";
@@ -120,11 +121,11 @@ interface ZoneRender {
   color: string;
   commonName: string;
   /** Full species properties used to populate the EfhDetailPanel on click. */
-  properties: EfhSpeciesProperties;
+  properties: EfhSpeciesProperties | SavedHabitatFeatureProperties;
 }
 
 function buildZoneRenders(
-  features: EfhFeature[],
+  features: Array<{ geometry: EfhFeature["geometry"]; properties: EfhSpeciesProperties | SavedHabitatFeatureProperties }>,
   minLon: number, maxLon: number,
   minLat: number, maxLat: number,
 ): ZoneRender[] {
@@ -275,13 +276,14 @@ export const EfhZoneLayer: React.FC = () => {
     (e: ThreeEvent<MouseEvent>) => {
       const props = (e.object.userData?.efhProperties ?? null) as
         | EfhSpeciesProperties
+        | SavedHabitatFeatureProperties
         | null;
-      if (!props) return;
+      if (!props || !props.species || !props.commonName || !props.fmp || !props.depthRangeM || !props.habitatDescription) return;
       // Stop the click from also dispatching to terrain / other layers
       // beneath the zone — otherwise the fly-controls' onClick would fire
       // and yank the camera around the moment the user inspects a zone.
       e.stopPropagation();
-      setSelectedEfh(props);
+      setSelectedEfh(props as EfhSpeciesProperties);
     },
     [setSelectedEfh],
   );

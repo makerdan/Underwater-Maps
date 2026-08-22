@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { buildCatalogGrids } from "../routes/catalog-saves.js";
+import { buildCatalogGrids, buildBundledHabitatCollection } from "../routes/catalog-saves.js";
 import { ALL_PRESET_DATASETS } from "../lib/terrain.js";
 import type { CatalogSeedEntry } from "../lib/catalogSeeder.js";
 import { writeArrayBuffer } from "geotiff";
@@ -33,6 +33,15 @@ function makeTiffResponse(body: ArrayBuffer): Response {
   });
 }
 
+const bundledHabitatCases: ReadonlyArray<
+  readonly [string, (p: Record<string, unknown>) => boolean]
+> = [
+  ["adfg-intertidal-clam-habitat-se-alaska", (p) => p.substrate === "sand" || p.substrate === "gravel"],
+  ["noaa-shorezone-tidal-pools-se-alaska", (p) => Number(p.tidepoolScore) >= 40],
+  ["noaa-shorezone-beachcombing-se-alaska", (p) => Number(p.beachcombingScore) >= 35],
+  ["aoos-intertidal-pow", () => true],
+];
+
 function makeEntry(overrides: Partial<CatalogSeedEntry> & { id: string }): CatalogSeedEntry {
   return {
     name: overrides.id,
@@ -52,6 +61,32 @@ function makeEntry(overrides: Partial<CatalogSeedEntry> & { id: string }): Catal
 }
 
 describe("buildCatalogGrids", () => {
+  it.each(bundledHabitatCases)("materializes bundled habitat entry %s with native properties", (id, predicate) => {
+    const collection = buildBundledHabitatCollection(makeEntry({
+      id,
+      dataType: "habitat",
+      coverageBbox: { minLon: -138, minLat: 54, maxLon: -130, maxLat: 60 },
+    }));
+    expect(collection).not.toBeNull();
+    expect(collection!.features.length).toBeGreaterThan(0);
+    expect(collection!.metadata.creditUrl).toBeTruthy();
+    expect(collection!.features.every((f) => predicate(f.properties))).toBe(true);
+  });
+
+  it("uses a requested bbox for both habitat clipping and the saved grid extent", async () => {
+    const requestBbox = { minLon: -134, minLat: 55, maxLon: -133, maxLat: 56 };
+    const result = await buildCatalogGrids(makeEntry({
+      id: "aoos-intertidal-pow",
+      dataType: "habitat",
+      coverageBbox: { minLon: -138, minLat: 54, maxLon: -130, maxLat: 60 },
+    }), requestBbox);
+    expect(result).not.toBeNull();
+    expect(result!.terrain.minLon).toBe(requestBbox.minLon);
+    expect(result!.terrain.maxLat).toBe(requestBbox.maxLat);
+    expect((result!.terrain as unknown as { habitatPolygons: { metadata: { bbox: number[] } } })
+      .habitatPolygons.metadata.bbox).toEqual([-134, 55, -133, 56]);
+  });
+
   it("returns null for non-preset catalog entries with no materializer wired", async () => {
     const entry = makeEntry({
       id: "some-future-source-not-yet-wired",

@@ -76,6 +76,11 @@ import {
   fetchNoaaAlaskaEfh,
   buildCollectionFromLiveFeatures,
 } from "../lib/efhFetcher.js";
+import {
+  ALASKA_SHOREZONE,
+  AOOS_INTERTIDAL_POW,
+  type ShoreZoneFeature,
+} from "../lib/shoreZoneData.js";
 
 const router = Router();
 
@@ -919,6 +924,17 @@ export async function buildCatalogGrids(
     return { terrain, overview };
   }
 
+  // Bundled intertidal habitat entries are deliberately materialized from the
+  // checked-in bundles.  Saving must not introduce a new upstream dependency:
+  // the bundles already contain the native ShoreZone/AOOS properties, scores,
+  // colours, and attribution needed by the saved-dataset read path.
+  const bundledHabitat = buildBundledHabitatCollection(entry, requestBbox);
+  if (bundledHabitat) {
+    const terrain = buildHabitatGrid(entry, bundledHabitat, 256, requestBbox);
+    const overview = buildHabitatGrid(entry, bundledHabitat, 64, requestBbox);
+    return { terrain, overview };
+  }
+
   // NOAA Great Lakes DEM — high-resolution lake-floor mosaics for all five
   // Great Lakes. Detected by id prefix or by the bbox center falling within
   // a known Great Lake's geographic bounds. Ranked highest-specificity among
@@ -1144,6 +1160,91 @@ export async function buildEfhHabitatCollection(
   };
 }
 
+type SavedHabitatCollection = {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    properties: Record<string, unknown>;
+    geometry: ShoreZoneFeature["geometry"];
+  }>;
+  metadata: Record<string, unknown>;
+};
+
+function habitatFeatureIntersectsBbox(
+  feature: ShoreZoneFeature,
+  bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number },
+): boolean {
+  const polygons =
+    feature.geometry.type === "Polygon"
+      ? [feature.geometry.coordinates]
+      : feature.geometry.coordinates;
+  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  for (const polygon of polygons) {
+    for (const ring of polygon) {
+      for (const [lon, lat] of ring) {
+        if (lon === undefined || lat === undefined) continue;
+        minLon = Math.min(minLon, lon);
+        minLat = Math.min(minLat, lat);
+        maxLon = Math.max(maxLon, lon);
+        maxLat = Math.max(maxLat, lat);
+      }
+    }
+  }
+  return maxLon >= bbox.minLon && minLon <= bbox.maxLon &&
+    maxLat >= bbox.minLat && minLat <= bbox.maxLat;
+}
+
+/**
+ * Select and clip one of the four catalog IDs backed by bundled intertidal
+ * data. Returning null is important: other habitat types must retain their
+ * explicit unsupported-materialization error.
+ */
+export function buildBundledHabitatCollection(
+  entry: CatalogSeedEntry,
+  requestBbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number } | null,
+): SavedHabitatCollection | null {
+  const source =
+    entry.id === "aoos-intertidal-pow" ? AOOS_INTERTIDAL_POW :
+    entry.id === "adfg-intertidal-clam-habitat-se-alaska" ||
+    entry.id === "noaa-shorezone-tidal-pools-se-alaska" ||
+    entry.id === "noaa-shorezone-beachcombing-se-alaska" ? ALASKA_SHOREZONE :
+    null;
+  if (!source) return null;
+
+  const bbox = requestBbox ?? entry.coverageBbox;
+  const predicate =
+    entry.id === "adfg-intertidal-clam-habitat-se-alaska"
+      ? (f: ShoreZoneFeature) => f.properties.substrate === "sand" || f.properties.substrate === "gravel"
+      : entry.id === "noaa-shorezone-tidal-pools-se-alaska"
+      ? (f: ShoreZoneFeature) => (f.properties.tidepoolScore ?? 0) >= 40
+      : entry.id === "noaa-shorezone-beachcombing-se-alaska"
+      ? (f: ShoreZoneFeature) => (f.properties.beachcombingScore ?? 0) >= 35
+      : () => true;
+  const features = source.features
+    .filter(predicate)
+    .filter((f) => habitatFeatureIntersectsBbox(f, bbox))
+    .map((f) => ({
+      type: "Feature" as const,
+      properties: { ...f.properties } as Record<string, unknown>,
+      geometry: f.geometry,
+    }));
+  return {
+    type: "FeatureCollection",
+    features,
+    metadata: {
+      region: entry.name,
+      bbox: [bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat],
+      source: source.metadata.source,
+      sourceName: source.metadata.sourceName,
+      sourceLayer: source.metadata.sourceLayer,
+      sourceService: source.metadata.sourceService,
+      creditUrl: source.metadata.creditUrl,
+      fetchedAt: source.metadata.fetchedAt,
+      featureCount: features.length,
+    },
+  };
+}
+
 /**
  * Build a TerrainGrid wrapper around a habitat polygon overlay. The depth
  * grid itself is a flat zero-depth surface (habitat layers carry no
@@ -1153,12 +1254,13 @@ export async function buildEfhHabitatCollection(
  */
 function buildHabitatGrid(
   entry: CatalogSeedEntry,
-  collection: EfhFeatureCollection,
+  collection: EfhFeatureCollection | SavedHabitatCollection,
   resolution: number,
+  requestBbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number } | null,
 ): TerrainGrid {
-  const { minLon, minLat, maxLon, maxLat } = entry.coverageBbox;
+  const { minLon, minLat, maxLon, maxLat } = requestBbox ?? entry.coverageBbox;
   const depths = new Array<number>(resolution * resolution).fill(0);
-  const grid: TerrainGrid & { habitatPolygons?: EfhFeatureCollection } = {
+  const grid: TerrainGrid & { habitatPolygons?: EfhFeatureCollection | SavedHabitatCollection } = {
     datasetId: entry.id,
     name: entry.name,
     waterType: entry.waterType,

@@ -1598,7 +1598,7 @@ export function installTestHelpers(): void {
       const data = queryClient.getQueryData<EfhFeatureCollection>(
         getGetEfhQueryKey({ datasetId }),
       );
-      return data?.features?.[index]?.properties ?? null;
+      return (data?.features?.[index]?.properties as EfhSpeciesProperties | undefined) ?? null;
     },
     openEfhDetailForFeature: (datasetId, index) => {
       const data = queryClient.getQueryData<EfhFeatureCollection>(
@@ -1606,7 +1606,8 @@ export function installTestHelpers(): void {
       );
       const props = data?.features?.[index]?.properties;
       if (!props) return false;
-      useUiStore.getState().setSelectedEfh(props);
+      if (!props.species || !props.commonName || !props.fmp || !props.depthRangeM || !props.habitatDescription) return false;
+      useUiStore.getState().setSelectedEfh(props as EfhSpeciesProperties);
       return true;
     },
     closeEfhDetail: () => {

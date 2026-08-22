@@ -87,17 +87,21 @@ export const GetDatasetsIdTerrainResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
-  "species": zod.string().describe('Scientific species name (snake_case)'),
-  "commonName": zod.string(),
-  "fmp": zod.string().describe('Fishery Management Plan name'),
-  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
-  "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
-  "source": zod.string(),
-  "creditUrl": zod.string(),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "species": zod.string().optional(),
+  "commonName": zod.string().optional(),
+  "fmp": zod.string().optional(),
+  "depthRangeM": zod.array(zod.number()).optional(),
+  "habitatDescription": zod.string().optional(),
+  "source": zod.string().optional(),
+  "creditUrl": zod.string().optional(),
+  "color": zod.string().optional(),
+  "unitId": zod.string().optional(),
+  "substrate": zod.string().optional(),
+  "shoreZoneClass": zod.string().optional(),
+  "cmecsCode": zod.string().optional(),
+  "tidepoolScore": zod.number().nullish(),
+  "beachcombingScore": zod.number().nullish()
+}).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
@@ -171,17 +175,21 @@ export const GetDatasetsIdOverviewResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
-  "species": zod.string().describe('Scientific species name (snake_case)'),
-  "commonName": zod.string(),
-  "fmp": zod.string().describe('Fishery Management Plan name'),
-  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
-  "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
-  "source": zod.string(),
-  "creditUrl": zod.string(),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "species": zod.string().optional(),
+  "commonName": zod.string().optional(),
+  "fmp": zod.string().optional(),
+  "depthRangeM": zod.array(zod.number()).optional(),
+  "habitatDescription": zod.string().optional(),
+  "source": zod.string().optional(),
+  "creditUrl": zod.string().optional(),
+  "color": zod.string().optional(),
+  "unitId": zod.string().optional(),
+  "substrate": zod.string().optional(),
+  "shoreZoneClass": zod.string().optional(),
+  "cmecsCode": zod.string().optional(),
+  "tidepoolScore": zod.number().nullish(),
+  "beachcombingScore": zod.number().nullish()
+}).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
@@ -245,17 +253,21 @@ export const PostDatasetsUploadResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
-  "species": zod.string().describe('Scientific species name (snake_case)'),
-  "commonName": zod.string(),
-  "fmp": zod.string().describe('Fishery Management Plan name'),
-  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
-  "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
-  "source": zod.string(),
-  "creditUrl": zod.string(),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "species": zod.string().optional(),
+  "commonName": zod.string().optional(),
+  "fmp": zod.string().optional(),
+  "depthRangeM": zod.array(zod.number()).optional(),
+  "habitatDescription": zod.string().optional(),
+  "source": zod.string().optional(),
+  "creditUrl": zod.string().optional(),
+  "color": zod.string().optional(),
+  "unitId": zod.string().optional(),
+  "substrate": zod.string().optional(),
+  "shoreZoneClass": zod.string().optional(),
+  "cmecsCode": zod.string().optional(),
+  "tidepoolScore": zod.number().nullish(),
+  "beachcombingScore": zod.number().nullish()
+}).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
@@ -292,17 +304,21 @@ export const PostDatasetsUploadResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
-  "species": zod.string().describe('Scientific species name (snake_case)'),
-  "commonName": zod.string(),
-  "fmp": zod.string().describe('Fishery Management Plan name'),
-  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
-  "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
-  "source": zod.string(),
-  "creditUrl": zod.string(),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "species": zod.string().optional(),
+  "commonName": zod.string().optional(),
+  "fmp": zod.string().optional(),
+  "depthRangeM": zod.array(zod.number()).optional(),
+  "habitatDescription": zod.string().optional(),
+  "source": zod.string().optional(),
+  "creditUrl": zod.string().optional(),
+  "color": zod.string().optional(),
+  "unitId": zod.string().optional(),
+  "substrate": zod.string().optional(),
+  "shoreZoneClass": zod.string().optional(),
+  "cmecsCode": zod.string().optional(),
+  "tidepoolScore": zod.number().nullish(),
+  "beachcombingScore": zod.number().nullish()
+}).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
@@ -427,17 +443,21 @@ export const PostDatasetsRasterCommitResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
-  "species": zod.string().describe('Scientific species name (snake_case)'),
-  "commonName": zod.string(),
-  "fmp": zod.string().describe('Fishery Management Plan name'),
-  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
-  "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
-  "source": zod.string(),
-  "creditUrl": zod.string(),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "species": zod.string().optional(),
+  "commonName": zod.string().optional(),
+  "fmp": zod.string().optional(),
+  "depthRangeM": zod.array(zod.number()).optional(),
+  "habitatDescription": zod.string().optional(),
+  "source": zod.string().optional(),
+  "creditUrl": zod.string().optional(),
+  "color": zod.string().optional(),
+  "unitId": zod.string().optional(),
+  "substrate": zod.string().optional(),
+  "shoreZoneClass": zod.string().optional(),
+  "cmecsCode": zod.string().optional(),
+  "tidepoolScore": zod.number().nullish(),
+  "beachcombingScore": zod.number().nullish()
+}).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
@@ -474,17 +494,21 @@ export const PostDatasetsRasterCommitResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
-  "species": zod.string().describe('Scientific species name (snake_case)'),
-  "commonName": zod.string(),
-  "fmp": zod.string().describe('Fishery Management Plan name'),
-  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
-  "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
-  "source": zod.string(),
-  "creditUrl": zod.string(),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "species": zod.string().optional(),
+  "commonName": zod.string().optional(),
+  "fmp": zod.string().optional(),
+  "depthRangeM": zod.array(zod.number()).optional(),
+  "habitatDescription": zod.string().optional(),
+  "source": zod.string().optional(),
+  "creditUrl": zod.string().optional(),
+  "color": zod.string().optional(),
+  "unitId": zod.string().optional(),
+  "substrate": zod.string().optional(),
+  "shoreZoneClass": zod.string().optional(),
+  "cmecsCode": zod.string().optional(),
+  "tidepoolScore": zod.number().nullish(),
+  "beachcombingScore": zod.number().nullish()
+}).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
@@ -589,17 +613,21 @@ export const GetUserDatasetsIdTerrainResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
-  "species": zod.string().describe('Scientific species name (snake_case)'),
-  "commonName": zod.string(),
-  "fmp": zod.string().describe('Fishery Management Plan name'),
-  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
-  "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
-  "source": zod.string(),
-  "creditUrl": zod.string(),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "species": zod.string().optional(),
+  "commonName": zod.string().optional(),
+  "fmp": zod.string().optional(),
+  "depthRangeM": zod.array(zod.number()).optional(),
+  "habitatDescription": zod.string().optional(),
+  "source": zod.string().optional(),
+  "creditUrl": zod.string().optional(),
+  "color": zod.string().optional(),
+  "unitId": zod.string().optional(),
+  "substrate": zod.string().optional(),
+  "shoreZoneClass": zod.string().optional(),
+  "cmecsCode": zod.string().optional(),
+  "tidepoolScore": zod.number().nullish(),
+  "beachcombingScore": zod.number().nullish()
+}).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
@@ -645,17 +673,21 @@ export const GetUserDatasetsIdOverviewResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
-  "species": zod.string().describe('Scientific species name (snake_case)'),
-  "commonName": zod.string(),
-  "fmp": zod.string().describe('Fishery Management Plan name'),
-  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
-  "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
-  "source": zod.string(),
-  "creditUrl": zod.string(),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "species": zod.string().optional(),
+  "commonName": zod.string().optional(),
+  "fmp": zod.string().optional(),
+  "depthRangeM": zod.array(zod.number()).optional(),
+  "habitatDescription": zod.string().optional(),
+  "source": zod.string().optional(),
+  "creditUrl": zod.string().optional(),
+  "color": zod.string().optional(),
+  "unitId": zod.string().optional(),
+  "substrate": zod.string().optional(),
+  "shoreZoneClass": zod.string().optional(),
+  "cmecsCode": zod.string().optional(),
+  "tidepoolScore": zod.number().nullish(),
+  "beachcombingScore": zod.number().nullish()
+}).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
@@ -4923,17 +4955,21 @@ export const GetEfhResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
-  "species": zod.string().describe('Scientific species name (snake_case)'),
-  "commonName": zod.string(),
-  "fmp": zod.string().describe('Fishery Management Plan name'),
-  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
-  "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
-  "source": zod.string(),
-  "creditUrl": zod.string(),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "species": zod.string().optional(),
+  "commonName": zod.string().optional(),
+  "fmp": zod.string().optional(),
+  "depthRangeM": zod.array(zod.number()).optional(),
+  "habitatDescription": zod.string().optional(),
+  "source": zod.string().optional(),
+  "creditUrl": zod.string().optional(),
+  "color": zod.string().optional(),
+  "unitId": zod.string().optional(),
+  "substrate": zod.string().optional(),
+  "shoreZoneClass": zod.string().optional(),
+  "cmecsCode": zod.string().optional(),
+  "tidepoolScore": zod.number().nullish(),
+  "beachcombingScore": zod.number().nullish()
+}).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
@@ -4969,17 +5005,21 @@ export const GetEfhByIdResponse = zod.object({
   "features": zod.array(zod.object({
   "type": zod.enum(['Feature']),
   "properties": zod.object({
-  "species": zod.string().describe('Scientific species name (snake_case)'),
-  "commonName": zod.string(),
-  "fmp": zod.string().describe('Fishery Management Plan name'),
-  "depthRangeM": zod.array(zod.number()).describe('[minDepth, maxDepth] in metres'),
-  "habitatDescription": zod.string(),
-  "lifeStage": zod.string().optional().describe('Life stages covered by this Essential Fish Habitat polygon (e.g. \"Juveniles & Adults\")'),
-  "season": zod.string().optional().describe('Seasonality \/ temporal window for this Essential Fish Habitat designation (e.g. \"Year-round\", \"Spawning Feb–Apr\")'),
-  "source": zod.string(),
-  "creditUrl": zod.string(),
-  "color": zod.string().describe('Suggested hex color for rendering')
-}),
+  "species": zod.string().optional(),
+  "commonName": zod.string().optional(),
+  "fmp": zod.string().optional(),
+  "depthRangeM": zod.array(zod.number()).optional(),
+  "habitatDescription": zod.string().optional(),
+  "source": zod.string().optional(),
+  "creditUrl": zod.string().optional(),
+  "color": zod.string().optional(),
+  "unitId": zod.string().optional(),
+  "substrate": zod.string().optional(),
+  "shoreZoneClass": zod.string().optional(),
+  "cmecsCode": zod.string().optional(),
+  "tidepoolScore": zod.number().nullish(),
+  "beachcombingScore": zod.number().nullish()
+}).describe('Properties for either NOAA EFH species polygons or bundled\nShoreZone\/AOOS intertidal habitat polygons. EFH fields are optional\nhere because saved non-EFH habitat retains its native fields.\n'),
   "geometry": zod.record(zod.string(), zod.unknown())
 })),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
