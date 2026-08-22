@@ -68,6 +68,7 @@ export const LandTerrainStatusBanner: React.FC = () => {
         pointerEvents: isLoading ? "none" : "auto",
         backdropFilter: "blur(6px)",
         whiteSpace: "nowrap",
+        userSelect: error ? "text" : "none",
       }}
     >
       {isLoading ? (

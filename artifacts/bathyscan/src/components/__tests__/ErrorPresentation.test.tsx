@@ -1,7 +1,93 @@
 import React from "react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+
+/**
+ * Keep this list in sync when adding a bespoke user-visible failure surface.
+ *
+ * Shared ErrorMessage callers inherit the component contract below. The other
+ * entries are deliberately explicit because a bespoke JSX fallback can look
+ * correct while silently losing either selection or its copy action.
+ *
+ * This is not an inventory of every string containing "error": console-only
+ * diagnostics, transient connection status, and intentional select-none
+ * controls are outside the user-facing failure contract.
+ */
+const USER_VISIBLE_FAILURE_SURFACES = [
+  {
+    name: "shared ErrorMessage contract",
+    file: "components/ui/ErrorMessage.tsx",
+    marker: "Selectable error content with one consistent",
+    copyMarker: "<CopyButton",
+    selectableMarker: "select-text",
+  },
+  {
+    name: "offline banner",
+    file: "App.tsx",
+    marker: 'data-testid="offline-banner"',
+    copyMarker: '<CopyButton text="You\'re offline"',
+    selectableMarker: "select-text",
+  },
+  {
+    name: "service unavailable banner",
+    file: "App.tsx",
+    marker: 'data-testid="service-unavailable-banner"',
+    copyMarker: "text=\"Service unavailable\"",
+    selectableMarker: "select-text",
+  },
+  {
+    name: "session expired banner",
+    file: "App.tsx",
+    marker: "Session expired — please reload to continue",
+    copyMarker: "text=\"Session expired — please reload to continue\"",
+    selectableMarker: "select-text",
+  },
+  {
+    name: "development API failure banner",
+    file: "components/DevApiDownBanner.tsx",
+    marker: 'data-testid="dev-api-down-banner"',
+    copyMarker: "<CopyButton",
+    selectableMarker: "select-text",
+  },
+  {
+    name: "error boundary fallback",
+    file: "components/ErrorBoundary.tsx",
+    marker: "Something went wrong loading",
+    copyMarker: "<CopyButton",
+    selectableMarker: "userSelect: \"text\"",
+  },
+  {
+    name: "offline read-only banner",
+    file: "components/OfflineReadOnlyBanner.tsx",
+    marker: "read-only",
+    copyMarker: "<CopyButton",
+    selectableMarker: "select-text",
+  },
+  {
+    name: "land terrain status failure",
+    file: "components/LandTerrainStatusBanner.tsx",
+    marker: 'data-testid="land-terrain-status-banner"',
+    copyMarker: "<CopyButton",
+    selectableMarker: "userSelect: error ? \"text\" : \"none\"",
+  },
+] as const;
+
+const BATHYSCAN_SRC = resolve(import.meta.dirname, "../..");
+
+function readSurfaceSource(file: string, marker: string): string {
+  const source = readFileSync(resolve(BATHYSCAN_SRC, file), "utf8");
+  const markerIndex = source.indexOf(marker);
+  if (markerIndex === -1) {
+    throw new Error(`Could not find inventory marker "${marker}" in ${file}`);
+  }
+
+  // These entries point to one surface per file. Check the complete file so
+  // multiline JSX and inline-style fallbacks cannot evade the contract.
+  return source;
+}
 
 describe("error presentation", () => {
   beforeEach(() => {
@@ -46,4 +132,13 @@ describe("error presentation", () => {
     expect(screen.getByText("Could not save the marker.")).toBeInTheDocument();
     expect(execCommand).toHaveBeenCalledWith("copy");
   });
+
+  it.each(USER_VISIBLE_FAILURE_SURFACES)(
+    "keeps the $name surface selectable and copyable",
+    ({ file, marker, copyMarker, selectableMarker }) => {
+      const surface = readSurfaceSource(file, marker);
+      expect(surface, `${file} is missing its copy affordance`).toContain(copyMarker);
+      expect(surface, `${file} is missing selectable error text`).toContain(selectableMarker);
+    },
+  );
 });
