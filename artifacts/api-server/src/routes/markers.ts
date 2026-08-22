@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq, sql, isNull, gte, lte } from "drizzle-orm";
+import { and, eq, sql, isNull, gte, lte, or } from "drizzle-orm";
 import { db, markersTable, catchCountersTable, catchEntriesTable, datasetCatalogTable, customDatasetsTable } from "@workspace/db";
 import { PostMarkersBody, DeleteMarkersIdParams, GetMarkersQueryParams, PatchMarkersIdParams, PatchMarkersIdBody, GetMarkersResponse, GetMarkersResponseItem, PatchMarkersIdResponse, DeleteMarkersMineResponse } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
@@ -130,8 +130,15 @@ router.get("/markers", requireAuth, validateQuery(GetMarkersQueryParams, "GET /a
         isNull(markersTable.datasetId),
         gte(markersTable.lat, minLat),
         lte(markersTable.lat, maxLat),
-        gte(markersTable.lon, minLon),
-        lte(markersTable.lon, maxLon),
+        // A coverage bbox with minLon > maxLon crosses the antimeridian.
+        // Treat it as the union of [minLon, 180] and [-180, maxLon]
+        // instead of issuing an impossible single interval.
+        minLon <= maxLon
+          ? and(gte(markersTable.lon, minLon), lte(markersTable.lon, maxLon))
+          : or(
+              gte(markersTable.lon, minLon),
+              lte(markersTable.lon, maxLon),
+            ),
       ),
     )
     .orderBy(markersTable.createdAt);

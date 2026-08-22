@@ -56,7 +56,11 @@ vi.mock("@workspace/db", async () => {
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
   and: vi.fn((...args: unknown[]) => args),
+  or: vi.fn((...args: unknown[]) => ({ type: "or", args })),
   lt: vi.fn(() => "lt-condition"),
+  isNull: vi.fn(() => "is-null-condition"),
+  gte: vi.fn(() => "gte-condition"),
+  lte: vi.fn(() => "lte-condition"),
   sql: vi.fn(() => "sql-fragment"),
 }));
 
@@ -112,6 +116,18 @@ describe("GET /api/markers — auth required", () => {
       .get("/api/markers")
       .set(AUTHED_HEADER);
     expect(res.status).toBe(400);
+  });
+
+  it("uses both longitude intervals for an antimeridian-crossing bounds query", async () => {
+    const { or } = await import("drizzle-orm");
+    const orMock = or as unknown as ReturnType<typeof vi.fn>;
+
+    const res = await request(app)
+      .get("/api/markers?minLat=-10&minLon=170&maxLat=10&maxLon=-170")
+      .set(AUTHED_HEADER);
+
+    expect(res.status).toBe(200);
+    expect(orMock).toHaveBeenCalledWith("gte-condition", "lte-condition");
   });
 });
 
