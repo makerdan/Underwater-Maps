@@ -233,18 +233,25 @@ describe("GET /api/me/export", () => {
 
 describe("DELETE /api/me", () => {
   it("deletes the user's settings, markers, datasets and trails", async () => {
+    state.gpsTrails = [{ id: "trail-1", userId: "user-test" }];
+    state.gpsTrailPoints = [{ id: "point-1", trailId: "trail-1" }];
+
     const res = await request(app).delete("/api/me");
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
-    // All four user-owned tables were targeted for deletion.
+    // Trail points are deleted first when trails exist, followed by all four
+    // user-owned parent tables.
     expect(state.deletes).toEqual(
       expect.arrayContaining([
+        "gpsTrailPoints",
         "gpsTrails",
         "markers",
         "customDatasets",
         "userSettings",
       ]),
     );
+    expect(state.gpsTrailPoints).toHaveLength(0);
+    expect(state.gpsTrails).toHaveLength(0);
   });
 
   it("rolls back all deletes when a mid-sequence DB failure occurs", async () => {

@@ -61,6 +61,10 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn(() => "eq-condition"),
   and: vi.fn((...args: unknown[]) => args),
   lt: vi.fn(() => "lt-condition"),
+  // /api/me uses this when deleting points belonging to the user's trails.
+  // Keep the mock compatible with the route import so the app can boot even
+  // when this settings-focused suite mounts the complete API router.
+  inArray: vi.fn(() => "inArray-condition"),
 }));
 
 vi.mock("@clerk/express", () => ({
