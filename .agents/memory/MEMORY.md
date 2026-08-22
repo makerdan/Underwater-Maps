@@ -133,3 +133,4 @@
 - [Nested router guard prefixes](express-nested-router-guard-prefixes.md) — aggregate Express route guards need explicit mount prefixes; nested layer internals do not reliably expose them.
 - [Environmental observation boundary](environmental-observation-boundary.md) — weather, tide, marine temperature, and profile callers use one facade while adapters retain behavior.
 - [Validation-lock detached lifecycle](validation-lock-unref-lifecycle.md) — an unref'd detached child still needs a referenced lifecycle handle until its exit event.
+- [Offline upload route](offline-upload-route.md) — uploaded UUID terrain uses authenticated user-datasets reads, not legacy catalog paths.

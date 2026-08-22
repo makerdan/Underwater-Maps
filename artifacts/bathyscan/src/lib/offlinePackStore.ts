@@ -155,6 +155,20 @@ export const OFFLINE_PACK_AUXILIARY_TIMEOUT_MS = 5_000;
 const CUSTOM_DATASET_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function terrainUrlForDataset(datasetId: string): string {
+  const route = CUSTOM_DATASET_UUID_RE.test(datasetId)
+    ? `/api/user/datasets/${datasetId}/terrain`
+    : `/api/datasets/${datasetId}/terrain`;
+  return `${API_BASE}${route}`;
+}
+
+function overviewUrlForDataset(datasetId: string): string {
+  const route = CUSTOM_DATASET_UUID_RE.test(datasetId)
+    ? `/api/user/datasets/${datasetId}/overview`
+    : `/api/datasets/${datasetId}/overview`;
+  return `${API_BASE}${route}`;
+}
+
 function cancellationError(): Error {
   const error = new Error("Offline pack save cancelled");
   error.name = "AbortError";
@@ -496,8 +510,8 @@ export async function saveOfflinePack(
     ? (resolvedBbox.minLon + resolvedBbox.maxLon) / 2
     : 0;
 
-  const terrainUrl = `${API_BASE}/api/datasets/${dataset.id}/terrain`;
-  const overviewUrl = `${API_BASE}/api/datasets/${dataset.id}/overview`;
+  const terrainUrl = terrainUrlForDataset(dataset.id);
+  const overviewUrl = overviewUrlForDataset(dataset.id);
   const transactionId = newId();
   let persistedPackKey: string | null = null;
 
@@ -1085,7 +1099,7 @@ export async function estimatePackStorageBytes(
   const stubMultiplier = resM <= 2 ? 4 : 1;
   const scaledStub = Math.round(2.5 * 1024 * 1024 * stubMultiplier);
 
-  const terrainUrl = `${API_BASE}/api/datasets/${datasetId}/terrain`;
+  const terrainUrl = terrainUrlForDataset(datasetId);
   try {
     const res = await fetch(terrainUrl, { method: "HEAD" });
     const contentLength = res.headers.get("content-length");

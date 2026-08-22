@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, API_URL, E2E_USER_ID } from "./fixtures";
 import { terrainCanvas } from "./_helpers/canvases";
 import { E2E_WEB_URL } from "./ports";
 
@@ -16,6 +16,10 @@ import { E2E_WEB_URL } from "./ports";
  */
 
 const BASE = process.env.BASE_URL ?? E2E_WEB_URL;
+const AUTH_HEADERS = {
+  "x-e2e-user-id": E2E_USER_ID,
+  "x-e2e-bypass-secret": "e2e-playwright-secret",
+};
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -456,6 +460,16 @@ const OFFLINE_UPLOAD_ID = "pwa-offline-e2e-upload-001";
 const OFFLINE_UPLOAD_NAME = "Offline Flow Survey";
 const OFFLINE_UPLOAD_BBOX = { minLon: -135.5, minLat: 59.4, maxLon: -135.4, maxLat: 59.5 };
 
+function makeOfflineTerrainCsv(): string {
+  const rows = ["lon,lat,depth"];
+  for (let r = 0; r < 12; r++) {
+    for (let c = 0; c < 12; c++) {
+      rows.push(`${(142.4 + c * 0.01).toFixed(4)},${(11.3 + r * 0.01).toFixed(4)},${1000 + (r + c) * 5}`);
+    }
+  }
+  return rows.join("\n");
+}
+
 test.describe("Save Offline full-download flow", () => {
   /**
    * Exercises the complete Save Area flow from the MY LIBRARY trigger button
@@ -571,6 +585,169 @@ test.describe("Save Offline full-download flow", () => {
       return;
     }
     await expect(cachedBadges.first()).toBeVisible();
+  });
+
+  test("real uploaded terrain survives storage inspection and an offline reload", async ({
+    page,
+    request,
+    context,
+  }) => {
+    test.setTimeout(180_000);
+    const filename = `e2e-offline-restart-${Date.now()}.csv`;
+    const upload = await request.post(`${API_URL}/api/datasets/upload`, {
+      headers: AUTH_HEADERS,
+      multipart: {
+        file: { name: filename, mimeType: "text/csv", buffer: Buffer.from(makeOfflineTerrainCsv()) },
+        resolution: "256",
+      },
+      timeout: 60_000,
+    });
+    expect(upload.ok(), `real upload failed: ${upload.status()}`).toBe(true);
+    const uploadBody = (await upload.json()) as { savedDatasetId?: string; savedDatasetMeta?: { name: string } };
+    const datasetId = uploadBody.savedDatasetId;
+    expect(datasetId).toBeTruthy();
+    const datasetName = uploadBody.savedDatasetMeta?.name ?? filename.replace(/\.csv$/, "");
+
+    try {
+      await page.addInitScript(() => {
+        try {
+          const raw = localStorage.getItem("bathyscan:settings");
+          const parsed = raw ? JSON.parse(raw) as { state?: Record<string, unknown>; version?: number } : {};
+          parsed.state = { ...(parsed.state ?? {}), hasSeenOnboarding: true, hasSeenToolbarRelocationHint: true };
+          localStorage.setItem("bathyscan:settings", JSON.stringify(parsed));
+        } catch {}
+      });
+      await page.goto(BASE, { waitUntil: "domcontentloaded" });
+
+      // Dev E2E serves the actual injectManifest worker, but explicitly
+      // register it here so this test is deterministic when run alone.
+      const registered = await page.evaluate(async () => {
+        if (!("serviceWorker" in navigator)) return false;
+        await navigator.serviceWorker.register("/e2e-offline-sw.js");
+        await navigator.serviceWorker.ready;
+        return true;
+      });
+      if (!registered) {
+        test.skip(true, "The browser could not register the offline service worker");
+        return;
+      }
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const controlled = await page.evaluate(
+        () => "serviceWorker" in navigator && navigator.serviceWorker.controller !== null,
+      );
+      if (!controlled) {
+        test.skip(true, "The browser could not obtain a controlling offline service worker after reload");
+        return;
+      }
+
+      const explore = page.getByRole("button", { name: "Explore", exact: true });
+      if (await explore.isVisible({ timeout: 10_000 }).catch(() => false)) {
+        await explore.click().catch(() => {});
+      }
+      await page
+        .waitForFunction(() => Boolean(window.__bathyTest?.seedTerrain), undefined, { timeout: 15_000 })
+        .catch(() => {});
+      await page.evaluate(() => window.__bathyTest?.seedTerrain?.()).catch(() => {});
+      const uploadRow = page.getByTestId(`btn-load-upload-${datasetId}`);
+      await expect(uploadRow).toBeVisible({ timeout: 30_000 });
+      await uploadRow.click();
+      await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
+
+      // The real modal fetches the authenticated upload's terrain and overview
+      // endpoints. Only auxiliary environmental data is stubbed here.
+      await page.route("**/api/tidal/pack*", (route) =>
+        route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+          station: "e2e-offline-station",
+          heightPredictions: [{ t: new Date().toISOString(), v: 1.2 }],
+          currentPredictions: [],
+          tidalExpiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+          generatedAt: new Date().toISOString(),
+        }) }),
+      );
+      await page.route("**/api/weather/pack*", (route) =>
+        route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+          station: null, observation: null, snapshotAt: new Date().toISOString(),
+        }) }),
+      );
+      await page.route("**/api/markers*", (route) => route.request().method() === "GET"
+        ? route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
+        : route.continue());
+
+      const saveTrigger = page.getByTestId(`btn-offline-upload-${datasetId}`);
+      await expect(saveTrigger).toBeVisible({ timeout: 10_000 });
+      await saveTrigger.click();
+      const modal = page.getByRole("dialog", { name: "Save offline" });
+      await expect(modal).toBeVisible({ timeout: 5_000 });
+      await modal.getByRole("button", { name: "Save Area" }).click();
+      await expect(page.getByTestId("area-pack-done")).toBeVisible({ timeout: 60_000 });
+
+      // Seed the app shell in the same persistent Cache Storage used by the
+      // E2E worker so the reload is genuinely offline, not a network error.
+      await page.evaluate(async () => {
+        const response = await fetch(location.href);
+        const cache = await caches.open("bathyscan-pack-terrain");
+        await cache.put(location.href, response);
+        const resources = performance.getEntriesByType("resource")
+          .map((entry) => (entry as PerformanceResourceTiming).name)
+          .filter((url) => url.startsWith(location.origin));
+        await Promise.all([...new Set(resources)].map(async (url) => {
+          try {
+            const asset = await fetch(url);
+            if (asset.ok) await cache.put(url, asset);
+          } catch {}
+        }));
+      });
+      const storageState = await page.evaluate(async (id) => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const open = indexedDB.open("keyval-store");
+          open.onsuccess = () => resolve(open.result);
+          open.onerror = () => reject(open.error);
+        });
+        const idbKeys = await new Promise<string[]>((resolve, reject) => {
+          const tx = db.transaction("keyval", "readonly");
+          const request = tx.objectStore("keyval").getAllKeys();
+          request.onsuccess = () => resolve(request.result.filter((key): key is string => typeof key === "string"));
+          request.onerror = () => reject(request.error);
+        });
+        db.close();
+        const cache = await caches.open("bathyscan-pack-terrain");
+        const urls = [
+          `${location.origin}/api/user/datasets/${id}/terrain`,
+          `${location.origin}/api/user/datasets/${id}/overview`,
+          `${location.origin}/api/markers?datasetId=${encodeURIComponent(id)}`,
+        ];
+        const cacheHits = await Promise.all(urls.map(async (url) => Boolean(await cache.match(url))));
+        return { hasPackRecord: idbKeys.some((key) => key.startsWith("offline-pack-")), cacheHits };
+      }, datasetId);
+      expect(storageState.hasPackRecord).toBe(true);
+      expect(storageState.cacheHits).toEqual([true, true, true]);
+
+      await modal.getByRole("button", { name: "Close", exact: true }).last().click();
+      await context.setOffline(true);
+      await page.evaluate(() => {
+        Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
+        window.dispatchEvent(new Event("offline"));
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+
+      const findData = page.getByRole("button", { name: /FIND DATA/ }).first();
+      await expect(findData).toBeVisible({ timeout: 15_000 });
+      await findData.click();
+      const panel = page.getByRole("dialog", { name: /Find Data panel/i });
+      await expect(panel).toBeVisible({ timeout: 8_000 });
+      await expect(panel.getByTestId(`offline-pack-card-${datasetId}`)).toBeVisible({ timeout: 10_000 });
+      await panel.getByTestId(`offline-pack-view-${datasetId}`).click();
+      const simulatedDialog = page.getByTestId("simulated-data-dialog");
+      if (await simulatedDialog.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await simulatedDialog.getByRole("button", { name: "Load anyway" }).click();
+      }
+      await expect(page.getByTestId("user-dataset-load-error")).toHaveCount(0);
+      await expect(page.locator("canvas").first()).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('[data-testid="offline-badge"]')).toBeVisible({ timeout: 5_000 });
+      expect(datasetName).toBeTruthy();
+    } finally {
+      await request.delete(`${API_URL}/api/user/datasets/${datasetId}`, { headers: AUTH_HEADERS });
+    }
   });
 });
 
