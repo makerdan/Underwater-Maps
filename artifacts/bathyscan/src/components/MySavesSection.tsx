@@ -62,6 +62,7 @@ import {
 } from "@/hooks/useOfflinePackStatus";
 import { useOfflineScopeStore } from "@/lib/offlineScopeStore";
 import { OVERLAY_Z } from "@/lib/overlayScale";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -364,9 +365,7 @@ const SaveCard: React.FC<{
         </div>
       )}
       {renameError && (
-        <div data-testid={`rename-save-error-${save.id}`} style={{ marginTop: 6, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fca5a5" }}>
-          ⚠ {renameError}
-        </div>
+        <ErrorMessage data-testid={`rename-save-error-${save.id}`} message={renameError} style={{ marginTop: 6, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fca5a5" }} />
       )}
       {save.status === "ready" && save.datasetId && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
@@ -426,9 +425,7 @@ const SaveCard: React.FC<{
       {save.status === "failed" && (
         <>
           {save.errorMessage && (
-            <div style={{ marginTop: 6, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", lineHeight: 1.4 }}>
-              {save.errorMessage}
-            </div>
+            <ErrorMessage message={save.errorMessage} style={{ marginTop: 6, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#f87171", lineHeight: 1.4 }} />
           )}
           <ViewscreenTooltip label="Try materializing this dataset again" side="top">
             <button
@@ -568,9 +565,7 @@ const UploadCard: React.FC<{
         </div>
       )}
       {renameError && (
-        <div data-testid={`rename-upload-error-${dataset.id}`} style={{ marginTop: 6, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fca5a5" }}>
-          ⚠ {renameError}
-        </div>
+        <ErrorMessage data-testid={`rename-upload-error-${dataset.id}`} message={renameError} style={{ marginTop: 6, fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#fca5a5" }} />
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
         <ViewscreenTooltip label="Open this dataset in the viewer" side="top">
@@ -1543,13 +1538,13 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
       {/* Delete errors */}
       {deleteError && (
         <div data-testid="save-delete-error" style={{ marginBottom: 8, padding: "6px 8px", border: "1px solid rgba(248,113,113,0.4)", background: "rgba(248,113,113,0.08)", borderRadius: 4, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#fca5a5", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-          <span>⚠ {deleteError}</span>
+          <ErrorMessage message={deleteError} style={{ flex: 1 }} />
           <button onClick={() => setDeleteError(null)} aria-label="Dismiss error" style={{ background: "transparent", border: "none", color: "#cbd5e1", cursor: "pointer", fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>×</button>
         </div>
       )}
       {deleteUploadError && (
         <div data-testid="upload-delete-error" style={{ marginBottom: 8, padding: "6px 8px", border: "1px solid rgba(248,113,113,0.4)", background: "rgba(248,113,113,0.08)", borderRadius: 4, fontSize: "calc(13.5px * var(--bs-font-scale, 1))", color: "#fca5a5", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-          <span>⚠ {deleteUploadError}</span>
+          <ErrorMessage message={deleteUploadError} style={{ flex: 1 }} />
           <button onClick={() => setDeleteUploadError(null)} aria-label="Dismiss error" style={{ background: "transparent", border: "none", color: "#cbd5e1", cursor: "pointer", fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>×</button>
         </div>
       )}
@@ -1734,7 +1729,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
                 : "This empty folder will be removed."}
             </div>
             {saveFolderDeleteError && (
-              <div style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#fca5a5", marginBottom: 10 }}>{saveFolderDeleteError}</div>
+              <ErrorMessage message={saveFolderDeleteError} style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#fca5a5", marginBottom: 10 }} />
             )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button onClick={() => setConfirmDeleteSaveFolder(null)} data-testid="confirm-delete-save-folder-cancel" style={{ fontSize: "calc(13.5px * var(--bs-font-scale, 1))", padding: "5px 12px", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 3, color: "#e2e8f0", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cancel</button>

@@ -31,6 +31,7 @@ import {
   type AdminUserRecord,
   type AdminUserStatus,
 } from "@/lib/adminUsers";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 type TabId = "all" | AdminUserStatus;
 
@@ -484,9 +485,11 @@ export function UserAccessSection() {
 
       {listQuery.isError && (
         <div data-testid="ua-error">
-          <div style={S.error}>
-            Failed to load users. Check your connection and try again.
-          </div>
+          <ErrorMessage
+            message="Failed to load users. Check your connection and try again."
+            detail={listQuery.error instanceof Error ? listQuery.error.message : null}
+            style={S.error}
+          />
           <button
             style={S.loadMoreBtn}
             data-testid="ua-retry"
@@ -535,9 +538,11 @@ export function UserAccessSection() {
       )}
 
       {actionError !== null && (
-        <div style={{ ...S.error, marginTop: 8 }} data-testid="ua-action-error">
-          {actionError}
-        </div>
+        <ErrorMessage
+          message={actionError}
+          style={{ ...S.error, marginTop: 8 }}
+          data-testid="ua-action-error"
+        />
       )}
 
       {listQuery.isSuccess && listQuery.hasNextPage === true && (

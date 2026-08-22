@@ -42,6 +42,7 @@ import { useTerrainStore } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
 import { CollectionSettingsSheet } from "./CollectionSettingsSheet";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -177,7 +178,7 @@ export const AddToCollectionDialog: React.FC<{
         />
 
         {error && (
-          <div data-testid="add-to-collection-error" style={{ marginTop: 8, color: "#fca5a5", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>{error}</div>
+          <ErrorMessage data-testid="add-to-collection-error" message={error} style={{ marginTop: 8, color: "#fca5a5", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }} />
         )}
 
         <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
@@ -370,7 +371,7 @@ const CollectionRow: React.FC<{
         )}
       </div>
       {renameError && (
-        <div data-testid="collection-rename-error" style={{ padding: "0 26px 4px", color: "#fca5a5", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}>{renameError}</div>
+        <ErrorMessage data-testid="collection-rename-error" message={renameError} style={{ padding: "0 26px 4px", color: "#fca5a5", fontSize: "calc(12px * var(--bs-font-scale, 1))" }} />
       )}
       {unavailableMemberNames.length > 0 && (
         <div
@@ -676,7 +677,7 @@ export const CollectionsSection: React.FC = () => {
                 </div>
               )}
               {createError && (
-                <div data-testid="collections-create-error" style={{ marginTop: 4, color: "#fca5a5", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}>{createError}</div>
+                <ErrorMessage data-testid="collections-create-error" message={createError} style={{ marginTop: 4, color: "#fca5a5", fontSize: "calc(12px * var(--bs-font-scale, 1))" }} />
               )}
             </div>
           )}
@@ -732,7 +733,7 @@ export const CollectionsSection: React.FC = () => {
               The collection will be removed. Its {confirmDelete.members.length} dataset{confirmDelete.members.length === 1 ? "" : "s"} stay in your library.
             </div>
             {deleteError && (
-              <div data-testid="collections-delete-error" style={{ marginBottom: 8, color: "#fca5a5", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }}>{deleteError}</div>
+              <ErrorMessage data-testid="collections-delete-error" message={deleteError} style={{ marginBottom: 8, color: "#fca5a5", fontSize: "calc(12.5px * var(--bs-font-scale, 1))" }} />
             )}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button data-testid="btn-cancel-delete-collection" onClick={() => setConfirmDelete(null)} disabled={deletePending} style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "4px 14px", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 3, color: "#94a3b8", cursor: deletePending ? "not-allowed" : "pointer", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cancel</button>

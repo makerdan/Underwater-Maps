@@ -17,6 +17,7 @@ import { triggerBlobDownload } from "@/lib/blobDownload";
 import { UserAccessSection } from "@/components/admin/UserAccessSection";
 import { useToast } from "@/hooks/use-toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import {
   AdminListUsersResponse,
   AdminPendingUsersCountResponse,
@@ -184,7 +185,7 @@ function OperationalCard({
       {state === "loading" && <div style={{ ...S.skeleton, width: "65%" }} />}
       {state === "ok" && <div style={S.note}>{message}</div>}
       {state === "empty" && <div style={S.note}>No current activity.</div>}
-      {state === "error" && <div style={S.error}>Unable to load this operational summary.</div>}
+      {state === "error" && <ErrorMessage message="Unable to load this operational summary." detail={message || null} style={S.error} />}
       <button
         data-testid={`admin-refresh-${title.toLowerCase().replace(/\W+/g, "-")}`}
         onClick={() => void load()}
@@ -199,15 +200,18 @@ function OperationalCard({
 
 function EmailDeliveryCard() {
   const [state, setState] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const send = async () => {
     setState("sending");
+    setErrorDetail(null);
     try {
       const res = await authorizedFetch(`${basePath}/api/admin/users/test-notification`, { method: "POST" });
-      if (!res.ok) throw new Error("request failed");
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const data = (await res.json()) as { sent?: boolean };
       if (data.sent !== true) throw new Error("delivery failed");
       setState("success");
-    } catch {
+    } catch (err) {
+      setErrorDetail(err instanceof Error ? err.message : null);
       setState("error");
     }
   };
@@ -224,7 +228,7 @@ function EmailDeliveryCard() {
         {state === "sending" ? "SENDING…" : "SEND TEST NOTIFICATION"}
       </button>
       {state === "success" && <div data-testid="admin-email-success" style={{ ...S.note, color: "#4ade80" }}>Test notification sent.</div>}
-      {state === "error" && <div data-testid="admin-email-error" style={{ ...S.error, marginTop: 8 }}>Unable to send the test notification.</div>}
+      {state === "error" && <ErrorMessage data-testid="admin-email-error" message="Unable to send the test notification." detail={errorDetail} style={{ ...S.error, marginTop: 8 }} />}
     </div>
   );
 }
@@ -363,7 +367,7 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
 
       {loadState === "error" && (
         <>
-          <div style={S.error}>Failed to load pending users.</div>
+          <ErrorMessage message="Failed to load pending users." style={S.error} />
           <button
             data-testid="pending-approvals-retry"
             onClick={() => void load()}
@@ -430,14 +434,16 @@ function PendingApprovalsCard({ adminStatus }: { adminStatus: "loading" | "ok" |
                   </div>
                 )}
                 {approveErrors.get(u.clerkUserId) && (
-                  <div style={{ ...S.error, fontSize: "calc(8px * var(--bs-font-scale, 1))" }}>
-                    {approveErrors.get(u.clerkUserId)}
-                  </div>
+                  <ErrorMessage
+                    message={approveErrors.get(u.clerkUserId) ?? ""}
+                    style={{ ...S.error, fontSize: "calc(8px * var(--bs-font-scale, 1))" }}
+                  />
                 )}
                 {denyErrors.get(u.clerkUserId) && (
-                  <div style={{ ...S.error, fontSize: "calc(8px * var(--bs-font-scale, 1))" }}>
-                    {denyErrors.get(u.clerkUserId)}
-                  </div>
+                  <ErrorMessage
+                    message={denyErrors.get(u.clerkUserId) ?? ""}
+                    style={{ ...S.error, fontSize: "calc(8px * var(--bs-font-scale, 1))" }}
+                  />
                 )}
               </div>
               <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -540,9 +546,10 @@ function SkillDownloadCard({ adminStatus }: { adminStatus: "loading" | "ok" | "f
           </button>
           {downloadState === "error" && (
             <>
-              <div style={{ ...S.error, marginTop: 8 }}>
-                Failed to download — please try again. If this keeps failing, the package may be missing from this deployment.
-              </div>
+              <ErrorMessage
+                message="Failed to download — please try again. If this keeps failing, the package may be missing from this deployment."
+                style={{ ...S.error, marginTop: 8 }}
+              />
               <button
                 data-testid="admin-skill-download-retry"
                 onClick={() => void handleDownload()}
@@ -621,13 +628,13 @@ export function AdminPanel() {
 
       {status === "forbidden" && (
         <div style={S.card}>
-          <div style={S.error}>Access restricted to admin users.</div>
+          <ErrorMessage message="Access restricted to admin users." style={S.error} />
         </div>
       )}
 
       {status === "error" && (
         <div style={S.card}>
-          <div style={S.error}>Admin tools are temporarily unavailable.</div>
+          <ErrorMessage message="Admin tools are temporarily unavailable." style={S.error} />
           <button
             data-testid="admin-stats-retry"
             onClick={() => setAdminProbeAttempt((attempt) => attempt + 1)}
@@ -653,7 +660,7 @@ export function AdminPanel() {
         <ErrorBoundary
           fallback={
             <div style={{ ...S.card, marginTop: 12 }}>
-              <div style={S.error}>User access table could not be loaded.</div>
+              <ErrorMessage message="User access table could not be loaded." style={S.error} />
             </div>
           }
         >
@@ -696,10 +703,10 @@ export function AdminPanel() {
 
       {status === "ok" && (
         <>
-          <ErrorBoundary fallback={<div style={{ ...S.card, marginTop: 12 }}><div style={S.error}>Email delivery section could not be loaded.</div></div>}>
+          <ErrorBoundary fallback={<div style={{ ...S.card, marginTop: 12 }}><ErrorMessage message="Email delivery section could not be loaded." style={S.error} /></div>}>
             <EmailDeliveryCard />
           </ErrorBoundary>
-          <ErrorBoundary fallback={<div style={{ ...S.card, marginTop: 12 }}><div style={S.error}>Operational stats could not be loaded.</div></div>}>
+          <ErrorBoundary fallback={<div style={{ ...S.card, marginTop: 12 }}><ErrorMessage message="Operational stats could not be loaded." style={S.error} /></div>}>
             <OperationalCard
               title="Dataset Bucket Status"
               endpoint="/api/admin/bucket-monitor"
@@ -734,7 +741,7 @@ export function AdminPanel() {
       )}
 
       {status === "ok" && (
-        <ErrorBoundary fallback={<div style={{ ...S.card, marginTop: 12 }}><div style={S.error}>Skill download could not be loaded.</div></div>}>
+        <ErrorBoundary fallback={<div style={{ ...S.card, marginTop: 12 }}><ErrorMessage message="Skill download could not be loaded." style={S.error} /></div>}>
           <SkillDownloadCard adminStatus={status} />
         </ErrorBoundary>
       )}
