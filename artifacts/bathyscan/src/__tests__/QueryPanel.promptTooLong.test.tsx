@@ -36,15 +36,6 @@ vi.mock("@/lib/offlineStore", () => ({
 const queryLLMMock = vi.fn();
 vi.mock("@/lib/queryLLM", () => ({
   queryLLM: (...args: unknown[]) => queryLLMMock(...args),
-  // QueryTooLongError must be present in the mock so the QueryPanel module can
-  // import it.  We provide a real class here so instanceof checks in QueryPanel
-  // work correctly even though queryLLM itself is stubbed.
-  QueryTooLongError: class QueryTooLongError extends Error {
-    constructor(details?: string) {
-      super(details ?? "Query too long");
-      this.name = "QueryTooLongError";
-    }
-  },
 }));
 
 vi.mock("@/lib/queryTools", () => ({
@@ -90,7 +81,10 @@ describe("QueryPanel — prompt-too-long error handling", () => {
     queryLLMMock.mockReset();
   });
 
-  it("shows a clear 'question too long' message when queryLLM throws QueryTooLongError", async () => {
+  it("shows a clear message for a foreign QueryTooLongError-shaped failure", async () => {
+    // Deliberately use a plain Error with the wire-level name rather than the
+    // queryLLM module's class. QueryPanel's contract is name-based so it
+    // remains stable when the API/client error implementations differ.
     const tooLongErr = Object.assign(new Error("final retained prompt must not exceed 16000 characters"), {
       name: "QueryTooLongError",
     });
