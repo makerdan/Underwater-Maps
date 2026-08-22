@@ -55,7 +55,16 @@ const POINT_RADIUS_RESPONSE = {
   center: { lat: 55.7, lon: -132.45 },
   radiusKm: 10,
   bbox: { north: 55.79, south: 55.61, east: -132.29, west: -132.61 },
-  datasets: [CATALOG_HIT],
+  datasets: [
+    CATALOG_HIT,
+    {
+      ...CATALOG_HIT,
+      id: "e2e-coord-search-substrate",
+      name: "Clarence Strait Substrate Survey",
+      dataType: "substrate",
+      sourceAgency: "Alaska Coastal Survey",
+    },
+  ],
 };
 
 test.describe("Coordinate search — Find Data → Overview Map flow", () => {
@@ -202,5 +211,90 @@ test.describe("Coordinate search — Find Data → Overview Map flow", () => {
     });
     // The drawer stays open — nothing was queued.
     await expect(panel).toBeVisible();
+  });
+
+  test.describe("mobile selected-area result filtering", () => {
+    test.use({ viewport: { width: 390, height: 740 } });
+
+    test("filters visible cards, resets cleanly, and keeps the coordinate area usable", async ({
+      page,
+    }) => {
+      await page.addInitScript(() => {
+        try {
+          sessionStorage.setItem("bathyscan:simulatedDataWarn:suppress", "true");
+        } catch {}
+      });
+
+      await page.route("**/api/datasets/point-radius-query", (route) =>
+        route.fulfill({
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(POINT_RADIUS_RESPONSE),
+        }),
+      );
+      // Keep the save buttons in their initial, actionable state regardless
+      // of data left by another browser journey.
+      await page.route("**/api/datasets/my-saves*", (route) =>
+        route.fulfill({
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify([]),
+        }),
+      );
+
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+
+      // Coordinate search is exposed by the desktop Find Data flow. The
+      // selected-area panel itself is viewport-safe at the narrow height;
+      // use the desktop shell here so this journey can submit coordinates.
+      await page.setViewportSize({ width: 1024, height: 740 });
+      const findDataBtn = page.locator('button:has-text("FIND DATA")').first();
+      await expect(findDataBtn).toBeVisible({ timeout: 15_000 });
+      await findDataBtn.dispatchEvent("click");
+      const panel = page.getByRole("dialog", { name: /Find Data panel/i });
+      await expect(panel).toBeVisible({ timeout: 8_000 });
+      await expandCoordSearchSection(page);
+      await page.getByTestId("coord-search-input").fill("55.7, -132.45");
+      await page.getByTestId("coord-search-radius").fill("10");
+      await page.getByTestId("coord-search-submit").click();
+
+      await expect(panel).not.toBeVisible({ timeout: 8_000 });
+      const bboxPanel = page.getByTestId("overview-bbox-panel");
+      await expect(bboxPanel).toBeVisible({ timeout: 10_000 });
+      await expect(bboxPanel).toContainText("Clarence Strait Multibeam", {
+        timeout: 15_000,
+      });
+      await expect(bboxPanel).toContainText("Clarence Strait Substrate Survey");
+
+      const summaryBeforeFilter = await page
+        .getByTestId("overview-bbox-metrics")
+        .innerText();
+      await expect(page.getByTestId("overview-bbox-save")).toHaveCount(2);
+      await expect(page.getByTestId("overview-bbox-save").first()).toBeVisible();
+
+      const nameFilter = page.getByLabel("Filter by name");
+      await nameFilter.fill("Multibeam");
+      await expect(page.getByTestId("overview-bbox-result-card")).toHaveCount(1);
+      await expect(bboxPanel).toContainText("Clarence Strait Multibeam");
+      await expect(bboxPanel).not.toContainText("Clarence Strait Substrate Survey");
+      await expect(page.getByTestId("overview-bbox-save")).toHaveCount(1);
+
+      await nameFilter.fill("does-not-exist");
+      await expect(page.getByTestId("overview-filtered-empty")).toBeVisible();
+      await expect(page.getByTestId("overview-bbox-result-card")).toHaveCount(0);
+      expect(await page.getByTestId("overview-bbox-metrics").innerText()).toBe(
+        summaryBeforeFilter,
+      );
+
+      await page
+        .getByTestId("overview-result-filters")
+        .getByRole("button", { name: "CLEAR" })
+        .click();
+      await expect(page.getByTestId("overview-bbox-result-card")).toHaveCount(2);
+      await expect(page.getByTestId("overview-bbox-save")).toHaveCount(2);
+      expect(await page.getByTestId("overview-bbox-metrics").innerText()).toBe(
+        summaryBeforeFilter,
+      );
+    });
   });
 });
