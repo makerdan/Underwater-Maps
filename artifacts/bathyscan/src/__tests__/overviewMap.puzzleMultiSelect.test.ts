@@ -482,7 +482,80 @@ describe("OverviewMap — puzzle multi-select", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 7. Reset clears all transforms AND groups
+  // 7. Switching the visible dataset set preserves valid layout state
+  //    while pruning a genuinely unloaded group member.
+  // -------------------------------------------------------------------------
+  it("preserves valid puzzle members across a visible-set switch and prunes unloaded members", async () => {
+    const { canvas, setPuzzleMode, setSelection, createGroup, getGroups, getTransform } =
+      await renderAndCapture();
+    const gridA = makeGrid(DATASET_A, -122, -119);
+    const gridB = makeGrid(DATASET_B, -119, -116);
+    const datasetC = "dataset-c";
+    const gridC = makeGrid(datasetC, -116, -113);
+    const worldGrid = makeWorldGrid(gridA, [gridB]);
+
+    await act(async () => { setPuzzleMode(true); });
+    await act(async () => { setSelection([DATASET_A, DATASET_B]); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+
+    // Establish a real layout change for the members that must survive.
+    const aCenter = tileCenterPx(gridA, worldGrid);
+    await drag(canvas, aCenter.x, aCenter.y, 24, -11);
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    const transformA = getTransform(DATASET_A);
+    const transformB = getTransform(DATASET_B);
+    expect(transformA?.tx).toBeCloseTo(24, 0);
+    expect(transformB?.ty).toBeCloseTo(-11, 0);
+
+    // Add C to the visible set and create a valid three-member group.
+    await act(async () => {
+      useTerrainStore.setState((prev) => ({
+        visibleDatasets: [
+          ...prev.visibleDatasets,
+          ({ datasetId: datasetC, source: "preset", overviewGrid: gridC, activeGrid: null }) as unknown as VisibleDataset,
+        ],
+      }));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await act(async () => { createGroup([DATASET_A, DATASET_B, datasetC]); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    expect(Object.values(getGroups())[0]).toEqual(
+      expect.arrayContaining([DATASET_A, DATASET_B, datasetC]),
+    );
+
+    // C is genuinely unloaded while A and B remain visible.
+    await act(async () => {
+      useTerrainStore.setState((prev) => ({
+        visibleDatasets: prev.visibleDatasets.filter((v) => v.datasetId !== datasetC),
+      }));
+    });
+    await waitFor(() => {
+      const members = Object.values(getGroups())[0];
+      expect(members).toEqual(expect.arrayContaining([DATASET_A, DATASET_B]));
+      expect(members).not.toContain(datasetC);
+    });
+    expect(getTransform(DATASET_A)).toMatchObject(transformA!);
+    expect(getTransform(DATASET_B)).toMatchObject(transformB!);
+
+    // Restoring the original visible set must not resurrect the pruned member.
+    await act(async () => {
+      useTerrainStore.setState((prev) => ({
+        visibleDatasets: [
+          ...prev.visibleDatasets,
+          ({ datasetId: datasetC, source: "preset", overviewGrid: gridC, activeGrid: null }) as unknown as VisibleDataset,
+        ],
+      }));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    const restoredMembers = Object.values(getGroups())[0];
+    expect(restoredMembers).toEqual(expect.arrayContaining([DATASET_A, DATASET_B]));
+    expect(restoredMembers).not.toContain(datasetC);
+    expect(getTransform(DATASET_A)).toMatchObject(transformA!);
+    expect(getTransform(DATASET_B)).toMatchObject(transformB!);
+  });
+
+  // -------------------------------------------------------------------------
+  // 8. Reset clears all transforms AND groups
   // -------------------------------------------------------------------------
   it("Reset button clears all puzzle transforms and groups", async () => {
     const { canvas, setPuzzleMode, setSelection, getTransform, createGroup, getGroups } =
