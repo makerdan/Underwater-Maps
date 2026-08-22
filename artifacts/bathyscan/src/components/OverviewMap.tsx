@@ -474,6 +474,15 @@ export const OverviewMap: React.FC = () => {
 
   // Weather station selected-pin React state (drives popover)
   const [selectedWeatherStation, setSelectedWeatherStation] = useState<WeatherStation | null>(null);
+  const weatherOpenerRef = useRef<HTMLElement | SVGElement | null>(null);
+  const rawsOpenerRef = useRef<HTMLElement | SVGElement | null>(null);
+  const intertidalOpenerRef = useRef<HTMLElement | SVGElement | null>(null);
+  const toolsOpenerRef = useRef<HTMLButtonElement | null>(null);
+  const waypointPanelOpenerRef = useRef<HTMLButtonElement | null>(null);
+  const trailPanelOpenerRef = useRef<HTMLButtonElement | null>(null);
+  const [overlayVersion, setOverlayVersion] = useState(0);
+  const [selectedRawsDatasetId, setSelectedRawsDatasetId] = useState<string | null>(null);
+  const selectedHotspot = useUiStore((s) => s.selectedHotspot);
 
   // --- Tools popover state --------------------------------------------------
   // Controls the compact "Tools" popover that houses box-select and download.
@@ -1355,6 +1364,12 @@ export const OverviewMap: React.FC = () => {
     dirtyRef.current = true;
   }, [overviewGrid]);
 
+  const openFindData = useCallback(() => {
+    useUiStore.getState().setSidebarMode("explore");
+    useUiStore.getState().setFindDataPanelOpen(true);
+    useUiStore.getState().setOverviewOpen(false);
+  }, []);
+
   // Escape behavior (capture-phase so we win against the global App handler):
   //   1. Mid-drag (drawing a rectangle): cancel the in-progress drag only.
   //   2. Completed download box: clear it.
@@ -1381,11 +1396,55 @@ export const OverviewMap: React.FC = () => {
         e.stopPropagation();
         dragRectRef.current = null;
         clearBbox();
+        return;
+      }
+      // Dismiss the nearest transient popup before allowing the app-level
+      // handler to close the whole Overview. Restore focus to its opener.
+      if (selectedWeatherStation) {
+        e.stopPropagation();
+        weatherStationSelectedIdRef.current = null;
+        setSelectedWeatherStation(null);
+        weatherOpenerRef.current?.focus();
+        return;
+      }
+      if (selectedRawsDatasetId) {
+        e.stopPropagation();
+        rawsSelectedIdRef.current = null;
+        setSelectedRawsDatasetId(null);
+        rawsOpenerRef.current?.focus();
+        return;
+      }
+      if (selectedHotspot) {
+        e.stopPropagation();
+        useUiStore.getState().setSelectedHotspot(null);
+        intertidalOpenerRef.current?.focus();
+        return;
+      }
+      if (showWaypointPanel) {
+        e.stopPropagation();
+        setShowWaypointPanel(false);
+        waypointPanelOpenerRef.current?.focus();
+        return;
+      }
+      if (showTrailList) {
+        e.stopPropagation();
+        setShowTrailList(false);
+        trailPanelOpenerRef.current?.focus();
+        return;
+      }
+      if (toolsPopoverOpen) {
+        e.stopPropagation();
+        setToolsPopoverOpen(false);
+        toolsOpenerRef.current?.focus();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [selectedBbox, bboxResults, downloadBbox, clearBbox]);
+  }, [
+    selectedBbox, bboxResults, downloadBbox, clearBbox, selectedWeatherStation,
+    selectedRawsDatasetId, selectedHotspot, showWaypointPanel, showTrailList,
+    toolsPopoverOpen,
+  ]);
 
   // Close the Tools popover when clicking outside its wrapper.
   useEffect(() => {
@@ -1574,6 +1633,7 @@ export const OverviewMap: React.FC = () => {
       setSelectedWeatherStation(null);
     }
     dirtyRef.current = true;
+    setOverlayVersion((v) => v + 1);
   }, [weatherStationsActive]);
   useEffect(() => {
     if (!weatherStationsActive) return;
@@ -1584,13 +1644,13 @@ export const OverviewMap: React.FC = () => {
     for (const s of weatherStations) m.set(s.id, s);
     weatherStationDataRef.current = m;
     dirtyRef.current = true;
+    setOverlayVersion((v) => v + 1);
   }, [weatherStations, weatherStationsActive]);
 
   // RAWS overlay — fetch all nearby stations when overlay is enabled
   const rawsOverlayActive = useUiStore((s) => s.rawsOverlayActive);
   const { stations: rawsStations } = useRawsStations();
   // Selected RAWS pin React state (drives popover)
-  const [selectedRawsDatasetId, setSelectedRawsDatasetId] = useState<string | null>(null);
   // Register popup state setter and canvas-position getter so e2e tests can
   // open the popover via the backdoor AND dispatch real canvas clicks at the
   // actual rendered pin coordinates.
@@ -1637,6 +1697,7 @@ export const OverviewMap: React.FC = () => {
       setSelectedRawsDatasetId(null);
     }
     dirtyRef.current = true;
+    setOverlayVersion((v) => v + 1);
   }, [rawsOverlayActive]);
   useEffect(() => {
     if (!rawsOverlayActive) return;
@@ -1647,6 +1708,7 @@ export const OverviewMap: React.FC = () => {
     for (const s of rawsStations) m.set(s.datasetId, s);
     rawsDataRef.current = m;
     dirtyRef.current = true;
+    setOverlayVersion((v) => v + 1);
   }, [rawsStations, rawsOverlayActive]);
 
   const { data: substrateCollection, isError: substrateIsError } = useGetSubstrate(datasetId, {
@@ -1691,7 +1753,6 @@ export const OverviewMap: React.FC = () => {
   // from uiStore so the 2D pins match what the 3D IntertidalHotspotsLayer shows.
   const intertidalHotspotsEnabled = useUiStore((s) => s.intertidalHotspotsEnabled);
   const intertidalScoreMode = useUiStore((s) => s.intertidalScoreMode);
-  const selectedHotspot = useUiStore((s) => s.selectedHotspot);
   useEffect(() => {
     intertidalHotspotsEnabledRef.current = intertidalHotspotsEnabled;
     if (!intertidalHotspotsEnabled) {
@@ -1700,6 +1761,7 @@ export const OverviewMap: React.FC = () => {
       intertidalSelectedUnitIdRef.current = null;
     }
     dirtyRef.current = true;
+    setOverlayVersion((v) => v + 1);
   }, [intertidalHotspotsEnabled]);
   useEffect(() => {
     intertidalScoreModeRef.current = intertidalScoreMode;
@@ -1748,6 +1810,7 @@ export const OverviewMap: React.FC = () => {
     intertidalPinsRef.current = pins;
     intertidalHotspotDataRef.current = dataMap;
     dirtyRef.current = true;
+    setOverlayVersion((v) => v + 1);
   }, [intertidalSpotsData, intertidalHotspotsEnabled, intertidalScoreMode]);
 
   // Fetch trail points when trails list changes; update savedTrailsRef for rAF
@@ -4045,6 +4108,9 @@ export const OverviewMap: React.FC = () => {
   return (
     <div
       ref={overviewRootRef}
+      role="dialog"
+      aria-label="Overview map"
+      aria-modal="true"
       style={{
         position: "absolute",
         inset: 0,
@@ -4063,6 +4129,35 @@ export const OverviewMap: React.FC = () => {
         style={{ width: "100%", height: "100%", cursor: "crosshair", display: "block", touchAction: "none" }}
       />
 
+      {/* Canvas text cannot be reached by a screen reader. Keep the painted
+          affordance for mouse users and provide its real keyboard equivalent. */}
+      {visibleDatasets.length === 0 && (
+        <button
+          type="button"
+          data-testid="overview-find-data"
+          aria-label="Find data to add to the overview map"
+          onClick={openFindData}
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "calc(50% + 8px)",
+            transform: "translate(-50%, -50%)",
+            zIndex: 42,
+            background: "transparent",
+            border: "0",
+            color: "rgba(0,229,255,0.85)",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+            letterSpacing: "0.02em",
+            padding: "8px",
+            cursor: "pointer",
+            textDecoration: "underline",
+          }}
+        >
+          Choose a dataset from Find Data
+        </button>
+      )}
+
       {/* Retry button — appears after the 15 s load-failure timeout so the
           user can re-trigger the fetch without closing and reopening the map. */}
       {overviewLoadFailed && (
@@ -4077,7 +4172,9 @@ export const OverviewMap: React.FC = () => {
           }}
         >
           <button
+            type="button"
             onClick={handleOverviewRetry}
+            aria-label="Retry loading overview map data"
             style={{
               background: "rgba(2,8,24,0.85)",
               border: "1px solid rgba(0,229,255,0.4)",
@@ -4112,7 +4209,9 @@ export const OverviewMap: React.FC = () => {
           }}
         >
           <button
+            type="button"
             onClick={handleErrorHintClick}
+            aria-label="Find data to replace the map dataset"
             style={{
               background: "none",
               border: "none",
@@ -4456,7 +4555,18 @@ export const OverviewMap: React.FC = () => {
               return (
                 <g
                   key={`wx-${pin.id}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Weather station ${weatherStationDataRef.current.get(pin.id)?.name ?? pin.id}`}
+                  aria-selected={isSelected}
                   style={{ cursor: "pointer", pointerEvents: "all" }}
+                  onFocus={(e) => { weatherOpenerRef.current = e.currentTarget; }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                    }
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     const stationData = weatherStationDataRef.current.get(pin.id) ?? null;
@@ -4500,7 +4610,18 @@ export const OverviewMap: React.FC = () => {
                 <g
                   key={`raws-${pin.datasetId}`}
                   data-testid={`raws-pin-${pin.datasetId}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`RAWS station ${rawsDataRef.current.get(pin.datasetId)?.name ?? pin.datasetId}`}
+                  aria-selected={isSelected}
                   style={{ cursor: "pointer", pointerEvents: "all" }}
+                  onFocus={(e) => { rawsOpenerRef.current = e.currentTarget; }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                    }
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (isSelected) {
@@ -4584,7 +4705,18 @@ export const OverviewMap: React.FC = () => {
               return (
                 <g
                   key={`it-${pin.unitId}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Intertidal ${intertidalScoreModeRef.current === "tidepool" ? "tidepool" : "beachcombing"} hotspot ${pin.unitId}, score ${pin.score}`}
+                  aria-selected={isSelected}
                   style={{ cursor: "pointer", pointerEvents: "all" }}
+                  onFocus={(e) => { intertidalOpenerRef.current = e.currentTarget; }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.currentTarget.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                    }
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     const hotspot = intertidalHotspotDataRef.current.get(pin.unitId) ?? null;
@@ -4619,6 +4751,68 @@ export const OverviewMap: React.FC = () => {
           </svg>
         );
       })()}
+
+      {/* DOM equivalent of actionable map pins for keyboard and assistive
+          technology users. Kept off-canvas rather than hidden from the tree. */}
+      <div
+        key={overlayVersion}
+        aria-label="Map overlays"
+        style={{ position: "absolute", left: -10000, top: 0, width: 1, height: 1, overflow: "hidden" }}
+      >
+        {weatherStationActiveRef.current && weatherStations.map((station) => {
+          const selected = weatherStationSelectedIdRef.current === station.id;
+          return (
+            <button
+              key={`a11y-wx-${station.id}`}
+              type="button"
+              aria-label={`Weather station ${station.name ?? station.id}`}
+              aria-selected={selected}
+              onClick={() => {
+                weatherStationSelectedIdRef.current = selected ? null : station.id;
+                setSelectedWeatherStation(selected ? null : station);
+              }}
+            >
+              {station.name ?? station.id}
+            </button>
+          );
+        })}
+        {rawsOverlayActive && rawsStations.map((station) => {
+          const selected = rawsSelectedIdRef.current === station.datasetId;
+          return (
+            <button
+              key={`a11y-raws-${station.datasetId}`}
+              type="button"
+              aria-label={`RAWS station ${station.name ?? station.datasetId}`}
+              aria-selected={selected}
+              onClick={() => {
+                rawsSelectedIdRef.current = selected ? null : station.datasetId;
+                setSelectedRawsDatasetId(selected ? null : station.datasetId);
+              }}
+            >
+              {station.name ?? station.datasetId}
+            </button>
+          );
+        })}
+        {intertidalHotspotsEnabledRef.current && intertidalPinsRef.current.map((pin) => {
+          const selected = intertidalSelectedUnitIdRef.current === pin.unitId;
+          return (
+            <button
+              key={`a11y-it-${pin.unitId}`}
+              type="button"
+              aria-label={`Intertidal hotspot ${pin.unitId}, score ${pin.score}`}
+              aria-selected={selected}
+              onClick={() => {
+                const hotspot = intertidalHotspotDataRef.current.get(pin.unitId);
+                if (!hotspot) return;
+                intertidalSelectedUnitIdRef.current = selected ? null : pin.unitId;
+                useUiStore.getState().setSelectedHotspot(selected ? null : hotspot);
+              }}
+            >
+              {pin.unitId}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Intertidal mode legend — positioned bottom-right above the scale bar */}
       {intertidalHotspotsEnabled && intertidalPinsRef.current.length > 0 && (
@@ -4747,6 +4941,7 @@ export const OverviewMap: React.FC = () => {
           <ViewscreenTooltip label="Zoom and pan to fit all loaded datasets in view" side="bottom">
             <button
               data-testid="overview-fit-to-data"
+              aria-label="Fit all loaded datasets in view"
               onClick={handleFitToData}
               disabled={datasetsWithGrid.length === 0}
               style={{
@@ -4772,6 +4967,7 @@ export const OverviewMap: React.FC = () => {
           <ViewscreenTooltip label="Puzzle mode: drag and rotate dataset tiles to align surveys" side="bottom">
             <button
               data-testid="overview-puzzle-toggle"
+              aria-label="Toggle puzzle mode"
               aria-pressed={puzzleMode}
               onClick={() => {
                 const next = !puzzleMode;
@@ -4831,6 +5027,7 @@ export const OverviewMap: React.FC = () => {
             <ViewscreenTooltip label="Load each dataset's 3D terrain at its puzzle-adjusted geographic position" side="bottom">
               <button
                 data-testid="overview-puzzle-apply-3d"
+                aria-label="Apply puzzle layout to 3D scene"
                 onClick={() => setApplyTo3DConfirmOpen(true)}
                 style={{
                   background: "rgba(45,212,191,0.12)",
@@ -4856,6 +5053,7 @@ export const OverviewMap: React.FC = () => {
             <ViewscreenTooltip label="Snap tiles flush when dragged within 12 px of a neighbor's edge" side="bottom">
               <button
                 data-testid="overview-puzzle-snap-toggle"
+                aria-label="Toggle snap to neighboring tile edges"
                 aria-pressed={snapEnabled}
                 onClick={() => setSnapEnabled((v) => !v)}
                 style={{
@@ -4882,6 +5080,7 @@ export const OverviewMap: React.FC = () => {
             <ViewscreenTooltip label="Highlight uncovered gaps (red) and overlapping tiles (orange)" side="bottom">
               <button
                 data-testid="overview-puzzle-gap-toggle"
+                aria-label="Toggle gap and overlap highlights"
                 aria-pressed={showGapOverlay}
                 onClick={() => setShowGapOverlay((v) => !v)}
                 style={{
@@ -4908,6 +5107,7 @@ export const OverviewMap: React.FC = () => {
             <ViewscreenTooltip label="Snap all tiles back to their original positions" side="bottom">
               <button
                 data-testid="overview-puzzle-reset"
+                aria-label="Reset puzzle tile positions"
                 onClick={() => {
                   setPuzzleTransforms(new Map());
                   setPuzzleSelectedIds(new Set(), null);
@@ -4943,6 +5143,7 @@ export const OverviewMap: React.FC = () => {
             <ViewscreenTooltip label="Save tile positions to session storage (survives navigation)" side="bottom">
               <button
                 data-testid="overview-puzzle-save"
+                aria-label="Save puzzle tile positions to this session"
                 onClick={() => {
                   try {
                     sessionStorage.setItem(
@@ -4982,6 +5183,7 @@ export const OverviewMap: React.FC = () => {
             <ViewscreenTooltip label="Pin this arrangement as a named layout preset (synced to your account)" side="bottom">
               <button
                 data-testid="overview-puzzle-save-layout"
+                aria-label="Save current puzzle arrangement as a named layout"
                 onClick={() => {
                   setPuzzleLayoutFormOpen((v) => !v);
                   setLayoutsDropdownOpen(false);
@@ -5013,6 +5215,7 @@ export const OverviewMap: React.FC = () => {
               <ViewscreenTooltip label="Restore a previously saved puzzle layout" side="bottom">
                 <button
                   data-testid="overview-puzzle-layouts-btn"
+                  aria-label="Open saved puzzle layouts"
                   onClick={() => {
                     setLayoutsDropdownOpen((v) => !v);
                     setPuzzleLayoutFormOpen(false);
@@ -5091,6 +5294,7 @@ export const OverviewMap: React.FC = () => {
                         </button>
                         <button
                           data-testid={`overview-puzzle-revision-delete-${rev.id}`}
+                          aria-label={`Delete revision ${rev.name}`}
                           onClick={() => void deleteServerRevision(rev)}
                           title="Delete this revision"
                           style={{
@@ -5141,6 +5345,7 @@ export const OverviewMap: React.FC = () => {
                       </button>
                       <button
                         data-testid={`overview-puzzle-layout-delete-${layout.id}`}
+                        aria-label={`Delete layout ${layout.name}`}
                         onClick={() => {
                           setPuzzleLayouts(puzzleLayouts.filter((l) => l.id !== layout.id));
                         }}
@@ -5209,6 +5414,7 @@ export const OverviewMap: React.FC = () => {
               />
               <button
                 data-testid="overview-puzzle-layout-confirm"
+                aria-label="Save named puzzle layout"
                 disabled={!puzzleLayoutNameInput.trim() || serverLayoutSaving}
                 onClick={() => {
                   if (spcActive) void saveLayoutToServer(puzzleLayoutNameInput);
@@ -5231,6 +5437,7 @@ export const OverviewMap: React.FC = () => {
               </button>
               <button
                 data-testid="overview-puzzle-layout-cancel"
+                aria-label="Cancel saving puzzle layout"
                 onClick={() => {
                   setPuzzleLayoutFormOpen(false);
                   setPuzzleLayoutNameInput("");
@@ -5291,6 +5498,7 @@ export const OverviewMap: React.FC = () => {
               />
               <button
                 data-testid="overview-puzzle-annotation-confirm"
+                aria-label="Save tile annotation"
                 onClick={commitAnnotation}
                 style={{
                   background: "rgba(34,211,238,0.2)",
@@ -5309,6 +5517,7 @@ export const OverviewMap: React.FC = () => {
               </button>
               <button
                 data-testid="overview-puzzle-annotation-cancel"
+                aria-label="Cancel tile annotation"
                 onClick={() => setAnnotationEditor(null)}
                 style={{
                   background: "transparent",
@@ -5342,6 +5551,7 @@ export const OverviewMap: React.FC = () => {
                   <ViewscreenTooltip label="Group selected tiles so they move as one unit" side="bottom">
                     <button
                       data-testid="overview-puzzle-group"
+                      aria-label="Group selected tiles"
                       onClick={() => {
                         const gid = `group-${++puzzleGroupCounterRef.current}`;
                         const members = new Set(selectedArr);
@@ -5373,6 +5583,7 @@ export const OverviewMap: React.FC = () => {
                   <ViewscreenTooltip label="Dissolve group(s) overlapping the current selection" side="bottom">
                     <button
                       data-testid="overview-puzzle-ungroup"
+                      aria-label="Ungroup selected tiles"
                       onClick={() => {
                         setPuzzleGroups((prev) => {
                           const next = new Map(prev);
@@ -5427,6 +5638,7 @@ export const OverviewMap: React.FC = () => {
               >
                 <button
                   data-testid="overview-puzzle-lock-toggle"
+                  aria-label={allLocked ? "Unlock selected tiles" : "Lock selected tiles"}
                   aria-pressed={allLocked}
                   onClick={toggleLock}
                   style={{
@@ -5550,13 +5762,14 @@ export const OverviewMap: React.FC = () => {
                   }}
                 />
                 <span style={{ color: "rgba(192,132,252,0.55)", fontFamily: "'JetBrains Mono', monospace", fontSize: "calc(10px * var(--bs-font-scale,1))" }}>°</span>
-                <button data-testid="overview-puzzle-rotate-plus1"  style={btnStyle} title="Rotate +1°"  onClick={() => applyDelta(1)}>+1°</button>
-                <button data-testid="overview-puzzle-rotate-plus5"  style={btnStyle} title="Rotate +5°"  onClick={() => applyDelta(5)}>+5°</button>
-                <button data-testid="overview-puzzle-rotate-plus45" style={btnStyle} title="Rotate +45°" onClick={() => applyDelta(45)}>+45°</button>
-                <button data-testid="overview-puzzle-rotate-plus90" style={btnStyle} title="Rotate +90°" onClick={() => applyDelta(90)}>+90°</button>
+                  <button aria-label="Rotate selected tiles by 1 degree clockwise" data-testid="overview-puzzle-rotate-plus1"  style={btnStyle} title="Rotate +1°"  onClick={() => applyDelta(1)}>+1°</button>
+                <button aria-label="Rotate selected tiles by 5 degrees clockwise" data-testid="overview-puzzle-rotate-plus5"  style={btnStyle} title="Rotate +5°"  onClick={() => applyDelta(5)}>+5°</button>
+                <button aria-label="Rotate selected tiles by 45 degrees clockwise" data-testid="overview-puzzle-rotate-plus45" style={btnStyle} title="Rotate +45°" onClick={() => applyDelta(45)}>+45°</button>
+                <button aria-label="Rotate selected tiles by 90 degrees clockwise" data-testid="overview-puzzle-rotate-plus90" style={btnStyle} title="Rotate +90°" onClick={() => applyDelta(90)}>+90°</button>
                 {selAngle !== 0 && (
                   <button
                     data-testid="overview-puzzle-rotation-reset"
+                    aria-label="Reset selected tile rotation"
                     style={{ ...btnStyle, color: "#f87171", border: "1px solid rgba(239,68,68,0.4)" }}
                     title="Reset rotation to 0°"
                     onClick={() => setAngle(0)}
@@ -5611,6 +5824,7 @@ export const OverviewMap: React.FC = () => {
                 <span style={{ color: "rgba(192,132,252,0.7)", fontFamily: "'JetBrains Mono', monospace", fontSize: "calc(10px * var(--bs-font-scale,1))", letterSpacing: "0.05em", marginRight: 2 }}>⇔</span>
                 <button
                   data-testid="overview-puzzle-flip-h"
+                  aria-label="Flip selected tiles horizontally"
                   style={flipBtnStyle}
                   title="Flip selected tile(s) horizontally"
                   onClick={() => applyFlip("flipH")}
@@ -5619,6 +5833,7 @@ export const OverviewMap: React.FC = () => {
                 </button>
                 <button
                   data-testid="overview-puzzle-flip-v"
+                  aria-label="Flip selected tiles vertically"
                   style={flipBtnStyle}
                   title="Flip selected tile(s) vertically"
                   onClick={() => applyFlip("flipV")}
@@ -5634,9 +5849,13 @@ export const OverviewMap: React.FC = () => {
             <ViewscreenTooltip label="Area tools: box-select or export terrain" side="bottom">
               <button
                 data-testid="overview-tools-toggle"
+                aria-label="Open map tools"
                 aria-expanded={toolsPopoverOpen}
                 aria-haspopup="true"
-                onClick={() => setToolsPopoverOpen((v) => !v)}
+                onClick={(e) => {
+                  toolsOpenerRef.current = e.currentTarget;
+                  setToolsPopoverOpen((v) => !v);
+                }}
                 style={{
                   background: (selectMode || downloadMode || waypointMode)
                     ? "rgba(0,229,255,0.12)"
@@ -5699,6 +5918,7 @@ export const OverviewMap: React.FC = () => {
                 {/* Box-Select row */}
                 <button
                   data-testid="overview-select-area-toggle"
+                  aria-label="Toggle box select tool"
                   role="menuitem"
                   aria-pressed={selectMode}
                   onClick={() => {
@@ -5735,6 +5955,7 @@ export const OverviewMap: React.FC = () => {
                 {/* Download row */}
                 <button
                   data-testid="overview-download-toggle"
+                  aria-label="Toggle export terrain tool"
                   role="menuitem"
                   aria-pressed={downloadMode}
                   onClick={() => {
@@ -5771,6 +5992,7 @@ export const OverviewMap: React.FC = () => {
                 {/* Waypoints row */}
                 <button
                   data-testid="overview-waypoint-mode-toggle"
+                  aria-label="Toggle waypoint mode"
                   role="menuitem"
                   aria-pressed={waypointMode}
                   onClick={() => {
@@ -5811,6 +6033,7 @@ export const OverviewMap: React.FC = () => {
             <ViewscreenTooltip label="Toggle Essential Fish Habitat zones" side="bottom">
             <button
               data-testid="efh-overlay-toggle"
+              aria-label="Toggle Essential Fish Habitat overlay"
               onClick={() => setShowEfh(!showEfh)}
               aria-pressed={showEfh}
               style={{
@@ -5837,7 +6060,13 @@ export const OverviewMap: React.FC = () => {
             <ViewscreenTooltip label="Show waypoint list" side="bottom">
             <button
               data-testid="overview-waypoint-panel-toggle"
-              onClick={() => setShowWaypointPanel((v) => !v)}
+              aria-label="Show waypoint list"
+                aria-expanded={showWaypointPanel}
+                aria-controls="overview-waypoint-panel"
+              onClick={(e) => {
+                waypointPanelOpenerRef.current = e.currentTarget;
+                setShowWaypointPanel((v) => !v);
+              }}
               style={{
                 background: showWaypointPanel ? "rgba(168,85,247,0.18)" : "rgba(0,10,20,0.75)",
                 border: `1px solid ${showWaypointPanel ? "rgba(168,85,247,0.55)" : "rgba(0,229,255,0.2)"}`,
@@ -5860,8 +6089,15 @@ export const OverviewMap: React.FC = () => {
           {/* Trail list toggle */}
           {trailsData && trailsData.length > 0 && (
             <ViewscreenTooltip label="Show saved GPS trails" side="bottom">
-            <button
-              onClick={() => setShowTrailList((v) => !v)}
+             <button
+              type="button"
+              aria-expanded={showTrailList}
+              aria-controls="overview-trail-list-panel"
+              onClick={(e) => {
+                trailPanelOpenerRef.current = e.currentTarget;
+                setShowTrailList((v) => !v);
+              }}
+              aria-label="Show saved GPS trails"
               style={{
                 background: showTrailList ? "rgba(251,146,60,0.15)" : "rgba(0,10,20,0.75)",
                 border: `1px solid ${showTrailList ? "rgba(251,146,60,0.5)" : "rgba(0,229,255,0.2)"}`,
@@ -5885,6 +6121,7 @@ export const OverviewMap: React.FC = () => {
           <button
             onClick={() => startWatching()}
             data-testid="gps-activate-btn"
+            aria-label={gpsActive ? "GPS active" : "Use my location"}
             aria-pressed={gpsActive}
             style={{
               background: gpsActive ? "rgba(59,130,246,0.15)" : "rgba(0,10,20,0.75)",
@@ -5907,6 +6144,7 @@ export const OverviewMap: React.FC = () => {
           <ViewscreenTooltip label="Close the overview map (O)" side="bottom">
           <button
             data-testid="overview-close"
+            aria-label="Close overview map"
             onClick={() => setOverviewOpen(false)}
             style={{
               pointerEvents: "auto",
@@ -6221,6 +6459,7 @@ const WaypointListPanel: React.FC<WaypointListPanelProps> = ({
   return (
     <div
       data-testid="overview-waypoint-panel"
+      id="overview-waypoint-panel"
       style={{
         position: "absolute",
         top: 44,
@@ -6250,6 +6489,8 @@ const WaypointListPanel: React.FC<WaypointListPanelProps> = ({
           WAYPOINTS{waypoints.length > 0 ? ` (${waypoints.length})` : ""}
         </span>
         <button
+          type="button"
+          aria-label="Close waypoint list"
           onClick={onClose}
           style={{
             background: "none",
@@ -6439,6 +6680,9 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
 
   return (
     <div
+      id="overview-trail-list-panel"
+      role="dialog"
+      aria-label="Saved GPS trails"
       style={{
         position: "absolute",
         top: 44,
@@ -6477,6 +6721,8 @@ const TrailListPanel: React.FC<TrailListPanelProps> = ({ trails, savedTrailsRef,
           </span>
         </div>
         <button
+          type="button"
+          aria-label={selectedTrail ? "Close saved trail details" : "Close saved GPS trails"}
           onClick={onClose}
           style={{
             background: "none",

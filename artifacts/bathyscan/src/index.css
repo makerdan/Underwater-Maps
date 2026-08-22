@@ -224,6 +224,27 @@ body.bs-daylight [role="listbox"] {
   border-color: rgba(30, 58, 130, 0.35) !important;
 }
 
+/* Overview controls use inline colours for the HUD aesthetic. Keep focus
+   visible above those colours in both themes, including SVG pin buttons. */
+.overview-map-header button:focus-visible,
+.overview-map-header input:focus-visible,
+.overview-map-header select:focus-visible,
+[data-testid^="overview-"]:focus-visible,
+.overview-map-header [role="button"]:focus-visible {
+  outline: 3px solid #00e5ff !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px rgba(2, 8, 24, 0.9) !important;
+}
+
+body.bs-daylight .overview-map-header button:focus-visible,
+body.bs-daylight .overview-map-header input:focus-visible,
+body.bs-daylight .overview-map-header select:focus-visible,
+body.bs-daylight [data-testid^="overview-"]:focus-visible,
+body.bs-daylight .overview-map-header [role="button"]:focus-visible {
+  outline-color: #1d4ed8 !important;
+  box-shadow: 0 0 0 2px #ffffff !important;
+}
+
 /* ── Cobalt borders inside all daylight panels — overrides inline cyan rgba ── */
 body.bs-daylight .habitat-panel *,
 body.bs-daylight .dataset-panel *,
