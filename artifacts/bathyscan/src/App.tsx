@@ -2426,7 +2426,7 @@ export function ClerkLoadFailedFallback() {
   return (
     <div
       role="alert"
-      className="flex flex-col items-center justify-center h-screen bg-[#040810] text-sky-100 gap-4 p-8 text-center"
+      className="flex flex-col items-center justify-center h-screen bg-[#040810] text-sky-100 gap-4 p-8 text-center select-text"
     >
       <p className="text-[24px] font-medium">
         Authentication service failed to load.
@@ -2434,6 +2434,13 @@ export function ClerkLoadFailedFallback() {
       <p className="text-[21px] text-sky-400">
         This may be a temporary network issue. Try reloading the page.
       </p>
+      <CopyButton
+        text={
+          "Authentication service failed to load.\n" +
+          "This may be a temporary network issue. Try reloading the page."
+        }
+        className="border border-cyan-400/30 text-cyan-300 hover:bg-cyan-400/10"
+      />
       <button
         onClick={() => window.location.reload()}
         className="mt-2 px-4 py-2 bg-sky-700 hover:bg-sky-600 rounded text-[21px] font-medium text-white transition-colors"

@@ -1,4 +1,5 @@
 import React from "react";
+import { CopyButton } from "@/components/ui/CopyButton";
 
 export const SCENE_CHUNK_RECOVERY_KEY = "bathyscan:scene-chunk-recovery";
 
@@ -85,7 +86,7 @@ export function SceneChunkFallback(): React.JSX.Element {
     <div
       role="alert"
       data-testid="scene-chunk-fallback"
-      className="absolute inset-0 flex items-center justify-center bg-[#040810] px-6 text-center text-sky-200"
+      className="absolute inset-0 flex items-center justify-center bg-[#040810] px-6 text-center text-sky-200 select-text"
     >
       <div className="max-w-md space-y-3">
         <p className="font-mono text-sm">The 3D map could not be loaded.</p>
@@ -93,6 +94,13 @@ export function SceneChunkFallback(): React.JSX.Element {
           The app was updated while this page was open. Reload once to get the
           current map assets.
         </p>
+        <CopyButton
+          text={
+            "The 3D map could not be loaded.\n" +
+            "The app was updated while this page was open. Reload once to get the current map assets."
+          }
+          className="border border-cyan-400/30 text-cyan-300 hover:bg-cyan-400/10"
+        />
         <button
           type="button"
           className="rounded border border-cyan-400/50 px-3 py-1 font-mono text-xs text-cyan-300 hover:bg-cyan-400/10"

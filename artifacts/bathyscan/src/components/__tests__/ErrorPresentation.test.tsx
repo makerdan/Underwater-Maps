@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { SceneChunkFallback } from "@/lib/dynamicSceneLoader";
+import { ClerkLoadFailedFallback } from "@/App";
 
 /**
  * Keep this list in sync when adding a bespoke user-visible failure surface.
@@ -73,6 +75,20 @@ const USER_VISIBLE_FAILURE_SURFACES = [
     copyMarker: "<CopyButton",
     selectableMarker: "userSelect: error ? \"text\" : \"none\"",
   },
+  {
+    name: "3D map chunk fallback",
+    file: "lib/dynamicSceneLoader.tsx",
+    marker: 'data-testid="scene-chunk-fallback"',
+    copyMarker: "<CopyButton",
+    selectableMarker: "select-text",
+  },
+  {
+    name: "authentication-load failure fallback",
+    file: "App.tsx",
+    marker: "Authentication service failed to load.",
+    copyMarker: "<CopyButton",
+    selectableMarker: "select-text",
+  },
 ] as const;
 
 const BATHYSCAN_SRC = resolve(import.meta.dirname, "../..");
@@ -131,6 +147,50 @@ describe("error presentation", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Copy failed" })).toBeInTheDocument());
     expect(screen.getByText("Could not save the marker.")).toBeInTheDocument();
     expect(execCommand).toHaveBeenCalledWith("copy");
+  });
+
+  it("renders a copy action for the 3D map chunk fallback", async () => {
+    render(<SceneChunkFallback />);
+
+    expect(screen.getByTestId("scene-chunk-fallback")).toHaveClass("select-text");
+    fireEvent.click(screen.getByRole("button", { name: "Copy error text" }));
+
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        "The 3D map could not be loaded.\n" +
+          "The app was updated while this page was open. Reload once to get the current map assets.",
+      ),
+    );
+  });
+
+  it("renders a copy action for the authentication-load failure fallback", async () => {
+    render(<ClerkLoadFailedFallback />);
+
+    expect(screen.getByRole("alert")).toHaveClass("select-text");
+    fireEvent.click(screen.getByRole("button", { name: "Copy error text" }));
+
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        "Authentication service failed to load.\n" +
+          "This may be a temporary network issue. Try reloading the page.",
+      ),
+    );
+  });
+
+  it("shows the copy failure state when a fallback cannot write to the clipboard", async () => {
+    vi.mocked(navigator.clipboard.writeText).mockRejectedValueOnce(new Error("denied"));
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: vi.fn().mockReturnValue(false),
+    });
+    render(<ClerkLoadFailedFallback />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy error text" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Copy failed" })).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Authentication service failed to load.")).toBeInTheDocument();
   });
 
   it.each(USER_VISIBLE_FAILURE_SURFACES)(
