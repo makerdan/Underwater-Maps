@@ -735,9 +735,9 @@ const DraggableSaveCard: React.FC<{
           {isSelected ? "✓" : ""}
         </button>
       )}
-      <div ref={setNodeRef} style={{ flex: 1, opacity: isDragging ? 0.4 : 1, position: "relative" }}>
-        <button {...attributes} {...listeners} aria-label={`Drag ${displayName} to a folder`} title="Drag to a folder"
-          style={{ position: "absolute", top: 6, right: 88, background: "transparent", border: "none", color: "#475569", cursor: "grab", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
+      <div ref={setNodeRef} {...attributes} {...listeners} style={{ flex: 1, opacity: isDragging ? 0.4 : 1, position: "relative", cursor: isDragging ? "grabbing" : "grab" }}>
+        <button aria-label={`Drag ${displayName} to a folder`} title="Drag to a folder"
+          style={{ position: "absolute", top: 6, right: 88, background: "transparent", border: "none", color: "#67e8f9", cursor: "grab", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1, pointerEvents: "none" }}
         >⠿</button>
         <button aria-label={`Move "${displayName}" to folder`} title="Move to folder" onClick={() => onMoveTo(save)}
           style={{ position: "absolute", top: 6, right: 63, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
@@ -811,9 +811,9 @@ const DraggableUploadCard: React.FC<{
           {isSelected ? "✓" : ""}
         </button>
       )}
-      <div ref={setNodeRef} style={{ flex: 1, opacity: isDragging ? 0.4 : 1, position: "relative" }}>
-        <button {...attributes} {...listeners} aria-label={`Drag ${dataset.name} to a folder`} title="Drag to a folder"
-          style={{ position: "absolute", top: 6, right: 88, background: "transparent", border: "none", color: "#475569", cursor: "grab", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
+      <div ref={setNodeRef} {...attributes} {...listeners} style={{ flex: 1, opacity: isDragging ? 0.4 : 1, position: "relative", cursor: isDragging ? "grabbing" : "grab" }}>
+        <button aria-label={`Drag ${dataset.name} to a folder`} title="Drag to a folder"
+          style={{ position: "absolute", top: 6, right: 88, background: "transparent", border: "none", color: "#67e8f9", cursor: "grab", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1, pointerEvents: "none" }}
         >⠿</button>
         <button aria-label={`Move "${dataset.name}" to folder`} title="Move to folder" data-testid={`btn-move-upload-${dataset.id}`} onClick={() => onMoveTo(dataset)}
           style={{ position: "absolute", top: 6, right: 63, background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 4px", zIndex: 1, lineHeight: 1 }}
@@ -834,15 +834,37 @@ const DraggableUploadCard: React.FC<{
   );
 };
 
-// ---------------------------------------------------------------------------
-// SaveFolderSection
-// ---------------------------------------------------------------------------
-
+const LibraryRootDropTarget: React.FC = () => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: "library-root",
+    data: { kind: "library-root" },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      data-testid="library-root-drop-target"
+      aria-label="Library root drop target"
+      style={{
+        marginTop: 8,
+        padding: "7px 8px",
+        borderRadius: 4,
+        border: isOver ? "1px dashed rgba(0,229,255,0.75)" : "1px dashed rgba(100,116,139,0.4)",
+        background: isOver ? "rgba(0,229,255,0.12)" : "rgba(15,23,42,0.2)",
+        color: isOver ? "#67e8f9" : "#64748b",
+        fontSize: "calc(11.5px * var(--bs-font-scale, 1))",
+        textAlign: "center",
+        transition: "background 0.12s, border 0.12s, color 0.12s",
+      }}
+    >
+      {isOver ? "Release to move to library root" : "Library root — drop here to move out of a folder"}
+    </div>
+  );
+};
 const SaveFolderSection: React.FC<{
   node: MergedFolderNode;
   isExpanded: boolean;
   onToggle: () => void;
-  renderItem: (item: MergedEntry) => React.ReactNode;
+  renderItem: (item: MergedEntry, depth: number) => React.ReactNode;
   renderSubFolder: (child: MergedFolderNode) => React.ReactNode;
   onShowMenu?: (e: React.MouseEvent, node: MergedFolderNode) => void;
   onNewFolder?: () => void;
@@ -867,16 +889,14 @@ const SaveFolderSection: React.FC<{
     data: { kind: "folder", folderId: node.folder.id },
   });
   const totalCount = node.items.length + node.children.length;
-  const indent = node.depth * 14;
   const renameInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => { if (isRenaming) renameInputRef.current?.select(); }, [isRenaming]);
 
   return (
-    <div style={{ marginLeft: indent }}>
+    <div ref={setNodeRef} style={{ marginLeft: Math.max(0, node.depth - 1) * 14 }}>
       <div
-        ref={setNodeRef}
-        style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 4, cursor: "pointer", background: isOver ? "rgba(0,229,255,0.08)" : "transparent", border: isOver ? "1px dashed rgba(0,229,255,0.4)" : "1px solid transparent", transition: "background 0.12s, border 0.12s", userSelect: "none" }}
+        style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 4, cursor: "pointer", background: isOver ? "rgba(0,229,255,0.12)" : "transparent", border: isOver ? "1px dashed rgba(0,229,255,0.65)" : "1px solid transparent", transition: "background 0.12s, border 0.12s", userSelect: "none" }}
         onClick={isRenaming ? undefined : onToggle}
         onContextMenu={onShowMenu ? (e) => onShowMenu(e, node) : undefined}
         role="button"
@@ -975,7 +995,7 @@ const SaveFolderSection: React.FC<{
       {isExpanded && (
         <div style={{ marginLeft: 14 }} data-testid={`save-folder-contents-${node.folder.id}`}>
           {node.children.map((child) => renderSubFolder(child))}
-          {node.items.map((item) => renderItem(item))}
+            {node.items.map((item) => renderItem(item, node.depth))}
           {node.children.length === 0 && node.items.length === 0 && (
             <div style={{ fontSize: "calc(12px * var(--bs-font-scale, 1))", color: "#475569", padding: "4px 8px" }}>
               No datasets in this folder
@@ -1396,10 +1416,24 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
     const dragData = event.active.data.current as { kind: "save"; saveId: string } | { kind: "upload"; datasetId: string } | undefined;
     if (!dragData) return;
     const dropData = event.over.data.current as { kind: string; folderId?: string } | undefined;
-    const targetFolderId = dropData?.kind === "folder" ? (dropData.folderId ?? null) : null;
-    if (dragData.kind === "save") void handleMoveSave(dragData.saveId, targetFolderId);
-    else if (dragData.kind === "upload") void handleMoveUpload(dragData.datasetId, targetFolderId);
-  }, [handleMoveSave, handleMoveUpload]);
+    if (dropData?.kind !== "folder" && dropData?.kind !== "library-root") return;
+    const targetFolderId = dropData.kind === "folder" ? (dropData.folderId ?? null) : null;
+    const label = activeDrag?.label ?? "dataset";
+    const move = dragData.kind === "save"
+      ? handleMoveSave(dragData.saveId, targetFolderId)
+      : handleMoveUpload(dragData.datasetId, targetFolderId);
+    void move.catch((err: unknown) => {
+      toast({
+        title: "Move failed",
+        description: `Could not move "${label}". ${err instanceof Error ? err.message : "Try again."}`,
+        variant: "destructive",
+      });
+    });
+  }, [activeDrag, handleMoveSave, handleMoveUpload, toast]);
+
+  const handleSaveDragCancel = useCallback(() => {
+    setActiveDrag(null);
+  }, []);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1433,52 +1467,53 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
     return out;
   };
 
-  const renderItem = (item: MergedEntry): React.ReactNode =>
-    item.kind === "save" ? (
-      <DraggableSaveCard
-        key={`save-${item.save.id}`}
-        save={item.save}
-        onLoadUserDataset={onLoadCatalogSave}
-        onRetry={handleRetry}
-        retrying={retryingIds.has(item.save.id)}
-        onDelete={(s) => { setDeleteError(null); setConfirmDelete(s); }}
-        deleting={deletingIds.has(item.save.id)}
-        onRename={handleRenameSave}
-        onMoveTo={(s) => setMoveTarget({ kind: "save", save: s })}
-        onAddToView={onAddToView}
-        atViewCap={atViewCap}
-        visibleDatasetIds={visibleDatasetIds}
-        onOfflineDownload={onOfflineDownload}
-        onAddToCollection={(s) => setAddToCollection({
-          label: s.displayLabel ?? s.catalog?.name ?? s.catalogId,
-          targets: [{ catalogSaveId: s.id }],
-        })}
-        offlineStatus={item.save.datasetId ? (packStatuses.get(item.save.datasetId) ?? "none") : "none"}
-        isSelected={selectedIds.has(item.save.id)}
-        onToggleSelect={toggleSelection}
-      />
-    ) : (
-      <DraggableUploadCard
-        key={`upload-${item.dataset.id}`}
-        dataset={item.dataset}
-        onLoad={onLoadUserDataset}
-        onDelete={(d) => { setDeleteUploadError(null); setConfirmDeleteUpload(d); }}
-        onRename={handleRenameUpload}
-        deleting={deletingUploadIds.has(item.dataset.id)}
-        onMoveTo={(d) => setMoveTarget({ kind: "upload", dataset: d })}
-        onAddToView={onAddToView}
-        isAlreadyInView={visibleDatasetIds?.has(item.dataset.id) ?? false}
-        atViewCap={atViewCap}
-        onOfflineDownload={onOfflineDownload}
-        onAddToCollection={(d) => setAddToCollection({
-          label: d.name,
-          targets: [{ datasetId: d.id }],
-        })}
-        offlineStatus={packStatuses.get(item.dataset.id) ?? "none"}
-        isSelected={selectedIds.has(item.dataset.id)}
-        onToggleSelect={toggleSelection}
-      />
-    );
+  const renderItem = (item: MergedEntry, depth = 0): React.ReactNode => (
+    <div key={item.kind === "save" ? `save-${item.save.id}` : `upload-${item.dataset.id}`} style={{ marginLeft: depth * 14 }}>
+      {item.kind === "save" ? (
+        <DraggableSaveCard
+          save={item.save}
+          onLoadUserDataset={onLoadCatalogSave}
+          onRetry={handleRetry}
+          retrying={retryingIds.has(item.save.id)}
+          onDelete={(s) => { setDeleteError(null); setConfirmDelete(s); }}
+          deleting={deletingIds.has(item.save.id)}
+          onRename={handleRenameSave}
+          onMoveTo={(s) => setMoveTarget({ kind: "save", save: s })}
+          onAddToView={onAddToView}
+          atViewCap={atViewCap}
+          visibleDatasetIds={visibleDatasetIds}
+          onOfflineDownload={onOfflineDownload}
+          onAddToCollection={(s) => setAddToCollection({
+            label: s.displayLabel ?? s.catalog?.name ?? s.catalogId,
+            targets: [{ catalogSaveId: s.id }],
+          })}
+          offlineStatus={item.save.datasetId ? (packStatuses.get(item.save.datasetId) ?? "none") : "none"}
+          isSelected={selectedIds.has(item.save.id)}
+          onToggleSelect={toggleSelection}
+        />
+      ) : (
+        <DraggableUploadCard
+          dataset={item.dataset}
+          onLoad={onLoadUserDataset}
+          onDelete={(d) => { setDeleteUploadError(null); setConfirmDeleteUpload(d); }}
+          onRename={handleRenameUpload}
+          deleting={deletingUploadIds.has(item.dataset.id)}
+          onMoveTo={(d) => setMoveTarget({ kind: "upload", dataset: d })}
+          onAddToView={onAddToView}
+          isAlreadyInView={visibleDatasetIds?.has(item.dataset.id) ?? false}
+          atViewCap={atViewCap}
+          onOfflineDownload={onOfflineDownload}
+          onAddToCollection={(d) => setAddToCollection({
+            label: d.name,
+            targets: [{ datasetId: d.id }],
+          })}
+          offlineStatus={packStatuses.get(item.dataset.id) ?? "none"}
+          isSelected={selectedIds.has(item.dataset.id)}
+          onToggleSelect={toggleSelection}
+        />
+      )}
+    </div>
+  );
 
   const renderFolderNode = (node: MergedFolderNode): React.ReactNode => (
     <SaveFolderSection
@@ -1626,10 +1661,11 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
 
       {/* Merged tree */}
       {!isEmpty && (
-        <DndContext sensors={saveDndSensors} onDragStart={handleSaveDragStart} onDragEnd={handleSaveDragEnd}>
+        <DndContext sensors={saveDndSensors} onDragStart={handleSaveDragStart} onDragEnd={handleSaveDragEnd} onDragCancel={handleSaveDragCancel}>
           <div>
             {mergedTree.roots.map(renderFolderNode)}
-            {mergedTree.rootItems.map(renderItem)}
+            {mergedTree.rootItems.map((item) => renderItem(item, 0))}
+            <LibraryRootDropTarget />
           </div>
           <DragOverlay dropAnimation={null}>
             {activeDrag && (
