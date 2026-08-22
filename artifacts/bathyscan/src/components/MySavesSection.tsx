@@ -27,6 +27,7 @@ import {
   usePatchDatasetsMySavesIdMove,
   usePostUserFolders,
   usePatchUserFoldersIdRename,
+  usePatchUserFoldersIdMove,
   useDeleteUserFoldersId,
   getGetDatasetsMySavesQueryKey,
   getGetUserDatasetsQueryKey,
@@ -52,7 +53,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { ViewscreenTooltip } from "@/components/ViewscreenTooltip";
-import { buildMergedTree, type MergedFolderNode, type MergedEntry } from "@/lib/datasetLibrary";
+import { buildMergedTree, isDescendantOf, type MergedFolderNode, type MergedEntry } from "@/lib/datasetLibrary";
 import { AddToCollectionDialog, type AddToCollectionTarget } from "@/components/CollectionsSection";
 import {
   useOfflinePackStatuses,
@@ -884,7 +885,16 @@ const SaveFolderSection: React.FC<{
   /** Multi-select: called with the folder id when the checkbox is toggled. */
   onToggleSelect?: (id: string) => void;
 }> = ({ node, isExpanded, onToggle, renderItem, renderSubFolder, onShowMenu, onNewFolder, onRenameStart, onDelete, isRenaming = false, renameValue = "", onRenameChange, onRenameCommit, onRenameCancel, onDownloadOffline, offlineRollup = "none", isSelected = false, onToggleSelect }) => {
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef: setDropNodeRef, isOver } = useDroppable({
+    id: `folder-${node.folder.id}`,
+    data: { kind: "folder", folderId: node.folder.id },
+  });
+  const {
+    attributes: dragAttributes,
+    listeners: dragListeners,
+    setNodeRef: setDragNodeRef,
+    isDragging,
+  } = useDraggable({
     id: `folder-${node.folder.id}`,
     data: { kind: "folder", folderId: node.folder.id },
   });
@@ -894,7 +904,7 @@ const SaveFolderSection: React.FC<{
   useEffect(() => { if (isRenaming) renameInputRef.current?.select(); }, [isRenaming]);
 
   return (
-    <div ref={setNodeRef} style={{ marginLeft: Math.max(0, node.depth - 1) * 14 }}>
+    <div ref={setDropNodeRef} style={{ marginLeft: Math.max(0, node.depth - 1) * 14 }}>
       <div
         style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 4, cursor: "pointer", background: isOver ? "rgba(0,229,255,0.12)" : "transparent", border: isOver ? "1px dashed rgba(0,229,255,0.65)" : "1px solid transparent", transition: "background 0.12s, border 0.12s", userSelect: "none" }}
         onClick={isRenaming ? undefined : onToggle}
@@ -929,6 +939,17 @@ const SaveFolderSection: React.FC<{
         )}
         <span style={{ fontSize: "calc(13px * var(--bs-font-scale, 1))", color: "#94a3b8" }}>{isExpanded ? "▾" : "▸"}</span>
         <span style={{ fontSize: "calc(14px * var(--bs-font-scale, 1))" }}>📁</span>
+        <button
+          ref={setDragNodeRef}
+          {...dragAttributes}
+          {...dragListeners}
+          type="button"
+          data-testid={`drag-folder-${node.folder.id}`}
+          aria-label={`Drag ${node.folder.name} to a folder`}
+          title="Drag folder to another folder or the library root"
+          onClick={(e) => e.stopPropagation()}
+          style={{ background: "transparent", border: "none", color: "#67e8f9", cursor: isDragging ? "grabbing" : "grab", fontSize: "calc(13px * var(--bs-font-scale, 1))", padding: "2px 3px", lineHeight: 1, opacity: isDragging ? 0.45 : 0.8, touchAction: "none" }}
+        >⠿</button>
         {isRenaming ? (
           <input
             ref={renameInputRef}
@@ -1327,6 +1348,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   // ── Folders ───────────────────────────────────────────────────────────────
   const postFolderMutation = usePostUserFolders();
   const renameFolderMutation = usePatchUserFoldersIdRename();
+  const moveFolderMutation = usePatchUserFoldersIdMove();
   const deleteFolderMutation = useDeleteUserFoldersId();
 
   const [renamingSaveFolder, setRenamingSaveFolder] = useState<{ id: string; value: string } | null>(null);
@@ -1388,7 +1410,12 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
   >(null);
 
   // ── Drag-and-drop ─────────────────────────────────────────────────────────
-  const [activeDrag, setActiveDrag] = useState<{ label: string } | null>(null);
+  const [activeDrag, setActiveDrag] = useState<
+    { kind: "save"; label: string } |
+    { kind: "upload"; label: string } |
+    { kind: "folder"; label: string; folderId: string } |
+    null
+  >(null);
   const saveDndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const visibleSaves = mySaves
@@ -1400,25 +1427,57 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
     });
 
   const handleSaveDragStart = useCallback((event: DragStartEvent) => {
-    const data = event.active.data.current as { kind: "save"; saveId: string } | { kind: "upload"; datasetId: string } | undefined;
+    const data = event.active.data.current as
+      | { kind: "save"; saveId: string }
+      | { kind: "upload"; datasetId: string }
+      | { kind: "folder"; folderId: string }
+      | undefined;
     if (data?.kind === "save") {
       const save = visibleSaves.find((s) => s.id === data.saveId);
-      if (save) setActiveDrag({ label: save.displayLabel ?? save.catalog?.name ?? save.catalogId });
+      if (save) setActiveDrag({ kind: "save", label: save.displayLabel ?? save.catalog?.name ?? save.catalogId });
     } else if (data?.kind === "upload") {
       const ds = userDatasets.find((d) => d.id === data.datasetId);
-      if (ds) setActiveDrag({ label: ds.name });
+      if (ds) setActiveDrag({ kind: "upload", label: ds.name });
+    } else if (data?.kind === "folder") {
+      const folder = userFolders.find((f) => f.id === data.folderId);
+      if (folder) setActiveDrag({ kind: "folder", folderId: folder.id, label: folder.name });
     }
-  }, [visibleSaves, userDatasets]);
+  }, [visibleSaves, userDatasets, userFolders]);
 
   const handleSaveDragEnd = useCallback((event: DragEndEvent) => {
     setActiveDrag(null);
     if (!event.over) return;
-    const dragData = event.active.data.current as { kind: "save"; saveId: string } | { kind: "upload"; datasetId: string } | undefined;
+    const dragData = event.active.data.current as
+      | { kind: "save"; saveId: string }
+      | { kind: "upload"; datasetId: string }
+      | { kind: "folder"; folderId: string }
+      | undefined;
     if (!dragData) return;
     const dropData = event.over.data.current as { kind: string; folderId?: string } | undefined;
     if (dropData?.kind !== "folder" && dropData?.kind !== "library-root") return;
     const targetFolderId = dropData.kind === "folder" ? (dropData.folderId ?? null) : null;
     const label = activeDrag?.label ?? "dataset";
+    if (dragData.kind === "folder") {
+      const folderTree = buildMergedTree(userFolders, [], []);
+      if (targetFolderId !== null && isDescendantOf(folderTree.byId, dragData.folderId, targetFolderId)) {
+        toast({
+          title: "Folder move not allowed",
+          description: `Cannot move "${label}" into itself or one of its subfolders.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      void moveFolderMutation.mutateAsync({ id: dragData.folderId, data: { parentId: targetFolderId } })
+        .then(() => qc.invalidateQueries({ queryKey: getGetUserFoldersQueryKey() }))
+        .catch((err: unknown) => {
+          toast({
+            title: "Move failed",
+            description: `Could not move "${label}". ${err instanceof Error ? err.message : "Try again."}`,
+            variant: "destructive",
+          });
+        });
+      return;
+    }
     const move = dragData.kind === "save"
       ? handleMoveSave(dragData.saveId, targetFolderId)
       : handleMoveUpload(dragData.datasetId, targetFolderId);
@@ -1429,7 +1488,7 @@ export const MySavesSection: React.FC<MySavesSectionProps> = ({
         variant: "destructive",
       });
     });
-  }, [activeDrag, handleMoveSave, handleMoveUpload, toast]);
+  }, [activeDrag, handleMoveSave, handleMoveUpload, moveFolderMutation, qc, toast, userFolders]);
 
   const handleSaveDragCancel = useCallback(() => {
     setActiveDrag(null);

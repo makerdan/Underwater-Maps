@@ -91,15 +91,15 @@ export function buildLibraryTree(
  * Returns true if `candidateParent` is `folderId` or one of its descendants.
  * Used to prevent moving a folder into its own subtree (cycles).
  */
-export function isDescendantOf(
-  byId: Map<string, FolderNode>,
+export function isDescendantOf<T extends { folder: { id: string }; children: T[] }>(
+  byId: Map<string, T>,
   folderId: string,
   candidateParent: string,
 ): boolean {
   if (candidateParent === folderId) return true;
   const start = byId.get(folderId);
   if (!start) return false;
-  const stack: FolderNode[] = [start];
+  const stack: T[] = [start];
   while (stack.length) {
     const n = stack.pop()!;
     for (const c of n.children) {
