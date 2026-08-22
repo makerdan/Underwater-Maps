@@ -121,6 +121,44 @@ test("write failure cleans up the partial lock and does not acquire it", async (
   assert.equal(existsSync(lockFile), false, "partial lock file must be removed after write failure");
 });
 
+test("cleanup failure during lock creation reports a non-acquired lock", async () => {
+  const lockFile = freshLockFile();
+  const marker = join(workDir, `cleanup-failure-marker-${lockCounter++}.txt`);
+  const preload = join(workDir, `cleanup-failure-preload-${lockCounter++}.mjs`);
+  writeFileSync(preload, `
+    import fs from "node:fs";
+    import { syncBuiltinESMExports } from "node:module";
+    fs.writeSync = () => {
+      const error = new Error("simulated write failure");
+      error.code = "EIO";
+      throw error;
+    };
+    fs.unlinkSync = () => {
+      const error = new Error("simulated cleanup failure");
+      error.code = "EACCES";
+      throw error;
+    };
+    syncBuiltinESMExports();
+  `);
+
+  const run = runLock({
+    lockFile,
+    env: {
+      NODE_OPTIONS: `--import ${preload}`,
+      VALIDATION_LOCK_TIMEOUT_MS: "100",
+      VALIDATION_LOCK_POLL_MS: "10",
+    },
+    args: ["node", "-e", `require("fs").writeFileSync(${JSON.stringify(marker)}, "ran")`],
+  });
+  const res = await run.done;
+
+  assert.equal(res.code, 3, "cleanup failure must never report an acquired lock");
+  assert.doesNotMatch(res.stdout, /lock acquired/, "wrapped command must not run after cleanup failure");
+  assert.equal(existsSync(marker), false, "wrapped command must not run after cleanup failure");
+  assert.match(res.stderr, /failed to remove corrupt lock file .*simulated cleanup failure/);
+  assert.match(res.stderr, /failed to write lock file .*simulated write failure/);
+});
+
 test("second process queues behind holder and runs after release", async () => {
   const lockFile = freshLockFile();
   const marker = join(workDir, "queue-marker.txt");
