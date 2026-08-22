@@ -9,9 +9,19 @@
 import { Worker } from "worker_threads";
 import path from "path";
 import { fileURLToPath } from "url";
-import { gridPoints, type TerrainGrid } from "../../lib/terrain.js";
+import { gridPoints, parseXyzCsv, type TerrainGrid } from "../../lib/terrain.js";
 import type { BathyFetchBundle, Bbox, FetchStrategy } from "../../lib/fetchers/types.js";
 import { getFetcher } from "../../lib/fetchers/index.js";
+import { parseUploadedFile, type RawPoint } from "../../lib/uploadParsers.js";
+import {
+  parsePdfContourFile,
+  PdfRasterOnlyError,
+  type PdfDepthUnit,
+} from "../../lib/pdfContour.js";
+import {
+  parseRasterPdfContourFile,
+  parseRasterImageContourFile,
+} from "../../lib/pdfContourRaster.js";
 
 export interface TerrainParseWorkerInput {
   filePath: string;
@@ -27,6 +37,24 @@ export interface TerrainParseWorkerInput {
 export interface TerrainParseWorkerResult {
   terrain: TerrainGrid;
   overview: TerrainGrid;
+}
+
+export interface TerrainUploadInput {
+  buffer: Buffer;
+  fileName: string;
+  resolution: number;
+  gridId: string;
+  datasetName: string;
+  smoothing: boolean;
+  pdfBbox?: Bbox;
+  pdfDepthUnit?: PdfDepthUnit;
+}
+
+export class TerrainInsufficientDataError extends Error {
+  constructor() {
+    super("File must contain at least 10 valid (lon, lat, depth) rows");
+    this.name = "TerrainInsufficientDataError";
+  }
 }
 
 const PARSE_WORKER_PATH = path.join(
@@ -119,6 +147,77 @@ export function processTerrainPoints(input: {
       smoothing: input.smoothing,
     }),
   };
+}
+
+/**
+ * Parse a direct upload and generate both persisted terrain grids.
+ *
+ * This is the synchronous-upload counterpart to runTerrainParseWorker. Keeping
+ * format dispatch here means direct and chunked uploads use the same parser
+ * implementations and grid-generation contract. HTTP validation and response
+ * mapping remain in the route.
+ */
+export async function processTerrainUpload(
+  input: TerrainUploadInput,
+): Promise<TerrainParseWorkerResult> {
+  const points = await parseTerrainUpload(input);
+  return processTerrainPoints({
+    points,
+    resolution: input.resolution,
+    gridId: input.gridId,
+    datasetName: input.datasetName,
+    smoothing: input.smoothing,
+  });
+}
+
+/** Parse a direct upload without requiring grid parameters. */
+export async function parseTerrainUpload(
+  input: Pick<TerrainUploadInput, "buffer" | "fileName" | "pdfBbox" | "pdfDepthUnit">,
+): Promise<RawPoint[]> {
+  const baseFileName = input.fileName.toLowerCase().endsWith(".gz")
+    ? input.fileName.slice(0, -3)
+    : input.fileName;
+  const fileExt = baseFileName.toLowerCase().split(".").pop() ?? "";
+  const textExtensions = new Set(["csv", "xyz", "txt"]);
+
+  let points: RawPoint[];
+  if (fileExt === "pdf") {
+    if (!input.pdfBbox) {
+      throw new Error("PDF georeference is required");
+    }
+    try {
+      points = await parsePdfContourFile(
+        input.buffer,
+        input.pdfBbox,
+        input.pdfDepthUnit ?? "feet",
+      );
+    } catch (err) {
+      if (!(err instanceof PdfRasterOnlyError)) throw err;
+      points = await parseRasterPdfContourFile(
+        input.buffer,
+        input.pdfBbox,
+        input.pdfDepthUnit ?? "feet",
+      );
+    }
+  } else if (fileExt === "png" || fileExt === "jpg" || fileExt === "jpeg") {
+    if (!input.pdfBbox) {
+      throw new Error("PDF georeference is required");
+    }
+    points = await parseRasterImageContourFile(
+      input.buffer,
+      input.pdfBbox,
+      input.pdfDepthUnit ?? "feet",
+    );
+  } else if (textExtensions.has(fileExt)) {
+    points = parseXyzCsv(input.buffer.toString("utf8"), baseFileName);
+  } else {
+    points = await parseUploadedFile(input.buffer, baseFileName);
+  }
+
+  if (points.length < 10) {
+    throw new TerrainInsufficientDataError();
+  }
+  return points;
 }
 
 /** Fetch one catalog bundle using the canonical fetcher registry. */

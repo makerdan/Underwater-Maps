@@ -37,17 +37,13 @@ import {
   ALL_PRESET_DATASETS,
   buildTerrainGrid,
   NoDataError,
-  parseXyzCsv,
   gridPoints,
   previewDataset,
   previewBboxForDownload,
   buildBboxCsvRows,
 } from "../lib/terrain.js";
-import { parseUploadedFile } from "../lib/uploadParsers.js";
-import { parsePdfContourFile, PdfStageError, PdfRasterOnlyError, type PdfDepthUnit } from "../lib/pdfContour.js";
+import { PdfStageError, type PdfDepthUnit } from "../lib/pdfContour.js";
 import {
-  parseRasterPdfContourFile,
-  parseRasterImageContourFile,
   commitCachedExtraction,
   extractRasterImageContoursOnly,
   type RasterExtractionResult,
@@ -81,7 +77,9 @@ import {
   runTerrainParseWorker,
   type TerrainParseWorkerInput,
   type TerrainParseWorkerResult,
+  parseTerrainUpload,
   processTerrainPoints,
+  TerrainInsufficientDataError,
 } from "../domains/terrain/service.js";
 import {
   recordExtensionDuration as _recordExtensionDuration,
@@ -2010,7 +2008,6 @@ router.post(
   // decompressedBuffer retains the raw bytes so binary parsers (LAS, GeoTIFF,
   // NetCDF, BAG) receive the decompressed Buffer, not a corrupted UTF-8
   // re-encoding of binary data.
-  let fileContent: string;
   let decompressedBuffer: Buffer | null = null;
   if (fileName.toLowerCase().endsWith(".gz")) {
     let decompressed: Buffer;
@@ -2059,24 +2056,19 @@ router.post(
     }
 
     decompressedBuffer = decompressed;
-    fileContent = decompressed.toString("utf8");
-  } else {
-    fileContent = file.buffer.toString("utf8");
   }
 
   const TEXT_EXTENSIONS = new Set(["csv", "xyz", "txt"]);
-  // Strip the outer .gz suffix before deriving the inner extension so that
-  // text formats (csv/xyz/txt) compressed as .gz are correctly routed to
-  // parseXyzCsv with the already-decompressed fileContent.
+  // Strip the outer .gz suffix before deriving the inner extension.
   const baseFileName = fileName.toLowerCase().endsWith(".gz") ? fileName.slice(0, -3) : fileName;
   const fileExt = baseFileName.toLowerCase().split(".").pop() ?? "";
 
-  // Parse the file BEFORE validating resolution so that parse failures (e.g.
-  // GPX with no <ele>, NMEA with no depth sentences) return 422 parse_error
-  // rather than falling through to the 400 "resolution required" check below.
-    let points;
-  try {
-    if (fileExt === "pdf") {
+  // Validate georeferencing metadata in the route so malformed form fields
+  // retain their existing HTTP responses. The terrain service owns the actual
+  // PDF/image parsing below.
+  let pdfBbox: z.infer<typeof RasterCommitBboxSchema> | undefined;
+  let pdfDepthUnit: PdfDepthUnit | undefined;
+  if (fileExt === "pdf" || fileExt === "png" || fileExt === "jpg" || fileExt === "jpeg") {
       // Vector contour map: requires user-supplied georeferencing metadata.
       // pdfBbox is a JSON string {minLon,minLat,maxLon,maxLat}; pdfDepthUnit
       // is "feet" (default — US lake maps are almost always feet) or "meters".
@@ -2106,6 +2098,7 @@ router.post(
         });
         return;
       }
+      pdfBbox = bboxParsed.data;
       const rawUnit = req.body["pdfDepthUnit"] as unknown;
       if (rawUnit !== undefined && rawUnit !== "feet" && rawUnit !== "meters") {
         res.status(400).json({
@@ -2114,97 +2107,30 @@ router.post(
         });
         return;
       }
-      const depthUnit: PdfDepthUnit = (rawUnit as PdfDepthUnit | undefined) ?? "feet";
-      try {
-        points = await parsePdfContourFile(file.buffer, bboxParsed.data, depthUnit);
-      } catch (err) {
-        if (err instanceof PdfRasterOnlyError) {
-          // The PDF is scanned/raster-only — re-run through the image-based
-          // contour pipeline (render PDF → OCR + line detection → georef).
-          try {
-            points = await parseRasterPdfContourFile(file.buffer, bboxParsed.data, depthUnit);
-          } catch (rasterErr) {
-            if (rasterErr instanceof PdfStageError) {
-              res.status(422).json({ error: `pdf_${rasterErr.stage}_error`, details: rasterErr.message });
-              return;
-            }
-            throw rasterErr;
-          }
-        } else if (err instanceof PdfStageError) {
-          res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
-          return;
-        } else {
-          throw err;
-        }
-      }
-    } else if (fileExt === "png" || fileExt === "jpg" || fileExt === "jpeg") {
-      // Raster contour map image uploaded directly — same georeferencing
-      // metadata required as for raster PDFs.
-      const rawBbox = req.body["pdfBbox"] as unknown;
-      if (typeof rawBbox !== "string" || rawBbox.length === 0) {
-        res.status(400).json({
-          error: "pdf_georeference_required",
-          details:
-            "Raster contour map images need georeferencing: include a 'pdfBbox' form field " +
-            "with the map's corner coordinates as JSON " +
-            '({"minLon":…,"minLat":…,"maxLon":…,"maxLat":…}).',
-        });
-        return;
-      }
-      let bboxJson: unknown;
-      try {
-        bboxJson = JSON.parse(rawBbox);
-    } catch {
-      res.status(400).json({ error: "invalid_param", details: "pdfBbox is not valid JSON." });
-      return;
-    }
-      const bboxParsed = RasterCommitBboxSchema.safeParse(bboxJson);
-      if (!bboxParsed.success) {
-        res.status(400).json({
-          error: "invalid_param",
-          details: "pdfBbox: " + (bboxParsed.error.issues[0]?.message ?? "invalid bounding box"),
-        });
-        return;
-      }
-      const rawUnit = req.body["pdfDepthUnit"] as unknown;
-      if (rawUnit !== undefined && rawUnit !== "feet" && rawUnit !== "meters") {
-        res.status(400).json({
-          error: "invalid_param",
-          details: 'pdfDepthUnit must be "feet" or "meters".',
-        });
-        return;
-      }
-      const depthUnit: PdfDepthUnit = (rawUnit as PdfDepthUnit | undefined) ?? "feet";
-      try {
-        points = await parseRasterImageContourFile(file.buffer, bboxParsed.data, depthUnit);
-      } catch (err) {
-        if (err instanceof PdfStageError) {
-          res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
-          return;
-        }
-        throw err;
-      }
-    } else if (TEXT_EXTENSIONS.has(fileExt)) {
-      points = parseXyzCsv(fileContent, baseFileName);
-    } else {
-      // For .gz-wrapped binary formats (LAS, GeoTIFF, NetCDF, BAG), pass the
-      // decompressed Buffer and the inner filename (baseFileName, without the
-      // .gz suffix) so the parser routes on the real extension and receives
-      // uncorrupted binary content.
-      const bufferForParser = decompressedBuffer ?? file.buffer;
-      points = await parseUploadedFile(bufferForParser, baseFileName);
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Parse error";
-    res.status(422).json({ error: "parse_error", details: msg });
-    return;
+      pdfDepthUnit = (rawUnit as PdfDepthUnit | undefined) ?? "feet";
   }
 
-  if (points.length < 10) {
-    res.status(400).json({
-      error: "insufficient_data",
-      details: "File must contain at least 10 valid (lon, lat, depth) rows",
+  // Parse before validating resolution to preserve the established error
+  // precedence (malformed files return parse errors even without resolution).
+  let points;
+  try {
+    points = await parseTerrainUpload({
+      buffer: decompressedBuffer ?? file.buffer,
+      fileName,
+      pdfBbox,
+      pdfDepthUnit,
     });
+  } catch (err) {
+    if (err instanceof TerrainInsufficientDataError) {
+      res.status(400).json({ error: "insufficient_data", details: err.message });
+      return;
+    }
+    if (err instanceof PdfStageError) {
+      res.status(422).json({ error: `pdf_${err.stage}_error`, details: err.message });
+      return;
+    }
+    const msg = err instanceof Error ? err.message : "Parse error";
+    res.status(422).json({ error: "parse_error", details: msg });
     return;
   }
 
@@ -2248,12 +2174,12 @@ router.post(
     const gridId = crypto.randomUUID();
 
     const { terrain, overview } = processTerrainPoints({
-      points,
-      resolution,
-      gridId,
-      datasetName,
-      smoothing,
-    });
+        points,
+        resolution,
+        gridId,
+        datasetName,
+        smoothing,
+      });
 
   const MAX_NODATA_PERCENT = 70;
     const coveragePercent = terrain.coveragePercent ?? 100;
