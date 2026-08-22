@@ -157,4 +157,21 @@ describe("GPX — realistic survey track fixture", () => {
     assertValidBathyPoints(pts, 10);
     expect(pts.length).toBe(16);
   });
+
+  it("routes an .xml-named GPX payload through the existing GPX parser", async () => {
+    const pts = await parseUploadedFile(gpxBuf, "survey.xml");
+    assertValidBathyPoints(pts, 10);
+    expect(pts.length).toBe(16);
+  });
+
+  it("rejects unrelated XML instead of treating it as CSV terrain data", async () => {
+    const xml = Buffer.from(
+      `<?xml version="1.0"?><survey><sample>1,2,3</sample></survey>`,
+      "utf8",
+    );
+
+    await expect(parseUploadedFile(xml, "survey.xml")).rejects.toThrow(
+      /Could not detect the file format/i,
+    );
+  });
 });

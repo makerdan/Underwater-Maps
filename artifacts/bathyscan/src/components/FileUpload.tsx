@@ -19,7 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
  */
 
 export const SUPPORTED_EXTENSIONS =
-  ".csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .gz, .pdf";
+  ".csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz, .pdf";
 
 /**
  * MIME-type → extension map passed to react-dropzone.
@@ -41,8 +41,9 @@ export const ACCEPT_MAP: Record<string, string[]> = {
   "image/tiff": [".tif", ".tiff"],
   "application/octet-stream": [".bag", ".las", ".laz", ".nc", ".gz"],
   "application/x-netcdf": [".nc"],
-  "application/gpx+xml": [".gpx"],
-  "text/xml": [".gpx"],
+  "application/gpx+xml": [".gpx", ".xml"],
+  "application/xml": [".xml"],
+  "text/xml": [".gpx", ".xml"],
   // PDF contour maps (vector or raster) — processed by pdfContour pipeline
   "application/pdf": [".pdf"],
 };

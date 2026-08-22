@@ -2354,7 +2354,7 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       if (rejected.length) {
         const code = rejected[0]?.errors[0]?.code;
         if (code === "file-invalid-type") {
-          setUploadError("Unsupported file type. Accepted: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .gz");
+          setUploadError("Unsupported file type. Accepted: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz");
         } else {
           setUploadError("Invalid file");
         }
@@ -2843,8 +2843,9 @@ export const DatasetPanel: React.FC<DatasetPanelProps> = ({ embedded = false }) 
       "image/tiff": [".tif", ".tiff"],
       "application/octet-stream": [".bag", ".las", ".laz", ".nc", ".gz"],
       "application/x-netcdf": [".nc"],
-      "application/gpx+xml": [".gpx"],
-      "text/xml": [".gpx"],
+      "application/gpx+xml": [".gpx", ".xml"],
+      "application/xml": [".xml"],
+      "text/xml": [".gpx", ".xml"],
       "application/pdf": [".pdf"],
       "image/png": [".png"],
       "image/jpeg": [".jpg", ".jpeg"],

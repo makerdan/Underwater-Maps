@@ -145,6 +145,25 @@ describe("POST /api/datasets/upload/request-gcs-url", () => {
     );
   });
 
+  it("returns 200 with uploadUrl and objectKey for a valid .xml file", async () => {
+    vi.mocked(signDatasetUploadUrl).mockResolvedValueOnce({
+      uploadUrl: "https://storage.googleapis.com/test-bucket/pending-datasets/user_test_gcs/uuid-xml/survey.xml?sig=fake",
+      objectKey: "pending-datasets/user_test_gcs/uuid-xml/survey.xml",
+    });
+
+    const res = await request(app)
+      .post("/api/datasets/upload/request-gcs-url")
+      .set(AUTHED)
+      .send({ fileName: "survey.xml" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.objectKey).toMatch(/\.xml$/);
+    expect(vi.mocked(signDatasetUploadUrl)).toHaveBeenCalledWith(
+      "user_test_gcs",
+      "survey.xml",
+    );
+  });
+
   it("returns 200 with uploadUrl and objectKey for a valid .gz file", async () => {
     vi.mocked(signDatasetUploadUrl).mockResolvedValueOnce({
       uploadUrl: "https://storage.googleapis.com/test-bucket/pending-datasets/user_test_gcs/uuid-002/survey.xyz.gz?sig=fake",

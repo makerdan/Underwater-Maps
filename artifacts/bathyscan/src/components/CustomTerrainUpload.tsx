@@ -127,7 +127,7 @@ export const CustomTerrainUpload: React.FC = () => {
         if (code === "file-too-large") {
           setUploadError("File exceeds 50 MB limit");
         } else if (code === "file-invalid-type") {
-          setUploadError("Unsupported file type. Accepted: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .nmea, .gz");
+          setUploadError("Unsupported file type. Accepted: .csv, .xyz, .txt, .tif, .tiff, .bag, .las, .laz, .nc, .gpx, .xml, .nmea, .gz");
         } else {
           setUploadError("Invalid file");
         }
@@ -150,8 +150,9 @@ export const CustomTerrainUpload: React.FC = () => {
       "image/tiff": [".tif", ".tiff"],
       "application/octet-stream": [".bag", ".las", ".laz", ".nc"],
       "application/x-netcdf": [".nc"],
-      "application/gpx+xml": [".gpx"],
-      "text/xml": [".gpx"],
+      "application/gpx+xml": [".gpx", ".xml"],
+      "application/xml": [".xml"],
+      "text/xml": [".gpx", ".xml"],
     },
     maxFiles: 1,
     maxSize: MAX_UPLOAD_BYTES,

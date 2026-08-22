@@ -176,4 +176,11 @@ describe("FileUpload — accept-map / display-string agreement (F-008)", () => {
 
     expect(missing).toEqual([]);
   });
+
+  it("accepts XML files through an XML-compatible MIME entry", () => {
+    expect(SUPPORTED_EXTENSIONS).toContain(".xml");
+    expect(ACCEPT_MAP["application/xml"]).toContain(".xml");
+    expect(ACCEPT_MAP["application/gpx+xml"]).toContain(".xml");
+    expect(ACCEPT_MAP["text/xml"]).toContain(".xml");
+  });
 });

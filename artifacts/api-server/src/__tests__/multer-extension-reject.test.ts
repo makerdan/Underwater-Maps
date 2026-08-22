@@ -100,6 +100,7 @@ const ALLOWED_EXTENSIONS = [
   ".laz",
   ".bag",
   ".gpx",
+  ".xml",
   ".nmea",
   ".nme",
 ];

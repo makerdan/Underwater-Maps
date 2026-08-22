@@ -1340,6 +1340,7 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set([
   ".las", ".laz",  // LAS / compressed LAS
   ".bag",          // Bathymetric Attributed Grid (HDF5)
   ".gpx",          // GPS Exchange (track logs with elevation)
+  ".xml",          // XML files containing GPX-compatible terrain data
   ".nmea",         // NMEA-0183 depth sounder logs (primary extension)
   ".nme",          // NMEA-0183 depth sounder logs (alternate extension used by some devices)
   ".pdf",          // Vector or raster contour map (requires pdfBbox + pdfDepthUnit form fields)
@@ -1379,7 +1380,7 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(
-        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea, .nme, .pdf, .png, .jpg, .jpeg`), {
+        Object.assign(new Error(`Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .xml, .nmea, .nme, .pdf, .png, .jpg, .jpeg`), {
           code: "LIMIT_UNEXPECTED_FILE",
         }) as unknown as null,
         false,
@@ -3169,7 +3170,7 @@ router.post(
     if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
       res.status(415).json({
         error: "unsupported_file_type",
-        details: `Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .nmea`,
+        details: `Unsupported file type. Accepted: .csv, .txt, .xyz, .gz, .tif, .tiff, .nc, .las, .laz, .bag, .gpx, .xml, .nmea, .nme`,
       });
       return;
     }

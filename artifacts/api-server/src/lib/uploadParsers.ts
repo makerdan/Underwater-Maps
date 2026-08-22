@@ -13,7 +13,7 @@
  *   BAG      (.bag)          — HDF5 survey archive; parsed via bag_parser.py
  *                              (h5py + pyproj; handles standard and VR BAGs,
  *                               reprojects any projected CRS to WGS84)
- *   GPX      (.gpx)          — track points with <ele> depth log (server-side)
+ *   GPX/XML  (.gpx / .xml)   — track points with <ele> depth log (server-side)
  *   NMEA     (.nmea)         — depth-sounder + position sentence log
  */
 
@@ -255,6 +255,17 @@ export async function parseUploadedFile(
       return parseBag(buffer);
     case "gpx":
       return parseGpxTerrain(buffer.toString("utf8"));
+    case "xml": {
+      // XML uploads are accepted only when their content is GPX-compatible.
+      // Do not let unrelated XML fall through to the permissive CSV sniff.
+      if (sniffFormat(buffer) !== "gpx") {
+        throw new Error(
+          "Could not detect the file format. Ensure the XML contains GPX " +
+            "track or waypoint elements with elevation/depth data.",
+        );
+      }
+      return parseGpxTerrain(buffer.toString("utf8"));
+    }
     case "nmea":
     case "nme":
       return parseNmea(buffer.toString("utf8"));
