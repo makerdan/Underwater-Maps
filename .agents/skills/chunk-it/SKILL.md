@@ -65,7 +65,8 @@ must be short-lived, bound to one opaque upload and tenant, limited to the
 allowed operation/key/part/range/size, and unusable for listing, reading,
 overwriting another object, or changing metadata. Prefer an application
 callback or server-side verification before treating a client completion as
-final.
+final; reconcile provider-reported parts, sizes, and checksums with the
+application manifest rather than trusting provider completion evidence alone.
 
 ## 3. Define a durable upload contract
 
@@ -95,6 +96,11 @@ Define which transitions are legal, durable, and retryable. Never infer
 received parts from a count: status must return the exact verified indexes or
 ranges, including holes, plus manifest geometry and a safe state. A status
 response must not expose secrets, internal paths, or another tenant's data.
+Advance `receiving` to `ready-to-finalize` only after a durable check confirms
+every expected part is verified and the byte accounting is exact. Guard every
+transition with the current durable state/version; terminal states reject new
+writes, grants, and finalization, while repeated reads or the same idempotent
+command return the recorded terminal result without repeating side effects.
 
 ### Suggested API/session contract
 
