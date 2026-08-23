@@ -227,6 +227,57 @@ test.describe("BathyScan — Overview Map", () => {
     await expect(page.locator(OVERLAY_HEADER)).toHaveCount(0, { timeout: 5_000 });
   });
 
+  test.describe("narrow screens", () => {
+    test.use({ viewport: { width: 800, height: 812 } });
+
+    test("keeps the Overview header centered and horizontally scrollable", async ({ page }) => {
+      if (!(await ensureSignedInOrSkip(page))) return;
+      await openOverview(page);
+
+      const header = page.getByTestId("overview-map-header-scroll");
+      const title = header.locator(":scope > span").first();
+      const instructions = header.locator(":scope > span").nth(1);
+      const controls = page.getByTestId("overview-map-header-controls");
+
+      await expect(header).toBeVisible();
+      await expect(title).toContainText("OVERVIEW MAP");
+      await expect(instructions).toContainText("SCROLL TO ZOOM");
+      await expect(controls).toBeVisible();
+
+      const layout = await header.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const titleBox = element.querySelector(":scope > span")?.getBoundingClientRect();
+        const controlsBox = element.querySelector('[data-testid="overview-map-header-controls"]')?.getBoundingClientRect();
+        const headerBox = element.getBoundingClientRect();
+        return {
+          alignItems: style.alignItems,
+          overflowX: style.overflowX,
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+          headerTop: headerBox.top,
+          headerBottom: headerBox.bottom,
+          titleCenter: titleBox ? (titleBox.top + titleBox.bottom) / 2 : null,
+          controlsCenter: controlsBox ? (controlsBox.top + controlsBox.bottom) / 2 : null,
+        };
+      });
+
+      expect(layout.alignItems).toBe("center");
+      expect(layout.overflowX).toBe("auto");
+      expect(layout.scrollWidth).toBeGreaterThan(layout.clientWidth);
+      expect(layout.titleCenter).toBeGreaterThanOrEqual(layout.headerTop);
+      expect(layout.titleCenter).toBeLessThanOrEqual(layout.headerBottom);
+      expect(layout.controlsCenter).toBeGreaterThanOrEqual(layout.headerTop);
+      expect(layout.controlsCenter).toBeLessThanOrEqual(layout.headerBottom);
+
+      await header.evaluate((element) => {
+        element.scrollLeft = element.scrollWidth;
+      });
+      await expect
+        .poll(() => header.evaluate((element) => element.scrollLeft))
+        .toBeGreaterThan(0);
+    });
+  });
+
   // ---------------------------------------------------------------------------
   // Canvas context-loss recovery
   //
