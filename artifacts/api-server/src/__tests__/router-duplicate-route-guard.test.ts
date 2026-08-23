@@ -62,9 +62,9 @@ import {
 } from "./helpers/routeGuard.js";
 import { API_DOMAINS, API_DOMAIN_KEYS } from "../routes/index.js";
 
+import { uploadIngestionRouter } from "../domains/upload/ingestion.js";
 import healthRouter from "../routes/health.js";
 import poeRouter from "../routes/poe.js";
-import datasetsRouter from "../routes/datasets.js";
 import markersRouter from "../routes/markers.js";
 import catchesRouter from "../routes/catches.js";
 import objectsRouter from "../routes/objects.js";
@@ -103,7 +103,7 @@ import envPackRouter from "../routes/env-pack.js";
 const ROUTERS: Array<[name: string, router: unknown]> = [
   ["health", healthRouter],
   ["poe", poeRouter],
-  ["datasets", datasetsRouter],
+  ["upload-ingestion", uploadIngestionRouter],
   ["markers", markersRouter],
   ["catches", catchesRouter],
   ["objects", objectsRouter],

@@ -127,7 +127,7 @@ vi.mock("@clerk/shared/keys", () => ({
 // ---------------------------------------------------------------------------
 
 import app from "../app.js";
-import { recoverStaleUploadJobs } from "../routes/datasets.js";
+import { recoverUploads } from "../domains/upload/lifecycle.js";
 import { __resetRateLimitMemory } from "../middlewares/rateLimit.js";
 
 // ---------------------------------------------------------------------------
@@ -300,7 +300,7 @@ describe("recoverStaleUploadJobs — irrecoverable jobs (no meta sidecar)", () =
       Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
     );
 
-    await recoverStaleUploadJobs();
+    await recoverUploads();
     readFileSpy.mockRestore();
 
     expect(dbControl.updateSet).toHaveBeenCalledWith(
@@ -316,7 +316,7 @@ describe("recoverStaleUploadJobs — irrecoverable jobs (no meta sidecar)", () =
       Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
     );
 
-    await recoverStaleUploadJobs();
+    await recoverUploads();
     readFileSpy.mockRestore();
 
     expect(dbControl.updateSet).toHaveBeenCalledWith(
@@ -330,7 +330,7 @@ describe("recoverStaleUploadJobs — irrecoverable jobs (no meta sidecar)", () =
   it("does nothing (no db.update calls) when no stale jobs exist", async () => {
     dbControl.selectWhere.mockResolvedValueOnce([]);
 
-    await recoverStaleUploadJobs();
+    await recoverUploads();
 
     expect(dbControl.updateSet).not.toHaveBeenCalled();
   });
@@ -358,7 +358,7 @@ describe("recoverStaleUploadJobs — resumable uploading sessions", () => {
       updatedAt: new Date(Date.now() - 5_000),
     }]);
 
-    await expect(recoverStaleUploadJobs()).resolves.toBe(true);
+    await expect(recoverUploads()).resolves.toBe(true);
 
     const statusRes = await request(app)
       .get(`/api/datasets/upload/chunk/status/${uploadId}`)
@@ -408,7 +408,7 @@ describe("recoverStaleUploadJobs — recoverable jobs (sidecar + assembled file)
     const readFileSpy = vi.spyOn(fs.promises, "readFile").mockResolvedValueOnce(sidecar as never);
     const accessSpy = vi.spyOn(fs.promises, "access").mockResolvedValueOnce(undefined);
 
-    await recoverStaleUploadJobs();
+    await recoverUploads();
 
     readFileSpy.mockRestore();
     accessSpy.mockRestore();
@@ -439,7 +439,7 @@ describe("recoverStaleUploadJobs — recoverable jobs (sidecar + assembled file)
     const readFileSpy = vi.spyOn(fs.promises, "readFile").mockResolvedValueOnce(sidecar as never);
     const accessSpy = vi.spyOn(fs.promises, "access").mockResolvedValueOnce(undefined);
 
-    await recoverStaleUploadJobs();
+    await recoverUploads();
 
     readFileSpy.mockRestore();
     accessSpy.mockRestore();
@@ -469,7 +469,7 @@ describe("recoverStaleUploadJobs — recoverable jobs (sidecar + assembled file)
       Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
     );
 
-    await recoverStaleUploadJobs();
+    await recoverUploads();
 
     readFileSpy.mockRestore();
     accessSpy.mockRestore();
@@ -501,7 +501,7 @@ describe("recoverStaleUploadJobs — recoverable jobs (sidecar + assembled file)
       throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
     });
 
-    await recoverStaleUploadJobs();
+    await recoverUploads();
     accessSpy.mockRestore();
 
     expect(dbControl.updateSet).toHaveBeenCalledWith(

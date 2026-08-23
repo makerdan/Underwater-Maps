@@ -2,7 +2,7 @@ import {
   cleanupStaleChunks,
   loadCalibrationFromDb,
   recoverStaleUploadJobs,
-} from "../../routes/datasets.js";
+} from "./ingestion.js";
 import { startUploadCleanupJob } from "../../lib/uploadCleanupJob.js";
 
 /**

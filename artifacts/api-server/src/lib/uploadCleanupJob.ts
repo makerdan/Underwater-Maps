@@ -11,7 +11,10 @@
  * restarts. This job fills that gap by running cleanup periodically.
  */
 
-import { cleanupAbandonedUploadJobs, sweepStaleUploadSessions } from "../routes/datasets.js";
+import {
+  cleanupAbandonedUploadJobs,
+  sweepStaleUploadSessions,
+} from "../domains/upload/ingestion.js";
 import { logger } from "./logger.js";
 
 const CLEANUP_INTERVAL_MS =
