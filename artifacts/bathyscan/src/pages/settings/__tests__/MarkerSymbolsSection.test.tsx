@@ -13,6 +13,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import {
   MARKER_CATEGORY_LABELS,
+  getMarkerPickerSections,
   SALMON_MARKER_TYPES,
   BOTTOMFISH_MARKER_TYPES,
   LEGACY_MARKER_TYPES,
@@ -51,6 +52,43 @@ vi.mock("@/pages/settings/components/SectionTitle", () => ({
 import { MarkerSymbolsSection } from "../MarkerSymbolsSection";
 
 describe("MarkerSymbolsSection — saltwater mode (default)", () => {
+  it("keeps every mode-specific picker section aligned with visible Settings guide headings", () => {
+    const expectedSections = {
+      saltwater: [
+        ["salmon", "SALMON TARGETS"],
+        ["bottomfish", "BOTTOMFISH"],
+        ["natural", "NATURAL WORLD"],
+        ["mariner", "MARINER"],
+        ["special", "SPECIAL"],
+      ],
+      freshwater: [
+        ["freshwater", "FRESHWATER"],
+        ["natural", "NATURAL WORLD"],
+        ["mariner", "MARINER"],
+        ["special", "SPECIAL"],
+      ],
+    } as const;
+
+    for (const [mode, expected] of Object.entries(expectedSections)) {
+      h.waterType = mode as "saltwater" | "freshwater";
+      const { unmount } = render(<MarkerSymbolsSection />);
+
+      expect(
+        getMarkerPickerSections(h.waterType).map((section) => section.category),
+        `${mode} marker picker sections must match the Settings guide contract`,
+      ).toEqual(expected.map(([category]) => category));
+
+      for (const [category, label] of expected) {
+        expect(
+          screen.getByText(label, { exact: true }),
+          `${mode} Settings guide is missing the ${category} section heading (${label})`,
+        ).toBeInTheDocument();
+      }
+
+      unmount();
+    }
+  });
+
   it("shows the saltwater marker guide prominently and not FRESHWATER", () => {
     h.waterType = "saltwater";
     render(<MarkerSymbolsSection />);
