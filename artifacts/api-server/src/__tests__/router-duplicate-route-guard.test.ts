@@ -98,13 +98,13 @@ import adminRouter from "../routes/admin.js";
 import adminUsersRouter from "../routes/admin-users.js";
 import githubRouter from "../routes/github.js";
 import collectionsRouter from "../routes/collections.js";
-import terrainBundlesRouter from "../routes/terrain-bundles.js";
 import envPackRouter from "../routes/env-pack.js";
 import terrainQueryRouter from "../domains/terrain/query/index.js";
 import platformCoreRouter from "../domains/platform/core-router.js";
 import terrainEnrichmentRouter from "../domains/terrain/enrichment/index.js";
 import catalogOrganizationRouter from "../domains/catalog-organization/index.js";
 import platformGovernanceRouter from "../domains/platform/governance-router.js";
+import terrainBundlesRouter from "../domains/terrain/bundles/index.js";
 
 /** name = the routes/<name>.ts module the router comes from. */
 const ROUTERS: Array<[name: string, router: unknown]> = [

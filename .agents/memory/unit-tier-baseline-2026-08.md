@@ -46,6 +46,15 @@ baseline breakage.
 order/load-dependent, observed right after the puzzle-layout merge wave —
 solo-verify before blaming an unrelated diff.
 
+
+## 2026-08-23 — OverviewMap responsive-interactions baseline
+`OverviewMap.responsiveInteractions.test.tsx` fails deterministically on the
+current clean baseline in two assertions: inactive GPS copy and redundant puzzle
+save visibility. Its related BathyScan type errors are also pre-existing.
+
+**How to apply:** if an unrelated backend task triggers the full tier, do not
+change terrain/API code for these failures; use the responsive-interactions
+task coverage when triaging the UI behavior.
 ## 2026-08-23 — OverviewMap responsive-interactions baseline failure
 `OverviewMap.responsiveInteractions.test.tsx` has two deterministic failures:
 the inactive GPS label is `MY LOCATION` instead of `LIVE GPS`, and the session

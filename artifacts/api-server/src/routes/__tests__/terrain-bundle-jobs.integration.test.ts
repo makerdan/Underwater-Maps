@@ -125,15 +125,17 @@ afterAll(() => {
 const { db, terrainBundleJobsTable } = await import("@workspace/db");
 const { eq, and, inArray } = await import("drizzle-orm");
 const {
-  default: terrainBundlesRouter,
-  recoverStaleTerrainBundleJobs,
+  terrainDomain,
+  recoverTerrainJobs,
+} = await import("../../domains/terrain/index.js");
+const {
   dispatchBundleJob,
 } = await import("../terrain-bundles.js");
 
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json());
-app.use(terrainBundlesRouter);
+app.use(terrainDomain.router);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -345,7 +347,7 @@ describe("restart recovery (real DB)", () => {
       progressNote: "Fetching bathymetry data…",
     });
 
-    const redispatched = await recoverStaleTerrainBundleJobs();
+    const redispatched = await recoverTerrainJobs();
     expect(redispatched).toBeGreaterThanOrEqual(1);
 
     const row = await waitForStatus(userId, "itest-preset", ["complete", "error"]);
@@ -387,12 +389,12 @@ describe("restart recovery (real DB)", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
     async function recoverStaleTerrainBundleJobsWhileBlocked() {
-      await recoverStaleTerrainBundleJobs();
+      await recoverTerrainJobs();
       // Wait until the (blocked) job has flipped to running so the second
       // sweep's "pending" select no longer picks it up spuriously — the
       // in-flight guard must be what prevents the duplicate.
       await waitForStatus(userId, "itest-preset", ["running"]);
-      await recoverStaleTerrainBundleJobs();
+      await recoverTerrainJobs();
     }
   });
 });

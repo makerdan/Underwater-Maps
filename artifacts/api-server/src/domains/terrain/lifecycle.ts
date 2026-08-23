@@ -1,5 +1,5 @@
-import { recoverStaleTerrainBundleJobs } from "../../routes/terrain-bundles.js";
+import { recoverTerrainJobs as recoverBundleJobs } from "./bundles/index.js";
 
 export async function recoverTerrainJobs(): Promise<number> {
-  return recoverStaleTerrainBundleJobs();
+  return recoverBundleJobs();
 }
