@@ -721,7 +721,7 @@ export const OverviewMap: React.FC = () => {
   // puzzleSelectedIds is a React state mirror so the toolbar can re-render.
   const puzzleSelectedIdsRef = useRef<Set<string>>(new Set());
   const [puzzleSelectedIds, setPuzzleSelectedIds_internal] = useState<Set<string>>(new Set());
-  /** The most-recently-clicked tile — drives angle-input display and corner-handle placement. */
+  /** The most-recently-clicked tile — drives corner-handle placement. */
   const puzzlePrimaryIdRef = useRef<string | null>(null);
   // Helper: set both ref and state for selection (always creates a new Set to trigger re-render).
   const setPuzzleSelectedIds = useCallback((ids: Set<string>, primaryId?: string | null) => {
@@ -3844,19 +3844,19 @@ export const OverviewMap: React.FC = () => {
         if (tileHitId !== null) {
           const tileId = tileHitId;
           const xfNow = puzzleTransformsRef.current.get(tileId);
-          // Flip the hit tile plus any group co-members (a grouped tile
-          // flips as part of its group, matching multi-move semantics).
-          const flipIds = new Set<string>([tileId]);
+          // Context actions apply to the hit tile plus any group co-members,
+          // matching multi-move semantics.
+          const tileActionIds = new Set<string>([tileId]);
           for (const members of puzzleGroupsRef.current.values()) {
             if (members.has(tileId)) {
-              for (const m of members) flipIds.add(m);
+              for (const m of members) tileActionIds.add(m);
               break;
             }
           }
           const applyTileFlip = (axis: "flipH" | "flipV") => {
             setPuzzleTransforms((prev) => {
               const next = new Map(prev);
-              for (const id of flipIds) {
+              for (const id of tileActionIds) {
                 const existing = prev.get(id);
                 const base = existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
                 next.set(id, { ...base, [axis]: !base[axis] });
@@ -3865,7 +3865,42 @@ export const OverviewMap: React.FC = () => {
             });
             dirtyRef.current = true;
           };
+          const applyTileRotation = (delta: number | null) => {
+            setPuzzleTransforms((prev) => {
+              const next = new Map(prev);
+              for (const id of tileActionIds) {
+                const existing = prev.get(id);
+                if (existing?.locked) continue;
+                const base = existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false };
+                next.set(id, {
+                  ...base,
+                  angleDeg: delta === null ? 0 : base.angleDeg + delta,
+                });
+              }
+              return next;
+            });
+            dirtyRef.current = true;
+          };
+          const rotationSteps = [90, 45, 5, 1] as const;
           const tileItems: ContextMenuItem[] = [
+            ...rotationSteps.map((degrees) => ({
+              label: `Rotate ${degrees}° counter-clockwise`,
+              icon: "↶",
+              onClick: () => applyTileRotation(-degrees),
+            })),
+            { label: "", onClick: () => {}, separator: true },
+            ...[...rotationSteps].reverse().map((degrees) => ({
+              label: `Rotate ${degrees}° clockwise`,
+              icon: "↷",
+              onClick: () => applyTileRotation(degrees),
+            })),
+            { label: "", onClick: () => {}, separator: true },
+            {
+              label: "Reset rotation",
+              icon: "↺",
+              onClick: () => applyTileRotation(null),
+            },
+            { label: "", onClick: () => {}, separator: true },
             {
               label: "Flip H",
               icon: "⇔",
@@ -5770,126 +5805,6 @@ export const OverviewMap: React.FC = () => {
                   {allLocked ? "🔓 UNLOCK" : "🔒 LOCK"}
                 </button>
               </ViewscreenTooltip>
-            );
-          })()}
-
-          {/* Rotation controls — visible in puzzle mode when any tile is selected */}
-          {puzzleMode && puzzleSelectedIds.size > 0 && (() => {
-            const primaryIdForPanel = puzzlePrimaryIdRef.current ?? ([...puzzleSelectedIds][0] ?? null);
-            const selAngle = primaryIdForPanel != null ? (puzzleTransforms.get(primaryIdForPanel)?.angleDeg ?? 0) : 0;
-            const applyDelta = (delta: number) => {
-              setPuzzleTransforms((prev) => {
-                const next = new Map(prev);
-                for (const id of puzzleSelectedIds) {
-                  const existing = prev.get(id);
-                  if (existing?.locked) continue; // locked tiles never rotate
-                  next.set(id, {
-                    ...(existing ?? { tx: 0, ty: 0, angleDeg: 0, flipH: false, flipV: false }),
-                    angleDeg: (existing?.angleDeg ?? 0) + delta,
-                  });
-                }
-                return next;
-              });
-              dirtyRef.current = true;
-            };
-            const setAngle = (deg: number) => {
-              // Apply delta vs primary tile angle so all tiles shift by the same amount.
-              const primaryAngle = primaryIdForPanel != null ? (puzzleTransforms.get(primaryIdForPanel)?.angleDeg ?? 0) : 0;
-              applyDelta(deg - primaryAngle);
-            };
-            const btnStyle: React.CSSProperties = {
-              background: "rgba(0,10,20,0.75)",
-              border: "1px solid rgba(168,85,247,0.45)",
-              borderRadius: 3,
-              color: "#c084fc",
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: "calc(11px * var(--bs-font-scale, 1))",
-              padding: "2px 6px",
-              cursor: "pointer",
-              lineHeight: "18px",
-              whiteSpace: "nowrap",
-            };
-            return (
-              <div
-                data-testid="overview-puzzle-rotation-panel"
-                style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 3,
-                background: "rgba(168,85,247,0.08)",
-                border: "1px solid rgba(168,85,247,0.35)",
-                borderRadius: 4,
-                padding: "2px 6px",
-              }}>
-                <select
-                  data-testid="overview-puzzle-rotate-dropdown"
-                  value=""
-                  onChange={(e) => {
-                    const v = parseInt(e.target.value, 10);
-                    if (!isNaN(v)) applyDelta(v);
-                    e.target.value = "";
-                  }}
-                  title="Rotate by step"
-                  style={{
-                    background: "rgba(0,0,0,0.55)",
-                    border: "1px solid rgba(168,85,247,0.55)",
-                    borderRadius: 3,
-                    color: "#e9d5ff",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: "calc(11px * var(--bs-font-scale,1))",
-                    padding: "1px 2px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value="" disabled>↻ Step…</option>
-                  <option value="-90">−90°</option>
-                  <option value="-45">−45°</option>
-                  <option value="-5">−5°</option>
-                  <option value="-1">−1°</option>
-                  <option value="1">+1°</option>
-                  <option value="5">+5°</option>
-                  <option value="45">+45°</option>
-                  <option value="90">+90°</option>
-                </select>
-                <input
-                  data-testid="overview-puzzle-angle-input"
-                  type="number"
-                  value={selAngle}
-                  onChange={(e) => {
-                    const v = parseInt(e.target.value, 10);
-                    if (!isNaN(v)) setAngle(v);
-                  }}
-                  title="Current rotation angle in degrees — edit to set exactly"
-                  style={{
-                    width: 52,
-                    background: "rgba(0,0,0,0.55)",
-                    border: "1px solid rgba(168,85,247,0.55)",
-                    borderRadius: 3,
-                    color: "#e9d5ff",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: "calc(12px * var(--bs-font-scale,1))",
-                    textAlign: "center",
-                    padding: "1px 2px",
-                    lineHeight: "18px",
-                  }}
-                />
-                <span style={{ color: "rgba(192,132,252,0.55)", fontFamily: "'JetBrains Mono', monospace", fontSize: "calc(10px * var(--bs-font-scale,1))" }}>°</span>
-                  <button aria-label="Rotate selected tiles by 1 degree clockwise" data-testid="overview-puzzle-rotate-plus1"  style={btnStyle} title="Rotate +1°"  onClick={() => applyDelta(1)}>+1°</button>
-                <button aria-label="Rotate selected tiles by 5 degrees clockwise" data-testid="overview-puzzle-rotate-plus5"  style={btnStyle} title="Rotate +5°"  onClick={() => applyDelta(5)}>+5°</button>
-                <button aria-label="Rotate selected tiles by 45 degrees clockwise" data-testid="overview-puzzle-rotate-plus45" style={btnStyle} title="Rotate +45°" onClick={() => applyDelta(45)}>+45°</button>
-                <button aria-label="Rotate selected tiles by 90 degrees clockwise" data-testid="overview-puzzle-rotate-plus90" style={btnStyle} title="Rotate +90°" onClick={() => applyDelta(90)}>+90°</button>
-                {selAngle !== 0 && (
-                  <button
-                    data-testid="overview-puzzle-rotation-reset"
-                    aria-label="Reset selected tile rotation"
-                    style={{ ...btnStyle, color: "#f87171", border: "1px solid rgba(239,68,68,0.4)" }}
-                    title="Reset rotation to 0°"
-                    onClick={() => setAngle(0)}
-                  >
-                    ↺
-                  </button>
-                )}
-              </div>
             );
           })()}
 

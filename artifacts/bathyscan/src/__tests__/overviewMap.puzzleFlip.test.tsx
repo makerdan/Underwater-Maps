@@ -1,11 +1,11 @@
 /**
- * OverviewMap — puzzle tile flip & rotation persistence tests (Task 4219).
+ * OverviewMap — puzzle tile flip & context-menu rotation persistence tests.
  *
  * Covers three "Confirm" scenarios as permanent regression tests:
  *   1. Right-click context menu on a puzzle tile shows "Flip H" / "Flip V"
  *      and clicking each toggles the corresponding flag in puzzleStore (#4195 family).
- *   2. The rotation angle control reflects puzzleStore state after the map
- *      unmounts and remounts mid-session (no stale closure / lost state).
+ *   2. Context-menu rotation updates survive an unmount and remount, while the
+ *      removed header controls stay absent.
  *   3. The composite canvas draw applies the horizontal/vertical flip via
  *      ctx.scale(-1, 1) / ctx.scale(1, -1) — a flipped tile is actually
  *      drawn mirrored, not just flagged in state.
@@ -229,7 +229,7 @@ async function renderAndCapture() {
 
   expect(capturedHandlers, "registerPuzzleTestHandlers was not called").not.toBeNull();
 
-  const [setPuzzleMode, setSelection, , getTransform] = capturedHandlers!;
+  const [setPuzzleMode, setSelection, , getTransform, createGroup] = capturedHandlers!;
 
   const canvas = document.querySelector<HTMLCanvasElement>(
     'canvas[data-testid="overview-map-canvas"]',
@@ -248,6 +248,7 @@ async function renderAndCapture() {
     setPuzzleMode,
     setSelection,
     getTransform,
+    createGroup,
     unmount: () => result!.unmount(),
   };
 }
@@ -332,26 +333,40 @@ describe("OverviewMap — puzzle tile flips & rotation persistence", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 2. Rotation control survives unmount → remount (no stale closure)
+  // 2. Context-menu rotation survives unmount → remount
   // -------------------------------------------------------------------------
-  it("angle control shows the puzzleStore rotation after the map unmounts and remounts", { timeout: 30_000 }, async () => {
+  it("moves rotation actions to the tile menu and persists their result across remount", { timeout: 30_000 }, async () => {
     const first = await renderAndCapture();
+    const gridA = makeGrid(DATASET_A, -122, -119);
+    const gridB = makeGrid(DATASET_B, -119, -116);
+    const wg = makeWorldGrid(gridA, [gridB]);
 
     await act(async () => { first.setPuzzleMode(true); });
     await act(async () => { first.setSelection([DATASET_A]); });
     await settle(60);
 
-    // Set an exact rotation via the angle input in the puzzle toolbar.
-    const input = document.querySelector<HTMLInputElement>(
-      '[data-testid="overview-puzzle-angle-input"]',
-    );
-    expect(input, "puzzle toolbar angle input should be visible").not.toBeNull();
-    fireEvent.change(input!, { target: { value: "37" } });
+    expect(document.querySelector('[data-testid="overview-puzzle-rotation-panel"]')).toBeNull();
+    expect(document.querySelector('[data-testid="overview-puzzle-rotate-dropdown"]')).toBeNull();
+    expect(document.querySelector('[data-testid="overview-puzzle-angle-input"]')).toBeNull();
+
+    const aCenter = tileCenterPx(gridA, wg);
+    await rightClickAt(first.canvas, aCenter.x, aCenter.y);
+    await waitFor(() => {
+      expect(screen.getByText("Rotate 45° clockwise")).toBeInTheDocument();
+      expect(screen.getByText("Rotate 5° counter-clockwise")).toBeInTheDocument();
+      expect(screen.getByText("Reset rotation")).toBeInTheDocument();
+    }, { timeout: 8000 });
+    fireEvent.click(screen.getByText("Rotate 45° clockwise"));
     await settle(60);
 
-    expect(first.getTransform(DATASET_A)?.angleDeg).toBe(37);
+    await rightClickAt(first.canvas, aCenter.x, aCenter.y);
+    await waitFor(() => expect(screen.getByText("Rotate 5° counter-clockwise")).toBeInTheDocument(), { timeout: 8000 });
+    fireEvent.click(screen.getByText("Rotate 5° counter-clockwise"));
+    await settle(60);
+
+    expect(first.getTransform(DATASET_A)?.angleDeg).toBe(40);
     // The write-through persistence layer must have captured it.
-    expect(sessionStorage.getItem(TRANSFORM_KEY) ?? "").toContain("37");
+    expect(sessionStorage.getItem(TRANSFORM_KEY) ?? "").toContain("40");
 
     // Unmount the whole map mid-session…
     await act(async () => { first.unmount(); });
@@ -362,12 +377,47 @@ describe("OverviewMap — puzzle tile flips & rotation persistence", () => {
     await act(async () => { second.setSelection([DATASET_A]); });
     await settle(60);
 
-    const inputAfter = document.querySelector<HTMLInputElement>(
-      '[data-testid="overview-puzzle-angle-input"]',
-    );
-    expect(inputAfter, "angle input should be visible after remount").not.toBeNull();
-    expect(inputAfter!.value).toBe("37");
-    expect(second.getTransform(DATASET_A)?.angleDeg).toBe(37);
+    expect(document.querySelector('[data-testid="overview-puzzle-rotation-panel"]')).toBeNull();
+    expect(second.getTransform(DATASET_A)?.angleDeg).toBe(40);
+  });
+
+  it("rotates and resets every unlocked group member while leaving locked members unchanged", { timeout: 30_000 }, async () => {
+    const { canvas, setPuzzleMode, createGroup } = await renderAndCapture();
+    const gridA = makeGrid(DATASET_A, -122, -119);
+    const gridB = makeGrid(DATASET_B, -119, -116);
+    const wg = makeWorldGrid(gridA, [gridB]);
+    const aCenter = tileCenterPx(gridA, wg);
+    const bCenter = tileCenterPx(gridB, wg);
+
+    await act(async () => { setPuzzleMode(true); });
+    await act(async () => { createGroup([DATASET_A, DATASET_B]); });
+    await settle(60);
+
+    await rightClickAt(canvas, aCenter.x, aCenter.y);
+    await waitFor(() => expect(screen.getByText("Rotate 5° clockwise")).toBeInTheDocument(), { timeout: 8000 });
+    fireEvent.click(screen.getByText("Rotate 5° clockwise"));
+    await settle();
+    expect(usePuzzleStore.getState().puzzleTransforms[DATASET_A]?.angleDeg).toBe(5);
+    expect(usePuzzleStore.getState().puzzleTransforms[DATASET_B]?.angleDeg).toBe(5);
+
+    await rightClickAt(canvas, bCenter.x, bCenter.y);
+    await waitFor(() => expect(screen.getByText("Lock tile")).toBeInTheDocument(), { timeout: 8000 });
+    fireEvent.click(screen.getByText("Lock tile"));
+    await settle();
+
+    await rightClickAt(canvas, aCenter.x, aCenter.y);
+    await waitFor(() => expect(screen.getByText("Rotate 45° clockwise")).toBeInTheDocument(), { timeout: 8000 });
+    fireEvent.click(screen.getByText("Rotate 45° clockwise"));
+    await settle();
+    expect(usePuzzleStore.getState().puzzleTransforms[DATASET_A]?.angleDeg).toBe(50);
+    expect(usePuzzleStore.getState().puzzleTransforms[DATASET_B]?.angleDeg).toBe(5);
+
+    await rightClickAt(canvas, aCenter.x, aCenter.y);
+    await waitFor(() => expect(screen.getByText("Reset rotation")).toBeInTheDocument(), { timeout: 8000 });
+    fireEvent.click(screen.getByText("Reset rotation"));
+    await settle();
+    expect(usePuzzleStore.getState().puzzleTransforms[DATASET_A]?.angleDeg).toBe(0);
+    expect(usePuzzleStore.getState().puzzleTransforms[DATASET_B]?.angleDeg).toBe(5);
   });
 
   // -------------------------------------------------------------------------
