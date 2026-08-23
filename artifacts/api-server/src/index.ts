@@ -12,7 +12,10 @@ import {
   recoverUploads,
   startUploadCleanup,
 } from "./domains/upload/index.js";
-import { recoverTerrainJobs } from "./domains/terrain/index.js";
+import {
+  recoverTerrainJobs,
+  startTerrainJobMonitor,
+} from "./domains/terrain/index.js";
 import { seedCatalog } from "./domains/catalog-search/index.js";
 import { startEnvironmentalRefresh } from "./domains/environmental/index.js";
 import type * as http from "http";
@@ -66,6 +69,7 @@ let activeServer: http.Server | null = null;
 let stopUploadCleanupJob: (() => void) | null = null;
 let stopOrphanedPhotosCleanupJob: (() => void) | null = null;
 let stopRateLimitPruneJob: (() => void) | null = null;
+let stopTerrainJobMonitor: (() => void) | null = null;
 let stopBucketMonitor: (() => Promise<void>) | null = null;
 let stopWeatherCacheRefresher: (() => Promise<void>) | null = null;
 
@@ -93,6 +97,7 @@ process.on("SIGTERM", () => {
       try { stopUploadCleanupJob?.(); } catch { /* ignore */ }
       try { stopOrphanedPhotosCleanupJob?.(); } catch { /* ignore */ }
       try { stopRateLimitPruneJob?.(); } catch { /* ignore */ }
+      try { stopTerrainJobMonitor?.(); } catch { /* ignore */ }
       try { await stopBucketMonitor?.(); } catch { /* ignore */ }
       try { await stopWeatherCacheRefresher?.(); } catch { /* ignore */ }
       try { await pool.end(); } catch { /* ignore */ }
@@ -113,6 +118,7 @@ process.on("SIGTERM", () => {
     try { stopUploadCleanupJob?.(); } catch { /* ignore */ }
     try { stopOrphanedPhotosCleanupJob?.(); } catch { /* ignore */ }
     try { stopRateLimitPruneJob?.(); } catch { /* ignore */ }
+    try { stopTerrainJobMonitor?.(); } catch { /* ignore */ }
     try { await stopBucketMonitor?.(); } catch { /* ignore */ }
     try { await stopWeatherCacheRefresher?.(); } catch { /* ignore */ }
 
@@ -244,6 +250,11 @@ function startServer(port: number): void {
     void recoverTerrainJobs().catch((bundleErr: unknown) => {
       logger.warn({ err: bundleErr }, "Terrain bundle job recovery failed (non-critical)");
     });
+    try {
+      stopTerrainJobMonitor = startTerrainJobMonitor();
+    } catch (err) {
+      logger.error({ err }, "[startup] startTerrainJobMonitor failed");
+    }
 
     // Seed the dataset discovery catalog on startup (idempotent).
     void seedCatalog().catch((seedErr: unknown) => {

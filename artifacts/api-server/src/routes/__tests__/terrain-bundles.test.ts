@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import request from "supertest";
 import express from "express";
+import { logger } from "../../lib/logger.js";
 
 // ---------------------------------------------------------------------------
 // Mock heavy dependencies before import
@@ -122,6 +123,9 @@ afterAll(() => {
 
 // Import after mocks are set up
 const { default: terrainBundlesRouter } = await import("../terrain-bundles.js");
+const { checkStaleTerrainBundleJobs } = await import(
+  "../../domains/terrain/bundles/index.js"
+);
 
 const app = express();
 app.set("trust proxy", 1);
@@ -278,6 +282,53 @@ describe("GET /terrain/bundles/:presetId/status", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ jobId: "job-1", status: "running" });
     expect(res.body.ageMs).toBeGreaterThanOrEqual(5_000);
+  });
+});
+
+describe("terrain bundle stale-job monitor", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("warns once with job identity, status, age, and failure reason", async () => {
+    const warn = vi.spyOn(logger, "warn");
+    mockSelect.mockReturnValue(makeChain([{
+      id: "stale-job-1",
+      presetId: "lake-ray-roberts",
+      status: "running",
+      createdAt: new Date(Date.now() - 60 * 60 * 1000),
+      errorMessage: "previous upstream timeout",
+    }]));
+
+    expect(await checkStaleTerrainBundleJobs()).toBe(1);
+    expect(await checkStaleTerrainBundleJobs()).toBe(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "terrain_bundle_stale_job",
+        alert: true,
+        jobId: "stale-job-1",
+        presetId: "lake-ray-roberts",
+        status: "running",
+        failureReason: "previous upstream timeout",
+        staleJobThresholdMs: 15 * 60 * 1000,
+      }),
+      "[terrain-bundles] active job exceeded stale-job threshold",
+    );
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not warn for a fresh active job", async () => {
+    const warn = vi.spyOn(logger, "warn");
+    mockSelect.mockReturnValue(makeChain([{
+      id: "fresh-job-1",
+      presetId: "lake-ray-roberts",
+      status: "pending",
+      createdAt: new Date(Date.now() - 1_000),
+      errorMessage: null,
+    }]));
+
+    expect(await checkStaleTerrainBundleJobs()).toBe(0);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 

@@ -1,5 +1,8 @@
 export { default, terrainDomain } from "./router.js";
-export { recoverTerrainJobs } from "./lifecycle.js";
+export {
+  recoverTerrainJobs,
+  startTerrainJobMonitor,
+} from "./lifecycle.js";
 export {
   fetchTerrainBundle,
   processTerrainPoints,
