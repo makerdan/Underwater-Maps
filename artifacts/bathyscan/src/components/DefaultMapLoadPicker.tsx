@@ -84,9 +84,9 @@ export function DefaultMapLoadPicker({ value, onChange }: DefaultMapLoadPickerPr
       </option>
 
       {presets && presets.length > 0 && (
-        <optgroup label="Built-in Presets">
+        <optgroup label="Built-in Presets" style={{ color: "#ffffff", background: "#00101f" }}>
           {presets.map((d) => (
-            <option key={`preset:${d.id}`} value={`preset:${d.id}`}>
+            <option key={`preset:${d.id}`} value={`preset:${d.id}`} style={{ color: "#ffffff", background: "#00101f" }}>
               {d.name}
             </option>
           ))}
@@ -94,9 +94,9 @@ export function DefaultMapLoadPicker({ value, onChange }: DefaultMapLoadPickerPr
       )}
 
       {isSignedIn && !uploadsLoading && uploads && uploads.length > 0 && (
-        <optgroup label="My Library">
+        <optgroup label="My Library" style={{ color: "#ffffff", background: "#00101f" }}>
           {uploads.map((d) => (
-            <option key={`upload:${d.id}`} value={`upload:${d.id}`}>
+            <option key={`upload:${d.id}`} value={`upload:${d.id}`} style={{ color: "#ffffff", background: "#00101f" }}>
               {d.name}
             </option>
           ))}

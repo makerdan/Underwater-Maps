@@ -6,7 +6,7 @@
  * of folder location and a dataset can belong to any number of collections.
  *
  * This file exports:
- *   • CollectionsSection      — the "COLLECTIONS" section (create / rename /
+ *   • CollectionsSection      — the "DATASET COLLECTIONS" section (create / rename /
  *                               delete / expand / remove members / empty state)
  *   • AddToCollectionDialog   — reusable picker dialog to add one or more
  *                               library items to a collection (used by
@@ -613,15 +613,22 @@ export const CollectionsSection: React.FC = () => {
   if (!isLoaded || !isSignedIn) return null;
 
   return (
-    <div data-testid="collections-section" style={{ marginTop: 10 }}>
+    <div
+      data-testid="collections-section"
+      style={{
+        marginTop: 10,
+        paddingTop: 8,
+        borderTop: "1px solid rgba(255,255,255,0.9)",
+      }}
+    >
       <div className="flex items-center justify-between" style={{ padding: "0 2px" }}>
         <button
           data-testid="btn-collections-toggle"
           onClick={() => setOpen((o) => !o)}
           className="flex items-center gap-1 hover:bg-white/5"
-          style={{ background: "transparent", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: "calc(12.5px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", padding: "2px 4px" }}
+          style={{ background: "transparent", border: "none", cursor: "pointer", color: "#ffffff", fontSize: "calc(12.5px * var(--bs-font-scale, 1))", letterSpacing: "0.12em", padding: "2px 4px" }}
         >
-          {open ? "▼" : "▶"} COLLECTIONS {sorted.length > 0 ? `(${sorted.length})` : ""}
+          {open ? "▼" : "▶"} DATASET COLLECTIONS {sorted.length > 0 ? `(${sorted.length})` : ""}
         </button>
         <button
           data-testid="btn-new-collection"

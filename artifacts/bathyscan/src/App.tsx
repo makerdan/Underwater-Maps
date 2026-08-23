@@ -398,9 +398,8 @@ function Main() {
   const [queryOpen, setQueryOpen] = useState(false);
   const sidePaneCollapsed = useUiStore((s) => s.sidePaneCollapsed);
   const setSidePaneCollapsed = useUiStore((s) => s.setSidePaneCollapsed);
-  // Ref + ResizeObserver to track the side panel's right edge so the Hide
-  // button is always anchored just past the panel's right edge (never buried
-  // under it on narrow screens or wide-panel modes).
+  // Ref + ResizeObserver to track the side panel's right edge for HUD
+  // positioning. The Hide control is anchored to the panel's left edge.
   const sidePanelRef = useRef<HTMLDivElement>(null);
   const [panelRightEdge, setPanelRightEdge] = useState(280);
   useEffect(() => {
@@ -1474,13 +1473,12 @@ function Main() {
           </ViewscreenTooltip>
         ) : (
           <>
-            {/* Hide button — fixed-position so it stays inside the viewport on
-                narrow screens (the panel can extend off-screen on small devices
-                but this button must always remain reachable). Kept outside the
-                ErrorBoundary so the pane can still be collapsed when the sidebar
-                content throws. */}
-            <div style={{ position: "fixed", top: 96, left: panelRightEdge + 4, zIndex: 21 }}>
-              <ViewscreenTooltip label="Hide side pane to free up screen space" side="left">
+            {/* Hide button — fixed at the sidebar's left edge so it remains
+                reachable even when the panel is wider than the viewport.
+                Kept outside the ErrorBoundary so the pane can still be
+                collapsed when the sidebar content throws. */}
+            <div style={{ position: "fixed", top: 96, left: 16, zIndex: 21 }}>
+              <ViewscreenTooltip label="Hide side pane to free up screen space" side="right">
                 <button
                   onClick={() => setSidePaneCollapsed(true)}
                   aria-label="Hide side pane"
