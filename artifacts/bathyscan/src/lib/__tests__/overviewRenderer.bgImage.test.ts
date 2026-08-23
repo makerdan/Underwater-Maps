@@ -254,6 +254,17 @@ describe("drawBackgroundImage", () => {
     expect(alphaAtDraw).toBeCloseTo(0.37, 9);
   });
 
+  it("draws the active collection image at the default 50% opacity", () => {
+    const ctx = makeCtx();
+    let alphaAtDraw = -1;
+    (ctx.drawImage as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      alphaAtDraw = ctx.globalAlpha;
+    });
+    drawBackgroundImage(ctx, IMAGE, 100, 100, null, BBOXES, GRID, T, 0.5);
+    expect(ctx.drawImage).toHaveBeenCalledOnce();
+    expect(alphaAtDraw).toBeCloseTo(0.5, 9);
+  });
+
   it("draws nothing at opacity 0 or with a degenerate image size", () => {
     const ctx = makeCtx();
     drawBackgroundImage(ctx, IMAGE, 100, 100, null, BBOXES, GRID, T, 0);

@@ -241,8 +241,24 @@ describe("OverviewMap — waypoint mode click dispatches correct lat/lon", () =>
     const toolsToggle = screen.getByTestId("overview-tools-toggle");
     await act(async () => { fireEvent.click(toolsToggle); });
 
+    expect(screen.getByTestId("overview-tools-popover")).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: "Toggle box select tool" })).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: "Toggle export terrain tool" })).toBeVisible();
     const waypointToggle = screen.getByTestId("overview-waypoint-mode-toggle");
     expect(waypointToggle).not.toBeNull();
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    expect(screen.getByTestId("overview-tools-popover")).not.toBeVisible();
+    expect(toolsToggle).toHaveFocus();
+
+    await act(async () => { fireEvent.click(toolsToggle); });
+    expect(screen.getByTestId("overview-tools-popover")).toBeVisible();
+    await act(async () => {
+      fireEvent.mouseDown(document.body);
+    });
+    expect(screen.getByTestId("overview-tools-popover")).not.toBeVisible();
 
     await act(async () => { fireEvent.click(waypointToggle); });
     expect(waypointToggle.getAttribute("aria-pressed")).toBe("true");

@@ -2498,29 +2498,29 @@ export const OverviewMap: React.FC = () => {
       const primIdNow = primaryDatasetIdRef.current;
 
       // Special-collection background reference image — drawn BELOW all
-      // dataset heatmaps, only while puzzle mode is on and a special
-      // collection with a loaded image is active. Positioned via the
-      // two-point geo-anchor affine when set, else stretched to the union
-      // bbox of the visible datasets, at the configured opacity.
-      if (puzzleModeRef.current) {
-        const spcNow = useSpecialCollectionStore.getState().active;
-        if (spcNow?.bgImage) {
-          const bgBboxes = visibleNow
-            .map((v) => (v.datasetId === primIdNow ? grid : v.overviewGrid))
-            .filter((g): g is NonNullable<typeof g> => g != null)
-            .map((g) => ({ minLon: g.minLon, maxLon: g.maxLon, minLat: g.minLat, maxLat: g.maxLat }));
-          drawBackgroundImage(
-            ctx,
-            spcNow.bgImage,
-            spcNow.bgImageW,
-            spcNow.bgImageH,
-            spcNow.bgGeoAnchors,
-            bgBboxes,
-            worldGrid,
-            t,
-            spcNow.bgOpacity,
-          );
-        }
+      // dataset heatmaps whenever a collection with a loaded image is active.
+      // The collection store is the source of truth for overlay visibility;
+      // keeping this independent of the puzzle toolbar toggle prevents a
+      // loaded reference image from disappearing when that UI state changes.
+      // Placement uses the two-point geo-anchor affine when set, otherwise the
+      // union bbox of the visible datasets, at the configured opacity.
+      const spcNow = useSpecialCollectionStore.getState().active;
+      if (spcNow?.bgImage) {
+        const bgBboxes = visibleNow
+          .map((v) => (v.datasetId === primIdNow ? grid : v.overviewGrid))
+          .filter((g): g is NonNullable<typeof g> => g != null)
+          .map((g) => ({ minLon: g.minLon, maxLon: g.maxLon, minLat: g.minLat, maxLat: g.maxLat }));
+        drawBackgroundImage(
+          ctx,
+          spcNow.bgImage,
+          spcNow.bgImageW,
+          spcNow.bgImageH,
+          spcNow.bgGeoAnchors,
+          bgBboxes,
+          worldGrid,
+          t,
+          spcNow.bgOpacity,
+        );
       }
 
       // Helper: apply puzzle transform for a tile and draw selection affordances.
@@ -6170,15 +6170,18 @@ export const OverviewMap: React.FC = () => {
               role="menu"
               style={{
                 display: toolsPopoverOpen ? "block" : "none",
-                position: "absolute",
-                top: "calc(100% + 4px)",
-                right: 0,
+                // The header scroll container clips descendants vertically.
+                // Use a viewport layer so the menu remains visible in both
+                // normal and horizontally-scrolled narrow layouts.
+                position: "fixed",
+                top: 40,
+                right: 8,
                 background: "rgba(2,8,24,0.97)",
                 border: "1px solid rgba(0,229,255,0.25)",
                 borderRadius: 4,
                 backdropFilter: "blur(8px)",
                 boxShadow: "0 4px 16px rgba(0,0,0,0.55)",
-                zIndex: 50,
+                zIndex: 1000,
                 minWidth: 168,
                 overflow: "hidden",
                 fontFamily: "'JetBrains Mono', monospace",
