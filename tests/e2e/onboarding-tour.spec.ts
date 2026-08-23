@@ -117,10 +117,11 @@ async function ensureSceneLoaded(page: Page): Promise<boolean> {
   // being loaded) mounts the OnboardingOverlay. Without this, the overlay is never
   // rendered even when hasSeenOnboarding=false, because the guard returns null
   // until a terrain commit has been received by the React context.
-  await page.evaluate(() => {
-    (window as unknown as { __bathyTest?: { seedTerrain?: () => void } })
-      .__bathyTest?.seedTerrain?.();
-  });
+  await page.waitForFunction(
+    () => Boolean((window as unknown as { __bathyTest?: { isTestBridgeReady?: () => boolean } }).__bathyTest?.isTestBridgeReady?.()),
+    { timeout: 10_000 },
+  );
+  await page.evaluate(() => window.__bathyTest?.seedTerrain?.());
   return true;
 }
 
@@ -370,6 +371,10 @@ test.describe("Onboarding tour overlay", () => {
     // Seed synthetic terrain so OnboardingGuard mounts the overlay after the
     // SPA navigation (terrain is not auto-loaded in the test environment
     // quickly enough for the 20 s dialog wait to catch it).
+    await page.waitForFunction(
+      () => Boolean((window as unknown as { __bathyTest?: { isTestBridgeReady?: () => boolean } }).__bathyTest?.isTestBridgeReady?.()),
+      { timeout: 10_000 },
+    );
     await page.evaluate(() => {
       (window as unknown as { __bathyTest?: { seedTerrain?: () => void } })
         .__bathyTest?.seedTerrain?.();

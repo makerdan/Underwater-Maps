@@ -62,6 +62,10 @@ test.describe("Depth palette cross-device sync", () => {
     });
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
+    await page.waitForFunction(() => Boolean(window.__bathyTest), {
+      timeout: 10_000,
+    });
+    await page.evaluate(() => window.__bathyTest!.waitForSettingsReady());
 
     // Pick a value that's unmistakeably different from the default
     // (#283593 indigo) so the assertion can't be satisfied by a stale
@@ -87,6 +91,10 @@ test.describe("Depth palette cross-device sync", () => {
     // re-hydrates from the server and the deep hex input shows the new value.
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
+    await page.waitForFunction(() => Boolean(window.__bathyTest), {
+      timeout: 10_000,
+    });
+    await page.evaluate(() => window.__bathyTest!.waitForSettingsReady());
     // Palette controls are in the "Depth Banding: Color Palettes" tab.
     await page.locator('button:has-text("DEPTH BANDING")').first().click();
 
@@ -340,6 +348,10 @@ test.describe("Depth palette cross-device sync", () => {
     // ── Navigate to the main map — never /settings ──────────────────────
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
+    await page.waitForFunction(() => Boolean(window.__bathyTest), {
+      timeout: 10_000,
+    });
+    await page.evaluate(() => window.__bathyTest!.waitForSettingsReady());
 
     // Wait for the test bridge to be installed (happens during app init when
     // VITE_DEV_AUTH_BYPASS=1). After domcontentloaded this should already

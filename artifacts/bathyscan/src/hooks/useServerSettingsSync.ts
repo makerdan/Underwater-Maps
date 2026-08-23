@@ -254,6 +254,10 @@ let _ackedZoneRev = 0;
 // everything synced" from "nothing in flight because the flush FAILED and was
 // silently dropped / is waiting on a retry".
 let _lastFlushFailed = false;
+// Monotonic acknowledgement sequence for test synchronization. Unlike
+// lastSyncedAt, this only advances after this client receives a successful PUT
+// response, so initial GET hydration can never satisfy a wait for a mutation.
+let _settingsSyncAck = 0;
 
 // True when the server rejected a PUT with 409 (another device saved a newer
 // version since this client last synced). While set:
@@ -347,6 +351,11 @@ export function hasUnackedSettingsEdits(): boolean {
     _zoneEditRev > _ackedZoneRev ||
     usePaletteStore.getState().rev > _ackedPaletteRev
   );
+}
+
+/** Number of successful settings PUT acknowledgements since this module loaded. */
+export function getSettingsSyncAcknowledgement(): number {
+  return _settingsSyncAck;
 }
 
 /**
@@ -565,7 +574,16 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
               parsed.skippedKeys,
             );
           }
-          hydrateFromServer(parsed.value as Parameters<typeof hydrateFromServer>[0]);
+          // A refetch may return the old server value after Replay tour or
+          // Take the tour changed this flag locally. Hydrate every other field,
+          // but never cancel that intentional local reset.
+          const hydratedValue = _onboardingLocallyEdited
+            ? {
+                ...parsed.value,
+                hasSeenOnboarding: useSettingsStore.getState().hasSeenOnboarding,
+              }
+            : parsed.value;
+          hydrateFromServer(hydratedValue as Parameters<typeof hydrateFromServer>[0]);
         }
       } else if (
         isFirstHydration &&
@@ -726,6 +744,7 @@ export function useServerSettingsSync(): { settingsReady: boolean } {
       const serverStamp = (resp as Record<string, unknown> | undefined)
         ?.__updatedAt;
       markAllSaved(typeof serverStamp === "string" ? serverStamp : undefined);
+      _settingsSyncAck++;
       if (paletteRevAtFlush > _ackedPaletteRev) _ackedPaletteRev = paletteRevAtFlush;
       if (settingsRevAtFlush > _ackedSettingsRev) _ackedSettingsRev = settingsRevAtFlush;
       if (panelRevAtFlush > _ackedPanelRev) _ackedPanelRev = panelRevAtFlush;

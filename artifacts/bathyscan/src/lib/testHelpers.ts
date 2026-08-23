@@ -62,6 +62,7 @@ import { applyCameraSpawn } from "./cameraSpawn";
 import {
   hasPendingOrInFlightSettingsSync,
   hasUnackedSettingsEdits,
+  getSettingsSyncAcknowledgement,
   isServerSettled,
   flushServerSync,
 } from "../hooks/useServerSettingsSync";
@@ -1153,29 +1154,21 @@ export function installTestHelpers(): void {
           return;
         }
         // Slow path: a sync is outstanding (debounce armed, PUT in flight, or
-        // a failed flush awaiting retry). Poll until lastSyncedAt changes —
-        // the authoritative signal that markAllSaved() fired after the server
-        // acknowledged the PUT — AND all edits are acked.
+        // a failed flush awaiting retry). Capture the acknowledgement sequence
+        // before polling. It advances only after this client receives a
+        // successful PUT response, unlike lastSyncedAt which GET hydration can
+        // also change.
         //
         // Deadline note: flush() itself waits up to 10 s for _serverSettled
         // before sending its PUT, so this helper's deadline must exceed that
         // or a legitimate slow flush outlives the helper and its PUT lands
         // AFTER the test (or its retry) has moved on — clobbering state the
         // retry just reset.
-        const before = useSettingsStore.getState().lastSyncedAt;
+        const beforeAck = getSettingsSyncAcknowledgement();
         const deadline = Date.now() + 15_000;
         const poll = () => {
-          const current = useSettingsStore.getState().lastSyncedAt;
-          // lastSyncedAt also changes when the initial GET hydration applies
-          // the server row (hydrateFromServer stamps it with __updatedAt).
-          // That change alone does NOT mean the pending PUT completed — so
-          // only resolve once the timestamp moved AND nothing is still
-          // debounced or in flight AND no unacked (or failed-flush) edits
-          // remain. Otherwise a hydration landing during the debounce window
-          // resolves this promise early, the caller reloads the page, and the
-          // pending PUT is aborted by navigation.
           if (
-            current !== before &&
+            getSettingsSyncAcknowledgement() > beforeAck &&
             !hasPendingOrInFlightSettingsSync() &&
             !hasUnackedSettingsEdits()
           ) {

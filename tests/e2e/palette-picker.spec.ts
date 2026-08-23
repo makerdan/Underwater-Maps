@@ -54,6 +54,10 @@ test.describe("Depth palette picker — end-to-end", () => {
     //    transition back to `/`.
     await page.locator('button[aria-label="Settings"], button:has-text("Settings")').first().dispatchEvent("click");
     await page.waitForURL((url) => url.pathname.endsWith("/settings"), { timeout: 5_000 });
+    await page.waitForFunction(() => Boolean(window.__bathyTest), {
+      timeout: 10_000,
+    });
+    await page.evaluate(() => window.__bathyTest!.waitForSettingsReady());
 
     // Palette controls live in the "Depth Banding: Color Palettes" tab (not Visuals).
     await page.locator('button:has-text("DEPTH BANDING")').first().dispatchEvent("click");
