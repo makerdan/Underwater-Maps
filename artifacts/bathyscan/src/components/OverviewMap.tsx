@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Eye, EyeOff } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   useGetMarkers,
@@ -570,6 +571,14 @@ export const OverviewMap: React.FC = () => {
   const [puzzleMode, setPuzzleMode] = useState(false);
   const puzzleModeRef = useRef(false);
   useEffect(() => { puzzleModeRef.current = puzzleMode; }, [puzzleMode]);
+  // Canvas-only preference for the current mounted map. It deliberately is not
+  // persisted with a puzzle layout or user settings.
+  const [showPuzzleTitles, setShowPuzzleTitles] = useState(true);
+  const showPuzzleTitlesRef = useRef(true);
+  useEffect(() => {
+    showPuzzleTitlesRef.current = showPuzzleTitles;
+    dirtyRef.current = true;
+  }, [showPuzzleTitles]);
 
   // Sync puzzle mode into puzzleStore so MarkerLayer can follow without prop drilling.
   const setPuzzleStoreMode = usePuzzleStore((s) => s.setPuzzleMode);
@@ -1609,6 +1618,7 @@ export const OverviewMap: React.FC = () => {
     for (const d of allDatasets ?? []) m.set(d.id, d.name);
     for (const d of userDatasetsForNames ?? []) m.set(d.id, d.name);
     datasetNameMapRef.current = m;
+    dirtyRef.current = true;
   }, [allDatasets, userDatasetsForNames]);
   const hasEfh = !!allDatasets?.find((d) => d.id === datasetId)?.hasEfh;
   // Derived once per render so the Fit button doesn't repeat the filter three
@@ -2425,6 +2435,35 @@ export const OverviewMap: React.FC = () => {
         ctx.translate(-tcx, -tcy);
 
         drawFn();
+
+        // Puzzle tile title — attached to the tile's transformed top edge, but
+        // counter-rotated and counter-flipped so it is always upright on screen.
+        // This is canvas-only; it has no bearing on the tile's hit testing.
+        if (puzzleModeRef.current && showPuzzleTitlesRef.current) {
+          const gridName = visibleDatasetsRef.current.find((v) => v.datasetId === tileDatasetId)
+            ?.overviewGrid?.name;
+          const displayName = datasetNameMapRef.current.get(tileDatasetId) ?? gridName;
+          const title = typeof displayName === "string" && displayName.trim()
+            ? displayName.trim()
+            : `Dataset ${tileDatasetId}`;
+          const titleMaxWidth = Math.max(36, Math.abs(bx1 - bx0) - 28);
+
+          ctx.save();
+          // Keep the title clear of the outer-corner handles, while its anchor
+          // continues to follow the translated/rotated/flipped tile.
+          ctx.translate(tcx, by0 - 12);
+          ctx.scale(pFlipH ? -1 : 1, pFlipV ? -1 : 1);
+          ctx.rotate(-pAngleRad);
+          ctx.font = "600 10px 'JetBrains Mono', monospace";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(2,8,24,0.9)";
+          ctx.fillStyle = "#e2e8f0";
+          ctx.strokeText(title, 0, 0, titleMaxWidth);
+          ctx.fillText(title, 0, 0, titleMaxWidth);
+          ctx.restore();
+        }
 
         // Selection affordances — bright-purple outline for all selected tiles;
         // corner handles are drawn only on the primary tile.
@@ -4988,14 +5027,19 @@ export const OverviewMap: React.FC = () => {
           height: 36,
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 16px",
+          justifyContent: "flex-start",
+          gap: 16,
+          padding: "0 12px",
+          boxSizing: "border-box",
+          overflowX: "auto",
+          overflowY: "hidden",
           background: "rgba(2,8,24,0.75)",
           backdropFilter: "blur(6px)",
           borderBottom: "1px solid rgba(0,229,255,0.1)",
           zIndex: 41,
-          pointerEvents: "none",
+          pointerEvents: "auto",
         }}
+        data-testid="overview-map-header-scroll"
       >
         <span
           style={{
@@ -5015,17 +5059,22 @@ export const OverviewMap: React.FC = () => {
             fontSize: "calc(11px * var(--bs-font-scale, 1))",
             letterSpacing: "0.1em",
             color: "#475569",
-            flexShrink: 1,
-            overflow: "hidden",
+            flexShrink: 0,
             whiteSpace: "nowrap",
-            textOverflow: "ellipsis",
+            pointerEvents: "none",
           }}
         >
           SCROLL TO ZOOM · DRAG TO PAN · CLICK TO DROP IN
         </span>
 
         {/* GPS controls */}
-        <div className="overview-map-header-controls" style={{ display: "flex", gap: 6, alignItems: "center", pointerEvents: "auto" }}>
+        <div
+          className="overview-map-header-controls"
+          data-testid="overview-map-header-controls"
+          role="toolbar"
+          aria-label="Overview map controls"
+          style={{ display: "flex", flexShrink: 0, gap: 6, alignItems: "center", minWidth: "max-content" }}
+        >
           {gpsError && (
             <span style={{ color: "#ef4444", fontSize: "calc(12px * var(--bs-font-scale, 1))", fontFamily: "'JetBrains Mono', monospace", maxWidth: 180 }}>
               ⚠ {gpsError}
@@ -5094,6 +5143,40 @@ export const OverviewMap: React.FC = () => {
               }}
             >
               ⊡ FIT
+            </button>
+          </ViewscreenTooltip>
+
+          <ViewscreenTooltip label={showPuzzleTitles ? "Hide puzzle tile titles" : "Show puzzle tile titles"} side="bottom">
+            <button
+              data-testid="overview-puzzle-titles-toggle"
+              aria-label={showPuzzleTitles ? "Hide puzzle tile titles" : "Show puzzle tile titles"}
+              aria-pressed={showPuzzleTitles}
+              onClick={() => {
+                setShowPuzzleTitles((visible) => {
+                  const next = !visible;
+                  showPuzzleTitlesRef.current = next;
+                  dirtyRef.current = true;
+                  return next;
+                });
+              }}
+              style={{
+                background: showPuzzleTitles ? "rgba(14,165,233,0.14)" : "rgba(0,10,20,0.75)",
+                border: `1px solid ${showPuzzleTitles ? "rgba(56,189,248,0.6)" : "rgba(0,229,255,0.2)"}`,
+                borderRadius: 3,
+                color: showPuzzleTitles ? "#7dd3fc" : "#94a3b8",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                padding: "2px 7px",
+                cursor: "pointer",
+                lineHeight: "18px",
+                whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              {showPuzzleTitles ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
+              TITLES
             </button>
           </ViewscreenTooltip>
 

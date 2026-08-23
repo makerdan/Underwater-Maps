@@ -457,12 +457,45 @@ describe("OverviewMap — puzzle tile flips & rotation persistence", () => {
 // call from any context lands in a shared array we can assert on.
 describe("OverviewMap — flipped tile draw transform", () => {
   const scaleCalls: Array<[number, number]> = [];
+  const titleDrawCalls: Array<{
+    text: string;
+    x: number;
+    y: number;
+    maxWidth: number | undefined;
+    matrix: [number, number, number, number, number, number];
+  }> = [];
   let origGetContext: typeof HTMLCanvasElement.prototype.getContext;
 
   function makeRecordingCtx(): CanvasRenderingContext2D {
     const propStore: Record<PropertyKey, unknown> = {};
+    let matrix: [number, number, number, number, number, number] = [1, 0, 0, 1, 0, 0];
+    const matrixStack: Array<[number, number, number, number, number, number]> = [];
+    const translate = (x: number, y: number) => {
+      matrix = [
+        matrix[0], matrix[1], matrix[2], matrix[3],
+        matrix[0] * x + matrix[2] * y + matrix[4],
+        matrix[1] * x + matrix[3] * y + matrix[5],
+      ];
+    };
+    const rotate = (angle: number) => {
+      const [a, b, c, d, e, f] = matrix;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      matrix = [a * cos + c * sin, b * cos + d * sin, -a * sin + c * cos, -b * sin + d * cos, e, f];
+    };
+    const scale = (x: number, y: number) => {
+      scaleCalls.push([x, y]);
+      matrix = [matrix[0] * x, matrix[1] * x, matrix[2] * y, matrix[3] * y, matrix[4], matrix[5]];
+    };
     const target: Record<PropertyKey, unknown> = {
-      scale: (x: number, y: number) => { scaleCalls.push([x, y]); },
+      save: () => { matrixStack.push([...matrix] as typeof matrix); },
+      restore: () => { matrix = matrixStack.pop() ?? [1, 0, 0, 1, 0, 0]; },
+      translate,
+      rotate,
+      scale,
+      fillText: (text: string, x: number, y: number, maxWidth?: number) => {
+        titleDrawCalls.push({ text, x, y, maxWidth, matrix: [...matrix] as typeof matrix });
+      },
       measureText: () => ({ width: 10 }),
       getImageData: () => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 }),
       createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }),
@@ -488,6 +521,7 @@ describe("OverviewMap — flipped tile draw transform", () => {
     usePuzzleStore.setState({ puzzleTransforms: {} });
     setupStores();
     scaleCalls.length = 0;
+    titleDrawCalls.length = 0;
     origGetContext = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function () {
       return makeRecordingCtx();
@@ -538,5 +572,59 @@ describe("OverviewMap — flipped tile draw transform", () => {
     });
 
     expect(scaleCalls.some(([x, y]) => x < 0 || y < 0)).toBe(false);
+  });
+
+  it("draws titles above transformed tiles upright, then suppresses only titles when closed", { timeout: 30_000 }, async () => {
+    sessionStorage.setItem(
+      TRANSFORM_KEY,
+      JSON.stringify([[DATASET_A, { tx: 18, ty: -10, angleDeg: 37, flipH: true, flipV: true }]]),
+    );
+
+    const { setPuzzleMode } = await renderAndCapture();
+    await act(async () => { setPuzzleMode(true); });
+
+    await waitFor(() => {
+      expect(titleDrawCalls.some((call) => call.text === "Grid dataset-a")).toBe(true);
+    }, { timeout: 8000 });
+
+    const titleCall = titleDrawCalls.find((call) => call.text === "Grid dataset-a")!;
+    // Text itself starts at the tile-top anchor and its transform's linear
+    // portion is the identity: the tile can rotate/flip while the title stays
+    // upright and unmirrored on the screen.
+    expect(titleCall.x).toBe(0);
+    expect(titleCall.y).toBe(0);
+    expect(titleCall.maxWidth).toBeGreaterThan(0);
+    expect(titleCall.matrix.slice(0, 4)).toEqual([
+      expect.closeTo(1, 6),
+      expect.closeTo(0, 6),
+      expect.closeTo(0, 6),
+      expect.closeTo(1, 6),
+    ]);
+
+    const titleToggle = screen.getByTestId("overview-puzzle-titles-toggle");
+    expect(titleToggle).toHaveAccessibleName("Hide puzzle tile titles");
+    expect(titleToggle).toHaveAttribute("aria-pressed", "true");
+
+    await settle(50);
+    titleDrawCalls.length = 0;
+    fireEvent.click(titleToggle);
+    await settle(80);
+
+    expect(titleToggle).toHaveAccessibleName("Show puzzle tile titles");
+    expect(titleToggle).toHaveAttribute("aria-pressed", "false");
+    expect(titleDrawCalls.some((call) => call.text.startsWith("Grid dataset"))).toBe(false);
+    // The tile render still runs when titles are hidden.
+    expect(scaleCalls.some(([x, y]) => x === -1 && y === -1)).toBe(true);
+  });
+
+  it("exposes one horizontally scrollable, accessible overview control row", async () => {
+    await renderAndCapture();
+
+    const scrollHeader = screen.getByTestId("overview-map-header-scroll");
+    const controls = screen.getByTestId("overview-map-header-controls");
+    expect(scrollHeader).toHaveStyle({ overflowX: "auto", overflowY: "hidden" });
+    expect(controls).toHaveAttribute("role", "toolbar");
+    expect(controls).toHaveAccessibleName("Overview map controls");
+    expect(controls).toHaveStyle({ flexShrink: "0", minWidth: "max-content" });
   });
 });
