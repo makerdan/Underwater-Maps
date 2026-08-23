@@ -110,46 +110,46 @@ describe("toValidWaterType", () => {
 // ─── toValidDefaultSpeedTier ─────────────────────────────────────────────────
 
 describe("toValidDefaultSpeedTier", () => {
-  it.each([0, 1, 2, 3, 4])(
+  it.each([0, 1, 2, 3, 4, 5])(
     "accepts valid integer %d unchanged",
     (v) => {
       expect(toValidDefaultSpeedTier(v)).toBe(v);
     },
   );
 
-  it("returns 2 for a value below the minimum (−1)", () => {
-    expect(toValidDefaultSpeedTier(-1)).toBe(2);
+  it("returns 0 for a value below the minimum (−1)", () => {
+    expect(toValidDefaultSpeedTier(-1)).toBe(0);
   });
 
-  it("returns 2 for a value above the maximum (5)", () => {
-    expect(toValidDefaultSpeedTier(5)).toBe(2);
+  it("returns 0 for a value above the maximum (6)", () => {
+    expect(toValidDefaultSpeedTier(6)).toBe(0);
   });
 
-  it("returns 2 for a non-integer number (1.5)", () => {
-    expect(toValidDefaultSpeedTier(1.5)).toBe(2);
+  it("returns 0 for a non-integer number (1.5)", () => {
+    expect(toValidDefaultSpeedTier(1.5)).toBe(0);
   });
 
-  it("returns 2 for NaN", () => {
-    expect(toValidDefaultSpeedTier(NaN)).toBe(2);
+  it("returns 0 for NaN", () => {
+    expect(toValidDefaultSpeedTier(NaN)).toBe(0);
   });
 
-  it("returns 2 for Infinity", () => {
-    expect(toValidDefaultSpeedTier(Infinity)).toBe(2);
+  it("returns 0 for Infinity", () => {
+    expect(toValidDefaultSpeedTier(Infinity)).toBe(0);
   });
 
-  it('returns 2 for a numeric string ("2")', () => {
-    expect(toValidDefaultSpeedTier("2")).toBe(2);
+  it('returns 0 for a numeric string ("2")', () => {
+    expect(toValidDefaultSpeedTier("2")).toBe(0);
   });
 
-  it("returns 2 for null", () => {
-    expect(toValidDefaultSpeedTier(null)).toBe(2);
+  it("returns 0 for null", () => {
+    expect(toValidDefaultSpeedTier(null)).toBe(0);
   });
 
-  it("returns 2 for undefined", () => {
-    expect(toValidDefaultSpeedTier(undefined)).toBe(2);
+  it("returns 0 for undefined", () => {
+    expect(toValidDefaultSpeedTier(undefined)).toBe(0);
   });
 
-  it("returns 2 for an object", () => {
-    expect(toValidDefaultSpeedTier({ tier: 2 })).toBe(2);
+  it("returns 0 for an object", () => {
+    expect(toValidDefaultSpeedTier({ tier: 2 })).toBe(0);
   });
 });

@@ -55,7 +55,7 @@ const makeApiClientMock = vi.hoisted(() => {
 vi.mock("@workspace/api-client-react", () => makeApiClientMock());
 
 vi.mock("@/lib/context", () => ({
-  FLY_SPEEDS_MPH: [30, 100, 250, 700, 2000],
+  FLY_SPEEDS_MPH: [2.3, 30, 100, 250, 700, 2000],
   useAppState: () => ({
     speedIndex: 1,
     setSpeedIndex: vi.fn(),

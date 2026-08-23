@@ -27,7 +27,7 @@ vi.mock("@/lib/settingsStore", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
 
   const state = () => ({
-    defaultSpeedTier: 2,
+    defaultSpeedTier: 0,
     setDefaultSpeedTier: vi.fn(),
     mouseSensitivity: 1.0,
     setMouseSensitivity: vi.fn(),

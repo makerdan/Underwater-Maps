@@ -1,6 +1,7 @@
 import React from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useSettingsStore, DEFAULT_SETTINGS } from "@/lib/settingsStore";
+import { FLY_SPEEDS_MPH } from "@/lib/boatSpeed";
 import { AdvancedDisclosure } from "@/components/AdvancedDisclosure";
 import {
   SHORTCUT_ACTIONS,
@@ -20,6 +21,7 @@ export function NavigationSection() {
   const s = useSettingsStore(useShallow((s) => s));
   const keyBindings = useSettingsStore((s) => s.keyBindings);
   const resetAllKeyBindings = useSettingsStore((s) => s.resetAllKeyBindings);
+  const maxSpeedTier = FLY_SPEEDS_MPH.length - 1;
 
   const conflictByAction = React.useMemo(() => {
     const byCode = findBindingConflicts(keyBindings);
@@ -55,17 +57,17 @@ export function NavigationSection() {
         <div style={S.row} className="bs-settings-row">
           <div>
             <div style={S.label}>Default Speed Tier</div>
-            <div style={S.sublabel}>0 = slowest, 4 = fastest</div>
+            <div style={S.sublabel}>0 = slowest, {maxSpeedTier} = fastest</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
-              type="range" min={0} max={4} step={1} value={clampSlider(s.defaultSpeedTier, 0, 4, DEFAULT_SETTINGS.defaultSpeedTier)}
-              onChange={(e) => s.setDefaultSpeedTier(clampSlider(Number(e.target.value), 0, 4, DEFAULT_SETTINGS.defaultSpeedTier))}
+              type="range" min={0} max={maxSpeedTier} step={1} value={clampSlider(s.defaultSpeedTier, 0, maxSpeedTier, DEFAULT_SETTINGS.defaultSpeedTier)}
+              onChange={(e) => s.setDefaultSpeedTier(clampSlider(Number(e.target.value), 0, maxSpeedTier, DEFAULT_SETTINGS.defaultSpeedTier))}
               style={S.slider}
               aria-label="Default Speed Tier"
             />
             <span style={{ color: "#00e5ff", fontSize: "calc(10px * var(--bs-font-scale, 1))", minWidth: 24, textAlign: "center" }}>
-              {clampSlider(s.defaultSpeedTier, 0, 4, DEFAULT_SETTINGS.defaultSpeedTier)}
+              {clampSlider(s.defaultSpeedTier, 0, maxSpeedTier, DEFAULT_SETTINGS.defaultSpeedTier)}
             </span>
           </div>
         </div>

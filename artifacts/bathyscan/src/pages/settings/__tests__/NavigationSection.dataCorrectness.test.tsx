@@ -20,7 +20,7 @@ const h = vi.hoisted(() => {
     pinchZoomSensitivity: 1.0,
     fieldOfView: 45,
     renderDistance: 400,
-    defaultSpeedTier: 2,
+    defaultSpeedTier: 0,
   };
   return { data };
 });
@@ -112,7 +112,7 @@ beforeEach(() => {
   h.data.pinchZoomSensitivity = 1.0;
   h.data.fieldOfView = 45;
   h.data.renderDistance = 400;
-  h.data.defaultSpeedTier = 2;
+  h.data.defaultSpeedTier = 0;
 });
 
 describe("NavigationSection — mouse sensitivity slider clamping", () => {
@@ -233,11 +233,18 @@ describe("NavigationSection — renderDistance slider clamping", () => {
 });
 
 describe("NavigationSection — defaultSpeedTier inline slider clamping", () => {
-  it("clamps defaultSpeedTier above max to 4", () => {
+  it("accepts the sixth defaultSpeedTier", () => {
+    h.data.defaultSpeedTier = 5;
+    render(<NavigationSection />);
+    const slider = screen.getByLabelText("Default Speed Tier") as HTMLInputElement;
+    expect(Number(slider.value)).toBe(5);
+  });
+
+  it("clamps defaultSpeedTier above max to 5", () => {
     h.data.defaultSpeedTier = 99;
     render(<NavigationSection />);
     const slider = screen.getByLabelText("Default Speed Tier") as HTMLInputElement;
-    expect(Number(slider.value)).toBe(4);
+    expect(Number(slider.value)).toBe(5);
   });
 
   it("clamps defaultSpeedTier below min to 0", () => {
@@ -247,10 +254,10 @@ describe("NavigationSection — defaultSpeedTier inline slider clamping", () => 
     expect(Number(slider.value)).toBe(0);
   });
 
-  it("replaces NaN defaultSpeedTier with the field default (2)", () => {
+  it("replaces NaN defaultSpeedTier with the field default (0)", () => {
     h.data.defaultSpeedTier = NaN;
     render(<NavigationSection />);
     const slider = screen.getByLabelText("Default Speed Tier") as HTMLInputElement;
-    expect(Number(slider.value)).toBe(2);
+    expect(Number(slider.value)).toBe(0);
   });
 });

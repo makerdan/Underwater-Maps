@@ -12,6 +12,7 @@
  */
 
 import type { ColormapTheme, JoystickMode, WaterType } from "@/lib/settingsStore";
+import { FLY_DEFAULT_SPEED_TIER, FLY_SPEEDS_MPH } from "@/lib/boatSpeed";
 
 const VALID_JOYSTICK_MODES: readonly string[] = ["auto", "always", "off"];
 const VALID_COLORMAP_THEMES: readonly string[] = [
@@ -56,17 +57,17 @@ export function toValidWaterType(value: unknown): WaterType {
 }
 
 /**
- * Returns `value` when it is an integer in the range [0, 4] (matching the
- * speed-tier slider in Settings.tsx), otherwise `2` (the factory default).
+ * Returns `value` when it is an integer in the supported free-fly tier range,
+ * otherwise the shared factory default.
  */
 export function toValidDefaultSpeedTier(value: unknown): number {
   if (
     typeof value === "number" &&
     Number.isInteger(value) &&
     value >= 0 &&
-    value <= 4
+    value < FLY_SPEEDS_MPH.length
   ) {
     return value;
   }
-  return 2;
+  return FLY_DEFAULT_SPEED_TIER;
 }

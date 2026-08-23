@@ -81,7 +81,10 @@ export const BOAT_TICK_SPEEDS = [3, 10, 20, 30, 40, 55] as const;
  * can use it without any circular import.  `context.tsx` re-exports this name
  * so existing callers that import from `@/lib/context` continue to work.
  */
-export const FLY_SPEEDS_MPH = [30, 100, 250, 700, 2000] as const;
+export const FLY_SPEEDS_MPH = [2.3, 30, 100, 250, 700, 2000] as const;
+
+/** The first free-fly tier is the factory default for every new session. */
+export const FLY_DEFAULT_SPEED_TIER = 0;
 
 /**
  * Fallback meters-per-world-unit used when no dataset is loaded or the

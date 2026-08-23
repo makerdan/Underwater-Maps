@@ -14,12 +14,17 @@
 import { describe, it, expect } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import React from "react";
-import { AppProvider, useAppState } from "@/lib/context";
+import { AppProvider, FLY_DEFAULT_SPEED_TIER, useAppState } from "@/lib/context";
 
 const wrapper = ({ children }: { children: React.ReactNode }) =>
   React.createElement(AppProvider, null, children);
 
 describe("AppProvider — setTidalOverlay stability", () => {
+  it("starts each new free-fly session at the shared default speed tier", () => {
+    const { result } = renderHook(() => useAppState(), { wrapper });
+    expect(result.current.speedIndex).toBe(FLY_DEFAULT_SPEED_TIER);
+  });
+
   it("setTidalOverlay reference is the same before and after an unrelated setDatasetId call", () => {
     const { result } = renderHook(() => {
       const { setTidalOverlay, setDatasetId } = useAppState();

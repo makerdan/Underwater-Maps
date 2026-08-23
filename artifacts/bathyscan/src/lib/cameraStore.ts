@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { FLY_DEFAULT_SPEED_TIER } from "./boatSpeed";
 
 export interface GpsPoint {
   lon: number;
@@ -137,7 +138,7 @@ export const useCameraStore = create<CameraStore>((set) => ({
   cameraDepth: null,
   cameraAltitude: 0,
   heading: 0,
-  speedIndex: 2,
+  speedIndex: FLY_DEFAULT_SPEED_TIER,
 
   setCameraGeo: ({ lon, lat, depth, heading, altitude }) =>
     set({
@@ -202,7 +203,7 @@ export const useCameraStore = create<CameraStore>((set) => ({
       cameraDepth: null,
       cameraAltitude: 0,
       heading: 0,
-      speedIndex: 2,
+      speedIndex: FLY_DEFAULT_SPEED_TIER,
       isOrbitingTouch: false,
       gpsFollowState: "off",
       pauseReason: null,

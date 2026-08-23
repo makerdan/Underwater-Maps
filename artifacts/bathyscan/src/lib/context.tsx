@@ -1,9 +1,9 @@
 import React, { createContext, useCallback, useContext, useState, ReactNode } from "react";
 import type { TerrainData } from "@workspace/api-client-react";
-import { FLY_SPEEDS_MPH } from "./boatSpeed";
+import { FLY_DEFAULT_SPEED_TIER, FLY_SPEEDS_MPH } from "./boatSpeed";
 import { useDriveBoatStore } from "./driveBoatStore";
 
-export { FLY_SPEEDS_MPH };
+export { FLY_DEFAULT_SPEED_TIER, FLY_SPEEDS_MPH };
 
 interface AppState {
   datasetId: string | null;
@@ -58,7 +58,7 @@ const AppContext = createContext<AppState | null>(null);
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [terrain, setTerrain] = useState<TerrainData | null>(null);
-  const [speedIndex, setSpeedIndex] = useState<number>(2);
+  const [speedIndex, setSpeedIndex] = useState<number>(FLY_DEFAULT_SPEED_TIER);
   const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
 
   const [tidalOverlay, setTidalOverlayRaw] = useState<boolean>(false);

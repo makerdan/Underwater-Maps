@@ -53,6 +53,7 @@ import {
   type ShortcutActionId,
 } from "./keyBindings";
 import { usePanelCollapseStore, type PanelId } from "./panelCollapseStore";
+import { FLY_DEFAULT_SPEED_TIER } from "./boatSpeed";
 // NOTE: terrainStore also imports settingsStore — intentional circular ESM
 // import.  Both accesses (getActiveCap in terrainStore, autoEvict call in
 // setMaxActiveDatasets here) live inside action/function bodies, never in
@@ -986,7 +987,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   showAdvancedEverywhere: false,
 
   // Camera
-  defaultSpeedTier: 2,
+  defaultSpeedTier: FLY_DEFAULT_SPEED_TIER,
   mouseSensitivity: 1.0,
   invertMouseY: false,
   mouseZoomSensitivity: 1.0,

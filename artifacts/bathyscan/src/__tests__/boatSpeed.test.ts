@@ -10,6 +10,7 @@ import {
   computeFlyScaledSpeed,
   smoothMpuStep,
   FLY_MPU_LERP_RATE,
+  FLY_DEFAULT_SPEED_TIER,
   FLY_SPEEDS_MPH,
   FLY_FALLBACK_MPU,
   FLY_MAX_FRAME_WU,
@@ -217,11 +218,22 @@ function makeRayRoberts(): TerrainData {
 describe("computeFlyScaledSpeed", () => {
   const MPH_TO_MS = 0.44704;
 
-  it("at the Ray Roberts mpu (~93 m/wu), default tier (index 2, 250 mph) produces wu/s consistent with a 60–90 s world crossing", () => {
+  it("exposes the ordered six-tier free-fly preset list with 2.3 mph as its default", () => {
+    expect(FLY_SPEEDS_MPH).toEqual([2.3, 30, 100, 250, 700, 2000]);
+    expect(FLY_DEFAULT_SPEED_TIER).toBe(0);
+  });
+
+  it("converts the default 2.3 mph tier without hitting the frame cap", () => {
+    const result = computeFlyScaledSpeed(FLY_DEFAULT_SPEED_TIER, FLY_FALLBACK_MPU, 1);
+    const expected = (2.3 * MPH_TO_MS) / FLY_FALLBACK_MPU;
+    expect(result).toBeCloseTo(expected, 10);
+    expect(result).toBeLessThan(FLY_MAX_FRAME_WU);
+  });
+
+  it("at the Ray Roberts mpu (~93 m/wu), the 250 mph tier produces wu/s consistent with a 60–90 s world crossing", () => {
     const grid = makeRayRoberts();
     const mpu = computeMetersPerWorldUnit(grid);
-    // Default tier is index 2 → 250 mph (matches cameraStore/settingsStore default)
-    const wups = computeFlyScaledSpeed(2, mpu, 1); // delta = 1 s to get wu/s
+    const wups = computeFlyScaledSpeed(3, mpu, 1); // delta = 1 s to get wu/s
     // At 250 mph and mpu ~93 m/wu: crossing WORLD_SIZE=100 wu ≈ 83 s (within 60–90 s)
     const crossingSeconds = WORLD_SIZE / wups;
     expect(crossingSeconds).toBeGreaterThanOrEqual(60);
@@ -277,14 +289,14 @@ describe("computeFlyScaledSpeed", () => {
 
   it("an extreme tiny-dataset mpu is capped by FLY_MAX_FRAME_WU so the result never exceeds it", () => {
     // mpu = 0.001 m/wu is pathologically small — raw speed would be enormous.
-    const result = computeFlyScaledSpeed(4, 0.001, 1);
+    const result = computeFlyScaledSpeed(5, 0.001, 1);
     expect(result).toBeLessThanOrEqual(FLY_MAX_FRAME_WU);
     expect(isFinite(result)).toBe(true);
   });
 
   it("the cap applies independently of delta — result ≤ FLY_MAX_FRAME_WU × delta", () => {
     const delta = 0.033; // ~60 fps frame
-    const result = computeFlyScaledSpeed(4, 0.001, delta);
+    const result = computeFlyScaledSpeed(5, 0.001, delta);
     // The cap is applied to the final value; for delta < 1 the raw product
     // might be below the cap, so just verify it is ≤ the cap.
     expect(result).toBeLessThanOrEqual(FLY_MAX_FRAME_WU);
@@ -355,7 +367,7 @@ describe("smoothMpuStep", () => {
     // so the per-frame displacement is far smaller.
     const largeMpu = 1000;
     const smallMpu = 100;
-    const speedIndex = 4; // highest tier (2000 mph)
+    const speedIndex = 5; // highest tier (2000 mph)
 
     const unsmoothedSpeed = computeFlyScaledSpeed(speedIndex, smallMpu, DELTA_60FPS);
     const firstFrameSmoothed = smoothMpuStep(largeMpu, smallMpu, DELTA_60FPS);
@@ -388,9 +400,19 @@ describe("computeFlyScaledSpeed — turbo mode", () => {
   it("turbo=true produces exactly TURBO_MULTIPLIER× the normal result when below cap", () => {
     const normal = computeFlyScaledSpeed(0, mpu, 1, false);
     const turbo = computeFlyScaledSpeed(0, mpu, 1, true);
-    // Speed tier 0 (30 mph) with mpu=200 is well below the base cap (20 wu).
+    // Default tier 0 (2.3 mph) with mpu=200 is well below the base cap (20 wu).
     // Verify turbo output is exactly TURBO_MULTIPLIER× normal.
     expect(turbo).toBeCloseTo(normal * TURBO_MULTIPLIER, 8);
+  });
+
+  it("turbo converts the default tier to 23 mph without a frame-cap artifact", () => {
+    const result = computeFlyScaledSpeed(FLY_DEFAULT_SPEED_TIER, mpu, 1, true);
+    const expected = (23 * MPH_TO_MS) / mpu;
+    expect(result).toBeCloseTo(expected, 10);
+    expect(result).toBeCloseTo(
+      computeFlyScaledSpeed(FLY_DEFAULT_SPEED_TIER, mpu, 1, false) * TURBO_MULTIPLIER,
+      10,
+    );
   });
 
   it("turbo=undefined behaves identically to turbo=false", () => {
@@ -402,7 +424,7 @@ describe("computeFlyScaledSpeed — turbo mode", () => {
   it("the turbo cap is TURBO_MULTIPLIER × FLY_MAX_FRAME_WU, not the normal cap", () => {
     // Use a tiny mpu so the raw speed exceeds the base cap.
     // With turbo=true the cap must be TURBO_MULTIPLIER × FLY_MAX_FRAME_WU.
-    const result = computeFlyScaledSpeed(4, 0.001, 1, true);
+    const result = computeFlyScaledSpeed(5, 0.001, 1, true);
     expect(result).toBeLessThanOrEqual(FLY_MAX_FRAME_WU * TURBO_MULTIPLIER);
     expect(result).toBeGreaterThan(FLY_MAX_FRAME_WU); // exceeds the base cap
   });
