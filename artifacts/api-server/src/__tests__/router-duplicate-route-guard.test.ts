@@ -100,6 +100,7 @@ import collectionsRouter from "../routes/collections.js";
 import terrainBundlesRouter from "../routes/terrain-bundles.js";
 import envPackRouter from "../routes/env-pack.js";
 import terrainQueryRouter from "../domains/terrain/query/index.js";
+import platformCoreRouter from "../domains/platform/core-router.js";
 
 /** name = the routes/<name>.ts module the router comes from. */
 const ROUTERS: Array<[name: string, router: unknown]> = [
@@ -141,7 +142,6 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["terrain-bundles", terrainBundlesRouter],
   ["env-pack", envPackRouter],
 ];
-
 describe("duplicate-route mis-merge guard (all routers)", () => {
   it("terrain query composition retains both query surfaces without duplicates", () => {
     expect(countRoutesDeep(terrainQueryRouter)).toBe(
@@ -153,6 +153,13 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
         [queryRouter, ""],
       ]),
     ).toEqual([]);
+  });
+
+  it("platform core composes health, settings, and account routes exactly once", () => {
+    expect(countRoutesDeep(platformCoreRouter)).toBe(
+      countRoutes(healthRouter) + countRoutes(settingsRouter) + countRoutes(meRouter),
+    );
+    expect(findDuplicateRoutes(platformCoreRouter)).toEqual([]);
   });
 
   it.each(ROUTERS)("routes/%s.ts registers every (method, path) pair at most once", (name, router) => {
