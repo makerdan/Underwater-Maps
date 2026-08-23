@@ -166,6 +166,7 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
   seedDatasetCatalog: vi.fn(async () => {}),
   getCatalogEntries: vi.fn(async () => [CATALOG_ENTRY, CATALOG_ENTRY_FRESH]),
   searchCatalog: vi.fn(async () => []),
+  invalidateCatalogCache: vi.fn(),
 }));
 
 // Area-request grouping: always a no-op (returns null → no auto-folder).
