@@ -91,8 +91,6 @@ import weatherStationsRouter from "../routes/weather-stations.js";
 import weatherStationObsRouter from "../routes/weather-station-obs.js";
 import rawsStationsRouter from "../routes/raws-stations.js";
 import rawsWeatherRouter from "../routes/raws-weather.js";
-import nceiRouter from "../routes/ncei.js";
-import searchFederatedRouter from "../routes/search-federated.js";
 import adminRouter from "../routes/admin.js";
 import adminUsersRouter from "../routes/admin-users.js";
 import githubRouter from "../routes/github.js";
@@ -135,8 +133,6 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["weather-station-obs", weatherStationObsRouter],
   ["raws-stations", rawsStationsRouter],
   ["raws-weather", rawsWeatherRouter],
-  ["ncei", nceiRouter],
-  ["search-federated", searchFederatedRouter],
   ["admin", adminRouter],
   ["admin-users", adminUsersRouter],
   ["github", githubRouter],
@@ -186,7 +182,9 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
       `routes/${name}.ts registered zero routes — guard would pass vacuously; is the export still a Router?`,
     ).toBeGreaterThan(0);
 
-    const duplicates = findDuplicateRoutes(router);
+    const duplicates = name === "catalog-discovery"
+      ? findDuplicateRoutesDeep(router)
+      : findDuplicateRoutes(router);
     expect(
       duplicates,
       `Duplicate route registration(s) on the "${name}" router — this is the signature of a ` +
@@ -222,7 +220,11 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
     const { default: apiRouter } = await import("../routes/index.js");
     expect(countRoutesDeep(apiRouter)).toBeGreaterThan(0);
     expect(countRoutesDeep(apiRouter)).toBe(
-      ROUTERS.reduce((total, [, router]) => total + countRoutes(router), 0),
+      ROUTERS.reduce(
+        (total, [name, router]) =>
+          total + (name === "catalog-discovery" ? countRoutesDeep(router) : countRoutes(router)),
+        0,
+      ),
     );
     expect(
       findDuplicateRoutesAcross(

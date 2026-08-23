@@ -5,10 +5,14 @@
  * GET  /api/datasets/catalog/search    — keyword + filter search
  * POST /api/datasets/bbox-query         — catalog coverage intersection
  * POST /api/datasets/point-radius-query — catalog coverage near a point
+ * GET/POST /api/search/federated*       — federated external catalog discovery
+ * GET/POST /api/ncei/*                  — NCEI external catalog discovery
  */
 
 import { Router } from "express";
 import { z } from "zod";
+import searchFederatedRouter from "./search-federated.js";
+import nceiRouter from "./ncei.js";
 import { CatalogSearchQuerySchema } from "./schemas.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { validateBody } from "../middlewares/validateBody.js";
@@ -318,5 +322,12 @@ router.post("/datasets/point-radius-query", catalogReadRateLimit, validateBody(P
     })),
   }, "POST /api/datasets/point-radius-query"));
 }));
+
+// External discovery belongs to this public catalog boundary as well. Keep
+// each source router independently testable while composing it exactly once
+// with local catalog discovery; source-specific middleware and paths remain
+// owned by their route modules.
+router.use(searchFederatedRouter);
+router.use(nceiRouter);
 
 export default router;
