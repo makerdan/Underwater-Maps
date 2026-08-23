@@ -10,13 +10,14 @@
  */
 import React, { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useGetMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
+import { useGetMarkers, getGetMarkersQueryKey, type Marker } from "@workspace/api-client-react";
 import { useAppState } from "@/lib/context";
 import { useUiStore } from "@/lib/uiStore";
 import { ReassignMarkersDialog } from "@/components/ReassignMarkersDialog";
 import { OVERLAY_Z } from "@/lib/overlayScale";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { MarkerIcon } from "@/lib/markerIcons";
+import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 
 const GpsImportDialog = React.lazy(() =>
   import("@/components/GpsImportDialog").then(({ GpsImportDialog: Dialog }) => ({
@@ -31,17 +32,19 @@ const PANEL_WIDTH = 300;
 const MARKER_ROW_HEIGHT = 56;
 
 interface MarkerRowProps {
-  id: string;
-  label: string;
-  lat: number;
-  lon: number;
-  depth: number;
-  type: string;
+  marker: Marker;
 }
 
-const MarkerRow: React.FC<MarkerRowProps> = ({ label, lat, lon, depth, type }) => (
+const MarkerRow: React.FC<MarkerRowProps> = ({ marker }) => {
+  const showDetails = useMarkerDetailStore((s) => s.show);
+  const drift = marker.geometry?.kind === "drift" ? marker.geometry : null;
+  return (
   <div
     data-testid={`marker-row-item`}
+    role="button"
+    tabIndex={0}
+    onClick={() => showDetails(marker)}
+    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") showDetails(marker); }}
     style={{
       padding: "8px 10px",
       borderBottom: "1px solid rgba(148,163,184,0.08)",
@@ -51,19 +54,20 @@ const MarkerRow: React.FC<MarkerRowProps> = ({ label, lat, lon, depth, type }) =
     }}
   >
       <div style={{ color: "#e2e8f0", fontSize: "calc(14px * var(--bs-font-scale, 1))", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
-        <MarkerIcon type={type} size={15} color={MARKER_COLOR[type] ?? "#e2e8f0"} />
-      {label}
+        <MarkerIcon type={marker.type} size={15} color={MARKER_COLOR[marker.type] ?? "#e2e8f0"} />
+      {marker.label}
     </div>
     <div style={{ color: "#64748b", fontSize: "calc(12.5px * var(--bs-font-scale, 1))", letterSpacing: "0.04em" }}>
-       {type} &bull; {lat.toFixed(4)}, {lon.toFixed(4)} &bull; {depth.toFixed(1)} m
+       {drift ? `SAVED DRIFT · ${Math.round(drift.summary.durationS / 3600)} h · ${Math.round(drift.summary.distanceM)} m` : `${marker.type} · ${marker.lat.toFixed(4)}, ${marker.lon.toFixed(4)} · ${marker.depth.toFixed(1)} m`}
     </div>
   </div>
-);
+  );
+};
 
 /** Inner component that holds the virtualizer — extracted so that the ref is
  *  always bound to the scroll element before the virtualizer is created. */
 interface MarkerListProps {
-  markers: MarkerRowProps[];
+  markers: Marker[];
 }
 
 const MarkerList: React.FC<MarkerListProps> = ({ markers }) => {
@@ -113,12 +117,7 @@ const MarkerList: React.FC<MarkerListProps> = ({ markers }) => {
               }}
             >
               <MarkerRow
-                id={m.id}
-                label={m.label}
-                lat={m.lat}
-                lon={m.lon}
-                depth={m.depth}
-                type={m.type}
+                marker={m}
               />
             </div>
           );

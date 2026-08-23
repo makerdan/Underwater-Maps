@@ -21,6 +21,8 @@ import {
   usePatchTrollingPresetFoldersId,
   useDeleteTrollingPresetFoldersId,
   getGetTrollingPresetFoldersQueryKey,
+  usePostMarkers,
+  getGetMarkersQueryKey,
   type TrollingPreset,
   type TrollingPresetFolder,
 } from "@workspace/api-client-react";
@@ -34,10 +36,12 @@ import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { formatFreshness } from "@/lib/freshnessUtils";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { LocationBadge } from "@/components/LocationBadge";
-import { formatSpeedFromKnots, formatWaveHeight, cardinal } from "@/lib/units";
+import { formatSpeedFromKnots, formatWaveHeight, formatDistance, cardinal } from "@/lib/units";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { driftGeometryFromPath } from "@/lib/driftMarker";
+import { refreshOfflinePackMarkers } from "@/lib/offlinePackStore";
 
 // Undo window for "soft" trolling-preset deletes (ms). The preset is hidden
 // from the list immediately and the actual DELETE only fires when the
@@ -328,6 +332,8 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
   const [planNameInput, setPlanNameInput] = useState("");
   const [planError, setPlanError] = useState<string | null>(null);
   const [showSavedPlans, setShowSavedPlans] = useState(false);
+  const [driftTargetType, setDriftTargetType] = useState<"chinook_salmon" | "halibut">("chinook_salmon");
+  const postDriftMarker = usePostMarkers();
 
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState<string | null>(null);
@@ -378,11 +384,42 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
   const handleSavePlan = useCallback(() => {
     const name = planNameInput.trim();
     if (!name) { setPlanError("Name required"); return; }
+    if (!driftPath || driftPath.length < 2 || !terrain) {
+      setPlanError("Compute a drift with at least two waypoints first");
+      return;
+    }
     setPlanError(null);
     saveDriftPlan(name);
+    const geometry = driftGeometryFromPath(driftPath);
+    if (!geometry) {
+      setPlanError("This drift path is invalid and cannot be saved");
+      return;
+    }
+    const first = geometry.waypoints[0]!;
+    postDriftMarker.mutate(
+      {
+        data: {
+          datasetId: terrain.datasetId,
+          lon: first.lon,
+          lat: first.lat,
+          depth: first.depth,
+          type: driftTargetType,
+          label: name,
+          notes: `Saved ${driftTargetType === "halibut" ? "bottomfish" : "salmon"} drift · ${formatDistance(geometry.summary.distanceM)} · ${Math.round(geometry.summary.durationS / 3600)} h`,
+          geometry,
+        },
+      },
+      {
+        onSuccess: () => {
+          void queryClient.invalidateQueries({ queryKey: getGetMarkersQueryKey() });
+          void refreshOfflinePackMarkers(terrain.datasetId);
+        },
+        onError: () => setPlanError("Plan saved locally, but the dataset marker could not be saved"),
+      },
+    );
     setPlanNameInput("");
     setShowSavedPlans(true);
-  }, [planNameInput, saveDriftPlan]);
+  }, [planNameInput, saveDriftPlan, driftPath, terrain, driftTargetType, postDriftMarker, queryClient]);
 
   const handleSavePreset = useCallback(async () => {
     const trimmed = presetName.trim();
@@ -1003,6 +1040,15 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
           <div style={{ background: "rgba(0,10,20,0.6)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 4, padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
             {/* Save current plan */}
             <div style={{ display: "flex", gap: 4 }}>
+              <select
+                aria-label="Drift target type"
+                value={driftTargetType}
+                onChange={(e) => setDriftTargetType(e.target.value as typeof driftTargetType)}
+                style={{ width: 86, background: "rgba(0,10,20,0.8)", border: "1px solid rgba(0,229,255,0.2)", color: "#7dd3fc", fontFamily: "inherit", fontSize: "calc(11px * var(--bs-font-scale, 1))" }}
+              >
+                <option value="chinook_salmon">SALMON</option>
+                <option value="halibut">BOTTOMFISH</option>
+              </select>
               <input
                 type="text"
                 value={planNameInput}
@@ -1013,8 +1059,9 @@ export const WeatherPanel: React.FC<WeatherPanelProps> = ({ onClose, embedded = 
               />
               <button
                 onClick={handleSavePlan}
+                disabled={postDriftMarker.isPending}
                 style={{ background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00e5ff", fontFamily: "inherit", fontSize: "calc(12px * var(--bs-font-scale, 1))", padding: "2px 8px", borderRadius: 3, cursor: "pointer", letterSpacing: "0.1em", whiteSpace: "nowrap" }}
-              >SAVE</button>
+              >{postDriftMarker.isPending ? "SAVING…" : "SAVE"}</button>
             </div>
             {planError && <ErrorMessage message={planError} style={{ color: "#f87171", fontSize: "calc(12px * var(--bs-font-scale, 1))" }} />}
 

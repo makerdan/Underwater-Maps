@@ -77,6 +77,7 @@ import {
   hitTestSubstrate,
   hitTestSubstrateLegend,
   renderSavedTrails,
+  renderSavedDrifts,
   drawSelectionRect,
   buildIntertidalHotspotDescriptors,
   shouldDrawOverlayAtScale,
@@ -2908,6 +2909,9 @@ export const OverviewMap: React.FC = () => {
       // Saved trails (completed)
       if (savedTrailsRef.current.length > 0) {
         renderSavedTrails(ctx, savedTrailsRef.current, worldGrid, t);
+      }
+      if (useSettingsStore.getState().overviewShowMarkers && markersRef.current.length > 0) {
+        renderSavedDrifts(ctx, markersRef.current, worldGrid, t);
       }
 
       // Habitat overlay (drawn above depth heatmap, below markers)

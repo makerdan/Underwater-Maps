@@ -7,9 +7,14 @@ import { useMarkerDetailStore } from "@/lib/markerDetailStore";
 import { MARKER_COLOR } from "@/lib/markerConstants";
 import { MarkerIcon } from "@/lib/markerIcons";
 import { useSettingsStore } from "@/lib/settingsStore";
-import { formatDepth, formatTemperature } from "@/lib/units";
+import { formatDepth, formatTemperature, formatDistance } from "@/lib/units";
 import { estimateWaterTemperature } from "@/lib/waterTemp";
 import { useSurfaceTemperature } from "@/hooks/useSurfaceTemperature";
+import { isDriftMarker } from "@/lib/driftMarker";
+import { useMarkerEditStore } from "@/lib/markerEditStore";
+import { useUndoableMarkerDelete } from "@/hooks/useUndoableMarkerDelete";
+import { usePostMarkers, getGetMarkersQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 const MONO: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -18,6 +23,10 @@ const MONO: React.CSSProperties = {
 export const MarkerDetailCard: React.FC = () => {
   const marker = useMarkerDetailStore((s) => s.marker);
   const hide = useMarkerDetailStore((s) => s.hide);
+  const openEditor = useMarkerEditStore((s) => s.open);
+  const { requestDelete } = useUndoableMarkerDelete();
+  const duplicateMutation = usePostMarkers();
+  const queryClient = useQueryClient();
   const units = useSettingsStore((s) => s.units);
   // Subscribe so a change to the temperature-only override re-renders the
   // temperature row even when the global units selector hasn't moved.
@@ -46,6 +55,26 @@ export const MarkerDetailCard: React.FC = () => {
   const color = MARKER_COLOR[marker.type] ?? "#e2e8f0";
   const createdAt = marker.createdAt ? new Date(marker.createdAt) : null;
   const area = marker.geometry?.kind === "area" ? marker.geometry : null;
+  const drift = isDriftMarker(marker) ? marker.geometry : null;
+  const duplicate = () => {
+    if (!drift || !marker.datasetId || duplicateMutation.isPending) return;
+    duplicateMutation.mutate({
+      data: {
+        datasetId: marker.datasetId,
+        lon: marker.lon,
+        lat: marker.lat,
+        depth: marker.depth,
+        type: marker.type,
+        label: `${marker.label} (copy)`,
+        notes: marker.notes ?? null,
+        geometry: drift,
+      },
+    }, {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: getGetMarkersQueryKey() });
+      },
+    });
+  };
 
   return (
     <div
@@ -93,7 +122,19 @@ export const MarkerDetailCard: React.FC = () => {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", fontSize: "calc(15px * var(--bs-font-scale, 1))" }}>
         <span style={{ color: "#94a3b8" }}>TYPE</span>
-        <span style={{ color: "#cbd5e1" }}>{marker.type}{area ? " · AREA TARGET" : ""}</span>
+        <span style={{ color: "#cbd5e1" }}>{drift ? "SAVED DRIFT" : marker.type}{area ? " · AREA TARGET" : ""}</span>
+        {drift && (
+          <>
+            <span style={{ color: "#94a3b8" }}>DISTANCE</span>
+            <span style={{ color: "#a78bfa" }}>{formatDistance(drift.summary.distanceM, { units })}</span>
+            <span style={{ color: "#94a3b8" }}>DURATION</span>
+            <span style={{ color: "#a78bfa" }}>{Math.round(drift.summary.durationS / 3600)} h</span>
+            <span style={{ color: "#94a3b8" }}>DEPTH RANGE</span>
+            <span style={{ color: "#fbbf24" }}>{formatDepth(drift.summary.minDepth, { units })} – {formatDepth(drift.summary.maxDepth, { units })}</span>
+            <span style={{ color: "#94a3b8" }}>WINDOW</span>
+            <span style={{ color: "#cbd5e1" }}>{new Date(drift.summary.startAt).toLocaleString()} → {new Date(drift.summary.endAt).toLocaleTimeString()}</span>
+          </>
+        )}
         {area && (
           <>
             <span style={{ color: "#94a3b8" }}>FOOTPRINT</span>
@@ -214,6 +255,13 @@ export const MarkerDetailCard: React.FC = () => {
           </div>
         </div>
       )}
+      <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 8, borderTop: `1px solid ${color}33` }}>
+        <button type="button" onClick={() => openEditor(marker)} style={{ ...MONO, flex: 1, cursor: "pointer", color: "#67e8f9", background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.25)", borderRadius: 3, padding: "4px 6px", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}>EDIT</button>
+        {drift && (
+          <button type="button" onClick={duplicate} disabled={duplicateMutation.isPending} style={{ ...MONO, flex: 1, cursor: "pointer", color: "#c4b5fd", background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 3, padding: "4px 6px", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}>DUPLICATE</button>
+        )}
+        <button type="button" onClick={() => { if (marker.datasetId) requestDelete(marker, marker.datasetId); hide(); }} style={{ ...MONO, cursor: "pointer", color: "#f87171", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 3, padding: "4px 6px", fontSize: "calc(12px * var(--bs-font-scale, 1))" }}>DELETE</button>
+      </div>
     </div>
   );
 };

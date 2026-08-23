@@ -27,6 +27,8 @@ import { useGetMarkersWithOfflineFallback } from "@/hooks/useGetMarkersWithOffli
 import { useAppState } from "@/lib/context";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { MarkerSprite } from "./MarkerSprite";
+import { SavedDriftLayer } from "./SavedDriftLayer";
+import { getSeaSurfaceY } from "@/lib/terrain";
 import { computeSecondaryMeshTransform, applyGeoCorrectionToGrid } from "./NonPrimaryDatasetMeshes";
 import { useSettingsStore } from "@/lib/settingsStore";
 import { useMarkerLayerStore } from "@/lib/markerLayerStore";
@@ -355,6 +357,9 @@ export const MarkerLayer: React.FC = () => {
     <group ref={(g) => { markerGroupRef.current = g; }}>
       {Array.from(byDataset.entries()).map(([datasetId, dsMarkers]) => {
         const dg = datasetGroups.get(datasetId)!;
+        const driftMarkers = markers.filter(
+          (m) => m.datasetId === datasetId && m.geometry?.kind === "drift",
+        );
         return (
           <group
             key={datasetId}
@@ -373,6 +378,13 @@ export const MarkerLayer: React.FC = () => {
                 effectiveLonLat={puzzleAdjustedPositions.get(m.id)}
               />
             ))}
+            {driftMarkers.length > 0 && (
+              <SavedDriftLayer
+                markers={driftMarkers}
+                terrain={dg.grid}
+                surfaceY={getSeaSurfaceY(dg.grid)}
+              />
+            )}
           </group>
         );
       })}
