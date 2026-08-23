@@ -29,5 +29,5 @@ export type { NodataBoundarySegment } from "./nodata";
 export { MAX_CONTOUR_SEGMENTS, buildContourLines, renderContourLines } from "./contours";
 export type { ContourSegment, ContourRenderOptions } from "./contours";
 export { renderRoutePath, renderDriftPath } from "./routes";
-export { computeBgAnchorAffine, computeBgFallbackRect, drawBackgroundImage, computeGapOverlapMask, GAP_OVERLAP_STEP_PX, drawGapOverlap } from "./puzzle";
+export { computeBgAnchorAffine, computeBgFallbackRect, drawBackgroundImage, hasValidBgGeoAnchorPair, computeGapOverlapMask, GAP_OVERLAP_STEP_PX, drawGapOverlap } from "./puzzle";
 export type { BgGeoAnchorPoint, BgAffine, GapOverlapTileInput, GapOverlapMask } from "./puzzle";

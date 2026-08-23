@@ -83,6 +83,7 @@ import {
   buildIntertidalHotspotDescriptors,
   shouldDrawOverlayAtScale,
   drawBackgroundImage,
+  hasValidBgGeoAnchorPair,
   computeGapOverlapMask,
   drawGapOverlap,
   GAP_OVERLAP_STEP_PX,
@@ -1207,6 +1208,10 @@ export const OverviewMap: React.FC = () => {
   const spcActive = useSpecialCollectionStore((s) => s.active);
   const spcPendingRestore = useSpecialCollectionStore((s) => s.pendingRestore);
   const spcPendingPuzzleOn = useSpecialCollectionStore((s) => s.pendingPuzzleOn);
+  const referenceImageCannotBePlaced =
+    Boolean(spcActive?.bgImage) &&
+    !hasValidBgGeoAnchorPair(spcActive?.bgGeoAnchors) &&
+    !visibleDatasets.some((dataset) => dataset.overviewGrid);
   // Redraw when the active special collection (image / opacity / anchors) changes.
   useEffect(() => { dirtyRef.current = true; }, [spcActive]);
   // Enter puzzle mode when a collection is activated without a saved revision.
@@ -4466,6 +4471,32 @@ export const OverviewMap: React.FC = () => {
         height={window.innerHeight}
         style={{ width: "100%", height: "100%", cursor: "crosshair", display: "block", touchAction: "none" }}
       />
+
+      {referenceImageCannotBePlaced && (
+        <div
+          data-testid="overview-reference-image-placement-hint"
+          role="status"
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: 18,
+            transform: "translateX(-50%)",
+            zIndex: 42,
+            maxWidth: "min(560px, calc(100% - 32px))",
+            padding: "8px 12px",
+            border: "1px solid rgba(251,191,36,0.5)",
+            borderRadius: 4,
+            background: "rgba(69, 26, 3, 0.92)",
+            color: "#fde68a",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: "calc(11px * var(--bs-font-scale, 1))",
+            lineHeight: 1.45,
+            textAlign: "center",
+          }}
+        >
+          Reference image can’t be placed. Load a dataset or save two valid GPS anchors.
+        </div>
+      )}
 
       {/* Canvas text cannot be reached by a screen reader. Keep the painted
           affordance for mouse users and provide its real keyboard equivalent. */}

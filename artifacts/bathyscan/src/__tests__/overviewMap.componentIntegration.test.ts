@@ -22,13 +22,14 @@
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, waitFor, fireEvent } from "@testing-library/react";
+import { act, waitFor, fireEvent, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "./setup";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useCameraStore } from "@/lib/cameraStore";
 import { useSettingsStore } from "@/lib/settingsStore";
+import { useSpecialCollectionStore } from "@/lib/specialCollectionStore";
 import * as overviewRenderer from "@/lib/overviewRenderer";
 import { POLYGON_LOD_MIN_ZOOM } from "@/lib/overviewRenderer";
 import type { TerrainData } from "@workspace/api-client-react";
@@ -188,6 +189,7 @@ function setupStores() {
     cameraDepth: 50,
     cameraAltitude: 30,
   });
+  useSpecialCollectionStore.setState({ active: null, pendingRestore: null });
 }
 
 /**
@@ -1036,7 +1038,52 @@ describe("OverviewMap — empty visibleDatasets shows empty-state hint, not LOAD
 });
 
 // ---------------------------------------------------------------------------
-// 5. Multi-dataset drawImage — both heatmaps placed at correct canvas positions
+// 5. Reference-image placement guidance
+// ---------------------------------------------------------------------------
+
+describe("OverviewMap — reference-image placement guidance", () => {
+  beforeEach(() => {
+    mockConfig.efhData = undefined;
+    setupStores();
+    useTerrainStore.setState({
+      visibleDatasets: [],
+      primaryDatasetId: null,
+      primaryDatasetIds: [],
+      overviewGrid: null,
+      activeGrid: null,
+    });
+    useSpecialCollectionStore.setState({
+      active: {
+        collectionId: "unplaced-reference",
+        name: "Unplaced reference",
+        bgImage: {} as CanvasImageSource,
+        bgImageW: 100,
+        bgImageH: 100,
+        bgOpacity: 0.5,
+        bgGeoAnchors: null,
+        layoutRevisions: [],
+        activeRevisionId: null,
+      },
+    });
+  });
+
+  afterEach(() => {
+    useSpecialCollectionStore.setState({ active: null, pendingRestore: null });
+  });
+
+  it("explains how to place a loaded reference image with no anchors or dataset bounds", async () => {
+    await act(async () => {
+      renderWithProviders(withQuery(React.createElement(OverviewMap)));
+    });
+
+    expect(screen.getByTestId("overview-reference-image-placement-hint")).toHaveTextContent(
+      "Load a dataset or save two valid GPS anchors.",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. Multi-dataset drawImage — both heatmaps placed at correct canvas positions
 //
 // When two non-overlapping datasets are loaded the rAF loop must call
 // ctx.drawImage twice: once for the secondary bitmap (via renderHeatmapAtBbox)

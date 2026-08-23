@@ -30,6 +30,40 @@ export interface BgAffine {
   f: number;
 }
 
+const ANCHOR_EPSILON = 1e-9;
+const IMAGE_POINT_RENDER_EPSILON = 1e-6;
+
+function wrappedLongitudeDifference(a: number, b: number): number {
+  return Math.abs(((a - b + 540) % 360) - 180);
+}
+
+/**
+ * Whether the saved anchor pair has the input validity needed to give a
+ * reference image its own geographic placement. The canvas transform performs
+ * a final finite-value check before drawing.
+ */
+export function hasValidBgGeoAnchorPair(
+  anchors: readonly BgGeoAnchorPoint[] | null | undefined,
+): anchors is readonly [BgGeoAnchorPoint, BgGeoAnchorPoint] {
+  if (!anchors || anchors.length !== 2) return false;
+  const [a1, a2] = anchors;
+  if (!a1 || !a2) return false;
+  const values = [a1.lon, a1.lat, a1.imgX, a1.imgY, a2.lon, a2.lat, a2.imgX, a2.imgY];
+  if (
+    values.some((value) => !Number.isFinite(value)) ||
+    a1.lon < -180 || a1.lon > 180 || a2.lon < -180 || a2.lon > 180 ||
+    a1.lat < -90 || a1.lat > 90 || a2.lat < -90 || a2.lat > 90 ||
+    a1.imgX < 0 || a1.imgY < 0 || a2.imgX < 0 || a2.imgY < 0
+  ) {
+    return false;
+  }
+  return (
+    Math.hypot(a2.imgX - a1.imgX, a2.imgY - a1.imgY) >= IMAGE_POINT_RENDER_EPSILON &&
+    (wrappedLongitudeDifference(a1.lon, a2.lon) > ANCHOR_EPSILON ||
+      Math.abs(a1.lat - a2.lat) > ANCHOR_EPSILON)
+  );
+}
+
 /**
  * Compute the similarity transform (uniform scale + rotation + translation)
  * that maps background-image pixel coordinates onto Overview canvas
@@ -46,18 +80,8 @@ export function computeBgAnchorAffine(
   grid: TerrainData,
   t: OverviewTransform,
 ): BgAffine | null {
-  const a1 = anchors[0];
-  const a2 = anchors[1];
-  if (anchors.length !== 2 || !a1 || !a2) return null;
-  const values = [a1.lon, a1.lat, a1.imgX, a1.imgY, a2.lon, a2.lat, a2.imgX, a2.imgY];
-  if (
-    values.some((value) => !Number.isFinite(value)) ||
-    a1.lon < -180 || a1.lon > 180 || a2.lon < -180 || a2.lon > 180 ||
-    a1.lat < -90 || a1.lat > 90 || a2.lat < -90 || a2.lat > 90 ||
-    a1.imgX < 0 || a1.imgY < 0 || a2.imgX < 0 || a2.imgY < 0
-  ) {
-    return null;
-  }
+  if (!hasValidBgGeoAnchorPair(anchors)) return null;
+  const [a1, a2] = anchors;
   const px = a2.imgX - a1.imgX;
   const py = a2.imgY - a1.imgY;
   const denom = px * px + py * py;
@@ -130,7 +154,7 @@ export function drawBackgroundImage(
   const alpha = Math.max(0, Math.min(1, opacity));
   if (alpha <= 0) return;
 
-  const affine = anchors && anchors.length === 2 ? computeBgAnchorAffine(anchors, grid, t) : null;
+  const affine = hasValidBgGeoAnchorPair(anchors) ? computeBgAnchorAffine(anchors, grid, t) : null;
   ctx.save();
   ctx.globalAlpha = alpha;
   if (affine) {
