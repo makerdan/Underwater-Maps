@@ -219,6 +219,7 @@ export const SIGNOUT_LOCALSTORAGE_MANIFEST: readonly LocalStorageManifestEntry[]
     { key: "bathyscan:boatSpeedMph", cleared: true, note: "Per-user boat speed pref (audit F-004); same AppProvider caveat as realisticMode." },
     { key: "bathyscan:puzzleTransforms", cleared: true, note: "Overview Map puzzle tile layout (user's dataset arrangement); sessionStorage twin cleared too." },
     { key: "bathyscan:puzzleGroups", cleared: true, note: "Overview Map puzzle grouping." },
+    { key: "bathyscan:puzzleLayouts:event", cleared: true, note: "Transient cross-tab puzzle preset update event; cleared to prevent a stale event crossing accounts." },
     { key: "bsquery-history", cleared: true, note: "AI query panel history — user's past questions." },
     { key: "bathyscan-offline-identity-v1", cleared: true, note: "Cached identity (name/userId) for the offline read-only banner — literally the previous user's identity." },
     { key: "bathyscan:colmap:*", cleared: true, note: "GPS-import column-mapping fingerprints." },
@@ -244,6 +245,7 @@ export const SIGNOUT_DYNAMIC_WRITE_SITES: readonly {
   { module: "lib/uiStore.ts", keys: ["bathyscan:hasSeenOrbitTouchHint"] },
   { module: "lib/driftStore.ts", keys: ["bathyscan:savedDriftPlans"] },
   { module: "lib/zoneOverlayStore.ts", keys: ["bathyscan:zoneOverlaySlots:saltwater", "bathyscan:zoneOverlaySlots:freshwater"] },
+  { module: "components/OverviewMap.tsx", keys: ["bathyscan:puzzleLayouts:event"] },
 ];
 
 /** True when `key` matches a manifest entry (exact, or `prefix*` pattern). */

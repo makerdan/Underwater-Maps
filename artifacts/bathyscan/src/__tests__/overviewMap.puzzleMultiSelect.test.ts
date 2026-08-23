@@ -27,6 +27,7 @@ import { renderWithProviders } from "./setup";
 import { useTerrainStore } from "@/lib/terrainStore";
 import { useUiStore } from "@/lib/uiStore";
 import { useCameraStore } from "@/lib/cameraStore";
+import { useSettingsStore, type PuzzleLayout } from "@/lib/settingsStore";
 import { computeInitialTransform, lonLatToCanvas } from "@/lib/overviewRenderer";
 import type { TerrainData } from "@workspace/api-client-react";
 import * as testHelpersModule from "@/lib/testHelpers";
@@ -646,7 +647,48 @@ describe("OverviewMap — puzzle multi-select", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 10. Reset clears all transforms AND groups
+  // 10. Cross-tab named layout changes merge by operation
+  // -------------------------------------------------------------------------
+  it("merges a cross-tab preset save without replacing existing presets", async () => {
+    await renderAndCapture();
+
+    const existing: PuzzleLayout = {
+      id: "layout-existing",
+      name: "Existing",
+      tiles: [{ datasetId: DATASET_A, tx: 7, ty: -3, angleDeg: 12 }],
+      groups: [],
+    };
+    const incoming: PuzzleLayout = {
+      id: "layout-incoming",
+      name: "Incoming",
+      tiles: [{ datasetId: DATASET_B, tx: -4, ty: 9, angleDeg: -6 }],
+      groups: [[DATASET_A, DATASET_B]],
+    };
+    await act(async () => {
+      useSettingsStore.setState({ puzzleLayouts: [existing] });
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: "bathyscan:puzzleLayouts:event",
+        newValue: JSON.stringify({ type: "save", layout: incoming }),
+        storageArea: localStorage,
+      }));
+    });
+
+    await waitFor(() => {
+      expect(useSettingsStore.getState().puzzleLayouts).toEqual([existing, incoming]);
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: "bathyscan:puzzleLayouts:event",
+        newValue: JSON.stringify({ type: "delete", id: incoming.id }),
+        storageArea: localStorage,
+      }));
+    });
+    expect(useSettingsStore.getState().puzzleLayouts).toEqual([existing]);
+  });
+
+  // -------------------------------------------------------------------------
+  // 11. Reset clears all transforms AND groups
   // -------------------------------------------------------------------------
   it("Reset button clears all puzzle transforms and groups", async () => {
     const { canvas, setPuzzleMode, setSelection, getTransform, createGroup, getGroups } =

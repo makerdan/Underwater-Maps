@@ -116,6 +116,7 @@ export function performSignOutCleanup(): void {
   // Overview Map puzzle layout (localStorage + its sessionStorage twin).
   safeRemove("bathyscan:puzzleTransforms");
   safeRemove("bathyscan:puzzleGroups");
+  safeRemove("bathyscan:puzzleLayouts:event");
   try {
     sessionStorage.removeItem("bathyscan:puzzleTransforms");
     sessionStorage.removeItem("bathyscan:puzzleGroups");

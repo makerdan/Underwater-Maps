@@ -77,7 +77,6 @@ import {
   hitTestSubstrate,
   hitTestSubstrateLegend,
   renderSavedTrails,
-  renderSavedDrifts,
   drawSelectionRect,
   buildIntertidalHotspotDescriptors,
   shouldDrawOverlayAtScale,
@@ -183,6 +182,21 @@ function layoutSignatureOf(
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   return JSON.stringify({ entries, groups: groupEntries });
 }
+
+const PUZZLE_LAYOUTS_SYNC_KEY = "bathyscan:puzzleLayouts:event";
+
+type PuzzleLayoutSyncEvent =
+  | { type: "save"; layout: PuzzleLayout }
+  | { type: "delete"; id: string };
+
+function broadcastPuzzleLayoutEvent(event: PuzzleLayoutSyncEvent): void {
+  try {
+    localStorage.setItem(PUZZLE_LAYOUTS_SYNC_KEY, JSON.stringify(event));
+  } catch {
+    // The settings store remains authoritative if browser storage is unavailable.
+  }
+}
+
 export const OverviewMap: React.FC = () => {
   const setOverviewOpen = useUiStore((s) => s.setOverviewOpen);
   const setPendingDropIn = useUiStore((s) => s.setPendingDropIn);
@@ -210,7 +224,6 @@ export const OverviewMap: React.FC = () => {
   const contoursEnabled = useSettingsStore((s) => s.contoursEnabled);
   const contourInterval = useSettingsStore((s) => s.contourInterval);
   const puzzleLayouts = useSettingsStore((s) => s.puzzleLayouts);
-  const setPuzzleLayouts = useSettingsStore((s) => s.setPuzzleLayouts);
   const datasetId = overviewGrid?.datasetId ?? appTerrain?.datasetId ?? "";
   const { data: markerData } = useGetMarkers(
     { datasetId },
@@ -585,6 +598,10 @@ export const OverviewMap: React.FC = () => {
   const setPuzzleStoreMode = usePuzzleStore((s) => s.setPuzzleMode);
   useEffect(() => { setPuzzleStoreMode(puzzleMode); }, [puzzleMode, setPuzzleStoreMode]);
 
+  // Brief "saved" flash state — true for ~1500 ms after the user clicks SAVE.
+  const [puzzleSaveStatus, setPuzzleSaveStatus] = useState<"idle" | "saved" | "failed">("idle");
+  const puzzleSaved = puzzleSaveStatus === "saved";
+
   // Layout preset save form — inline text input that appears below the toolbar.
   const [puzzleLayoutFormOpen, setPuzzleLayoutFormOpen] = useState(false);
   const [puzzleLayoutNameInput, setPuzzleLayoutNameInput] = useState("");
@@ -730,7 +747,25 @@ export const OverviewMap: React.FC = () => {
     const handlePuzzleStorage = (event: StorageEvent) => {
       if (event.storageArea && event.storageArea !== localStorage) return;
 
-      if (event.key === "bathyscan:puzzleTransforms") {
+      if (event.key === PUZZLE_LAYOUTS_SYNC_KEY && event.newValue) {
+        try {
+          const change = JSON.parse(event.newValue) as PuzzleLayoutSyncEvent;
+          if (change.type === "save" && change.layout?.id) {
+            useSettingsStore.setState((state) => ({
+              puzzleLayouts: [
+                ...state.puzzleLayouts.filter((layout) => layout.id !== change.layout.id),
+                change.layout,
+              ].slice(-50),
+            }));
+          } else if (change.type === "delete" && typeof change.id === "string") {
+            useSettingsStore.setState((state) => ({
+              puzzleLayouts: state.puzzleLayouts.filter((layout) => layout.id !== change.id),
+            }));
+          }
+        } catch {
+          // Ignore corrupt cross-tab data and retain the current preset library.
+        }
+      } else if (event.key === "bathyscan:puzzleTransforms") {
         if (!event.newValue) {
           setPuzzleTransforms(new Map());
           return;
@@ -940,11 +975,19 @@ export const OverviewMap: React.FC = () => {
       groups.push([...members]);
     }
     const id = `pl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-    const next = [...puzzleLayouts, { id, name: trimmed, tiles, groups }].slice(-50);
-    setPuzzleLayouts(next);
+    const layout = { id, name: trimmed, tiles, groups };
+    useSettingsStore.setState((state) => ({
+      puzzleLayouts: [
+        ...state.puzzleLayouts.filter((existing) => existing.id !== layout.id),
+        layout,
+      ].slice(-50),
+    }));
+    broadcastPuzzleLayoutEvent({ type: "save", layout });
     setPuzzleLayoutFormOpen(false);
     setPuzzleLayoutNameInput("");
-  }, [puzzleLayouts, setPuzzleLayouts]);
+    setPuzzleSaveStatus("saved");
+    setTimeout(() => setPuzzleSaveStatus("idle"), 3000);
+  }, []);
 
   // Signature of the current layout — compared against the last saved/restored
   // signature to detect unsaved changes before switching revisions.
@@ -990,6 +1033,8 @@ export const OverviewMap: React.FC = () => {
       );
       setPuzzleLayoutFormOpen(false);
       setPuzzleLayoutNameInput("");
+      setPuzzleSaveStatus("saved");
+      setTimeout(() => setPuzzleSaveStatus("idle"), 3000);
     } catch {
       toast({
         title: "Save failed",
@@ -2909,9 +2954,6 @@ export const OverviewMap: React.FC = () => {
       // Saved trails (completed)
       if (savedTrailsRef.current.length > 0) {
         renderSavedTrails(ctx, savedTrailsRef.current, worldGrid, t);
-      }
-      if (useSettingsStore.getState().overviewShowMarkers && markersRef.current.length > 0) {
-        renderSavedDrifts(ctx, markersRef.current, worldGrid, t);
       }
 
       // Habitat overlay (drawn above depth heatmap, below markers)
@@ -5413,14 +5455,63 @@ export const OverviewMap: React.FC = () => {
             </ViewscreenTooltip>
           )}
 
+          {/* Save to Session button — visible when any tile has been moved or rotated */}
+          {hasPuzzleTransforms && (
+            <ViewscreenTooltip label="Save tile positions to session storage (survives navigation)" side="bottom">
+              <button
+                data-testid="overview-puzzle-save"
+                aria-label="Save puzzle tile positions to this session"
+                onClick={() => {
+                   let saved = false;
+                   try {
+                    sessionStorage.setItem(
+                      "bathyscan:puzzleTransforms",
+                      JSON.stringify([...puzzleTransforms.entries()]),
+                    );
+                     saved = true;
+                  } catch {
+                     // Storage can be disabled or reject writes (quota/private
+                     // browsing). Do not show success when that happens.
+                  }
+                    setPuzzleSaveStatus(saved ? "saved" : "failed");
+                    if (!saved) {
+                      toast({
+                        title: "Session save unavailable",
+                        description: "Your layout is still visible, but browser storage rejected the save. Keep this tab open or try again after enabling site storage.",
+                        variant: "destructive",
+                        duration: 6000,
+                      });
+                    }
+                    setTimeout(() => setPuzzleSaveStatus("idle"), saved ? 3000 : 6000);
+                }}
+                style={{
+                  background: puzzleSaved ? "rgba(34,197,94,0.22)" : "rgba(20,184,166,0.12)",
+                  border: puzzleSaved ? "1px solid rgba(34,197,94,0.80)" : "1px solid rgba(20,184,166,0.50)",
+                  borderRadius: 3,
+                  color: puzzleSaved ? "#86efac" : "#2dd4bf",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
+                  padding: "2px 8px",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  lineHeight: "18px",
+                  whiteSpace: "nowrap",
+                  transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                }}
+              >
+                {puzzleSaved ? "✓ SAVED" : puzzleSaveStatus === "failed" ? "⚠ SAVE FAILED" : "✦ SAVE"}
+              </button>
+            </ViewscreenTooltip>
+          )}
+
           {/* Save named layout preset — visible when puzzle has any transforms
               (or always in puzzle mode when a special collection is active,
               so an initial arrangement can be saved as revision #1). */}
           {(hasPuzzleTransforms || (puzzleMode && spcActive != null)) && (
-            <ViewscreenTooltip label="Save a reusable named layout preset synced to your account" side="bottom">
+            <ViewscreenTooltip label="Pin this arrangement as a named layout preset (synced to your account)" side="bottom">
               <button
                 data-testid="overview-puzzle-save-layout"
-                aria-label="Save current puzzle arrangement as a named, reusable layout"
+                aria-label="Save current puzzle arrangement as a named layout"
                 onClick={() => {
                   setPuzzleLayoutFormOpen((v) => !v);
                   setLayoutsDropdownOpen(false);
@@ -5439,7 +5530,7 @@ export const OverviewMap: React.FC = () => {
                   whiteSpace: "nowrap",
                 }}
               >
-                📌 SAVE NAMED LAYOUT
+                📌 SAVE LAYOUT
               </button>
             </ViewscreenTooltip>
           )}
@@ -5586,7 +5677,10 @@ export const OverviewMap: React.FC = () => {
                         data-testid={`overview-puzzle-layout-delete-${layout.id}`}
                         aria-label={`Delete layout ${layout.name}`}
                         onClick={() => {
-                          setPuzzleLayouts(puzzleLayouts.filter((l) => l.id !== layout.id));
+                          useSettingsStore.setState((state) => ({
+                            puzzleLayouts: state.puzzleLayouts.filter((l) => l.id !== layout.id),
+                          }));
+                          broadcastPuzzleLayoutEvent({ type: "delete", id: layout.id });
                         }}
                         title="Delete this layout"
                         style={{
@@ -5653,7 +5747,7 @@ export const OverviewMap: React.FC = () => {
               />
               <button
                 data-testid="overview-puzzle-layout-confirm"
-                 aria-label="Save named, reusable puzzle layout"
+                aria-label="Save named puzzle layout"
                 disabled={!puzzleLayoutNameInput.trim() || serverLayoutSaving}
                 onClick={() => {
                   if (spcActive) void saveLayoutToServer(puzzleLayoutNameInput);
@@ -6236,14 +6330,11 @@ export const OverviewMap: React.FC = () => {
             </ViewscreenTooltip>
           )}
 
-          <ViewscreenTooltip
-            label={gpsActive ? "Live GPS is active" : "Start a live GPS watch using your device"}
-            side="bottom"
-          >
+          <ViewscreenTooltip label="Use your device's GPS for location" side="bottom">
           <button
             onClick={() => startWatching()}
             data-testid="gps-activate-btn"
-            aria-label={gpsActive ? "GPS active" : "Start live GPS"}
+            aria-label={gpsActive ? "GPS active" : "Use my location"}
             aria-pressed={gpsActive}
             style={{
               background: gpsActive ? "rgba(59,130,246,0.15)" : "rgba(0,10,20,0.75)",
@@ -6259,7 +6350,7 @@ export const OverviewMap: React.FC = () => {
               whiteSpace: "nowrap",
             }}
           >
-            {gpsActive ? "📍 GPS ACTIVE" : "📍 LIVE GPS"}
+            {gpsActive ? "📍 GPS ACTIVE" : "📍 MY LOCATION"}
           </button>
           </ViewscreenTooltip>
 
