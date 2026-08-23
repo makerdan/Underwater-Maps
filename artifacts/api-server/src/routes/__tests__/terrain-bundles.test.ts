@@ -264,18 +264,20 @@ describe("GET /terrain/bundles/:presetId/status", () => {
   });
 
   it("returns job status when found", async () => {
+    const createdAt = new Date(Date.now() - 5_000).toISOString();
     mockSelect.mockReturnValue(makeChain([{
       id: "job-1",
       status: "running",
       progressNote: "Fetching…",
       errorMessage: null,
-      createdAt: new Date().toISOString(),
+      createdAt,
       completedAt: null,
     }]));
 
     const res = await request(app).get("/terrain/bundles/lake-ray-roberts/status").set("x-e2e-user-id", "bypass-user");
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ jobId: "job-1", status: "running" });
+    expect(res.body.ageMs).toBeGreaterThanOrEqual(5_000);
   });
 });
 

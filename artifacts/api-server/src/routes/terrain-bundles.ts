@@ -179,6 +179,39 @@ async function resolveBundleTarget(presetId: string): Promise<BundleTarget | nul
  * which matches the single-instance deploy model.
  */
 const inFlightJobs = new Set<string>();
+const pendingJobs = new Set<string>();
+const jobDispatchedAt = new Map<string, number>();
+let completedJobCount = 0;
+let failedJobCount = 0;
+
+function getJobAgeMs(createdAt: Date | string | number | null | undefined): number | undefined {
+  if (createdAt == null) return undefined;
+  const timestamp = createdAt instanceof Date ? createdAt.getTime() : new Date(createdAt).getTime();
+  return Number.isFinite(timestamp) ? Math.max(0, Date.now() - timestamp) : undefined;
+}
+
+function logBundleJobMetric(
+  event: "queued" | "started" | "completed" | "failed" | "recovered",
+  fields: {
+    jobId: string;
+    presetId?: string;
+    userId?: string;
+    jobAgeMs?: number;
+    failureReason?: string;
+  },
+): void {
+  logger.info(
+    {
+      code: "terrain_bundle_job",
+      event,
+      queueDepth: pendingJobs.size,
+      completedCount: completedJobCount,
+      failureCount: failedJobCount,
+      ...fields,
+    },
+    `[terrain-bundles] job ${event}`,
+  );
+}
 
 /**
  * Dispatches a job to run in the background exactly once per process at a
@@ -190,12 +223,17 @@ export function dispatchBundleJob(jobId: string, userId: string, presetId: strin
     return;
   }
   inFlightJobs.add(jobId);
+  pendingJobs.add(jobId);
+  jobDispatchedAt.set(jobId, Date.now());
+  logBundleJobMetric("queued", { jobId, userId, presetId });
   void runBundleJob(jobId, userId, presetId)
     .catch((err: unknown) => {
       logger.warn({ err, jobId }, "[terrain-bundles] unexpected job dispatch failure");
     })
     .finally(() => {
       inFlightJobs.delete(jobId);
+      pendingJobs.delete(jobId);
+      jobDispatchedAt.delete(jobId);
     });
 }
 
@@ -236,6 +274,13 @@ export async function recoverStaleTerrainBundleJobs(): Promise<number> {
       "[terrain-bundles] startup recovery re-dispatched stale jobs",
     );
   }
+  for (const job of recovered) {
+    logBundleJobMetric("recovered", {
+      jobId: job.id,
+      userId: job.userId,
+      presetId: job.presetId,
+    });
+  }
   return pending.length;
 }
 
@@ -250,6 +295,13 @@ async function runBundleJob(
 ): Promise<void> {
   const target = await resolveBundleTarget(presetId);
   if (!target) {
+    failedJobCount += 1;
+    logBundleJobMetric("failed", {
+      jobId,
+      userId,
+      presetId,
+      failureReason: `Unknown preset: ${presetId}`,
+    });
     await db
       .update(terrainBundleJobsTable)
       .set({ status: "error", errorMessage: `Unknown preset: ${presetId}`, completedAt: new Date() })
@@ -258,6 +310,13 @@ async function runBundleJob(
   }
 
   if (!target.fetchStrategy) {
+    failedJobCount += 1;
+    logBundleJobMetric("failed", {
+      jobId,
+      userId,
+      presetId,
+      failureReason: `Preset ${presetId} has no fetchStrategy`,
+    });
     await db
       .update(terrainBundleJobsTable)
       .set({ status: "error", errorMessage: `Preset ${presetId} has no fetchStrategy`, completedAt: new Date() })
@@ -266,6 +325,11 @@ async function runBundleJob(
   }
 
   try {
+    pendingJobs.delete(jobId);
+    const jobAgeMs = jobDispatchedAt.has(jobId)
+      ? Date.now() - jobDispatchedAt.get(jobId)!
+      : undefined;
+    logBundleJobMetric("started", { jobId, userId, presetId, jobAgeMs });
     await db
       .update(terrainBundleJobsTable)
       .set({ status: "running", progressNote: "Fetching bathymetry data…" })
@@ -285,9 +349,28 @@ async function runBundleJob(
       .set({ status: "complete", progressNote: "Done", completedAt: new Date() })
       .where(eq(terrainBundleJobsTable.id, jobId));
 
+    completedJobCount += 1;
+    logBundleJobMetric("completed", {
+      jobId,
+      userId,
+      presetId,
+      jobAgeMs: jobDispatchedAt.has(jobId)
+        ? Date.now() - jobDispatchedAt.get(jobId)!
+        : undefined,
+    });
     logger.info({ jobId, userId, presetId }, "[terrain-bundles] job complete");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    failedJobCount += 1;
+    logBundleJobMetric("failed", {
+      jobId,
+      userId,
+      presetId,
+      failureReason: msg,
+      jobAgeMs: jobDispatchedAt.has(jobId)
+        ? Date.now() - jobDispatchedAt.get(jobId)!
+        : undefined,
+    });
     logger.warn({ jobId, userId, presetId, err }, "[terrain-bundles] job error");
     try {
       await db
@@ -441,6 +524,7 @@ router.get(
       errorMessage: job.errorMessage,
       createdAt: job.createdAt,
       completedAt: job.completedAt,
+      ageMs: getJobAgeMs(job.createdAt),
     });
   }),
 );
@@ -481,6 +565,7 @@ router.get(
         status: job.status,
         progressNote: job.progressNote,
         errorMessage: job.errorMessage,
+        ageMs: getJobAgeMs(job.createdAt),
         message: job.status === "error" ? "Download failed" : "Download in progress",
       });
       return;
