@@ -45,3 +45,10 @@ baseline breakage.
 (1/5667) but passes 3/3 solo. Same class as the github.test.ts entry above:
 order/load-dependent, observed right after the puzzle-layout merge wave —
 solo-verify before blaming an unrelated diff.
+
+## 2026-08-23 — OverviewMap responsive-interactions baseline failure
+`OverviewMap.responsiveInteractions.test.tsx` has two deterministic failures:
+the inactive GPS label is `MY LOCATION` instead of `LIVE GPS`, and the session
+save button remains alongside named-layout save. The file also fails typecheck
+from the same stale expectations. Verified 3/3 in isolation on the current
+tree; unrelated to API-only changes.

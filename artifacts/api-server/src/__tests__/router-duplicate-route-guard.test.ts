@@ -56,10 +56,10 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   findDuplicateRoutes,
+  findDuplicateRoutesDeep,
   countRoutes,
   countRoutesDeep,
   findDuplicateRoutesAcross,
-  findDuplicateRoutesDeep,
 } from "./helpers/routeGuard.js";
 import { API_DOMAINS, API_DOMAIN_KEYS } from "../routes/index.js";
 
@@ -92,6 +92,8 @@ import weatherStationsRouter from "../routes/weather-stations.js";
 import weatherStationObsRouter from "../routes/weather-station-obs.js";
 import rawsStationsRouter from "../routes/raws-stations.js";
 import rawsWeatherRouter from "../routes/raws-weather.js";
+import nceiRouter from "../routes/ncei.js";
+import searchFederatedRouter from "../routes/search-federated.js";
 import adminRouter from "../routes/admin.js";
 import adminUsersRouter from "../routes/admin-users.js";
 import githubRouter from "../routes/github.js";
@@ -102,6 +104,7 @@ import terrainQueryRouter from "../domains/terrain/query/index.js";
 import platformCoreRouter from "../domains/platform/core-router.js";
 import terrainEnrichmentRouter from "../domains/terrain/enrichment/index.js";
 import catalogOrganizationRouter from "../domains/catalog-organization/index.js";
+import platformGovernanceRouter from "../domains/platform/governance-router.js";
 
 /** name = the routes/<name>.ts module the router comes from. */
 const ROUTERS: Array<[name: string, router: unknown]> = [
@@ -113,15 +116,19 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["objects", objectsRouter],
   ["settings", settingsRouter],
   ["catalog-organization", catalogOrganizationRouter],
+  ["user-datasets", userDatasetsRouter],
+  ["folders", foldersRouter],
   ["tidal", tidalRouter],
   ["tides", tidesRouter],
   ["query", queryRouter],
-  ["me", meRouter],
   ["trails", trailsRouter],
+  ["me", meRouter],
   ["substrate", substrateRouter],
   ["efh", efhRouter],
   ["intertidal-spots", intertidalSpotsRouter],
   ["catalog-discovery", catalogDiscoveryRouter],
+  ["catalog-saves", catalogSavesRouter],
+  ["collections", collectionsRouter],
   ["surface-conditions", surfaceConditionsRouter],
   ["trolling-presets", trollingPresetsRouter],
   ["trolling-preset-folders", trollingPresetFoldersRouter],
@@ -132,8 +139,9 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["weather-station-obs", weatherStationObsRouter],
   ["raws-stations", rawsStationsRouter],
   ["raws-weather", rawsWeatherRouter],
-  ["admin", adminRouter],
-  ["admin-users", adminUsersRouter],
+  ["ncei", nceiRouter],
+  ["search-federated", searchFederatedRouter],
+  ["platform-governance", platformGovernanceRouter],
   ["github", githubRouter],
   ["terrain-bundles", terrainBundlesRouter],
   ["env-pack", envPackRouter],
@@ -192,15 +200,20 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
     ).toEqual([]);
   });
 
+  it("platform governance composes administration and admin-user routes exactly once", () => {
+    expect(countRoutesDeep(platformGovernanceRouter)).toBe(
+      countRoutes(adminRouter) + countRoutes(adminUsersRouter),
+    );
+    expect(findDuplicateRoutesDeep(platformGovernanceRouter)).toEqual([]);
+  });
+
   it.each(ROUTERS)("routes/%s.ts registers every (method, path) pair at most once", (name, router) => {
     expect(
-      name === "catalog-organization" ? countRoutesDeep(router) : countRoutes(router),
+      countRoutesDeep(router),
       `routes/${name}.ts registered zero routes — guard would pass vacuously; is the export still a Router?`,
     ).toBeGreaterThan(0);
 
-    const duplicates = name === "catalog-discovery" || name === "catalog-organization"
-      ? findDuplicateRoutesDeep(router)
-      : findDuplicateRoutes(router);
+    const duplicates = findDuplicateRoutesDeep(router);
     expect(
       duplicates,
       `Duplicate route registration(s) on the "${name}" router — this is the signature of a ` +
@@ -239,9 +252,9 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
       ROUTERS.reduce(
         (total, [name, router]) =>
           total +
-          (name === "catalog-discovery" || name === "catalog-organization"
-            ? countRoutesDeep(router)
-            : countRoutes(router)),
+            (name === "platform-governance" || name === "catalog-organization"
+              ? countRoutesDeep(router)
+              : countRoutes(router)),
         0,
       ),
     );

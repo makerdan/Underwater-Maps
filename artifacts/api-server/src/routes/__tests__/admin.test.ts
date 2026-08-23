@@ -102,14 +102,14 @@ vi.mock("node:fs", async (importOriginal) => {
   };
 });
 
-import adminRouter from "../admin.js";
+import platformGovernanceRouter from "../../domains/platform/governance-router.js";
 import tidalRouter from "../tidal.js";
 
 const E2E_USER = "user_e2e_admin_test";
 
 function makeApp() {
   const app = express();
-  app.use(adminRouter);
+  app.use(platformGovernanceRouter);
   return app;
 }
 
