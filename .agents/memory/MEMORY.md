@@ -136,3 +136,4 @@
 - [Validation-lock detached lifecycle](validation-lock-unref-lifecycle.md) — an unref'd detached child still needs a referenced lifecycle handle until its exit event.
 - [Offline upload route](offline-upload-route.md) — uploaded UUID terrain uses authenticated user-datasets reads, not legacy catalog paths.
 - [Mobile coordinate-search e2e](mobile-coordinate-search-e2e.md) — mobile uses a dataset picker without coordinate search; narrow-flow tests must choose their shell explicitly.
+- [Nested router prefix guards](nested-router-prefix-guards.md) — prefix-aware checks avoid false duplicate reports when Express nested mounts hide their mount path.

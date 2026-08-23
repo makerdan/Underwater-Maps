@@ -98,6 +98,7 @@ import githubRouter from "../routes/github.js";
 import collectionsRouter from "../routes/collections.js";
 import terrainBundlesRouter from "../routes/terrain-bundles.js";
 import envPackRouter from "../routes/env-pack.js";
+import terrainQueryRouter from "../domains/terrain/query/index.js";
 
 /** name = the routes/<name>.ts module the router comes from. */
 const ROUTERS: Array<[name: string, router: unknown]> = [
@@ -140,6 +141,18 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
 ];
 
 describe("duplicate-route mis-merge guard (all routers)", () => {
+  it("terrain query composition retains both query surfaces without duplicates", () => {
+    expect(countRoutesDeep(terrainQueryRouter)).toBe(
+      countRoutes(poeRouter) + countRoutes(queryRouter),
+    );
+    expect(
+      findDuplicateRoutesAcross([
+        [poeRouter, "/poe"],
+        [queryRouter, ""],
+      ]),
+    ).toEqual([]);
+  });
+
   it.each(ROUTERS)("routes/%s.ts registers every (method, path) pair at most once", (name, router) => {
     expect(
       countRoutes(router),
