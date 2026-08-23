@@ -106,36 +106,31 @@ import catalogOrganizationRouter from "../domains/catalog-organization/index.js"
 import platformGovernanceRouter from "../domains/platform/governance-router.js";
 import terrainBundlesRouter from "../domains/terrain/bundles/index.js";
 import { fieldDataRouter } from "../domains/upload/field-data.js";
+import platformUserRoutesRouter from "../domains/platform/user-routes-router.js";
+import platformIntegrationsRouter from "../domains/platform/integrations-router.js";
 
 /** name = the routes/<name>.ts module the router comes from. */
 const ROUTERS: Array<[name: string, router: unknown]> = [
-  ["health", healthRouter],
   ["poe", poeRouter],
   ["upload-ingestion", uploadIngestionRouter],
   ["markers", markersRouter],
   ["catches", catchesRouter],
   ["objects", objectsRouter],
-  ["settings", settingsRouter],
   ["catalog-organization", catalogOrganizationRouter],
-  ["user-datasets", userDatasetsRouter],
-  ["folders", foldersRouter],
   ["tidal", tidalRouter],
   ["tides", tidesRouter],
   ["query", queryRouter],
   ["trails", trailsRouter],
-  ["me", meRouter],
   ["substrate", substrateRouter],
   ["efh", efhRouter],
   ["intertidal-spots", intertidalSpotsRouter],
   ["catalog-discovery", catalogDiscoveryRouter],
-  ["catalog-saves", catalogSavesRouter],
-  ["collections", collectionsRouter],
+  ["platform-core", platformCoreRouter],
   ["surface-conditions", surfaceConditionsRouter],
   ["trolling-presets", trollingPresetsRouter],
   ["trolling-preset-folders", trollingPresetFoldersRouter],
   ["water-temperature", waterTemperatureRouter],
   ["temperature-profile", temperatureProfileRouter],
-  ["routes", routesRouter],
   ["weather-stations", weatherStationsRouter],
   ["weather-station-obs", weatherStationObsRouter],
   ["raws-stations", rawsStationsRouter],
@@ -143,7 +138,8 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["ncei", nceiRouter],
   ["search-federated", searchFederatedRouter],
   ["platform-governance", platformGovernanceRouter],
-  ["github", githubRouter],
+  ["platform-user-routes", platformUserRoutesRouter],
+  ["platform-integrations", platformIntegrationsRouter],
   ["terrain-bundles", terrainBundlesRouter],
   ["env-pack", envPackRouter],
 ];
@@ -208,6 +204,23 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
     expect(findDuplicateRoutesDeep(platformGovernanceRouter)).toEqual([]);
   });
 
+  it("platform user routes composes saved-route CRUD exactly once", () => {
+    expect(countRoutesDeep(platformUserRoutesRouter)).toBe(
+      countRoutes(routesRouter),
+    );
+    expect(findDuplicateRoutesDeep(platformUserRoutesRouter)).toEqual([]);
+  });
+
+  it("platform integrations preserves the /github prefix exactly once", () => {
+    expect(countRoutesDeep(platformIntegrationsRouter)).toBe(
+      countRoutes(githubRouter),
+    );
+    expect(findDuplicateRoutesAcross([
+      [githubRouter, "/github"],
+    ])).toEqual([]);
+    expect(findDuplicateRoutesDeep(platformIntegrationsRouter)).toEqual([]);
+  });
+
   it.each(ROUTERS)("routes/%s.ts registers every (method, path) pair at most once", (name, router) => {
     expect(
       countRoutesDeep(router),
@@ -262,8 +275,12 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
     expect(countRoutesDeep(apiRouter)).toBe(
       ROUTERS.reduce(
         (total, [name, router]) =>
-          total +
-            (name === "platform-governance" || name === "catalog-organization"
+        total +
+            (name === "platform-governance" ||
+              name === "platform-core" ||
+              name === "platform-user-routes" ||
+              name === "platform-integrations" ||
+              name === "catalog-organization"
               ? countRoutesDeep(router)
               : countRoutes(router)),
         0,
@@ -273,7 +290,7 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
       findDuplicateRoutesAcross(
         ROUTERS.map(([name, router]) => [
           router,
-          name === "poe" ? "/poe" : name === "github" ? "/github" : "",
+          name === "poe" ? "/poe" : name === "platform-integrations" ? "/github" : "",
         ]),
       ),
     ).toEqual([]);
