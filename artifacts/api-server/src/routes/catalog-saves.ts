@@ -77,6 +77,7 @@ import {
   type ShoreZoneFeature,
 } from "../lib/shoreZoneData.js";
 import { entryCreatedAtIso, toCatalogResponse } from "./catalog-discovery.js";
+import { catalogSaveService } from "../domains/catalog-search/save-service.js";
 export {
   CATALOG_READ_ROUTE,
   CATALOG_READ_WINDOW_MS,
@@ -288,7 +289,7 @@ router.post("/datasets/catalog/:id/save", requireAuth, dataMutationRateLimit, va
   // Kick off materialization. Fire-and-forget so the HTTP response returns
   // quickly; clients poll /my-saves/:id/status (or refetch /my-saves) for
   // the eventual ready/failed status.
-  void materializeSave(created.id, userId, entry);
+  void catalogSaveService.materializeSave(created.id, userId, entry);
 
   res.status(201).json(validateResponse(GetDatasetsMySavesResponseItem, formatSaveRow(created, entry), "POST /api/datasets/catalog/:id/save"));
 }));
@@ -342,7 +343,7 @@ function humanizeErrorMessage(raw: string): string {
   return raw;
 }
 
-export async function materializeSave(
+async function legacyMaterializeSave(
   saveId: string,
   userId: string,
   entry: CatalogSeedEntry,
@@ -541,6 +542,15 @@ export async function materializeSave(
     }
   }
 }
+
+// Kept temporarily as a source-compatible reference while route-level
+// materializer tests migrate to the domain service export below.
+void legacyMaterializeSave;
+
+// Compatibility export for existing route-level tests and imports. New route
+// code uses catalogSaveService directly; the implementation lives in the
+// domain service.
+export { materializeSave } from "../domains/catalog-search/save-service.js";
 
 /**
  * Build the terrain + overview grids for a catalog entry. Returns null when
@@ -1117,7 +1127,7 @@ router.post("/datasets/my-saves/:id/retry", requireAuth, dataMutationRateLimit, 
     return;
   }
 
-  void materializeSave(updated.id, userId, entry);
+  void catalogSaveService.materializeSave(updated.id, userId, entry);
 
   res.status(200).json(validateResponse(PostDatasetsMySavesIdRetryResponse, formatSaveRow(updated, entry), "POST /api/datasets/my-saves/:id/retry"));
 }));
