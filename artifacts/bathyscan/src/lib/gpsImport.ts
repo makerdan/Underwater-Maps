@@ -32,6 +32,8 @@ export interface ParsedPoint {
 }
 
 export interface ParsedRoute {
+  /** Stable identity used by the import editor; absent for parser-only callers. */
+  id?: string;
   name: string;
   points: { lat: number; lon: number; name?: string }[];
   source: "route" | "track";
