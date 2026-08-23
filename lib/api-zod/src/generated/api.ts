@@ -6505,13 +6505,18 @@ export const GetTerrainBundlesPresetIdStatusParams = zod.object({
   "presetId": zod.coerce.string().describe('Preset dataset ID')
 })
 
+export const getTerrainBundlesPresetIdStatusResponseAgeMsMin = 0;
+
+
+
 export const GetTerrainBundlesPresetIdStatusResponse = zod.object({
   "jobId": zod.string().uuid().optional(),
   "status": zod.enum(['pending', 'running', 'complete', 'error']).optional(),
   "progressNote": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
   "createdAt": zod.coerce.date().optional(),
-  "completedAt": zod.coerce.date().nullish()
+  "completedAt": zod.coerce.date().nullish(),
+  "ageMs": zod.number().min(getTerrainBundlesPresetIdStatusResponseAgeMsMin).optional().describe('Age of the job in milliseconds at response time')
 })
 
 

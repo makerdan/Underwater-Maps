@@ -5475,6 +5475,11 @@ export type GetTerrainBundlesPresetIdStatus200 = {
   errorMessage?: string | null;
   createdAt?: string;
   completedAt?: string | null;
+  /**
+     * Age of the job in milliseconds at response time
+     * @minimum 0
+     */
+  ageMs?: number;
 };
 
 /**
@@ -5494,6 +5499,13 @@ export const GetTerrainBundlesPresetId202Status = {
 export type GetTerrainBundlesPresetId202 = {
   jobId?: string;
   status?: GetTerrainBundlesPresetId202Status;
+  progressNote?: string | null;
+  errorMessage?: string | null;
+  /**
+     * Age of the job in milliseconds at response time
+     * @minimum 0
+     */
+  ageMs?: number;
   message?: string;
 };
 

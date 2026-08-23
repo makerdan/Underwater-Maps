@@ -6145,16 +6145,16 @@ paths:
                   status:
                     type: string
                     enum: [pending, running, error]
-                   progressNote:
-                     type: string
-                     nullable: true
-                   errorMessage:
-                     type: string
-                     nullable: true
-                   ageMs:
-                     type: integer
-                     minimum: 0
-                     description: Age of the job in milliseconds at response time
+                  progressNote:
+                    type: string
+                    nullable: true
+                  errorMessage:
+                    type: string
+                    nullable: true
+                  ageMs:
+                    type: integer
+                    minimum: 0
+                    description: Age of the job in milliseconds at response time
                   message:
                     type: string
         "401":
