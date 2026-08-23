@@ -66,7 +66,7 @@ describe("OverviewMap responsive interactions", () => {
 
   it("keeps the backing canvas dimensions aligned after viewport resize", async () => {
     renderOverview();
-    const canvas = screen.getByTestId("overview-map-canvas") as HTMLCanvasElement;
+    const canvas = screen.getByTestId("overview-map-canvas");
     expect(canvas.width).toBe(800);
     expect(canvas.height).toBe(600);
 
@@ -93,6 +93,8 @@ describe("OverviewMap responsive interactions", () => {
   it("keeps Close independently reachable in the header controls", async () => {
     renderOverview();
     const close = screen.getByTestId("overview-close");
+
+    const compass = screen.getByTestId("overview-compass");
     expect(close).toBeVisible();
     await act(async () => { fireEvent.click(close); });
     expect(useUiStore.getState().overviewOpen).toBe(false);
@@ -122,5 +124,19 @@ describe("OverviewMap responsive interactions", () => {
     expect(screen.getByTestId("overview-puzzle-layout-form")).toBeInTheDocument();
     expect(screen.getByTestId("overview-puzzle-layout-confirm"))
       .toHaveAccessibleName("Save named, reusable puzzle layout");
+  });
+
+  it("keeps the compass and zoom controls together below the header", () => {
+    renderOverview();
+
+    const compass = screen.getByTestId("overview-compass");
+    const zoomIn = screen.getByTestId("overview-zoom-in");
+    const zoomOut = screen.getByTestId("overview-zoom-out");
+    const zoomFit = screen.getByTestId("overview-zoom-fit");
+
+    expect(compass).toHaveStyle({ top: "50px", right: "14px" });
+    expect(zoomIn.parentElement).toHaveStyle({ top: "92px", right: "16px" });
+    expect(zoomOut).toBeInTheDocument();
+    expect(zoomFit).toBeInTheDocument();
   });
 });

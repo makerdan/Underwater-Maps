@@ -183,6 +183,8 @@ function layoutSignatureOf(
   return JSON.stringify({ entries, groups: groupEntries });
 }
 
+const OVERVIEW_CONTROLS_TOP_OFFSET = 36;
+
 const PUZZLE_LAYOUTS_SYNC_KEY = "bathyscan:puzzleLayouts:event";
 
 type PuzzleLayoutSyncEvent =
@@ -4504,7 +4506,7 @@ export const OverviewMap: React.FC = () => {
         style={{
           position: "absolute",
           right: 16,
-          top: 56,
+          top: 56 + OVERVIEW_CONTROLS_TOP_OFFSET,
           zIndex: 41,
           display: "flex",
           flexDirection: "column",
@@ -4591,7 +4593,7 @@ export const OverviewMap: React.FC = () => {
         data-testid="overview-compass"
         style={{
           position: "absolute",
-          top: 14,
+          top: 14 + OVERVIEW_CONTROLS_TOP_OFFSET,
           right: 14,
           width: 36,
           height: 36,
