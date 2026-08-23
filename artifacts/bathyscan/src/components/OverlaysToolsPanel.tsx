@@ -211,6 +211,8 @@ const ViewscreenDepthPalette: React.FC = () => {
   const bandColors = usePaletteStore((s) => s.bandColors);
   const setBandColors = usePaletteStore((s) => s.setBandColors);
   const blendBands = usePaletteStore((s) => s.blendBands);
+  const savedDepthThemes = usePaletteStore((s) => s.savedDepthThemes);
+  const applyTheme = usePaletteStore((s) => s.applyTheme);
   const colormapTheme = useSettingsStore((s) => s.colormapTheme);
   const setColormapThemeByUser = useSettingsStore((s) => s.setColormapThemeByUser);
 
@@ -234,6 +236,11 @@ const ViewscreenDepthPalette: React.FC = () => {
 
   const updateColormap = (theme: ColormapTheme) => {
     setColormapThemeByUser(theme);
+    void flushServerSync();
+  };
+
+  const updateSavedTheme = (id: string) => {
+    applyTheme(id);
     void flushServerSync();
   };
 
@@ -384,6 +391,87 @@ const ViewscreenDepthPalette: React.FC = () => {
           );
         })}
       </div>
+
+      {savedDepthThemes.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div
+            style={{
+              color: "#94a3b8",
+              fontSize: "calc(11px * var(--bs-font-scale, 1))",
+              letterSpacing: "0.1em",
+              marginBottom: 4,
+              textTransform: "uppercase",
+            }}
+          >
+            Saved themes
+          </div>
+          <div
+            data-testid="viewscreen-saved-themes"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              maxHeight: 132,
+              overflowY: "auto",
+              paddingRight: 2,
+            }}
+          >
+            {savedDepthThemes.map((theme) => {
+              const lastColor = theme.bandColors[theme.bandColors.length - 1];
+              const themeGradient = theme.bandColors.length >= 2
+                ? `linear-gradient(90deg, ${theme.bandColors[0]} 0%, ${lastColor} 100%)`
+                : (theme.bandColors[0] ?? "#00e5ff");
+              return (
+                <button
+                  key={theme.id}
+                  type="button"
+                  data-testid={`viewscreen-saved-theme-${theme.id}`}
+                  title={`Use saved theme ${theme.name}`}
+                  onClick={() => updateSavedTheme(theme.id)}
+                  style={{
+                    width: "100%",
+                    minWidth: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "4px 5px",
+                    color: "#cbd5e1",
+                    background: "rgba(0,0,0,0.3)",
+                    border: "1px solid rgba(0,229,255,0.16)",
+                    borderRadius: 3,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                    letterSpacing: "0.04em",
+                    textAlign: "left",
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 24,
+                      height: 10,
+                      flexShrink: 0,
+                      borderRadius: 2,
+                      background: themeGradient,
+                    }}
+                  />
+                  <span
+                    style={{
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {theme.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </section>
   );
 };

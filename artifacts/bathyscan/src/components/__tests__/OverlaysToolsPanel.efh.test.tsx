@@ -183,6 +183,8 @@ beforeEach(() => {
   usePaletteStore.setState({
     bandColors: [...DEFAULT_BAND_COLORS],
     bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
+    blendBands: true,
+    savedDepthThemes: [],
   });
 });
 
@@ -387,5 +389,56 @@ describe("OverlaysToolsPanel — depth palette", () => {
 
     expect(paletteHarness.setColormapThemeByUser).toHaveBeenCalledWith("thermal");
     expect(paletteHarness.flushServerSync).toHaveBeenCalled();
+  });
+
+  it("applies a saved theme through the shared palette store and flushes server sync", () => {
+    act(() => {
+      usePaletteStore.setState({
+        bandColors: ["#112233", "#445566"],
+        bandBoundaries: [0, 120, 480],
+        blendBands: false,
+      });
+      usePaletteStore.getState().saveCurrentTheme("Harbor night");
+      usePaletteStore.setState({
+        bandColors: [...DEFAULT_BAND_COLORS],
+        bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
+        blendBands: true,
+      });
+    });
+    const theme = usePaletteStore.getState().savedDepthThemes[0]!;
+
+    render(<OverlaysToolsPanel />);
+    fireEvent.click(screen.getByTestId(`viewscreen-saved-theme-${theme.id}`));
+
+    expect(usePaletteStore.getState().bandColors).toEqual(["#112233", "#445566"]);
+    expect(usePaletteStore.getState().bandBoundaries).toEqual([0, 120, 480]);
+    expect(usePaletteStore.getState().blendBands).toBe(false);
+    expect(paletteHarness.flushServerSync).toHaveBeenCalled();
+  });
+
+  it("reactively reflects saved themes created, renamed, and deleted in Settings", () => {
+    render(<OverlaysToolsPanel />);
+    expect(screen.queryByTestId("viewscreen-saved-themes")).not.toBeInTheDocument();
+
+    act(() => usePaletteStore.getState().saveCurrentTheme("Before rename"));
+    const theme = usePaletteStore.getState().savedDepthThemes[0]!;
+    expect(screen.getByTestId(`viewscreen-saved-theme-${theme.id}`)).toHaveTextContent("Before rename");
+
+    act(() => usePaletteStore.getState().renameTheme(theme.id, "After rename"));
+    expect(screen.getByTestId(`viewscreen-saved-theme-${theme.id}`)).toHaveTextContent("After rename");
+
+    act(() => usePaletteStore.getState().deleteTheme(theme.id));
+    expect(screen.queryByTestId("viewscreen-saved-themes")).not.toBeInTheDocument();
+  });
+
+  it("keeps the saved-theme list scrollable in the narrow sidebar", () => {
+    act(() => {
+      usePaletteStore.getState().saveCurrentTheme("One");
+      usePaletteStore.getState().saveCurrentTheme("Two");
+    });
+    render(<OverlaysToolsPanel />);
+
+    const list = screen.getByTestId("viewscreen-saved-themes");
+    expect(list).toHaveStyle({ maxHeight: "132px", overflowY: "auto" });
   });
 });
