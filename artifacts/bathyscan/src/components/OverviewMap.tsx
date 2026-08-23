@@ -725,6 +725,64 @@ export const OverviewMap: React.FC = () => {
     }
   }, []);
 
+  // A storage event is the browser's cross-tab synchronization channel.
+  // sessionStorage is intentionally not listened to here because it is
+  // scoped to this tab; the mirrored localStorage value is what other tabs
+  // receive when a layout is cleaned up.
+  useEffect(() => {
+    const handlePuzzleStorage = (event: StorageEvent) => {
+      if (event.storageArea && event.storageArea !== localStorage) return;
+
+      if (event.key === "bathyscan:puzzleTransforms") {
+        if (!event.newValue) {
+          setPuzzleTransforms(new Map());
+          return;
+        }
+        try {
+          const entries = JSON.parse(event.newValue) as Array<
+            [string, { tx: number; ty: number; angleDeg: number; flipH?: boolean; flipV?: boolean; locked?: boolean; annotation?: string }]
+          >;
+          if (!Array.isArray(entries)) return;
+          setPuzzleTransforms(
+            new Map(entries.map(([id, xf]) => [
+              id,
+              {
+                tx: xf.tx, ty: xf.ty, angleDeg: xf.angleDeg,
+                flipH: xf.flipH ?? false, flipV: xf.flipV ?? false,
+                ...(xf.locked ? { locked: true } : {}),
+                ...(xf.annotation ? { annotation: String(xf.annotation).slice(0, 40) } : {}),
+              },
+            ])),
+          );
+        } catch {
+          // Ignore corrupt cross-tab data and retain the current layout.
+        }
+      } else if (event.key === "bathyscan:puzzleGroups") {
+        if (!event.newValue) {
+          setPuzzleGroups(new Map());
+          return;
+        }
+        try {
+          const entries = JSON.parse(event.newValue) as Array<[string, string[]]>;
+          if (!Array.isArray(entries)) return;
+          setPuzzleGroups(
+            new Map(entries.map(([gid, members]) => [gid, new Set(members)])),
+          );
+          const maxN = entries.reduce((m, [gid]) => {
+            const n = parseInt(gid.replace("group-", ""), 10);
+            return isNaN(n) ? m : Math.max(m, n);
+          }, 0);
+          puzzleGroupCounterRef.current = Math.max(puzzleGroupCounterRef.current, maxN);
+        } catch {
+          // Ignore corrupt cross-tab data and retain the current layout.
+        }
+      }
+    };
+
+    window.addEventListener("storage", handlePuzzleStorage);
+    return () => window.removeEventListener("storage", handlePuzzleStorage);
+  }, []);
+
   // Currently selected puzzle tiles (set of datasetIds) and the primary tile.
   // puzzleSelectedIdsRef is updated synchronously in event handlers for hit-testing;
   // puzzleSelectedIds is a React state mirror so the toolbar can re-render.

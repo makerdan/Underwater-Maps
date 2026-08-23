@@ -601,7 +601,52 @@ describe("OverviewMap — puzzle multi-select", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 9. Reset clears all transforms AND groups
+  // 9. Cross-tab storage cleanup updates stale puzzle state
+  // -------------------------------------------------------------------------
+  it("applies cross-tab transform and group cleanup without changing visible members", async () => {
+    const { canvas, setPuzzleMode, setSelection, getTransform, createGroup, getGroups } =
+      await renderAndCapture();
+    const gridA = makeGrid(DATASET_A, -122, -119);
+    const gridB = makeGrid(DATASET_B, -119, -116);
+    const worldGrid = makeWorldGrid(gridA, [gridB]);
+
+    await act(async () => { setPuzzleMode(true); });
+    await act(async () => { setSelection([DATASET_A, DATASET_B]); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await drag(canvas, tileCenterPx(gridA, worldGrid).x, tileCenterPx(gridA, worldGrid).y, 26, -13);
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    const transformA = getTransform(DATASET_A);
+    expect(getTransform(DATASET_B)?.ty).toBeCloseTo(-13, 0);
+
+    await act(async () => { createGroup([DATASET_A, DATASET_B]); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    const groupId = Object.keys(getGroups())[0]!;
+    expect(getGroups()[groupId]).toEqual(expect.arrayContaining([DATASET_A, DATASET_B]));
+
+    const transformsWithoutB = JSON.stringify([[DATASET_A, transformA!]]);
+    const groupsWithoutB = JSON.stringify([]);
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: "bathyscan:puzzleTransforms",
+        newValue: transformsWithoutB,
+        storageArea: localStorage,
+      }));
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: "bathyscan:puzzleGroups",
+        newValue: groupsWithoutB,
+        storageArea: localStorage,
+      }));
+    });
+
+    await waitFor(() => {
+      expect(getTransform(DATASET_B)).toBeNull();
+      expect(Object.keys(getGroups())).toHaveLength(0);
+    });
+    expect(getTransform(DATASET_A)).toMatchObject(transformA!);
+  });
+
+  // -------------------------------------------------------------------------
+  // 10. Reset clears all transforms AND groups
   // -------------------------------------------------------------------------
   it("Reset button clears all puzzle transforms and groups", async () => {
     const { canvas, setPuzzleMode, setSelection, getTransform, createGroup, getGroups } =
