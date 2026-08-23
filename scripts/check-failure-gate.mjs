@@ -141,6 +141,8 @@ const skipIfNoTask = process.argv.includes("--skip-if-no-task");
 // **Command:** tier names. A plan with `**Command:** \`not-a-real-tier\``
 // will be caught and exit 1 even in --stubs-only mode.
 const stubsOnly = process.argv.includes("--stubs-only");
+const isMain =
+  process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 
 // ---------------------------------------------------------------------------
 // Stub placeholder patterns — these match the exact lines that --fix-stub
@@ -186,7 +188,7 @@ const STUB_PLACEHOLDERS = [
 // When TASK_PLAN_FILE is not set (developer / manual run), the full archive
 // scan proceeds as before.
 
-const TASK_PLAN_FILE = process.env.TASK_PLAN_FILE;
+const TASK_PLAN_FILE = isMain ? process.env.TASK_PLAN_FILE : undefined;
 
 let files;
 /** Given an entry from `files`, return the filesystem path to read. */
@@ -194,7 +196,13 @@ let resolveFilePath;
 /** Human-readable description of what was scanned, for the summary line. */
 let scanDescription;
 
-if (TASK_PLAN_FILE) {
+if (!isMain) {
+  // This module also exports pure helpers used by the self-test. Do not scan
+  // the caller's task archive (or validate its TASK_PLAN_FILE) while imported.
+  files = [];
+  resolveFilePath = (f) => f;
+  scanDescription = "import-only helper mode";
+} else if (TASK_PLAN_FILE) {
   // Single-file mode —————————————————————————————————————————————————————
   console.log(`check-failure-gate — single-file mode: ${TASK_PLAN_FILE}`);
 
@@ -332,9 +340,6 @@ export function writeFileAtomically(
 // ---------------------------------------------------------------------------
 // Check each file
 // ---------------------------------------------------------------------------
-const isMain =
-  process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
-
 if (isMain) {
 const compliant = [];
 const nonCompliant = []; // { file, readFailed?, missingSections[], unfilledPlaceholders[], missingValidationLines[] }
