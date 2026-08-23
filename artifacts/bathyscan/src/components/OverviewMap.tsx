@@ -584,10 +584,6 @@ export const OverviewMap: React.FC = () => {
   const setPuzzleStoreMode = usePuzzleStore((s) => s.setPuzzleMode);
   useEffect(() => { setPuzzleStoreMode(puzzleMode); }, [puzzleMode, setPuzzleStoreMode]);
 
-  // Brief "saved" flash state — true for ~1500 ms after the user clicks SAVE.
-  const [puzzleSaveStatus, setPuzzleSaveStatus] = useState<"idle" | "saved" | "failed">("idle");
-  const puzzleSaved = puzzleSaveStatus === "saved";
-
   // Layout preset save form — inline text input that appears below the toolbar.
   const [puzzleLayoutFormOpen, setPuzzleLayoutFormOpen] = useState(false);
   const [puzzleLayoutNameInput, setPuzzleLayoutNameInput] = useState("");
@@ -947,8 +943,6 @@ export const OverviewMap: React.FC = () => {
     setPuzzleLayouts(next);
     setPuzzleLayoutFormOpen(false);
     setPuzzleLayoutNameInput("");
-    setPuzzleSaveStatus("saved");
-    setTimeout(() => setPuzzleSaveStatus("idle"), 3000);
   }, [puzzleLayouts, setPuzzleLayouts]);
 
   // Signature of the current layout — compared against the last saved/restored
@@ -995,8 +989,6 @@ export const OverviewMap: React.FC = () => {
       );
       setPuzzleLayoutFormOpen(false);
       setPuzzleLayoutNameInput("");
-      setPuzzleSaveStatus("saved");
-      setTimeout(() => setPuzzleSaveStatus("idle"), 3000);
     } catch {
       toast({
         title: "Save failed",
@@ -5417,63 +5409,14 @@ export const OverviewMap: React.FC = () => {
             </ViewscreenTooltip>
           )}
 
-          {/* Save to Session button — visible when any tile has been moved or rotated */}
-          {hasPuzzleTransforms && (
-            <ViewscreenTooltip label="Save tile positions to session storage (survives navigation)" side="bottom">
-              <button
-                data-testid="overview-puzzle-save"
-                aria-label="Save puzzle tile positions to this session"
-                onClick={() => {
-                   let saved = false;
-                   try {
-                    sessionStorage.setItem(
-                      "bathyscan:puzzleTransforms",
-                      JSON.stringify([...puzzleTransforms.entries()]),
-                    );
-                     saved = true;
-                  } catch {
-                     // Storage can be disabled or reject writes (quota/private
-                     // browsing). Do not show success when that happens.
-                  }
-                    setPuzzleSaveStatus(saved ? "saved" : "failed");
-                    if (!saved) {
-                      toast({
-                        title: "Session save unavailable",
-                        description: "Your layout is still visible, but browser storage rejected the save. Keep this tab open or try again after enabling site storage.",
-                        variant: "destructive",
-                        duration: 6000,
-                      });
-                    }
-                    setTimeout(() => setPuzzleSaveStatus("idle"), saved ? 3000 : 6000);
-                }}
-                style={{
-                  background: puzzleSaved ? "rgba(34,197,94,0.22)" : "rgba(20,184,166,0.12)",
-                  border: puzzleSaved ? "1px solid rgba(34,197,94,0.80)" : "1px solid rgba(20,184,166,0.50)",
-                  borderRadius: 3,
-                  color: puzzleSaved ? "#86efac" : "#2dd4bf",
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: "calc(12px * var(--bs-font-scale, 1))",
-                  padding: "2px 8px",
-                  cursor: "pointer",
-                  letterSpacing: "0.1em",
-                  lineHeight: "18px",
-                  whiteSpace: "nowrap",
-                  transition: "background 0.15s, border-color 0.15s, color 0.15s",
-                }}
-              >
-                {puzzleSaved ? "✓ SAVED" : puzzleSaveStatus === "failed" ? "⚠ SAVE FAILED" : "✦ SAVE"}
-              </button>
-            </ViewscreenTooltip>
-          )}
-
           {/* Save named layout preset — visible when puzzle has any transforms
               (or always in puzzle mode when a special collection is active,
               so an initial arrangement can be saved as revision #1). */}
           {(hasPuzzleTransforms || (puzzleMode && spcActive != null)) && (
-            <ViewscreenTooltip label="Pin this arrangement as a named layout preset (synced to your account)" side="bottom">
+            <ViewscreenTooltip label="Save a reusable named layout preset synced to your account" side="bottom">
               <button
                 data-testid="overview-puzzle-save-layout"
-                aria-label="Save current puzzle arrangement as a named layout"
+                aria-label="Save current puzzle arrangement as a named, reusable layout"
                 onClick={() => {
                   setPuzzleLayoutFormOpen((v) => !v);
                   setLayoutsDropdownOpen(false);
@@ -5492,7 +5435,7 @@ export const OverviewMap: React.FC = () => {
                   whiteSpace: "nowrap",
                 }}
               >
-                📌 SAVE LAYOUT
+                📌 SAVE NAMED LAYOUT
               </button>
             </ViewscreenTooltip>
           )}
@@ -5706,7 +5649,7 @@ export const OverviewMap: React.FC = () => {
               />
               <button
                 data-testid="overview-puzzle-layout-confirm"
-                aria-label="Save named puzzle layout"
+                 aria-label="Save named, reusable puzzle layout"
                 disabled={!puzzleLayoutNameInput.trim() || serverLayoutSaving}
                 onClick={() => {
                   if (spcActive) void saveLayoutToServer(puzzleLayoutNameInput);
@@ -6289,11 +6232,14 @@ export const OverviewMap: React.FC = () => {
             </ViewscreenTooltip>
           )}
 
-          <ViewscreenTooltip label="Use your device's GPS for location" side="bottom">
+          <ViewscreenTooltip
+            label={gpsActive ? "Live GPS is active" : "Start a live GPS watch using your device"}
+            side="bottom"
+          >
           <button
             onClick={() => startWatching()}
             data-testid="gps-activate-btn"
-            aria-label={gpsActive ? "GPS active" : "Use my location"}
+            aria-label={gpsActive ? "GPS active" : "Start live GPS"}
             aria-pressed={gpsActive}
             style={{
               background: gpsActive ? "rgba(59,130,246,0.15)" : "rgba(0,10,20,0.75)",
@@ -6309,7 +6255,7 @@ export const OverviewMap: React.FC = () => {
               whiteSpace: "nowrap",
             }}
           >
-            {gpsActive ? "📍 GPS ACTIVE" : "📍 MY LOCATION"}
+            {gpsActive ? "📍 GPS ACTIVE" : "📍 LIVE GPS"}
           </button>
           </ViewscreenTooltip>
 

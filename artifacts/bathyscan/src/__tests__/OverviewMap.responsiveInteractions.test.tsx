@@ -52,6 +52,8 @@ describe("OverviewMap responsive interactions", () => {
   beforeEach(() => {
     Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
     Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+    sessionStorage.clear();
+    localStorage.clear();
     const overviewGrid = grid();
     useTerrainStore.setState({
       overviewGrid,
@@ -94,5 +96,31 @@ describe("OverviewMap responsive interactions", () => {
     expect(close).toBeVisible();
     await act(async () => { fireEvent.click(close); });
     expect(useUiStore.getState().overviewOpen).toBe(false);
+  });
+
+  it("clearly identifies the inactive GPS action as starting live GPS", () => {
+    renderOverview();
+    const gps = screen.getByTestId("gps-activate-btn");
+
+    expect(gps).toHaveTextContent("📍 LIVE GPS");
+    expect(gps).toHaveAccessibleName("Start live GPS");
+  });
+
+  it("shows one named-layout action instead of a redundant session Save", () => {
+    sessionStorage.setItem(
+      "bathyscan:puzzleTransforms",
+      JSON.stringify([["responsive-ds", { tx: 12, ty: 8, angleDeg: 0 }]]),
+    );
+    renderOverview();
+
+    expect(screen.queryByTestId("overview-puzzle-save")).not.toBeInTheDocument();
+    const saveLayout = screen.getByTestId("overview-puzzle-save-layout");
+    expect(saveLayout).toHaveTextContent("📌 SAVE NAMED LAYOUT");
+    expect(saveLayout).toHaveAccessibleName("Save current puzzle arrangement as a named, reusable layout");
+
+    fireEvent.click(saveLayout);
+    expect(screen.getByTestId("overview-puzzle-layout-form")).toBeInTheDocument();
+    expect(screen.getByTestId("overview-puzzle-layout-confirm"))
+      .toHaveAccessibleName("Save named, reusable puzzle layout");
   });
 });
