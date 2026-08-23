@@ -41,6 +41,15 @@ import { useSurfaceConditions } from "@/hooks/useSurfaceConditions";
 import { useWeatherStations } from "@/hooks/useWeatherStations";
 import { useTemperatureProfile } from "@/hooks/useTemperatureProfile";
 import { useToast } from "@/hooks/use-toast";
+import {
+  PALETTE_PRESETS,
+  MID1_HEX,
+  MID2_HEX,
+  bandColorsFromPreset,
+  usePaletteStore,
+} from "@/lib/paletteStore";
+import { flushServerSync } from "@/hooks/useServerSettingsSync";
+import type { ColormapTheme } from "@/lib/settingsStore";
 
 const PANEL: React.CSSProperties = {
   background: "rgba(2,8,18,0.94)",
@@ -190,6 +199,192 @@ const ThermalLegend: React.FC = () => {
         Colour maps depth → temperature via Argo/CTD profile data.
       </span>
     </div>
+  );
+};
+
+/**
+ * Small, viewscreen-friendly palette control. This deliberately reads and
+ * writes the same palette/settings stores as DepthColorsCard so Settings and
+ * the viewscreen always reflect one another.
+ */
+const ViewscreenDepthPalette: React.FC = () => {
+  const bandColors = usePaletteStore((s) => s.bandColors);
+  const setBandColors = usePaletteStore((s) => s.setBandColors);
+  const blendBands = usePaletteStore((s) => s.blendBands);
+  const colormapTheme = useSettingsStore((s) => s.colormapTheme);
+  const setColormapThemeByUser = useSettingsStore((s) => s.setColormapThemeByUser);
+
+  const activePresetId = useMemo(() => {
+    return PALETTE_PRESETS.find((preset) => {
+      const colors = bandColorsFromPreset(preset, bandColors.length);
+      return colors.length === bandColors.length &&
+        colors.every((color, index) => color.toLowerCase() === bandColors[index]!.toLowerCase());
+    })?.id;
+  }, [bandColors]);
+
+  const gradient = bandColors.length >= 2
+    ? `linear-gradient(90deg, ${bandColors.map((color, index) =>
+      `${color} ${(index / (bandColors.length - 1)) * 100}%`).join(", ")})`
+    : (bandColors[0] ?? "#00e5ff");
+
+  const updatePreset = (preset: (typeof PALETTE_PRESETS)[number]) => {
+    setBandColors(bandColorsFromPreset(preset, bandColors.length));
+    void flushServerSync();
+  };
+
+  const updateColormap = (theme: ColormapTheme) => {
+    setColormapThemeByUser(theme);
+    void flushServerSync();
+  };
+
+  return (
+    <section
+      data-testid="viewscreen-depth-palette"
+      aria-label="Depth palette"
+      style={{
+        margin: "4px 0 2px",
+        padding: "8px",
+        border: "1px solid rgba(0,229,255,0.16)",
+        borderRadius: 4,
+        background: "rgba(0,10,20,0.38)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 6,
+          marginBottom: 6,
+        }}
+      >
+        <span
+          style={{
+            color: "#94a3b8",
+            fontSize: "calc(13.5px * var(--bs-font-scale, 1))",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+          }}
+        >
+          Depth Palette
+        </span>
+        <span
+          data-testid="viewscreen-depth-palette-active"
+          style={{
+            color: "#67e8f9",
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          {activePresetId
+            ? PALETTE_PRESETS.find((preset) => preset.id === activePresetId)?.label
+            : "Custom"}
+        </span>
+      </div>
+
+      <div
+        data-testid="viewscreen-depth-palette-preview"
+        aria-label={`Current depth palette${blendBands ? ", blended" : ", discrete bands"}`}
+        style={{
+          height: 12,
+          marginBottom: 7,
+          border: "1px solid rgba(0,229,255,0.24)",
+          borderRadius: 2,
+          background: gradient,
+        }}
+      />
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          color: "#cbd5e1",
+          fontSize: "calc(12px * var(--bs-font-scale, 1))",
+          letterSpacing: "0.06em",
+        }}
+      >
+        <span style={{ flex: 1 }}>Colormap</span>
+        <select
+          data-testid="viewscreen-depth-colormap-select"
+          aria-label="Depth colormap"
+          value={colormapTheme}
+          onChange={(event) => updateColormap(event.target.value as ColormapTheme)}
+          style={{
+            minWidth: 0,
+            maxWidth: "58%",
+            color: "#e2e8f0",
+            background: "rgba(0,0,0,0.45)",
+            border: "1px solid rgba(0,229,255,0.2)",
+            borderRadius: 3,
+            fontFamily: "inherit",
+            fontSize: "calc(12px * var(--bs-font-scale, 1))",
+            padding: "3px 4px",
+          }}
+        >
+          <option value="ocean">Ocean</option>
+          <option value="freshwater">Freshwater</option>
+          <option value="pastel">Pastel</option>
+          <option value="thermal">Thermal</option>
+          <option value="grayscale">Grayscale</option>
+          <option value="viridis">Viridis</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+
+      <div
+        data-testid="viewscreen-depth-palette-presets"
+        style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 7 }}
+      >
+        {PALETTE_PRESETS.map((preset) => {
+          const active = activePresetId === preset.id;
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              data-testid={`viewscreen-palette-preset-${preset.id}`}
+              aria-pressed={active}
+              title={`Use ${preset.label} depth palette`}
+              onClick={() => updatePreset(preset)}
+              style={{
+                flex: "1 1 44%",
+                minWidth: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "4px 5px",
+                color: active ? "#67e8f9" : "#cbd5e1",
+                background: active ? "rgba(0,229,255,0.12)" : "rgba(0,0,0,0.3)",
+                border: `1px solid ${active ? "rgba(0,229,255,0.55)" : "rgba(0,229,255,0.16)"}`,
+                borderRadius: 3,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontSize: "calc(11px * var(--bs-font-scale, 1))",
+                letterSpacing: "0.04em",
+                textAlign: "left",
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 24,
+                  height: 10,
+                  flexShrink: 0,
+                  borderRadius: 2,
+                  background: preset.stops
+                    ? `linear-gradient(90deg, ${preset.stops.map((stop) => `${stop.hex} ${stop.position * 100}%`).join(", ")})`
+                    : `linear-gradient(90deg, ${preset.shallow} 0%, ${MID1_HEX} 33%, ${MID2_HEX} 66%, ${preset.deep} 100%)`,
+                }}
+              />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {preset.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 };
 
@@ -482,6 +677,8 @@ export const OverlaysToolsPanel: React.FC = () => {
           className="px-3 py-2 flex flex-col gap-1.5"
           style={{ borderTop: "1px solid rgba(0,229,255,0.08)" }}
         >
+          <ViewscreenDepthPalette />
+
           <ToggleButton
             testId="hud-toggle-overview"
             active={overviewOpen}

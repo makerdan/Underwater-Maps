@@ -34,6 +34,15 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
+const paletteHarness = vi.hoisted(() => ({
+  setColormapThemeByUser: vi.fn(),
+  flushServerSync: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/hooks/useServerSettingsSync", () => ({
+  flushServerSync: paletteHarness.flushServerSync,
+}));
+
 vi.mock("@/components/ViewscreenTooltip", () => ({
   ViewscreenTooltip: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
@@ -57,9 +66,13 @@ vi.mock("@/components/ui/spinner", () => ({
 
 vi.mock("@/lib/settingsStore", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/settingsStore")>();
-  const storeState = { waterType: "salt" };
+  const storeState = {
+    waterType: "salt",
+    colormapTheme: "ocean" as const,
+    setColormapThemeByUser: paletteHarness.setColormapThemeByUser,
+  };
   const useSettingsStore = Object.assign(
-    (sel: (s: { waterType: string }) => unknown) => sel(storeState),
+    (sel: (s: typeof storeState) => unknown) => sel(storeState),
     {
       getState: () => storeState,
       setState: vi.fn(),
@@ -123,6 +136,7 @@ vi.mock("@workspace/api-client-react", () =>
 
 import { OverlaysToolsPanel } from "@/components/OverlaysToolsPanel";
 import { useUiStore } from "@/lib/uiStore";
+import { usePaletteStore, DEFAULT_BAND_COLORS, DEFAULT_BAND_BOUNDARIES } from "@/lib/paletteStore";
 
 // Inline snapshot of the GOA EFH species list used by the static checklist.
 // Kept here so tests remain self-contained after efhSpeciesPalette.ts was removed.
@@ -164,6 +178,12 @@ beforeEach(() => {
     })),
   };
   resetUiStore();
+  paletteHarness.setColormapThemeByUser.mockClear();
+  paletteHarness.flushServerSync.mockClear();
+  usePaletteStore.setState({
+    bandColors: [...DEFAULT_BAND_COLORS],
+    bandBoundaries: [...DEFAULT_BAND_BOUNDARIES],
+  });
 });
 
 describe("OverlaysToolsPanel — EFH species toggle panel", () => {
@@ -336,5 +356,36 @@ describe("OverlaysToolsPanel — EFH species toggle panel", () => {
     );
     expect(dynamicBtn).toBeDefined();
     expect(dynamicBtn!.getAttribute("aria-pressed")).toBe("false");
+  });
+});
+
+describe("OverlaysToolsPanel — depth palette", () => {
+  it("renders the current palette preview, presets, and colormap selector", () => {
+    render(<OverlaysToolsPanel />);
+
+    expect(screen.getByTestId("viewscreen-depth-palette")).toBeInTheDocument();
+    expect(screen.getByTestId("viewscreen-depth-palette-preview")).toBeInTheDocument();
+    expect(screen.getByTestId("viewscreen-palette-preset-pastel")).toBeInTheDocument();
+    expect(screen.getByTestId("viewscreen-depth-colormap-select")).toHaveValue("ocean");
+  });
+
+  it("applies a preset through the shared palette store and flushes server sync", () => {
+    render(<OverlaysToolsPanel />);
+
+    fireEvent.click(screen.getByTestId("viewscreen-palette-preset-pastel"));
+
+    expect(usePaletteStore.getState().bandColors).not.toEqual([...DEFAULT_BAND_COLORS]);
+    expect(paletteHarness.flushServerSync).toHaveBeenCalled();
+  });
+
+  it("routes colormap changes through the shared settings mutation and flushes", () => {
+    render(<OverlaysToolsPanel />);
+
+    fireEvent.change(screen.getByTestId("viewscreen-depth-colormap-select"), {
+      target: { value: "thermal" },
+    });
+
+    expect(paletteHarness.setColormapThemeByUser).toHaveBeenCalledWith("thermal");
+    expect(paletteHarness.flushServerSync).toHaveBeenCalled();
   });
 });
