@@ -66,9 +66,11 @@ vi.mock("../../middlewares/dataMutationRateLimit.js", () => ({
 }));
 
 const mockSearchCatalog = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockInvalidateCatalogCache = vi.hoisted(() => vi.fn());
 
 vi.mock("../../lib/catalogSeeder.js", () => ({
   searchCatalog: mockSearchCatalog,
+  invalidateCatalogCache: mockInvalidateCatalogCache,
   getCatalogEntries: vi.fn().mockResolvedValue([]),
   seedDatasetCatalog: vi.fn().mockResolvedValue(undefined),
   scoreEntry: vi.fn().mockReturnValue(1),
@@ -143,6 +145,7 @@ const VALID_BBOX = { north: 60, south: 50, east: -130, west: -140 };
 beforeEach(() => {
   mockSearchCatalog.mockClear();
   mockSearchCatalog.mockResolvedValue([]);
+  mockInvalidateCatalogCache.mockClear();
 });
 
 // ---------------------------------------------------------------------------
