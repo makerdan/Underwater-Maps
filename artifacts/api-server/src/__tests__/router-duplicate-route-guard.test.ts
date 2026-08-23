@@ -59,6 +59,7 @@ import {
   countRoutes,
   countRoutesDeep,
   findDuplicateRoutesAcross,
+  findDuplicateRoutesDeep,
 } from "./helpers/routeGuard.js";
 import { API_DOMAINS, API_DOMAIN_KEYS } from "../routes/index.js";
 
@@ -100,6 +101,7 @@ import envPackRouter from "../routes/env-pack.js";
 import terrainQueryRouter from "../domains/terrain/query/index.js";
 import platformCoreRouter from "../domains/platform/core-router.js";
 import terrainEnrichmentRouter from "../domains/terrain/enrichment/index.js";
+import catalogOrganizationRouter from "../domains/catalog-organization/index.js";
 
 /** name = the routes/<name>.ts module the router comes from. */
 const ROUTERS: Array<[name: string, router: unknown]> = [
@@ -110,8 +112,7 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["catches", catchesRouter],
   ["objects", objectsRouter],
   ["settings", settingsRouter],
-  ["user-datasets", userDatasetsRouter],
-  ["folders", foldersRouter],
+  ["catalog-organization", catalogOrganizationRouter],
   ["tidal", tidalRouter],
   ["tides", tidesRouter],
   ["query", queryRouter],
@@ -121,8 +122,6 @@ const ROUTERS: Array<[name: string, router: unknown]> = [
   ["efh", efhRouter],
   ["intertidal-spots", intertidalSpotsRouter],
   ["catalog-discovery", catalogDiscoveryRouter],
-  ["catalog-saves", catalogSavesRouter],
-  ["collections", collectionsRouter],
   ["surface-conditions", surfaceConditionsRouter],
   ["trolling-presets", trollingPresetsRouter],
   ["trolling-preset-folders", trollingPresetFoldersRouter],
@@ -176,13 +175,30 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
     ).toEqual([]);
   });
 
+  it("catalog organization composition retains all user-owned catalog routes without duplicates", () => {
+    expect(countRoutesDeep(catalogOrganizationRouter)).toBe(
+      countRoutes(userDatasetsRouter) +
+        countRoutes(foldersRouter) +
+        countRoutes(collectionsRouter) +
+        countRoutes(catalogSavesRouter),
+    );
+    expect(
+      findDuplicateRoutesAcross([
+        [userDatasetsRouter, ""],
+        [foldersRouter, ""],
+        [collectionsRouter, ""],
+        [catalogSavesRouter, ""],
+      ]),
+    ).toEqual([]);
+  });
+
   it.each(ROUTERS)("routes/%s.ts registers every (method, path) pair at most once", (name, router) => {
     expect(
-      countRoutes(router),
+      name === "catalog-organization" ? countRoutesDeep(router) : countRoutes(router),
       `routes/${name}.ts registered zero routes — guard would pass vacuously; is the export still a Router?`,
     ).toBeGreaterThan(0);
 
-    const duplicates = name === "catalog-discovery"
+    const duplicates = name === "catalog-discovery" || name === "catalog-organization"
       ? findDuplicateRoutesDeep(router)
       : findDuplicateRoutes(router);
     expect(
@@ -222,7 +238,10 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
     expect(countRoutesDeep(apiRouter)).toBe(
       ROUTERS.reduce(
         (total, [name, router]) =>
-          total + (name === "catalog-discovery" ? countRoutesDeep(router) : countRoutes(router)),
+          total +
+          (name === "catalog-discovery" || name === "catalog-organization"
+            ? countRoutesDeep(router)
+            : countRoutes(router)),
         0,
       ),
     );
