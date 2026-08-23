@@ -67,6 +67,11 @@ vi.mock("@/hooks/useFocusTrap", () => ({
   useFocusTrap: () => {},
 }));
 
+vi.mock("@/lib/clerkCompat", async () => {
+  const { mockClerkCompat } = await import("@/__tests__/testHelpers.auth");
+  return mockClerkCompat();
+});
+
 vi.mock("@/lib/markerConstants", () => ({
   SALTWATER_MARKER_TYPES: [{ value: "custom", label: "Custom" }],
   FRESHWATER_MARKER_TYPES: [{ value: "custom", label: "Custom" }],

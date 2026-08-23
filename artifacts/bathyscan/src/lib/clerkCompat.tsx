@@ -71,6 +71,9 @@ const bypassUseClerk = () =>
     signOut: async () => {
       console.warn("[bathyscan dev-bypass] signOut() is a no-op while the bypass is on.");
     },
+    openSignIn: () => {
+      console.warn("[bathyscan dev-bypass] openSignIn() is a no-op while the bypass is on.");
+    },
     addListener: (cb: (evt: { user: typeof FAKE_DEV_USER }) => void) => {
       try {
         cb({ user: FAKE_DEV_USER });

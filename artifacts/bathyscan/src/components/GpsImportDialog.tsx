@@ -63,6 +63,7 @@ import { useSettingsStore } from "@/lib/settingsStore";
 import { useToast } from "@/hooks/use-toast";
 import { useReturnFocus } from "@/hooks/useReturnFocus";
 import { authorizedFetch } from "@/lib/authorizedFetch";
+import { useClerk, useUser } from "@/lib/clerkCompat";
 
 const SAVED_ROUTE_WAYPOINTS_MAX = 20;
 const MARKER_LABEL_MAX = 200;
@@ -143,6 +144,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   useReturnFocus();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { isSignedIn } = useUser();
+  const { openSignIn } = useClerk();
   const postMarkers = usePostMarkers();
   const deleteMarkersId = useDeleteMarkersId();
 
@@ -652,11 +655,9 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
   }, [
     phase,
     importWaypoints,
-    importRoutes,
     qc,
     terrain,
     markerType,
-    bounds,
     toast,
     onClose,
     postMarkers,
@@ -874,7 +875,8 @@ export const GpsImportDialog: React.FC<Props> = ({ terrain, onClose }) => {
                     : r,
                 ),
               }))}
-              isSignedIn={true}
+              isSignedIn={isSignedIn === true}
+              onSignIn={openSignIn}
               routeDatasetId={terrain?.datasetId ?? matchedSave?.datasetId ?? null}
               onCancel={onClose}
               onConfirm={() => void doImport()}
@@ -1017,6 +1019,7 @@ interface PreviewPanelProps {
   removeRoute: (idx: number) => void;
   closeRouteLoop: (idx: number) => void;
   isSignedIn: boolean;
+  onSignIn: () => void;
   routeDatasetId: string | null;
   onCancel: () => void;
   onConfirm: () => void;
@@ -1049,6 +1052,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
   removeRoute,
   closeRouteLoop,
   isSignedIn,
+  onSignIn,
   routeDatasetId,
   onCancel,
   onConfirm,
@@ -1268,6 +1272,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({
                 removeRoute={removeRoute}
                  closeRouteLoop={closeRouteLoop}
                  isSignedIn={isSignedIn}
+                  onSignIn={onSignIn}
                  datasetId={routeDatasetId}
                  bounds={bounds}
               />
@@ -1466,9 +1471,10 @@ const RouteEditor: React.FC<{
   removeRoute: (idx: number) => void;
   closeRouteLoop: (idx: number) => void;
   isSignedIn: boolean;
+  onSignIn: () => void;
   datasetId: string | null;
   bounds?: Bounds;
-}> = ({ route, index, renameRoute, removeRoutePoint, removeRoute, closeRouteLoop, isSignedIn, datasetId, bounds }) => {
+}> = ({ route, index, renameRoute, removeRoutePoint, removeRoute, closeRouteLoop, isSignedIn, onSignIn, datasetId, bounds }) => {
   const qc = useQueryClient();
   const [selected, setSelected] = useState(true);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -1482,8 +1488,7 @@ const RouteEditor: React.FC<{
   const save = async () => {
     if (!selected || status === "saving" || status === "saved") return;
     if (!isSignedIn) {
-      setError("Sign in to save navigation routes.");
-      setStatus("error");
+      onSignIn();
       return;
     }
     if (!datasetId) {

@@ -67,7 +67,7 @@ export function mockClerkCompat(overrides: ClerkCompatOverrides = {}) {
         isSignedIn: true,
         isLoaded: true,
       })),
-    useClerk: overrides.useClerk ?? (() => ({ signOut: vi.fn() })),
+    useClerk: overrides.useClerk ?? (() => ({ signOut: vi.fn(), openSignIn: vi.fn() })),
     ClerkProvider: ({ children }: { children: unknown }) => children,
     Show: ({ when, children }: { when: string; children?: unknown }) =>
       when === "signed-in" ? children : null,
