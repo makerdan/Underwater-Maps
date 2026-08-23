@@ -5129,7 +5129,7 @@ export const OverviewMap: React.FC = () => {
           alignItems: "center",
           justifyContent: "flex-start",
           gap: 16,
-          padding: "0 12px",
+          padding: "0 2in 0 12px",
           boxSizing: "border-box",
           overflowX: "auto",
           overflowY: "hidden",
