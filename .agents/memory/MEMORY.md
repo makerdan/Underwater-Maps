@@ -109,7 +109,7 @@
 - [Tier-gate baseline triage rules](unit-tier-baseline-route-guard.md) — gate policies that must not regress (tier-lock hard-fail, task-agnostic validation commands) + rules for pre-existing-vs-new failure triage.
 - [Task-locked scripts suite interaction](task-locked-scripts-suite-interaction.md) — check-failure-gate is green in isolation but can fail inside the full scripts unit aggregation when TASK_PLAN_FILE is inherited.
 - [Tier-lock TASK_PLAN_FILE requirement](tier-lock-plan-file.md) — tier runs hard-fail without TASK_PLAN_FILE + compliant ## Validation/## Regression Guard sections; fix-stub then hand-fill, run via upserted validation command.
-- [orval "Failed to resolve input" root cause](orval-failed-resolve-input.md) — this misleading error is always a duplicate YAML key in openapi.yaml; @scalar/json-magic silently swallows the yaml.parse exception and returns ok:false.
+- [Orval "Failed to resolve input" root cause](orval-failed-resolve-input.md) — malformed OpenAPI YAML (duplicate key or bad indentation) is silently swallowed as an input-resolution error.
 - [Hand-edited generated api.ts trap](generated-api-hand-edit-trap.md) — fields added only to lib/api-zod generated output vanish on regeneration; openapi.yaml is the sole source of truth.
 - [Vitest unhandled-error gate fails green runs](unhandled-rejection-gate.md) — "N errors, exit 1" with all tests passing = stale wholesale mock missing a newly-called export, not a test regression; check the Unhandled Errors section first.
 - [Shared walker ignore-dirs](shared-walker-ignore-dirs.md) — walker scripts must import IGNORED_DIRS from scripts/lib/ignored-dirs.mjs; local copies fail check:runner-step-sync in CI.
