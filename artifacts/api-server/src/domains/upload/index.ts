@@ -1,4 +1,5 @@
 export { default, uploadDomain } from "./router.js";
+export { default as fieldDataRouter } from "./field-data.js";
 export {
   uploadState,
   type UploadSession,

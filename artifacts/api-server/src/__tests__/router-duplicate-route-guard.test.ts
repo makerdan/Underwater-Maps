@@ -105,6 +105,7 @@ import terrainEnrichmentRouter from "../domains/terrain/enrichment/index.js";
 import catalogOrganizationRouter from "../domains/catalog-organization/index.js";
 import platformGovernanceRouter from "../domains/platform/governance-router.js";
 import terrainBundlesRouter from "../domains/terrain/bundles/index.js";
+import { fieldDataRouter } from "../domains/upload/field-data.js";
 
 /** name = the routes/<name>.ts module the router comes from. */
 const ROUTERS: Array<[name: string, router: unknown]> = [
@@ -239,6 +240,16 @@ describe("duplicate-route mis-merge guard (all routers)", () => {
         `inventory: ${missing.join(", ")}. Add them to API_DOMAINS.`,
     ).toEqual([]);
     expect(mounted.sort()).toEqual([...API_DOMAIN_KEYS].sort());
+  });
+
+  it("upload field-data composition contains each endpoint exactly once", () => {
+    expect(countRoutesDeep(fieldDataRouter)).toBe(
+      [markersRouter, catchesRouter, objectsRouter].reduce(
+        (total, router) => total + countRoutes(router),
+        0,
+      ),
+    );
+    expect(findDuplicateRoutesDeep(fieldDataRouter)).toEqual([]);
   });
 
   it.each(API_DOMAINS)("$name domain is composed", (domain) => {
