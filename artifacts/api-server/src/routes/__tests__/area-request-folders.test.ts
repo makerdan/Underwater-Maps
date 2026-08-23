@@ -475,6 +475,7 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
   getCatalogEntries: async () => H.CATALOG_ENTRIES,
   searchCatalog: async () => [],
   scoreEntry: () => 1,
+  invalidateCatalogCache: () => {},
 }));
 
 // Controllable reverse-geocode mock: tests set G.result to the place name

@@ -141,12 +141,14 @@ vi.mock("@workspace/db", () => ({
 }));
 
 vi.mock("../../lib/catalogSeeder.js", () => ({
+  invalidateCatalogCache: vi.fn(),
   getCatalogEntries: vi.fn(() =>
     Promise.resolve([
       { id: "catalog-lake-freshwater", waterType: "freshwater" as const },
       { id: "catalog-ocean-salt",      waterType: "saltwater"  as const },
     ]),
   ),
+  searchCatalog: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock("@workspace/api-zod", async (importOriginal) => {

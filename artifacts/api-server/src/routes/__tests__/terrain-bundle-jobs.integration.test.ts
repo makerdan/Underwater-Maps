@@ -69,6 +69,7 @@ vi.mock("../../lib/terrain.js", async () => {
 });
 
 vi.mock("../../lib/catalogSeeder.js", () => ({
+  invalidateCatalogCache: async () => {},
   getCatalogEntries: async () => [
     {
       id: "itest-catalog-lake",
@@ -80,6 +81,7 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
       waterType: "freshwater",
     },
   ],
+  searchCatalog: async () => [],
 }));
 
 const SAMPLE_BUNDLE = {

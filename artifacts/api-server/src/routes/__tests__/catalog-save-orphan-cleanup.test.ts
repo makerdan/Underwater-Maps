@@ -405,6 +405,7 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
   getCatalogEntries: async () => [H.CATALOG_ENTRY],
   searchCatalog: async () => [],
   scoreEntry: () => 1,
+  invalidateCatalogCache: () => {},
 }));
 
 vi.mock("@workspace/api-zod", async (importOriginal) => {

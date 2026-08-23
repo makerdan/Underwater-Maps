@@ -141,6 +141,7 @@ export const GITHUB_CI_COVERAGE = {
   "check:skip-count": { tokens: ["pnpm run check:skip-count"] },
   "check:testdb-schema-drift": { tokens: ["pnpm run check:testdb-schema-drift"] },
   "check:api-route-schema-drift": { tokens: ["pnpm run check:api-route-schema-drift"] },
+  "check:catalog-facade-mocks": { tokens: ["pnpm run check:catalog-facade-mocks"] },
   "check:runbutton-noop": { tokens: ["pnpm run check:runbutton-noop"] },
   "check:stale-lock-cleanup": {
     excluded: "Tests Replit validation-lock recovery behavior; GitHub uses isolated ephemeral runners rather than the shared local lock.",

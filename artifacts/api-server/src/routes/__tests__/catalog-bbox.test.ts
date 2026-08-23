@@ -88,6 +88,7 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
       hasEfh: false,
     },
   ]),
+  invalidateCatalogCache: vi.fn(),
 }));
 
 import app from "../../app.js";

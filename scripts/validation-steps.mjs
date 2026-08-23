@@ -77,6 +77,8 @@ export function getValidationSteps(logPrefix) {
     // no resource: binary-diff check, sub-second — catches stale failure-gate-skill.zip
     { name: "check:failure-gate-zip", resource: null, cmd: "pnpm run check:failure-gate-zip", tiers: FAST },
     { name: "check:api-route-schema-drift", resource: null, cmd: "pnpm run check:api-route-schema-drift", tiers: FAST },
+    // no resource: route-test startup guard for catalog facade dependency drift
+    { name: "check:catalog-facade-mocks", resource: null, cmd: "pnpm run check:catalog-facade-mocks", tiers: FAST },
     // no resource: binary-diff check, sub-second — catches stale poe-setup-skill.zip (skip if zip not yet published)
     { name: "check:poe-setup-zip", resource: null, cmd: "pnpm run check:poe-setup-zip", tiers: FAST },
     // no resource: binary-diff check, sub-second — catches stale port-authority-skill.zip (skip if zip not yet published)

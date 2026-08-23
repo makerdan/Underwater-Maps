@@ -178,6 +178,9 @@ jobs:
       - name: 'check:api-route-schema-drift'
         run: pnpm run check:api-route-schema-drift
 
+      - name: 'check:catalog-facade-mocks'
+        run: pnpm run check:catalog-facade-mocks
+
       - name: 'check:runbutton-noop'
         run: pnpm run check:runbutton-noop
 

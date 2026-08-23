@@ -96,6 +96,7 @@ vi.mock("../../lib/catalogSeeder.js", () => ({
   seedDatasetCatalog: vi.fn(async () => {}),
   getCatalogEntries: vi.fn(async () => []),
   searchCatalog: vi.fn(async () => [SAMPLE_RESULT]),
+  invalidateCatalogCache: vi.fn(),
 }));
 
 import app from "../../app.js";
